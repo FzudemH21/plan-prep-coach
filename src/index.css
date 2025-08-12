@@ -53,6 +53,14 @@ All colors MUST be HSL.
     --sidebar-border: 220 13% 91%;
 
     --sidebar-ring: 217.2 91.2% 59.8%;
+    
+    /* Intensity scale tokens (HSL) */
+    --intensity-low: 142 70% 45%;        /* green */
+    --intensity-moderate: 48 96% 53%;    /* yellow */
+    --intensity-high: 0 84% 60%;         /* red */
+    --intensity-deload: 210 40% 90%;     /* light blue/gray */
+
+    --intensity-foreground: 0 0% 100%;
   }
 
   .dark {
@@ -91,6 +99,14 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Intensity scale tokens (HSL) - dark */
+    --intensity-low: 142 70% 40%;
+    --intensity-moderate: 48 96% 50%;
+    --intensity-high: 0 70% 50%;
+    --intensity-deload: 210 20% 25%;
+
+    --intensity-foreground: 0 0% 98%;
   }
 }
 
