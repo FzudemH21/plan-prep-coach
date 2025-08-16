@@ -55,10 +55,14 @@ All colors MUST be HSL.
     --sidebar-ring: 217.2 91.2% 59.8%;
     
     /* Intensity scale tokens (HSL) */
-    --intensity-low: 142 70% 45%;        /* green */
+    --intensity-off: 0 0% 95%;           /* light gray */
+    --intensity-deload: 142 35% 55%;     /* dark green */
+    --intensity-easy: 142 70% 45%;       /* green */
+    --intensity-easy-moderate: 200 70% 50%; /* blue */
     --intensity-moderate: 48 96% 53%;    /* yellow */
-    --intensity-high: 0 84% 60%;         /* red */
-    --intensity-deload: 210 40% 90%;     /* light blue/gray */
+    --intensity-moderate-hard: 30 100% 60%; /* orange */
+    --intensity-hard: 0 84% 60%;         /* red */
+    --intensity-very-hard: 0 50% 40%;    /* dark red */
 
     --intensity-foreground: 0 0% 100%;
   }
@@ -101,10 +105,14 @@ All colors MUST be HSL.
     --sidebar-ring: 217.2 91.2% 59.8%;
 
     /* Intensity scale tokens (HSL) - dark */
-    --intensity-low: 142 70% 40%;
-    --intensity-moderate: 48 96% 50%;
-    --intensity-high: 0 70% 50%;
-    --intensity-deload: 210 20% 25%;
+    --intensity-off: 0 0% 15%;           /* dark gray */
+    --intensity-deload: 142 35% 45%;     /* dark green */
+    --intensity-easy: 142 70% 40%;       /* green */
+    --intensity-easy-moderate: 200 70% 45%; /* blue */
+    --intensity-moderate: 48 96% 50%;    /* yellow */
+    --intensity-moderate-hard: 30 100% 55%; /* orange */
+    --intensity-hard: 0 70% 50%;         /* red */
+    --intensity-very-hard: 0 50% 35%;    /* dark red */
 
     --intensity-foreground: 0 0% 98%;
   }
