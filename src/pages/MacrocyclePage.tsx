@@ -277,9 +277,277 @@ export default function MacrocyclePage() {
     </Card>
   );
 
+  const renderSubGoalsForm = () => (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center space-x-2">
+          <Target className="h-5 w-5" />
+          <span>Sub-Goals & Testing Methods</span>
+        </CardTitle>
+        <CardDescription>
+          Break down your main goal into measurable sub-goals and define testing methods.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-4">
+          {subGoals.map((subGoal, index) => (
+            <div key={subGoal.id} className="p-4 border rounded-lg space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Sub-Goal Description</Label>
+                  <Input
+                    value={subGoal.description}
+                    onChange={(e) => {
+                      const updated = [...subGoals];
+                      updated[index].description = e.target.value;
+                      setSubGoals(updated);
+                    }}
+                    placeholder="e.g., 2x bodyweight squat"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Test Method</Label>
+                  <Input
+                    value={subGoal.testMethod}
+                    onChange={(e) => {
+                      const updated = [...subGoals];
+                      updated[index].testMethod = e.target.value;
+                      setSubGoals(updated);
+                    }}
+                    placeholder="e.g., 1RM back squat test"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Pre-Test Value</Label>
+                  <div className="flex space-x-2">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={subGoal.preTestValue || ""}
+                      onChange={(e) => {
+                        const updated = [...subGoals];
+                        updated[index].preTestValue = parseFloat(e.target.value);
+                        const percentChange = updated[index].preTestValue > 0 ? 
+                          ((updated[index].goalValue - updated[index].preTestValue) / updated[index].preTestValue) * 100 : 0;
+                        updated[index].percentChange = percentChange;
+                        setSubGoals(updated);
+                      }}
+                      placeholder="150"
+                    />
+                    <Input
+                      value={subGoal.unit}
+                      onChange={(e) => {
+                        const updated = [...subGoals];
+                        updated[index].unit = e.target.value;
+                        setSubGoals(updated);
+                      }}
+                      placeholder="kg"
+                      className="w-20"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Goal Value</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={subGoal.goalValue || ""}
+                    onChange={(e) => {
+                      const updated = [...subGoals];
+                      updated[index].goalValue = parseFloat(e.target.value);
+                      const percentChange = updated[index].preTestValue > 0 ? 
+                        ((updated[index].goalValue - updated[index].preTestValue) / updated[index].preTestValue) * 100 : 0;
+                      updated[index].percentChange = percentChange;
+                      setSubGoals(updated);
+                    }}
+                    placeholder="180"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Change</Label>
+                  <div className="flex items-center h-10">
+                    <Badge variant={subGoal.percentChange && subGoal.percentChange > 0 ? "default" : "destructive"}>
+                      {subGoal.percentChange ? `${subGoal.percentChange.toFixed(1)}%` : "0%"}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  setSubGoals(subGoals.filter((_, i) => i !== index));
+                }}
+              >
+                Remove Sub-Goal
+              </Button>
+            </div>
+          ))}
+        </div>
+
+        <Button
+          onClick={() => {
+            const newSubGoal: SubGoal = {
+              id: `subgoal-${Date.now()}`,
+              description: "",
+              testMethod: "",
+              preTestValue: 0,
+              goalValue: 0,
+              unit: "",
+              percentChange: 0,
+              testDates: []
+            };
+            setSubGoals([...subGoals, newSubGoal]);
+          }}
+          variant="outline"
+          className="w-full"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Add Sub-Goal
+        </Button>
+
+        {subGoals.length > 0 && smartGoal.startDate && smartGoal.endDate && (
+          <div className="space-y-4">
+            <h4 className="font-semibold">Test Scheduling</h4>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Available Tests</Label>
+                <div className="space-y-2 p-4 border rounded-lg bg-muted/50 min-h-32">
+                  {subGoals.map((subGoal) => (
+                    <div
+                      key={subGoal.id}
+                      className="p-2 bg-background border rounded cursor-move hover:bg-accent"
+                      draggable
+                    >
+                      <div className="font-medium text-sm">{subGoal.testMethod || "Unnamed Test"}</div>
+                      <div className="text-xs text-muted-foreground">{subGoal.description}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Training Calendar</Label>
+                <div className="border rounded-lg p-3">
+                  <Calendar
+                    mode="single"
+                    selected={undefined}
+                    className="rounded-md"
+                    disabled={(date) => {
+                      if (!smartGoal.startDate || !smartGoal.endDate) return true;
+                      return date < smartGoal.startDate || date > smartGoal.endDate;
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  const renderTrainableQualitiesForm = () => (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center space-x-2">
+          <Target className="h-5 w-5" />
+          <span>Trainable Qualities</span>
+        </CardTitle>
+        <CardDescription>
+          Identify the qualities that need to be developed to achieve your sub-goals.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-4">
+          {subGoals.map((subGoal, index) => {
+            const quality = qualities.find(q => q.id === subGoal.id) || { id: subGoal.id, name: "", description: "", methods: [] };
+            
+            return (
+              <div key={subGoal.id} className="p-4 border rounded-lg space-y-4">
+                <div className="space-y-2">
+                  <Label className="font-medium">{subGoal.description || "Sub-Goal"}</Label>
+                  <Input
+                    value={quality.name}
+                    onChange={(e) => {
+                      const updated = [...qualities];
+                      const existingIndex = updated.findIndex(q => q.id === subGoal.id);
+                      
+                      if (existingIndex >= 0) {
+                        updated[existingIndex].name = e.target.value;
+                      } else {
+                        updated.push({
+                          id: subGoal.id,
+                          name: e.target.value,
+                          description: "",
+                          methods: []
+                        });
+                      }
+                      setQualities(updated);
+                    }}
+                    placeholder="e.g., Maximal Strength, Power, Speed"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Enter trainable qualities separated by commas
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const renderTrainingMethodsForm = () => (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center space-x-2">
+          <Target className="h-5 w-5" />
+          <span>Training Methods</span>
+        </CardTitle>
+        <CardDescription>
+          Select and configure training methods to develop the identified qualities.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-4">
+          {qualities.map((quality, index) => (
+            <div key={quality.id} className="p-4 border rounded-lg space-y-4">
+              <div className="space-y-2">
+                <Label className="font-medium">
+                  {quality.name || "Quality"} - Training Methods
+                </Label>
+                <Input
+                  value={quality.methods.join(", ")}
+                  onChange={(e) => {
+                    const updated = [...qualities];
+                    updated[index].methods = e.target.value.split(",").map(m => m.trim()).filter(m => m);
+                    setQualities(updated);
+                  }}
+                  placeholder="e.g., Heavy Resistance Training, Olympic Lifts, Plyometrics"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Enter training methods separated by commas
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   const stepTitles = [
     "Athlete Information",
-    "Goal Setting",
+    "Goal Setting", 
     "Sub-Goals & Testing",
     "Trainable Qualities",
     "Training Methods"
@@ -310,51 +578,9 @@ export default function MacrocyclePage() {
       <div className="space-y-6">
         {currentStep === 1 && renderAthleteInfoForm()}
         {currentStep === 2 && renderGoalSettingForm()}
-        {currentStep === 3 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Sub-Goals & Testing Methods</CardTitle>
-              <CardDescription>
-                Break down your main goal into measurable sub-goals and define testing methods.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-center text-muted-foreground py-8">
-                Sub-goals form coming next...
-              </p>
-            </CardContent>
-          </Card>
-        )}
-        {currentStep === 4 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Trainable Qualities</CardTitle>
-              <CardDescription>
-                Identify the qualities that need to be developed to achieve your sub-goals.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-center text-muted-foreground py-8">
-                Trainable qualities selection coming next...
-              </p>
-            </CardContent>
-          </Card>
-        )}
-        {currentStep === 5 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Training Methods</CardTitle>
-              <CardDescription>
-                Select and configure training methods to develop the identified qualities.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-center text-muted-foreground py-8">
-                Training methods configuration coming next...
-              </p>
-            </CardContent>
-          </Card>
-        )}
+        {currentStep === 3 && renderSubGoalsForm()}
+        {currentStep === 4 && renderTrainableQualitiesForm()}
+        {currentStep === 5 && renderTrainingMethodsForm()}
       </div>
 
       {/* Navigation */}

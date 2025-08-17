@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import HomePage from "./pages/HomePage";
 import MacrocyclePage from "./pages/MacrocyclePage";
+import MesocyclePage from "./pages/MesocyclePage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -20,7 +21,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/macrocycle" element={<MacrocyclePage />} />
-            <Route path="/mesocycle" element={<div className="text-center py-12">Mesocycle page coming soon...</div>} />
+            <Route path="/mesocycle" element={<MesocyclePage />} />
             <Route path="/microcycle" element={<div className="text-center py-12">Microcycle page coming soon...</div>} />
             <Route path="/clients" element={<div className="text-center py-12">Client database coming soon...</div>} />
             <Route path="/templates" element={<div className="text-center py-12">Templates & library coming soon...</div>} />
