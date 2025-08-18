@@ -8,8 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { AthleteInfo, SmartGoal, SubGoal, TrainableQuality } from "@/types/training";
 import { User, Target, Calendar as CalendarIcon, Plus, Bot } from "lucide-react";
+import { 
+  getUniqueSubGoals, 
+  getUniqueQualities, 
+  getUniqueTrainingMethods 
+} from "@/data/trainingData";
 
 export default function MacrocyclePage() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -295,27 +301,29 @@ export default function MacrocyclePage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Sub-Goal Description</Label>
-                  <Input
+                  <SearchableDropdown
                     value={subGoal.description}
-                    onChange={(e) => {
+                    onChange={(value) => {
                       const updated = [...subGoals];
-                      updated[index].description = e.target.value;
+                      updated[index].description = value;
                       setSubGoals(updated);
                     }}
-                    placeholder="e.g., 2x bodyweight squat"
+                    options={getUniqueSubGoals()}
+                    placeholder="Select or type sub-goal..."
                   />
                 </div>
                 
                 <div className="space-y-2">
                   <Label>Test Method</Label>
-                  <Input
+                  <SearchableDropdown
                     value={subGoal.testMethod}
-                    onChange={(e) => {
+                    onChange={(value) => {
                       const updated = [...subGoals];
-                      updated[index].testMethod = e.target.value;
+                      updated[index].testMethod = value;
                       setSubGoals(updated);
                     }}
-                    placeholder="e.g., 1RM back squat test"
+                    options={["1RM Back Squat", "1RM Front Squat", "1RM Deadlift", "CMJ Height", "CMJ RSI", "Drop Jump RSI", "10m Sprint", "20m Sprint", "40m Sprint", "505 COD Test", "T-Test", "Yo-Yo IR1"]}
+                    placeholder="Select or type test method..."
                   />
                 </div>
               </div>
@@ -474,26 +482,27 @@ export default function MacrocyclePage() {
               <div key={subGoal.id} className="p-4 border rounded-lg space-y-4">
                 <div className="space-y-2">
                   <Label className="font-medium">{subGoal.description || "Sub-Goal"}</Label>
-                  <Input
-                    value={quality.name}
-                    onChange={(e) => {
-                      const updated = [...qualities];
-                      const existingIndex = updated.findIndex(q => q.id === subGoal.id);
-                      
-                      if (existingIndex >= 0) {
-                        updated[existingIndex].name = e.target.value;
-                      } else {
-                        updated.push({
-                          id: subGoal.id,
-                          name: e.target.value,
-                          description: "",
-                          methods: []
-                        });
-                      }
-                      setQualities(updated);
-                    }}
-                    placeholder="e.g., Maximal Strength, Power, Speed"
-                  />
+                <SearchableDropdown
+                  value={quality.name}
+                  onChange={(value) => {
+                    const updated = [...qualities];
+                    const existingIndex = updated.findIndex(q => q.id === subGoal.id);
+                    
+                    if (existingIndex >= 0) {
+                      updated[existingIndex].name = value;
+                    } else {
+                      updated.push({
+                        id: subGoal.id,
+                        name: value,
+                        description: "",
+                        methods: []
+                      });
+                    }
+                    setQualities(updated);
+                  }}
+                  options={getUniqueQualities()}
+                  placeholder="Select or type trainable quality..."
+                />
                   <p className="text-xs text-muted-foreground">
                     Enter trainable qualities separated by commas
                   </p>
@@ -525,14 +534,15 @@ export default function MacrocyclePage() {
                 <Label className="font-medium">
                   {quality.name || "Quality"} - Training Methods
                 </Label>
-                <Input
+                <SearchableDropdown
                   value={quality.methods.join(", ")}
-                  onChange={(e) => {
+                  onChange={(value) => {
                     const updated = [...qualities];
-                    updated[index].methods = e.target.value.split(",").map(m => m.trim()).filter(m => m);
+                    updated[index].methods = value.split(",").map(m => m.trim()).filter(m => m);
                     setQualities(updated);
                   }}
-                  placeholder="e.g., Heavy Resistance Training, Olympic Lifts, Plyometrics"
+                  options={getUniqueTrainingMethods()}
+                  placeholder="Select or type training methods..."
                 />
                 <p className="text-xs text-muted-foreground">
                   Enter training methods separated by commas
