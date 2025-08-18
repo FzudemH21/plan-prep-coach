@@ -155,7 +155,7 @@ export const getUniqueOverarchingGoals = (): string[] => {
 };
 
 export const getUniqueSubGoals = (): string[] => {
-  return Array.from(new Set(trainingData.map(item => item.subGoal))).sort();
+  return Array.from(new Set(trainingData.map(item => `${item.overarchingGoal} - ${item.subGoal}`))).sort();
 };
 
 export const getUniqueQualities = (): string[] => {
