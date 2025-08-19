@@ -135,8 +135,10 @@ export default function MesocyclePage() {
             <div className="space-y-1 md:col-span-2">
               <Label className="text-sm font-medium text-muted-foreground">Training Qualities</Label>
               <div className="flex flex-wrap gap-1">
-                {macrocycleData.qualities?.map((quality: string, index: number) => (
-                  <Badge key={index} variant="secondary" className="text-xs">{quality}</Badge>
+                {macrocycleData.qualities?.map((quality: any, index: number) => (
+                  <Badge key={index} variant="secondary" className="text-xs">
+                    {typeof quality === 'string' ? quality : quality.name || quality.id || 'Unknown Quality'}
+                  </Badge>
                 ))}
               </div>
             </div>
