@@ -130,8 +130,6 @@ export default function MacrocyclePage() {
 
   // Auto-populate training methods when qualities change
   useEffect(() => {
-    console.log('Training methods useEffect triggered, qualities:', qualities.length);
-    
     const newMethodsByQuality: Record<string, { subGoalLabel: string; qualityName: string; list: string[] }> = {};
     
     qualities.forEach(quality => {
@@ -177,7 +175,6 @@ export default function MacrocyclePage() {
     });
 
     if (hasChanges || Object.keys(methodsByQuality).length !== Object.keys(newMethodsByQuality).length) {
-      console.log('Updating training methods, changes detected');
       setMethodsByQuality(newMethodsByQuality);
       
       // Sync back to qualities array
@@ -188,7 +185,10 @@ export default function MacrocyclePage() {
       
       setQualities(updatedQualities);
     }
-  }, [qualities.length, JSON.stringify(qualities.map(q => q.name)), subGoals, subGoals.map(sg => sg.description).join('|')]);
+  }, [
+    JSON.stringify(qualities.map(q => ({ id: q.id, name: q.name }))),
+    JSON.stringify(subGoals.map(sg => ({ id: sg.id, description: sg.description })))
+  ]);
 
   const addQualityToSubGoal = (subGoalId: string, quality: string) => {
     setQualitiesBySubGoal(prev => ({
@@ -211,18 +211,21 @@ export default function MacrocyclePage() {
   };
 
   const addMethodToQuality = (qualityId: string, method: string) => {
-    setMethodsByQuality(prev => ({
-      ...prev,
-      [qualityId]: {
-        ...prev[qualityId],
-        list: Array.from(new Set([...(prev[qualityId]?.list || []), method]))
-      }
-    }));
+    setMethodsByQuality(prev => {
+      const newList = Array.from(new Set([...(prev[qualityId]?.list || []), method]));
+      return {
+        ...prev,
+        [qualityId]: {
+          ...prev[qualityId],
+          list: newList
+        }
+      };
+    });
     
-    // Sync back to qualities array
+    // Sync back to qualities array with functional update
     setQualities(prev => prev.map(quality => 
       quality.id === qualityId 
-        ? { ...quality, methods: methodsByQuality[qualityId]?.list || [] }
+        ? { ...quality, methods: Array.from(new Set([...(quality.methods || []), method])) }
         : quality
     ));
   };
@@ -236,10 +239,10 @@ export default function MacrocyclePage() {
       }
     }));
     
-    // Sync back to qualities array
+    // Sync back to qualities array with functional update
     setQualities(prev => prev.map(quality => 
       quality.id === qualityId 
-        ? { ...quality, methods: methodsByQuality[qualityId]?.list || [] }
+        ? { ...quality, methods: (quality.methods || []).filter(m => m !== method) }
         : quality
     ));
   };
@@ -669,18 +672,27 @@ export default function MacrocyclePage() {
                   mode="single"
                   selected={undefined}
                   onSelect={(date) => {
-                    console.log('Calendar date clicked:', date, 'selected test:', selectedTest);
                     if (date && selectedTest) {
                       const updated = [...subGoals];
                       const subGoalIndex = updated.findIndex(sg => sg.id === selectedTest);
                       if (subGoalIndex !== -1) {
-                        updated[subGoalIndex] = {
-                          ...updated[subGoalIndex],
-                          testDates: [...(updated[subGoalIndex].testDates || []), date]
-                        };
-                        console.log('Test scheduled successfully');
+                        const currentDates = updated[subGoalIndex].testDates || [];
+                        const isAlreadyScheduled = currentDates.some(testDate => 
+                          testDate.toDateString() === date.toDateString()
+                        );
+                        
+                        if (isAlreadyScheduled) {
+                          // Remove the test from this date (unschedule)
+                          updated[subGoalIndex].testDates = currentDates.filter(testDate => 
+                            testDate.toDateString() !== date.toDateString()
+                          );
+                        } else {
+                          // Add the test to this date (schedule)
+                          updated[subGoalIndex].testDates = [...currentDates, date];
+                        }
+                        
                         setSubGoals(updated);
-                        setSelectedTest(null);
+                        // Keep the test selected for multiple scheduling
                       }
                     }
                   }}
@@ -689,23 +701,32 @@ export default function MacrocyclePage() {
                     if (!smartGoal.startDate || !smartGoal.endDate) return true;
                     return date < smartGoal.startDate || date > smartGoal.endDate;
                   }}
+                  modifiers={{
+                    scheduled: subGoals.flatMap(sg => sg.testDates || [])
+                  }}
+                  modifiersStyles={{
+                    scheduled: { 
+                      backgroundColor: 'hsl(var(--primary) / 0.1)',
+                      color: 'hsl(var(--primary))',
+                      fontWeight: 'bold'
+                    }
+                  }}
                   components={{
                     Day: (props: any) => {
-                      const { date, ...dayProps } = props;
+                      const { date } = props;
                       const scheduledTests = subGoals.filter(sg => 
                         sg.testDates?.some(testDate => 
                           testDate.toDateString() === date.toDateString()
                         )
                       );
+                      
                       return (
-                        <div className="relative">
-                          <div {...dayProps}>
-                            {date.getDate()}
-                          </div>
+                        <div className="relative h-9 w-9 flex items-center justify-center cursor-pointer">
+                          <span>{date.getDate()}</span>
                           {scheduledTests.length > 0 && (
-                            <div className="absolute top-full left-1/2 transform -translate-x-1/2 text-xs text-center mt-1 max-w-20">
-                              <div className="bg-primary/10 text-primary rounded px-1 py-0.5 text-[10px] leading-tight">
-                                {scheduledTests.map(sg => sg.testMethod).join(', ')}
+                            <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2">
+                              <div className="bg-primary text-primary-foreground rounded-full w-2 h-2 text-[8px] flex items-center justify-center">
+                                {scheduledTests.length}
                               </div>
                             </div>
                           )}
