@@ -578,15 +578,19 @@ export default function MesocyclePage() {
   };
 
   const renderMethodPeriodization = () => {
-    // Get all allocated methods from mesocycles
-    const allocatedMethods = new Set<string>();
+    // Get all available methods from methodParameters
+    const allMethods = Object.keys(methodParameters);
     
-    mesocycles.forEach(meso => {
-      meso.trainingMethods?.forEach((methodData: any) => {
+    // Helper function to check if a method is allocated to a specific mesocycle
+    const isMethodAllocatedToMesocycle = (methodName: string, mesocycleId: string) => {
+      const mesocycle = mesocycles.find(m => m.id === mesocycleId);
+      if (!mesocycle || !mesocycle.trainingMethods) return false;
+      
+      return mesocycle.trainingMethods.some((methodData: any) => {
         const method = typeof methodData === 'string' ? methodData : methodData.method;
-        allocatedMethods.add(method);
+        return method === methodName;
       });
-    });
+    };
 
     const updateParameterValue = (mesocycleId: string, microcycleIndex: number, methodName: string, parameterName: string, value: string | number) => {
       setParameterValues(prev => setParameterValue(mesocycleId, microcycleIndex, methodName, parameterName, value, prev));
@@ -619,10 +623,10 @@ export default function MesocyclePage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {allocatedMethods.size === 0 ? (
+          {allMethods.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-muted-foreground mb-2">No training methods allocated yet.</p>
-              <p className="text-sm text-muted-foreground">Please complete step 3 to allocate training methods to mesocycles first.</p>
+              <p className="text-muted-foreground mb-2">No training methods available.</p>
+              <p className="text-sm text-muted-foreground">Please ensure method parameters are configured properly.</p>
             </div>
           ) : (
             <div className="space-y-6">
@@ -663,7 +667,7 @@ export default function MesocyclePage() {
 
                   {/* Method Rows */}
                   <div className="space-y-4">
-                    {Array.from(allocatedMethods).map((method) => {
+                    {allMethods.map((method: string) => {
                       const parameters = getParametersForMethod(method);
                       if (parameters.length === 0) return null;
 
@@ -679,9 +683,15 @@ export default function MesocyclePage() {
                               </div>
                             </div>
                             {mesocycles.map((meso) => 
-                              Array.from({ length: meso.duration }, (_, weekIndex) => (
-                                <div key={`${meso.id}-${weekIndex}`} className="h-16 border-l bg-muted/10"></div>
-                              ))
+                              Array.from({ length: meso.duration }, (_, weekIndex) => {
+                                const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
+                                return (
+                                  <div 
+                                    key={`${meso.id}-${weekIndex}`} 
+                                    className={`h-16 border-l ${isAllocated ? 'bg-muted/10' : 'bg-gray-100/50 opacity-50'}`}
+                                  />
+                                );
+                              })
                             )}
                           </div>
                           
@@ -697,16 +707,22 @@ export default function MesocyclePage() {
                                 </div>
                                 {mesocycles.map((meso) =>
                                   Array.from({ length: meso.duration }, (_, weekIndex) => {
+                                    const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
                                     const currentValue = getParameterValue(meso.id, weekIndex, method, param.name, parameterValues);
+                                    
                                     return (
-                                      <div key={`${meso.id}-${weekIndex}-${param.name}`} className="p-1 border-l">
+                                      <div 
+                                        key={`${meso.id}-${weekIndex}-${param.name}`} 
+                                        className={`p-1 border-l ${!isAllocated ? 'bg-gray-100/50 opacity-50' : ''}`}
+                                      >
                                         {param.type === 'select' ? (
                                           <Select
                                             value={currentValue?.toString() || param.defaultValue?.toString() || ''}
-                                            onValueChange={(value) => updateParameterValue(meso.id, weekIndex, method, param.name, value)}
+                                            onValueChange={(value) => isAllocated && updateParameterValue(meso.id, weekIndex, method, param.name, value)}
+                                            disabled={!isAllocated}
                                           >
-                                            <SelectTrigger className="h-8 text-xs">
-                                              <SelectValue />
+                                            <SelectTrigger className={`h-8 text-xs ${!isAllocated ? 'cursor-not-allowed' : ''}`}>
+                                              <SelectValue placeholder={!isAllocated ? "Not allocated" : ""} />
                                             </SelectTrigger>
                                             <SelectContent className="z-50">
                                               {param.options?.map((option) => (
@@ -720,11 +736,12 @@ export default function MesocyclePage() {
                                           <Input
                                             type={param.type === 'number' ? 'number' : 'text'}
                                             value={currentValue || param.defaultValue || ''}
-                                            onChange={(e) => updateParameterValue(meso.id, weekIndex, method, param.name, param.type === 'number' ? Number(e.target.value) : e.target.value)}
-                                            className="h-8 text-xs"
+                                            onChange={(e) => isAllocated && updateParameterValue(meso.id, weekIndex, method, param.name, param.type === 'number' ? Number(e.target.value) : e.target.value)}
+                                            className={`h-8 text-xs ${!isAllocated ? 'cursor-not-allowed' : ''}`}
                                             min={param.min}
                                             max={param.max}
-                                            placeholder={param.defaultValue?.toString() || ''}
+                                            placeholder={!isAllocated ? "Not allocated" : param.defaultValue?.toString() || ''}
+                                            disabled={!isAllocated}
                                           />
                                         )}
                                       </div>
