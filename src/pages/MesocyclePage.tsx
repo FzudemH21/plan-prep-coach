@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { TrainingMethod, IntensityLevel } from "@/types/training";
 import { ExtendedMesocycle } from "@/features/planner/types";
 import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Settings } from "lucide-react";
@@ -578,8 +579,23 @@ export default function MesocyclePage() {
   };
 
   const renderMethodPeriodization = () => {
-    // Get all available methods from methodParameters
-    const allMethods = Object.keys(methodParameters);
+    // Get only allocated methods from mesocycles
+    const getAllocatedMethods = () => {
+      const allocatedMethods = new Set<string>();
+      
+      mesocycles.forEach(meso => {
+        meso.trainingMethods?.forEach((methodData: any) => {
+          const method = typeof methodData === 'string' ? methodData : methodData.method;
+          if (method && methodParameters[method]) {
+            allocatedMethods.add(method);
+          }
+        });
+      });
+      
+      return Array.from(allocatedMethods);
+    };
+
+    const allMethods = getAllocatedMethods();
     
     // Helper function to check if a method is allocated to a specific mesocycle
     const isMethodAllocatedToMesocycle = (methodName: string, mesocycleId: string) => {
@@ -590,6 +606,24 @@ export default function MesocyclePage() {
         const method = typeof methodData === 'string' ? methodData : methodData.method;
         return method === methodName;
       });
+    };
+
+    // Helper function to get mesocycle overview data
+    const getMesocycleOverview = (mesocycle: ExtendedMesocycle) => {
+      const subGoals = new Set<string>();
+      const qualities = new Set<string>();
+      
+      mesocycle.trainingMethods?.forEach((methodData: any) => {
+        if (typeof methodData === 'object') {
+          if (methodData.subGoal) subGoals.add(methodData.subGoal);
+          if (methodData.quality) qualities.add(methodData.quality);
+        }
+      });
+      
+      return {
+        subGoals: Array.from(subGoals),
+        qualities: Array.from(qualities)
+      };
     };
 
     const updateParameterValue = (mesocycleId: string, microcycleIndex: number, methodName: string, parameterName: string, value: string | number) => {
@@ -625,13 +659,63 @@ export default function MesocyclePage() {
         <CardContent>
           {allMethods.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-muted-foreground mb-2">No training methods available.</p>
-              <p className="text-sm text-muted-foreground">Please ensure method parameters are configured properly.</p>
+              <p className="text-muted-foreground mb-2">No training methods allocated.</p>
+              <p className="text-sm text-muted-foreground">Please allocate training methods to mesocycles in step 3 first.</p>
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="overflow-x-auto">
-                <div className="min-w-max">
+              {/* Mesocycle Overview Section */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold">Mesocycle Overview</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {mesocycles.map((meso) => {
+                    const overview = getMesocycleOverview(meso);
+                    return (
+                      <Card key={meso.id} className="p-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <div className={`w-3 h-3 rounded ${getIntensityColor(meso.intensity)}`}></div>
+                            <h4 className="font-medium text-sm">{meso.name}</h4>
+                          </div>
+                          {overview.subGoals.length > 0 && (
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Sub-goals</Label>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {overview.subGoals.map((subGoal, idx) => (
+                                  <Badge key={idx} variant="outline" className="text-xs px-2 py-0.5">
+                                    {subGoal}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {overview.qualities.length > 0 && (
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Training Qualities</Label>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {overview.qualities.map((quality, idx) => (
+                                  <Badge key={idx} variant="secondary" className="text-xs px-2 py-0.5">
+                                    {quality}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {overview.subGoals.length === 0 && overview.qualities.length === 0 && (
+                            <p className="text-xs text-muted-foreground italic">No methods allocated</p>
+                          )}
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Method Periodization Table with ScrollArea */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold">Method Parameters</h3>
+                <ScrollArea className="h-96 w-full border rounded-lg">
+                  <div className="min-w-max p-4">
                   {/* Column Headers */}
                   <div className="grid gap-1 mb-4" style={{
                     gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
@@ -754,8 +838,9 @@ export default function MesocyclePage() {
                         </div>
                       );
                     })}
+                   </div>
                   </div>
-                </div>
+                </ScrollArea>
               </div>
             </div>
           )}
