@@ -987,6 +987,26 @@ export default function MacrocyclePage() {
     "Training Methods"
   ];
 
+  const handleNext = () => {
+    if (currentStep === totalSteps) {
+      // Save macrocycle data to localStorage before navigation
+      const macrocycleData = {
+        athleteInfo,
+        smartGoal,
+        subGoals,
+        qualities,
+        qualitiesBySubGoal,
+        methodsByQuality,
+        selectedTest,
+        completedAt: new Date().toISOString()
+      };
+      localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
+      navigate('/mesocycle');
+    } else {
+      setCurrentStep(Math.min(totalSteps, currentStep + 1));
+    }
+  };
+
   const renderMacroView = () => (
     <div className="max-w-4xl mx-auto space-y-8">
       {/* Header */}
@@ -1076,10 +1096,9 @@ export default function MacrocyclePage() {
           
           <Button 
             size="sm"
-            onClick={() => setCurrentStep(Math.min(totalSteps, currentStep + 1))}
-            disabled={currentStep === totalSteps}
+            onClick={handleNext}
           >
-            {currentStep === totalSteps ? "Complete" : "Next"}
+            {currentStep === totalSteps ? "Move on to Mesocycle" : "Next"}
           </Button>
         </div>
       </div>
@@ -1103,28 +1122,7 @@ export default function MacrocyclePage() {
           Previous
         </Button>
         
-        <Button 
-          onClick={() => {
-            if (currentStep === totalSteps) {
-              // Save macrocycle data to localStorage before navigation
-              const macrocycleData = {
-                athleteInfo,
-                smartGoal,
-                subGoals,
-                qualities,
-                qualitiesBySubGoal,
-                methodsByQuality,
-                selectedTest,
-                completedAt: new Date().toISOString()
-              };
-              localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
-              navigate('/mesocycle');
-            } else {
-              setCurrentStep(Math.min(totalSteps, currentStep + 1));
-            }
-          }}
-          disabled={currentStep === totalSteps && !athleteInfo.name}
-        >
+        <Button onClick={handleNext}>
           {currentStep === totalSteps ? "Move on to Mesocycle" : "Next"}
         </Button>
       </div>
