@@ -833,6 +833,26 @@ export default function MacrocyclePage() {
           </div>
           <Progress value={progress} className="h-2" />
         </div>
+        
+        {/* Top Navigation */}
+        <div className="flex justify-between">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
+            disabled={currentStep === 1}
+          >
+            Previous
+          </Button>
+          
+          <Button 
+            size="sm"
+            onClick={() => setCurrentStep(Math.min(totalSteps, currentStep + 1))}
+            disabled={currentStep === totalSteps}
+          >
+            {currentStep === totalSteps ? "Complete" : "Next"}
+          </Button>
+        </div>
       </div>
 
       {/* Step Content */}

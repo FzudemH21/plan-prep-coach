@@ -49,13 +49,20 @@ export function SearchableDropdown({
       setOpen(false);
     }
     setSearchValue("");
+    if (!multiple) {
+      setOpen(false);
+    }
   };
 
   const handleInputChange = (inputValue: string) => {
     setSearchValue(inputValue);
-    if (allowCustomInput && !multiple) {
-      onValueChange?.(inputValue);
-      onChange?.(inputValue);
+    // Don't trigger value change on every keystroke - only on explicit confirmation
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && searchValue.trim()) {
+      e.preventDefault();
+      handleSelect(searchValue.trim());
     }
   };
 
@@ -90,9 +97,10 @@ export function SearchableDropdown({
           <div className="flex items-center border-b px-3">
             <CommandInput
               ref={inputRef}
-              placeholder="Search or type new..."
+              placeholder="Search or type new... (Press Enter to add)"
               value={searchValue}
               onValueChange={handleInputChange}
+              onKeyDown={handleKeyDown}
               className="h-9"
             />
           </div>
