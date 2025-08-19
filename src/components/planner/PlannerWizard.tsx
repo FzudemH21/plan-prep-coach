@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Plan, Mesocycle } from "@/features/planner/types";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { trainingData } from "@/data/trainingData";
+import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 
 const schema = z.object({
   goal: z.string().min(5, "Please describe a SMART goal"),
@@ -19,6 +21,7 @@ const schema = z.object({
   sessionsAll: z.number().int().min(1).max(14),
   applySessionsAll: z.boolean().default(true),
   sessionLengthAll: z.number().int().min(10).max(240),
+  subGoals: z.array(z.string()).default([]),
   qualities: z.string().optional(),
 });
 
@@ -39,8 +42,25 @@ export default function PlannerWizard({ onComplete, initial }: WizardProps) {
     sessionsAll: 3,
     applySessionsAll: true,
     sessionLengthAll: 60,
+    subGoals: [],
     qualities: "",
   });
+
+  // Get unique sub-goals for dropdown
+  const subGoalOptions = Array.from(new Set(trainingData.map(item => `${item.overarchingGoal} - ${item.subGoal}`)));
+
+  // Auto-populate qualities when sub-goals change
+  const selectedSubGoals = form.watch("subGoals") || [];
+  React.useEffect(() => {
+    if (selectedSubGoals.length > 0) {
+      const qualities = Array.from(new Set(
+        trainingData
+          .filter(item => selectedSubGoals.includes(`${item.overarchingGoal} - ${item.subGoal}`))
+          .map(item => item.quality)
+      ));
+      form.setValue("qualities", qualities.join(", "));
+    }
+  }, [selectedSubGoals, form]);
 
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
@@ -187,6 +207,26 @@ export default function PlannerWizard({ onComplete, initial }: WizardProps) {
 
             {step === 2 && (
               <section className="grid gap-6">
+                <FormField
+                  control={form.control}
+                  name="subGoals"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Sub-goals (Step 3/5)</FormLabel>
+                      <FormControl>
+                        <SearchableDropdown
+                          options={subGoalOptions}
+                          placeholder="Select sub-goals..."
+                          multiple={true}
+                          value={field.value}
+                          onValueChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormDescription>Select relevant sub-goals for your training plan.</FormDescription>
+                    </FormItem>
+                  )}
+                />
+                
                 <div className="rounded-md border p-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
@@ -268,10 +308,16 @@ export default function PlannerWizard({ onComplete, initial }: WizardProps) {
                   name="qualities"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Qualities to improve (comma separated)</FormLabel>
+                      <FormLabel>Trainable Qualities (Step 4/5) - Auto-populated</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g., Max Strength, Acceleration, Mobility" {...field} />
+                        <Input 
+                          placeholder="Auto-populated based on selected sub-goals" 
+                          {...field} 
+                          readOnly 
+                          className="bg-muted" 
+                        />
                       </FormControl>
+                      <FormDescription>These qualities are automatically selected based on your chosen sub-goals.</FormDescription>
                     </FormItem>
                   )}
                 />

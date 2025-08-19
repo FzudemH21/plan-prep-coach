@@ -6,312 +6,384 @@ export interface TrainingGoalData {
 }
 
 export const trainingData: TrainingGoalData[] = [
-  // Sprint ability goals
-  { overarchingGoal: "Improving sprint ability", subGoal: "Block start & reaction", quality: "Start technique", trainingMethod: "Block starts 6–10 × 10–20 m @90–100% with full recovery (2–4 min), 2–3×/wk; emphasize set-up, shin angles, first 2 steps; video feedback each rep" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Block start & reaction", quality: "Reaction time", trainingMethod: "Simple→choice reaction starts (light/sound cues): 8–12 reps, 2–3×/wk; 10–20 s between reps; add false-start control drills" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Block start & reaction", quality: "Initial RFD (0–100 ms)", trainingMethod: "Max-intent isometrics (IMTP or iso-squat): 3–6 × 3–5 s, 2×/wk; pair with unloaded jumps 4–6 × 3–5 @ full intent (2–3 min rest)" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Block start & reaction", quality: "Horizontal impulse at 1st–3rd step", trainingMethod: "Heavy resisted sprints 10–20 m with 30–50% v-decrement: 4–8 reps, 2×/wk; 2–4 min rest; posture cue 'push long'" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Block start & reaction", quality: "Shin angle management", trainingMethod: "Wall drills (A-march/lean): 3–5 × 20–30 contacts, 2–3×/wk; progress to 3-step build-outs 6–10 reps" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Block start & reaction", quality: "Intermuscular coordination (hip–knee–ankle)", trainingMethod: "Dribble to 10–20 m & wicket runs 3–5 × 20–30 m, 2×/wk; maintain front-side mechanics" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Block start & reaction", quality: "Motor unit recruitment & firing rate", trainingMethod: "Heavy resistance training >85% 1RM (squat/hinge): 3–6 × ≤5 reps, 2×/wk; 2–4 min rest; rotate front/back/hinge" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Block start & reaction", quality: "Trunk stiffness & bracing", trainingMethod: "Anti-extension/anti-rotation isometrics 3–5 × 20–40 s, 2–3×/wk; add heavy carries 4–6 × 20–40 m" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Block start & reaction", quality: "Arm swing timing", trainingMethod: "Seated/standing arm-swing drills 4–6 × 10–15 cycles, 2×/wk; integrate into 10–20 m starts" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Block start & reaction", quality: "Psychological arousal & attentional focus", trainingMethod: "Pre-performance routine practice 1–2×/wk (breath cues, visualization 5–8 min) before starts; 6–10 blocked then 6–10 random starts" },
-  
-  { overarchingGoal: "Improving sprint ability", subGoal: "Acceleration 0–10 m", quality: "Horizontal force production", trainingMethod: "Resisted sprints 10–20 m with 10–30% v-decrement: 3–6 reps, 2×/wk; pair with heavy trap-bar deadlift 3–5 × 2–5 @85–95% 1RM" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Acceleration 0–10 m", quality: "Force orientation (horizontal vs vertical)", trainingMethod: "Sled pulls/pushes with torso lean: 4–8 × 10–20 m, 2×/wk; aim constant shin angle; 2–3 min rest" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Acceleration 0–10 m", quality: "Step length–frequency balance", trainingMethod: "Wicket runs 4–6 × 20–30 m, 2×/wk; adjust spacing to target contact time and projection" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Acceleration 0–10 m", quality: "Early-phase RFD", trainingMethod: "Isometric mid-thigh pull 3–5 × 3–5 s + jump squats 20–40% 1RM 4–6 × 3–5, 2×/wk" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Acceleration 0–10 m", quality: "Hip extensor strength", trainingMethod: "Back or front squat 3–6 × 3–6 @80–92% 1RM, 2×/wk; hinge pattern (RDL) 3–5 × 4–6 @70–85%" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Acceleration 0–10 m", quality: "Ankle plantarflexor stiffness", trainingMethod: "Isometric calf raises 4–5 × 30–45 s (straight/bent knee), 3×/wk; progress to pogo series 4–6 × 20–30 contacts" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Acceleration 0–10 m", quality: "Front-side mechanics", trainingMethod: "A/B-skips & dribbles 3–5 × 20–30 m, 2×/wk; integrate into 3–5 × 10–20 m accelerations" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Acceleration 0–10 m", quality: "Interlimb coordination", trainingMethod: "Alternating step drills & wall cycles 3–5 × 10–15 cycles, 2×/wk; immediate transfer to sprints" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Acceleration 0–10 m", quality: "Technique under load", trainingMethod: "Resisted accelerations (light–moderate) 6–10 × 10–20 m, 2×/wk; cue posture & projection" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Acceleration 0–10 m", quality: "Tendon elasticity", trainingMethod: "Low-amplitude pogos 4–6 × 20–30 contacts, 2–3×/wk; progress to drop jumps (20–30 cm) 3–5 × 5–8" },
-
-  { overarchingGoal: "Improving sprint ability", subGoal: "Acceleration 10–30 m", quality: "Net impulse per step", trainingMethod: "Unresisted 20–30 m accelerations 4–8 reps, 2×/wk with full recovery; pair with heavy sled 10–20 m 3–5 reps" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Acceleration 10–30 m", quality: "Progressive body angle rise", trainingMethod: "10–30 m build-ups with posture checkpoints: 6–10 reps, 2×/wk; 2–4 min rest" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Acceleration 10–30 m", quality: "Hamstring eccentric strength", trainingMethod: "Nordic hamstring 3–4 × 4–6, 2×/wk; long-length RDL 3–4 × 6–8 @65–80% 1RM" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Acceleration 10–30 m", quality: "Gluteus maximus power", trainingMethod: "Hip thrust 3–5 × 3–6 @80–90% 1RM, 2×/wk; add banded hip extension 3–4 × 8–12" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Acceleration 10–30 m", quality: "Step-to-step variability control", trainingMethod: "Laser/gates approaches with step audit: 6–10 reps, 1–2×/wk; constraint drills for consistent projection" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Acceleration 10–30 m", quality: "Stretch–shortening cycle utilization", trainingMethod: "Loaded jumps (trap-bar jump) 20–40% 1RM 4–6 × 3–5, 2×/wk; pogo→bound progressions" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Acceleration 10–30 m", quality: "Technical rhythm", trainingMethod: "Metronome wicket runs 4–6 × 20–30 m, 2×/wk" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Acceleration 10–30 m", quality: "Braking minimization", trainingMethod: "Coaching cueing + video; wicket spacing to prevent overstriding; 6–10 runs, 2×/wk" },
-
-  { overarchingGoal: "Improving sprint ability", subGoal: "Max velocity development", quality: "Very short ground contact time", trainingMethod: "Fly sprints 20–30 m @98–100% vmax: 4–8 reps, 2×/wk; 3–5 min rest; aim tc < 120–140 ms" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Max velocity development", quality: "Step frequency optimization", trainingMethod: "Wicket runs 4–6 × 20–30 m (tight spacing), 2×/wk; cadence targets" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Max velocity development", quality: "Functional leg stiffness", trainingMethod: "Drop jumps 20–40 cm 4–6 × 5–8, 2×/wk; RSIST ankle/knee 3–5 × 3–5 s" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Max velocity development", quality: "Vertical force at speed", trainingMethod: "Heavy partial squats 3–5 × 3–5 @85–95% 1RM, 1–2×/wk; fly sprints as above" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Max velocity development", quality: "Hip flexor velocity", trainingMethod: "High-knee switch drills 4–6 × 10–15 cycles, 2×/wk; resisted band switches 3–4 × 8–12" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Max velocity development", quality: "Hip extensor velocity", trainingMethod: "Light sled runs 20–30 m (≤10% v-dec) 4–8 reps, 2×/wk with max intent" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Max velocity development", quality: "Ankle stiffness", trainingMethod: "Ankling/pogos 4–6 × 20–30 contacts, 2–3×/wk; isometric calf 4–5 × 30–45 s" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Max velocity development", quality: "Elastic energy return", trainingMethod: "Bounding series 3–5 × 20–30 m, 1–2×/wk; technical emphasis" },
-  { overarchingGoal: "Improving sprint ability", subGoal: "Max velocity development", quality: "Technical posture and pelvis control", trainingMethod: "Posture drills (A-run posture holds) 3–5 × 20–30 m, 2×/wk; cues neutral pelvis" },
-
-  // Change of Direction goals
-  { overarchingGoal: "Improving change of direction (COD) ability", subGoal: "Deceleration capacity", quality: "High braking force eccentrically", trainingMethod: "Decel runs 10–20 m → stick: 4–6 × 3–5, 2×/wk; eccentric split squats 3–5 × 4–6 @70–85% with 3–4 s lowering" },
-  { overarchingGoal: "Improving change of direction (COD) ability", subGoal: "Deceleration capacity", quality: "Rate of force absorption", trainingMethod: "Drop landings 20–40 cm 3–5 × 4–6, 2×/wk; cue 'quiet fast feet'" },
-  { overarchingGoal: "Improving change of direction (COD) ability", subGoal: "Deceleration capacity", quality: "Stiffness modulation", trainingMethod: "Isometric mid-range lunges 3–5 × 20–40 s, 2×/wk; progress to reactive hops" },
-  { overarchingGoal: "Improving change of direction (COD) ability", subGoal: "Deceleration capacity", quality: "Trunk–hip control", trainingMethod: "Anti-rotation/lateral core 3–4 × 8–12 + carries 4–6 × 20–40 m, 2–3×/wk" },
-  { overarchingGoal: "Improving change of direction (COD) ability", subGoal: "Deceleration capacity", quality: "Foot placement precision", trainingMethod: "Cone-braking patterns 6–10 × 10–20 m, 2×/wk; video foot strike" },
-
-  // Muscle Mass goals
-  { overarchingGoal: "Increasing muscle mass", subGoal: "Global hypertrophy (whole body)", quality: "Positive protein balance (training-induced MPS)", trainingMethod: "RT 10–20 hard sets/muscle/wk @ 6–20 reps, 30–85% 1RM; distribute 2–4×/wk; protein 1.6–2.2 g/kg/day (note, nutrition outside training scope)" },
-  { overarchingGoal: "Increasing muscle mass", subGoal: "Global hypertrophy (whole body)", quality: "Mechanical tension tolerance", trainingMethod: "Compound lifts 3–5 × 6–10 @ 70–85% 1RM, 2–4×/wk; proximity to failure 0–2 RIR" },
-  { overarchingGoal: "Increasing muscle mass", subGoal: "Global hypertrophy (whole body)", quality: "Stretch-mediated signaling", trainingMethod: "Long-length partials (e.g., incline DB press deep): 3–5 × 8–12, 2–3×/wk" },
-  { overarchingGoal: "Increasing muscle mass", subGoal: "Global hypertrophy (whole body)", quality: "Fiber hypertrophy (type I and II)", trainingMethod: "Mixed loading: 3–5 × 5–8 @ 80–85% + 2–4 × 12–20 @ 30–50%, 2–4×/wk" },
-
-  { overarchingGoal: "Increasing muscle mass", subGoal: "Regional hypertrophy (lower body)", quality: "Quadriceps cross-sectional area", trainingMethod: "Back/front squat or leg press 3–5 × 6–12 @ 65–85% 1RM, 2–3×/wk" },
-  { overarchingGoal: "Increasing muscle mass", subGoal: "Regional hypertrophy (lower body)", quality: "Hamstrings cross-sectional area", trainingMethod: "RDL/Nordic 3–4 × 6–10, 2×/wk; long-length bias" },
-  { overarchingGoal: "Increasing muscle mass", subGoal: "Regional hypertrophy (lower body)", quality: "Gluteal cross-sectional area", trainingMethod: "Hip thrust 3–5 × 6–12 @ 70–85%, 2–3×/wk; step-ups 3–4 × 8–12" },
-
-  // Strength goals
-  { overarchingGoal: "Increasing muscle strength", subGoal: "Maximal dynamic strength (1RM)", quality: "Myofibrillar hypertrophy", trainingMethod: "Heavy compound RT 3–6 × 3–6 @ 80–90% 1RM, 2–3×/wk" },
-  { overarchingGoal: "Increasing muscle strength", subGoal: "Maximal dynamic strength (1RM)", quality: "Neural drive (recruitment/firing)", trainingMethod: "Singles/doubles @ 90–95% 1RM 3–6 total lifts, 1–2×/wk; long rest 3–5 min" },
-  { overarchingGoal: "Increasing muscle strength", subGoal: "Maximal dynamic strength (1RM)", quality: "Intermuscular coordination", trainingMethod: "Competition lifts 4–6 × 1–3 @ 85–92% 1RM, 2×/wk; pause/tempo variants" },
-
-  { overarchingGoal: "Increasing muscle strength", subGoal: "Rate of force development", quality: "Early-phase neural drive", trainingMethod: "Ballistic lifts 20–40% 1RM 4–6 × 3–5, 2×/wk; contrast with heavy sets" },
-  { overarchingGoal: "Increasing muscle strength", subGoal: "Rate of force development", quality: "Tendon stiffness", trainingMethod: "Short high-intent isometrics 4–6 × 3–5 s, 2–3×/wk" },
-  { overarchingGoal: "Increasing muscle strength", subGoal: "Rate of force development", quality: "Explosive coordination", trainingMethod: "Olympic lift derivatives 4–6 × 2–3 @ 60–80%, 2×/wk" },
-
-  // Running goals
-  { overarchingGoal: "Running – short distance performance (400–800 m)", subGoal: "Speed reserve & maximal velocity", quality: "Maximal sprint speed", trainingMethod: "Fly 20–30 m: 4–8 reps @98–100% vmax, 1–2×/wk; 3–5 min rest" },
-  { overarchingGoal: "Running – short distance performance (400–800 m)", subGoal: "Speed reserve & maximal velocity", quality: "Step frequency", trainingMethod: "Wicket runs 4–6 × 20–30 m, 1–2×/wk" },
-  { overarchingGoal: "Running – short distance performance (400–800 m)", subGoal: "Speed reserve & maximal velocity", quality: "Step length", trainingMethod: "Acceleration buildups 6–10 × 30–60 m, 1–2×/wk" },
-
-  { overarchingGoal: "Running – short distance performance (400–800 m)", subGoal: "Anaerobic capacity & glycolytic power", quality: "Glycolytic enzyme activity", trainingMethod: "Special endurance I: 3–5 × 200–300 m @ 93–97%, 1×/wk; 6–12 min rest" },
-  { overarchingGoal: "Running – short distance performance (400–800 m)", subGoal: "Anaerobic capacity & glycolytic power", quality: "Buffering capacity", trainingMethod: "Sets of 3–4 × 150–200 m with 2–3 min rest, 1×/wk" },
-
-  { overarchingGoal: "Running – middle distance performance (1500–5000 m)", subGoal: "Aerobic power (VO2max)", quality: "Cardiac output", trainingMethod: "VO2max intervals 5 × 3 min or 6 × 2 min @ 95–100% vVO2max, 1–2×/wk" },
-  { overarchingGoal: "Running – middle distance performance (1500–5000 m)", subGoal: "Aerobic power (VO2max)", quality: "Capillarization", trainingMethod: "Z2 volume 30–90 min, 2–4×/wk" },
-  { overarchingGoal: "Running – middle distance performance (1500–5000 m)", subGoal: "Aerobic power (VO2max)", quality: "Mitochondrial density", trainingMethod: "Tempo 20–40 min @ LT, 1–2×/wk" },
-
-  // Throwing goals
-  { overarchingGoal: "Increasing throwing ability", subGoal: "Release speed", quality: "Proximal-to-distal sequencing", trainingMethod: "Med-ball scoop/rotational throws 6–10 × 2–3, 2–3×/wk; full intent, 2–3 min rest" },
-  { overarchingGoal: "Increasing throwing ability", subGoal: "Release speed", quality: "Trunk rotational power", trainingMethod: "Heavy rotational MB (3–6 kg) 4–6 × 3–5, 2×/wk; add cable chops 3–4 × 6–10" },
-  { overarchingGoal: "Increasing throwing ability", subGoal: "Release speed", quality: "Hip–shoulder separation", trainingMethod: "Separation drills with bands 3–4 × 6–10, 2×/wk; cue delayed upper-body" },
-
-  { overarchingGoal: "Increasing throwing ability", subGoal: "Accuracy/consistency", quality: "Motor control under speed", trainingMethod: "Submax to max target throws 5–8 × 5–8/wk; constrain to hit zones" },
-  { overarchingGoal: "Increasing throwing ability", subGoal: "Accuracy/consistency", quality: "Visual targeting", trainingMethod: "Quiet eye drills 2–3 × 5–8 min, 2×/wk; integrate into target throws" },
-
-  // Olympic Weightlifting goals
-  { overarchingGoal: "Improving Olympic weightlifting performance", subGoal: "Snatch total", quality: "Second-pull power", trainingMethod: "Snatch pulls 4–6 × 2–3 @ 90–110% of snatch, 2×/wk" },
-  { overarchingGoal: "Improving Olympic weightlifting performance", subGoal: "Snatch total", quality: "Pull-under speed", trainingMethod: "Tall snatch/snatch balance 5–8 × 2–3 light–moderate, 2–3×/wk" },
-  { overarchingGoal: "Improving Olympic weightlifting performance", subGoal: "Snatch total", quality: "Overhead mobility", trainingMethod: "Thoracic/shoulder ER mobility 3 × 30–45 s, 3×/wk" },
-
-  { overarchingGoal: "Improving Olympic weightlifting performance", subGoal: "Clean & jerk total", quality: "First-pull strength", trainingMethod: "Clean deadlift 3–5 × 3–5 @ 90–110% clean, 2×/wk" },
-  { overarchingGoal: "Improving Olympic weightlifting performance", subGoal: "Clean & jerk total", quality: "Front squat strength", trainingMethod: "Front squat 3–5 × 2–5 @ 80–92% 1RM, 2×/wk" },
-
-  // Sport-specific endurance goals
-  { overarchingGoal: "Football-specific endurance (American football)", subGoal: "Drive-to-drive repeatability", quality: "Alactic power", trainingMethod: "10–12 × 5–10 s position sprints, 2×/wk; full rest 2–3 min" },
-  { overarchingGoal: "Football-specific endurance (American football)", subGoal: "Drive-to-drive repeatability", quality: "Aerobic recovery", trainingMethod: "Tempo runs 8–12 × 100–150 m @ 70–75% with 45–60 s rest, 2×/wk" },
-
-  { overarchingGoal: "Soccer-specific endurance", subGoal: "High-speed running exposure", quality: "Aerobic power", trainingMethod: "4 × 4 min @ 90–95% HRmax, 1×/wk" },
-  { overarchingGoal: "Soccer-specific endurance", subGoal: "High-speed running exposure", quality: "Speed reserve", trainingMethod: "Fly 20–30 m 4–8 reps, 1×/wk" },
-
-  { overarchingGoal: "Rugby-specific endurance", subGoal: "Repeat-effort ability (collision + sprint)", quality: "Aerobic recovery", trainingMethod: "SSG/collision games 4–6 × 2–4 min, 2×/wk" },
-  { overarchingGoal: "Rugby-specific endurance", subGoal: "Repeat-effort ability (collision + sprint)", quality: "Alactic power", trainingMethod: "10–12 × 5–10 s sprints, 2×/wk" },
-
-  { overarchingGoal: "Basketball-specific endurance", subGoal: "Transition play repeatability", quality: "Repeated sprint ability with COD", trainingMethod: "Court shuttles 10–20 m 3–4 sets × 6–10 reps, 2×/wk" },
-
-  // Continue from previous entries - Olympic Weightlifting completion
-  { overarchingGoal: "Improving Olympic weightlifting performance", subGoal: "Receiving positions", quality: "Trunk stiffness", trainingMethod: "Bracing drills + heavy carries 4–6 × 20–40 m, 2–3×/wk" },
-  { overarchingGoal: "Improving Olympic weightlifting performance", subGoal: "Technique robustness under fatigue", quality: "Motor pattern consistency", trainingMethod: "EMOM technique work @ 60–70% for 8–12 min, 1–2×/wk" },
-  { overarchingGoal: "Improving Olympic weightlifting performance", subGoal: "Technique robustness under fatigue", quality: "Bar path under load", trainingMethod: "Paused lifts 3–5 × 2–3 @ 70–80%, 1–2×/wk" },
-  { overarchingGoal: "Improving Olympic weightlifting performance", subGoal: "Technique robustness under fatigue", quality: "Psychological arousal control", trainingMethod: "Competition simulations 1×/wk in peaking" },
-  { overarchingGoal: "Improving Olympic weightlifting performance", subGoal: "Technique robustness under fatigue", quality: "Rhythm maintenance", trainingMethod: "Tempo lifts 3–4 × 3–5 @ 60–75%, 1×/wk" },
-
-  // Football-specific endurance (American football) completion
-  { overarchingGoal: "Football-specific endurance (American football)", subGoal: "Drive-to-drive repeatability", quality: "Contact robustness", trainingMethod: "Grappling/collision circuits 6–10 × 10–20 s, 1–2×/wk" },
-  { overarchingGoal: "Football-specific endurance (American football)", subGoal: "Drive-to-drive repeatability", quality: "Acceleration repeatability", trainingMethod: "Resisted starts 6–10 × 10–20 m, 2×/wk" },
-  { overarchingGoal: "Football-specific endurance (American football)", subGoal: "Drive-to-drive repeatability", quality: "Heat tolerance", trainingMethod: "Heat acclimation 20–40 min easy, 2×/wk" },
-  { overarchingGoal: "Football-specific endurance (American football)", subGoal: "Special teams sprint capacity", quality: "Acceleration", trainingMethod: "10–20 m starts 6–10 reps, 2×/wk" },
-  { overarchingGoal: "Football-specific endurance (American football)", subGoal: "Special teams sprint capacity", quality: "Max velocity reserve", trainingMethod: "Fly 20–30 m 4–8 reps, 1×/wk" },
-  { overarchingGoal: "Football-specific endurance (American football)", subGoal: "Special teams sprint capacity", quality: "Repeated sprint ability", trainingMethod: "RSA 2–3 sets/wk: 6–10 × 20–30 m; 20–30 s rest" },
-  { overarchingGoal: "Football-specific endurance (American football)", subGoal: "Special teams sprint capacity", quality: "Technique in pads", trainingMethod: "Sprint drills in pads 1–2×/wk" },
-  { overarchingGoal: "Football-specific endurance (American football)", subGoal: "Contact work capacity", quality: "Eccentric–isometric strength", trainingMethod: "Eccentric squats 3–5 × 4–6 & isometric holds 4 × 20–40 s, 2×/wk" },
-  { overarchingGoal: "Football-specific endurance (American football)", subGoal: "Contact work capacity", quality: "Grappling endurance", trainingMethod: "Partner grapples 6–10 × 15–30 s, 2×/wk" },
-  { overarchingGoal: "Football-specific endurance (American football)", subGoal: "Contact work capacity", quality: "Trunk stiffness", trainingMethod: "Carries/planks 3–5 × 30–45 s, 2–3×/wk" },
-  { overarchingGoal: "Football-specific endurance (American football)", subGoal: "Contact work capacity", quality: "Neck strength", trainingMethod: "Neck isometrics 3–4 × 10–20 s, 2–3×/wk" },
-
-  // Soccer-specific endurance completion
-  { overarchingGoal: "Soccer-specific endurance", subGoal: "High-speed running exposure", quality: "Hamstring robustness", trainingMethod: "Nordics 2×/wk + calf isos 3×/wk" },
-  { overarchingGoal: "Soccer-specific endurance", subGoal: "High-speed running exposure", quality: "Technique at high speed", trainingMethod: "Wicket runs 4–6 × 20–30 m, 1–2×/wk" },
-  { overarchingGoal: "Soccer-specific endurance", subGoal: "High-speed running exposure", quality: "Heat tolerance", trainingMethod: "Heat sessions 20–40 min easy, 2×/wk in pre-season" },
-  { overarchingGoal: "Soccer-specific endurance", subGoal: "Worst-case scenarios (1–5 min) tolerance", quality: "Critical speed/metabolic power", trainingMethod: "4–6 × 2–4 min small-sided games (4v4–6v6) hard, 2×/wk" },
-  { overarchingGoal: "Soccer-specific endurance", subGoal: "Worst-case scenarios (1–5 min) tolerance", quality: "COD endurance", trainingMethod: "Shuttle runs 15–30 m 2–3 sets of 6–10 reps, 1–2×/wk" },
-  { overarchingGoal: "Soccer-specific endurance", subGoal: "Worst-case scenarios (1–5 min) tolerance", quality: "Tactical pacing", trainingMethod: "Conditioned games (touch limits) 1–2×/wk" },
-  { overarchingGoal: "Soccer-specific endurance", subGoal: "Worst-case scenarios (1–5 min) tolerance", quality: "Neuromuscular durability", trainingMethod: "Plyo microdoses 2–3×/wk; track high-speed exposure" },
-  { overarchingGoal: "Soccer-specific endurance", subGoal: "Repeated sprint ability with COD", quality: "PCr resynthesis", trainingMethod: "6–10 × 20–30 m with 20–30 s rest, 1–2×/wk" },
-  { overarchingGoal: "Soccer-specific endurance", subGoal: "Repeated sprint ability with COD", quality: "Glycolytic capacity", trainingMethod: "3–5 × 30–45 s shuttle sets, 1×/wk" },
-  { overarchingGoal: "Soccer-specific endurance", subGoal: "Repeated sprint ability with COD", quality: "Braking–reacceleration mechanics", trainingMethod: "Decel→re-accel drills 6–10 reps, 2×/wk" },
-  { overarchingGoal: "Soccer-specific endurance", subGoal: "Repeated sprint ability with COD", quality: "Decision speed", trainingMethod: "Reactive RSA games 2–3×/wk" },
-  { overarchingGoal: "Soccer-specific endurance", subGoal: "Small-sided game tolerance", quality: "Aerobic–anaerobic mix", trainingMethod: "SSG 4–6 × 3–5 min, 2×/wk" },
-  { overarchingGoal: "Soccer-specific endurance", subGoal: "Small-sided game tolerance", quality: "Accelerations per minute", trainingMethod: "Constraint-led SSG to raise accel count, 1–2×/wk" },
-  { overarchingGoal: "Soccer-specific endurance", subGoal: "Small-sided game tolerance", quality: "Technical skill under fatigue", trainingMethod: "SSG with technical constraints 1–2×/wk" },
-  { overarchingGoal: "Soccer-specific endurance", subGoal: "Small-sided game tolerance", quality: "Spatial cognition", trainingMethod: "Positional games (rondos) 2–3×/wk" },
-
-  // Rugby-specific endurance completion
-  { overarchingGoal: "Rugby-specific endurance", subGoal: "Repeat-effort ability (collision + sprint)", quality: "Contact robustness", trainingMethod: "Grapple/wrestle 6–10 × 15–30 s, 2×/wk" },
-  { overarchingGoal: "Rugby-specific endurance", subGoal: "Repeat-effort ability (collision + sprint)", quality: "COD endurance", trainingMethod: "Shuttles 2–3 sets × 6–10 reps, 1–2×/wk" },
-  { overarchingGoal: "Rugby-specific endurance", subGoal: "Repeat-effort ability (collision + sprint)", quality: "Trunk strength", trainingMethod: "Carries/planks 3–5 × 30–45 s, 2–3×/wk" },
-  { overarchingGoal: "Rugby-specific endurance", subGoal: "Scrum/ruck/maul work capacity", quality: "Isometric strength", trainingMethod: "Scrum machine isometrics 6–10 × 5–8 s, 2×/wk" },
-  { overarchingGoal: "Rugby-specific endurance", subGoal: "Scrum/ruck/maul work capacity", quality: "Neck/shoulder endurance", trainingMethod: "Isometric neck/shoulder holds 3–4 × 20–30 s, 2–3×/wk" },
-  { overarchingGoal: "Rugby-specific endurance", subGoal: "Scrum/ruck/maul work capacity", quality: "Grip endurance", trainingMethod: "Towel holds 4–6 × 20–30 s, 2–3×/wk" },
-  { overarchingGoal: "Rugby-specific endurance", subGoal: "Scrum/ruck/maul work capacity", quality: "Hip drive strength", trainingMethod: "Hip thrust 3–5 × 3–6 @ 80–90%, 2×/wk" },
-  { overarchingGoal: "Rugby-specific endurance", subGoal: "Scrum/ruck/maul work capacity", quality: "Breathing–bracing coordination", trainingMethod: "Loaded carries 4–6 × 20–40 m, 2–3×/wk" },
-  { overarchingGoal: "Rugby-specific endurance", subGoal: "Backline high-speed running", quality: "Speed reserve", trainingMethod: "Fly 20–30 m 4–8 reps, 1×/wk" },
-  { overarchingGoal: "Rugby-specific endurance", subGoal: "Backline high-speed running", quality: "Repeated sprint ability", trainingMethod: "RSA 2–3 sets/wk" },
-  { overarchingGoal: "Rugby-specific endurance", subGoal: "Backline high-speed running", quality: "COD at speed", trainingMethod: "505 drills 6–10 reps, 1–2×/wk" },
-  { overarchingGoal: "Rugby-specific endurance", subGoal: "Backline high-speed running", quality: "Hamstring robustness", trainingMethod: "Nordics 2×/wk + calf isos 3×/wk" },
-
-  // Basketball-specific endurance completion
-  { overarchingGoal: "Basketball-specific endurance", subGoal: "Transition play repeatability", quality: "Aerobic recovery", trainingMethod: "Tempo intervals 6–10 × 200–300 m @ 70–75%, 2×/wk" },
-  { overarchingGoal: "Basketball-specific endurance", subGoal: "Transition play repeatability", quality: "Decision speed", trainingMethod: "Reactive transition drills 8–12 × 10–20 s, 2×/wk" },
-  { overarchingGoal: "Basketball-specific endurance", subGoal: "Transition play repeatability", quality: "Heat tolerance", trainingMethod: "Heat acclimation 20–40 min easy, 2×/wk pre-season" },
-  { overarchingGoal: "Basketball-specific endurance", subGoal: "Worst-case shift segments (2–4 min)", quality: "Metabolic power", trainingMethod: "SSG 4–6 × 2–4 min hard, 2×/wk" },
-  { overarchingGoal: "Basketball-specific endurance", subGoal: "Worst-case shift segments (2–4 min)", quality: "COD endurance", trainingMethod: "COD shuttles 2–3 sets × 6–10 reps, 1–2×/wk" },
-  { overarchingGoal: "Basketball-specific endurance", subGoal: "Worst-case shift segments (2–4 min)", quality: "Neuromuscular durability", trainingMethod: "Plyo microdose 2–3×/wk; cap jumps/session" },
-  { overarchingGoal: "Basketball-specific endurance", subGoal: "Repeated jumping & contesting", quality: "Reactive strength", trainingMethod: "Drop/bounce jumps 3–5 × 5–8, 2×/wk" },
-  { overarchingGoal: "Basketball-specific endurance", subGoal: "Repeated jumping & contesting", quality: "Tendon stiffness", trainingMethod: "Isometrics 4 × 30–45 s, 3×/wk" },
-  { overarchingGoal: "Basketball-specific endurance", subGoal: "Repeated jumping & contesting", quality: "Trunk/pelvis control", trainingMethod: "Anti-rotation/lateral 3–4 × 8–12, 2–3×/wk" },
-  { overarchingGoal: "Basketball-specific endurance", subGoal: "Repeated jumping & contesting", quality: "Landing mechanics", trainingMethod: "Drop to stick 4–6 × 3–5, 2×/wk" },
-  { overarchingGoal: "Basketball-specific endurance", subGoal: "Repeated jumping & contesting", quality: "Foot intrinsic strength", trainingMethod: "Short-foot drills 3–5 × 10–15 daily" },
-
-  // Core/trunk strength goals
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Anti-extension capacity", quality: "Isometric trunk torque", trainingMethod: "Front/ab wheel planks 3–5 × 20–40 s, 2–3×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Anti-extension capacity", quality: "Ribcage–pelvis alignment", trainingMethod: "90/90 breathing + dead bug 3–4 × 6–10, 3×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Anti-extension capacity", quality: "Breathing–bracing synergy", trainingMethod: "Brace drills under load + carries 4–6 × 20–40 m, 2–3×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Anti-extension capacity", quality: "Hip flexor balance", trainingMethod: "Hip flexor eccentrics 3–4 × 8–12, 2×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Anti-rotation capacity", quality: "Oblique strength", trainingMethod: "Pallof press 3–4 × 8–12/side, 2–3×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Anti-rotation capacity", quality: "Transversus abdominis control", trainingMethod: "Low-load bracing 3–4 × 10–15, 3×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Anti-rotation capacity", quality: "Lumbopelvic control", trainingMethod: "Marching/offset carries 4–6 × 20–40 m, 2–3×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Anti-lateral flexion capacity", quality: "Quadratus lumborum strength", trainingMethod: "Suitcase carries 4–6 × 20–40 m, 2–3×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Anti-lateral flexion capacity", quality: "Frontal-plane stiffness", trainingMethod: "Side plank 3–4 × 20–45 s, 3×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Anti-lateral flexion capacity", quality: "Single-leg stance control", trainingMethod: "Single-leg RDL 3–4 × 6–10, 2×/wk; balance work" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Rotational power", quality: "Hip–shoulder separation", trainingMethod: "MB rotational throws 4–6 × 3–5, 2×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Rotational power", quality: "Thoracic mobility", trainingMethod: "Open books/extension 3 × 30–45 s, 3×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Rotational power", quality: "Sequencing efficiency", trainingMethod: "Step-behind MB throws 4–6 × 3–5, 2×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Rotational power", quality: "Pelvic rotation speed", trainingMethod: "Cable rotations 3–4 × 6–10, 2×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Isometric carry capacity", quality: "Grip–trunk linkage", trainingMethod: "Farmer carries 4–6 × 20–40 m, 2–3×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Isometric carry capacity", quality: "Gait under load", trainingMethod: "Suitcase/front rack carries 4–6 × 20–40 m, 2–3×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Isometric carry capacity", quality: "Spinal stability", trainingMethod: "Front/side planks 3–4 × 30–45 s, 2–3×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Isometric carry capacity", quality: "Anti-shear tolerance", trainingMethod: "Dead bug progressions 3–4 × 8–12, 3×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Trunk endurance for running", quality: "Lumbopelvic stability", trainingMethod: "Glute bridge/clam + march 3–4 × 8–12, 3×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Trunk endurance for running", quality: "Pelvic tilt control", trainingMethod: "Posterior tilt drills 3–4 × 10–15, 3×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Trunk endurance for running", quality: "Breathing efficiency", trainingMethod: "Nasal breathing drills during easy runs 1–2×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Trunk endurance for running", quality: "Shock attenuation", trainingMethod: "Mini-hops 4–6 × 20 contacts, 2–3×/wk" },
-
-  // Dunking ability goals
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Approach speed & rhythm", quality: "Curvilinear approach running", trainingMethod: "Approach runs with curve 6–10 reps @80–90%, 2×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Approach speed & rhythm", quality: "Penultimate step mechanics", trainingMethod: "Penultimate drills 6–10 reps, 2×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Approach speed & rhythm", quality: "Posture control", trainingMethod: "Posture drills + video 6–10 reps, 2×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Approach speed & rhythm", quality: "Foot strike precision", trainingMethod: "Checkmark approaches 6–10 reps, 2×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Take-off reactive strength", quality: "Reactive strength index (RSI)", trainingMethod: "Drop/bounce jumps 4–6 × 5–8 (20–40 cm), 2×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Take-off reactive strength", quality: "Ankle stiffness", trainingMethod: "Isometric calf 4–5 × 30–45 s, 3×/wk; pogos 2–3×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Take-off reactive strength", quality: "Knee stiffness", trainingMethod: "Isometric leg press 4 × 30–45 s, 2–3×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Take-off reactive strength", quality: "Hip stiffness", trainingMethod: "RSIST hip 4–6 × 3–5 s, 2×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Take-off reactive strength", quality: "Short ground contact ability", trainingMethod: "Drop jumps timing focus 4–6 × 5–8, 2×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Take-off reactive strength", quality: "Elastic energy return", trainingMethod: "Bounding 3–5 × 20–30 m, 1–2×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Hip–knee power at take-off", quality: "Rate of force development", trainingMethod: "Max-intent isometrics 3–6 × 3–5 s + loaded jumps 20–40% 1RM 4–6 × 3–5, 2×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Hip–knee power at take-off", quality: "Concentric power", trainingMethod: "Trap-bar jump squats 4–6 × 3–5 @ 20–40% 1RM, 2×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Hip–knee power at take-off", quality: "Arm swing timing", trainingMethod: "Full-approach jumps 6–8 × 2–3, 2×/wk; video feedback" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Hip–knee power at take-off", quality: "Trunk stiffness", trainingMethod: "Heavy carries 4–6 × 20–40 m + anti-extension isos 3–5 × 20–40 s, 2–3×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Jump technique & ball control", quality: "Arm swing with ball", trainingMethod: "Ball dunks/rim touches 5–8 × 1–2, 2×/wk; long rest" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Jump technique & ball control", quality: "Off-hand protection", trainingMethod: "Pad-obstructed jumps 4–6 × 2–3, 1–2×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Jump technique & ball control", quality: "Mid-air body control", trainingMethod: "Low-hoop technical dunks 5–8 × 2–3, 1–2×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Jump technique & ball control", quality: "Landing mechanics", trainingMethod: "Drop-to-stick 4–6 × 3–5, 2×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Tissue robustness for high approach jumps", quality: "Patellar tendon tolerance", trainingMethod: "Spanish squats 4–5 × 30–45 s, 3×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Tissue robustness for high approach jumps", quality: "Achilles tendon tolerance", trainingMethod: "Isometric calf (straight/bent) 4–5 × 30–45 s, 3×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Tissue robustness for high approach jumps", quality: "Calf–hamstring strength", trainingMethod: "Nordics 3–4 × 4–6 & seated calf 3–5 × 6–10 heavy, 2×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Tissue robustness for high approach jumps", quality: "Foot intrinsic strength", trainingMethod: "Short-foot drills daily 3–5 × 10–15" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Tissue robustness for high approach jumps", quality: "Bone loading tolerance", trainingMethod: "Low-height multidirectional hops 5–8 × 10–20 contacts, 3–5×/wk" },
-
-  // High jump ability goals
-  { overarchingGoal: "Improving high jump ability", subGoal: "Approach curve & speed", quality: "Curve running technique", trainingMethod: "Curvilinear approaches 6–10 reps @80–90%, 2×/wk" },
-  { overarchingGoal: "Improving high jump ability", subGoal: "Approach curve & speed", quality: "Inside–outside leg stiffness balance", trainingMethod: "Curved wicket runs 4–6 × 20–30 m, 2×/wk" },
-  { overarchingGoal: "Improving high jump ability", subGoal: "Approach curve & speed", quality: "Lean & centripetal force management", trainingMethod: "Cone-guided curve strides 6–8 × 30–40 m @70–85%, 1–2×/wk" },
-  { overarchingGoal: "Improving high jump ability", subGoal: "Approach curve & speed", quality: "Approach rhythm", trainingMethod: "Metronome approaches 6–10 reps, 1–2×/wk" },
-  { overarchingGoal: "Improving high jump ability", subGoal: "Penultimate & plant mechanics", quality: "Lowering CoM on penultimate step", trainingMethod: "Penultimate pop-ups 6–10 runs, 2×/wk" },
-  { overarchingGoal: "Improving high jump ability", subGoal: "Penultimate & plant mechanics", quality: "Stiff plant leg", trainingMethod: "Single-leg drop jumps 4–6 × 4–6, 2×/wk" },
-  { overarchingGoal: "Improving high jump ability", subGoal: "Penultimate & plant mechanics", quality: "Horizontal-to-vertical impulse conversion", trainingMethod: "Short-approach take-offs 6–10 jumps @≥90%, 2×/wk" },
-  { overarchingGoal: "Improving high jump ability", subGoal: "Penultimate & plant mechanics", quality: "Trunk–arm synchronization", trainingMethod: "MB step-to-plant overhead throws 4–6 × 4–6, 2×/wk" },
-  { overarchingGoal: "Improving high jump ability", subGoal: "Take-off power & stiffness", quality: "Rate of force development", trainingMethod: "IMTP/split-squat isos 4–6 × 3–5 s, 2×/wk" },
-  { overarchingGoal: "Improving high jump ability", subGoal: "Take-off power & stiffness", quality: "SSC efficiency", trainingMethod: "Drop jumps 4–6 × 5–8 (20–40 cm), 2×/wk" },
-  { overarchingGoal: "Improving high jump ability", subGoal: "Take-off power & stiffness", quality: "Ankle stiffness", trainingMethod: "Pogos/ankling 4–6 × 20–30 contacts, 2–3×/wk" },
-  { overarchingGoal: "Improving high jump ability", subGoal: "Take-off power & stiffness", quality: "Hip stiffness", trainingMethod: "RSIST hip 4–6 × 3–5 s, 2×/wk" },
-  { overarchingGoal: "Improving high jump ability", subGoal: "Take-off power & stiffness", quality: "Leg alignment", trainingMethod: "A/B-skips with bands 3–5 × 20 m, 2×/wk" },
-  { overarchingGoal: "Improving high jump ability", subGoal: "Take-off power & stiffness", quality: "Pelvis control", trainingMethod: "Pallof press marching 3–4 × 8–12/side, 2–3×/wk" },
-  { overarchingGoal: "Improving high jump ability", subGoal: "Bar clearance technique", quality: "Arching/rotation timing", trainingMethod: "Back-over low bar 6–10 reps, 2×/wk" },
-  { overarchingGoal: "Improving high jump ability", subGoal: "Bar clearance technique", quality: "Head/arm sequencing", trainingMethod: "Scissor/arm cue drills 4–6 × 4–6, 1–2×/wk" },
-  { overarchingGoal: "Improving high jump ability", subGoal: "Bar clearance technique", quality: "Proprioception", trainingMethod: "Low-bar tactile clearances 8–12 reps, 1–2×/wk" },
-  { overarchingGoal: "Improving high jump ability", subGoal: "Bar clearance technique", quality: "Flexibility (spine/hip/shoulder)", trainingMethod: "PNF/contract–relax 3–4 × 30–45 s per group, 3×/wk" },
-
-  // Long jump ability goals
-  { overarchingGoal: "Improving long jump ability", subGoal: "Approach speed & accuracy", quality: "Max velocity reserve", trainingMethod: "Fly 20–30 m 4–8 reps, 2×/wk" },
-  { overarchingGoal: "Improving long jump ability", subGoal: "Approach speed & accuracy", quality: "Step count consistency", trainingMethod: "Checkmark approaches 6–10 runs, 2×/wk" },
-  { overarchingGoal: "Improving long jump ability", subGoal: "Approach speed & accuracy", quality: "Visual steering", trainingMethod: "Board-focused late-steer runs 6–8, 1–2×/wk" },
-  { overarchingGoal: "Improving long jump ability", subGoal: "Approach speed & accuracy", quality: "Board accuracy", trainingMethod: "Toe-to-board accuracy drills 8–12 reps, 2×/wk" },
-  { overarchingGoal: "Improving long jump ability", subGoal: "Approach speed & accuracy", quality: "Approach rhythm", trainingMethod: "Wicket runs 4–6 × 20–30 m, 2×/wk" },
-  { overarchingGoal: "Improving long jump ability", subGoal: "Take-off conversion (horizontal→vertical)", quality: "Penultimate step preparation", trainingMethod: "Penultimate drop-ins 6–10 jumps, 2×/wk" },
-  { overarchingGoal: "Improving long jump ability", subGoal: "Take-off conversion (horizontal→vertical)", quality: "Leg stiffness", trainingMethod: "Stiff-leg bounds 3–5 × 20–30 m, 2×/wk" },
-  { overarchingGoal: "Improving long jump ability", subGoal: "Take-off conversion (horizontal→vertical)", quality: "Rate of force development", trainingMethod: "Trap-bar jump squats 4–6 × 3–5 @ 20–40% 1RM, 2×/wk" },
-  { overarchingGoal: "Improving long jump ability", subGoal: "Take-off conversion (horizontal→vertical)", quality: "Hip extensor power", trainingMethod: "Hip thrust 3–5 × 3–6 @ 80–90% 1RM, 2×/wk" },
-  { overarchingGoal: "Improving long jump ability", subGoal: "Take-off conversion (horizontal→vertical)", quality: "Trunk–arm swing timing", trainingMethod: "MB forward heaves 4–6 × 4–6, 2×/wk" },
-  { overarchingGoal: "Improving long jump ability", subGoal: "Flight & landing control", quality: "In-air posture control", trainingMethod: "Hitch-kick drills into sand 6–10, 2×/wk" },
-  { overarchingGoal: "Improving long jump ability", subGoal: "Flight & landing control", quality: "Hitch-kick/hang technique", trainingMethod: "Sand technique 6–10 reps, 1–2×/wk" },
-  { overarchingGoal: "Improving long jump ability", subGoal: "Flight & landing control", quality: "Eccentric landing strength", trainingMethod: "Altitude landings 30–60 cm: 3–5 × 4–6, 2×/wk" },
-  { overarchingGoal: "Improving long jump ability", subGoal: "Flight & landing control", quality: "Sand impact tolerance", trainingMethod: "Low-height drop to sand 4–6 × 5–8, 1–2×/wk" },
-
-  // Triple jump ability goals
-  { overarchingGoal: "Improving triple jump ability", subGoal: "Phase distribution (hop–step–jump)", quality: "Leg stiffness modulation", trainingMethod: "Bounce series 4–6 × 20–30 m, 2–3×/wk" },
-  { overarchingGoal: "Improving triple jump ability", subGoal: "Phase distribution (hop–step–jump)", quality: "Elastic energy recycling", trainingMethod: "Depth jumps 3–5 × 4–6 (20–40 cm), 1–2×/wk" },
-  { overarchingGoal: "Improving triple jump ability", subGoal: "Phase distribution (hop–step–jump)", quality: "Eccentric strength", trainingMethod: "Nordics 3–4 × 4–6 + long-length RDL 3–4 × 6–8 @ 65–80%, 2×/wk" },
-  { overarchingGoal: "Improving triple jump ability", subGoal: "Phase distribution (hop–step–jump)", quality: "Technique timing", trainingMethod: "Short-approach triple 6–10 contacts, 2×/wk; video feedback" },
-  { overarchingGoal: "Improving triple jump ability", subGoal: "Phase distribution (hop–step–jump)", quality: "Asymmetry management", trainingMethod: "Alternating hop–step drills 4–6 × 20 m, 2×/wk" },
-  { overarchingGoal: "Improving triple jump ability", subGoal: "Approach speed & braking control", quality: "Speed reserve", trainingMethod: "Fly 20–30 m 4–8 reps, 2×/wk; 3–5 min rest" },
-  { overarchingGoal: "Improving triple jump ability", subGoal: "Approach speed & braking control", quality: "Penultimate step preparation", trainingMethod: "Penultimate-to-hop 6–10 reps, 2×/wk; cue quick drop & stiff hop" },
-  { overarchingGoal: "Improving triple jump ability", subGoal: "Approach speed & braking control", quality: "Foot placement precision", trainingMethod: "Mini-hurdle step patterns 4–6 × 20 m, 2×/wk; narrow/neutral foot strike" },
-  { overarchingGoal: "Improving triple jump ability", subGoal: "Approach speed & braking control", quality: "Trunk control", trainingMethod: "Heavy anti-rotation carries 4–6 × 20–40 m, 2–3×/wk" },
-  { overarchingGoal: "Improving triple jump ability", subGoal: "Ground contact quality in each phase", quality: "Short ground contact with adequate impulse", trainingMethod: "Drop jumps 4–6 × 5–8 (20–40 cm), 2×/wk; aim tc < 200 ms" },
-  { overarchingGoal: "Improving triple jump ability", subGoal: "Ground contact quality in each phase", quality: "Ankle–knee co-contraction", trainingMethod: "Stiffness hops 4–6 × 10–15, 2–3×/wk" },
-  { overarchingGoal: "Improving triple jump ability", subGoal: "Ground contact quality in each phase", quality: "Hip extensor power", trainingMethod: "Power cleans 4–6 × 2–3 @ 70–85% 1RM, 2×/wk; 2–4 min rest" },
-  { overarchingGoal: "Improving triple jump ability", subGoal: "Ground contact quality in each phase", quality: "Pelvis control", trainingMethod: "Band-resisted A-skips 3–5 × 20 m, 2×/wk; focus neutral pelvis" },
-  { overarchingGoal: "Improving triple jump ability", subGoal: "Landing robustness", quality: "Eccentric strength", trainingMethod: "Eccentric squats 3–5 × 4–6 @ 70–85% with 3–4 s lowering, 2×/wk" },
-  { overarchingGoal: "Improving triple jump ability", subGoal: "Landing robustness", quality: "Tendon tolerance", trainingMethod: "Isometric calf raises (straight/bent) 4–5 × 30–45 s, 3×/wk" },
-  { overarchingGoal: "Improving triple jump ability", subGoal: "Landing robustness", quality: "Foot intrinsic strength", trainingMethod: "Short-foot + toe splay daily 3–5 × 10–15" },
-  { overarchingGoal: "Improving triple jump ability", subGoal: "Landing robustness", quality: "Bone loading tolerance", trainingMethod: "Low-height multidirectional hops 5–8 × 10–20 contacts, 3–5×/wk; 4–8 h between bouts" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Anti-extension capacity", quality: "Ribcage–pelvis alignment", trainingMethod: "90/90 breathing + dead bug 3–4 × 6–10, 3×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Anti-rotation capacity", quality: "Oblique strength", trainingMethod: "Pallof press 3–4 × 8–12/side, 2–3×/wk" },
-  { overarchingGoal: "Improving core/trunk strength", subGoal: "Rotational power", quality: "Hip–shoulder separation", trainingMethod: "MB rotational throws 4–6 × 3–5, 2×/wk" },
-
-  // Jumping ability goals
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Approach speed & rhythm", quality: "Curvilinear approach running", trainingMethod: "Approach runs with curve 6–10 reps @80–90%, 2×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Take-off reactive strength", quality: "Reactive strength index (RSI)", trainingMethod: "Drop/bounce jumps 4–6 × 5–8 (20–40 cm), 2×/wk" },
-  { overarchingGoal: "Improving dunking ability (basketball)", subGoal: "Hip–knee power at take-off", quality: "Rate of force development", trainingMethod: "Max-intent isometrics 3–6 × 3–5 s + loaded jumps 20–40% 1RM 4–6 × 3–5, 2×/wk" },
-
-  { overarchingGoal: "Improving high jump ability", subGoal: "Approach curve & speed", quality: "Curve running technique", trainingMethod: "Curvilinear approaches 6–10 reps @80–90%, 2×/wk" },
-  { overarchingGoal: "Improving high jump ability", subGoal: "Take-off power & stiffness", quality: "Rate of force development", trainingMethod: "IMTP/split-squat isos 4–6 × 3–5 s, 2×/wk" },
-
-  { overarchingGoal: "Improving long jump ability", subGoal: "Approach speed & accuracy", quality: "Max velocity reserve", trainingMethod: "Fly 20–30 m 4–8 reps, 2×/wk" },
-  { overarchingGoal: "Improving long jump ability", subGoal: "Take-off conversion (horizontal→vertical)", quality: "Penultimate step preparation", trainingMethod: "Penultimate drop-ins 6–10 jumps, 2×/wk" },
-
-  { overarchingGoal: "Improving triple jump ability", subGoal: "Phase distribution (hop–step–jump)", quality: "Leg stiffness modulation", trainingMethod: "Bounce series 4–6 × 20–30 m, 2–3×/wk" },
-  { overarchingGoal: "Improving triple jump ability", subGoal: "Ground contact quality in each phase", quality: "Short ground contact with adequate impulse", trainingMethod: "Drop jumps 4–6 × 5–8 (20–40 cm), 2×/wk; aim tc < 200 ms" },
-
-  // Cycling goals
-  { overarchingGoal: "Cycling – short distance performance (1–4 min)", subGoal: "Peak aerobic power & W′", quality: "VO2 kinetics", trainingMethod: "30/15s × 10–20 @ MAP, 1–2×/wk" },
-  { overarchingGoal: "Cycling – short distance performance (1–4 min)", subGoal: "Seated/standing torque at high power", quality: "Hip extensor strength", trainingMethod: "Heavy RT (deadlift/squat) 3–5 × 3–6 @ 80–90% 1RM, 2×/wk" },
-
-  { overarchingGoal: "Cycling – middle distance performance (4–40 min)", subGoal: "Functional threshold/critical power", quality: "Mitochondrial respiration", trainingMethod: "2 × 20 min or 3 × 12–15 min @ 95–100% FTP, 2–3×/wk" },
-  { overarchingGoal: "Cycling – long distance performance (≥40 min)", subGoal: "Endurance & durability", quality: "Fat oxidation", trainingMethod: "Z2 rides 60–180 min, 2–4×/wk; occasional 'low glycogen' (advanced)" },
-
-  // Swimming goals
-  { overarchingGoal: "Swimming – short distance performance (50–200 m)", subGoal: "Start & turn speed", quality: "Block reaction time", trainingMethod: "Start drills 8–12 reps with full recovery, 2–3×/wk" },
-  { overarchingGoal: "Swimming – short distance performance (50–200 m)", subGoal: "Stroke rate × length at high speed", quality: "Upper-limb power", trainingMethod: "Power paddles 8–12 × 25 m @ fast, 2×/wk" },
-
-  { overarchingGoal: "Swimming – middle distance performance (200–800 m)", subGoal: "Aerobic power & VO2 kinetics", quality: "Stroke-specific economy", trainingMethod: "Pull buoy/paddles aerobic sets 20–40 min, 2×/wk" },
-  { overarchingGoal: "Swimming – long distance performance (≥1500 m/open water)", subGoal: "Economy & durability", quality: "Technique stability", trainingMethod: "Long aerobic continuous 30–60 min with form cues, 2–3×/wk" },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Block start & reaction",
+    quality: "Start technique",
+    trainingMethod: "Block starts 6–10 × 10–20 m @90–100% with full recovery (2–4 min), 2–3×/wk; emphasize set-up, shin angles, first 2 steps; video feedback each rep"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Block start & reaction",
+    quality: "Reaction time",
+    trainingMethod: "Simple?choice reaction starts (light/sound cues): 8–12 reps, 2–3×/wk; 10–20 s between reps; add false-start control drills"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Block start & reaction",
+    quality: "Initial RFD (0–100 ms)",
+    trainingMethod: "Max-intent isometrics (IMTP or iso-squat): 3–6 × 3–5 s, 2×/wk; pair with unloaded jumps 4–6 × 3–5 @ full intent (2–3 min rest)"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Block start & reaction",
+    quality: "Horizontal impulse at 1st–3rd step",
+    trainingMethod: "Heavy resisted sprints 10–20 m with 30–50% v-decrement: 4–8 reps, 2×/wk; 2–4 min rest; posture cue 'push long'"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Block start & reaction",
+    quality: "Shin angle management",
+    trainingMethod: "Wall drills (A-march/lean): 3–5 × 20–30 contacts, 2–3×/wk; progress to 3-step build-outs 6–10 reps"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Block start & reaction",
+    quality: "Intermuscular coordination (hip–knee–ankle)",
+    trainingMethod: "Dribble to 10–20 m & wicket runs 3–5 × 20–30 m, 2×/wk; maintain front-side mechanics"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Block start & reaction",
+    quality: "Motor unit recruitment & firing rate",
+    trainingMethod: "Heavy resistance training >85% 1RM (squat/hinge): 3–6 × ?5 reps, 2×/wk; 2–4 min rest; rotate front/back/hinge"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Block start & reaction",
+    quality: "Trunk stiffness & bracing",
+    trainingMethod: "Anti-extension/anti-rotation isometrics 3–5 × 20–40 s, 2–3×/wk; add heavy carries 4–6 × 20–40 m"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Block start & reaction",
+    quality: "Arm swing timing",
+    trainingMethod: "Seated/standing arm-swing drills 4–6 × 10–15 cycles, 2×/wk; integrate into 10–20 m starts"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Block start & reaction",
+    quality: "Psychological arousal & attentional focus",
+    trainingMethod: "Pre-performance routine practice 1–2×/wk (breath cues, visualization 5–8 min) before starts; 6–10 blocked then 6–10 random starts"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Acceleration 0–10 m",
+    quality: "Horizontal force production",
+    trainingMethod: "Resisted sprints 10–20 m with 10–30% v-decrement: 3–6 reps, 2×/wk; pair with heavy trap-bar deadlift 3–5 × 2–5 @85–95% 1RM"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Acceleration 0–10 m",
+    quality: "Force orientation (horizontal vs vertical)",
+    trainingMethod: "Sled pulls/pushes with torso lean: 4–8 × 10–20 m, 2×/wk; aim constant shin angle; 2–3 min rest"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Acceleration 0–10 m",
+    quality: "Step length–frequency balance",
+    trainingMethod: "Wicket runs 4–6 × 20–30 m, 2×/wk; adjust spacing to target contact time and projection"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Acceleration 0–10 m",
+    quality: "Early-phase RFD",
+    trainingMethod: "Isometric mid-thigh pull 3–5 × 3–5 s + jump squats 20–40% 1RM 4–6 × 3–5, 2×/wk"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Acceleration 0–10 m",
+    quality: "Hip extensor strength",
+    trainingMethod: "Back or front squat 3–6 × 3–6 @80–92% 1RM, 2×/wk; hinge pattern (RDL) 3–5 × 4–6 @70–85%"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Acceleration 0–10 m",
+    quality: "Ankle plantarflexor stiffness",
+    trainingMethod: "Isometric calf raises 4–5 × 30–45 s (straight/bent knee), 3×/wk; progress to pogo series 4–6 × 20–30 contacts"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Acceleration 0–10 m",
+    quality: "Front-side mechanics",
+    trainingMethod: "A/B-skips & dribbles 3–5 × 20–30 m, 2×/wk; integrate into 3–5 × 10–20 m accelerations"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Acceleration 0–10 m",
+    quality: "Interlimb coordination",
+    trainingMethod: "Alternating step drills & wall cycles 3–5 × 10–15 cycles, 2×/wk; immediate transfer to sprints"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Acceleration 0–10 m",
+    quality: "Technique under load",
+    trainingMethod: "Resisted accelerations (light–moderate) 6–10 × 10–20 m, 2×/wk; cue posture & projection"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Acceleration 0–10 m",
+    quality: "Tendon elasticity",
+    trainingMethod: "Low-amplitude pogos 4–6 × 20–30 contacts, 2–3×/wk; progress to drop jumps (20–30 cm) 3–5 × 5–8"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Acceleration 10–30 m",
+    quality: "Net impulse per step",
+    trainingMethod: "Unresisted 20–30 m accelerations 4–8 reps, 2×/wk with full recovery; pair with heavy sled 10–20 m 3–5 reps"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Acceleration 10–30 m",
+    quality: "Progressive body angle rise",
+    trainingMethod: "10–30 m build-ups with posture checkpoints: 6–10 reps, 2×/wk; 2–4 min rest"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Acceleration 10–30 m",
+    quality: "Hamstring eccentric strength",
+    trainingMethod: "Nordic hamstring 3–4 × 4–6, 2×/wk; long-length RDL 3–4 × 6–8 @65–80% 1RM"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Acceleration 10–30 m",
+    quality: "Gluteus maximus power",
+    trainingMethod: "Hip thrust 3–5 × 3–6 @80–90% 1RM, 2×/wk; add banded hip extension 3–4 × 8–12"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Acceleration 10–30 m",
+    quality: "Step-to-step variability control",
+    trainingMethod: "Laser/gates approaches with step audit: 6–10 reps, 1–2×/wk; constraint drills for consistent projection"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Acceleration 10–30 m",
+    quality: "Stretch–shortening cycle utilization",
+    trainingMethod: "Loaded jumps (trap-bar jump) 20–40% 1RM 4–6 × 3–5, 2×/wk; pogo?bound progressions"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Acceleration 10–30 m",
+    quality: "Technical rhythm",
+    trainingMethod: "Metronome wicket runs 4–6 × 20–30 m, 2×/wk"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Acceleration 10–30 m",
+    quality: "Braking minimization",
+    trainingMethod: "Coaching cueing + video; wicket spacing to prevent overstriding; 6–10 runs, 2×/wk"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Max velocity development",
+    quality: "Very short ground contact time",
+    trainingMethod: "Fly sprints 20–30 m @98–100% vmax: 4–8 reps, 2×/wk; 3–5 min rest; aim tc < 120–140 ms"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Max velocity development",
+    quality: "Step frequency optimization",
+    trainingMethod: "Wicket runs 4–6 × 20–30 m (tight spacing), 2×/wk; cadence targets"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Max velocity development",
+    quality: "Functional leg stiffness",
+    trainingMethod: "Drop jumps 20–40 cm 4–6 × 5–8, 2×/wk; RSIST ankle/knee 3–5 × 3–5 s"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Max velocity development",
+    quality: "Vertical force at speed",
+    trainingMethod: "Heavy partial squats 3–5 × 3–5 @85–95% 1RM, 1–2×/wk; fly sprints as above"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Max velocity development",
+    quality: "Hip flexor velocity",
+    trainingMethod: "High-knee switch drills 4–6 × 10–15 cycles, 2×/wk; resisted band switches 3–4 × 8–12"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Max velocity development",
+    quality: "Hip extensor velocity",
+    trainingMethod: "Light sled runs 20–30 m (?10% v-dec) 4–8 reps, 2×/wk with max intent"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Max velocity development",
+    quality: "Ankle stiffness",
+    trainingMethod: "Ankling/pogos 4–6 × 20–30 contacts, 2–3×/wk; isometric calf 4–5 × 30–45 s"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Max velocity development",
+    quality: "Elastic energy return",
+    trainingMethod: "Bounding series 3–5 × 20–30 m, 1–2×/wk; technical emphasis"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Max velocity development",
+    quality: "Technical posture and pelvis control",
+    trainingMethod: "Posture drills (A-run posture holds) 3–5 × 20–30 m, 2×/wk; cues neutral pelvis"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Speed endurance (7–15 s)",
+    quality: "Neuromuscular fatigue resistance",
+    trainingMethod: "Speed-endurance runs 60–120 m @90–95% vmax: 4–8 reps, 1–2×/wk; 2–4 min rest early, 6–10 min later"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Speed endurance (7–15 s)",
+    quality: "Anaerobic capacity (glycolytic power)",
+    trainingMethod: "Special endurance I (2×150–3×200 m @ 93–97% with 8–15 min rest), 1×/wk in appropriate phase"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Speed endurance (7–15 s)",
+    quality: "Buffering capacity",
+    trainingMethod: "Sprint repeats 120–150 m @ 90–95% with incomplete rest (2–4 min): 4–6 reps, 1×/wk"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Speed endurance (7–15 s)",
+    quality: "Technique retention under fatigue",
+    trainingMethod: "Technical checkpoints + video within SE sessions; limit form breakdown; cap session when kinematics degrade"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Speed endurance (7–15 s)",
+    quality: "PCr resynthesis rate",
+    trainingMethod: "Alactic sprints 20–40 m @100% with 2–4 min rest: 6–10 reps, 1–2×/wk"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Speed endurance (7–15 s)",
+    quality: "Thermoregulation",
+    trainingMethod: "Heat acclimation strides: 6–10 × 60–80 m easy–moderate in heat, 2–3×/wk pre-season; hydrate/electrolytes protocol"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Speed endurance (7–15 s)",
+    quality: "Mental pacing",
+    trainingMethod: "SE sets with split targets; 1–2 sets/session, 1–2×/wk; teach distribution (fast–relax–fast)"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Repeated sprint ability",
+    quality: "Aerobic power for recovery",
+    trainingMethod: "VO?max intervals 4 × 4 min @ 90–95% HRmax (2–3 min easy), 1–2×/wk off-day from speed"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Repeated sprint ability",
+    quality: "PCr resynthesis capacity",
+    trainingMethod: "RSA sets: 6–10 × 20–30 m with 20–30 s rest, 1–2×/wk; 3–5 min set rest"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Repeated sprint ability",
+    quality: "Neuromuscular resilience",
+    trainingMethod: "Mixed-cuts RSA (with COD) 2–3 sets/wk; cap drop-off ?10% time"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Repeated sprint ability",
+    quality: "Heat tolerance",
+    trainingMethod: "Progressive heat exposures 20–40 min Z1–Z2, 2–3×/wk for 7–14 days"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Repeated sprint ability",
+    quality: "COD repeatability",
+    trainingMethod: "505-style RSA: 6–10 reps, 1–2×/wk; full tech cues"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Repeated sprint ability",
+    quality: "Efficient acceleration mechanics",
+    trainingMethod: "Resisted 10–20 m starts 6–10 reps, 2×/wk; video feedback"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Sprint technique robustness",
+    quality: "Front-side mechanics",
+    trainingMethod: "Drills (A/B, dribbles, wicket) 3–5 × 20–30 m, 2×/wk; integrate to sprints"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Sprint technique robustness",
+    quality: "Pelvis stability",
+    trainingMethod: "Anti-rotation core 3–4 × 8–12 + carries 4–6 × 20–40 m, 2–3×/wk"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Sprint technique robustness",
+    quality: "Foot strike close to CoM",
+    trainingMethod: "Wicket spacing & midfoot cues: 4–6 × 20–30 m, 2×/wk"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Sprint technique robustness",
+    quality: "Arm swing–leg timing",
+    trainingMethod: "Arm cycles + wicket runs: 3–5 blocks of 2 runs, 2×/wk"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Sprint technique robustness",
+    quality: "Head/torso alignment",
+    trainingMethod: "Wall posture + sprint posture holds: 3–5 × 20–30 s, 2×/wk; transfer to runs"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Sprint technique robustness",
+    quality: "Rhythm control",
+    trainingMethod: "Metronome-assisted strides 6–10 × 30–60 m, 1–2×/wk"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Tissue robustness for sprinting",
+    quality: "Hamstring fascicle length",
+    trainingMethod: "Nordic hamstring 2×/wk (3–4 × 4–6); add long-length hip hinge 3–4 × 6–8 @65–80%"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Tissue robustness for sprinting",
+    quality: "Hamstring eccentric strength",
+    trainingMethod: "RDL/eccentric squat 3–5 × 4–6 @70–85% with 3–4 s lowering, 2×/wk"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Tissue robustness for sprinting",
+    quality: "Achilles tendon stiffness",
+    trainingMethod: "Isometric calf 4–5 × 30–45 s (straight/bent), 3×/wk; progress to plyos"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Tissue robustness for sprinting",
+    quality: "Patellar tendon stiffness",
+    trainingMethod: "Spanish squats 4–5 × 30–45 s, 3×/wk; add isometric leg press 4 × 30–45 s"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Tissue robustness for sprinting",
+    quality: "Calf–soleus capacity",
+    trainingMethod: "Seated/standing calf 3–5 × 6–10 heavy, 2×/wk; endurance raises 2–3 × 15–20"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Tissue robustness for sprinting",
+    quality: "Bone loading tolerance",
+    trainingMethod: "Micro-dose low-height hops 5–8 × 10–20 contacts, 3–5×/wk; 4–8 h between bouts"
+  },
+  {
+    overarchingGoal: "Improving sprint ability",
+    subGoal: "Tissue robustness for sprinting",
+    quality: "Foot intrinsic strength",
+    trainingMethod: "Short-foot drills 3–5 × 10–15 daily; towel curls 3 × 12–15, 3×/wk"
+  }
 ];
 
 // Helper functions to get unique values
