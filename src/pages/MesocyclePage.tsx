@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,8 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Mesocycle, TrainingMethod, IntensityLevel } from "@/types/training";
-import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays } from "lucide-react";
+import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info } from "lucide-react";
 import MesocycleCalendar from "@/components/mesocycle/MesocycleCalendar";
+import { format, addWeeks } from "date-fns";
 
 export default function MesocyclePage() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -16,9 +17,68 @@ export default function MesocyclePage() {
   const [trainingMethods, setTrainingMethods] = useState<TrainingMethod[]>([]);
   const [mesocycleLength, setMesocycleLength] = useState(4);
   const [uniformLength, setUniformLength] = useState(true);
+  
+  // Macrocycle data from previous step
+  const [macrocycleData, setMacrocycleData] = useState<any>(null);
+  const [planStartDate, setPlanStartDate] = useState<Date>(new Date());
+  const [planEndDate, setPlanEndDate] = useState<Date>(new Date());
+  const [totalWeeks, setTotalWeeks] = useState<number>(0);
 
   const totalSteps = 4;
   const progress = (currentStep / totalSteps) * 100;
+
+  // Load macrocycle data on mount
+  useEffect(() => {
+    const savedMacrocycleData = localStorage.getItem('macrocycleData');
+    if (savedMacrocycleData) {
+      const data = JSON.parse(savedMacrocycleData);
+      setMacrocycleData(data);
+      
+      // Extract total weeks from SMART goal
+      const weeks = data.smartGoal?.timeframe || 12;
+      setTotalWeeks(weeks);
+      
+      // Calculate plan dates
+      const startDate = new Date();
+      const endDate = addWeeks(startDate, weeks);
+      setPlanStartDate(startDate);
+      setPlanEndDate(endDate);
+      
+      // Auto-calculate mesocycles based on total duration
+      const suggestedMesocycleCount = Math.max(2, Math.min(6, Math.round(weeks / 4)));
+      const suggestedLength = Math.round(weeks / suggestedMesocycleCount);
+      
+      setMesocycleLength(suggestedLength);
+      
+      // Create default mesocycles
+      const defaultMesocycles: Mesocycle[] = Array.from({ length: suggestedMesocycleCount }, (_, i) => {
+        let currentStartDate = addWeeks(startDate, i * suggestedLength);
+        let currentEndDate = addWeeks(currentStartDate, suggestedLength);
+        
+        return {
+          id: `meso-${i + 1}`,
+          name: `Mesocycle ${i + 1}`,
+          startDate: currentStartDate,
+          endDate: currentEndDate,
+          duration: suggestedLength,
+          intensity: i === suggestedMesocycleCount - 1 ? "deload" : "moderate" as IntensityLevel,
+          trainingMethods: [],
+          microcycles: []
+        };
+      });
+      
+      setMesocycles(defaultMesocycles);
+      
+      // Load training methods from macrocycle data
+      if (data.methodsByQuality) {
+        const allMethods: TrainingMethod[] = [];
+        Object.values(data.methodsByQuality).forEach((methods: any) => {
+          allMethods.push(...methods);
+        });
+        setTrainingMethods(allMethods);
+      }
+    }
+  }, []);
 
   const intensityLevels: IntensityLevel[] = ["off", "deload", "easy", "easy-moderate", "moderate", "moderate-hard", "hard", "very-hard"];
 
@@ -35,6 +95,56 @@ export default function MesocyclePage() {
     };
     return colors[intensity] || "bg-muted text-muted-foreground";
   };
+
+  const renderTrainingPlanOverview = () => (
+    <Card className="mb-6">
+      <CardHeader>
+        <CardTitle className="flex items-center space-x-2">
+          <Info className="h-5 w-5" />
+          <span>Training Plan Overview</span>
+        </CardTitle>
+        <CardDescription>
+          Summary of your macrocycle plan and training timeline.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {macrocycleData ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="space-y-1">
+              <Label className="text-sm font-medium text-muted-foreground">Goal</Label>
+              <p className="text-sm font-medium">{macrocycleData.smartGoal?.specific || "Not specified"}</p>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-sm font-medium text-muted-foreground">Total Duration</Label>
+              <p className="text-sm font-medium">{totalWeeks} weeks ({totalWeeks * 7} days)</p>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-sm font-medium text-muted-foreground">Start Date</Label>
+              <p className="text-sm font-medium">{format(planStartDate, 'MMM dd, yyyy')}</p>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-sm font-medium text-muted-foreground">End Date</Label>
+              <p className="text-sm font-medium">{format(planEndDate, 'MMM dd, yyyy')}</p>
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <Label className="text-sm font-medium text-muted-foreground">Training Qualities</Label>
+              <div className="flex flex-wrap gap-1">
+                {macrocycleData.qualities?.map((quality: string, index: number) => (
+                  <Badge key={index} variant="secondary" className="text-xs">{quality}</Badge>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <Label className="text-sm font-medium text-muted-foreground">Available Methods</Label>
+              <p className="text-sm text-muted-foreground">{trainingMethods.length} training methods available</p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No macrocycle data found. Please complete the macrocycle planning first.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
 
   const renderMesocycleSetup = () => (
     <Card>
@@ -147,8 +257,13 @@ export default function MesocyclePage() {
               </div>
             </div>
 
-            {/* Calendar Visualization */}
-            <MesocycleCalendar mesocycles={mesocycles} />
+            {/* Full Training Plan Calendar Visualization */}
+            <MesocycleCalendar 
+              mesocycles={mesocycles} 
+              startDate={planStartDate}
+              showFullPlan={true}
+              totalWeeks={totalWeeks}
+            />
           </>
         )}
       </CardContent>
@@ -312,6 +427,9 @@ export default function MesocyclePage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+      {/* Training Plan Overview */}
+      {renderTrainingPlanOverview()}
+      
       {/* Progress Header */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">

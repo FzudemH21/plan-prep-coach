@@ -9,9 +9,16 @@ import { addDays, format, isWithinInterval, startOfDay } from "date-fns";
 interface MesocycleCalendarProps {
   mesocycles: Mesocycle[];
   startDate?: Date;
+  showFullPlan?: boolean;
+  totalWeeks?: number;
 }
 
-export default function MesocycleCalendar({ mesocycles, startDate = new Date() }: MesocycleCalendarProps) {
+export default function MesocycleCalendar({ 
+  mesocycles, 
+  startDate = new Date(), 
+  showFullPlan = false, 
+  totalWeeks = 0 
+}: MesocycleCalendarProps) {
   // Calculate dates for all mesocycles
   const calculateMesocycleDates = () => {
     let currentDate = startOfDay(startDate);
@@ -99,9 +106,14 @@ export default function MesocycleCalendar({ mesocycles, startDate = new Date() }
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Mesocycle Calendar</CardTitle>
+        <CardTitle>
+          {showFullPlan ? "Full Training Plan Calendar" : "Mesocycle Calendar"}
+        </CardTitle>
         <CardDescription>
-          Visual timeline showing all mesocycles with their durations and intensities
+          {showFullPlan 
+            ? `Complete ${totalWeeks}-week training plan overview with mesocycle breakdown`
+            : "Visual timeline showing all mesocycles with their durations and intensities"
+          }
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -131,7 +143,10 @@ export default function MesocycleCalendar({ mesocycles, startDate = new Date() }
                 to: endDate
               }}
               month={startDate}
-              numberOfMonths={Math.min(3, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30)))}
+              numberOfMonths={showFullPlan 
+                ? Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30))
+                : Math.min(3, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30)))
+              }
               components={{
                 Day: CustomDay
               }}
