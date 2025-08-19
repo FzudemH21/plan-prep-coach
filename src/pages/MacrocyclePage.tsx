@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,11 +10,12 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { AthleteInfo, SmartGoal, SubGoal, TrainableQuality } from "@/types/training";
-import { User, Target, Calendar as CalendarIcon, Plus, Bot } from "lucide-react";
+import { User, Target, Calendar as CalendarIcon, Plus, Bot, X } from "lucide-react";
 import { 
   getUniqueSubGoals, 
   getUniqueQualities, 
-  getUniqueTrainingMethods 
+  getUniqueTrainingMethods,
+  trainingData
 } from "@/data/trainingData";
 
 export default function MacrocyclePage() {
@@ -23,6 +24,75 @@ export default function MacrocyclePage() {
   const [smartGoal, setSmartGoal] = useState<Partial<SmartGoal>>({});
   const [subGoals, setSubGoals] = useState<SubGoal[]>([]);
   const [qualities, setQualities] = useState<TrainableQuality[]>([]);
+  const [qualitiesBySubGoal, setQualitiesBySubGoal] = useState<Record<string, { label: string; list: string[] }>>({});
+
+  // Helper function to get qualities for a sub-goal label
+  const getQualitiesForSubGoalLabel = (subGoalLabel: string): string[] => {
+    const parts = subGoalLabel.split(' - ');
+    if (parts.length < 2) return [];
+    
+    const overarchingGoal = parts[0];
+    const subGoal = parts[1];
+    
+    return Array.from(new Set(
+      trainingData
+        .filter(item => 
+          item.overarchingGoal === overarchingGoal && 
+          item.subGoal === subGoal
+        )
+        .map(item => item.quality)
+    ));
+  };
+
+  // Auto-populate qualities when sub-goals change
+  useEffect(() => {
+    const newQualitiesBySubGoal: Record<string, { label: string; list: string[] }> = {};
+    
+    subGoals.forEach(subGoal => {
+      const existing = qualitiesBySubGoal[subGoal.id];
+      const recommendedQualities = getQualitiesForSubGoalLabel(subGoal.description);
+      
+      newQualitiesBySubGoal[subGoal.id] = {
+        label: subGoal.description,
+        list: existing?.list?.length ? existing.list : recommendedQualities
+      };
+    });
+    
+    setQualitiesBySubGoal(newQualitiesBySubGoal);
+    
+    // Sync to qualities array for Step 5 compatibility
+    const allQualities: TrainableQuality[] = Object.entries(newQualitiesBySubGoal)
+      .flatMap(([subGoalId, { list }]) =>
+        list.map(qualityName => ({
+          id: `${subGoalId}::${qualityName}`,
+          name: qualityName,
+          description: "",
+          methods: qualities.find(q => q.id === `${subGoalId}::${qualityName}`)?.methods || []
+        }))
+      );
+    
+    setQualities(allQualities);
+  }, [subGoals]);
+
+  const addQualityToSubGoal = (subGoalId: string, quality: string) => {
+    setQualitiesBySubGoal(prev => ({
+      ...prev,
+      [subGoalId]: {
+        ...prev[subGoalId],
+        list: Array.from(new Set([...(prev[subGoalId]?.list || []), quality]))
+      }
+    }));
+  };
+
+  const removeQualityFromSubGoal = (subGoalId: string, quality: string) => {
+    setQualitiesBySubGoal(prev => ({
+      ...prev,
+      [subGoalId]: {
+        ...prev[subGoalId],
+        list: prev[subGoalId]?.list.filter(q => q !== quality) || []
+      }
+    }));
+  };
 
   const totalSteps = 5;
   const progress = (currentStep / totalSteps) * 100;
@@ -466,43 +536,61 @@ export default function MacrocyclePage() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="space-y-4">
-          {subGoals.map((subGoal, index) => {
-            const quality = qualities.find(q => q.id === subGoal.id) || { id: subGoal.id, name: "", description: "", methods: [] };
+        <div className="space-y-6">
+          {subGoals.map((subGoal) => {
+            const subGoalQualities = qualitiesBySubGoal[subGoal.id] || { label: subGoal.description, list: [] };
+            const recommendedQualities = getQualitiesForSubGoalLabel(subGoal.description);
+            const availableQualities = recommendedQualities.filter(q => !subGoalQualities.list.includes(q));
             
             return (
               <div key={subGoal.id} className="p-4 border rounded-lg space-y-4">
-                <div className="space-y-2">
-                  <Label className="font-medium">{subGoal.description || "Sub-Goal"}</Label>
-                <SearchableDropdown
-                  value={quality.name}
-                  onChange={(value) => {
-                    const updated = [...qualities];
-                    const existingIndex = updated.findIndex(q => q.id === subGoal.id);
-                    
-                    if (existingIndex >= 0) {
-                      updated[existingIndex].name = value;
-                    } else {
-                      updated.push({
-                        id: subGoal.id,
-                        name: value,
-                        description: "",
-                        methods: []
-                      });
-                    }
-                    setQualities(updated);
-                  }}
-                  options={getUniqueQualities()}
-                  placeholder="Select or type trainable quality..."
-                />
-                  <p className="text-xs text-muted-foreground">
-                    Enter trainable qualities separated by commas
-                  </p>
+                <div className="space-y-3">
+                  <Label className="font-medium text-base">{subGoal.description || "Sub-Goal"}</Label>
+                  
+                  {/* Selected qualities */}
+                  <div className="space-y-2">
+                    {subGoalQualities.list.map((quality) => (
+                      <div key={quality} className="flex items-center justify-between p-2 bg-muted rounded-md">
+                        <span className="text-sm">{quality}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeQualityFromSubGoal(subGoal.id, quality)}
+                          className="h-6 w-6 p-0 hover:bg-destructive hover:text-destructive-foreground"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Add quality dropdown */}
+                  <div className="space-y-2">
+                    <Label className="text-sm text-muted-foreground">Add Quality</Label>
+                     <SearchableDropdown
+                       value=""
+                       onChange={(value) => {
+                         if (value) {
+                           addQualityToSubGoal(subGoal.id, value);
+                         }
+                       }}
+                       options={[...availableQualities, ...getUniqueQualities()]}
+                       placeholder="Select or type to add quality..."
+                       allowCustomInput={true}
+                       className="bg-background"
+                     />
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
+        
+        {subGoals.length === 0 && (
+          <div className="text-center py-8 text-muted-foreground">
+            <p>No sub-goals selected. Please go back to Step 3 to add sub-goals.</p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

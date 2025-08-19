@@ -85,7 +85,7 @@ export function SearchableDropdown({
           <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-full p-0" style={{ width: "var(--radix-popover-trigger-width)" }}>
+      <PopoverContent className="w-full p-0 bg-background border shadow-md z-50" style={{ width: "var(--radix-popover-trigger-width)" }}>
         <Command>
           <div className="flex items-center border-b px-3">
             <CommandInput
