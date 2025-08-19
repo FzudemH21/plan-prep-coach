@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,7 @@ import { useDisplayMode } from "@/contexts/DisplayModeContext";
 
 export default function MacrocyclePage() {
   const { displayMode } = useDisplayMode();
+  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [athleteInfo, setAthleteInfo] = useState<Partial<AthleteInfo>>({});
   const [smartGoal, setSmartGoal] = useState<Partial<SmartGoal>>({});
@@ -1102,10 +1104,28 @@ export default function MacrocyclePage() {
         </Button>
         
         <Button 
-          onClick={() => setCurrentStep(Math.min(totalSteps, currentStep + 1))}
-          disabled={currentStep === totalSteps}
+          onClick={() => {
+            if (currentStep === totalSteps) {
+              // Save macrocycle data to localStorage before navigation
+              const macrocycleData = {
+                athleteInfo,
+                smartGoal,
+                subGoals,
+                qualities,
+                qualitiesBySubGoal,
+                methodsByQuality,
+                selectedTest,
+                completedAt: new Date().toISOString()
+              };
+              localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
+              navigate('/mesocycle');
+            } else {
+              setCurrentStep(Math.min(totalSteps, currentStep + 1));
+            }
+          }}
+          disabled={currentStep === totalSteps && !athleteInfo.name}
         >
-          {currentStep === totalSteps ? "Complete" : "Next"}
+          {currentStep === totalSteps ? "Move on to Mesocycle" : "Next"}
         </Button>
       </div>
     </div>
