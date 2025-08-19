@@ -46,6 +46,12 @@ export default function PlannerWizard({ onComplete, initial }: WizardProps) {
     qualities: "",
   });
 
+  const form = useForm<z.infer<typeof schema>>({
+    resolver: zodResolver(schema),
+    defaultValues: draft,
+    mode: "onChange",
+  });
+
   // Get unique sub-goals for dropdown
   const subGoalOptions = Array.from(new Set(trainingData.map(item => `${item.overarchingGoal} - ${item.subGoal}`)));
 
@@ -61,12 +67,6 @@ export default function PlannerWizard({ onComplete, initial }: WizardProps) {
       form.setValue("qualities", qualities.join(", "));
     }
   }, [selectedSubGoals, form]);
-
-  const form = useForm<z.infer<typeof schema>>({
-    resolver: zodResolver(schema),
-    defaultValues: draft,
-    mode: "onChange",
-  });
 
   const mesoNames = useMemo(() => Array.from({ length: form.watch("mesoCount") || 0 }, (_, i) => `Mesocycle ${i + 1}`), [form.watch("mesoCount")]);
 
@@ -218,7 +218,7 @@ export default function PlannerWizard({ onComplete, initial }: WizardProps) {
                           options={subGoalOptions}
                           placeholder="Select sub-goals..."
                           multiple={true}
-                          value={field.value}
+                          value={field.value || []}
                           onValueChange={field.onChange}
                         />
                       </FormControl>
@@ -303,24 +303,56 @@ export default function PlannerWizard({ onComplete, initial }: WizardProps) {
                   )}
                 </div>
 
-                <FormField
-                  control={form.control}
-                  name="qualities"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Trainable Qualities (Step 4/5) - Auto-populated</FormLabel>
-                      <FormControl>
-                        <Input 
-                          placeholder="Auto-populated based on selected sub-goals" 
-                          {...field} 
-                          readOnly 
-                          className="bg-muted" 
-                        />
-                      </FormControl>
-                      <FormDescription>These qualities are automatically selected based on your chosen sub-goals.</FormDescription>
-                    </FormItem>
+                <div className="space-y-6">
+                  <div>
+                    <h4 className="text-lg font-medium mb-4">Trainable Qualities (Step 4/5)</h4>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Each selected sub-goal shows its associated trainable qualities. You can add or remove qualities as needed.
+                    </p>
+                  </div>
+                  
+                  {selectedSubGoals.map((subGoal) => {
+                    const qualitiesForSubGoal = trainingData
+                      .filter(item => `${item.overarchingGoal} - ${item.subGoal}` === subGoal)
+                      .map(item => item.quality);
+                    
+                    return (
+                      <div key={subGoal} className="border rounded-lg p-4 space-y-3">
+                        <h5 className="font-medium text-sm">{subGoal}</h5>
+                        <div className="space-y-2">
+                          {qualitiesForSubGoal.map((quality, index) => (
+                            <div key={`${subGoal}-${index}`} className="flex items-center gap-2">
+                              <Input
+                                value={quality}
+                                readOnly
+                                className="flex-1 text-sm"
+                              />
+                              <Button 
+                                type="button" 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => {
+                                  // Remove this quality from the list
+                                  const currentQualities = form.getValues("qualities")?.split(",").map(q => q.trim()).filter(Boolean) || [];
+                                  const updatedQualities = currentQualities.filter(q => q !== quality);
+                                  form.setValue("qualities", updatedQualities.join(", "));
+                                }}
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  
+                  {selectedSubGoals.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Select sub-goals above to see their associated trainable qualities.
+                    </div>
                   )}
-                />
+                </div>
               </section>
             )}
 

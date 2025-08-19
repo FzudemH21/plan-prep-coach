@@ -7,21 +7,25 @@ import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SearchableDropdownProps {
-  value: string;
-  onChange: (value: string) => void;
+  value: string | string[];
+  onValueChange?: (value: string | string[]) => void;
+  onChange?: (value: string) => void; // For backward compatibility
   options: string[];
   placeholder?: string;
   className?: string;
   allowCustomInput?: boolean;
+  multiple?: boolean;
 }
 
 export function SearchableDropdown({
   value,
+  onValueChange,
   onChange,
   options,
   placeholder = "Select or type...",
   className,
   allowCustomInput = true,
+  multiple = false,
 }: SearchableDropdownProps) {
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
@@ -33,15 +37,25 @@ export function SearchableDropdown({
   );
 
   const handleSelect = (selectedValue: string) => {
-    onChange(selectedValue);
-    setOpen(false);
+    if (multiple) {
+      const currentValues = Array.isArray(value) ? value : [];
+      const newValues = currentValues.includes(selectedValue)
+        ? currentValues.filter(v => v !== selectedValue)
+        : [...currentValues, selectedValue];
+      onValueChange?.(newValues);
+    } else {
+      onValueChange?.(selectedValue);
+      onChange?.(selectedValue);
+      setOpen(false);
+    }
     setSearchValue("");
   };
 
   const handleInputChange = (inputValue: string) => {
     setSearchValue(inputValue);
-    if (allowCustomInput) {
-      onChange(inputValue);
+    if (allowCustomInput && !multiple) {
+      onValueChange?.(inputValue);
+      onChange?.(inputValue);
     }
   };
 
@@ -61,7 +75,12 @@ export function SearchableDropdown({
           className={cn("w-full justify-between text-left font-normal", className)}
         >
           <span className="truncate">
-            {value || placeholder}
+            {multiple 
+              ? Array.isArray(value) && value.length > 0
+                ? `${value.length} selected`
+                : placeholder
+              : value || placeholder
+            }
           </span>
           <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -105,7 +124,9 @@ export function SearchableDropdown({
                   <Check
                     className={cn(
                       "mr-2 h-4 w-4",
-                      value === option ? "opacity-100" : "opacity-0"
+                      multiple 
+                        ? (Array.isArray(value) && value.includes(option)) ? "opacity-100" : "opacity-0"
+                        : value === option ? "opacity-100" : "opacity-0"
                     )}
                   />
                   <span className="truncate">{option}</span>
