@@ -7,13 +7,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TrainingMethod, IntensityLevel } from "@/types/training";
 import { ExtendedMesocycle } from "@/features/planner/types";
-import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown } from "lucide-react";
+import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Settings } from "lucide-react";
 import MesocycleCalendar from "@/components/mesocycle/MesocycleCalendar";
 import { MicrocycleIntensityChart } from "@/components/mesocycle/MicrocycleIntensityChart";
 import { format, addWeeks } from "date-fns";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
+import { methodParameters, getParametersForMethod, getParameterValue, setParameterValue } from "@/data/methodParameters";
 
 export default function MesocyclePage() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -27,8 +29,11 @@ export default function MesocyclePage() {
   const [planStartDate, setPlanStartDate] = useState<Date>(new Date());
   const [planEndDate, setPlanEndDate] = useState<Date>(new Date());
   const [totalWeeks, setTotalWeeks] = useState<number>(0);
+  
+  // Parameter values for method periodization (step 4)
+  const [parameterValues, setParameterValues] = useState<Record<string, Record<number, Record<string, Record<string, string | number>>>>>({});
 
-  const totalSteps = 3;
+  const totalSteps = 4;
 
   // Navigation component for top and bottom
   const NavigationButtons = () => (
@@ -572,29 +577,177 @@ export default function MesocyclePage() {
     );
   };
 
-  const renderMethodPeriodization = () => (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <Target className="h-5 w-5" />
-          <span>Training Method Periodization</span>
-        </CardTitle>
-        <CardDescription>
-          Configure loading parameters for each training method across mesocycles.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <p className="text-center text-muted-foreground py-8">
-          Method periodization matrix coming next...
-        </p>
-      </CardContent>
-    </Card>
-  );
+  const renderMethodPeriodization = () => {
+    // Get all allocated methods from mesocycles
+    const allocatedMethods = new Set<string>();
+    const methodsBySubGoal: Record<string, Array<{ method: string; quality: string; subGoal: string }>> = {};
+    
+    mesocycles.forEach(meso => {
+      meso.trainingMethods?.forEach((methodData: any) => {
+        const method = typeof methodData === 'string' ? methodData : methodData.method;
+        const quality = typeof methodData === 'string' ? '' : methodData.quality;
+        const subGoal = typeof methodData === 'string' ? '' : methodData.subGoal;
+        
+        allocatedMethods.add(method);
+        
+        if (!methodsBySubGoal[subGoal]) {
+          methodsBySubGoal[subGoal] = [];
+        }
+        
+        if (!methodsBySubGoal[subGoal].find(m => m.method === method)) {
+          methodsBySubGoal[subGoal].push({ method, quality, subGoal });
+        }
+      });
+    });
+
+    const updateParameterValue = (mesocycleId: string, microcycleIndex: number, methodName: string, parameterName: string, value: string | number) => {
+      setParameterValues(prev => setParameterValue(mesocycleId, microcycleIndex, methodName, parameterName, value, prev));
+    };
+
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Settings className="h-5 w-5" />
+            <span>Training Method Parameter Evolution</span>
+          </CardTitle>
+          <CardDescription>
+            Configure loading parameters for each training method across all mesocycles and microcycles.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {allocatedMethods.size === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground mb-2">No training methods allocated yet.</p>
+              <p className="text-sm text-muted-foreground">Please complete step 3 to allocate training methods to mesocycles first.</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Column Headers */}
+              <div className="overflow-x-auto">
+                <div className="min-w-max">
+                  <div className="grid gap-2 mb-4" style={{
+                    gridTemplateColumns: `250px ${mesocycles.map(meso => `repeat(${meso.duration}, 120px)`).join(' ')}`
+                  }}>
+                    {/* Method Column Header */}
+                    <div className="p-3 bg-muted font-medium text-sm border rounded-lg">
+                      Training Method
+                    </div>
+                    
+                    {/* Mesocycle Headers */}
+                    {mesocycles.map((meso) => (
+                      <div key={meso.id} className={`p-2 rounded-lg border text-center ${getIntensityColor(meso.intensity)}`} style={{ gridColumn: `span ${meso.duration}` }}>
+                        <div className="font-medium text-sm">{meso.name}</div>
+                        <div className="text-xs opacity-90">{meso.duration} weeks</div>
+                      </div>
+                    ))}
+                    
+                    {/* Microcycle Week Headers */}
+                    <div></div>
+                    {mesocycles.map((meso) => 
+                      Array.from({ length: meso.duration }, (_, weekIndex) => (
+                        <div key={`${meso.id}-week-${weekIndex}`} className="p-2 bg-muted/50 border rounded text-center text-xs">
+                          Week {weekIndex + 1}
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {meso.microcycles?.[weekIndex]?.intensity || meso.intensity}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Method Rows */}
+                  <div className="space-y-6">
+                    {Object.entries(methodsBySubGoal).map(([subGoal, methods]) => (
+                      <Collapsible key={subGoal} className="space-y-3">
+                        <CollapsibleTrigger className="flex items-center justify-between w-full p-3 bg-background border rounded-lg hover:bg-muted/50 transition-colors">
+                          <span className="font-medium text-left">{subGoal}</span>
+                          <ChevronDown className="h-4 w-4" />
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="space-y-3">
+                          {methods.map(({ method, quality }) => {
+                            const parameters = getParametersForMethod(method);
+                            
+                            return (
+                              <div key={method} className="space-y-2">
+                                {/* Method Header */}
+                                <div className="p-2 bg-primary/10 border rounded-lg">
+                                  <div className="font-medium text-sm">{quality}</div>
+                                  <div className="text-xs text-muted-foreground line-clamp-2">{method}</div>
+                                </div>
+                                
+                                {/* Parameter Rows */}
+                                {parameters.map((param) => (
+                                  <div key={param.name} className="grid gap-2" style={{
+                                    gridTemplateColumns: `250px ${mesocycles.map(meso => `repeat(${meso.duration}, 120px)`).join(' ')}`
+                                  }}>
+                                    {/* Parameter Label */}
+                                    <div className="p-2 bg-muted/30 border rounded text-sm flex items-center">
+                                      <span className="font-medium">{param.name.replace(/_/g, ' ')}</span>
+                                      {param.unit && <span className="text-muted-foreground ml-1">({param.unit})</span>}
+                                    </div>
+                                    
+                                    {/* Parameter Input Cells */}
+                                    {mesocycles.map((meso) =>
+                                      Array.from({ length: meso.duration }, (_, weekIndex) => {
+                                        const currentValue = getParameterValue(meso.id, weekIndex, method, param.name, parameterValues);
+                                        
+                                        return (
+                                          <div key={`${meso.id}-${weekIndex}-${param.name}`} className="p-1">
+                                            {param.type === 'select' ? (
+                                              <Select
+                                                value={currentValue as string || param.defaultValue as string || ''}
+                                                onValueChange={(value) => updateParameterValue(meso.id, weekIndex, method, param.name, value)}
+                                              >
+                                                <SelectTrigger className="h-8 text-xs">
+                                                  <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                  {param.options?.map((option) => (
+                                                    <SelectItem key={option} value={option} className="text-xs">
+                                                      {option}
+                                                    </SelectItem>
+                                                  ))}
+                                                </SelectContent>
+                                              </Select>
+                                            ) : (
+                                              <Input
+                                                type={param.type === 'number' ? 'number' : 'text'}
+                                                value={currentValue || param.defaultValue || ''}
+                                                onChange={(e) => updateParameterValue(meso.id, weekIndex, method, param.name, param.type === 'number' ? Number(e.target.value) : e.target.value)}
+                                                className="h-8 text-xs"
+                                                min={param.min}
+                                                max={param.max}
+                                                placeholder={param.defaultValue?.toString() || ''}
+                                              />
+                                            )}
+                                          </div>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })}
+                        </CollapsibleContent>
+                      </Collapsible>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
 
   const stepTitles = [
     "Mesocycle Setup",
     "Intensity Configuration", 
-    "Training Quality Allocation"
+    "Training Quality Allocation",
+    "Method Periodization"
   ];
 
   return (
@@ -625,6 +778,7 @@ export default function MesocyclePage() {
           {currentStep === 1 && renderMesocycleSetup()}
           {currentStep === 2 && renderIntensitySetup()}
           {currentStep === 3 && renderQualityAllocation()}
+          {currentStep === 4 && renderMethodPeriodization()}
         </div>
 
         <NavigationButtons />
