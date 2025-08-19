@@ -376,39 +376,40 @@ export default function MesocyclePage() {
     </Card>
   );
 
+  // Group qualities by sub-goal using the training data - moved to component level
+  const qualitiesBySubGoal = React.useMemo(() => {
+    const trainableQualities = macrocycleData?.qualities || [];
+    const result: Record<string, Array<{ quality: string; methods: string[] }>> = {};
+    
+    trainableQualities.forEach((quality: any) => {
+      const qualityName = typeof quality === 'string' ? quality : quality.name || quality.id || 'Unknown Quality';
+      
+      // Find all data entries for this quality to get its sub-goal(s) and methods
+      const qualityEntries = trainingData.filter(item => item.quality === qualityName);
+      
+      qualityEntries.forEach(entry => {
+        const subGoal = entry.subGoal;
+        if (!result[subGoal]) {
+          result[subGoal] = [];
+        }
+        
+        // Check if quality already exists in this sub-goal
+        const existingQuality = result[subGoal].find(q => q.quality === qualityName);
+        const methods = getMethodsForQuality(qualityName);
+        
+        if (!existingQuality) {
+          result[subGoal].push({ quality: qualityName, methods });
+        }
+      });
+    });
+    
+    return result;
+  }, [macrocycleData?.qualities]);
+
   const renderQualityAllocation = () => {
     // Extract training qualities and sub-goals from macrocycle data
     const trainableQualities = macrocycleData?.qualities || [];
     const subGoals = macrocycleData?.subGoals || {};
-
-    // Group qualities by sub-goal using the training data
-    const qualitiesBySubGoal = React.useMemo(() => {
-      const result: Record<string, Array<{ quality: string; methods: string[] }>> = {};
-      
-      trainableQualities.forEach((quality: any) => {
-        const qualityName = typeof quality === 'string' ? quality : quality.name || quality.id || 'Unknown Quality';
-        
-        // Find all data entries for this quality to get its sub-goal(s) and methods
-        const qualityEntries = trainingData.filter(item => item.quality === qualityName);
-        
-        qualityEntries.forEach(entry => {
-          const subGoal = entry.subGoal;
-          if (!result[subGoal]) {
-            result[subGoal] = [];
-          }
-          
-          // Check if quality already exists in this sub-goal
-          const existingQuality = result[subGoal].find(q => q.quality === qualityName);
-          const methods = getMethodsForQuality(qualityName);
-          
-          if (!existingQuality) {
-            result[subGoal].push({ quality: qualityName, methods });
-          }
-        });
-      });
-      
-      return result;
-    }, [trainableQualities]);
 
     const handleMethodDragStart = (e: React.DragEvent, method: string, quality: string, subGoal: string) => {
       const dragData = JSON.stringify({ method, quality, subGoal });
