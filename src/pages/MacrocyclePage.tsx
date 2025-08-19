@@ -26,6 +26,7 @@ export default function MacrocyclePage() {
   const [qualities, setQualities] = useState<TrainableQuality[]>([]);
   const [qualitiesBySubGoal, setQualitiesBySubGoal] = useState<Record<string, { label: string; list: string[] }>>({});
   const [methodsByQuality, setMethodsByQuality] = useState<Record<string, { subGoalLabel: string; qualityName: string; list: string[] }>>({});
+  const [selectedTest, setSelectedTest] = useState<string | null>(null);
 
   // Helper function to normalize strings for comparison
   const normalizeForComparison = (str: string): string => {
@@ -83,17 +84,30 @@ export default function MacrocyclePage() {
       const existing = qualitiesBySubGoal[subGoal.id];
       const recommendedQualities = getQualitiesForSubGoalLabel(subGoal.description);
       
+      // If the sub-goal description has changed, reset to recommended qualities
+      const hasDescriptionChanged = existing && existing.label !== subGoal.description;
+      
       newQualitiesBySubGoal[subGoal.id] = {
         label: subGoal.description,
-        list: existing?.list?.length ? existing.list : recommendedQualities
+        list: hasDescriptionChanged ? recommendedQualities : (existing?.list?.length ? existing.list : recommendedQualities)
       };
+    });
+    
+    // Remove qualities for sub-goals that no longer exist
+    const existingSubGoalIds = new Set(subGoals.map(sg => sg.id));
+    Object.keys(qualitiesBySubGoal).forEach(subGoalId => {
+      if (!existingSubGoalIds.has(subGoalId)) {
+        delete qualitiesBySubGoal[subGoalId];
+      }
     });
     
     // Only update if there are actual changes
     const hasChanges = Object.keys(newQualitiesBySubGoal).some(subGoalId => {
       const oldList = qualitiesBySubGoal[subGoalId]?.list || [];
       const newList = newQualitiesBySubGoal[subGoalId]?.list || [];
-      return JSON.stringify(oldList) !== JSON.stringify(newList);
+      const oldLabel = qualitiesBySubGoal[subGoalId]?.label || '';
+      const newLabel = newQualitiesBySubGoal[subGoalId]?.label || '';
+      return JSON.stringify(oldList) !== JSON.stringify(newList) || oldLabel !== newLabel;
     });
 
     if (hasChanges || Object.keys(qualitiesBySubGoal).length !== Object.keys(newQualitiesBySubGoal).length) {
@@ -112,7 +126,7 @@ export default function MacrocyclePage() {
       
       setQualities(allQualities);
     }
-  }, [subGoals]);
+  }, [subGoals, subGoals.map(sg => sg.description).join('|')]);
 
   // Auto-populate training methods when qualities change
   useEffect(() => {
@@ -131,12 +145,23 @@ export default function MacrocyclePage() {
           const subGoalName = parts[1].trim();
           const recommendedMethods = getTrainingMethodsForQuality(overarchingGoal, subGoalName, qualityName);
           
+          // If the sub-goal description has changed, reset to recommended methods
+          const hasSubGoalChanged = existing && existing.subGoalLabel !== subGoal.description;
+          
           newMethodsByQuality[quality.id] = {
             subGoalLabel: subGoal.description,
             qualityName: qualityName,
-            list: existing?.list?.length ? existing.list : recommendedMethods
+            list: hasSubGoalChanged ? recommendedMethods : (existing?.list?.length ? existing.list : recommendedMethods)
           };
         }
+      }
+    });
+    
+    // Remove methods for qualities that no longer exist
+    const existingQualityIds = new Set(qualities.map(q => q.id));
+    Object.keys(methodsByQuality).forEach(qualityId => {
+      if (!existingQualityIds.has(qualityId)) {
+        delete methodsByQuality[qualityId];
       }
     });
     
@@ -144,7 +169,9 @@ export default function MacrocyclePage() {
     const hasChanges = Object.keys(newMethodsByQuality).some(qualityId => {
       const oldList = methodsByQuality[qualityId]?.list || [];
       const newList = newMethodsByQuality[qualityId]?.list || [];
-      return JSON.stringify(oldList) !== JSON.stringify(newList);
+      const oldLabel = methodsByQuality[qualityId]?.subGoalLabel || '';
+      const newLabel = newMethodsByQuality[qualityId]?.subGoalLabel || '';
+      return JSON.stringify(oldList) !== JSON.stringify(newList) || oldLabel !== newLabel;
     });
 
     if (hasChanges || Object.keys(methodsByQuality).length !== Object.keys(newMethodsByQuality).length) {
@@ -158,7 +185,7 @@ export default function MacrocyclePage() {
       
       setQualities(updatedQualities);
     }
-  }, [qualities.map(q => q.id).join(','), subGoals]);
+  }, [qualities.map(q => q.id).join(','), subGoals, subGoals.map(sg => sg.description).join('|')]);
 
   const addQualityToSubGoal = (subGoalId: string, quality: string) => {
     setQualitiesBySubGoal(prev => ({
@@ -604,38 +631,89 @@ export default function MacrocyclePage() {
         </Button>
 
         {subGoals.length > 0 && smartGoal.startDate && smartGoal.endDate && (
-          <div className="space-y-4">
-            <h4 className="font-semibold">Test Scheduling</h4>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div>
-                <Label className="text-sm font-medium mb-2 block">Available Tests</Label>
-                <div className="space-y-2 p-4 border rounded-lg bg-muted/50 min-h-32">
-                  {subGoals.map((subGoal) => (
-                    <div
-                      key={subGoal.id}
-                      className="p-2 bg-background border rounded cursor-move hover:bg-accent"
-                      draggable
-                    >
-                      <div className="font-medium text-sm">{subGoal.testMethod || "Unnamed Test"}</div>
-                      <div className="text-xs text-muted-foreground">{subGoal.description}</div>
-                    </div>
-                  ))}
-                </div>
+          <div className="space-y-6">
+            <h4 className="font-semibold text-center">Test Scheduling</h4>
+            
+            {/* Available Tests - Centered */}
+            <div className="flex flex-col items-center">
+              <Label className="text-sm font-medium mb-3">Available Tests</Label>
+              <div className="flex flex-wrap justify-center gap-2 p-4 border rounded-lg bg-muted/50 min-h-24 max-w-2xl">
+                {subGoals.map((subGoal) => (
+                  <div
+                    key={subGoal.id}
+                    className={`p-3 bg-background border rounded cursor-pointer hover:bg-accent transition-colors ${
+                      selectedTest === subGoal.id ? 'ring-2 ring-primary bg-primary/10' : ''
+                    }`}
+                    onClick={() => setSelectedTest(selectedTest === subGoal.id ? null : subGoal.id)}
+                  >
+                    <div className="font-medium text-sm text-center">{subGoal.testMethod || "Unnamed Test"}</div>
+                    <div className="text-xs text-muted-foreground text-center">{subGoal.description}</div>
+                  </div>
+                ))}
               </div>
+              {selectedTest && (
+                <p className="text-sm text-muted-foreground mt-2 text-center">
+                  Click on a date in the calendar below to schedule this test
+                </p>
+              )}
+            </div>
 
-              <div>
-                <Label className="text-sm font-medium mb-2 block">Training Calendar</Label>
-                <div className="border rounded-lg p-3">
-                  <Calendar
-                    mode="single"
-                    selected={undefined}
-                    className="rounded-md"
-                    disabled={(date) => {
-                      if (!smartGoal.startDate || !smartGoal.endDate) return true;
-                      return date < smartGoal.startDate || date > smartGoal.endDate;
-                    }}
-                  />
-                </div>
+            {/* Training Calendar - Larger and Centered */}
+            <div className="flex flex-col items-center">
+              <Label className="text-sm font-medium mb-3">Training Calendar</Label>
+              <div className="border rounded-lg p-6 bg-background">
+                <Calendar
+                  mode="single"
+                  selected={undefined}
+                  onSelect={(date) => {
+                    if (date && selectedTest) {
+                      const updated = [...subGoals];
+                      const subGoalIndex = updated.findIndex(sg => sg.id === selectedTest);
+                      if (subGoalIndex !== -1) {
+                        updated[subGoalIndex] = {
+                          ...updated[subGoalIndex],
+                          testDates: [...(updated[subGoalIndex].testDates || []), date]
+                        };
+                        setSubGoals(updated);
+                        setSelectedTest(null);
+                      }
+                    }
+                  }}
+                  className="rounded-md scale-110"
+                  disabled={(date) => {
+                    if (!smartGoal.startDate || !smartGoal.endDate) return true;
+                    return date < smartGoal.startDate || date > smartGoal.endDate;
+                  }}
+                  components={{
+                    Day: (props: any) => {
+                      const { date } = props;
+                      const scheduledTests = subGoals.filter(sg => 
+                        sg.testDates?.some(testDate => 
+                          testDate.toDateString() === date.toDateString()
+                        )
+                      );
+                      return (
+                        <div className="relative">
+                          <button 
+                            {...props}
+                            className={props.className}
+                            onClick={props.onClick}
+                            disabled={props.disabled}
+                          >
+                            {date.getDate()}
+                          </button>
+                          {scheduledTests.length > 0 && (
+                            <div className="absolute top-full left-1/2 transform -translate-x-1/2 text-xs text-center mt-1 max-w-20">
+                              <div className="bg-primary/10 text-primary rounded px-1 py-0.5 text-[10px] leading-tight">
+                                {scheduledTests.map(sg => sg.testMethod).join(', ')}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+                  }}
+                />
               </div>
             </div>
           </div>
