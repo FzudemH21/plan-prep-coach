@@ -73,7 +73,13 @@ export default function MesocyclePage() {
       if (data.methodsByQuality) {
         const allMethods: TrainingMethod[] = [];
         Object.values(data.methodsByQuality).forEach((methods: any) => {
-          allMethods.push(...methods);
+          // Ensure methods is an array before spreading
+          if (Array.isArray(methods)) {
+            allMethods.push(...methods);
+          } else if (methods && typeof methods === 'object') {
+            // If it's a single method object, push it directly
+            allMethods.push(methods);
+          }
         });
         setTrainingMethods(allMethods);
       }
