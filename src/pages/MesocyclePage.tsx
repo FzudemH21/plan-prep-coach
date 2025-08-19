@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Mesocycle, TrainingMethod, IntensityLevel } from "@/types/training";
-import { Target, Calendar as CalendarIcon, Bot, GripVertical } from "lucide-react";
+import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays } from "lucide-react";
+import MesocycleCalendar from "@/components/mesocycle/MesocycleCalendar";
 
 export default function MesocyclePage() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -23,16 +24,16 @@ export default function MesocyclePage() {
 
   const getIntensityColor = (intensity: IntensityLevel) => {
     const colors = {
-      "off": "bg-white border-2",
-      "deload": "bg-emerald-800",
-      "easy": "bg-emerald-600", 
-      "easy-moderate": "bg-blue-500",
-      "moderate": "bg-yellow-500",
-      "moderate-hard": "bg-orange-500",
-      "hard": "bg-red-500",
-      "very-hard": "bg-red-800"
+      "off": "bg-intensity-off text-intensity-foreground border-2",
+      "deload": "bg-intensity-deload text-intensity-foreground",
+      "easy": "bg-intensity-easy text-intensity-foreground", 
+      "easy-moderate": "bg-intensity-easy-moderate text-intensity-foreground",
+      "moderate": "bg-intensity-moderate text-intensity-foreground",
+      "moderate-hard": "bg-intensity-moderate-hard text-intensity-foreground",
+      "hard": "bg-intensity-hard text-intensity-foreground",
+      "very-hard": "bg-intensity-very-hard text-intensity-foreground"
     };
-    return colors[intensity] || "bg-gray-300";
+    return colors[intensity] || "bg-muted text-muted-foreground";
   };
 
   const renderMesocycleSetup = () => (
@@ -107,43 +108,48 @@ export default function MesocyclePage() {
         </div>
 
         {mesocycles.length > 0 && (
-          <div className="space-y-4">
-            <h4 className="font-semibold">Mesocycle Overview</h4>
-            <div className="grid grid-cols-1 gap-4">
-              {mesocycles.map((meso, index) => (
-                <div key={meso.id} className="p-4 border rounded-lg space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Input
-                      value={meso.name}
-                      onChange={(e) => {
-                        const updated = [...mesocycles];
-                        updated[index].name = e.target.value;
-                        setMesocycles(updated);
-                      }}
-                      className="font-medium"
-                    />
-                    {!uniformLength && (
-                      <div className="flex items-center space-x-2">
-                        <Label>Weeks:</Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          max="12"
-                          value={meso.duration}
-                          onChange={(e) => {
-                            const updated = [...mesocycles];
-                            updated[index].duration = parseInt(e.target.value);
-                            setMesocycles(updated);
-                          }}
-                          className="w-20"
-                        />
-                      </div>
-                    )}
+          <>
+            <div className="space-y-4">
+              <h4 className="font-semibold">Mesocycle Configuration</h4>
+              <div className="grid grid-cols-1 gap-4">
+                {mesocycles.map((meso, index) => (
+                  <div key={meso.id} className="p-4 border rounded-lg space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Input
+                        value={meso.name}
+                        onChange={(e) => {
+                          const updated = [...mesocycles];
+                          updated[index].name = e.target.value;
+                          setMesocycles(updated);
+                        }}
+                        className="font-medium"
+                      />
+                      {!uniformLength && (
+                        <div className="flex items-center space-x-2">
+                          <Label>Weeks:</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            max="12"
+                            value={meso.duration}
+                            onChange={(e) => {
+                              const updated = [...mesocycles];
+                              updated[index].duration = parseInt(e.target.value);
+                              setMesocycles(updated);
+                            }}
+                            className="w-20"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+
+            {/* Calendar Visualization */}
+            <MesocycleCalendar mesocycles={mesocycles} />
+          </>
         )}
       </CardContent>
     </Card>
