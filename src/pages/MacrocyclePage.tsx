@@ -130,6 +130,8 @@ export default function MacrocyclePage() {
 
   // Auto-populate training methods when qualities change
   useEffect(() => {
+    console.log('Training methods useEffect triggered, qualities:', qualities.length);
+    
     const newMethodsByQuality: Record<string, { subGoalLabel: string; qualityName: string; list: string[] }> = {};
     
     qualities.forEach(quality => {
@@ -175,6 +177,7 @@ export default function MacrocyclePage() {
     });
 
     if (hasChanges || Object.keys(methodsByQuality).length !== Object.keys(newMethodsByQuality).length) {
+      console.log('Updating training methods, changes detected');
       setMethodsByQuality(newMethodsByQuality);
       
       // Sync back to qualities array
@@ -185,7 +188,7 @@ export default function MacrocyclePage() {
       
       setQualities(updatedQualities);
     }
-  }, [qualities.map(q => q.id).join(','), subGoals, subGoals.map(sg => sg.description).join('|')]);
+  }, [qualities.length, JSON.stringify(qualities.map(q => q.name)), subGoals, subGoals.map(sg => sg.description).join('|')]);
 
   const addQualityToSubGoal = (subGoalId: string, quality: string) => {
     setQualitiesBySubGoal(prev => ({
@@ -666,6 +669,7 @@ export default function MacrocyclePage() {
                   mode="single"
                   selected={undefined}
                   onSelect={(date) => {
+                    console.log('Calendar date clicked:', date, 'selected test:', selectedTest);
                     if (date && selectedTest) {
                       const updated = [...subGoals];
                       const subGoalIndex = updated.findIndex(sg => sg.id === selectedTest);
@@ -674,6 +678,7 @@ export default function MacrocyclePage() {
                           ...updated[subGoalIndex],
                           testDates: [...(updated[subGoalIndex].testDates || []), date]
                         };
+                        console.log('Test scheduled successfully');
                         setSubGoals(updated);
                         setSelectedTest(null);
                       }
@@ -686,7 +691,7 @@ export default function MacrocyclePage() {
                   }}
                   components={{
                     Day: (props: any) => {
-                      const { date } = props;
+                      const { date, ...dayProps } = props;
                       const scheduledTests = subGoals.filter(sg => 
                         sg.testDates?.some(testDate => 
                           testDate.toDateString() === date.toDateString()
@@ -694,14 +699,9 @@ export default function MacrocyclePage() {
                       );
                       return (
                         <div className="relative">
-                          <button 
-                            {...props}
-                            className={props.className}
-                            onClick={props.onClick}
-                            disabled={props.disabled}
-                          >
+                          <div {...dayProps}>
                             {date.getDate()}
-                          </button>
+                          </div>
                           {scheduledTests.length > 0 && (
                             <div className="absolute top-full left-1/2 transform -translate-x-1/2 text-xs text-center mt-1 max-w-20">
                               <div className="bg-primary/10 text-primary rounded px-1 py-0.5 text-[10px] leading-tight">
