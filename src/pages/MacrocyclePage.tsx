@@ -113,21 +113,29 @@ export default function MacrocyclePage() {
 
     if (hasChanges || Object.keys(qualitiesBySubGoal).length !== Object.keys(newQualitiesBySubGoal).length) {
       setQualitiesBySubGoal(newQualitiesBySubGoal);
-      
-      // Sync to qualities array for Step 5 compatibility
-      const allQualities: TrainableQuality[] = Object.entries(newQualitiesBySubGoal)
-        .flatMap(([subGoalId, { list }]) =>
-          list.map(qualityName => ({
-            id: `${subGoalId}::${qualityName}`,
-            name: qualityName,
-            description: "",
-            methods: qualities.find(q => q.id === `${subGoalId}::${qualityName}`)?.methods || []
-          }))
-        );
-      
-      setQualities(allQualities);
     }
   }, [subGoals, subGoals.map(sg => sg.description).join('|')]);
+
+  // Sync qualities array from qualitiesBySubGoal changes
+  useEffect(() => {
+    const allQualities: TrainableQuality[] = Object.entries(qualitiesBySubGoal)
+      .flatMap(([subGoalId, { list }]) =>
+        list.map(qualityName => ({
+          id: `${subGoalId}::${qualityName}`,
+          name: qualityName,
+          description: "",
+          methods: qualities.find(q => q.id === `${subGoalId}::${qualityName}`)?.methods || []
+        }))
+      );
+    
+    // Only update if there are actual changes
+    const hasChanges = JSON.stringify(qualities.map(q => ({ id: q.id, name: q.name }))) !== 
+                      JSON.stringify(allQualities.map(q => ({ id: q.id, name: q.name })));
+    
+    if (hasChanges) {
+      setQualities(allQualities);
+    }
+  }, [JSON.stringify(qualitiesBySubGoal)]);
 
   // Auto-populate training methods when qualities change
   useEffect(() => {
@@ -159,6 +167,13 @@ export default function MacrocyclePage() {
         }
       });
       
+      // Remove methods for qualities that no longer exist
+      Object.keys(prevMethods).forEach(qualityId => {
+        if (!qualities.find(q => q.id === qualityId)) {
+          delete prevMethods[qualityId];
+        }
+      });
+      
       // Check if there are actual changes
       const hasChanges = JSON.stringify(prevMethods) !== JSON.stringify(nextMethods);
       
@@ -177,27 +192,60 @@ export default function MacrocyclePage() {
     });
   }, [
     JSON.stringify(qualities.map(q => ({ id: q.id, name: q.name }))),
-    JSON.stringify(subGoals.map(sg => ({ id: sg.id, description: sg.description })))
+    JSON.stringify(subGoals.map(sg => ({ id: sg.id, description: sg.description }))),
+    JSON.stringify(qualitiesBySubGoal)
   ]);
 
   const addQualityToSubGoal = (subGoalId: string, quality: string) => {
-    setQualitiesBySubGoal(prev => ({
-      ...prev,
-      [subGoalId]: {
-        ...prev[subGoalId],
-        list: Array.from(new Set([...(prev[subGoalId]?.list || []), quality]))
-      }
-    }));
+    setQualitiesBySubGoal(prev => {
+      const updated = {
+        ...prev,
+        [subGoalId]: {
+          ...prev[subGoalId],
+          list: Array.from(new Set([...(prev[subGoalId]?.list || []), quality]))
+        }
+      };
+      
+      // Immediately sync to qualities array
+      const allQualities: TrainableQuality[] = Object.entries(updated)
+        .flatMap(([subGoalId, { list }]) =>
+          list.map(qualityName => ({
+            id: `${subGoalId}::${qualityName}`,
+            name: qualityName,
+            description: "",
+            methods: qualities.find(q => q.id === `${subGoalId}::${qualityName}`)?.methods || []
+          }))
+        );
+      setQualities(allQualities);
+      
+      return updated;
+    });
   };
 
   const removeQualityFromSubGoal = (subGoalId: string, quality: string) => {
-    setQualitiesBySubGoal(prev => ({
-      ...prev,
-      [subGoalId]: {
-        ...prev[subGoalId],
-        list: prev[subGoalId]?.list.filter(q => q !== quality) || []
-      }
-    }));
+    setQualitiesBySubGoal(prev => {
+      const updated = {
+        ...prev,
+        [subGoalId]: {
+          ...prev[subGoalId],
+          list: prev[subGoalId]?.list.filter(q => q !== quality) || []
+        }
+      };
+      
+      // Immediately sync to qualities array
+      const allQualities: TrainableQuality[] = Object.entries(updated)
+        .flatMap(([subGoalId, { list }]) =>
+          list.map(qualityName => ({
+            id: `${subGoalId}::${qualityName}`,
+            name: qualityName,
+            description: "",
+            methods: qualities.find(q => q.id === `${subGoalId}::${qualityName}`)?.methods || []
+          }))
+        );
+      setQualities(allQualities);
+      
+      return updated;
+    });
   };
 
   const addMethodToQuality = (qualityId: string, method: string) => {
