@@ -27,19 +27,31 @@ export default function MacrocyclePage() {
   const [qualitiesBySubGoal, setQualitiesBySubGoal] = useState<Record<string, { label: string; list: string[] }>>({});
   const [methodsByQuality, setMethodsByQuality] = useState<Record<string, { subGoalLabel: string; qualityName: string; list: string[] }>>({});
 
+  // Helper function to normalize strings for comparison
+  const normalizeForComparison = (str: string): string => {
+    return str.toLowerCase()
+      .replace(/–/g, '-')  // Replace em dash with regular dash
+      .replace(/\s+/g, ' ') // Normalize spaces
+      .trim();
+  };
+
   // Helper function to get qualities for a sub-goal label
   const getQualitiesForSubGoalLabel = (subGoalLabel: string): string[] => {
     const parts = subGoalLabel.split(' - ');
     if (parts.length < 2) return [];
     
-    const overarchingGoal = parts[0];
-    const subGoal = parts[1];
+    const overarchingGoal = parts[0].trim();
+    const subGoal = parts[1].trim();
+    
+    // Normalize for comparison
+    const normalizedOverarching = normalizeForComparison(overarchingGoal);
+    const normalizedSubGoal = normalizeForComparison(subGoal);
     
     return Array.from(new Set(
       trainingData
         .filter(item => 
-          item.overarchingGoal === overarchingGoal && 
-          item.subGoal === subGoal
+          normalizeForComparison(item.overarchingGoal) === normalizedOverarching && 
+          normalizeForComparison(item.subGoal) === normalizedSubGoal
         )
         .map(item => item.quality)
     ));
@@ -47,12 +59,17 @@ export default function MacrocyclePage() {
 
   // Helper function to get training methods for a specific quality
   const getTrainingMethodsForQuality = (overarchingGoal: string, subGoal: string, qualityName: string): string[] => {
+    // Normalize for comparison
+    const normalizedOverarching = normalizeForComparison(overarchingGoal);
+    const normalizedSubGoal = normalizeForComparison(subGoal);
+    const normalizedQuality = normalizeForComparison(qualityName);
+    
     return Array.from(new Set(
       trainingData
         .filter(item => 
-          item.overarchingGoal === overarchingGoal && 
-          item.subGoal === subGoal &&
-          item.quality === qualityName
+          normalizeForComparison(item.overarchingGoal) === normalizedOverarching && 
+          normalizeForComparison(item.subGoal) === normalizedSubGoal &&
+          normalizeForComparison(item.quality) === normalizedQuality
         )
         .map(item => item.trainingMethod)
     ));
@@ -72,20 +89,29 @@ export default function MacrocyclePage() {
       };
     });
     
-    setQualitiesBySubGoal(newQualitiesBySubGoal);
-    
-    // Sync to qualities array for Step 5 compatibility
-    const allQualities: TrainableQuality[] = Object.entries(newQualitiesBySubGoal)
-      .flatMap(([subGoalId, { list }]) =>
-        list.map(qualityName => ({
-          id: `${subGoalId}::${qualityName}`,
-          name: qualityName,
-          description: "",
-          methods: qualities.find(q => q.id === `${subGoalId}::${qualityName}`)?.methods || []
-        }))
-      );
-    
-    setQualities(allQualities);
+    // Only update if there are actual changes
+    const hasChanges = Object.keys(newQualitiesBySubGoal).some(subGoalId => {
+      const oldList = qualitiesBySubGoal[subGoalId]?.list || [];
+      const newList = newQualitiesBySubGoal[subGoalId]?.list || [];
+      return JSON.stringify(oldList) !== JSON.stringify(newList);
+    });
+
+    if (hasChanges || Object.keys(qualitiesBySubGoal).length !== Object.keys(newQualitiesBySubGoal).length) {
+      setQualitiesBySubGoal(newQualitiesBySubGoal);
+      
+      // Sync to qualities array for Step 5 compatibility
+      const allQualities: TrainableQuality[] = Object.entries(newQualitiesBySubGoal)
+        .flatMap(([subGoalId, { list }]) =>
+          list.map(qualityName => ({
+            id: `${subGoalId}::${qualityName}`,
+            name: qualityName,
+            description: "",
+            methods: qualities.find(q => q.id === `${subGoalId}::${qualityName}`)?.methods || []
+          }))
+        );
+      
+      setQualities(allQualities);
+    }
   }, [subGoals]);
 
   // Auto-populate training methods when qualities change
@@ -101,8 +127,8 @@ export default function MacrocyclePage() {
         const parts = subGoal.description.split(' - ');
         
         if (parts.length >= 2) {
-          const overarchingGoal = parts[0];
-          const subGoalName = parts[1];
+          const overarchingGoal = parts[0].trim();
+          const subGoalName = parts[1].trim();
           const recommendedMethods = getTrainingMethodsForQuality(overarchingGoal, subGoalName, qualityName);
           
           newMethodsByQuality[quality.id] = {
@@ -114,16 +140,25 @@ export default function MacrocyclePage() {
       }
     });
     
-    setMethodsByQuality(newMethodsByQuality);
-    
-    // Sync back to qualities array
-    const updatedQualities = qualities.map(quality => ({
-      ...quality,
-      methods: newMethodsByQuality[quality.id]?.list || []
-    }));
-    
-    setQualities(updatedQualities);
-  }, [qualities.length, subGoals]);
+    // Only update if there are actual changes
+    const hasChanges = Object.keys(newMethodsByQuality).some(qualityId => {
+      const oldList = methodsByQuality[qualityId]?.list || [];
+      const newList = newMethodsByQuality[qualityId]?.list || [];
+      return JSON.stringify(oldList) !== JSON.stringify(newList);
+    });
+
+    if (hasChanges || Object.keys(methodsByQuality).length !== Object.keys(newMethodsByQuality).length) {
+      setMethodsByQuality(newMethodsByQuality);
+      
+      // Sync back to qualities array
+      const updatedQualities = qualities.map(quality => ({
+        ...quality,
+        methods: newMethodsByQuality[quality.id]?.list || []
+      }));
+      
+      setQualities(updatedQualities);
+    }
+  }, [qualities.map(q => q.id).join(','), subGoals]);
 
   const addQualityToSubGoal = (subGoalId: string, quality: string) => {
     setQualitiesBySubGoal(prev => ({
