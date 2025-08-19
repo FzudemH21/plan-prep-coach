@@ -9,6 +9,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
+import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { AthleteInfo, SmartGoal, SubGoal, TrainableQuality } from "@/types/training";
 import { User, Target, Calendar as CalendarIcon, Plus, Bot, X } from "lucide-react";
 import { 
@@ -130,61 +131,50 @@ export default function MacrocyclePage() {
 
   // Auto-populate training methods when qualities change
   useEffect(() => {
-    const newMethodsByQuality: Record<string, { subGoalLabel: string; qualityName: string; list: string[] }> = {};
-    
-    qualities.forEach(quality => {
-      const [subGoalId, qualityName] = quality.id.split('::');
-      const subGoal = subGoals.find(sg => sg.id === subGoalId);
+    setMethodsByQuality(prevMethods => {
+      const nextMethods: Record<string, { subGoalLabel: string; qualityName: string; list: string[] }> = {};
       
-      if (subGoal && qualityName) {
-        const existing = methodsByQuality[quality.id];
-        const parts = subGoal.description.split(' - ');
+      qualities.forEach(quality => {
+        const [subGoalId, qualityName] = quality.id.split('::');
+        const subGoal = subGoals.find(sg => sg.id === subGoalId);
         
-        if (parts.length >= 2) {
-          const overarchingGoal = parts[0].trim();
-          const subGoalName = parts[1].trim();
-          const recommendedMethods = getTrainingMethodsForQuality(overarchingGoal, subGoalName, qualityName);
+        if (subGoal && qualityName) {
+          const existing = prevMethods[quality.id];
+          const parts = subGoal.description.split(' - ');
           
-          // If the sub-goal description has changed, reset to recommended methods
-          const hasSubGoalChanged = existing && existing.subGoalLabel !== subGoal.description;
-          
-          newMethodsByQuality[quality.id] = {
-            subGoalLabel: subGoal.description,
-            qualityName: qualityName,
-            list: hasSubGoalChanged ? recommendedMethods : (existing?.list?.length ? existing.list : recommendedMethods)
-          };
+          if (parts.length >= 2) {
+            const overarchingGoal = parts[0].trim();
+            const subGoalName = parts[1].trim();
+            const recommendedMethods = getTrainingMethodsForQuality(overarchingGoal, subGoalName, qualityName);
+            
+            // If the sub-goal description has changed, reset to recommended methods
+            const hasSubGoalChanged = existing && existing.subGoalLabel !== subGoal.description;
+            
+            nextMethods[quality.id] = {
+              subGoalLabel: subGoal.description,
+              qualityName: qualityName,
+              list: hasSubGoalChanged ? recommendedMethods : (existing?.list?.length ? existing.list : recommendedMethods)
+            };
+          }
         }
-      }
-    });
-    
-    // Remove methods for qualities that no longer exist
-    const existingQualityIds = new Set(qualities.map(q => q.id));
-    Object.keys(methodsByQuality).forEach(qualityId => {
-      if (!existingQualityIds.has(qualityId)) {
-        delete methodsByQuality[qualityId];
-      }
-    });
-    
-    // Only update if there are actual changes
-    const hasChanges = Object.keys(newMethodsByQuality).some(qualityId => {
-      const oldList = methodsByQuality[qualityId]?.list || [];
-      const newList = newMethodsByQuality[qualityId]?.list || [];
-      const oldLabel = methodsByQuality[qualityId]?.subGoalLabel || '';
-      const newLabel = newMethodsByQuality[qualityId]?.subGoalLabel || '';
-      return JSON.stringify(oldList) !== JSON.stringify(newList) || oldLabel !== newLabel;
-    });
-
-    if (hasChanges || Object.keys(methodsByQuality).length !== Object.keys(newMethodsByQuality).length) {
-      setMethodsByQuality(newMethodsByQuality);
+      });
       
-      // Sync back to qualities array
-      const updatedQualities = qualities.map(quality => ({
-        ...quality,
-        methods: newMethodsByQuality[quality.id]?.list || []
-      }));
+      // Check if there are actual changes
+      const hasChanges = JSON.stringify(prevMethods) !== JSON.stringify(nextMethods);
       
-      setQualities(updatedQualities);
-    }
+      if (hasChanges) {
+        // Sync back to qualities array
+        setQualities(prevQualities => 
+          prevQualities.map(quality => ({
+            ...quality,
+            methods: nextMethods[quality.id]?.list || []
+          }))
+        );
+        return nextMethods;
+      }
+      
+      return prevMethods;
+    });
   }, [
     JSON.stringify(qualities.map(q => ({ id: q.id, name: q.name }))),
     JSON.stringify(subGoals.map(sg => ({ id: sg.id, description: sg.description })))
@@ -712,26 +702,58 @@ export default function MacrocyclePage() {
                     }
                   }}
                   components={{
-                    Day: (props: any) => {
-                      const { date } = props;
+                    Day: ({ date, ...buttonProps }: any) => {
                       const scheduledTests = subGoals.filter(sg => 
                         sg.testDates?.some(testDate => 
                           testDate.toDateString() === date.toDateString()
                         )
                       );
                       
-                      return (
-                        <div className="relative h-9 w-9 flex items-center justify-center cursor-pointer">
-                          <span>{date.getDate()}</span>
+                      const dayContent = (
+                        <button 
+                          {...buttonProps}
+                          className={`relative h-9 w-9 p-0 font-normal flex items-center justify-center ${
+                            scheduledTests.length > 0 ? 'ring-2 ring-primary rounded-full' : ''
+                          } ${buttonProps.className || ''}`}
+                        >
                           {scheduledTests.length > 0 && (
-                            <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2">
-                              <div className="bg-primary text-primary-foreground rounded-full w-2 h-2 text-[8px] flex items-center justify-center">
-                                {scheduledTests.length}
-                              </div>
-                            </div>
+                            <span className="absolute top-0 left-1/2 -translate-x-1/2 text-[8px] leading-none text-primary truncate max-w-[36px]">
+                              {scheduledTests[0].testMethod || "Test"}{scheduledTests.length > 1 ? ` +${scheduledTests.length - 1}` : ""}
+                            </span>
                           )}
-                        </div>
+                          <span className={scheduledTests.length > 0 ? "mt-1" : ""}>
+                            {date.getDate()}
+                          </span>
+                        </button>
                       );
+
+                      // If there are scheduled tests and no test is currently selected, show hover card
+                      if (scheduledTests.length > 0 && !selectedTest) {
+                        return (
+                          <HoverCard>
+                            <HoverCardTrigger asChild>
+                              {dayContent}
+                            </HoverCardTrigger>
+                            <HoverCardContent className="w-80" side="top">
+                              <div className="space-y-2">
+                                <h4 className="font-semibold">
+                                  Scheduled Tests for {date.toLocaleDateString()}
+                                </h4>
+                                <div className="space-y-1">
+                                  {scheduledTests.map((test, index) => (
+                                    <div key={index} className="text-sm">
+                                      <div className="font-medium">{test.testMethod || "Unnamed Test"}</div>
+                                      <div className="text-muted-foreground text-xs">{test.description}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </HoverCardContent>
+                          </HoverCard>
+                        );
+                      }
+
+                      return dayContent;
                     }
                   }}
                 />
