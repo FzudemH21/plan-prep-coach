@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,12 +6,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { TrainingMethod, IntensityLevel } from "@/types/training";
 import { ExtendedMesocycle } from "@/features/planner/types";
-import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info } from "lucide-react";
+import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown } from "lucide-react";
 import MesocycleCalendar from "@/components/mesocycle/MesocycleCalendar";
 import { MicrocycleIntensityChart } from "@/components/mesocycle/MicrocycleIntensityChart";
 import { format, addWeeks } from "date-fns";
+import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 
 export default function MesocyclePage() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -379,8 +381,38 @@ export default function MesocyclePage() {
     const trainableQualities = macrocycleData?.qualities || [];
     const subGoals = macrocycleData?.subGoals || {};
 
-    const handleDragStart = (e: React.DragEvent, quality: string) => {
-      e.dataTransfer.setData('text/plain', quality);
+    // Group qualities by sub-goal using the training data
+    const qualitiesBySubGoal = React.useMemo(() => {
+      const result: Record<string, Array<{ quality: string; methods: string[] }>> = {};
+      
+      trainableQualities.forEach((quality: any) => {
+        const qualityName = typeof quality === 'string' ? quality : quality.name || quality.id || 'Unknown Quality';
+        
+        // Find all data entries for this quality to get its sub-goal(s) and methods
+        const qualityEntries = trainingData.filter(item => item.quality === qualityName);
+        
+        qualityEntries.forEach(entry => {
+          const subGoal = entry.subGoal;
+          if (!result[subGoal]) {
+            result[subGoal] = [];
+          }
+          
+          // Check if quality already exists in this sub-goal
+          const existingQuality = result[subGoal].find(q => q.quality === qualityName);
+          const methods = getMethodsForQuality(qualityName);
+          
+          if (!existingQuality) {
+            result[subGoal].push({ quality: qualityName, methods });
+          }
+        });
+      });
+      
+      return result;
+    }, [trainableQualities]);
+
+    const handleMethodDragStart = (e: React.DragEvent, method: string, quality: string, subGoal: string) => {
+      const dragData = JSON.stringify({ method, quality, subGoal });
+      e.dataTransfer.setData('text/plain', dragData);
     };
 
     const handleDragOver = (e: React.DragEvent) => {
@@ -389,28 +421,40 @@ export default function MesocyclePage() {
 
     const handleDrop = (e: React.DragEvent, mesocycleId: string) => {
       e.preventDefault();
-      const quality = e.dataTransfer.getData('text/plain');
+      const dragDataString = e.dataTransfer.getData('text/plain');
       
-      // Check if quality already exists in this mesocycle
-      const mesocycleIndex = mesocycles.findIndex(m => m.id === mesocycleId);
-      if (mesocycleIndex === -1) return;
-      
-      const currentQualities = mesocycles[mesocycleIndex].trainingQualities || [];
-      if (currentQualities.includes(quality)) return; // Prevent duplicates
-      
-      // Add quality to mesocycle
-      const updated = [...mesocycles];
-      updated[mesocycleIndex].trainingQualities = [...currentQualities, quality];
-      setMesocycles(updated);
+      try {
+        const dragData = JSON.parse(dragDataString);
+        const { method, quality, subGoal } = dragData;
+        
+        // Check if method already exists in this mesocycle
+        const mesocycleIndex = mesocycles.findIndex(m => m.id === mesocycleId);
+        if (mesocycleIndex === -1) return;
+        
+        const currentMethods = mesocycles[mesocycleIndex].trainingMethods || [];
+        const methodExists = currentMethods.some((m: any) => 
+          (typeof m === 'string' ? m : m.method) === method
+        );
+        
+        if (methodExists) return; // Prevent duplicates
+        
+        // Add method with metadata to mesocycle
+        const updated = [...mesocycles];
+        const newMethod = { method, quality, subGoal };
+        updated[mesocycleIndex].trainingMethods = [...currentMethods, newMethod];
+        setMesocycles(updated);
+      } catch (error) {
+        console.error('Failed to parse drag data:', error);
+      }
     };
 
-    const removeQualityFromMesocycle = (mesocycleId: string, quality: string) => {
+    const removeMethodFromMesocycle = (mesocycleId: string, method: string) => {
       const mesocycleIndex = mesocycles.findIndex(m => m.id === mesocycleId);
       if (mesocycleIndex === -1) return;
       
       const updated = [...mesocycles];
-      updated[mesocycleIndex].trainingQualities = (updated[mesocycleIndex].trainingQualities || [])
-        .filter(q => q !== quality);
+      updated[mesocycleIndex].trainingMethods = (updated[mesocycleIndex].trainingMethods || [])
+        .filter((m: any) => (typeof m === 'string' ? m : m.method) !== method);
       setMesocycles(updated);
     };
 
@@ -419,42 +463,55 @@ export default function MesocyclePage() {
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <GripVertical className="h-5 w-5" />
-            <span>Training Quality Allocation</span>
+            <span>Training Method Allocation</span>
           </CardTitle>
           <CardDescription>
-            Drag and drop training qualities to assign them to specific mesocycles. Each quality can be used multiple times but only once per mesocycle.
+            Expand training qualities to view methods, then drag and drop training methods to assign them to specific mesocycles. Each method can only be used once per mesocycle.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
-              <Label className="text-sm font-medium mb-2 block">Available Training Qualities</Label>
-              <div className="space-y-2 p-4 border rounded-lg bg-muted/50 min-h-32">
-                {trainableQualities.map((quality: any, index: number) => {
-                  const qualityName = typeof quality === 'string' ? quality : quality.name || quality.id || 'Unknown Quality';
-                  const relatedSubGoals = Array.isArray(subGoals[qualityName]) ? subGoals[qualityName] : [];
-                  
-                  return (
-                    <div
-                      key={index}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, qualityName)}
-                      className="p-3 bg-background border rounded-lg cursor-grab hover:shadow-md transition-shadow"
-                    >
-                      <div className="font-medium text-sm">{qualityName}</div>
-                      {relatedSubGoals.length > 0 && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Related sub-goals: {relatedSubGoals.join(', ')}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+              <Label className="text-sm font-medium mb-2 block">Available Training Methods by Sub-Goal</Label>
+              <div className="space-y-3 p-4 border rounded-lg bg-muted/50 max-h-96 overflow-y-auto">
+                {Object.entries(qualitiesBySubGoal).map(([subGoal, qualities]) => (
+                  <Collapsible key={subGoal} className="space-y-2">
+                    <CollapsibleTrigger className="flex items-center justify-between w-full p-2 bg-background border rounded-lg hover:bg-muted/50 transition-colors">
+                      <span className="font-medium text-sm text-left">{subGoal}</span>
+                      <ChevronDown className="h-4 w-4" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-2 pl-4">
+                      {qualities.map(({ quality, methods }) => (
+                        <Collapsible key={quality} className="space-y-1">
+                          <CollapsibleTrigger className="flex items-center justify-between w-full p-2 bg-muted border rounded text-left hover:bg-muted/80 transition-colors">
+                            <span className="text-sm font-medium">{quality}</span>
+                            <ChevronDown className="h-3 w-3" />
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="space-y-1 pl-4">
+                            {methods.map((method, index) => (
+                              <div
+                                key={index}
+                                draggable
+                                onDragStart={(e) => handleMethodDragStart(e, method, quality, subGoal)}
+                                className="p-2 bg-background border rounded cursor-grab hover:shadow-md transition-shadow text-xs"
+                                title={method}
+                              >
+                                <div className="line-clamp-2">
+                                  {method.length > 80 ? `${method.substring(0, 80)}...` : method}
+                                </div>
+                              </div>
+                            ))}
+                          </CollapsibleContent>
+                        </Collapsible>
+                      ))}
+                    </CollapsibleContent>
+                  </Collapsible>
+                ))}
               </div>
             </div>
 
             <div>
-              <Label className="text-sm font-medium mb-2 block">Mesocycle Assignments</Label>
+              <Label className="text-sm font-medium mb-2 block">Mesocycle Method Assignments</Label>
               <div className="space-y-3">
                 {mesocycles.map((meso) => (
                   <div
@@ -469,21 +526,39 @@ export default function MesocyclePage() {
                         <span className="font-medium text-sm">{meso.name}</span>
                       </div>
                     </div>
-                    <div className="space-y-1">
-                      {(meso.trainingQualities || []).length === 0 ? (
-                        <p className="text-xs text-muted-foreground">Drop training qualities here</p>
+                    <div className="space-y-2">
+                      {(!meso.trainingMethods || meso.trainingMethods.length === 0) ? (
+                        <p className="text-xs text-muted-foreground">Drop training methods here</p>
                       ) : (
-                        meso.trainingQualities?.map((quality, index) => (
-                          <div key={index} className="flex items-center justify-between bg-primary/10 rounded px-2 py-1">
-                            <span className="text-xs font-medium">{quality}</span>
-                            <button
-                              onClick={() => removeQualityFromMesocycle(meso.id, quality)}
-                              className="text-destructive hover:text-destructive/80 text-xs ml-2"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))
+                        meso.trainingMethods?.map((methodData: any, index: number) => {
+                          const method = typeof methodData === 'string' ? methodData : methodData.method;
+                          const quality = typeof methodData === 'string' ? '' : methodData.quality;
+                          const subGoal = typeof methodData === 'string' ? '' : methodData.subGoal;
+                          
+                          return (
+                            <div key={index} className="bg-primary/10 rounded p-2 space-y-1">
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  {subGoal && (
+                                    <div className="text-xs font-medium text-muted-foreground">{subGoal}</div>
+                                  )}
+                                  {quality && (
+                                    <div className="text-xs font-medium text-primary">{quality}</div>
+                                  )}
+                                  <div className="text-xs mt-1 line-clamp-2">
+                                    {method.length > 100 ? `${method.substring(0, 100)}...` : method}
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => removeMethodFromMesocycle(meso.id, method)}
+                                  className="text-destructive hover:text-destructive/80 text-sm ml-2 shrink-0"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
                       )}
                     </div>
                   </div>
