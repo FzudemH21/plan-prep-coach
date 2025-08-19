@@ -22,6 +22,7 @@ const schema = z.object({
   applySessionsAll: z.boolean().default(true),
   sessionLengthAll: z.number().int().min(10).max(240),
   subGoals: z.array(z.string()).default([]),
+  subGoalQualities: z.record(z.array(z.string())).default({}),
   qualities: z.string().optional(),
 });
 
@@ -43,6 +44,7 @@ export default function PlannerWizard({ onComplete, initial }: WizardProps) {
     applySessionsAll: true,
     sessionLengthAll: 60,
     subGoals: [],
+    subGoalQualities: {},
     qualities: "",
   });
 
@@ -58,13 +60,25 @@ export default function PlannerWizard({ onComplete, initial }: WizardProps) {
   // Auto-populate qualities when sub-goals change
   const selectedSubGoals = form.watch("subGoals") || [];
   React.useEffect(() => {
-    if (selectedSubGoals.length > 0) {
-      const qualities = Array.from(new Set(
+    const currentMap = form.getValues("subGoalQualities") || {};
+    const nextMap: Record<string, string[]> = {};
+
+    selectedSubGoals.forEach((key: string) => {
+      const [overarching, sub] = key.split(" - ");
+      const defaults = Array.from(new Set(
         trainingData
-          .filter(item => selectedSubGoals.includes(`${item.overarchingGoal} - ${item.subGoal}`))
-          .map(item => item.quality)
+          .filter((item) => item.overarchingGoal === overarching && item.subGoal === sub)
+          .map((item) => item.quality)
       ));
-      form.setValue("qualities", qualities.join(", "));
+      const existing = currentMap[key] || defaults;
+      const merged = Array.from(new Set((existing.length ? existing : defaults).map((q) => q.trim()).filter(Boolean)));
+      nextMap[key] = merged;
+    });
+
+    // Only update if there's a change to prevent loops
+    const stringify = (obj: any) => JSON.stringify(obj);
+    if (stringify(currentMap) !== stringify(nextMap)) {
+      form.setValue("subGoalQualities", nextMap as any, { shouldDirty: true });
     }
   }, [selectedSubGoals, form]);
 
@@ -96,10 +110,20 @@ export default function PlannerWizard({ onComplete, initial }: WizardProps) {
       };
     });
 
+    const map = (values as any).subGoalQualities || {};
+    const qualitiesUnion: string[] = Array.from(
+      new Set(
+        Object.values(map)
+          .flat()
+          .map((q: string) => q.trim())
+          .filter(Boolean)
+      )
+    );
+
     const plan: Plan = {
       goal: values.goal,
       mesocycles,
-      qualities: values.qualities?.split(",").map((q) => q.trim()).filter(Boolean) ?? [],
+      qualities: qualitiesUnion,
     };
     onComplete(plan);
   }
@@ -107,6 +131,22 @@ export default function PlannerWizard({ onComplete, initial }: WizardProps) {
   function onValuesChange() {
     const current = form.getValues();
     setDraft(current as any);
+  }
+
+  function addQualityToSubGoal(key: string, quality: string) {
+    const q = (quality || "").trim();
+    if (!q) return;
+    const map = (form.getValues("subGoalQualities") as Record<string, string[]>) || {};
+    const list = map[key] || [];
+    const nextList = Array.from(new Set([...list, q]));
+    form.setValue("subGoalQualities", { ...map, [key]: nextList } as any, { shouldDirty: true });
+  }
+
+  function removeQualityFromSubGoal(key: string, quality: string) {
+    const map = (form.getValues("subGoalQualities") as Record<string, string[]>) || {};
+    const list = map[key] || [];
+    const nextList = list.filter((q) => q !== quality);
+    form.setValue("subGoalQualities", { ...map, [key]: nextList } as any, { shouldDirty: true });
   }
 
   return (
@@ -307,46 +347,55 @@ export default function PlannerWizard({ onComplete, initial }: WizardProps) {
                   <div>
                     <h4 className="text-lg font-medium mb-4">Trainable Qualities (Step 4/5)</h4>
                     <p className="text-sm text-muted-foreground mb-4">
-                      Each selected sub-goal shows its associated trainable qualities. You can add or remove qualities as needed.
+                      Each selected sub-goal shows its associated trainable qualities. You can add or remove qualities as needed per sub-goal.
                     </p>
                   </div>
-                  
                   {selectedSubGoals.map((subGoal) => {
-                    const qualitiesForSubGoal = trainingData
-                      .filter(item => `${item.overarchingGoal} - ${item.subGoal}` === subGoal)
-                      .map(item => item.quality);
-                    
+                    const [overarching, sub] = subGoal.split(" - ");
+                    const recommended = Array.from(new Set(
+                      trainingData
+                        .filter((item) => item.overarchingGoal === overarching && item.subGoal === sub)
+                        .map((item) => item.quality)
+                    ));
+                    const map = (form.watch("subGoalQualities") as Record<string, string[]>) || {};
+                    const selectedList = map[subGoal] || [];
+
                     return (
                       <div key={subGoal} className="border rounded-lg p-4 space-y-3">
                         <h5 className="font-medium text-sm">{subGoal}</h5>
                         <div className="space-y-2">
-                          {qualitiesForSubGoal.map((quality, index) => (
-                            <div key={`${subGoal}-${index}`} className="flex items-center gap-2">
-                              <Input
-                                value={quality}
-                                readOnly
-                                className="flex-1 text-sm"
-                              />
-                              <Button 
-                                type="button" 
-                                variant="outline" 
+                          {selectedList.map((quality) => (
+                            <div key={`${subGoal}-${quality}`} className="flex items-center gap-2">
+                              <Input value={quality} readOnly className="flex-1 text-sm" />
+                              <Button
+                                type="button"
+                                variant="outline"
                                 size="sm"
-                                onClick={() => {
-                                  // Remove this quality from the list
-                                  const currentQualities = form.getValues("qualities")?.split(",").map(q => q.trim()).filter(Boolean) || [];
-                                  const updatedQualities = currentQualities.filter(q => q !== quality);
-                                  form.setValue("qualities", updatedQualities.join(", "));
-                                }}
+                                onClick={() => removeQualityFromSubGoal(subGoal, quality)}
                               >
                                 Remove
                               </Button>
                             </div>
                           ))}
+
+                          <div className="flex items-center gap-2 pt-2">
+                            <SearchableDropdown
+                              value=""
+                              onValueChange={(val) => {
+                                if (typeof val === "string") {
+                                  addQualityToSubGoal(subGoal, val);
+                                }
+                              }}
+                              options={recommended.filter((q) => !selectedList.includes(q))}
+                              placeholder="Add a quality..."
+                              allowCustomInput
+                            />
+                          </div>
                         </div>
                       </div>
                     );
                   })}
-                  
+
                   {selectedSubGoals.length === 0 && (
                     <div className="text-center py-8 text-muted-foreground">
                       Select sub-goals above to see their associated trainable qualities.
