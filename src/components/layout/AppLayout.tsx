@@ -5,13 +5,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Bot, FileText, Download, Settings } from "lucide-react";
 import { DisplayMode } from "@/types/training";
+import { useDisplayMode } from "@/contexts/DisplayModeContext";
 
 interface AppLayoutProps {
   children?: React.ReactNode;
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const [displayMode, setDisplayMode] = useState<DisplayMode>("step-by-step");
+  const { displayMode, setDisplayMode } = useDisplayMode();
   const [showAIAgent, setShowAIAgent] = useState(false);
 
   const getModeColor = (mode: DisplayMode) => {

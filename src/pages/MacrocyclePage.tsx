@@ -18,8 +18,10 @@ import {
   getUniqueTrainingMethods,
   trainingData
 } from "@/data/trainingData";
+import { useDisplayMode } from "@/contexts/DisplayModeContext";
 
 export default function MacrocyclePage() {
+  const { displayMode } = useDisplayMode();
   const [currentStep, setCurrentStep] = useState(1);
   const [athleteInfo, setAthleteInfo] = useState<Partial<AthleteInfo>>({});
   const [smartGoal, setSmartGoal] = useState<Partial<SmartGoal>>({});
@@ -982,6 +984,62 @@ export default function MacrocyclePage() {
     "Trainable Qualities",
     "Training Methods"
   ];
+
+  const renderMacroView = () => (
+    <div className="max-w-4xl mx-auto space-y-8">
+      {/* Header */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold">Macrocycle Overview</h1>
+          <Button variant="outline" size="sm">
+            <Bot className="h-4 w-4 mr-2" />
+            Ask AI for Help
+          </Button>
+        </div>
+        <p className="text-muted-foreground">
+          Complete overview of your macrocycle planning across all phases.
+        </p>
+      </div>
+
+      {/* All Steps in One View */}
+      <div className="space-y-8">
+        {/* Step 1: Athlete Information */}
+        <div id="athlete-info" className="space-y-4">
+          <h2 className="text-2xl font-semibold border-b pb-2">1. Athlete Information</h2>
+          {renderAthleteInfoForm()}
+        </div>
+
+        {/* Step 2: Goal Setting */}
+        <div id="goal-setting" className="space-y-4">
+          <h2 className="text-2xl font-semibold border-b pb-2">2. S.M.A.R.T. Goal Setting</h2>
+          {renderGoalSettingForm()}
+        </div>
+
+        {/* Step 3: Sub-Goals */}
+        <div id="sub-goals" className="space-y-4">
+          <h2 className="text-2xl font-semibold border-b pb-2">3. Sub-Goals & Testing</h2>
+          {renderSubGoalsForm()}
+        </div>
+
+        {/* Step 4: Trainable Qualities */}
+        <div id="qualities" className="space-y-4">
+          <h2 className="text-2xl font-semibold border-b pb-2">4. Trainable Qualities</h2>
+          {renderTrainableQualitiesForm()}
+        </div>
+
+        {/* Step 5: Training Methods */}
+        <div id="methods" className="space-y-4">
+          <h2 className="text-2xl font-semibold border-b pb-2">5. Training Methods</h2>
+          {renderTrainingMethodsForm()}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Conditional rendering based on display mode
+  if (displayMode === "macro") {
+    return renderMacroView();
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
