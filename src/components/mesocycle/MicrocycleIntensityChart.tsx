@@ -49,15 +49,34 @@ interface CustomWeekTickProps {
 }
 
 interface MesocycleLabelProps {
-  x?: number;
-  y?: number;
   mesocycleName: string;
   centerX: number;
+  chartWidth: number;
+  chartHeight: number;
+  margin: { left: number; right: number; bottom: number };
+  xDomain: [number, number];
 }
 
-const MesocycleLabel: React.FC<MesocycleLabelProps> = ({ x = 0, y = 0, mesocycleName, centerX }) => {
+const MesocycleLabel: React.FC<MesocycleLabelProps> = ({ 
+  mesocycleName, 
+  centerX, 
+  chartWidth, 
+  chartHeight, 
+  margin, 
+  xDomain 
+}) => {
+  // Convert data coordinate to pixel coordinate
+  const pixelX = margin.left + ((centerX - xDomain[0]) / (xDomain[1] - xDomain[0])) * (chartWidth - margin.left - margin.right);
+  const pixelY = chartHeight - margin.bottom + 35;
+  
   return (
-    <text x={centerX} y={y + 36} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={12}>
+    <text 
+      x={pixelX} 
+      y={pixelY} 
+      textAnchor="middle" 
+      fill="hsl(var(--muted-foreground))" 
+      fontSize={12}
+    >
       {mesocycleName}
     </text>
   );
@@ -148,23 +167,18 @@ const DraggableDot: React.FC<DraggableDotProps> = ({
     const dy = e.clientY - startYRef.current;
     const newY = Math.max(20, Math.min(chartHeight - 20, startCyRef.current + dy));
     
-    // Calculate which intensity level this Y position corresponds to with precise mapping
+    // Calculate which intensity level this Y position corresponds to
     const stepHeight = (chartHeight - 40) / (intensityLevels.length - 1); // 20px margin top/bottom
     const relativeY = newY - 20; // Remove top margin
     const normalizedPosition = (chartHeight - 40 - relativeY) / stepHeight; // Invert Y axis
     
-    // Use floor + 0.5 threshold for more accurate snapping
-    const intensityIndex = Math.floor(normalizedPosition + 0.5);
-    const clampedIndex = Math.max(0, Math.min(intensityLevels.length - 1, intensityIndex));
-    const newIntensity = getIntensityFromValue(clampedIndex);
+    // Use direct mapping without premature snapping
+    const intensityIndex = Math.max(0, Math.min(intensityLevels.length - 1, Math.round(normalizedPosition)));
+    const newIntensity = getIntensityFromValue(intensityIndex);
     
     setDragPosition({ x: cx, y: newY });
     setCurrentIntensity(newIntensity);
-    
-    // Update line immediately during drag for real-time feedback
-    if (newIntensity !== payload.intensity) {
-      onIntensityChange(mesocycleIndex, weekIndex, newIntensity);
-    }
+    // Don't update the actual data during drag to prevent re-renders that break dragging
   };
 
   const onPointerUp = (e: React.PointerEvent<SVGCircleElement>) => {
@@ -337,6 +351,18 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
           <div style={{ minWidth: Math.max(800, chartData.length * 100), paddingRight: '50px' }}>
             <ResponsiveContainer width="100%" height={450}>
               <LineChart data={chartData} margin={{ top: 20, right: 50, left: 100, bottom: 100 }}>
+            {/* Mesocycle labels positioned correctly */}
+            {mesocycleCenters.map((center, index) => (
+              <MesocycleLabel
+                key={`mesocycle-label-${center.name}-${index}`}
+                mesocycleName={center.name}
+                centerX={center.centerX}
+                chartWidth={800}
+                chartHeight={450}
+                margin={{ left: 100, right: 50, bottom: 100 }}
+                xDomain={[1, chartData.length]}
+              />
+            ))}
             {/* Background areas for each mesocycle */}
             {mesocycleAreas.map((area, index) => (
               <ReferenceArea
@@ -362,17 +388,6 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
               tick={(props) => <CustomWeekTick {...props} data={chartData} />}
             />
             
-            {/* Centered mesocycle labels */}
-            {mesocycleCenters.map((center, index) => (
-              <g key={`mesocycle-label-${center.name}-${index}`}>
-                <MesocycleLabel
-                  x={0}
-                  y={400}
-                  mesocycleName={center.name}
-                  centerX={center.centerX}
-                />
-              </g>
-            ))}
             <YAxis 
               domain={[0, intensityLevels.length - 1]}
               ticks={intensityLevels.map((_, index) => index)}
