@@ -48,6 +48,21 @@ interface CustomWeekTickProps {
   data: any[];
 }
 
+interface MesocycleLabelProps {
+  x?: number;
+  y?: number;
+  mesocycleName: string;
+  centerX: number;
+}
+
+const MesocycleLabel: React.FC<MesocycleLabelProps> = ({ x = 0, y = 0, mesocycleName, centerX }) => {
+  return (
+    <text x={centerX} y={y + 36} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={12}>
+      {mesocycleName}
+    </text>
+  );
+};
+
 const CustomWeekTick: React.FC<CustomWeekTickProps> = ({ x = 0, y = 0, payload, data }) => {
   const value = payload?.value ?? 0;
   const point = data.find((d) => d.globalWeek === value);
@@ -71,12 +86,6 @@ const CustomWeekTick: React.FC<CustomWeekTickProps> = ({ x = 0, y = 0, payload, 
       <text x={x} y={y + 18} textAnchor="middle" fill="hsl(var(--foreground))" fontSize={14}>
         {weekLabel}
       </text>
-      {/* mesocycle label under the last week tick */}
-      {isLast && (
-        <text x={x} y={y + 36} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={12}>
-          {point.mesocycle}
-        </text>
-      )}
     </g>
   );
 };
@@ -139,15 +148,23 @@ const DraggableDot: React.FC<DraggableDotProps> = ({
     const dy = e.clientY - startYRef.current;
     const newY = Math.max(20, Math.min(chartHeight - 20, startCyRef.current + dy));
     
-    // Calculate which intensity level this Y position corresponds to
+    // Calculate which intensity level this Y position corresponds to with precise mapping
     const stepHeight = (chartHeight - 40) / (intensityLevels.length - 1); // 20px margin top/bottom
     const relativeY = newY - 20; // Remove top margin
-    const intensityIndex = Math.round((chartHeight - 40 - relativeY) / stepHeight); // Invert Y axis
+    const normalizedPosition = (chartHeight - 40 - relativeY) / stepHeight; // Invert Y axis
+    
+    // Use floor + 0.5 threshold for more accurate snapping
+    const intensityIndex = Math.floor(normalizedPosition + 0.5);
     const clampedIndex = Math.max(0, Math.min(intensityLevels.length - 1, intensityIndex));
     const newIntensity = getIntensityFromValue(clampedIndex);
     
     setDragPosition({ x: cx, y: newY });
     setCurrentIntensity(newIntensity);
+    
+    // Update line immediately during drag for real-time feedback
+    if (newIntensity !== payload.intensity) {
+      onIntensityChange(mesocycleIndex, weekIndex, newIntensity);
+    }
   };
 
   const onPointerUp = (e: React.PointerEvent<SVGCircleElement>) => {
@@ -249,24 +266,33 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
     return data;
   }, [mesocycles]);
 
-  // Calculate mesocycle background areas
-  const mesocycleAreas = React.useMemo(() => {
+  // Calculate mesocycle background areas and center positions for labels
+  const { mesocycleAreas, mesocycleCenters } = React.useMemo(() => {
     const areas: Array<{ x1: number; x2: number; color: string; name: string }> = [];
+    const centers: Array<{ name: string; centerX: number }> = [];
     let currentStart = 1; // globalWeek is 1-based
 
     mesocycles.forEach((meso) => {
       const first = currentStart;
       const last = currentStart + meso.duration - 1;
+      const centerX = (first + last) / 2; // Calculate center position
+      
       areas.push({
         x1: first - 0.5, // start boundary
         x2: last + 0.5,  // end boundary
         color: intensityColors[meso.intensity],
         name: meso.name,
       });
+      
+      centers.push({
+        name: meso.name,
+        centerX: centerX
+      });
+      
       currentStart = last + 1;
     });
 
-    return areas;
+    return { mesocycleAreas: areas, mesocycleCenters: centers };
   }, [mesocycles]);
 
   const handleIntensityChange = (mesoIndex: number, weekIndex: number, intensity: Intensity) => {
@@ -335,6 +361,18 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
               tickLine={false}
               tick={(props) => <CustomWeekTick {...props} data={chartData} />}
             />
+            
+            {/* Centered mesocycle labels */}
+            {mesocycleCenters.map((center, index) => (
+              <g key={`mesocycle-label-${center.name}-${index}`}>
+                <MesocycleLabel
+                  x={0}
+                  y={400}
+                  mesocycleName={center.name}
+                  centerX={center.centerX}
+                />
+              </g>
+            ))}
             <YAxis 
               domain={[0, intensityLevels.length - 1]}
               ticks={intensityLevels.map((_, index) => index)}
