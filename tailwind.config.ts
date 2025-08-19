@@ -70,7 +70,7 @@ export default {
 					moderate: 'hsl(var(--intensity-moderate))',
 					'moderate-hard': 'hsl(var(--intensity-moderate-hard))',
 					hard: 'hsl(var(--intensity-hard))',
-					'very-hard': 'hsl(var(--intensity-very-hard))',
+					'extremely-hard': 'hsl(var(--intensity-extremely-hard))',
 					foreground: 'hsl(var(--intensity-foreground))'
 				}
 			},

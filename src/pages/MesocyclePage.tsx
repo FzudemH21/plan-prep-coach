@@ -10,6 +10,7 @@ import { TrainingMethod, IntensityLevel } from "@/types/training";
 import { ExtendedMesocycle } from "@/features/planner/types";
 import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info } from "lucide-react";
 import MesocycleCalendar from "@/components/mesocycle/MesocycleCalendar";
+import { MicrocycleIntensityChart } from "@/components/mesocycle/MicrocycleIntensityChart";
 import { format, addWeeks } from "date-fns";
 
 export default function MesocyclePage() {
@@ -358,62 +359,17 @@ export default function MesocyclePage() {
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
           <Target className="h-5 w-5" />
-          <span>Mesocycle Intensity</span>
+          <span>Microcycle Intensity Configuration</span>
         </CardTitle>
         <CardDescription>
-          Set the training intensity for each mesocycle using the interactive chart.
+          Configure the training intensity for each week (microcycle) within your mesocycles using the interactive chart.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <h4 className="font-semibold">Intensity Levels</h4>
-              <div className="space-y-2">
-                {intensityLevels.map((level) => (
-                  <div key={level} className="flex items-center space-x-3">
-                    <div className={`w-4 h-4 rounded ${getIntensityColor(level)}`}></div>
-                    <span className="text-sm capitalize">{level.replace("-", " ")}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h4 className="font-semibold">Mesocycle Intensity Assignment</h4>
-              <div className="space-y-3">
-                {mesocycles.map((meso, index) => (
-                  <div key={meso.id} className="flex items-center space-x-4">
-                    <div className={`w-6 h-6 rounded ${getIntensityColor(meso.intensity)}`}></div>
-                    <span className="w-32 text-sm font-medium">{meso.name}</span>
-                    <Select
-                      value={meso.intensity}
-                      onValueChange={(value: IntensityLevel) => {
-                        const updated = [...mesocycles];
-                        updated[index].intensity = value;
-                        setMesocycles(updated);
-                      }}
-                    >
-                      <SelectTrigger className="w-40">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {intensityLevels.map((level) => (
-                          <SelectItem key={level} value={level}>
-                            <div className="flex items-center space-x-2">
-                              <div className={`w-3 h-3 rounded ${getIntensityColor(level)}`}></div>
-                              <span className="capitalize">{level.replace("-", " ")}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
+      <CardContent>
+        <MicrocycleIntensityChart 
+          mesocycles={mesocycles}
+          onMesocyclesChange={setMesocycles}
+        />
       </CardContent>
     </Card>
   );
