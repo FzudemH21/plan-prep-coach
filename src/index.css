@@ -62,7 +62,7 @@ All colors MUST be HSL.
     --intensity-moderate: 48 96% 53%;    /* yellow */
     --intensity-moderate-hard: 30 100% 60%; /* orange */
     --intensity-hard: 0 84% 60%;         /* red */
-    --intensity-very-hard: 0 50% 40%;    /* dark red */
+    --intensity-extremely-hard: 0 50% 40%;    /* dark red */
 
     --intensity-foreground: 0 0% 100%;
   }
@@ -112,7 +112,7 @@ All colors MUST be HSL.
     --intensity-moderate: 48 96% 50%;    /* yellow */
     --intensity-moderate-hard: 30 100% 55%; /* orange */
     --intensity-hard: 0 70% 50%;         /* red */
-    --intensity-very-hard: 0 50% 35%;    /* dark red */
+    --intensity-extremely-hard: 0 50% 35%;    /* dark red */
 
     --intensity-foreground: 0 0% 98%;
   }

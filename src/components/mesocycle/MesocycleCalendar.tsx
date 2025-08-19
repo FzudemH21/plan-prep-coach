@@ -63,9 +63,25 @@ export default function MesocycleCalendar({
       "moderate": "bg-[hsl(var(--intensity-moderate))] text-[hsl(var(--intensity-foreground))]",
       "moderate-hard": "bg-[hsl(var(--intensity-moderate-hard))] text-[hsl(var(--intensity-foreground))]",
       "hard": "bg-[hsl(var(--intensity-hard))] text-[hsl(var(--intensity-foreground))]",
-      "very-hard": "bg-[hsl(var(--intensity-very-hard))] text-[hsl(var(--intensity-foreground))]"
+      "extremely-hard": "bg-[hsl(var(--intensity-extremely-hard))] text-[hsl(var(--intensity-foreground))]"
     };
     return colorMap[intensity as keyof typeof colorMap] || "bg-muted text-muted-foreground";
+  };
+
+  // Filter out weeks with no training
+  const getTrainingWeeks = () => {
+    if (mesocyclesWithDates.length === 0) return [];
+    
+    const trainingWeeks = [];
+    for (const meso of mesocyclesWithDates) {
+      if (meso.intensity !== "off") {
+        trainingWeeks.push({
+          start: meso.startDate,
+          end: meso.endDate
+        });
+      }
+    }
+    return trainingWeeks;
   };
 
   // Custom day component
@@ -143,6 +159,7 @@ export default function MesocycleCalendar({
                 to: endDate
               }}
               month={startDate}
+              weekStartsOn={1}
               numberOfMonths={showFullPlan 
                 ? Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30))
                 : Math.min(3, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30)))
@@ -150,10 +167,14 @@ export default function MesocycleCalendar({
               components={{
                 Day: CustomDay
               }}
-              className="w-full"
+              className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
               modifiersClassNames={{
                 selected: "",
                 today: "ring-2 ring-primary"
+              }}
+              disabled={(date) => {
+                // Hide days that are not part of any mesocycle
+                return !getMesocycleForDate(date);
               }}
             />
           </div>

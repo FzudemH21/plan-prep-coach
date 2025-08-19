@@ -24,7 +24,7 @@ export default function MesocyclePage() {
   const [planEndDate, setPlanEndDate] = useState<Date>(new Date());
   const [totalWeeks, setTotalWeeks] = useState<number>(0);
 
-  const totalSteps = 4;
+  const totalSteps = 3;
   const progress = (currentStep / totalSteps) * 100;
 
   // Load macrocycle data on mount
@@ -86,7 +86,7 @@ export default function MesocyclePage() {
     }
   }, []);
 
-  const intensityLevels: IntensityLevel[] = ["off", "deload", "easy", "easy-moderate", "moderate", "moderate-hard", "hard", "very-hard"];
+  const intensityLevels: IntensityLevel[] = ["off", "deload", "easy", "easy-moderate", "moderate", "moderate-hard", "hard", "extremely-hard"];
 
   const getIntensityColor = (intensity: IntensityLevel) => {
     const colors = {
@@ -97,7 +97,7 @@ export default function MesocyclePage() {
       "moderate": "bg-intensity-moderate text-intensity-foreground",
       "moderate-hard": "bg-intensity-moderate-hard text-intensity-foreground",
       "hard": "bg-intensity-hard text-intensity-foreground",
-      "very-hard": "bg-intensity-very-hard text-intensity-foreground"
+      "extremely-hard": "bg-intensity-extremely-hard text-intensity-foreground"
     };
     return colors[intensity] || "bg-muted text-muted-foreground";
   };
@@ -233,32 +233,62 @@ export default function MesocyclePage() {
                 {mesocycles.map((meso, index) => (
                   <div key={meso.id} className="p-4 border rounded-lg space-y-2">
                     <div className="flex items-center justify-between">
-                      <Input
-                        value={meso.name}
-                        onChange={(e) => {
-                          const updated = [...mesocycles];
-                          updated[index].name = e.target.value;
-                          setMesocycles(updated);
-                        }}
-                        className="font-medium"
-                      />
-                      {!uniformLength && (
+                      <div className="flex items-center space-x-2 flex-1">
+                        <Input
+                          value={meso.name}
+                          onChange={(e) => {
+                            const updated = [...mesocycles];
+                            updated[index].name = e.target.value;
+                            setMesocycles(updated);
+                          }}
+                          className="font-medium flex-1"
+                        />
+                        {!uniformLength && (
+                          <div className="flex items-center space-x-2">
+                            <Label>Weeks:</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              max="12"
+                              value={meso.duration}
+                              onChange={(e) => {
+                                const updated = [...mesocycles];
+                                updated[index].duration = parseInt(e.target.value);
+                                setMesocycles(updated);
+                              }}
+                              className="w-20"
+                            />
+                          </div>
+                        )}
                         <div className="flex items-center space-x-2">
-                          <Label>Weeks:</Label>
-                          <Input
-                            type="number"
-                            min="1"
-                            max="12"
-                            value={meso.duration}
-                            onChange={(e) => {
+                          <Label>Intensity:</Label>
+                          <Select
+                            value={meso.intensity}
+                            onValueChange={(value: IntensityLevel) => {
                               const updated = [...mesocycles];
-                              updated[index].duration = parseInt(e.target.value);
+                              updated[index].intensity = value;
                               setMesocycles(updated);
                             }}
-                            className="w-20"
-                          />
+                          >
+                            <SelectTrigger className="w-36">
+                              <div className="flex items-center space-x-2">
+                                <div className={`w-3 h-3 rounded ${getIntensityColor(meso.intensity)}`}></div>
+                                <SelectValue />
+                              </div>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {intensityLevels.map((level) => (
+                                <SelectItem key={level} value={level}>
+                                  <div className="flex items-center space-x-2">
+                                    <div className={`w-3 h-3 rounded ${getIntensityColor(level)}`}></div>
+                                    <span className="capitalize">{level.replace("-", " ")}</span>
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
-                      )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -427,8 +457,7 @@ export default function MesocyclePage() {
   );
 
   const stepTitles = [
-    "Mesocycle Setup",
-    "Intensity Assignment", 
+    "Mesocycle Setup & Intensity",
     "Method Allocation",
     "Method Periodization"
   ];
@@ -460,9 +489,8 @@ export default function MesocyclePage() {
       {/* Step Content */}
       <div className="space-y-6">
         {currentStep === 1 && renderMesocycleSetup()}
-        {currentStep === 2 && renderIntensitySetup()}
-        {currentStep === 3 && renderMethodAllocation()}
-        {currentStep === 4 && renderMethodPeriodization()}
+        {currentStep === 2 && renderMethodAllocation()}
+        {currentStep === 3 && renderMethodPeriodization()}
       </div>
 
       {/* Navigation */}

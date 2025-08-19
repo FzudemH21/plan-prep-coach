@@ -1,6 +1,6 @@
 export type DisplayMode = "step-by-step" | "macro" | "meso" | "micro";
 
-export type IntensityLevel = "off" | "deload" | "easy" | "easy-moderate" | "moderate" | "moderate-hard" | "hard" | "very-hard";
+export type IntensityLevel = "off" | "deload" | "easy" | "easy-moderate" | "moderate" | "moderate-hard" | "hard" | "extremely-hard";
 
 export interface AthleteInfo {
   id: string;
