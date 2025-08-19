@@ -100,55 +100,113 @@ const DraggableDot: React.FC<DraggableDotProps> = ({
   mesocycleIndex,
   weekIndex,
   onIntensityChange,
+  chartHeight,
+  yAxisMin,
+  yAxisMax,
 }) => {
   const [dragging, setDragging] = React.useState(false);
+  const [dragPosition, setDragPosition] = React.useState<{ x: number; y: number } | null>(null);
+  const [currentIntensity, setCurrentIntensity] = React.useState<Intensity>(() => payload?.intensity as Intensity || "moderate");
   const startYRef = React.useRef<number>(0);
-  const startIndexRef = React.useRef<number>(0);
+  const startCyRef = React.useRef<number>(0);
+
+  React.useEffect(() => {
+    if (payload?.intensity) {
+      setCurrentIntensity(payload.intensity as Intensity);
+    }
+  }, [payload?.intensity]);
 
   if (!payload || cx === undefined || cy === undefined) return null;
 
-  const intensity: Intensity = payload.intensity as Intensity;
-  const color = intensityColors[intensity];
+  const color = intensityColors[currentIntensity];
+  const displayCx = dragPosition?.x ?? cx;
+  const displayCy = dragPosition?.y ?? cy;
 
   const onPointerDown = (e: React.PointerEvent<SVGCircleElement>) => {
     e.preventDefault();
+    e.stopPropagation();
     (e.target as Element).setPointerCapture?.(e.pointerId);
     setDragging(true);
     startYRef.current = e.clientY;
-    startIndexRef.current = getIntensityValue(payload.intensity as Intensity);
+    startCyRef.current = cy;
+    setDragPosition({ x: cx, y: cy });
   };
 
   const onPointerMove = (e: React.PointerEvent<SVGCircleElement>) => {
     if (!dragging) return;
-    const dy = startYRef.current - e.clientY; // dragging up -> positive dy
-    const stepPx = 24; // pixels per intensity step
-    const deltaSteps = Math.round(dy / stepPx);
-    const newIndex = Math.max(0, Math.min(intensityLevels.length - 1, startIndexRef.current + deltaSteps));
-    const newIntensity = getIntensityFromValue(newIndex);
-    if (newIntensity !== intensity) {
-      onIntensityChange(mesocycleIndex, weekIndex, newIntensity);
-    }
+    e.preventDefault();
+    
+    const dy = e.clientY - startYRef.current;
+    const newY = Math.max(20, Math.min(chartHeight - 20, startCyRef.current + dy));
+    
+    // Calculate which intensity level this Y position corresponds to
+    const stepHeight = (chartHeight - 40) / (intensityLevels.length - 1); // 20px margin top/bottom
+    const relativeY = newY - 20; // Remove top margin
+    const intensityIndex = Math.round((chartHeight - 40 - relativeY) / stepHeight); // Invert Y axis
+    const clampedIndex = Math.max(0, Math.min(intensityLevels.length - 1, intensityIndex));
+    const newIntensity = getIntensityFromValue(clampedIndex);
+    
+    setDragPosition({ x: cx, y: newY });
+    setCurrentIntensity(newIntensity);
   };
 
   const onPointerUp = (e: React.PointerEvent<SVGCircleElement>) => {
+    e.preventDefault();
     (e.target as Element).releasePointerCapture?.(e.pointerId);
     setDragging(false);
+    setDragPosition(null);
+    
+    // Only trigger the actual change on release
+    if (currentIntensity !== payload.intensity) {
+      onIntensityChange(mesocycleIndex, weekIndex, currentIntensity);
+    }
   };
 
   return (
     <g>
+      {/* Glow effect when dragging */}
+      {dragging && (
+        <circle
+          cx={displayCx}
+          cy={displayCy}
+          r={12}
+          fill={color}
+          fillOpacity={0.3}
+          stroke="none"
+        />
+      )}
+      {/* Main dot */}
       <circle
-        cx={cx}
-        cy={cy}
+        cx={displayCx}
+        cy={displayCy}
         r={8}
         fill={color}
         stroke={"hsl(var(--foreground))"}
-        strokeWidth={2}
-        style={{ cursor: dragging ? 'grabbing' : 'ns-resize', touchAction: 'none' }}
+        strokeWidth={dragging ? 3 : 2}
+        style={{ 
+          cursor: dragging ? 'grabbing' : 'ns-resize', 
+          touchAction: 'none',
+          transition: dragging ? 'none' : 'all 0.2s ease'
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onPointerLeave={onPointerUp}
       />
+      {/* Intensity label when dragging */}
+      {dragging && (
+        <text
+          x={displayCx}
+          y={displayCy - 20}
+          textAnchor="middle"
+          fill="hsl(var(--foreground))"
+          fontSize={12}
+          fontWeight="bold"
+          className="pointer-events-none"
+        >
+          {currentIntensity.replace("-", " ")}
+        </text>
+      )}
     </g>
   );
 };
@@ -250,17 +308,17 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
       <div className="bg-card border rounded-lg p-4 relative">
         <h4 className="font-semibold mb-4 text-lg">Microcycle Intensity Progression</h4>
         <div className="overflow-x-auto">
-          <div style={{ minWidth: Math.max(600, chartData.length * 90) }}>
+          <div style={{ minWidth: Math.max(800, chartData.length * 100), paddingRight: '50px' }}>
             <ResponsiveContainer width="100%" height={450}>
-              <LineChart data={chartData} margin={{ top: 20, right: 30, left: 100, bottom: 100 }}>
+              <LineChart data={chartData} margin={{ top: 20, right: 50, left: 100, bottom: 100 }}>
             {/* Background areas for each mesocycle */}
             {mesocycleAreas.map((area, index) => (
               <ReferenceArea
-                key={`area-${index}`}
+                key={`mesocycle-bg-${area.name}-${index}`}
                 x1={area.x1}
                 x2={area.x2}
                 fill={area.color}
-                fillOpacity={0.35}
+                fillOpacity={0.5}
                 strokeOpacity={0}
               />
             ))}
