@@ -25,6 +25,7 @@ export default function MacrocyclePage() {
   const [subGoals, setSubGoals] = useState<SubGoal[]>([]);
   const [qualities, setQualities] = useState<TrainableQuality[]>([]);
   const [qualitiesBySubGoal, setQualitiesBySubGoal] = useState<Record<string, { label: string; list: string[] }>>({});
+  const [methodsByQuality, setMethodsByQuality] = useState<Record<string, { subGoalLabel: string; qualityName: string; list: string[] }>>({});
 
   // Helper function to get qualities for a sub-goal label
   const getQualitiesForSubGoalLabel = (subGoalLabel: string): string[] => {
@@ -41,6 +42,19 @@ export default function MacrocyclePage() {
           item.subGoal === subGoal
         )
         .map(item => item.quality)
+    ));
+  };
+
+  // Helper function to get training methods for a specific quality
+  const getTrainingMethodsForQuality = (overarchingGoal: string, subGoal: string, qualityName: string): string[] => {
+    return Array.from(new Set(
+      trainingData
+        .filter(item => 
+          item.overarchingGoal === overarchingGoal && 
+          item.subGoal === subGoal &&
+          item.quality === qualityName
+        )
+        .map(item => item.trainingMethod)
     ));
   };
 
@@ -74,6 +88,43 @@ export default function MacrocyclePage() {
     setQualities(allQualities);
   }, [subGoals]);
 
+  // Auto-populate training methods when qualities change
+  useEffect(() => {
+    const newMethodsByQuality: Record<string, { subGoalLabel: string; qualityName: string; list: string[] }> = {};
+    
+    qualities.forEach(quality => {
+      const [subGoalId, qualityName] = quality.id.split('::');
+      const subGoal = subGoals.find(sg => sg.id === subGoalId);
+      
+      if (subGoal && qualityName) {
+        const existing = methodsByQuality[quality.id];
+        const parts = subGoal.description.split(' - ');
+        
+        if (parts.length >= 2) {
+          const overarchingGoal = parts[0];
+          const subGoalName = parts[1];
+          const recommendedMethods = getTrainingMethodsForQuality(overarchingGoal, subGoalName, qualityName);
+          
+          newMethodsByQuality[quality.id] = {
+            subGoalLabel: subGoal.description,
+            qualityName: qualityName,
+            list: existing?.list?.length ? existing.list : recommendedMethods
+          };
+        }
+      }
+    });
+    
+    setMethodsByQuality(newMethodsByQuality);
+    
+    // Sync back to qualities array
+    const updatedQualities = qualities.map(quality => ({
+      ...quality,
+      methods: newMethodsByQuality[quality.id]?.list || []
+    }));
+    
+    setQualities(updatedQualities);
+  }, [qualities.length, subGoals]);
+
   const addQualityToSubGoal = (subGoalId: string, quality: string) => {
     setQualitiesBySubGoal(prev => ({
       ...prev,
@@ -92,6 +143,40 @@ export default function MacrocyclePage() {
         list: prev[subGoalId]?.list.filter(q => q !== quality) || []
       }
     }));
+  };
+
+  const addMethodToQuality = (qualityId: string, method: string) => {
+    setMethodsByQuality(prev => ({
+      ...prev,
+      [qualityId]: {
+        ...prev[qualityId],
+        list: Array.from(new Set([...(prev[qualityId]?.list || []), method]))
+      }
+    }));
+    
+    // Sync back to qualities array
+    setQualities(prev => prev.map(quality => 
+      quality.id === qualityId 
+        ? { ...quality, methods: methodsByQuality[qualityId]?.list || [] }
+        : quality
+    ));
+  };
+
+  const removeMethodFromQuality = (qualityId: string, method: string) => {
+    setMethodsByQuality(prev => ({
+      ...prev,
+      [qualityId]: {
+        ...prev[qualityId],
+        list: prev[qualityId]?.list.filter(m => m !== method) || []
+      }
+    }));
+    
+    // Sync back to qualities array
+    setQualities(prev => prev.map(quality => 
+      quality.id === qualityId 
+        ? { ...quality, methods: methodsByQuality[qualityId]?.list || [] }
+        : quality
+    ));
   };
 
   const totalSteps = 5;
@@ -607,30 +692,81 @@ export default function MacrocyclePage() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="space-y-4">
-          {qualities.map((quality, index) => (
-            <div key={quality.id} className="p-4 border rounded-lg space-y-4">
-              <div className="space-y-2">
-                <Label className="font-medium">
-                  {quality.name || "Quality"} - Training Methods
-                </Label>
-                <SearchableDropdown
-                  value={quality.methods.join(", ")}
-                  onChange={(value) => {
-                    const updated = [...qualities];
-                    updated[index].methods = value.split(",").map(m => m.trim()).filter(m => m);
-                    setQualities(updated);
-                  }}
-                  options={getUniqueTrainingMethods()}
-                  placeholder="Select or type training methods..."
-                />
-                <p className="text-xs text-muted-foreground">
-                  Enter training methods separated by commas
-                </p>
+        <div className="space-y-6">
+          {qualities.map((quality) => {
+            const qualityData = methodsByQuality[quality.id];
+            if (!qualityData) return null;
+            
+            const [subGoalId, qualityName] = quality.id.split('::');
+            const subGoal = subGoals.find(sg => sg.id === subGoalId);
+            const parts = subGoal?.description.split(' - ') || [];
+            const overarchingGoal = parts[0] || '';
+            const subGoalName = parts[1] || '';
+            
+            // Get recommended methods for this specific quality
+            const recommendedMethods = overarchingGoal && subGoalName ? 
+              getTrainingMethodsForQuality(overarchingGoal, subGoalName, qualityName) : [];
+            const availableMethods = [...recommendedMethods, ...getUniqueTrainingMethods()];
+            const uniqueAvailableMethods = Array.from(new Set(availableMethods));
+            
+            return (
+              <div key={quality.id} className="p-4 border rounded-lg space-y-4">
+                <div className="space-y-2">
+                  {/* Sub-goal context */}
+                  <div className="text-sm text-muted-foreground">
+                    <span className="font-medium">Sub-goal:</span> {qualityData.subGoalLabel}
+                  </div>
+                  
+                  {/* Quality header */}
+                  <Label className="font-medium text-base flex items-center space-x-2">
+                    <Target className="h-4 w-4" />
+                    <span>Quality: {qualityData.qualityName}</span>
+                  </Label>
+                  
+                  {/* Selected methods */}
+                  <div className="space-y-2">
+                    {qualityData.list.map((method, methodIndex) => (
+                      <div key={methodIndex} className="flex items-start justify-between p-3 bg-muted rounded-md">
+                        <span className="text-sm flex-1">{method}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeMethodFromQuality(quality.id, method)}
+                          className="h-6 w-6 p-0 ml-2 hover:bg-destructive hover:text-destructive-foreground flex-shrink-0"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Add method dropdown */}
+                  <div className="space-y-2">
+                    <Label className="text-sm text-muted-foreground">Add Training Method</Label>
+                    <SearchableDropdown
+                      value=""
+                      onChange={(value) => {
+                        if (value) {
+                          addMethodToQuality(quality.id, value);
+                        }
+                      }}
+                      options={uniqueAvailableMethods}
+                      placeholder="Select or type to add training method..."
+                      allowCustomInput={true}
+                      className="bg-background"
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
+        
+        {qualities.length === 0 && (
+          <div className="text-center py-8 text-muted-foreground">
+            <p>No qualities selected. Please go back to Step 4 to select trainable qualities.</p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
