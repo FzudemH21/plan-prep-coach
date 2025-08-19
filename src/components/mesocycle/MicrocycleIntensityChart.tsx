@@ -41,6 +41,46 @@ const getIntensityFromValue = (value: number): Intensity => {
   return intensityLevels[value] || "moderate";
 };
 
+interface CustomWeekTickProps {
+  x?: number;
+  y?: number;
+  payload?: { value: number };
+  data: any[];
+}
+
+const CustomWeekTick: React.FC<CustomWeekTickProps> = ({ x = 0, y = 0, payload, data }) => {
+  const value = payload?.value ?? 0;
+  const point = data.find((d) => d.globalWeek === value);
+  if (!point) return null;
+
+  const isLast = point.isLastWeekOfMeso;
+  const weekLabel = `W${point.weekIndex + 1}`;
+
+  return (
+    <g>
+      {/* custom tick line (taller on last week of meso) */}
+      <line
+        x1={x}
+        y1={y - (isLast ? 8 : 0)}
+        x2={x}
+        y2={y + 6}
+        stroke="hsl(var(--foreground))"
+        strokeWidth={isLast ? 2 : 1}
+      />
+      {/* week label */}
+      <text x={x} y={y + 18} textAnchor="middle" fill="hsl(var(--foreground))" fontSize={14}>
+        {weekLabel}
+      </text>
+      {/* mesocycle label under the last week tick */}
+      {isLast && (
+        <text x={x} y={y + 36} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={12}>
+          {point.mesocycle}
+        </text>
+      )}
+    </g>
+  );
+};
+
 interface DraggableDotProps {
   cx?: number;
   cy?: number;
@@ -53,66 +93,46 @@ interface DraggableDotProps {
   yAxisMax: number;
 }
 
-const DraggableDot: React.FC<DraggableDotProps> = ({ 
-  cx, 
-  cy, 
-  payload, 
-  mesocycleIndex, 
-  weekIndex, 
+const DraggableDot: React.FC<DraggableDotProps> = ({
+  cx,
+  cy,
+  payload,
+  mesocycleIndex,
+  weekIndex,
   onIntensityChange,
-  chartHeight,
-  yAxisMin,
-  yAxisMax
 }) => {
-  const [isDragging, setIsDragging] = React.useState(false);
-  const [dragStartY, setDragStartY] = React.useState(0);
-  const svgRef = React.useRef<SVGSVGElement>(null);
-  
+  const [dragging, setDragging] = React.useState(false);
+  const startYRef = React.useRef<number>(0);
+  const startIndexRef = React.useRef<number>(0);
+
   if (!payload || cx === undefined || cy === undefined) return null;
-  
-  const intensity = payload.intensity as Intensity;
+
+  const intensity: Intensity = payload.intensity as Intensity;
   const color = intensityColors[intensity];
 
-  const getIntensityFromY = (yPos: number, svgRect: DOMRect): Intensity => {
-    // Get chart area bounds relative to SVG
-    const chartTop = 20; // margin.top
-    const chartBottom = svgRect.height - 80; // height - margin.bottom
-    const chartHeight = chartBottom - chartTop;
-    
-    // Convert mouse Y to chart-relative position
-    const chartRelativeY = yPos - chartTop;
-    const relativePosition = Math.max(0, Math.min(1, chartRelativeY / chartHeight));
-    
-    // Invert Y axis (top = high intensity, bottom = low intensity)
-    const intensityIndex = Math.round((1 - relativePosition) * (intensityLevels.length - 1));
-    return intensityLevels[Math.max(0, Math.min(intensityLevels.length - 1, intensityIndex))];
+  const onPointerDown = (e: React.PointerEvent<SVGCircleElement>) => {
+    e.preventDefault();
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    setDragging(true);
+    startYRef.current = e.clientY;
+    startIndexRef.current = getIntensityValue(payload.intensity as Intensity);
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-    setDragStartY(e.clientY);
-    
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!svgRef.current) return;
-      
-      const rect = svgRef.current.getBoundingClientRect();
-      const yPos = e.clientY - rect.top;
-      const newIntensity = getIntensityFromY(yPos, rect);
-      
-      if (newIntensity !== intensity) {
-        onIntensityChange(mesocycleIndex, weekIndex, newIntensity);
-      }
-    };
+  const onPointerMove = (e: React.PointerEvent<SVGCircleElement>) => {
+    if (!dragging) return;
+    const dy = startYRef.current - e.clientY; // dragging up -> positive dy
+    const stepPx = 24; // pixels per intensity step
+    const deltaSteps = Math.round(dy / stepPx);
+    const newIndex = Math.max(0, Math.min(intensityLevels.length - 1, startIndexRef.current + deltaSteps));
+    const newIntensity = getIntensityFromValue(newIndex);
+    if (newIntensity !== intensity) {
+      onIntensityChange(mesocycleIndex, weekIndex, newIntensity);
+    }
+  };
 
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+  const onPointerUp = (e: React.PointerEvent<SVGCircleElement>) => {
+    (e.target as Element).releasePointerCapture?.(e.pointerId);
+    setDragging(false);
   };
 
   return (
@@ -122,12 +142,13 @@ const DraggableDot: React.FC<DraggableDotProps> = ({
         cy={cy}
         r={8}
         fill={color}
-        stroke="#000000"
+        stroke={"hsl(var(--foreground))"}
         strokeWidth={2}
-        className={`cursor-${isDragging ? 'grabbing' : 'grab'} transition-all ${isDragging ? 'scale-110' : 'hover:scale-110'}`}
-        onMouseDown={handleMouseDown}
+        style={{ cursor: dragging ? 'grabbing' : 'ns-resize', touchAction: 'none' }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
       />
-      <svg ref={svgRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />
     </g>
   );
 };
@@ -172,19 +193,21 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
 
   // Calculate mesocycle background areas
   const mesocycleAreas = React.useMemo(() => {
-    const areas: Array<{ start: number, end: number, color: string, name: string }> = [];
-    let currentWeek = 0;
-    
-    mesocycles.forEach((meso, index) => {
+    const areas: Array<{ x1: number; x2: number; color: string; name: string }> = [];
+    let currentStart = 1; // globalWeek is 1-based
+
+    mesocycles.forEach((meso) => {
+      const first = currentStart;
+      const last = currentStart + meso.duration - 1;
       areas.push({
-        start: currentWeek,
-        end: currentWeek + meso.duration,
+        x1: first - 0.5, // start boundary
+        x2: last + 0.5,  // end boundary
         color: intensityColors[meso.intensity],
-        name: meso.name
+        name: meso.name,
       });
-      currentWeek += meso.duration;
+      currentStart = last + 1;
     });
-    
+
     return areas;
   }, [mesocycles]);
 
@@ -227,41 +250,40 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
       <div className="bg-card border rounded-lg p-4 relative">
         <h4 className="font-semibold mb-4 text-lg">Microcycle Intensity Progression</h4>
         <div className="overflow-x-auto">
-          <div style={{ minWidth: Math.max(600, chartData.length * 60) }}>
+          <div style={{ minWidth: Math.max(600, chartData.length * 90) }}>
             <ResponsiveContainer width="100%" height={450}>
               <LineChart data={chartData} margin={{ top: 20, right: 30, left: 100, bottom: 100 }}>
             {/* Background areas for each mesocycle */}
             {mesocycleAreas.map((area, index) => (
               <ReferenceArea
                 key={`area-${index}`}
-                x1={area.start}
-                x2={area.end}
+                x1={area.x1}
+                x2={area.x2}
                 fill={area.color}
-                fillOpacity={0.25}
+                fillOpacity={0.35}
                 strokeOpacity={0}
               />
             ))}
             
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis 
+              type="number"
               dataKey="globalWeek"
+              domain={[1, chartData.length]}
+              ticks={chartData.map(d => d.globalWeek)}
+              interval={0}
               stroke="hsl(var(--foreground))"
-              tick={{ fontSize: 14 }}
-              angle={-45}
-              textAnchor="end"
-              height={100}
-              tickFormatter={(value) => {
-                const dataPoint = chartData.find(d => d.globalWeek === value);
-                return dataPoint ? `${dataPoint.mesocycle}\nW${dataPoint.weekIndex + 1}` : `W${value}`;
-              }}
+              height={80}
+              tickLine={false}
+              tick={(props) => <CustomWeekTick {...props} data={chartData} />}
             />
             <YAxis 
               domain={[0, intensityLevels.length - 1]}
               ticks={intensityLevels.map((_, index) => index)}
               tickFormatter={(value) => intensityLevels[value]?.replace("-", " ") || ""}
               stroke="hsl(var(--foreground))"
-              tick={{ fontSize: 14 }}
-              width={100}
+              tick={{ fontSize: 16 }}
+              width={120}
             />
             <Tooltip 
               content={({ active, payload, label }) => {
@@ -284,7 +306,7 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
             {/* Single line connecting all points */}
             <Line
               dataKey="intensityValue"
-              stroke="#000000"
+              stroke={"hsl(var(--foreground))"}
               strokeWidth={2}
               connectNulls={false}
               dot={(props) => (
