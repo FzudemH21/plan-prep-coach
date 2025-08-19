@@ -56,13 +56,13 @@ All colors MUST be HSL.
     
     /* Intensity scale tokens (HSL) */
     --intensity-off: 0 0% 95%;           /* light gray */
-    --intensity-deload: 142 35% 55%;     /* dark green */
-    --intensity-easy: 142 70% 45%;       /* green */
-    --intensity-easy-moderate: 200 70% 50%; /* blue */
-    --intensity-moderate: 48 96% 53%;    /* yellow */
-    --intensity-moderate-hard: 30 100% 60%; /* orange */
-    --intensity-hard: 0 84% 60%;         /* red */
-    --intensity-extremely-hard: 0 50% 40%;    /* dark red */
+    --intensity-deload: 120 40% 30%;     /* dark green */
+    --intensity-easy: 120 60% 50%;       /* green */
+    --intensity-easy-moderate: 210 80% 60%; /* blue */
+    --intensity-moderate: 45 95% 55%;    /* yellow */
+    --intensity-moderate-hard: 25 95% 55%; /* orange */
+    --intensity-hard: 0 80% 55%;         /* red */
+    --intensity-extremely-hard: 0 60% 35%;    /* dark red */
 
     --intensity-foreground: 0 0% 100%;
   }
@@ -105,14 +105,14 @@ All colors MUST be HSL.
     --sidebar-ring: 217.2 91.2% 59.8%;
 
     /* Intensity scale tokens (HSL) - dark */
-    --intensity-off: 0 0% 15%;           /* dark gray */
-    --intensity-deload: 142 35% 45%;     /* dark green */
-    --intensity-easy: 142 70% 40%;       /* green */
-    --intensity-easy-moderate: 200 70% 45%; /* blue */
-    --intensity-moderate: 48 96% 50%;    /* yellow */
-    --intensity-moderate-hard: 30 100% 55%; /* orange */
-    --intensity-hard: 0 70% 50%;         /* red */
-    --intensity-extremely-hard: 0 50% 35%;    /* dark red */
+    --intensity-off: 0 0% 20%;           /* dark gray */
+    --intensity-deload: 120 40% 35%;     /* dark green */
+    --intensity-easy: 120 60% 45%;       /* green */
+    --intensity-easy-moderate: 210 80% 55%; /* blue */
+    --intensity-moderate: 45 95% 50%;    /* yellow */
+    --intensity-moderate-hard: 25 95% 50%; /* orange */
+    --intensity-hard: 0 80% 50%;         /* red */
+    --intensity-extremely-hard: 0 60% 30%;    /* dark red */
 
     --intensity-foreground: 0 0% 98%;
   }

@@ -56,14 +56,14 @@ export default function MesocycleCalendar({
   // Get intensity color using design system tokens
   const getIntensityColorClass = (intensity: string) => {
     const colorMap = {
-      "off": "bg-[hsl(var(--intensity-off))] text-[hsl(var(--intensity-foreground))]",
-      "deload": "bg-[hsl(var(--intensity-deload))] text-[hsl(var(--intensity-foreground))]",
-      "easy": "bg-[hsl(var(--intensity-easy))] text-[hsl(var(--intensity-foreground))]",
-      "easy-moderate": "bg-[hsl(var(--intensity-easy-moderate))] text-[hsl(var(--intensity-foreground))]",
-      "moderate": "bg-[hsl(var(--intensity-moderate))] text-[hsl(var(--intensity-foreground))]",
-      "moderate-hard": "bg-[hsl(var(--intensity-moderate-hard))] text-[hsl(var(--intensity-foreground))]",
-      "hard": "bg-[hsl(var(--intensity-hard))] text-[hsl(var(--intensity-foreground))]",
-      "extremely-hard": "bg-[hsl(var(--intensity-extremely-hard))] text-[hsl(var(--intensity-foreground))]"
+      "off": "bg-[hsl(var(--intensity-off))] text-black",
+      "deload": "bg-[hsl(var(--intensity-deload))] text-white",
+      "easy": "bg-[hsl(var(--intensity-easy))] text-white",
+      "easy-moderate": "bg-[hsl(var(--intensity-easy-moderate))] text-white",
+      "moderate": "bg-[hsl(var(--intensity-moderate))] text-black",
+      "moderate-hard": "bg-[hsl(var(--intensity-moderate-hard))] text-white",
+      "hard": "bg-[hsl(var(--intensity-hard))] text-white",
+      "extremely-hard": "bg-[hsl(var(--intensity-extremely-hard))] text-white"
     };
     return colorMap[intensity as keyof typeof colorMap] || "bg-muted text-muted-foreground";
   };
@@ -167,14 +167,24 @@ export default function MesocycleCalendar({
               components={{
                 Day: CustomDay
               }}
-              className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+              className="pointer-events-auto"
+              classNames={{
+                months: "flex flex-row space-x-4 overflow-x-auto",
+                month: "space-y-4 flex-shrink-0",
+                table: "w-full border-collapse space-y-1",
+                head_row: "flex",
+                head_cell: "text-muted-foreground rounded-md w-16 font-normal text-[0.8rem]",
+                row: "flex w-full mt-2",
+                cell: "relative w-16 h-16 text-center text-sm p-0"
+              }}
               modifiersClassNames={{
                 selected: "",
                 today: "ring-2 ring-primary"
               }}
               disabled={(date) => {
-                // Hide days that are not part of any mesocycle
-                return !getMesocycleForDate(date);
+                // Hide days that are not part of any mesocycle or are "off" days
+                const mesocycle = getMesocycleForDate(date);
+                return !mesocycle || mesocycle.intensity === "off";
               }}
             />
           </div>

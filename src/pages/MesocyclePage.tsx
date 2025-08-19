@@ -90,14 +90,14 @@ export default function MesocyclePage() {
 
   const getIntensityColor = (intensity: IntensityLevel) => {
     const colors = {
-      "off": "bg-intensity-off text-intensity-foreground border-2",
-      "deload": "bg-intensity-deload text-intensity-foreground",
-      "easy": "bg-intensity-easy text-intensity-foreground", 
-      "easy-moderate": "bg-intensity-easy-moderate text-intensity-foreground",
-      "moderate": "bg-intensity-moderate text-intensity-foreground",
-      "moderate-hard": "bg-intensity-moderate-hard text-intensity-foreground",
-      "hard": "bg-intensity-hard text-intensity-foreground",
-      "extremely-hard": "bg-intensity-extremely-hard text-intensity-foreground"
+      "off": "bg-[hsl(var(--intensity-off))] text-black border-2",
+      "deload": "bg-[hsl(var(--intensity-deload))] text-white",
+      "easy": "bg-[hsl(var(--intensity-easy))] text-white", 
+      "easy-moderate": "bg-[hsl(var(--intensity-easy-moderate))] text-white",
+      "moderate": "bg-[hsl(var(--intensity-moderate))] text-black",
+      "moderate-hard": "bg-[hsl(var(--intensity-moderate-hard))] text-white",
+      "hard": "bg-[hsl(var(--intensity-hard))] text-white",
+      "extremely-hard": "bg-[hsl(var(--intensity-extremely-hard))] text-white"
     };
     return colors[intensity] || "bg-muted text-muted-foreground";
   };
@@ -154,6 +154,10 @@ export default function MesocyclePage() {
     </Card>
   );
 
+  // Calculate total mesocycle weeks
+  const totalMesocycleWeeks = mesocycles.reduce((sum, meso) => sum + meso.duration, 0);
+  const weeksMismatch = totalMesocycleWeeks !== totalWeeks;
+
   const renderMesocycleSetup = () => (
     <Card>
       <CardHeader>
@@ -166,6 +170,19 @@ export default function MesocyclePage() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Week Validation Warning */}
+        {weeksMismatch && (
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+            <div className="flex items-center space-x-2 text-destructive">
+              <Info className="h-4 w-4" />
+              <span className="font-medium">Week Mismatch Warning</span>
+            </div>
+            <p className="text-sm text-destructive/80 mt-1">
+              Total mesocycle weeks ({totalMesocycleWeeks}) don't match your macrocycle plan ({totalWeeks} weeks). 
+              Please adjust mesocycle durations to match your training plan.
+            </p>
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="numMesocycles">Number of Mesocycles</Label>
