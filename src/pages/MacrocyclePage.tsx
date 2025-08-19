@@ -226,41 +226,33 @@ export default function MacrocyclePage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Start Date</Label>
-            <div className="border rounded-md p-3">
-              <Calendar
-                mode="single"
-                selected={smartGoal.startDate}
-                onSelect={(date) => {
-                  const start = date || new Date();
-                  const end = smartGoal.endDate || new Date();
-                  const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-                  const totalWeeks = Math.ceil(totalDays / 7);
-                  setSmartGoal({...smartGoal, startDate: start, totalDays, totalWeeks});
-                }}
-                className="rounded-md"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>End Date</Label>
-            <div className="border rounded-md p-3">
-              <Calendar
-                mode="single"
-                selected={smartGoal.endDate}
-                onSelect={(date) => {
-                  const end = date || new Date();
-                  const start = smartGoal.startDate || new Date();
-                  const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-                  const totalWeeks = Math.ceil(totalDays / 7);
-                  setSmartGoal({...smartGoal, endDate: end, totalDays, totalWeeks});
-                }}
-                className="rounded-md"
-              />
-            </div>
+        <div className="space-y-2">
+          <Label>Training Plan Duration</Label>
+          <div className="border rounded-md p-3">
+            <Calendar
+              mode="range"
+              selected={{
+                from: smartGoal.startDate,
+                to: smartGoal.endDate
+              }}
+              onSelect={(range) => {
+                if (!range) return;
+                
+                const start = range.from || new Date();
+                const end = range.to || range.from || new Date();
+                const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+                const totalWeeks = Math.ceil(totalDays / 7);
+                
+                setSmartGoal({
+                  ...smartGoal, 
+                  startDate: start, 
+                  endDate: end,
+                  totalDays: totalDays > 0 ? totalDays : 1,
+                  totalWeeks: totalWeeks > 0 ? totalWeeks : 1
+                });
+              }}
+              className="rounded-md"
+            />
           </div>
         </div>
 
