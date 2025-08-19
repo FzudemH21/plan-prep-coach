@@ -6,14 +6,15 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Mesocycle, TrainingMethod, IntensityLevel } from "@/types/training";
+import { TrainingMethod, IntensityLevel } from "@/types/training";
+import { ExtendedMesocycle } from "@/features/planner/types";
 import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info } from "lucide-react";
 import MesocycleCalendar from "@/components/mesocycle/MesocycleCalendar";
 import { format, addWeeks } from "date-fns";
 
 export default function MesocyclePage() {
   const [currentStep, setCurrentStep] = useState(1);
-  const [mesocycles, setMesocycles] = useState<Mesocycle[]>([]);
+  const [mesocycles, setMesocycles] = useState<ExtendedMesocycle[]>([]);
   const [trainingMethods, setTrainingMethods] = useState<TrainingMethod[]>([]);
   const [mesocycleLength, setMesocycleLength] = useState(4);
   const [uniformLength, setUniformLength] = useState(true);
@@ -25,6 +26,25 @@ export default function MesocyclePage() {
   const [totalWeeks, setTotalWeeks] = useState<number>(0);
 
   const totalSteps = 3;
+
+  // Navigation component for top and bottom
+  const NavigationButtons = () => (
+    <div className="flex justify-between items-center">
+      <Button 
+        onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
+        disabled={currentStep <= 1}
+        variant="outline"
+      >
+        Previous
+      </Button>
+      <Button 
+        onClick={() => setCurrentStep(Math.min(totalSteps, currentStep + 1))}
+        disabled={currentStep >= totalSteps}
+      >
+        Next
+      </Button>
+    </div>
+  );
   const progress = (currentStep / totalSteps) * 100;
 
   // Load macrocycle data on mount
@@ -51,18 +71,22 @@ export default function MesocyclePage() {
       setMesocycleLength(suggestedLength);
       
       // Create default mesocycles
-      const defaultMesocycles: Mesocycle[] = Array.from({ length: suggestedMesocycleCount }, (_, i) => {
+      const defaultMesocycles: ExtendedMesocycle[] = Array.from({ length: suggestedMesocycleCount }, (_, i) => {
         let currentStartDate = addWeeks(startDate, i * suggestedLength);
         let currentEndDate = addWeeks(currentStartDate, suggestedLength);
         
         return {
           id: `meso-${i + 1}`,
           name: `Mesocycle ${i + 1}`,
+          weeks: suggestedLength,
+          sessionsPerWeek: 3,
+          sessionLength: 60,
           startDate: currentStartDate,
           endDate: currentEndDate,
           duration: suggestedLength,
           intensity: i === suggestedMesocycleCount - 1 ? "deload" : "moderate" as IntensityLevel,
           trainingMethods: [],
+          trainingQualities: [],
           microcycles: []
         };
       });
@@ -194,14 +218,18 @@ export default function MesocyclePage() {
               value={mesocycles.length || 3}
               onChange={(e) => {
                 const count = parseInt(e.target.value);
-                const newMesocycles: Mesocycle[] = Array.from({ length: count }, (_, i) => ({
+                const newMesocycles: ExtendedMesocycle[] = Array.from({ length: count }, (_, i) => ({
                   id: `meso-${i + 1}`,
                   name: `Mesocycle ${i + 1}`,
+                  weeks: mesocycleLength,
+                  sessionsPerWeek: 3,
+                  sessionLength: 60,
                   startDate: new Date(),
                   endDate: new Date(),
                   duration: mesocycleLength,
                   intensity: "moderate" as IntensityLevel,
                   trainingMethods: [],
+                  trainingQualities: [],
                   microcycles: []
                 }));
                 setMesocycles(newMesocycles);
@@ -314,7 +342,7 @@ export default function MesocyclePage() {
 
             {/* Full Training Plan Calendar Visualization */}
             <MesocycleCalendar 
-              mesocycles={mesocycles} 
+              mesocycles={mesocycles as any} 
               startDate={planStartDate}
               showFullPlan={true}
               totalWeeks={totalWeeks}
@@ -390,69 +418,127 @@ export default function MesocyclePage() {
     </Card>
   );
 
-  const renderMethodAllocation = () => (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <GripVertical className="h-5 w-5" />
-          <span>Training Method Allocation</span>
-        </CardTitle>
-        <CardDescription>
-          Drag and drop training methods to assign them to specific mesocycles.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div>
-            <Label className="text-sm font-medium mb-2 block">Available Training Methods</Label>
-            <div className="space-y-2 p-4 border rounded-lg bg-muted/50 min-h-32">
-              {trainingMethods.map((method) => (
-                <div
-                  key={method.id}
-                  className="p-3 bg-background border rounded cursor-move hover:bg-accent"
-                  draggable
-                >
-                  <div className="font-medium text-sm">{method.name}</div>
-                  <div className="text-xs text-muted-foreground">{method.quality}</div>
-                </div>
-              ))}
-              {trainingMethods.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No training methods available. Complete the macrocycle planning first.
-                </p>
-              )}
-            </div>
-          </div>
+  const renderQualityAllocation = () => {
+    // Extract training qualities and sub-goals from macrocycle data
+    const trainableQualities = macrocycleData?.qualities || [];
+    const subGoals = macrocycleData?.subGoals || {};
 
-          <div>
-            <Label className="text-sm font-medium mb-2 block">Mesocycles</Label>
-            <div className="space-y-2">
-              {mesocycles.map((meso) => (
-                <div
-                  key={meso.id}
-                  className={`p-4 border rounded-lg min-h-20 ${getIntensityColor(meso.intensity)} ${
-                    meso.intensity === "off" ? "text-black" : "text-white"
-                  }`}
-                >
-                  <div className="font-medium text-sm mb-2">{meso.name}</div>
-                  <div className="space-y-1">
-                    {meso.trainingMethods.map((methodId) => {
-                      const method = trainingMethods.find(m => m.id === methodId);
-                      return method ? (
-                        <Badge key={methodId} variant="secondary" className="text-xs">
-                          {method.name}
-                        </Badge>
-                      ) : null;
-                    })}
+    const handleDragStart = (e: React.DragEvent, quality: string) => {
+      e.dataTransfer.setData('text/plain', quality);
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+      e.preventDefault();
+    };
+
+    const handleDrop = (e: React.DragEvent, mesocycleId: string) => {
+      e.preventDefault();
+      const quality = e.dataTransfer.getData('text/plain');
+      
+      // Check if quality already exists in this mesocycle
+      const mesocycleIndex = mesocycles.findIndex(m => m.id === mesocycleId);
+      if (mesocycleIndex === -1) return;
+      
+      const currentQualities = mesocycles[mesocycleIndex].trainingQualities || [];
+      if (currentQualities.includes(quality)) return; // Prevent duplicates
+      
+      // Add quality to mesocycle
+      const updated = [...mesocycles];
+      updated[mesocycleIndex].trainingQualities = [...currentQualities, quality];
+      setMesocycles(updated);
+    };
+
+    const removeQualityFromMesocycle = (mesocycleId: string, quality: string) => {
+      const mesocycleIndex = mesocycles.findIndex(m => m.id === mesocycleId);
+      if (mesocycleIndex === -1) return;
+      
+      const updated = [...mesocycles];
+      updated[mesocycleIndex].trainingQualities = (updated[mesocycleIndex].trainingQualities || [])
+        .filter(q => q !== quality);
+      setMesocycles(updated);
+    };
+
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <GripVertical className="h-5 w-5" />
+            <span>Training Quality Allocation</span>
+          </CardTitle>
+          <CardDescription>
+            Drag and drop training qualities to assign them to specific mesocycles. Each quality can be used multiple times but only once per mesocycle.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Available Training Qualities</Label>
+              <div className="space-y-2 p-4 border rounded-lg bg-muted/50 min-h-32">
+                {trainableQualities.map((quality: any, index: number) => {
+                  const qualityName = typeof quality === 'string' ? quality : quality.name || quality.id || 'Unknown Quality';
+                  const relatedSubGoals = Array.isArray(subGoals[qualityName]) ? subGoals[qualityName] : [];
+                  
+                  return (
+                    <div
+                      key={index}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, qualityName)}
+                      className="p-3 bg-background border rounded-lg cursor-grab hover:shadow-md transition-shadow"
+                    >
+                      <div className="font-medium text-sm">{qualityName}</div>
+                      {relatedSubGoals.length > 0 && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Related sub-goals: {relatedSubGoals.join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Mesocycle Assignments</Label>
+              <div className="space-y-3">
+                {mesocycles.map((meso) => (
+                  <div
+                    key={meso.id}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, meso.id)}
+                    className="p-4 border rounded-lg bg-background min-h-24 transition-colors hover:bg-muted/50"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <div className={`w-3 h-3 rounded ${getIntensityColor(meso.intensity)}`}></div>
+                        <span className="font-medium text-sm">{meso.name}</span>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      {(meso.trainingQualities || []).length === 0 ? (
+                        <p className="text-xs text-muted-foreground">Drop training qualities here</p>
+                      ) : (
+                        meso.trainingQualities?.map((quality, index) => (
+                          <div key={index} className="flex items-center justify-between bg-primary/10 rounded px-2 py-1">
+                            <span className="text-xs font-medium">{quality}</span>
+                            <button
+                              onClick={() => removeQualityFromMesocycle(meso.id, quality)}
+                              className="text-destructive hover:text-destructive/80 text-xs ml-2"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
+        </CardContent>
+      </Card>
+    );
+  };
 
   const renderMethodPeriodization = () => (
     <Card>
@@ -474,16 +560,13 @@ export default function MesocyclePage() {
   );
 
   const stepTitles = [
-    "Mesocycle Setup & Intensity",
-    "Method Allocation",
-    "Method Periodization"
+    "Mesocycle Setup",
+    "Intensity Configuration", 
+    "Training Quality Allocation"
   ];
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      {/* Training Plan Overview */}
-      {renderTrainingPlanOverview()}
-      
       {/* Progress Header */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -503,30 +586,16 @@ export default function MesocyclePage() {
         </div>
       </div>
 
-      {/* Step Content */}
-      <div className="space-y-6">
-        {currentStep === 1 && renderMesocycleSetup()}
-        {currentStep === 2 && renderMethodAllocation()}
-        {currentStep === 3 && renderMethodPeriodization()}
-      </div>
-
-      {/* Navigation */}
-      <div className="flex justify-between pt-6">
-        <Button 
-          variant="outline" 
-          onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
-          disabled={currentStep === 1}
-        >
-          Previous
-        </Button>
+        <NavigationButtons />
         
-        <Button 
-          onClick={() => setCurrentStep(Math.min(totalSteps, currentStep + 1))}
-          disabled={currentStep === totalSteps}
-        >
-          {currentStep === totalSteps ? "Complete" : "Next"}
-        </Button>
-      </div>
+        <div className="space-y-8">
+          {renderTrainingPlanOverview()}
+          {currentStep === 1 && renderMesocycleSetup()}
+          {currentStep === 2 && renderIntensitySetup()}
+          {currentStep === 3 && renderQualityAllocation()}
+        </div>
+
+        <NavigationButtons />
     </div>
   );
 }

@@ -6,14 +6,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 function intensityBg(intensity: Intensity) {
   switch (intensity) {
-    case "low":
-      return "bg-[hsl(var(--intensity-low))] text-[hsl(var(--intensity-foreground))]";
-    case "moderate":
-      return "bg-[hsl(var(--intensity-moderate))] text-[hsl(var(--intensity-foreground))]";
-    case "high":
-      return "bg-[hsl(var(--intensity-high))] text-[hsl(var(--intensity-foreground))]";
+    case "off":
+      return "bg-[hsl(var(--intensity-off))] text-black border-2";
     case "deload":
-      return "bg-[hsl(var(--intensity-deload))] text-foreground";
+      return "bg-[hsl(var(--intensity-deload))] text-white";
+    case "easy":
+      return "bg-[hsl(var(--intensity-easy))] text-white";
+    case "easy-moderate":
+      return "bg-[hsl(var(--intensity-easy-moderate))] text-white";
+    case "moderate":
+      return "bg-[hsl(var(--intensity-moderate))] text-black";
+    case "moderate-hard":
+      return "bg-[hsl(var(--intensity-moderate-hard))] text-white";
+    case "hard":
+      return "bg-[hsl(var(--intensity-hard))] text-white";
+    case "extremely-hard":
+      return "bg-[hsl(var(--intensity-extremely-hard))] text-white";
   }
 }
 
@@ -81,10 +89,14 @@ export default function PlanTable({ plan, onChange, onEditSetup }: Props) {
                                   <SelectValue placeholder="Select intensity" />
                                 </SelectTrigger>
                                 <SelectContent className="z-50 bg-popover">
-                                  <SelectItem value="low">Low</SelectItem>
-                                  <SelectItem value="moderate">Moderate</SelectItem>
-                                  <SelectItem value="high">High</SelectItem>
+                                  <SelectItem value="off">Off</SelectItem>
                                   <SelectItem value="deload">Deload</SelectItem>
+                                  <SelectItem value="easy">Easy</SelectItem>
+                                  <SelectItem value="easy-moderate">Easy-Moderate</SelectItem>
+                                  <SelectItem value="moderate">Moderate</SelectItem>
+                                  <SelectItem value="moderate-hard">Moderate-Hard</SelectItem>
+                                  <SelectItem value="hard">Hard</SelectItem>
+                                  <SelectItem value="extremely-hard">Extremely Hard</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
