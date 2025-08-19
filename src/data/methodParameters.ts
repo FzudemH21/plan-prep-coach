@@ -10,130 +10,122 @@ export interface MethodParameter {
 }
 
 export const methodParameters: Record<string, MethodParameter[]> = {
-  "10–30 m build-ups with posture checkpoints": [
+  "Block starts 6–10 × 10–20 m @90–100% with full recovery (2–4 min), 2–3×/wk; emphasize set-up, shin angles, first 2 steps; video feedback each rep": [
     { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
-    { name: "reps", type: "number", min: 1, max: 20, defaultValue: 4 },
-    { name: "distance_m", unit: "m", type: "number", min: 10, max: 30, defaultValue: 20 },
-    { name: "rest_between_reps_min", unit: "min", type: "number", min: 1, max: 10, defaultValue: 3 },
-    { name: "checkpoints_m", unit: "m", type: "number", min: 5, max: 15, defaultValue: 10 }
-  ],
-  "505-style RSA": [
-    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 1 },
-    { name: "reps", type: "number", min: 3, max: 15, defaultValue: 6 },
-    { name: "distance_pattern", type: "text", defaultValue: "5-0-5m" },
-    { name: "rest_between_reps_s", unit: "s", type: "number", min: 10, max: 120, defaultValue: 45 },
-    { name: "technique_cues", type: "text", defaultValue: "Low center of mass" }
-  ],
-  "A/B-skips & dribbles": [
-    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
-    { name: "sets", type: "number", min: 1, max: 6, defaultValue: 3 },
-    { name: "segment_length_m", unit: "m", type: "number", min: 10, max: 50, defaultValue: 20 },
-    { name: "transfer_task (accelerations)", type: "text", defaultValue: "10m accelerations" }
-  ],
-  "Alactic sprints 20–40 m": [
-    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
-    { name: "reps", type: "number", min: 2, max: 8, defaultValue: 4 },
-    { name: "distance_m", unit: "m", type: "number", min: 20, max: 40, defaultValue: 30 },
-    { name: "intensity_metric", type: "select", options: ["Time", "Speed", "Split"], defaultValue: "Time" },
-    { name: "intensity_target", unit: "%", type: "number", min: 90, max: 100, defaultValue: 95 },
-    { name: "rest_between_reps_min", unit: "min", type: "number", min: 3, max: 8, defaultValue: 5 }
-  ],
-  "Alternating step drills & wall cycles": [
-    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
-    { name: "sets", type: "number", min: 2, max: 5, defaultValue: 3 },
-    { name: "cycles", type: "number", min: 5, max: 20, defaultValue: 10 },
-    { name: "transfer_task (sprints)", type: "text", defaultValue: "20m sprints" }
-  ],
-  "Ankling/pogos": [
-    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
-    { name: "sets", type: "number", min: 2, max: 5, defaultValue: 3 },
-    { name: "contacts", type: "number", min: 10, max: 50, defaultValue: 20 },
-    { name: "progression (to drop jumps)", type: "text", defaultValue: "Week 3-4" },
-    { name: "paired_isometric (calf)", type: "text", defaultValue: "3x10s holds" }
-  ],
-  "Anti-extension/anti-rotation isometrics": [
-    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
-    { name: "sets", type: "number", min: 2, max: 5, defaultValue: 3 },
-    { name: "hold_s", unit: "s", type: "number", min: 10, max: 60, defaultValue: 30 },
-    { name: "paired_carries_distance_m", unit: "m", type: "number", min: 10, max: 40, defaultValue: 20 }
-  ],
-  "Anti-rotation core + carries": [
-    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
-    { name: "sets", type: "number", min: 2, max: 5, defaultValue: 3 },
-    { name: "reps", type: "number", min: 5, max: 20, defaultValue: 10 },
-    { name: "carries_distance_m", unit: "m", type: "number", min: 10, max: 40, defaultValue: 20 }
-  ],
-  "Arm cycles + wicket runs": [
-    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
-    { name: "blocks", type: "number", min: 2, max: 6, defaultValue: 3 },
-    { name: "runs_per_block", type: "number", min: 2, max: 8, defaultValue: 4 }
-  ],
-  "Back or front squat (strength)": [
-    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
-    { name: "sets", type: "number", min: 3, max: 6, defaultValue: 4 },
-    { name: "reps", type: "number", min: 1, max: 8, defaultValue: 4 },
-    { name: "intensity_percent_1RM", unit: "%", type: "number", min: 60, max: 100, defaultValue: 85 },
-    { name: "paired_hinge_sets", type: "number", min: 2, max: 4, defaultValue: 3 },
-    { name: "paired_hinge_intensity_percent_1RM", unit: "%", type: "number", min: 60, max: 90, defaultValue: 75 }
-  ],
-  "Block starts": [
-    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
-    { name: "sets_or_reps", type: "number", min: 3, max: 12, defaultValue: 6 },
-    { name: "distance_m", unit: "m", type: "number", min: 10, max: 60, defaultValue: 30 },
+    { name: "reps", type: "number", min: 6, max: 10, defaultValue: 8 },
+    { name: "distance_m", unit: "m", type: "number", min: 10, max: 20, defaultValue: 15 },
     { name: "intensity_metric", type: "select", options: ["Time", "Speed", "Reaction"], defaultValue: "Time" },
     { name: "intensity_target", unit: "%", type: "number", min: 90, max: 100, defaultValue: 95 },
-    { name: "rest_between_reps_min", unit: "min", type: "number", min: 2, max: 8, defaultValue: 4 },
-    { name: "technique_cues", type: "text", defaultValue: "Drive phase focus" },
+    { name: "rest_between_reps_min", unit: "min", type: "number", min: 2, max: 4, defaultValue: 3 },
+    { name: "technique_cues", type: "text", defaultValue: "Set-up, shin angles, first 2 steps" },
     { name: "video_feedback", type: "select", options: ["Yes", "No"], defaultValue: "Yes" }
   ],
-  "Bounding series": [
-    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 1 },
-    { name: "sets", type: "number", min: 2, max: 5, defaultValue: 3 },
-    { name: "distance_m", unit: "m", type: "number", min: 30, max: 100, defaultValue: 60 },
-    { name: "technical_focus", type: "text", defaultValue: "Horizontal displacement" }
-  ],
-  "Coaching cueing + video (wicket spacing)": [
-    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 1 },
-    { name: "runs", type: "number", min: 3, max: 10, defaultValue: 5 },
-    { name: "video_feedback", type: "select", options: ["Yes", "No"], defaultValue: "Yes" },
-    { name: "spacing_adjustment", type: "text", defaultValue: "Individual based" }
-  ],
-  "Dribble to 10–20 m & wicket runs": [
+  "Simple→choice reaction starts (light/sound cues): 8–12 reps, 2–3×/wk; 10–20 s between reps; add false-start control drills": [
     { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
-    { name: "sets", type: "number", min: 2, max: 5, defaultValue: 3 },
-    { name: "segment_length_m", unit: "m", type: "number", min: 10, max: 20, defaultValue: 15 },
-    { name: "technical_focus (front-side mechanics)", type: "text", defaultValue: "Knee drive" }
+    { name: "reps", type: "number", min: 8, max: 12, defaultValue: 10 },
+    { name: "cue_type", type: "select", options: ["Light", "Sound", "Both"], defaultValue: "Light" },
+    { name: "rest_between_reps_s", unit: "s", type: "number", min: 10, max: 20, defaultValue: 15 },
+    { name: "false_start_control", type: "select", options: ["Yes", "No"], defaultValue: "Yes" }
   ],
-  "Technique drill block (A/B, dribbles, wicket)": [
+  "Max-intent isometrics (IMTP or iso-squat): 3–6 × 3–5 s, 2×/wk; pair with unloaded jumps 4–6 × 3–5 @ full intent (2–3 min rest)": [
     { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
-    { name: "sets", type: "number", min: 2, max: 5, defaultValue: 3 },
-    { name: "segment_length_m", unit: "m", type: "number", min: 10, max: 30, defaultValue: 20 },
-    { name: "integration (to sprints)", type: "text", defaultValue: "Progressive build-ups" }
+    { name: "iso_sets", type: "number", min: 3, max: 6, defaultValue: 4 },
+    { name: "iso_hold_s", unit: "s", type: "number", min: 3, max: 5, defaultValue: 4 },
+    { name: "pair_jump_sets", type: "number", min: 4, max: 6, defaultValue: 5 },
+    { name: "pair_jump_reps", type: "number", min: 3, max: 5, defaultValue: 4 },
+    { name: "rest_between_exercises_min", unit: "min", type: "number", min: 2, max: 3, defaultValue: 2.5 }
   ],
-  "Drop jumps 20–40 cm": [
-    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 1 },
-    { name: "sets", type: "number", min: 2, max: 5, defaultValue: 3 },
-    { name: "reps", type: "number", min: 3, max: 8, defaultValue: 5 },
-    { name: "drop_height_cm", unit: "cm", type: "number", min: 20, max: 40, defaultValue: 30 },
-    { name: "contact_time_target_ms", unit: "ms", type: "number", min: 150, max: 250, defaultValue: 200 }
-  ],
-  "RSIST ankle/knee": [
+  "Heavy resisted sprints 10–20 m with 30–50% v-decrement: 4–8 reps, 2×/wk; 2–4 min rest; posture cue 'push long'": [
     { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
-    { name: "sets", type: "number", min: 2, max: 4, defaultValue: 3 },
-    { name: "holds_s", unit: "s", type: "number", min: 5, max: 30, defaultValue: 15 },
-    { name: "joint_position", type: "select", options: ["Ankle", "Knee", "Both"], defaultValue: "Both" }
+    { name: "reps", type: "number", min: 4, max: 8, defaultValue: 6 },
+    { name: "distance_m", unit: "m", type: "number", min: 10, max: 20, defaultValue: 15 },
+    { name: "intensity_metric", type: "select", options: ["V-decrement", "Load"], defaultValue: "V-decrement" },
+    { name: "v_decrement_percent", unit: "%", type: "number", min: 30, max: 50, defaultValue: 40 },
+    { name: "rest_between_reps_min", unit: "min", type: "number", min: 2, max: 4, defaultValue: 3 },
+    { name: "posture_cue", type: "text", defaultValue: "push long" }
   ],
-  "Fly sprints 20–30 m": [
-    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 1 },
-    { name: "reps", type: "number", min: 2, max: 6, defaultValue: 3 },
+  "Wall drills (A-march/lean): 3–5 × 20–30 contacts, 2–3×/wk; progress to 3-step build-outs 6–10 reps": [
+    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
+    { name: "sets", type: "number", min: 3, max: 5, defaultValue: 4 },
+    { name: "contacts", type: "number", min: 20, max: 30, defaultValue: 25 },
+    { name: "progression_build_out_reps", type: "number", min: 6, max: 10, defaultValue: 8 }
+  ],
+  "Dribble to 10–20 m & wicket runs 3–5 × 20–30 m, 2×/wk; maintain front-side mechanics": [
+    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
+    { name: "sets", type: "number", min: 3, max: 5, defaultValue: 4 },
+    { name: "segment_length_m", unit: "m", type: "number", min: 20, max: 30, defaultValue: 25 },
+    { name: "technical_focus", type: "text", defaultValue: "front-side mechanics" }
+  ],
+  "Heavy resistance training >85% 1RM (squat/hinge): 3–6 × ≤5 reps, 2×/wk; 2–4 min rest; rotate front/back/hinge": [
+    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
+    { name: "sets", type: "number", min: 3, max: 6, defaultValue: 4 },
+    { name: "reps", type: "number", min: 1, max: 5, defaultValue: 3 },
+    { name: "intensity_percent_1RM", unit: "%", type: "number", min: 85, max: 100, defaultValue: 90 },
+    { name: "rest_between_sets_min", unit: "min", type: "number", min: 2, max: 4, defaultValue: 3 },
+    { name: "exercise_rotation", type: "text", defaultValue: "front/back/hinge" }
+  ],
+  "Anti-extension/anti-rotation isometrics 3–5 × 20–40 s, 2–3×/wk; add heavy carries 4–6 × 20–40 m": [
+    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
+    { name: "sets", type: "number", min: 3, max: 5, defaultValue: 4 },
+    { name: "hold_s", unit: "s", type: "number", min: 20, max: 40, defaultValue: 30 },
+    { name: "paired_carries_sets", type: "number", min: 4, max: 6, defaultValue: 5 },
+    { name: "paired_carries_distance_m", unit: "m", type: "number", min: 20, max: 40, defaultValue: 30 }
+  ],
+  "Seated/standing arm-swing drills 4–6 × 10–15 cycles, 2×/wk; integrate into 10–20 m starts": [
+    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
+    { name: "sets", type: "number", min: 4, max: 6, defaultValue: 5 },
+    { name: "cycles", type: "number", min: 10, max: 15, defaultValue: 12 },
+    { name: "integration_task", type: "text", defaultValue: "10–20 m starts" }
+  ],
+  "Pre-performance routine practice 1–2×/wk (breath cues, visualization 5–8 min) before starts; 6–10 blocked then 6–10 random starts": [
+    { name: "frequency_per_week", type: "number", min: 1, max: 2, defaultValue: 1 },
+    { name: "visualization_min", unit: "min", type: "number", min: 5, max: 8, defaultValue: 6 },
+    { name: "breathing_cues", type: "select", options: ["Yes", "No"], defaultValue: "Yes" },
+    { name: "blocked_trials", type: "number", min: 6, max: 10, defaultValue: 8 },
+    { name: "random_trials", type: "number", min: 6, max: 10, defaultValue: 8 }
+  ],
+  "Resisted sprints 10–20 m with 10–30% v-decrement: 3–6 reps, 2×/wk; pair with heavy trap-bar deadlift 3–5 × 2–5 @85–95% 1RM": [
+    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
+    { name: "sprint_reps", type: "number", min: 3, max: 6, defaultValue: 4 },
+    { name: "sprint_distance_m", unit: "m", type: "number", min: 10, max: 20, defaultValue: 15 },
+    { name: "v_decrement_percent", unit: "%", type: "number", min: 10, max: 30, defaultValue: 20 },
+    { name: "TBDL_sets", type: "number", min: 3, max: 5, defaultValue: 4 },
+    { name: "TBDL_reps", type: "number", min: 2, max: 5, defaultValue: 3 },
+    { name: "TBDL_intensity_percent_1RM", unit: "%", type: "number", min: 85, max: 95, defaultValue: 90 }
+  ],
+  "Sled pulls/pushes with torso lean: 4–8 × 10–20 m, 2×/wk; aim constant shin angle; 2–3 min rest": [
+    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
+    { name: "sets", type: "number", min: 4, max: 8, defaultValue: 6 },
+    { name: "distance_m", unit: "m", type: "number", min: 10, max: 20, defaultValue: 15 },
+    { name: "rest_between_reps_min", unit: "min", type: "number", min: 2, max: 3, defaultValue: 2.5 },
+    { name: "shin_angle_target", type: "text", defaultValue: "constant" }
+  ],
+  "Wicket runs 4–6 × 20–30 m, 2×/wk; adjust spacing to target contact time and projection": [
+    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
+    { name: "runs", type: "number", min: 4, max: 6, defaultValue: 5 },
+    { name: "segment_length_m", unit: "m", type: "number", min: 20, max: 30, defaultValue: 25 },
+    { name: "spacing_adjustment", type: "text", defaultValue: "individual" },
+    { name: "contact_time_target", unit: "ms", type: "number", min: 120, max: 180, defaultValue: 150 },
+    { name: "projection_cue", type: "text", defaultValue: "horizontal" }
+  ],
+  "Isometric mid-thigh pull 3–5 × 3–5 s + jump squats 20–40% 1RM 4–6 × 3–5, 2×/wk": [
+    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
+    { name: "IMTP_sets", type: "number", min: 3, max: 5, defaultValue: 4 },
+    { name: "IMTP_hold_s", unit: "s", type: "number", min: 3, max: 5, defaultValue: 4 },
+    { name: "JumpSquat_sets", type: "number", min: 4, max: 6, defaultValue: 5 },
+    { name: "JumpSquat_reps", type: "number", min: 3, max: 5, defaultValue: 4 },
+    { name: "JumpSquat_load_percent_1RM", unit: "%", type: "number", min: 20, max: 40, defaultValue: 30 }
+  ],
+  "Fly sprints 20–30 m @98–100% vmax: 4–8 reps, 2×/wk; 3–5 min rest; aim tc < 120–140 ms": [
+    { name: "frequency_per_week", type: "number", min: 1, max: 7, defaultValue: 2 },
+    { name: "reps", type: "number", min: 4, max: 8, defaultValue: 6 },
     { name: "fly_distance_m", unit: "m", type: "number", min: 20, max: 30, defaultValue: 25 },
-    { name: "build_up_m", unit: "m", type: "number", min: 30, max: 50, defaultValue: 40 },
-    { name: "intensity_metric", type: "select", options: ["Time", "Speed"], defaultValue: "Speed" },
-    { name: "intensity_target", unit: "%", type: "number", min: 95, max: 100, defaultValue: 98 },
-    { name: "rest_between_reps_min", unit: "min", type: "number", min: 5, max: 10, defaultValue: 7 },
-    { name: "contact_time_target_ms", unit: "ms", type: "number", min: 80, max: 120, defaultValue: 100 }
+    { name: "intensity_metric", type: "select", options: ["Vmax %", "Time"], defaultValue: "Vmax %" },
+    { name: "intensity_target", unit: "%", type: "number", min: 98, max: 100, defaultValue: 99 },
+    { name: "rest_between_reps_min", unit: "min", type: "number", min: 3, max: 5, defaultValue: 4 },
+    { name: "contact_time_target_ms", unit: "ms", type: "number", min: 120, max: 140, defaultValue: 130 }
   ]
-};
+}
 
 // Add more methods here following the same pattern...
 // For brevity, I'll continue with a few more key methods

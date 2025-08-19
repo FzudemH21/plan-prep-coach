@@ -580,23 +580,11 @@ export default function MesocyclePage() {
   const renderMethodPeriodization = () => {
     // Get all allocated methods from mesocycles
     const allocatedMethods = new Set<string>();
-    const methodsBySubGoal: Record<string, Array<{ method: string; quality: string; subGoal: string }>> = {};
     
     mesocycles.forEach(meso => {
       meso.trainingMethods?.forEach((methodData: any) => {
         const method = typeof methodData === 'string' ? methodData : methodData.method;
-        const quality = typeof methodData === 'string' ? '' : methodData.quality;
-        const subGoal = typeof methodData === 'string' ? '' : methodData.subGoal;
-        
         allocatedMethods.add(method);
-        
-        if (!methodsBySubGoal[subGoal]) {
-          methodsBySubGoal[subGoal] = [];
-        }
-        
-        if (!methodsBySubGoal[subGoal].find(m => m.method === method)) {
-          methodsBySubGoal[subGoal].push({ method, quality, subGoal });
-        }
       });
     });
 
@@ -604,12 +592,27 @@ export default function MesocyclePage() {
       setParameterValues(prev => setParameterValue(mesocycleId, microcycleIndex, methodName, parameterName, value, prev));
     };
 
+    // Helper function for intensity colors (using same logic from other components)
+    const intensityBg = (intensity: string) => {
+      const intensityMap: Record<string, string> = {
+        'off': 'bg-gray-200 text-gray-700 border-gray-300',
+        'deload': 'bg-blue-100 text-blue-700 border-blue-300',
+        'easy': 'bg-green-100 text-green-700 border-green-300',
+        'easy-moderate': 'bg-emerald-100 text-emerald-700 border-emerald-300',
+        'moderate': 'bg-yellow-100 text-yellow-700 border-yellow-300',
+        'moderate-hard': 'bg-orange-100 text-orange-700 border-orange-300',
+        'hard': 'bg-red-100 text-red-700 border-red-300',
+        'extremely-hard': 'bg-red-200 text-red-800 border-red-400'
+      };
+      return intensityMap[intensity] || intensityMap['easy'];
+    };
+
     return (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <Settings className="h-5 w-5" />
-            <span>Training Method Parameter Evolution</span>
+            <span>Step 4: Method Periodization</span>
           </CardTitle>
           <CardDescription>
             Configure loading parameters for each training method across all mesocycles and microcycles.
@@ -623,116 +626,117 @@ export default function MesocyclePage() {
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Column Headers */}
               <div className="overflow-x-auto">
                 <div className="min-w-max">
-                  <div className="grid gap-2 mb-4" style={{
-                    gridTemplateColumns: `250px ${mesocycles.map(meso => `repeat(${meso.duration}, 120px)`).join(' ')}`
+                  {/* Column Headers */}
+                  <div className="grid gap-1 mb-4" style={{
+                    gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
                   }}>
                     {/* Method Column Header */}
                     <div className="p-3 bg-muted font-medium text-sm border rounded-lg">
-                      Training Method
+                      Training Methods
                     </div>
                     
-                    {/* Mesocycle Headers */}
-                    {mesocycles.map((meso) => (
-                      <div key={meso.id} className={`p-2 rounded-lg border text-center ${getIntensityColor(meso.intensity)}`} style={{ gridColumn: `span ${meso.duration}` }}>
-                        <div className="font-medium text-sm">{meso.name}</div>
-                        <div className="text-xs opacity-90">{meso.duration} weeks</div>
-                      </div>
-                    ))}
-                    
-                    {/* Microcycle Week Headers */}
-                    <div></div>
+                    {/* Week Headers with Intensity Colors */}
                     {mesocycles.map((meso) => 
-                      Array.from({ length: meso.duration }, (_, weekIndex) => (
-                        <div key={`${meso.id}-week-${weekIndex}`} className="p-2 bg-muted/50 border rounded text-center text-xs">
-                          Week {weekIndex + 1}
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {meso.microcycles?.[weekIndex]?.intensity || meso.intensity}
+                      Array.from({ length: meso.duration }, (_, weekIndex) => {
+                        const globalWeek = mesocycles.slice(0, mesocycles.indexOf(meso)).reduce((sum, m) => sum + m.duration, 0) + weekIndex + 1;
+                        const microcycle = meso.microcycles?.[weekIndex];
+                        const intensity = microcycle?.intensity || meso.intensity;
+                        
+                        return (
+                          <div key={`${meso.id}-week-${weekIndex}`} className={`text-center border rounded ${intensityBg(intensity)}`}>
+                            <div className="text-xs px-2 py-1 font-medium">
+                              {meso.name}
+                            </div>
+                            <div className="text-xs p-1 font-medium border-t">
+                              Week {globalWeek}
+                            </div>
+                            <div className="text-xs px-1 py-0.5 opacity-80">
+                              {intensity?.replace('-', ' ') || 'easy'}
+                            </div>
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
 
                   {/* Method Rows */}
-                  <div className="space-y-6">
-                    {Object.entries(methodsBySubGoal).map(([subGoal, methods]) => (
-                      <Collapsible key={subGoal} className="space-y-3">
-                        <CollapsibleTrigger className="flex items-center justify-between w-full p-3 bg-background border rounded-lg hover:bg-muted/50 transition-colors">
-                          <span className="font-medium text-left">{subGoal}</span>
-                          <ChevronDown className="h-4 w-4" />
-                        </CollapsibleTrigger>
-                        <CollapsibleContent className="space-y-3">
-                          {methods.map(({ method, quality }) => {
-                            const parameters = getParametersForMethod(method);
-                            
-                            return (
-                              <div key={method} className="space-y-2">
-                                {/* Method Header */}
-                                <div className="p-2 bg-primary/10 border rounded-lg">
-                                  <div className="font-medium text-sm">{quality}</div>
-                                  <div className="text-xs text-muted-foreground line-clamp-2">{method}</div>
-                                </div>
-                                
-                                {/* Parameter Rows */}
-                                {parameters.map((param) => (
-                                  <div key={param.name} className="grid gap-2" style={{
-                                    gridTemplateColumns: `250px ${mesocycles.map(meso => `repeat(${meso.duration}, 120px)`).join(' ')}`
-                                  }}>
-                                    {/* Parameter Label */}
-                                    <div className="p-2 bg-muted/30 border rounded text-sm flex items-center">
-                                      <span className="font-medium">{param.name.replace(/_/g, ' ')}</span>
-                                      {param.unit && <span className="text-muted-foreground ml-1">({param.unit})</span>}
-                                    </div>
-                                    
-                                    {/* Parameter Input Cells */}
-                                    {mesocycles.map((meso) =>
-                                      Array.from({ length: meso.duration }, (_, weekIndex) => {
-                                        const currentValue = getParameterValue(meso.id, weekIndex, method, param.name, parameterValues);
-                                        
-                                        return (
-                                          <div key={`${meso.id}-${weekIndex}-${param.name}`} className="p-1">
-                                            {param.type === 'select' ? (
-                                              <Select
-                                                value={currentValue as string || param.defaultValue as string || ''}
-                                                onValueChange={(value) => updateParameterValue(meso.id, weekIndex, method, param.name, value)}
-                                              >
-                                                <SelectTrigger className="h-8 text-xs">
-                                                  <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                  {param.options?.map((option) => (
-                                                    <SelectItem key={option} value={option} className="text-xs">
-                                                      {option}
-                                                    </SelectItem>
-                                                  ))}
-                                                </SelectContent>
-                                              </Select>
-                                            ) : (
-                                              <Input
-                                                type={param.type === 'number' ? 'number' : 'text'}
-                                                value={currentValue || param.defaultValue || ''}
-                                                onChange={(e) => updateParameterValue(meso.id, weekIndex, method, param.name, param.type === 'number' ? Number(e.target.value) : e.target.value)}
-                                                className="h-8 text-xs"
-                                                min={param.min}
-                                                max={param.max}
-                                                placeholder={param.defaultValue?.toString() || ''}
-                                              />
-                                            )}
-                                          </div>
-                                        );
-                                      })
-                                    )}
-                                  </div>
-                                ))}
+                  <div className="space-y-4">
+                    {Array.from(allocatedMethods).map((method) => {
+                      const parameters = getParametersForMethod(method);
+                      if (parameters.length === 0) return null;
+
+                      return (
+                        <div key={method} className="border rounded-lg bg-card shadow-sm">
+                          {/* Method name header */}
+                          <div className="grid gap-1 bg-muted/20" style={{ 
+                            gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)` 
+                          }}>
+                            <div className="p-3 font-medium text-sm border-r bg-muted/40 rounded-tl">
+                              <div className="line-clamp-3" title={method}>
+                                {method}
                               </div>
-                            );
-                          })}
-                        </CollapsibleContent>
-                      </Collapsible>
-                    ))}
+                            </div>
+                            {mesocycles.map((meso) => 
+                              Array.from({ length: meso.duration }, (_, weekIndex) => (
+                                <div key={`${meso.id}-${weekIndex}`} className="h-16 border-l bg-muted/10"></div>
+                              ))
+                            )}
+                          </div>
+                          
+                          {/* Parameter rows */}
+                          <div className="divide-y">
+                            {parameters.map((param) => (
+                              <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
+                                gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)` 
+                              }}>
+                                <div className="p-2 text-xs text-muted-foreground bg-muted/5 border-r flex items-center">
+                                  <span className="font-medium">{param.name.replace(/_/g, ' ')}</span>
+                                  {param.unit && <span className="ml-1 text-xs opacity-70">({param.unit})</span>}
+                                </div>
+                                {mesocycles.map((meso) =>
+                                  Array.from({ length: meso.duration }, (_, weekIndex) => {
+                                    const currentValue = getParameterValue(meso.id, weekIndex, method, param.name, parameterValues);
+                                    return (
+                                      <div key={`${meso.id}-${weekIndex}-${param.name}`} className="p-1 border-l">
+                                        {param.type === 'select' ? (
+                                          <Select
+                                            value={currentValue?.toString() || param.defaultValue?.toString() || ''}
+                                            onValueChange={(value) => updateParameterValue(meso.id, weekIndex, method, param.name, value)}
+                                          >
+                                            <SelectTrigger className="h-8 text-xs">
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent className="z-50">
+                                              {param.options?.map((option) => (
+                                                <SelectItem key={option} value={option} className="text-xs">
+                                                  {option}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        ) : (
+                                          <Input
+                                            type={param.type === 'number' ? 'number' : 'text'}
+                                            value={currentValue || param.defaultValue || ''}
+                                            onChange={(e) => updateParameterValue(meso.id, weekIndex, method, param.name, param.type === 'number' ? Number(e.target.value) : e.target.value)}
+                                            className="h-8 text-xs"
+                                            min={param.min}
+                                            max={param.max}
+                                            placeholder={param.defaultValue?.toString() || ''}
+                                          />
+                                        )}
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
