@@ -67,9 +67,9 @@ export default function MesocyclePage() {
       const weeks = data.smartGoal?.timeframe || 12;
       setTotalWeeks(weeks);
       
-      // Calculate plan dates
-      const startDate = new Date();
-      const endDate = addWeeks(startDate, weeks);
+      // Calculate plan dates from macrocycle SMART goal
+      const startDate = data.smartGoal?.startDate ? new Date(data.smartGoal.startDate) : new Date();
+      const endDate = data.smartGoal?.targetDate ? new Date(data.smartGoal.targetDate) : addWeeks(startDate, weeks);
       setPlanStartDate(startDate);
       setPlanEndDate(endDate);
       
@@ -665,7 +665,7 @@ export default function MesocyclePage() {
           ) : (
             <div className="space-y-3">
               <h3 className="text-lg font-semibold">Method Periodization</h3>
-              <ScrollArea className="h-96 w-full border rounded-lg">
+              <ScrollArea className="h-[32rem] w-full border rounded-lg">
                 <div className="min-w-max p-4">
                   {/* Multi-Level Headers */}
                   <div className="mb-4 space-y-1">
