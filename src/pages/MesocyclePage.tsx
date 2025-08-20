@@ -663,90 +663,98 @@ export default function MesocyclePage() {
               <p className="text-sm text-muted-foreground">Please allocate training methods to mesocycles in step 3 first.</p>
             </div>
           ) : (
-            <div className="space-y-6">
-              {/* Mesocycle Overview Section */}
-              <div className="space-y-3">
-                <h3 className="text-lg font-semibold">Mesocycle Overview</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {mesocycles.map((meso) => {
-                    const overview = getMesocycleOverview(meso);
-                    return (
-                      <Card key={meso.id} className="p-4">
-                        <div className="space-y-2">
-                          <div className="flex items-center space-x-2">
-                            <div className={`w-3 h-3 rounded ${getIntensityColor(meso.intensity)}`}></div>
-                            <h4 className="font-medium text-sm">{meso.name}</h4>
+            <div className="space-y-3">
+              <h3 className="text-lg font-semibold">Method Periodization</h3>
+              <ScrollArea className="h-96 w-full border rounded-lg">
+                <div className="min-w-max p-4">
+                  {/* Multi-Level Headers */}
+                  <div className="mb-4 space-y-1">
+                    {/* Level 1: Mesocycle Group Headers */}
+                    <div className="grid gap-1" style={{
+                      gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
+                    }}>
+                      <div className="p-2 bg-muted font-medium text-sm border rounded-t-lg">
+                        Training Methods
+                      </div>
+                      {mesocycles.map((meso) => (
+                        <div 
+                          key={`${meso.id}-header`} 
+                          className="p-2 bg-primary text-primary-foreground font-medium text-sm border rounded-t-lg text-center"
+                          style={{ 
+                            gridColumn: `span ${meso.duration}` 
+                          }}
+                        >
+                          <div className="flex items-center justify-center space-x-2">
+                            <div className={`w-2 h-2 rounded-full bg-white/80`}></div>
+                            <span>{meso.name}</span>
                           </div>
-                          {overview.subGoals.length > 0 && (
-                            <div>
-                              <Label className="text-xs text-muted-foreground">Sub-goals</Label>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {overview.subGoals.map((subGoal, idx) => (
-                                  <Badge key={idx} variant="outline" className="text-xs px-2 py-0.5">
-                                    {subGoal}
-                                  </Badge>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {overview.qualities.length > 0 && (
-                            <div>
-                              <Label className="text-xs text-muted-foreground">Training Qualities</Label>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {overview.qualities.map((quality, idx) => (
-                                  <Badge key={idx} variant="secondary" className="text-xs px-2 py-0.5">
-                                    {quality}
-                                  </Badge>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {overview.subGoals.length === 0 && overview.qualities.length === 0 && (
-                            <p className="text-xs text-muted-foreground italic">No methods allocated</p>
-                          )}
                         </div>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Method Periodization Table with ScrollArea */}
-              <div className="space-y-3">
-                <h3 className="text-lg font-semibold">Method Parameters</h3>
-                <ScrollArea className="h-96 w-full border rounded-lg">
-                  <div className="min-w-max p-4">
-                  {/* Column Headers */}
-                  <div className="grid gap-1 mb-4" style={{
-                    gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
-                  }}>
-                    {/* Method Column Header */}
-                    <div className="p-3 bg-muted font-medium text-sm border rounded-lg">
-                      Training Methods
+                      ))}
                     </div>
-                    
-                    {/* Week Headers with Intensity Colors */}
-                    {mesocycles.map((meso) => 
-                      Array.from({ length: meso.duration }, (_, weekIndex) => {
-                        const globalWeek = mesocycles.slice(0, mesocycles.indexOf(meso)).reduce((sum, m) => sum + m.duration, 0) + weekIndex + 1;
-                        const microcycle = meso.microcycles?.[weekIndex];
-                        const intensity = microcycle?.intensity || meso.intensity;
-                        
+
+                    {/* Level 2: Sub-goals and Qualities */}
+                    <div className="grid gap-1" style={{
+                      gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
+                    }}>
+                      <div className="p-2 bg-muted/50 border-l border-r text-xs">
+                        Focus Areas
+                      </div>
+                      {mesocycles.map((meso) => {
+                        const overview = getMesocycleOverview(meso);
                         return (
-                          <div key={`${meso.id}-week-${weekIndex}`} className={`text-center border rounded ${intensityBg(intensity)}`}>
-                            <div className="text-xs px-2 py-1 font-medium">
-                              {meso.name}
-                            </div>
-                            <div className="text-xs p-1 font-medium border-t">
-                              Week {globalWeek}
-                            </div>
-                            <div className="text-xs px-1 py-0.5 opacity-80">
-                              {intensity?.replace('-', ' ') || 'easy'}
-                            </div>
+                          <div 
+                            key={`${meso.id}-overview`} 
+                            className="p-2 bg-muted/30 border-l border-r text-xs space-y-1"
+                            style={{ 
+                              gridColumn: `span ${meso.duration}` 
+                            }}
+                          >
+                            {overview.subGoals.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                <span className="font-medium text-muted-foreground">Goals:</span>
+                                <span className="text-foreground">{overview.subGoals.join(', ')}</span>
+                              </div>
+                            )}
+                            {overview.qualities.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                <span className="font-medium text-muted-foreground">Qualities:</span>
+                                <span className="text-foreground">{overview.qualities.join(', ')}</span>
+                              </div>
+                            )}
+                            {overview.subGoals.length === 0 && overview.qualities.length === 0 && (
+                              <span className="text-muted-foreground italic">No methods allocated</span>
+                            )}
                           </div>
                         );
-                      })
-                    )}
+                      })}
+                    </div>
+
+                    {/* Level 3: Week Headers with Intensity Colors */}
+                    <div className="grid gap-1" style={{
+                      gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
+                    }}>
+                      <div className="p-2 bg-muted/80 font-medium text-xs border rounded-b-lg">
+                        Parameters
+                      </div>
+                      {mesocycles.map((meso) => 
+                        Array.from({ length: meso.duration }, (_, weekIndex) => {
+                          const globalWeek = mesocycles.slice(0, mesocycles.indexOf(meso)).reduce((sum, m) => sum + m.duration, 0) + weekIndex + 1;
+                          const microcycle = meso.microcycles?.[weekIndex];
+                          const intensity = microcycle?.intensity || meso.intensity;
+                          
+                          return (
+                            <div key={`${meso.id}-week-${weekIndex}`} className={`text-center border rounded-b ${intensityBg(intensity)}`}>
+                              <div className="text-xs p-1 font-medium">
+                                Week {globalWeek}
+                              </div>
+                              <div className="text-xs px-1 py-0.5 opacity-80 border-t">
+                                {intensity?.replace('-', ' ') || 'easy'}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
 
                   {/* Method Rows */}
@@ -842,8 +850,7 @@ export default function MesocyclePage() {
                   </div>
                 </ScrollArea>
               </div>
-            </div>
-          )}
+            )}
         </CardContent>
       </Card>
     );
