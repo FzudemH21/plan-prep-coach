@@ -44,6 +44,10 @@ export default function MesocyclePage() {
       <Button 
         onClick={() => {
           if (currentStep <= 1) {
+            // Smart navigation: go to last saved step in macrocycle
+            const savedStep = localStorage.getItem('macrocycleStep');
+            const targetStep = savedStep ? parseInt(savedStep) : 5; // Go to last step if no saved step
+            localStorage.setItem('macrocycleStep', targetStep.toString());
             navigate('/macrocycle');
           } else {
             setCurrentStep(Math.max(1, currentStep - 1));
@@ -158,19 +162,37 @@ export default function MesocyclePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-1">
               <Label className="text-sm font-medium text-muted-foreground">Goal</Label>
-              <p className="text-sm font-medium">{macrocycleData.smartGoal?.specific || macrocycleData.smartGoal?.measurable || macrocycleData.smartGoal?.realistic || "Not specified"}</p>
+              <p className="text-sm font-medium">
+                {(() => {
+                  // Better goal display priority
+                  const goal = macrocycleData.smartGoal?.description || 
+                              macrocycleData.smartGoal?.specific || 
+                              macrocycleData.smartGoal?.measurable || 
+                              macrocycleData.smartGoal?.realistic;
+                  return goal && goal.trim() !== "" ? goal : "Not specified";
+                })()}
+              </p>
             </div>
             <div className="space-y-1">
               <Label className="text-sm font-medium text-muted-foreground">Total Duration</Label>
-              <p className="text-sm font-medium">{totalWeeks} weeks ({totalWeeks * 7} days)</p>
+              <p className="text-sm font-medium">
+                {macrocycleData.smartGoal?.startDate && macrocycleData.smartGoal?.endDate ? 
+                  `${totalWeeks} weeks (${totalWeeks * 7} days)` : 
+                  "-"
+                }
+              </p>
             </div>
             <div className="space-y-1">
               <Label className="text-sm font-medium text-muted-foreground">Start Date</Label>
-              <p className="text-sm font-medium">{format(planStartDate, 'MMM dd, yyyy')}</p>
+              <p className="text-sm font-medium">
+                {macrocycleData.smartGoal?.startDate ? format(planStartDate, 'MMM dd, yyyy') : "-"}
+              </p>
             </div>
             <div className="space-y-1">
               <Label className="text-sm font-medium text-muted-foreground">End Date</Label>
-              <p className="text-sm font-medium">{format(planEndDate, 'MMM dd, yyyy')}</p>
+              <p className="text-sm font-medium">
+                {macrocycleData.smartGoal?.endDate ? format(planEndDate, 'MMM dd, yyyy') : "-"}
+              </p>
             </div>
             <div className="space-y-1 md:col-span-2">
               <Label className="text-sm font-medium text-muted-foreground">Sub-goals</Label>

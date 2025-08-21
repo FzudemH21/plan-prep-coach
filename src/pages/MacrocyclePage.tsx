@@ -33,6 +33,55 @@ export default function MacrocyclePage() {
   const [methodsByQuality, setMethodsByQuality] = useState<Record<string, { subGoalLabel: string; qualityName: string; list: string[] }>>({});
   const [selectedTest, setSelectedTest] = useState<string | null>(null);
 
+  // Load saved data and step on mount
+  useEffect(() => {
+    const savedData = localStorage.getItem('macrocycleData');
+    const savedStep = localStorage.getItem('macrocycleStep');
+    
+    if (savedData) {
+      try {
+        const data = JSON.parse(savedData);
+        setAthleteInfo(data.athleteInfo || {});
+        setSmartGoal(data.smartGoal || {});
+        setSubGoals(data.subGoals || []);
+        setQualities(data.qualities || []);
+        setQualitiesBySubGoal(data.qualitiesBySubGoal || {});
+        setMethodsByQuality(data.methodsByQuality || {});
+        setSelectedTest(data.selectedTest || null);
+      } catch (error) {
+        console.error('Error loading saved macrocycle data:', error);
+      }
+    }
+    
+    if (savedStep) {
+      try {
+        setCurrentStep(parseInt(savedStep));
+      } catch (error) {
+        console.error('Error loading saved step:', error);
+      }
+    }
+  }, []);
+
+  // Save data whenever form data changes (continuous saving)
+  useEffect(() => {
+    const macrocycleData = {
+      athleteInfo,
+      smartGoal,
+      subGoals,
+      qualities,
+      qualitiesBySubGoal,
+      methodsByQuality,
+      selectedTest,
+      lastUpdated: new Date().toISOString()
+    };
+    localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
+  }, [athleteInfo, smartGoal, subGoals, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest]);
+
+  // Save step whenever it changes (step persistence)
+  useEffect(() => {
+    localStorage.setItem('macrocycleStep', currentStep.toString());
+  }, [currentStep]);
+
   // Helper function to normalize strings for comparison
   const normalizeForComparison = (str: string): string => {
     return str.toLowerCase()
