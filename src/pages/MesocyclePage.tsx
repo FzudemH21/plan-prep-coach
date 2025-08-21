@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,7 @@ import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 import { methodParameters, getParametersForMethod, getParameterValue, setParameterValue } from "@/data/methodParameters";
 
 export default function MesocyclePage() {
+  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [mesocycles, setMesocycles] = useState<ExtendedMesocycle[]>([]);
   const [trainingMethods, setTrainingMethods] = useState<TrainingMethod[]>([]);
@@ -40,11 +42,16 @@ export default function MesocyclePage() {
   const NavigationButtons = () => (
     <div className="flex justify-between items-center">
       <Button 
-        onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
-        disabled={currentStep <= 1}
+        onClick={() => {
+          if (currentStep <= 1) {
+            navigate('/macrocycle');
+          } else {
+            setCurrentStep(Math.max(1, currentStep - 1));
+          }
+        }}
         variant="outline"
       >
-        Previous
+        {currentStep <= 1 ? "Back to Macrocycle" : "Previous"}
       </Button>
       <Button 
         onClick={() => setCurrentStep(Math.min(totalSteps, currentStep + 1))}
@@ -69,7 +76,7 @@ export default function MesocyclePage() {
       
       // Calculate plan dates from macrocycle SMART goal
       const startDate = data.smartGoal?.startDate ? new Date(data.smartGoal.startDate) : new Date();
-      const endDate = data.smartGoal?.targetDate ? new Date(data.smartGoal.targetDate) : addWeeks(startDate, weeks);
+      const endDate = data.smartGoal?.endDate ? new Date(data.smartGoal.endDate) : addWeeks(startDate, weeks);
       setPlanStartDate(startDate);
       setPlanEndDate(endDate);
       
@@ -151,7 +158,7 @@ export default function MesocyclePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-1">
               <Label className="text-sm font-medium text-muted-foreground">Goal</Label>
-              <p className="text-sm font-medium">{macrocycleData.smartGoal?.specific || "Not specified"}</p>
+              <p className="text-sm font-medium">{macrocycleData.smartGoal?.specific || macrocycleData.smartGoal?.measurable || macrocycleData.smartGoal?.realistic || "Not specified"}</p>
             </div>
             <div className="space-y-1">
               <Label className="text-sm font-medium text-muted-foreground">Total Duration</Label>
@@ -166,11 +173,11 @@ export default function MesocyclePage() {
               <p className="text-sm font-medium">{format(planEndDate, 'MMM dd, yyyy')}</p>
             </div>
             <div className="space-y-1 md:col-span-2">
-              <Label className="text-sm font-medium text-muted-foreground">Training Qualities</Label>
+              <Label className="text-sm font-medium text-muted-foreground">Sub-goals</Label>
               <div className="flex flex-wrap gap-1">
-                {macrocycleData.qualities?.map((quality: any, index: number) => (
+                {macrocycleData.subGoals?.map((subGoal: any, index: number) => (
                   <Badge key={index} variant="secondary" className="text-xs">
-                    {typeof quality === 'string' ? quality : quality.name || quality.id || 'Unknown Quality'}
+                    {subGoal.description || subGoal.name || subGoal.id || 'Unknown Sub-goal'}
                   </Badge>
                 ))}
               </div>
