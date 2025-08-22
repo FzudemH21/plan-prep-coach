@@ -713,191 +713,191 @@ export default function MesocyclePage() {
           ) : (
              <div className="space-y-3">
                <h3 className="text-lg font-semibold">Method Periodization</h3>
-               <div className="h-[32rem] w-full border rounded-lg overflow-auto" style={{scrollbarWidth: 'thin'}}>
-                 <div className="min-w-max relative">
-                   {/* Multi-Level Sticky Headers */}
-                   <div className="sticky top-0 z-10 bg-background border-b space-y-1 shadow-sm">
-                     {/* Level 1: Mesocycle Group Headers */}
-                     <div className="grid gap-1" style={{
-                       gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
-                     }}>
-                       <div className="p-2 bg-muted font-medium text-sm border rounded-t-lg">
-                         Training Methods
-                       </div>
-                       {mesocycles.map((meso) => (
-                         <div 
-                           key={`${meso.id}-header`} 
-                           className="p-2 bg-primary text-primary-foreground font-medium text-sm border rounded-t-lg text-center"
-                           style={{ 
-                             gridColumn: `span ${meso.duration}` 
-                           }}
-                         >
-                           <div className="flex items-center justify-center space-x-2">
-                             <div className={`w-2 h-2 rounded-full bg-white/80`}></div>
-                             <span>{meso.name}</span>
-                           </div>
+                 <div className="h-[32rem] w-full border rounded-lg overflow-auto" style={{scrollbarWidth: 'thin'}}>
+                   <div className="min-w-max relative">
+                     {/* Multi-Level Sticky Headers */}
+                     <div className="sticky top-0 z-10 bg-background border-b space-y-1 shadow-sm">
+                       {/* Level 1: Mesocycle Group Headers */}
+                       <div className="grid gap-1" style={{
+                         gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
+                       }}>
+                         <div className="sticky left-0 z-20 p-2 bg-muted font-medium text-sm border rounded-t-lg">
+                           Training Methods
                          </div>
-                       ))}
-                     </div>
-
-                     {/* Level 2: Sub-goals and Qualities */}
-                     <div className="grid gap-1" style={{
-                       gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
-                     }}>
-                       <div className="p-2 bg-muted/50 border-l border-r text-xs">
-                         Focus Areas
-                       </div>
-                       {mesocycles.map((meso) => {
-                         const overview = getMesocycleOverview(meso);
-                         return (
+                         {mesocycles.map((meso) => (
                            <div 
-                             key={`${meso.id}-overview`} 
-                             className="p-2 bg-muted/30 border-l border-r text-xs space-y-1"
+                             key={`${meso.id}-header`} 
+                             className="p-2 bg-primary text-primary-foreground font-medium text-sm border rounded-t-lg text-center"
                              style={{ 
                                gridColumn: `span ${meso.duration}` 
                              }}
                            >
-                             {overview.subGoals.length > 0 && (
-                               <div className="flex flex-wrap gap-1">
-                                 <span className="font-medium text-muted-foreground">Goals:</span>
-                                 <span className="text-foreground">{overview.subGoals.join(', ')}</span>
+                             <div className="flex items-center justify-center space-x-2">
+                               <div className={`w-2 h-2 rounded-full bg-white/80`}></div>
+                               <span>{meso.name}</span>
+                             </div>
+                           </div>
+                         ))}
+                       </div>
+
+                       {/* Level 2: Sub-goals and Qualities */}
+                       <div className="grid gap-1" style={{
+                         gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
+                       }}>
+                         <div className="sticky left-0 z-20 p-2 bg-muted/50 border-l border-r text-xs">
+                           Focus Areas
+                         </div>
+                         {mesocycles.map((meso) => {
+                           const overview = getMesocycleOverview(meso);
+                           return (
+                             <div 
+                               key={`${meso.id}-overview`} 
+                               className="p-2 bg-muted/30 border-l border-r text-xs space-y-1"
+                               style={{ 
+                                 gridColumn: `span ${meso.duration}` 
+                               }}
+                             >
+                               {overview.subGoals.length > 0 && (
+                                 <div className="flex flex-wrap gap-1">
+                                   <span className="font-medium text-muted-foreground">Goals:</span>
+                                   <span className="text-foreground">{overview.subGoals.join(', ')}</span>
+                                 </div>
+                               )}
+                               {overview.qualities.length > 0 && (
+                                 <div className="flex flex-wrap gap-1">
+                                   <span className="font-medium text-muted-foreground">Qualities:</span>
+                                   <span className="text-foreground">{overview.qualities.join(', ')}</span>
+                                 </div>
+                               )}
+                               {overview.subGoals.length === 0 && overview.qualities.length === 0 && (
+                                 <span className="text-muted-foreground italic">No methods allocated</span>
+                               )}
+                             </div>
+                           );
+                         })}
+                       </div>
+
+                       {/* Level 3: Week Headers with Intensity Colors */}
+                       <div className="grid gap-1" style={{
+                         gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
+                       }}>
+                         <div className="sticky left-0 z-20 p-2 bg-muted/80 font-medium text-xs border rounded-b-lg">
+                           Parameters
+                         </div>
+                         {mesocycles.map((meso) => 
+                           Array.from({ length: meso.duration }, (_, weekIndex) => {
+                             const globalWeek = mesocycles.slice(0, mesocycles.indexOf(meso)).reduce((sum, m) => sum + m.duration, 0) + weekIndex + 1;
+                             const microcycle = meso.microcycles?.[weekIndex];
+                             const intensity = microcycle?.intensity || meso.intensity;
+                             
+                             return (
+                               <div key={`${meso.id}-week-${weekIndex}`} className={`text-center border rounded-b ${intensityBg(intensity)}`}>
+                                 <div className="text-xs p-1 font-medium">
+                                   Week {globalWeek}
+                                 </div>
+                                 <div className="text-xs px-1 py-0.5 opacity-80 border-t">
+                                   {intensity?.replace('-', ' ') || 'easy'}
+                                 </div>
                                </div>
-                             )}
-                             {overview.qualities.length > 0 && (
-                               <div className="flex flex-wrap gap-1">
-                                 <span className="font-medium text-muted-foreground">Qualities:</span>
-                                 <span className="text-foreground">{overview.qualities.join(', ')}</span>
+                             );
+                           })
+                         )}
+                       </div>
+                     </div>
+
+                     {/* Method Rows */}
+                     <div className="p-4 space-y-4">
+                       {allMethods.map((method: string) => {
+                         const parameters = getParametersForMethod(method);
+                         
+                         return (
+                           <div key={method} className="border rounded-lg bg-card shadow-sm">
+                             {/* Method name header */}
+                             <div className="grid gap-1 bg-muted/20" style={{ 
+                               gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)` 
+                             }}>
+                               <div className="sticky left-0 z-10 p-3 font-medium text-sm border-r bg-muted/40 rounded-tl">
+                                 <div className="line-clamp-3" title={method}>
+                                   {method}
+                                 </div>
                                </div>
-                             )}
-                             {overview.subGoals.length === 0 && overview.qualities.length === 0 && (
-                               <span className="text-muted-foreground italic">No methods allocated</span>
+                               {mesocycles.map((meso) => 
+                                 Array.from({ length: meso.duration }, (_, weekIndex) => {
+                                   const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
+                                   return (
+                                     <div 
+                                       key={`${meso.id}-${weekIndex}`} 
+                                       className={`h-16 border-l ${isAllocated ? 'bg-muted/10' : 'bg-gray-100/50 opacity-50'}`}
+                                     />
+                                   );
+                                 })
+                               )}
+                             </div>
+                             
+                             {/* Parameter rows - only show if method has parameters */}
+                             {parameters.length > 0 && (
+                               <div className="divide-y">
+                                 {parameters.map((param) => (
+                                   <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
+                                     gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)` 
+                                   }}>
+                                     <div className="sticky left-0 z-10 p-2 text-xs text-muted-foreground bg-muted/5 border-r flex items-center">
+                                       <span className="font-medium">{param.name.replace(/_/g, ' ')}</span>
+                                       {param.unit && <span className="ml-1 text-xs opacity-70">({param.unit})</span>}
+                                     </div>
+                                     {mesocycles.map((meso) =>
+                                       Array.from({ length: meso.duration }, (_, weekIndex) => {
+                                         const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
+                                         const currentValue = getParameterValue(meso.id, weekIndex, method, param.name, parameterValues);
+                                         
+                                         return (
+                                           <div 
+                                             key={`${meso.id}-${weekIndex}-${param.name}`} 
+                                             className={`p-1 border-l ${!isAllocated ? 'bg-gray-100/50 opacity-50' : ''}`}
+                                           >
+                                             {param.type === 'select' ? (
+                                               <Select
+                                                 value={isAllocated ? (currentValue?.toString() || '') : ''}
+                                                 onValueChange={(value) => isAllocated && updateParameterValue(meso.id, weekIndex, method, param.name, value)}
+                                                 disabled={!isAllocated}
+                                               >
+                                                 <SelectTrigger className={`h-8 text-xs ${!isAllocated ? 'cursor-not-allowed' : ''}`}>
+                                                   <SelectValue placeholder={!isAllocated ? '' : param.defaultValue?.toString() || ''} />
+                                                 </SelectTrigger>
+                                                 <SelectContent className="z-50">
+                                                   {param.options?.map((option) => (
+                                                     <SelectItem key={option} value={option} className="text-xs">
+                                                       {option}
+                                                     </SelectItem>
+                                                   ))}
+                                                 </SelectContent>
+                                               </Select>
+                                             ) : (
+                                               <Input
+                                                 type={param.type === 'number' ? 'number' : 'text'}
+                                                 value={isAllocated ? (currentValue || '') : ''}
+                                                 onChange={(e) => isAllocated && updateParameterValue(meso.id, weekIndex, method, param.name, param.type === 'number' ? Number(e.target.value) : e.target.value)}
+                                                 className={`h-8 text-xs ${!isAllocated ? 'cursor-not-allowed' : ''}`}
+                                                 min={param.min}
+                                                 max={param.max}
+                                                 placeholder={!isAllocated ? '' : param.defaultValue?.toString() || ''}
+                                                 disabled={!isAllocated}
+                                               />
+                                             )}
+                                           </div>
+                                         );
+                                       })
+                                     )}
+                                   </div>
+                                 ))}
+                               </div>
                              )}
                            </div>
                          );
                        })}
                      </div>
-
-                     {/* Level 3: Week Headers with Intensity Colors */}
-                     <div className="grid gap-1" style={{
-                       gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
-                     }}>
-                       <div className="p-2 bg-muted/80 font-medium text-xs border rounded-b-lg">
-                         Parameters
-                       </div>
-                       {mesocycles.map((meso) => 
-                         Array.from({ length: meso.duration }, (_, weekIndex) => {
-                           const globalWeek = mesocycles.slice(0, mesocycles.indexOf(meso)).reduce((sum, m) => sum + m.duration, 0) + weekIndex + 1;
-                           const microcycle = meso.microcycles?.[weekIndex];
-                           const intensity = microcycle?.intensity || meso.intensity;
-                           
-                           return (
-                             <div key={`${meso.id}-week-${weekIndex}`} className={`text-center border rounded-b ${intensityBg(intensity)}`}>
-                               <div className="text-xs p-1 font-medium">
-                                 Week {globalWeek}
-                               </div>
-                               <div className="text-xs px-1 py-0.5 opacity-80 border-t">
-                                 {intensity?.replace('-', ' ') || 'easy'}
-                               </div>
-                             </div>
-                           );
-                         })
-                       )}
-                     </div>
-                   </div>
-
-                   {/* Method Rows */}
-                   <div className="p-4 space-y-4">
-                     {allMethods.map((method: string) => {
-                       const parameters = getParametersForMethod(method);
-                       
-                       return (
-                         <div key={method} className="border rounded-lg bg-card shadow-sm">
-                           {/* Method name header */}
-                           <div className="grid gap-1 bg-muted/20" style={{ 
-                             gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)` 
-                           }}>
-                             <div className="p-3 font-medium text-sm border-r bg-muted/40 rounded-tl">
-                               <div className="line-clamp-3" title={method}>
-                                 {method}
-                               </div>
-                             </div>
-                             {mesocycles.map((meso) => 
-                               Array.from({ length: meso.duration }, (_, weekIndex) => {
-                                 const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
-                                 return (
-                                   <div 
-                                     key={`${meso.id}-${weekIndex}`} 
-                                     className={`h-16 border-l ${isAllocated ? 'bg-muted/10' : 'bg-gray-100/50 opacity-50'}`}
-                                   />
-                                 );
-                               })
-                             )}
-                           </div>
-                           
-                           {/* Parameter rows - only show if method has parameters */}
-                           {parameters.length > 0 && (
-                             <div className="divide-y">
-                               {parameters.map((param) => (
-                                 <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
-                                   gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)` 
-                                 }}>
-                                   <div className="p-2 text-xs text-muted-foreground bg-muted/5 border-r flex items-center">
-                                     <span className="font-medium">{param.name.replace(/_/g, ' ')}</span>
-                                     {param.unit && <span className="ml-1 text-xs opacity-70">({param.unit})</span>}
-                                   </div>
-                                   {mesocycles.map((meso) =>
-                                     Array.from({ length: meso.duration }, (_, weekIndex) => {
-                                       const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
-                                       const currentValue = getParameterValue(meso.id, weekIndex, method, param.name, parameterValues);
-                                       
-                                       return (
-                                         <div 
-                                           key={`${meso.id}-${weekIndex}-${param.name}`} 
-                                           className={`p-1 border-l ${!isAllocated ? 'bg-gray-100/50 opacity-50' : ''}`}
-                                         >
-                                           {param.type === 'select' ? (
-                                             <Select
-                                               value={isAllocated ? (currentValue?.toString() || '') : ''}
-                                               onValueChange={(value) => isAllocated && updateParameterValue(meso.id, weekIndex, method, param.name, value)}
-                                               disabled={!isAllocated}
-                                             >
-                                               <SelectTrigger className={`h-8 text-xs ${!isAllocated ? 'cursor-not-allowed' : ''}`}>
-                                                 <SelectValue placeholder={!isAllocated ? '' : param.defaultValue?.toString() || ''} />
-                                               </SelectTrigger>
-                                               <SelectContent className="z-50">
-                                                 {param.options?.map((option) => (
-                                                   <SelectItem key={option} value={option} className="text-xs">
-                                                     {option}
-                                                   </SelectItem>
-                                                 ))}
-                                               </SelectContent>
-                                             </Select>
-                                           ) : (
-                                             <Input
-                                               type={param.type === 'number' ? 'number' : 'text'}
-                                               value={isAllocated ? (currentValue || '') : ''}
-                                               onChange={(e) => isAllocated && updateParameterValue(meso.id, weekIndex, method, param.name, param.type === 'number' ? Number(e.target.value) : e.target.value)}
-                                               className={`h-8 text-xs ${!isAllocated ? 'cursor-not-allowed' : ''}`}
-                                               min={param.min}
-                                               max={param.max}
-                                               placeholder={!isAllocated ? '' : param.defaultValue?.toString() || ''}
-                                               disabled={!isAllocated}
-                                             />
-                                           )}
-                                         </div>
-                                       );
-                                     })
-                                   )}
-                                 </div>
-                               ))}
-                             </div>
-                           )}
-                         </div>
-                       );
-                     })}
                    </div>
                  </div>
-               </div>
              </div>
             )}
         </CardContent>
