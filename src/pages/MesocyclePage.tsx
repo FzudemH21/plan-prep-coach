@@ -78,7 +78,7 @@ export default function MesocyclePage() {
       const startDate = data.smartGoal?.startDate ? new Date(data.smartGoal.startDate) : new Date();
       const endDate = data.smartGoal?.endDate ? new Date(data.smartGoal.endDate) : addWeeks(startDate, 12);
       const weeks = data.smartGoal?.startDate && data.smartGoal?.endDate ? 
-        Math.ceil((Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1) / 7) : 12; // inclusive calculation
+        Math.ceil((Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))) / 7) : 12; // match MacrocyclePage calculation
       setTotalWeeks(weeks);
       
       // Set plan dates
@@ -180,7 +180,7 @@ export default function MesocyclePage() {
               <Label className="text-sm font-medium text-muted-foreground">Total Duration</Label>
               <p className="text-sm font-medium">
                 {macrocycleData.smartGoal?.startDate && macrocycleData.smartGoal?.endDate ? 
-                  `${totalWeeks} weeks (${Math.ceil((planEndDate.getTime() - planStartDate.getTime()) / (1000 * 60 * 60 * 24)) + 1} days)` : 
+                  `${totalWeeks} weeks (${Math.ceil((planEndDate.getTime() - planStartDate.getTime()) / (1000 * 60 * 60 * 24))} days)` : 
                   "-"
                 }
               </p>
