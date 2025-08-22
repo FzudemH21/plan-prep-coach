@@ -42,7 +42,15 @@ export default function MacrocyclePage() {
       try {
         const data = JSON.parse(savedData);
         setAthleteInfo(data.athleteInfo || {});
-        setSmartGoal(data.smartGoal || {});
+        // Convert string dates to Date objects when loading from localStorage
+        const parsedSmartGoal = data.smartGoal || {};
+        if (parsedSmartGoal.startDate) {
+          parsedSmartGoal.startDate = new Date(parsedSmartGoal.startDate);
+        }
+        if (parsedSmartGoal.endDate) {
+          parsedSmartGoal.endDate = new Date(parsedSmartGoal.endDate);
+        }
+        setSmartGoal(parsedSmartGoal);
         setSubGoals(data.subGoals || []);
         setQualities(data.qualities || []);
         setQualitiesBySubGoal(data.qualitiesBySubGoal || {});
@@ -542,7 +550,8 @@ export default function MacrocyclePage() {
 
         <div className="space-y-2">
           <Label>Training Plan Duration</Label>
-          <div className="border rounded-md p-3">
+          <div className="flex justify-center">
+            <div className="border rounded-md p-3 w-fit">
             <Calendar
               mode="range"
               selected={{
@@ -567,6 +576,7 @@ export default function MacrocyclePage() {
               }}
               className="rounded-md"
             />
+            </div>
           </div>
         </div>
 
