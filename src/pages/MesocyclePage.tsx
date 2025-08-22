@@ -420,10 +420,17 @@ export default function MesocyclePage() {
     const selectedSubGoals = macrocycleData?.subGoals || [];
     const result: Record<string, Array<{ quality: string; methods: string[] }>> = {};
     
-    // Extract sub-goal names from the selected sub-goals
-    const selectedSubGoalNames = selectedSubGoals.map((subGoal: any) => 
-      subGoal.description || subGoal.name || subGoal.id || 'Unknown Sub-goal'
-    );
+    // Extract sub-goal names from the selected sub-goals - handle different formats
+    const selectedSubGoalNames = selectedSubGoals.map((subGoal: any) => {
+      if (typeof subGoal === 'string') return subGoal;
+      // For objects, try to extract the actual sub-goal name
+      const description = subGoal.description || subGoal.name || subGoal.id || 'Unknown Sub-goal';
+      // If description contains " - " separator (formatted as "overarching - sub"), extract the sub-goal part
+      if (description.includes(' - ')) {
+        return description.split(' - ')[1];
+      }
+      return description;
+    });
     
     trainableQualities.forEach((quality: any) => {
       const qualityName = typeof quality === 'string' ? quality : quality.name || quality.id || 'Unknown Quality';
