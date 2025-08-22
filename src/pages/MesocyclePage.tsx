@@ -15,7 +15,7 @@ import { ExtendedMesocycle } from "@/features/planner/types";
 import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Settings } from "lucide-react";
 import MesocycleCalendar from "@/components/mesocycle/MesocycleCalendar";
 import { MicrocycleIntensityChart } from "@/components/mesocycle/MicrocycleIntensityChart";
-import { format, addWeeks } from "date-fns";
+import { format, addWeeks, differenceInWeeks } from "date-fns";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 import { methodParameters, getParametersForMethod, getParameterValue, setParameterValue } from "@/data/methodParameters";
 
@@ -74,36 +74,39 @@ export default function MesocyclePage() {
       const data = JSON.parse(savedMacrocycleData);
       setMacrocycleData(data);
       
-      // Extract total weeks from SMART goal
-      const weeks = data.smartGoal?.timeframe || 12;
+      // Calculate total weeks from date range
+      const startDate = data.smartGoal?.startDate ? new Date(data.smartGoal.startDate) : new Date();
+      const endDate = data.smartGoal?.endDate ? new Date(data.smartGoal.endDate) : addWeeks(startDate, 12);
+      const weeks = data.smartGoal?.startDate && data.smartGoal?.endDate ? 
+        differenceInWeeks(endDate, startDate) : 12; // fallback only if no dates
       setTotalWeeks(weeks);
       
-      // Calculate plan dates from macrocycle SMART goal
-      const startDate = data.smartGoal?.startDate ? new Date(data.smartGoal.startDate) : new Date();
-      const endDate = data.smartGoal?.endDate ? new Date(data.smartGoal.endDate) : addWeeks(startDate, weeks);
+      // Set plan dates
       setPlanStartDate(startDate);
       setPlanEndDate(endDate);
       
-      // Auto-calculate mesocycles based on total duration
-      const suggestedMesocycleCount = Math.max(2, Math.min(6, Math.round(weeks / 4)));
-      const suggestedLength = Math.round(weeks / suggestedMesocycleCount);
+      // Auto-calculate mesocycles using 4-week blocks as default
+      const suggestedMesocycleCount = Math.ceil(weeks / 4);
+      const suggestedLength = 4;
       
       setMesocycleLength(suggestedLength);
       
-      // Create default mesocycles
+      // Create default mesocycles with 4-week blocks
       const defaultMesocycles: ExtendedMesocycle[] = Array.from({ length: suggestedMesocycleCount }, (_, i) => {
-        let currentStartDate = addWeeks(startDate, i * suggestedLength);
-        let currentEndDate = addWeeks(currentStartDate, suggestedLength);
+        const remainingWeeks = weeks - (i * 4);
+        const mesocycleWeeks = Math.min(4, remainingWeeks);
+        let currentStartDate = addWeeks(startDate, i * 4);
+        let currentEndDate = addWeeks(currentStartDate, mesocycleWeeks);
         
         return {
           id: `meso-${i + 1}`,
           name: `Mesocycle ${i + 1}`,
-          weeks: suggestedLength,
+          weeks: mesocycleWeeks,
           sessionsPerWeek: 3,
           sessionLength: 60,
           startDate: currentStartDate,
           endDate: currentEndDate,
-          duration: suggestedLength,
+          duration: mesocycleWeeks,
           intensity: i === suggestedMesocycleCount - 1 ? "deload" : "moderate" as IntensityLevel,
           trainingMethods: [],
           trainingQualities: [],

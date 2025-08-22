@@ -84,7 +84,14 @@ export default function PlannerWizard({ onComplete, initial }: WizardProps) {
 
   const mesoNames = useMemo(() => Array.from({ length: form.watch("mesoCount") || 0 }, (_, i) => `Mesocycle ${i + 1}`), [form.watch("mesoCount")]);
 
-  const [weeksPerMeso, setWeeksPerMeso] = useState<number[]>(() => Array.from({ length: draft.mesoCount || 0 }, () => draft.weeksAll || 4));
+  const [weeksPerMeso, setWeeksPerMeso] = useState<number[]>(() => {
+    const count = draft.mesoCount || 3;
+    const totalWeeks = (draft.weeksAll || 4) * count;
+    return Array.from({ length: count }, (_, i) => {
+      const remainingWeeks = totalWeeks - (i * 4);
+      return Math.min(4, remainingWeeks);
+    });
+  });
   const [sessionsPerMeso, setSessionsPerMeso] = useState<number[]>(() => Array.from({ length: draft.mesoCount || 0 }, () => draft.sessionsAll || 3));
   const [sessionLengthPerMeso, setSessionLengthPerMeso] = useState<number[]>(() => Array.from({ length: draft.mesoCount || 0 }, () => draft.sessionLengthAll || 60));
 
