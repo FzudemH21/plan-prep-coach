@@ -32,6 +32,7 @@ export default function MacrocyclePage() {
   const [qualitiesBySubGoal, setQualitiesBySubGoal] = useState<Record<string, { label: string; list: string[] }>>({});
   const [methodsByQuality, setMethodsByQuality] = useState<Record<string, { subGoalLabel: string; qualityName: string; list: string[] }>>({});
   const [selectedTest, setSelectedTest] = useState<string | null>(null);
+  const [selectionPhase, setSelectionPhase] = useState<'start' | 'end'>('start');
 
   // Load saved data and step on mount
   useEffect(() => {
@@ -553,26 +554,53 @@ export default function MacrocyclePage() {
           <div className="flex justify-center">
             <div className="border rounded-md p-3 w-fit">
             <Calendar
-              mode="range"
-              selected={{
-                from: smartGoal.startDate,
-                to: smartGoal.endDate
+              mode="single"
+              selected={smartGoal.startDate || smartGoal.endDate}
+              onSelect={(selectedDate) => {
+                if (!selectedDate) return;
+
+                if (selectionPhase === 'start' || !smartGoal.startDate) {
+                  // First click or reset: set start date, clear end date
+                  setSmartGoal({
+                    ...smartGoal,
+                    startDate: selectedDate,
+                    endDate: undefined,
+                    totalDays: undefined,
+                    totalWeeks: undefined
+                  });
+                  setSelectionPhase('end');
+                } else if (selectionPhase === 'end') {
+                  if (selectedDate >= smartGoal.startDate) {
+                    // Second click: set end date if after start date
+                    const totalDays = Math.ceil((selectedDate.getTime() - smartGoal.startDate.getTime()) / (1000 * 60 * 60 * 24));
+                    const totalWeeks = Math.ceil(totalDays / 7);
+                    
+                    setSmartGoal({
+                      ...smartGoal,
+                      endDate: selectedDate,
+                      totalDays: totalDays > 0 ? totalDays : 1,
+                      totalWeeks: totalWeeks > 0 ? totalWeeks : 1
+                    });
+                    setSelectionPhase('start');
+                  } else {
+                    // If clicked date is before start date, treat as new start date
+                    setSmartGoal({
+                      ...smartGoal,
+                      startDate: selectedDate,
+                      endDate: undefined,
+                      totalDays: undefined,
+                      totalWeeks: undefined
+                    });
+                    setSelectionPhase('end');
+                  }
+                }
               }}
-              onSelect={(range) => {
-                if (!range) return;
-                
-                const start = range.from || new Date();
-                const end = range.to || range.from || new Date();
-                const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-                const totalWeeks = Math.ceil(totalDays / 7);
-                
-                setSmartGoal({
-                  ...smartGoal, 
-                  startDate: start, 
-                  endDate: end,
-                  totalDays: totalDays > 0 ? totalDays : 1,
-                  totalWeeks: totalWeeks > 0 ? totalWeeks : 1
-                });
+              modifiers={{
+                selected: (date) => {
+                  if (!smartGoal.startDate) return false;
+                  if (!smartGoal.endDate) return date.getTime() === smartGoal.startDate.getTime();
+                  return date >= smartGoal.startDate && date <= smartGoal.endDate;
+                }
               }}
               className="rounded-md"
             />
