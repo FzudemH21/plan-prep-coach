@@ -596,10 +596,27 @@ export default function MacrocyclePage() {
                 }
               }}
               modifiers={{
-                selected: (date) => {
-                  if (!smartGoal.startDate) return false;
-                  if (!smartGoal.endDate) return date.getTime() === smartGoal.startDate.getTime();
-                  return date >= smartGoal.startDate && date <= smartGoal.endDate;
+                start: (date) => smartGoal.startDate && date.getTime() === smartGoal.startDate.getTime(),
+                end: (date) => smartGoal.endDate && date.getTime() === smartGoal.endDate.getTime(),
+                middle: (date) => {
+                  if (!smartGoal.startDate || !smartGoal.endDate) return false;
+                  return date > smartGoal.startDate && date < smartGoal.endDate;
+                }
+              }}
+              modifiersStyles={{
+                start: { 
+                  backgroundColor: 'hsl(var(--foreground))', 
+                  color: 'hsl(var(--background))',
+                  fontWeight: 'bold'
+                },
+                end: { 
+                  backgroundColor: 'hsl(var(--foreground))', 
+                  color: 'hsl(var(--background))',
+                  fontWeight: 'bold'
+                },
+                middle: { 
+                  backgroundColor: 'hsl(var(--muted))', 
+                  color: 'hsl(var(--muted-foreground))'
                 }
               }}
               className="rounded-md"
