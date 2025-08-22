@@ -417,13 +417,22 @@ export default function MesocyclePage() {
   // Group qualities by sub-goal using the training data - moved to component level
   const qualitiesBySubGoal = React.useMemo(() => {
     const trainableQualities = macrocycleData?.qualities || [];
+    const selectedSubGoals = macrocycleData?.subGoals || [];
     const result: Record<string, Array<{ quality: string; methods: string[] }>> = {};
+    
+    // Extract sub-goal names from the selected sub-goals
+    const selectedSubGoalNames = selectedSubGoals.map((subGoal: any) => 
+      subGoal.description || subGoal.name || subGoal.id || 'Unknown Sub-goal'
+    );
     
     trainableQualities.forEach((quality: any) => {
       const qualityName = typeof quality === 'string' ? quality : quality.name || quality.id || 'Unknown Quality';
       
       // Find all data entries for this quality to get its sub-goal(s) and methods
-      const qualityEntries = trainingData.filter(item => item.quality === qualityName);
+      const qualityEntries = trainingData.filter(item => 
+        item.quality === qualityName && 
+        selectedSubGoalNames.includes(item.subGoal)
+      );
       
       qualityEntries.forEach(entry => {
         const subGoal = entry.subGoal;
@@ -442,7 +451,7 @@ export default function MesocyclePage() {
     });
     
     return result;
-  }, [macrocycleData?.qualities]);
+  }, [macrocycleData?.qualities, macrocycleData?.subGoals]);
 
   const renderQualityAllocation = () => {
     // Extract training qualities and sub-goals from macrocycle data
