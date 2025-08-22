@@ -721,7 +721,7 @@ export default function MesocyclePage() {
                        <div className="grid gap-1" style={{
                          gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
                        }}>
-                         <div className="sticky left-0 z-20 p-2 bg-muted font-medium text-sm border rounded-t-lg">
+                         <div className="sticky left-0 z-30 p-2 bg-muted font-medium text-sm border rounded-t-lg shadow-sm">
                            Training Methods
                          </div>
                          {mesocycles.map((meso) => (
@@ -744,7 +744,7 @@ export default function MesocyclePage() {
                        <div className="grid gap-1" style={{
                          gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
                        }}>
-                         <div className="sticky left-0 z-20 p-2 bg-muted/50 border-l border-r text-xs">
+                         <div className="sticky left-0 z-30 p-2 bg-muted/50 border-l border-r text-xs shadow-sm">
                            Focus Areas
                          </div>
                          {mesocycles.map((meso) => {
@@ -781,7 +781,7 @@ export default function MesocyclePage() {
                        <div className="grid gap-1" style={{
                          gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
                        }}>
-                         <div className="sticky left-0 z-20 p-2 bg-muted/80 font-medium text-xs border rounded-b-lg">
+                         <div className="sticky left-0 z-30 p-2 bg-muted/80 font-medium text-xs border rounded-b-lg shadow-sm">
                            Parameters
                          </div>
                          {mesocycles.map((meso) => 
@@ -813,14 +813,14 @@ export default function MesocyclePage() {
                          return (
                            <div key={method} className="border rounded-lg bg-card shadow-sm">
                              {/* Method name header */}
-                             <div className="grid gap-1 bg-muted/20" style={{ 
-                               gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)` 
-                             }}>
-                               <div className="sticky left-0 z-10 p-3 font-medium text-sm border-r bg-muted/40 rounded-tl">
-                                 <div className="line-clamp-3" title={method}>
-                                   {method}
-                                 </div>
+                           <div className="grid gap-1 bg-muted/20" style={{ 
+                             gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)` 
+                           }}>
+                             <div className="sticky left-0 z-20 p-3 font-medium text-sm border-r bg-muted/40 rounded-tl shadow-sm">
+                               <div className="line-clamp-3" title={method}>
+                                 {method}
                                </div>
+                             </div>
                                {mesocycles.map((meso) => 
                                  Array.from({ length: meso.duration }, (_, weekIndex) => {
                                    const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
@@ -841,7 +841,7 @@ export default function MesocyclePage() {
                                    <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
                                      gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)` 
                                    }}>
-                                     <div className="sticky left-0 z-10 p-2 text-xs text-muted-foreground bg-muted/5 border-r flex items-center">
+                                     <div className="sticky left-0 z-20 p-2 text-xs text-muted-foreground bg-muted/5 border-r flex items-center shadow-sm">
                                        <span className="font-medium">{param.name.replace(/_/g, ' ')}</span>
                                        {param.unit && <span className="ml-1 text-xs opacity-70">({param.unit})</span>}
                                      </div>
