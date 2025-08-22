@@ -716,7 +716,7 @@ export default function MesocyclePage() {
                  <div className="h-[32rem] w-full border rounded-lg overflow-auto" style={{scrollbarWidth: 'thin'}}>
                    <div className="min-w-max relative">
                      {/* Multi-Level Sticky Headers */}
-                     <div className="sticky top-0 z-10 bg-background border-b space-y-1 shadow-sm">
+                     <div className="sticky top-0 z-[90] bg-background border-b space-y-1 shadow-sm">
                        {/* Level 1: Mesocycle Group Headers */}
                        <div className="grid gap-1" style={{
                          gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
