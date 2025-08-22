@@ -721,7 +721,7 @@ export default function MesocyclePage() {
                        <div className="grid gap-1" style={{
                          gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
                        }}>
-                          <div className="sticky left-0 z-50 p-2 bg-background font-medium text-sm border rounded-t-lg shadow-md border-r">
+                          <div className="sticky left-0 z-[60] p-2 bg-background font-medium text-sm border rounded-t-lg shadow-md border-r">
                             Training Methods
                           </div>
                          {mesocycles.map((meso) => (
@@ -744,7 +744,7 @@ export default function MesocyclePage() {
                        <div className="grid gap-1" style={{
                          gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
                        }}>
-                          <div className="sticky left-0 z-50 p-2 bg-background border-l border-r text-xs shadow-md">
+                          <div className="sticky left-0 z-[60] p-2 bg-background border-l border-r text-xs shadow-md">
                             Focus Areas
                           </div>
                          {mesocycles.map((meso) => {
@@ -781,7 +781,7 @@ export default function MesocyclePage() {
                        <div className="grid gap-1" style={{
                          gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
                        }}>
-                          <div className="sticky left-0 z-50 p-2 bg-background font-medium text-xs border rounded-b-lg shadow-md border-r">
+                          <div className="sticky left-0 z-[60] p-2 bg-background font-medium text-xs border rounded-b-lg shadow-md border-r">
                             Parameters
                           </div>
                          {mesocycles.map((meso) => 
