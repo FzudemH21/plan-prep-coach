@@ -721,9 +721,9 @@ export default function MesocyclePage() {
                        <div className="grid gap-1" style={{
                          gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
                        }}>
-                         <div className="sticky left-0 z-30 p-2 bg-muted font-medium text-sm border rounded-t-lg shadow-sm">
-                           Training Methods
-                         </div>
+                          <div className="sticky left-0 z-50 p-2 bg-background font-medium text-sm border rounded-t-lg shadow-md border-r">
+                            Training Methods
+                          </div>
                          {mesocycles.map((meso) => (
                            <div 
                              key={`${meso.id}-header`} 
@@ -744,9 +744,9 @@ export default function MesocyclePage() {
                        <div className="grid gap-1" style={{
                          gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
                        }}>
-                         <div className="sticky left-0 z-30 p-2 bg-muted/50 border-l border-r text-xs shadow-sm">
-                           Focus Areas
-                         </div>
+                          <div className="sticky left-0 z-50 p-2 bg-background border-l border-r text-xs shadow-md">
+                            Focus Areas
+                          </div>
                          {mesocycles.map((meso) => {
                            const overview = getMesocycleOverview(meso);
                            return (
@@ -781,9 +781,9 @@ export default function MesocyclePage() {
                        <div className="grid gap-1" style={{
                          gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
                        }}>
-                         <div className="sticky left-0 z-30 p-2 bg-muted/80 font-medium text-xs border rounded-b-lg shadow-sm">
-                           Parameters
-                         </div>
+                          <div className="sticky left-0 z-50 p-2 bg-background font-medium text-xs border rounded-b-lg shadow-md border-r">
+                            Parameters
+                          </div>
                          {mesocycles.map((meso) => 
                            Array.from({ length: meso.duration }, (_, weekIndex) => {
                              const globalWeek = mesocycles.slice(0, mesocycles.indexOf(meso)).reduce((sum, m) => sum + m.duration, 0) + weekIndex + 1;
@@ -816,11 +816,11 @@ export default function MesocyclePage() {
                            <div className="grid gap-1 bg-muted/20" style={{ 
                              gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)` 
                            }}>
-                             <div className="sticky left-0 z-20 p-3 font-medium text-sm border-r bg-muted/40 rounded-tl shadow-sm">
-                               <div className="line-clamp-3" title={method}>
-                                 {method}
-                               </div>
-                             </div>
+                              <div className="sticky left-0 z-40 p-3 font-medium text-sm border-r bg-background rounded-tl shadow-md">
+                                <div className="line-clamp-3" title={method}>
+                                  {method}
+                                </div>
+                              </div>
                                {mesocycles.map((meso) => 
                                  Array.from({ length: meso.duration }, (_, weekIndex) => {
                                    const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
@@ -841,10 +841,10 @@ export default function MesocyclePage() {
                                    <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
                                      gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)` 
                                    }}>
-                                     <div className="sticky left-0 z-20 p-2 text-xs text-muted-foreground bg-muted/5 border-r flex items-center shadow-sm">
-                                       <span className="font-medium">{param.name.replace(/_/g, ' ')}</span>
-                                       {param.unit && <span className="ml-1 text-xs opacity-70">({param.unit})</span>}
-                                     </div>
+                                      <div className="sticky left-0 z-40 p-2 text-xs text-muted-foreground bg-background border-r flex items-center shadow-md">
+                                        <span className="font-medium">{param.name.replace(/_/g, ' ')}</span>
+                                        {param.unit && <span className="ml-1 text-xs opacity-70">({param.unit})</span>}
+                                      </div>
                                      {mesocycles.map((meso) =>
                                        Array.from({ length: meso.duration }, (_, weekIndex) => {
                                          const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
