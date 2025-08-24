@@ -41,11 +41,11 @@ export default function ToolboxDatabase() {
 
   // Group entries hierarchically for table display with rowspan
   const hierarchicalData = useMemo(() => {
-    // Sort entries by category, then sub-category, then parameter
+    // Sort entries by category and sub-category only, preserve original parameter order
     const sortedEntries = [...filteredEntries].sort((a, b) => {
       if (a.category !== b.category) return a.category.localeCompare(b.category);
       if (a.subCategory !== b.subCategory) return a.subCategory.localeCompare(b.subCategory);
-      return a.parameter.localeCompare(b.parameter);
+      return 0; // Keep original parameter order
     });
 
     // Group by category and sub-category
@@ -386,15 +386,15 @@ export default function ToolboxDatabase() {
                         <div className="max-w-md">
                           {entry.parameter.includes('[') ? (
                             <div>
-                              <span className="font-medium">
+                              <span className="font-bold">
                                 {entry.parameter.split('[')[0].trim()}
                               </span>
-                              <span className="text-xs text-muted-foreground ml-1">
+                              <span className="text-xs text-muted-foreground ml-1 font-bold">
                                 [{entry.parameter.split('[')[1]}
                               </span>
                             </div>
                           ) : (
-                            entry.parameter
+                            <span className="font-bold">{entry.parameter}</span>
                           )}
                         </div>
                       </TableCell>
