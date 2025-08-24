@@ -58,6 +58,8 @@ export default function AthleticismDatabase() {
     loadingRecommendations: {}
   });
 
+  const [pendingParam, setPendingParam] = useState<Record<string, string>>({});
+
   const filteredEntries = data.entries.filter(entry => 
     entry.overarchingGoal.toLowerCase().includes(searchTerm.toLowerCase()) ||
     entry.subGoal.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -784,9 +786,8 @@ export default function AthleticismDatabase() {
                           );
                         });
 
-                        // Add the parameter addition row if there are available parameters
-                        if (uniqueAvailableParams.length > 0) {
-                          console.log(`Adding plus button for method: ${method}`);
+                        // Always render the parameter addition row (disable if none available)
+                        {
                           rowsToRender.push(
                             <TableRow key={`${method}-add-param`}>
                               {parameters.length === 0 && (
@@ -798,9 +799,11 @@ export default function AthleticismDatabase() {
                                 <div className="flex items-center gap-2">
                                   <select 
                                     className="flex-1 px-3 py-2 border rounded-md text-sm bg-background"
-                                    id={`param-select-${method}`}
+                                    value={pendingParam[method] ?? ''}
+                                    onChange={(e) => setPendingParam(prev => ({ ...prev, [method]: e.target.value }))}
+                                    disabled={uniqueAvailableParams.length === 0}
                                   >
-                                    <option value="">Select parameter to add...</option>
+                                    <option value="">{uniqueAvailableParams.length === 0 ? 'All parameters added' : 'Select parameter to add...'}</option>
                                     {uniqueAvailableParams.map(param => (
                                       <option key={param} value={param}>{param}</option>
                                     ))}
@@ -809,28 +812,27 @@ export default function AthleticismDatabase() {
                                     variant="outline"
                                     size="sm"
                                     onClick={() => {
-                                      const selectElement = document.getElementById(`param-select-${method}`) as HTMLSelectElement;
-                                      const selectedParameter = selectElement.value;
+                                      const selectedParameter = pendingParam[method];
                                       if (selectedParameter) {
                                         const newRecommendations = { ...editingEntry.loadingRecommendations };
                                         if (!newRecommendations[method]) {
                                           newRecommendations[method] = {};
                                         }
                                         newRecommendations[method][selectedParameter] = '';
-                                        setEditingEntry({...editingEntry, loadingRecommendations: newRecommendations});
-                                        selectElement.value = '';
+                                        setEditingEntry({ ...editingEntry, loadingRecommendations: newRecommendations });
+                                        setPendingParam(prev => ({ ...prev, [method]: '' }));
                                       }
                                     }}
+                                    disabled={uniqueAvailableParams.length === 0 || !(pendingParam[method])}
                                     className="h-8 w-8 p-0 rounded-full"
+                                    aria-label={`Add parameter to ${method}`}
                                   >
-                                    <span className="text-lg font-bold text-primary">+</span>
+                                    <Plus className="h-4 w-4 text-primary" />
                                   </Button>
                                 </div>
                               </TableCell>
                             </TableRow>
                           );
-                        } else {
-                          console.log(`No available parameters for method: ${method}`);
                         }
 
                         return rowsToRender;
