@@ -39,6 +39,63 @@ export default function ToolboxDatabase() {
     );
   }, [data.entries, searchTerm]);
 
+  // Group entries hierarchically for table display with rowspan
+  const hierarchicalData = useMemo(() => {
+    // Sort entries by category, then sub-category, then parameter
+    const sortedEntries = [...filteredEntries].sort((a, b) => {
+      if (a.category !== b.category) return a.category.localeCompare(b.category);
+      if (a.subCategory !== b.subCategory) return a.subCategory.localeCompare(b.subCategory);
+      return a.parameter.localeCompare(b.parameter);
+    });
+
+    // Group by category and sub-category
+    const grouped: Array<{
+      category: string;
+      categoryRowspan: number;
+      subCategories: Array<{
+        subCategory: string;
+        subCategoryRowspan: number;
+        parameters: ToolboxEntry[];
+      }>;
+    }> = [];
+
+    sortedEntries.forEach(entry => {
+      let categoryGroup = grouped.find(g => g.category === entry.category);
+      if (!categoryGroup) {
+        categoryGroup = {
+          category: entry.category,
+          categoryRowspan: 0,
+          subCategories: []
+        };
+        grouped.push(categoryGroup);
+      }
+
+      let subCategoryGroup = categoryGroup.subCategories.find(s => s.subCategory === entry.subCategory);
+      if (!subCategoryGroup) {
+        subCategoryGroup = {
+          subCategory: entry.subCategory,
+          subCategoryRowspan: 0,
+          parameters: []
+        };
+        categoryGroup.subCategories.push(subCategoryGroup);
+      }
+
+      subCategoryGroup.parameters.push(entry);
+    });
+
+    // Calculate rowspans
+    grouped.forEach(categoryGroup => {
+      let totalCategoryRows = 0;
+      categoryGroup.subCategories.forEach(subCategoryGroup => {
+        subCategoryGroup.subCategoryRowspan = subCategoryGroup.parameters.length;
+        totalCategoryRows += subCategoryGroup.parameters.length;
+      });
+      categoryGroup.categoryRowspan = totalCategoryRows;
+    });
+
+    return grouped;
+  }, [filteredEntries]);
+
   // Handle add entry
   const handleAddEntry = () => {
     if (!newEntry.category.trim() || !newEntry.parameter.trim()) {
@@ -300,48 +357,71 @@ export default function ToolboxDatabase() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredEntries.map((entry) => (
-                <TableRow key={entry.id}>
-                  <TableCell className="font-medium">{entry.category}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {entry.subCategory || "-"}
-                  </TableCell>
-                  <TableCell>
-                    <div className="max-w-md">
-                      {entry.parameter.includes('[') ? (
-                        <div>
-                          <span className="font-medium">
-                            {entry.parameter.split('[')[0].trim()}
-                          </span>
-                          <span className="text-xs text-muted-foreground ml-1">
-                            [{entry.parameter.split('[')[1]}
-                          </span>
-                        </div>
-                      ) : (
-                        entry.parameter
+              {hierarchicalData.map((categoryGroup, categoryIndex) => 
+                categoryGroup.subCategories.map((subCategoryGroup, subCategoryIndex) =>
+                  subCategoryGroup.parameters.map((entry, parameterIndex) => (
+                    <TableRow key={entry.id} className="border-b">
+                      {/* Category cell with rowspan */}
+                      {subCategoryIndex === 0 && parameterIndex === 0 && (
+                        <TableCell 
+                          rowSpan={categoryGroup.categoryRowspan}
+                          className="font-bold text-primary border-r-2 border-border bg-muted/30 align-top"
+                        >
+                          {entry.category}
+                        </TableCell>
                       )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditDialog(entry)}
-                      >
-                        <Edit className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteEntry(entry.id)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                      
+                      {/* Sub-category cell with rowspan */}
+                      {parameterIndex === 0 && (
+                        <TableCell 
+                          rowSpan={subCategoryGroup.subCategoryRowspan}
+                          className="font-medium text-muted-foreground border-r border-border bg-muted/10 align-top"
+                        >
+                          {entry.subCategory || "-"}
+                        </TableCell>
+                      )}
+                      
+                      {/* Parameter cell */}
+                      <TableCell className="border-r border-border">
+                        <div className="max-w-md">
+                          {entry.parameter.includes('[') ? (
+                            <div>
+                              <span className="font-medium">
+                                {entry.parameter.split('[')[0].trim()}
+                              </span>
+                              <span className="text-xs text-muted-foreground ml-1">
+                                [{entry.parameter.split('[')[1]}
+                              </span>
+                            </div>
+                          ) : (
+                            entry.parameter
+                          )}
+                        </div>
+                      </TableCell>
+                      
+                      {/* Actions cell */}
+                      <TableCell>
+                        <div className="flex items-center space-x-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEditDialog(entry)}
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteEntry(entry.id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -394,7 +474,7 @@ export default function ToolboxDatabase() {
       </Dialog>
 
       {/* No results message */}
-      {filteredEntries.length === 0 && searchTerm && (
+      {hierarchicalData.length === 0 && searchTerm && (
         <div className="text-center py-12">
           <p className="text-muted-foreground">No parameters found matching "{searchTerm}"</p>
         </div>
