@@ -198,7 +198,7 @@ const EditableTable: React.FC<EditableTableProps> = ({
       </div>
 
       {/* Scrollable Table */}
-      <div className="flex-1 overflow-x-auto overflow-y-auto border rounded-lg" style={{scrollbarWidth: 'thin'}}>
+      <div className="max-h-[60vh] overflow-x-auto overflow-y-auto border rounded-lg" style={{scrollbarWidth: 'thin'}}>
         <table className="w-full min-w-[1400px] border-collapse">
           {/* Sticky Header */}
           <thead className="bg-muted/50 sticky top-0 z-10">

@@ -203,9 +203,8 @@ const EditablePlyometricsTable: React.FC<EditablePlyometricsTableProps> = ({
         />
       </div>
 
-      <div className="border rounded-lg overflow-x-auto overflow-y-auto" style={{scrollbarWidth: 'thin'}}>
-        <div className="min-w-[1400px]">
-          <Table>
+      <div className="max-h-[60vh] border rounded-lg overflow-x-auto overflow-y-auto" style={{scrollbarWidth: 'thin'}}>
+        <Table className="min-w-[1400px]">
           <TableHeader className="sticky top-0 bg-background z-10">
             <TableRow>
               {columns.map((column) => (
@@ -277,7 +276,6 @@ const EditablePlyometricsTable: React.FC<EditablePlyometricsTableProps> = ({
             )}
           </TableBody>
         </Table>
-        </div>
       </div>
     </div>
   );
