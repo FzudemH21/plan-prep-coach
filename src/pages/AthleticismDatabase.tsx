@@ -157,11 +157,30 @@ export default function AthleticismDatabase() {
       return <span className="text-muted-foreground text-sm">No recommendations specified</span>;
     }
 
-    const formatValue = (key: string, value: any): string => {
-      if (typeof value === 'object' && value !== null) {
-        return JSON.stringify(value);
+    const formatValue = (value: any): string => {
+      if (value === null || value === undefined) {
+        return 'Not specified';
+      }
+      if (typeof value === 'object') {
+        // Handle nested objects by flattening them
+        if (Array.isArray(value)) {
+          return value.join(', ');
+        }
+        // For objects, try to extract meaningful values
+        const objEntries = Object.entries(value);
+        if (objEntries.length === 0) {
+          return 'Not specified';
+        }
+        return objEntries.map(([k, v]) => `${k}: ${v}`).join(', ');
       }
       return String(value);
+    };
+
+    const formatKey = (key: string): string => {
+      return key
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/^./, str => str.toUpperCase())
+        .trim();
     };
 
     return (
@@ -169,10 +188,10 @@ export default function AthleticismDatabase() {
         {Object.entries(recommendations).map(([key, value]) => (
           <div key={key} className="text-sm">
             <span className="font-medium text-foreground">
-              {key.charAt(0).toUpperCase() + key.slice(1)}:
+              {formatKey(key)}:
             </span>{' '}
             <span className="text-muted-foreground">
-              {formatValue(key, value)}
+              {formatValue(value)}
             </span>
           </div>
         ))}
@@ -523,40 +542,45 @@ export default function AthleticismDatabase() {
       {/* Edit Dialog */}
       {editingEntry && (
         <Dialog open={!!editingEntry} onOpenChange={() => setEditingEntry(null)}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit Entry</DialogTitle>
               <DialogDescription>
-                Modify the training method entry.
+                Modify the training method entry and its loading recommendations.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="edit-goal">Overarching Goal</Label>
-                <Input
-                  id="edit-goal"
-                  value={editingEntry.overarchingGoal}
-                  onChange={(e) => setEditingEntry({...editingEntry, overarchingGoal: e.target.value})}
-                />
+            <div className="space-y-6">
+              {/* Basic Entry Fields */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="edit-goal">Overarching Goal</Label>
+                  <Input
+                    id="edit-goal"
+                    value={editingEntry.overarchingGoal}
+                    onChange={(e) => setEditingEntry({...editingEntry, overarchingGoal: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-subgoal">Sub-goal</Label>
+                  <Input
+                    id="edit-subgoal"
+                    value={editingEntry.subGoal}
+                    onChange={(e) => setEditingEntry({...editingEntry, subGoal: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-quality">Quality</Label>
+                  <Input
+                    id="edit-quality"
+                    value={editingEntry.quality}
+                    onChange={(e) => setEditingEntry({...editingEntry, quality: e.target.value})}
+                  />
+                </div>
               </div>
+
+              {/* Methods */}
               <div>
-                <Label htmlFor="edit-subgoal">Sub-goal</Label>
-                <Input
-                  id="edit-subgoal"
-                  value={editingEntry.subGoal}
-                  onChange={(e) => setEditingEntry({...editingEntry, subGoal: e.target.value})}
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-quality">Quality</Label>
-                <Input
-                  id="edit-quality"
-                  value={editingEntry.quality}
-                  onChange={(e) => setEditingEntry({...editingEntry, quality: e.target.value})}
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-methods">Mapped Methods (JSON array)</Label>
+                <Label htmlFor="edit-methods">Mapped Methods</Label>
                 <Textarea
                   id="edit-methods"
                   value={JSON.stringify(editingEntry.mappedMethods)}
@@ -565,22 +589,111 @@ export default function AthleticismDatabase() {
                       setEditingEntry({...editingEntry, mappedMethods: JSON.parse(e.target.value)});
                     } catch {}
                   }}
+                  rows={3}
                 />
               </div>
+
+              {/* Loading Recommendations Table */}
               <div>
-                <Label htmlFor="edit-loading">Loading Recommendations (JSON)</Label>
-                <Textarea
-                  id="edit-loading"
-                  value={JSON.stringify(editingEntry.loadingRecommendations, null, 2)}
-                  onChange={(e) => {
-                    try {
-                      setEditingEntry({...editingEntry, loadingRecommendations: JSON.parse(e.target.value)});
-                    } catch {}
-                  }}
-                  rows={8}
-                />
+                <Label className="text-base font-semibold">Loading Recommendations</Label>
+                <div className="mt-3 border rounded-lg">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[200px]">Method</TableHead>
+                        <TableHead className="w-[150px]">Parameter</TableHead>
+                        <TableHead>Value</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {editingEntry.mappedMethods.map((method) => {
+                        const methodRecommendations = editingEntry.loadingRecommendations[method] || {};
+                        const parameters = Object.entries(methodRecommendations);
+                        
+                        if (parameters.length === 0) {
+                          return (
+                            <TableRow key={method}>
+                              <TableCell className="font-medium">{method}</TableCell>
+                              <TableCell colSpan={2} className="text-muted-foreground text-sm">
+                                No parameters specified
+                              </TableCell>
+                            </TableRow>
+                          );
+                        }
+
+                        return parameters.map(([paramKey, paramValue], paramIndex) => (
+                          <TableRow key={`${method}-${paramKey}`}>
+                            {paramIndex === 0 && (
+                              <TableCell rowSpan={parameters.length} className="font-medium align-top border-r">
+                                {method}
+                              </TableCell>
+                            )}
+                            <TableCell className="font-medium text-sm">
+                              {paramKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim()}
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                value={typeof paramValue === 'object' ? JSON.stringify(paramValue) : String(paramValue)}
+                                onChange={(e) => {
+                                  const newRecommendations = { ...editingEntry.loadingRecommendations };
+                                  if (!newRecommendations[method]) {
+                                    newRecommendations[method] = {};
+                                  }
+                                  
+                                  let newValue: any = e.target.value;
+                                  // Try to parse as JSON if it looks like an object/array
+                                  if (newValue.startsWith('{') || newValue.startsWith('[')) {
+                                    try {
+                                      newValue = JSON.parse(newValue);
+                                    } catch {
+                                      // Keep as string if JSON parsing fails
+                                    }
+                                  }
+                                  
+                                  newRecommendations[method][paramKey] = newValue;
+                                  setEditingEntry({...editingEntry, loadingRecommendations: newRecommendations});
+                                }}
+                                className="text-sm"
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ));
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+                
+                {/* Add Parameter Button */}
+                <div className="mt-4 p-4 border rounded-lg bg-muted/20">
+                  <Label className="text-sm font-medium">Add New Parameter</Label>
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    <select 
+                      className="px-3 py-2 border rounded-md text-sm bg-background"
+                      onChange={(e) => {
+                        const method = e.target.value;
+                        if (method) {
+                          const newRecommendations = { ...editingEntry.loadingRecommendations };
+                          if (!newRecommendations[method]) {
+                            newRecommendations[method] = {};
+                          }
+                          newRecommendations[method]['newParameter'] = '';
+                          setEditingEntry({...editingEntry, loadingRecommendations: newRecommendations});
+                        }
+                      }}
+                    >
+                      <option value="">Select method...</option>
+                      {editingEntry.mappedMethods.map(method => (
+                        <option key={method} value={method}>{method}</option>
+                      ))}
+                    </select>
+                    <span className="text-sm text-muted-foreground flex items-center">
+                      Add parameter to selected method
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="flex justify-end space-x-2">
+
+              <div className="flex justify-end space-x-2 pt-4">
                 <Button variant="outline" onClick={() => setEditingEntry(null)}>
                   Cancel
                 </Button>
