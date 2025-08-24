@@ -154,18 +154,18 @@ const ExerciseLibrary = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* Compact Header */}
       <div className="border-b bg-card">
-        <div className="max-w-7xl mx-auto px-4 py-6">
+        <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button variant="ghost" onClick={() => navigate('/templates')}>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/templates')}>
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to Templates
               </Button>
               <div>
-                <h1 className="text-3xl font-bold">Exercise Library</h1>
-                <p className="text-muted-foreground mt-1">
+                <h1 className="text-2xl font-bold">Exercise Library</h1>
+                <p className="text-sm text-muted-foreground">
                   Manage your resistance training exercise database
                 </p>
               </div>
@@ -181,12 +181,13 @@ const ExerciseLibrary = () => {
               />
               <Button 
                 variant="outline" 
+                size="sm"
                 onClick={() => document.getElementById('import-file')?.click()}
               >
                 <Upload className="h-4 w-4 mr-2" />
                 Import
               </Button>
-              <Button variant="outline" onClick={handleExport}>
+              <Button variant="outline" size="sm" onClick={handleExport}>
                 <Download className="h-4 w-4 mr-2" />
                 Export
               </Button>
@@ -195,58 +196,60 @@ const ExerciseLibrary = () => {
         </div>
       </div>
 
-      {/* Statistics Cards */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Exercises</CardTitle>
+      {/* Compact Statistics Cards */}
+      <div className="max-w-7xl mx-auto px-4 py-3">
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <Card className="p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Total Exercises</p>
+                <p className="text-lg font-bold">{stats.total}</p>
+              </div>
               <FileText className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.total}</div>
-              <p className="text-xs text-muted-foreground">
-                {filteredExercises.length} shown after filtering
-              </p>
-            </CardContent>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {filteredExercises.length} shown
+            </p>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Body Regions</CardTitle>
+          <Card className="p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Body Regions</p>
+                <p className="text-lg font-bold">{Object.keys(stats.bodyRegions).length}</p>
+              </div>
               <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{Object.keys(stats.bodyRegions).length}</div>
-              <p className="text-xs text-muted-foreground">
-                Most common: {Object.entries(stats.bodyRegions).sort(([,a], [,b]) => b - a)[0]?.[0] || 'N/A'}
-              </p>
-            </CardContent>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Top: {Object.entries(stats.bodyRegions).sort(([,a], [,b]) => b - a)[0]?.[0] || 'N/A'}
+            </p>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Equipment Types</CardTitle>
+          <Card className="p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Equipment Types</p>
+                <p className="text-lg font-bold">{Object.keys(stats.equipment).length}</p>
+              </div>
               <Activity className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{Object.keys(stats.equipment).length}</div>
-              <p className="text-xs text-muted-foreground">
-                Most used: {Object.entries(stats.equipment).sort(([,a], [,b]) => b - a)[0]?.[0] || 'N/A'}
-              </p>
-            </CardContent>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Most: {Object.entries(stats.equipment).sort(([,a], [,b]) => b - a)[0]?.[0] || 'N/A'}
+            </p>
           </Card>
         </div>
 
-        {/* Editable Table */}
-        <EditableTable
-          exercises={filteredExercises}
-          onUpdateExercise={updateEntry}
-          onDeleteExercise={deleteEntry}
-          onAddExercise={handleAddExercise}
-          filterState={filterState}
-          onFilterChange={setFilterState}
-        />
+        {/* Table Container with Controlled Height */}
+        <div className="max-h-[60vh] overflow-hidden border rounded-lg bg-card">
+          <EditableTable
+            exercises={filteredExercises}
+            onUpdateExercise={updateEntry}
+            onDeleteExercise={deleteEntry}
+            onAddExercise={handleAddExercise}
+            filterState={filterState}
+            onFilterChange={setFilterState}
+          />
+        </div>
       </div>
     </div>
   );
