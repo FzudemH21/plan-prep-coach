@@ -711,6 +711,11 @@ export default function AthleticismDatabase() {
                         
                         const uniqueAvailableParams = [...new Set(availableParams)];
                         
+                        // Debug logging
+                        console.log(`Method: ${method}`);
+                        console.log(`Available parameters:`, uniqueAvailableParams);
+                        console.log(`Current parameters:`, Object.keys(methodRecommendations));
+                        
                         if (parameters.length === 0 && uniqueAvailableParams.length === 0) {
                           return (
                             <TableRow key={method}>
@@ -781,6 +786,7 @@ export default function AthleticismDatabase() {
 
                         // Add the parameter addition row if there are available parameters
                         if (uniqueAvailableParams.length > 0) {
+                          console.log(`Adding plus button for method: ${method}`);
                           rowsToRender.push(
                             <TableRow key={`${method}-add-param`}>
                               {parameters.length === 0 && (
@@ -823,6 +829,8 @@ export default function AthleticismDatabase() {
                               </TableCell>
                             </TableRow>
                           );
+                        } else {
+                          console.log(`No available parameters for method: ${method}`);
                         }
 
                         return rowsToRender;
