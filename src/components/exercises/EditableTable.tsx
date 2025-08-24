@@ -203,7 +203,7 @@ const EditableTable: React.FC<EditableTableProps> = ({
                   placeholder={`Filter ${column.label.toLowerCase()}`}
                   value={filterState.columnFilters[column.key] || ''}
                   onChange={(e) => handleColumnFilter(column.key, e.target.value)}
-                  size="sm"
+                  className="h-8"
                 />
               </div>
             ))}
