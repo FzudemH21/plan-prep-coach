@@ -20,7 +20,8 @@ import {
   Edit, 
   Trash2, 
   Search,
-  Copy
+  Copy,
+  X
 } from "lucide-react";
 
 // Interface for hierarchical display
@@ -582,17 +583,39 @@ export default function AthleticismDatabase() {
 
               {/* Methods */}
               <div>
-                <Label htmlFor="edit-methods">Mapped Methods</Label>
-                <Textarea
-                  id="edit-methods"
-                  value={JSON.stringify(editingEntry.mappedMethods)}
-                  onChange={(e) => {
-                    try {
-                      setEditingEntry({...editingEntry, mappedMethods: JSON.parse(e.target.value)});
-                    } catch {}
-                  }}
-                  rows={3}
-                />
+                <Label className="text-base font-semibold">Mapped Methods</Label>
+                <div className="mt-2 space-y-2">
+                  {editingEntry.mappedMethods.length === 0 ? (
+                    <div className="text-muted-foreground text-sm p-4 border border-dashed rounded-lg text-center">
+                      No methods added yet. Use the "Add Method" section below to add training methods.
+                    </div>
+                  ) : (
+                    <div className="border rounded-lg">
+                      {editingEntry.mappedMethods.map((method, index) => (
+                        <div key={method} className={`flex items-center justify-between p-3 ${index !== editingEntry.mappedMethods.length - 1 ? 'border-b' : ''}`}>
+                          <span className="font-medium text-sm">{method}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const newMethods = editingEntry.mappedMethods.filter(m => m !== method);
+                              const newRecommendations = { ...editingEntry.loadingRecommendations };
+                              delete newRecommendations[method];
+                              setEditingEntry({
+                                ...editingEntry,
+                                mappedMethods: newMethods,
+                                loadingRecommendations: newRecommendations
+                              });
+                            }}
+                            className="text-muted-foreground hover:text-destructive"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Loading Recommendations Table */}
@@ -666,41 +689,57 @@ export default function AthleticismDatabase() {
                 </div>
                 
                 {/* Add Method Section */}
-                <div className="mt-4">
+                <div className="mt-4 space-y-4">
                   <div className="p-4 border rounded-lg bg-primary/5">
                     <Label className="text-sm font-medium">Add Method</Label>
                     <div className="grid grid-cols-1 gap-2 mt-2">
                       <select 
                         className="px-3 py-2 border rounded-md text-sm bg-background"
                         onChange={(e) => {
-                          const selectedMethod = e.target.value;
-                          if (selectedMethod && !editingEntry.mappedMethods.includes(selectedMethod)) {
-                            const newMethods = [...editingEntry.mappedMethods, selectedMethod];
-                            const newRecommendations = { ...editingEntry.loadingRecommendations };
-                            // Initialize with empty recommendations for the new method
-                            newRecommendations[selectedMethod] = {};
-                            setEditingEntry({
-                              ...editingEntry, 
-                              mappedMethods: newMethods,
-                              loadingRecommendations: newRecommendations
-                            });
+                          const selectedEntry = toolboxData.entries.find(entry => entry.id === e.target.value);
+                          if (selectedEntry) {
+                            const methodName = selectedEntry.subCategory && selectedEntry.subCategory.trim() !== '' 
+                              ? `${selectedEntry.category} - ${selectedEntry.subCategory}`
+                              : selectedEntry.category;
+                            
+                            if (!editingEntry.mappedMethods.includes(methodName)) {
+                              const newMethods = [...editingEntry.mappedMethods, methodName];
+                              const newRecommendations = { ...editingEntry.loadingRecommendations };
+                              // Initialize with empty recommendations for the new method
+                              newRecommendations[methodName] = {};
+                              setEditingEntry({
+                                ...editingEntry, 
+                                mappedMethods: newMethods,
+                                loadingRecommendations: newRecommendations
+                              });
+                            }
                             e.target.value = ''; // Reset selection
                           }
                         }}
                       >
                         <option value="">Select method to add...</option>
                         {toolboxData.entries
-                          .filter(entry => !editingEntry.mappedMethods.includes(entry.parameter))
+                          .filter(entry => {
+                            const methodName = entry.subCategory && entry.subCategory.trim() !== '' 
+                              ? `${entry.category} - ${entry.subCategory}`
+                              : entry.category;
+                            return !editingEntry.mappedMethods.includes(methodName);
+                          })
                           .sort((a, b) => {
                             if (a.category !== b.category) return a.category.localeCompare(b.category);
                             if (a.subCategory !== b.subCategory) return a.subCategory.localeCompare(b.subCategory);
                             return a.parameter.localeCompare(b.parameter);
                           })
-                          .map(entry => (
-                            <option key={entry.id} value={entry.parameter}>
-                              {entry.category} - {entry.parameter}
-                            </option>
-                          ))
+                          .map(entry => {
+                            const methodName = entry.subCategory && entry.subCategory.trim() !== '' 
+                              ? `${entry.category} - ${entry.subCategory}`
+                              : entry.category;
+                            return (
+                              <option key={entry.id} value={entry.id}>
+                                {methodName}
+                              </option>
+                            );
+                          })
                         }
                       </select>
                       <span className="text-xs text-muted-foreground">
@@ -708,6 +747,74 @@ export default function AthleticismDatabase() {
                       </span>
                     </div>
                   </div>
+
+                  {/* Add Parameter to Existing Method */}
+                  {editingEntry.mappedMethods.length > 0 && (
+                    <div className="p-4 border rounded-lg bg-muted/20">
+                      <Label className="text-sm font-medium">Add Parameter to Method</Label>
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        <select 
+                          className="px-3 py-2 border rounded-md text-sm bg-background"
+                          id="method-select"
+                        >
+                          <option value="">Select method...</option>
+                          {editingEntry.mappedMethods.map(method => (
+                            <option key={method} value={method}>{method}</option>
+                          ))}
+                        </select>
+                        <select 
+                          className="px-3 py-2 border rounded-md text-sm bg-background"
+                          onChange={(e) => {
+                            const selectedParameter = e.target.value;
+                            const methodSelect = document.getElementById('method-select') as HTMLSelectElement;
+                            const selectedMethod = methodSelect.value;
+                            
+                            if (selectedMethod && selectedParameter) {
+                              const newRecommendations = { ...editingEntry.loadingRecommendations };
+                              if (!newRecommendations[selectedMethod]) {
+                                newRecommendations[selectedMethod] = {};
+                              }
+                              if (!newRecommendations[selectedMethod][selectedParameter]) {
+                                newRecommendations[selectedMethod][selectedParameter] = '';
+                                setEditingEntry({...editingEntry, loadingRecommendations: newRecommendations});
+                              }
+                              e.target.value = '';
+                              methodSelect.value = '';
+                            }
+                          }}
+                        >
+                          <option value="">Select parameter...</option>
+                          {(() => {
+                            const methodSelect = document.getElementById('method-select') as HTMLSelectElement;
+                            const selectedMethod = methodSelect?.value;
+                            if (!selectedMethod) return [];
+                            
+                            // Find all toolbox entries that match this method
+                            const matchingEntries = toolboxData.entries.filter(entry => {
+                              const methodName = entry.subCategory && entry.subCategory.trim() !== '' 
+                                ? `${entry.category} - ${entry.subCategory}`
+                                : entry.category;
+                              return methodName === selectedMethod;
+                            });
+                            
+                            // Get all unique parameters from matching entries
+                            const availableParams = [...new Set(matchingEntries.map(entry => entry.parameter))];
+                            
+                            // Filter out parameters that are already added
+                            const existingParams = Object.keys(editingEntry.loadingRecommendations[selectedMethod] || {});
+                            const filteredParams = availableParams.filter(param => !existingParams.includes(param));
+                            
+                            return filteredParams.map(param => (
+                              <option key={param} value={param}>{param}</option>
+                            ));
+                          })()}
+                        </select>
+                      </div>
+                      <span className="text-xs text-muted-foreground mt-1 block">
+                        Select a method first, then choose from its available parameters
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
