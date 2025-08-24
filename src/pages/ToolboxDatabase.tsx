@@ -1,0 +1,404 @@
+import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { ArrowLeft, Plus, Search, Download, Upload, Trash2, Edit } from "lucide-react";
+import { useToolboxData } from "@/hooks/useToolboxData";
+import { ToolboxEntry } from "@/types/toolbox";
+import { useToast } from "@/hooks/use-toast";
+
+export default function ToolboxDatabase() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { data, isLoading, addEntry, updateEntry, deleteEntry, importData, exportData } = useToolboxData();
+  
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<ToolboxEntry | null>(null);
+  const [newEntry, setNewEntry] = useState({
+    category: "",
+    subCategory: "",
+    parameter: ""
+  });
+
+  // Filter entries based on search term
+  const filteredEntries = useMemo(() => {
+    if (!searchTerm.trim()) return data.entries;
+    
+    const term = searchTerm.toLowerCase();
+    return data.entries.filter(entry =>
+      entry.category.toLowerCase().includes(term) ||
+      entry.subCategory.toLowerCase().includes(term) ||
+      entry.parameter.toLowerCase().includes(term)
+    );
+  }, [data.entries, searchTerm]);
+
+  // Handle add entry
+  const handleAddEntry = () => {
+    if (!newEntry.category.trim() || !newEntry.parameter.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Category and Parameter are required fields.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    addEntry(newEntry);
+    setNewEntry({ category: "", subCategory: "", parameter: "" });
+    setIsAddDialogOpen(false);
+    toast({
+      title: "Entry Added",
+      description: "New toolbox entry has been added successfully."
+    });
+  };
+
+  // Handle edit entry
+  const handleEditEntry = () => {
+    if (!editingEntry || !editingEntry.category.trim() || !editingEntry.parameter.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Category and Parameter are required fields.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    updateEntry(editingEntry.id, {
+      category: editingEntry.category,
+      subCategory: editingEntry.subCategory,
+      parameter: editingEntry.parameter
+    });
+    setEditingEntry(null);
+    setIsEditDialogOpen(false);
+    toast({
+      title: "Entry Updated",
+      description: "Toolbox entry has been updated successfully."
+    });
+  };
+
+  // Handle delete entry
+  const handleDeleteEntry = (id: string) => {
+    deleteEntry(id);
+    toast({
+      title: "Entry Deleted",
+      description: "Toolbox entry has been deleted successfully."
+    });
+  };
+
+  // Handle file import
+  const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const importedCount = importData(text);
+        toast({
+          title: "Import Successful",
+          description: `Successfully imported ${importedCount} entries.`
+        });
+      } catch (error) {
+        toast({
+          title: "Import Failed",
+          description: error instanceof Error ? error.message : "Failed to import data",
+          variant: "destructive"
+        });
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  };
+
+  // Handle export
+  const handleExport = () => {
+    const tsvContent = exportData();
+    const blob = new Blob([tsvContent], { type: 'text/tab-separated-values' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `toolbox-database-${new Date().toISOString().split('T')[0]}.tsv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast({
+      title: "Export Successful",
+      description: "Toolbox database has been exported successfully."
+    });
+  };
+
+  // Open edit dialog
+  const openEditDialog = (entry: ToolboxEntry) => {
+    setEditingEntry({ ...entry });
+    setIsEditDialogOpen(true);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-lg">Loading toolbox database...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => navigate("/templates")}
+            className="flex items-center space-x-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back to Templates</span>
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold">Training Toolbox Database</h1>
+            <p className="text-muted-foreground">Comprehensive database of training method parameters</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          <input
+            type="file"
+            accept=".tsv,.txt,.csv"
+            onChange={handleImport}
+            className="hidden"
+            id="import-file"
+          />
+          <Button variant="outline" onClick={() => document.getElementById('import-file')?.click()}>
+            <Upload className="h-4 w-4 mr-2" />
+            Import
+          </Button>
+          <Button variant="outline" onClick={handleExport}>
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Total Parameters</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{data.entries.length}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Categories</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {new Set(data.entries.map(e => e.category)).size}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Last Updated</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-sm text-muted-foreground">
+              {new Date(data.lastUpdated).toLocaleDateString()}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search and Actions */}
+      <div className="flex items-center justify-between">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search categories, sub-categories, or parameters..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Parameter
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add New Parameter</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="category">Category *</Label>
+                <Input
+                  id="category"
+                  value={newEntry.category}
+                  onChange={(e) => setNewEntry(prev => ({ ...prev, category: e.target.value }))}
+                  placeholder="e.g., Sprinting, Lower Body Resistance Training"
+                />
+              </div>
+              <div>
+                <Label htmlFor="subCategory">Sub-Category</Label>
+                <Input
+                  id="subCategory"
+                  value={newEntry.subCategory}
+                  onChange={(e) => setNewEntry(prev => ({ ...prev, subCategory: e.target.value }))}
+                  placeholder="e.g., Acceleration, Strength (optional)"
+                />
+              </div>
+              <div>
+                <Label htmlFor="parameter">Parameter *</Label>
+                <Textarea
+                  id="parameter"
+                  value={newEntry.parameter}
+                  onChange={(e) => setNewEntry(prev => ({ ...prev, parameter: e.target.value }))}
+                  placeholder="e.g., Frequency, Intensity [%], Surface [Grass, Track, etc.]"
+                  rows={3}
+                />
+              </div>
+              <div className="flex justify-end space-x-2">
+                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleAddEntry}>
+                  Add Parameter
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Parameters Table */}
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-1/4">Category</TableHead>
+                <TableHead className="w-1/5">Sub-Category</TableHead>
+                <TableHead className="w-2/5">Parameter</TableHead>
+                <TableHead className="w-1/10">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredEntries.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell className="font-medium">{entry.category}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {entry.subCategory || "-"}
+                  </TableCell>
+                  <TableCell>
+                    <div className="max-w-md">
+                      {entry.parameter.includes('[') ? (
+                        <div>
+                          <span className="font-medium">
+                            {entry.parameter.split('[')[0].trim()}
+                          </span>
+                          <span className="text-xs text-muted-foreground ml-1">
+                            [{entry.parameter.split('[')[1]}
+                          </span>
+                        </div>
+                      ) : (
+                        entry.parameter
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center space-x-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEditDialog(entry)}
+                      >
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteEntry(entry.id)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Parameter</DialogTitle>
+          </DialogHeader>
+          {editingEntry && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="edit-category">Category *</Label>
+                <Input
+                  id="edit-category"
+                  value={editingEntry.category}
+                  onChange={(e) => setEditingEntry(prev => prev ? { ...prev, category: e.target.value } : null)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-subCategory">Sub-Category</Label>
+                <Input
+                  id="edit-subCategory"
+                  value={editingEntry.subCategory}
+                  onChange={(e) => setEditingEntry(prev => prev ? { ...prev, subCategory: e.target.value } : null)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-parameter">Parameter *</Label>
+                <Textarea
+                  id="edit-parameter"
+                  value={editingEntry.parameter}
+                  onChange={(e) => setEditingEntry(prev => prev ? { ...prev, parameter: e.target.value } : null)}
+                  rows={3}
+                />
+              </div>
+              <div className="flex justify-end space-x-2">
+                <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleEditEntry}>
+                  Update Parameter
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* No results message */}
+      {filteredEntries.length === 0 && searchTerm && (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">No parameters found matching "{searchTerm}"</p>
+        </div>
+      )}
+    </div>
+  );
+}

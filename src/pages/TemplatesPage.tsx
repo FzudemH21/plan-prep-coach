@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Database, FileText, ArrowLeft, Target } from "lucide-react";
+import { Database, FileText, ArrowLeft, Target, Wrench } from "lucide-react";
 
 export default function TemplatesPage() {
   const navigate = useNavigate();
@@ -43,7 +43,28 @@ export default function TemplatesPage() {
             </p>
             <div className="flex items-center justify-between">
               <span className="text-xs bg-secondary px-2 py-1 rounded">Editable</span>
-              <span className="text-xs text-muted-foreground">47 entries</span>
+              <span className="text-xs text-muted-foreground">63 entries</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/templates/toolbox")}>
+          <CardHeader>
+            <div className="flex items-center space-x-3">
+              <Wrench className="h-8 w-8 text-primary" />
+              <div>
+                <CardTitle>Training Toolbox</CardTitle>
+                <CardDescription>All training method parameters</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              Complete database of training method parameters with predefined options for systematic program design.
+            </p>
+            <div className="flex items-center justify-between">
+              <span className="text-xs bg-secondary px-2 py-1 rounded">Editable</span>
+              <span className="text-xs text-muted-foreground">300+ parameters</span>
             </div>
           </CardContent>
         </Card>

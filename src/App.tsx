@@ -10,6 +10,7 @@ import MacrocyclePage from "./pages/MacrocyclePage";
 import MesocyclePage from "./pages/MesocyclePage";
 import TemplatesPage from "./pages/TemplatesPage";
 import AthleticismDatabase from "./pages/AthleticismDatabase";
+import ToolboxDatabase from "./pages/ToolboxDatabase";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
               <Route path="/clients" element={<div className="text-center py-12">Client database coming soon...</div>} />
               <Route path="/templates" element={<TemplatesPage />} />
               <Route path="/templates/athleticism" element={<AthleticismDatabase />} />
+              <Route path="/templates/toolbox" element={<ToolboxDatabase />} />
               <Route path="/analytics" element={<div className="text-center py-12">Analytics coming soon...</div>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
