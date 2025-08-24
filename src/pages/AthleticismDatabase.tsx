@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAthleticismData } from '@/hooks/useAthleticismData';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { AthleticismEntry } from '@/types/athleticism';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { 
   ArrowLeft, 
   Plus, 
@@ -796,39 +797,41 @@ export default function AthleticismDatabase() {
                                 </TableCell>
                               )}
                               <TableCell colSpan={2}>
-                                <div className="flex items-center gap-2">
-                                  <select 
-                                    className="flex-1 px-3 py-2 border rounded-md text-sm bg-background"
-                                    value={pendingParam[method] ?? ''}
-                                    onChange={(e) => setPendingParam(prev => ({ ...prev, [method]: e.target.value }))}
-                                    disabled={uniqueAvailableParams.length === 0}
-                                  >
-                                    <option value="">{uniqueAvailableParams.length === 0 ? 'All parameters added' : 'Select parameter to add...'}</option>
-                                    {uniqueAvailableParams.map(param => (
-                                      <option key={param} value={param}>{param}</option>
-                                    ))}
-                                  </select>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                      const selectedParameter = pendingParam[method];
-                                      if (selectedParameter) {
-                                        const newRecommendations = { ...editingEntry.loadingRecommendations };
-                                        if (!newRecommendations[method]) {
-                                          newRecommendations[method] = {};
-                                        }
-                                        newRecommendations[method][selectedParameter] = '';
-                                        setEditingEntry({ ...editingEntry, loadingRecommendations: newRecommendations });
-                                        setPendingParam(prev => ({ ...prev, [method]: '' }));
-                                      }
-                                    }}
-                                    disabled={uniqueAvailableParams.length === 0 || !(pendingParam[method])}
-                                    className="h-8 w-8 p-0 rounded-full"
-                                    aria-label={`Add parameter to ${method}`}
-                                  >
-                                    <Plus className="h-4 w-4 text-primary" />
-                                  </Button>
+                                <div className="flex items-center justify-end">
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-8 w-8 rounded-full"
+                                        disabled={uniqueAvailableParams.length === 0}
+                                        aria-label={`Add parameter to ${method}`}
+                                      >
+                                        <Plus className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent className="z-50 bg-background">
+                                      {uniqueAvailableParams.length === 0 ? (
+                                        <DropdownMenuItem disabled>All parameters added</DropdownMenuItem>
+                                      ) : (
+                                        uniqueAvailableParams.map(param => (
+                                          <DropdownMenuItem
+                                            key={param}
+                                            onClick={() => {
+                                              const newRecommendations = { ...editingEntry.loadingRecommendations };
+                                              if (!newRecommendations[method]) {
+                                                newRecommendations[method] = {};
+                                              }
+                                              newRecommendations[method][param] = '';
+                                              setEditingEntry({ ...editingEntry, loadingRecommendations: newRecommendations });
+                                            }}
+                                          >
+                                            {param}
+                                          </DropdownMenuItem>
+                                        ))
+                                      )}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
                                 </div>
                               </TableCell>
                             </TableRow>
