@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useExerciseData } from '@/hooks/useExerciseData';
-import { FilterState } from '@/types/exercises';
+import { FilterState, ExerciseEntry } from '@/types/exercises';
 import EditableTable from '@/components/exercises/EditableTable';
 
 const ExerciseLibrary = () => {
@@ -34,14 +34,15 @@ const ExerciseLibrary = () => {
       );
     }
 
-    // Apply column filters
-    Object.entries(filterState.columnFilters).forEach(([column, value]) => {
-      if (value) {
-        const filterLower = value.toLowerCase();
-        filtered = filtered.filter(exercise =>
-          exercise[column as keyof typeof exercise].toLowerCase().includes(filterLower)
+    // Apply column filters (AND logic between columns, OR logic within columns)
+    filtered = filtered.filter(exercise => {
+      return Object.entries(filterState.columnFilters).every(([key, values]) => {
+        if (!values || values.length === 0) return true;
+        const exerciseValue = exercise[key as keyof ExerciseEntry];
+        return values.some(value => 
+          exerciseValue.toLowerCase().includes(value.toLowerCase())
         );
-      }
+      });
     });
 
     // Apply sorting

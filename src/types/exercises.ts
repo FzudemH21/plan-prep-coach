@@ -21,7 +21,7 @@ export interface ExerciseDatabase {
 
 export interface FilterState {
   search: string;
-  columnFilters: Record<string, string>;
+  columnFilters: Record<string, string[]>;
   sortColumn: string | null;
   sortDirection: 'asc' | 'desc';
 }

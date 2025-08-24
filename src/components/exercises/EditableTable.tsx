@@ -4,8 +4,9 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, ChevronUp, ChevronDown, Plus, Trash2, Filter } from 'lucide-react';
+import { Search, ChevronUp, ChevronDown, Plus, Trash2, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { ColumnFilter } from './ColumnFilter';
 
 interface EditableCellProps {
   value: string;
@@ -111,8 +112,6 @@ const EditableTable: React.FC<EditableTableProps> = ({
   filterState,
   onFilterChange
 }) => {
-  const [showFilters, setShowFilters] = useState(false);
-
   const columns: TableColumn[] = [
     { key: 'übungsname', label: 'Übungsname', type: 'text' },
     { key: 'akzentuierteKörperregion', label: 'Akzentuierte Körperregion', type: 'select', options: ['Unterkörper', 'Oberkörper', 'Ganzkörper', 'Rumpf', 'Schulter'] },
@@ -136,127 +135,119 @@ const EditableTable: React.FC<EditableTableProps> = ({
     });
   };
 
-  const handleColumnFilter = (columnKey: string, value: string) => {
+  const handleColumnFilter = (columnKey: keyof ExerciseEntry, values: string[]) => {
+    const newColumnFilters = { ...filterState.columnFilters };
+    if (values.length === 0) {
+      delete newColumnFilters[columnKey];
+    } else {
+      newColumnFilters[columnKey] = values;
+    }
     onFilterChange({
       ...filterState,
-      columnFilters: {
-        ...filterState.columnFilters,
-        [columnKey]: value
-      }
+      columnFilters: newColumnFilters,
     });
   };
 
   const clearAllFilters = () => {
     onFilterChange({
+      ...filterState,
       search: '',
       columnFilters: {},
-      sortColumn: null,
-      sortDirection: 'asc'
     });
   };
 
+  const hasActiveFilters = filterState.search || Object.keys(filterState.columnFilters).length > 0;
+
   return (
     <div className="space-y-4">
-      {/* Global Search and Filter Controls */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="flex flex-wrap items-center gap-4 mb-4">
+        <div className="flex items-center gap-2 min-w-[200px]">
+          <Search className="h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search exercises..."
+            placeholder="Globale Suche..."
             value={filterState.search}
             onChange={(e) => onFilterChange({ ...filterState, search: e.target.value })}
-            className="pl-10"
+            className="h-8"
           />
         </div>
         
-        <div className="flex gap-2">
+        {hasActiveFilters && (
           <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowFilters(!showFilters)}
-          >
-            <Filter className="h-4 w-4 mr-2" />
-            Filters
-          </Button>
-          <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={clearAllFilters}
+            className="h-8 text-muted-foreground hover:text-foreground"
           >
-            Clear All
+            <X className="h-3 w-3 mr-1" />
+            Alle Filter zurücksetzen
           </Button>
-          <Button onClick={onAddExercise} size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Exercise
-          </Button>
-        </div>
+        )}
+        
+        <Button onClick={onAddExercise} size="sm" className="ml-auto">
+          <Plus className="h-4 w-4 mr-2" />
+          Übung hinzufügen
+        </Button>
       </div>
 
-      {/* Column Filters */}
-      {showFilters && (
-        <Card className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {columns.slice(0, 8).map(column => (
-              <div key={column.key} className="space-y-2">
-                <label className="text-sm font-medium">{column.label}</label>
-                <Input
-                  placeholder={`Filter ${column.label.toLowerCase()}`}
-                  value={filterState.columnFilters[column.key] || ''}
-                  onChange={(e) => handleColumnFilter(column.key, e.target.value)}
-                  className="h-8"
-                />
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
       {/* Table */}
-      <div className="border rounded-lg overflow-hidden">
+      <div className="border border-border rounded-lg overflow-hidden bg-card">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
             <thead className="bg-muted/50">
               <tr>
-                {columns.map(column => (
-                  <th 
+                {columns.map((column) => (
+                  <th
                     key={column.key}
-                    className="border-r p-3 text-left font-medium cursor-pointer hover:bg-muted transition-colors min-w-[150px]"
-                    onClick={() => handleSort(column.key)}
+                    className="px-4 py-2 text-left font-medium text-muted-foreground border-b border-border"
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">{column.label}</span>
-                      <div className="ml-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div 
+                        className="flex items-center gap-2 cursor-pointer hover:text-foreground transition-colors"
+                        onClick={() => handleSort(column.key)}
+                      >
+                        <span>{column.label}</span>
                         {filterState.sortColumn === column.key && (
-                          filterState.sortDirection === 'asc' ? 
-                            <ChevronUp className="h-4 w-4" /> : 
+                          filterState.sortDirection === 'asc' ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
                             <ChevronDown className="h-4 w-4" />
+                          )
                         )}
                       </div>
+                      <ColumnFilter
+                        column={column}
+                        allData={exercises}
+                        selectedValues={filterState.columnFilters[column.key] || []}
+                        onSelectionChange={(values) => handleColumnFilter(column.key, values)}
+                      />
                     </div>
                   </th>
                 ))}
-                <th className="p-3 w-16">Actions</th>
+                <th className="px-4 py-2 text-left font-medium text-muted-foreground border-b border-border w-16">
+                  Aktionen
+                </th>
               </tr>
             </thead>
             <tbody>
               {exercises.map((exercise, index) => (
-                <tr key={exercise.id} className={index % 2 === 0 ? 'bg-background' : 'bg-muted/25'}>
+                <tr key={exercise.id} className={index % 2 === 0 ? 'bg-background' : 'bg-muted/25 hover:bg-muted/40'}>
                   {columns.map(column => (
-                    <td key={column.key} className="border-r p-1 align-top">
-                    <EditableCell
-                      value={exercise[column.key]}
-                      onChange={(value) => onUpdateExercise(exercise.id, { [column.key]: value } as Partial<ExerciseEntry>)}
-                      column={column}
-                    />
+                    <td key={column.key} className="border-r border-border p-1 align-top min-w-[150px]">
+                      <EditableCell
+                        value={exercise[column.key]}
+                        onChange={(value) => onUpdateExercise(exercise.id, { [column.key]: value } as Partial<ExerciseEntry>)}
+                        column={column}
+                      />
                     </td>
                   ))}
-                  <td className="p-3 text-center">
+                  <td className="px-4 py-2 text-center">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => onDeleteExercise(exercise.id)}
+                      className="hover:bg-destructive/10 hover:text-destructive"
                     >
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </td>
                 </tr>
@@ -268,7 +259,8 @@ const EditableTable: React.FC<EditableTableProps> = ({
 
       {exercises.length === 0 && (
         <div className="text-center py-12 text-muted-foreground">
-          No exercises found. Try adjusting your filters or add a new exercise.
+          <p className="text-lg font-medium mb-2">Keine Übungen gefunden</p>
+          <p className="text-sm">Passen Sie Ihre Filter an oder fügen Sie eine neue Übung hinzu.</p>
         </div>
       )}
     </div>
