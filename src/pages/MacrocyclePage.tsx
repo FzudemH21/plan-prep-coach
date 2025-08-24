@@ -14,16 +14,16 @@ import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/h
 import { AthleteInfo, SmartGoal, SubGoal, TrainableQuality } from "@/types/training";
 import { User, Target, Calendar as CalendarIcon, Plus, Bot, X } from "lucide-react";
 import { 
-  getUniqueSubGoals, 
   getUniqueQualities, 
-  getUniqueTrainingMethods,
-  trainingData
+  getUniqueTrainingMethods
 } from "@/data/trainingData";
 import { useDisplayMode } from "@/contexts/DisplayModeContext";
+import { useAthleticismData } from "@/hooks/useAthleticismData";
 
 export default function MacrocyclePage() {
   const { displayMode } = useDisplayMode();
   const navigate = useNavigate();
+  const { data: athleticismData } = useAthleticismData();
   const [currentStep, setCurrentStep] = useState(1);
   const [athleteInfo, setAthleteInfo] = useState<Partial<AthleteInfo>>({});
   const [smartGoal, setSmartGoal] = useState<Partial<SmartGoal>>({});
@@ -99,8 +99,18 @@ export default function MacrocyclePage() {
       .trim();
   };
 
-  // Helper function to get qualities for a sub-goal label
-  const getQualitiesForSubGoalLabel = (subGoalLabel: string): string[] => {
+  // Helper function to get unique sub-goals from athleticism database
+  const getSubGoalsFromAthleticismDB = (): string[] => {
+    const subGoalSet = new Set<string>();
+    athleticismData.entries.forEach(entry => {
+      const formatted = `${entry.overarchingGoal} - ${entry.subGoal}`;
+      subGoalSet.add(formatted);
+    });
+    return Array.from(subGoalSet).sort();
+  };
+
+  // Helper function to get qualities for a sub-goal from athleticism database
+  const getQualitiesForSubGoalFromDB = (subGoalLabel: string): string[] => {
     const parts = subGoalLabel.split(' - ');
     if (parts.length < 2) return [];
     
@@ -112,31 +122,90 @@ export default function MacrocyclePage() {
     const normalizedSubGoal = normalizeForComparison(subGoal);
     
     return Array.from(new Set(
-      trainingData
-        .filter(item => 
-          normalizeForComparison(item.overarchingGoal) === normalizedOverarching && 
-          normalizeForComparison(item.subGoal) === normalizedSubGoal
+      athleticismData.entries
+        .filter(entry => 
+          normalizeForComparison(entry.overarchingGoal) === normalizedOverarching && 
+          normalizeForComparison(entry.subGoal) === normalizedSubGoal
         )
-        .map(item => item.quality)
+        .map(entry => entry.quality)
     ));
   };
 
-  // Helper function to get training methods for a specific quality
-  const getTrainingMethodsForQuality = (overarchingGoal: string, subGoal: string, qualityName: string): string[] => {
-    // Normalize for comparison
-    const normalizedOverarching = normalizeForComparison(overarchingGoal);
-    const normalizedSubGoal = normalizeForComparison(subGoal);
-    const normalizedQuality = normalizeForComparison(qualityName);
-    
-    return Array.from(new Set(
-      trainingData
-        .filter(item => 
-          normalizeForComparison(item.overarchingGoal) === normalizedOverarching && 
-          normalizeForComparison(item.subGoal) === normalizedSubGoal &&
-          normalizeForComparison(item.quality) === normalizedQuality
-        )
-        .map(item => item.trainingMethod)
-    ));
+  // Helper function to format loading recommendations as sentences
+  const formatLoadingRecommendations = (recommendations: Record<string, any>): string => {
+    const parts: string[] = [];
+    Object.entries(recommendations).forEach(([key, value]) => {
+      if (value && typeof value === 'string' && value.trim()) {
+        parts.push(`${key}: ${value}`);
+      } else if (value && typeof value === 'number') {
+        parts.push(`${key}: ${value}`);
+      }
+    });
+    return parts.join(', ');
+  };
+
+  // Helper function to get methods with their sub-goals and qualities (for reversed Step 5 view)
+  const getMethodsWithSubGoalsAndQualities = () => {
+    const methodsMap = new Map<string, {
+      subGoals: Set<string>;
+      qualitiesWithRecommendations: Array<{
+        subGoal: string;
+        quality: string;
+        recommendations: string;
+      }>;
+    }>();
+
+    // Get all selected methods from qualities
+    qualities.forEach(quality => {
+      const methods = quality.methods || [];
+      const [subGoalId, qualityName] = quality.id.split('::');
+      const subGoal = subGoals.find(sg => sg.id === subGoalId);
+      
+      if (subGoal && qualityName) {
+        const subGoalDescription = subGoal.description;
+        const parts = subGoalDescription.split(' - ');
+        
+        if (parts.length >= 2) {
+          const overarchingGoal = parts[0].trim();
+          const subGoalName = parts[1].trim();
+          
+          // Find matching entry in athleticism database
+          const athleticismEntry = athleticismData.entries.find(entry =>
+            normalizeForComparison(entry.overarchingGoal) === normalizeForComparison(overarchingGoal) &&
+            normalizeForComparison(entry.subGoal) === normalizeForComparison(subGoalName) &&
+            normalizeForComparison(entry.quality) === normalizeForComparison(qualityName)
+          );
+
+          methods.forEach(method => {
+            if (!methodsMap.has(method)) {
+              methodsMap.set(method, {
+                subGoals: new Set(),
+                qualitiesWithRecommendations: []
+              });
+            }
+            
+            const methodData = methodsMap.get(method)!;
+            methodData.subGoals.add(subGoalDescription);
+            
+            // Get loading recommendations for this method from athleticism database
+            const recommendations = athleticismEntry?.loadingRecommendations?.[method] || {};
+            const formattedRecommendations = formatLoadingRecommendations(recommendations);
+            
+            methodData.qualitiesWithRecommendations.push({
+              subGoal: subGoalDescription,
+              quality: qualityName,
+              recommendations: formattedRecommendations
+            });
+          });
+        }
+      }
+    });
+
+    return Array.from(methodsMap.entries()).map(([method, data]) => ({
+      method,
+      subGoals: Array.from(data.subGoals),
+      qualitiesWithRecommendations: data.qualitiesWithRecommendations
+    }));
   };
 
   // Auto-populate qualities when sub-goals change
@@ -145,7 +214,7 @@ export default function MacrocyclePage() {
     
     subGoals.forEach(subGoal => {
       const existing = qualitiesBySubGoal[subGoal.id];
-      const recommendedQualities = getQualitiesForSubGoalLabel(subGoal.description);
+      const recommendedQualities = getQualitiesForSubGoalFromDB(subGoal.description);
       
       // If the sub-goal description has changed, reset to recommended qualities
       const hasDescriptionChanged = existing && existing.label !== subGoal.description;
@@ -215,7 +284,21 @@ export default function MacrocyclePage() {
           if (parts.length >= 2) {
             const overarchingGoal = parts[0].trim();
             const subGoalName = parts[1].trim();
-            const recommendedMethods = getTrainingMethodsForQuality(overarchingGoal, subGoalName, qualityName);
+            
+            // Get recommended methods from athleticism database
+            const normalizedOverarching = normalizeForComparison(overarchingGoal);
+            const normalizedSubGoal = normalizeForComparison(subGoalName);
+            const normalizedQuality = normalizeForComparison(qualityName);
+            
+            const recommendedMethods = Array.from(new Set(
+              athleticismData.entries
+                .filter(entry => 
+                  normalizeForComparison(entry.overarchingGoal) === normalizedOverarching && 
+                  normalizeForComparison(entry.subGoal) === normalizedSubGoal &&
+                  normalizeForComparison(entry.quality) === normalizedQuality
+                )
+                .flatMap(entry => entry.mappedMethods)
+            ));
             
             // If the sub-goal description has changed, reset to recommended methods
             const hasSubGoalChanged = existing && existing.subGoalLabel !== subGoal.description;
@@ -662,16 +745,16 @@ export default function MacrocyclePage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Sub-Goal Description</Label>
-                  <SearchableDropdown
-                    value={subGoal.description}
-                    onChange={(value) => {
-                      const updated = [...subGoals];
-                      updated[index].description = value;
-                      setSubGoals(updated);
-                    }}
-                    options={getUniqueSubGoals()}
-                    placeholder="Select or type sub-goal..."
-                  />
+                   <SearchableDropdown
+                     value={subGoal.description}
+                     onChange={(value) => {
+                       const updated = [...subGoals];
+                       updated[index].description = value;
+                       setSubGoals(updated);
+                     }}
+                     options={getSubGoalsFromAthleticismDB()}
+                     placeholder="Select or type sub-goal..."
+                   />
                 </div>
                 
                 <div className="space-y-2">
@@ -936,7 +1019,7 @@ export default function MacrocyclePage() {
         <div className="space-y-6">
           {subGoals.map((subGoal) => {
             const subGoalQualities = qualitiesBySubGoal[subGoal.id] || { label: subGoal.description, list: [] };
-            const recommendedQualities = getQualitiesForSubGoalLabel(subGoal.description);
+            const recommendedQualities = getQualitiesForSubGoalFromDB(subGoal.description);
             const availableQualities = recommendedQualities.filter(q => !subGoalQualities.list.includes(q));
             
             return (
@@ -992,96 +1075,69 @@ export default function MacrocyclePage() {
     </Card>
   );
 
-  const renderTrainingMethodsForm = () => (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <Target className="h-5 w-5" />
-          <span>Training Methods</span>
-        </CardTitle>
-        <CardDescription>
-          Select and configure training methods to develop the identified qualities.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="space-y-6">
-          {qualities.map((quality) => {
-            const qualityData = methodsByQuality[quality.id];
-            if (!qualityData) return null;
-            
-            const [subGoalId, qualityName] = quality.id.split('::');
-            const subGoal = subGoals.find(sg => sg.id === subGoalId);
-            const parts = subGoal?.description.split(' - ') || [];
-            const overarchingGoal = parts[0] || '';
-            const subGoalName = parts[1] || '';
-            
-            // Get recommended methods for this specific quality
-            const recommendedMethods = overarchingGoal && subGoalName ? 
-              getTrainingMethodsForQuality(overarchingGoal, subGoalName, qualityName) : [];
-            const availableMethods = [...recommendedMethods, ...getUniqueTrainingMethods()];
-            const uniqueAvailableMethods = Array.from(new Set(availableMethods));
-            
-            return (
-              <div key={quality.id} className="p-4 border rounded-lg space-y-4">
+  const renderTrainingMethodsForm = () => {
+    const methodsWithData = getMethodsWithSubGoalsAndQualities();
+    
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Target className="h-5 w-5" />
+            <span>Training Methods Overview</span>
+          </CardTitle>
+          <CardDescription>
+            Overview of selected training methods with the sub-goals and qualities they address, including loading recommendations.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-6">
+            {methodsWithData.map((methodData, index) => (
+              <div key={index} className="p-4 border rounded-lg space-y-4">
+                {/* Method header */}
                 <div className="space-y-2">
-                  {/* Sub-goal context */}
-                  <div className="text-sm text-muted-foreground">
-                    <span className="font-medium">Sub-goal:</span> {qualityData.subGoalLabel}
-                  </div>
-                  
-                  {/* Quality header */}
-                  <Label className="font-medium text-base flex items-center space-x-2">
+                  <Label className="font-medium text-lg flex items-center space-x-2">
                     <Target className="h-4 w-4" />
-                    <span>Quality: {qualityData.qualityName}</span>
+                    <span>{methodData.method}</span>
+                  </Label>
+                </div>
+                
+                {/* Sub-goals and qualities this method addresses */}
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    This method addresses the following sub-goals and qualities:
                   </Label>
                   
-                  {/* Selected methods */}
-                  <div className="space-y-2">
-                    {qualityData.list.map((method, methodIndex) => (
-                      <div key={methodIndex} className="flex items-start justify-between p-3 bg-muted rounded-md">
-                        <span className="text-sm flex-1">{method}</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeMethodFromQuality(quality.id, method)}
-                          className="h-6 w-6 p-0 ml-2 hover:bg-destructive hover:text-destructive-foreground flex-shrink-0"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
+                  <div className="space-y-3">
+                    {methodData.qualitiesWithRecommendations.map((item, itemIndex) => (
+                      <div key={itemIndex} className="p-3 bg-muted/50 rounded-md space-y-2">
+                        <div className="text-sm">
+                          <span className="font-medium">Sub-Goal:</span> {item.subGoal}
+                        </div>
+                        <div className="text-sm">
+                          <span className="font-medium">Quality:</span> {item.quality}
+                        </div>
+                        {item.recommendations && (
+                          <div className="text-sm text-muted-foreground">
+                            <span className="font-medium">Loading Recommendations:</span> {item.recommendations}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
-                  
-                  {/* Add method dropdown */}
-                  <div className="space-y-2">
-                    <Label className="text-sm text-muted-foreground">Add Training Method</Label>
-                    <SearchableDropdown
-                      value=""
-                      onChange={(value) => {
-                        if (value) {
-                          addMethodToQuality(quality.id, value);
-                        }
-                      }}
-                      options={uniqueAvailableMethods}
-                      placeholder="Select or type to add training method..."
-                      allowCustomInput={true}
-                      className="bg-background"
-                    />
-                  </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
-        
-        {qualities.length === 0 && (
-          <div className="text-center py-8 text-muted-foreground">
-            <p>No qualities selected. Please go back to Step 4 to select trainable qualities.</p>
+            ))}
           </div>
-        )}
-      </CardContent>
-    </Card>
-  );
+          
+          {methodsWithData.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>No training methods selected. Please go back to Step 4 to select trainable qualities and methods.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
 
   const stepTitles = [
     "Athlete Information",
