@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { ExerciseDatabase, ExerciseEntry } from "@/types/exercises";
-import { defaultExerciseDatabase } from "@/data/exerciseData";
+import { completeExerciseDatabase } from "@/data/exerciseDataComplete";
 
 export function useExerciseData() {
-  const [data, setData] = useState<ExerciseDatabase>(defaultExerciseDatabase);
+  const [data, setData] = useState<ExerciseDatabase>(completeExerciseDatabase);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -15,11 +15,11 @@ export function useExerciseData() {
           setData(parsed);
         } else {
           setData(defaultExerciseDatabase);
-          localStorage.setItem("exercise-database", JSON.stringify(defaultExerciseDatabase));
+          localStorage.setItem("exercise-database", JSON.stringify(completeExerciseDatabase));
         }
       } catch (error) {
         console.error("Failed to load exercise data:", error);
-        setData(defaultExerciseDatabase);
+        setData(completeExerciseDatabase);
       } finally {
         setIsLoading(false);
       }
@@ -76,43 +76,66 @@ export function useExerciseData() {
     saveData(newData);
   };
 
-  const importData = (tsvText: string) => {
+  const importData = (tsvText: string, mode: 'replace' | 'append' = 'append') => {
     try {
-      const lines = tsvText.trim().split('\n');
+      // Remove BOM and normalize line endings
+      const cleanText = tsvText.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      const lines = cleanText.trim().split('\n');
       if (lines.length < 2) return;
       
-      const headers = lines[0].split('\t');
+      // Skip header line
       const exerciseRows = lines.slice(1);
       
-      const newEntries: ExerciseEntry[] = exerciseRows.map((line, index) => {
-        const values = line.split('\t');
-        const maxId = Math.max(...data.exercises.map(e => parseInt(e.id) || 0));
+      const newEntries: ExerciseEntry[] = [];
+      let currentLine = '';
+      let fieldCount = 0;
+      
+      // Robust parsing that handles multi-line fields
+      for (let i = 0; i < exerciseRows.length; i++) {
+        currentLine += (currentLine ? '\n' : '') + exerciseRows[i];
+        fieldCount = currentLine.split('\t').length;
         
-        return {
-          id: (maxId + index + 1).toString(),
-          übungsname: values[0] || '',
-          akzentuierteKörperregion: values[1] || '',
-          dominantesBewegungsmuster: values[2] || '',
-          forcesActingOnSpine: values[3] || '',
-          übungsausführung: values[4] || '',
-          trunkTrainingFramework: values[5] || '',
-          mainMovementPlane: values[6] || '',
-          level: values[7] || '',
-          artDesWiderstandes: values[8] || '',
-          stand: values[9] || '',
-          variationen: values[10] || ''
-        };
-      });
+        // We expect 11 fields total
+        if (fieldCount >= 11) {
+          const values = currentLine.split('\t');
+          const maxId = mode === 'replace' ? 0 : Math.max(...data.exercises.map(e => parseInt(e.id) || 0));
+          
+          newEntries.push({
+            id: (maxId + newEntries.length + 1).toString(),
+            übungsname: values[0] || '',
+            akzentuierteKörperregion: values[1] || '',
+            dominantesBewegungsmuster: values[2] || '',
+            forcesActingOnSpine: values[3] || '',
+            übungsausführung: values[4] || '',
+            trunkTrainingFramework: values[5] || '',
+            mainMovementPlane: values[6] || '',
+            level: values[7] || '',
+            artDesWiderstandes: values[8] || '',
+            stand: values[9] || '',
+            variationen: values.slice(10).join('\t') // Handle multi-line variations field
+          });
+          
+          currentLine = '';
+          fieldCount = 0;
+        }
+      }
       
       const newData: ExerciseDatabase = {
         ...data,
-        exercises: [...data.exercises, ...newEntries]
+        exercises: mode === 'replace' ? newEntries : [...data.exercises, ...newEntries],
+        version: data.version
       };
       
       saveData(newData);
     } catch (error) {
       console.error("Failed to import exercise data:", error);
+      throw error;
     }
+  };
+
+  const resetToDefaults = () => {
+    setData(completeExerciseDatabase);
+    localStorage.removeItem("exercise-database");
   };
 
   const exportData = () => {
@@ -155,6 +178,7 @@ export function useExerciseData() {
     deleteEntry,
     importData,
     exportData,
-    saveData
+    saveData,
+    resetToDefaults
   };
 }

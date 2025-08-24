@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { ArrowLeft, Download, Upload, FileText, Users, Activity } from 'lucide-react';
+import { ArrowLeft, Download, Upload, FileText, Users, Activity, RotateCcw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useExerciseData } from '@/hooks/useExerciseData';
 import { FilterState, ExerciseEntry } from '@/types/exercises';
@@ -11,7 +13,8 @@ import EditableTable from '@/components/exercises/EditableTable';
 const ExerciseLibrary = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { data, addEntry, updateEntry, deleteEntry, importData, exportData } = useExerciseData();
+  const { data, addEntry, updateEntry, deleteEntry, importData, exportData, resetToDefaults } = useExerciseData();
+  const [importMode, setImportMode] = useState<'replace' | 'append'>('replace');
   
   const [filterState, setFilterState] = useState<FilterState>({
     search: '',
@@ -135,14 +138,14 @@ const ExerciseLibrary = () => {
     reader.onload = (e) => {
       try {
         const content = e.target?.result as string;
-        importData(content);
+        importData(content, importMode);
         toast({
           title: "Import Successful",
-          description: "Exercise data imported successfully."
+          description: `Exercise data ${importMode === 'replace' ? 'replaced' : 'appended'} successfully.`
         });
       } catch (error) {
         toast({
-          title: "Import Failed",
+          title: "Import Failed", 
           description: "Failed to import exercise data.",
           variant: "destructive"
         });
@@ -150,6 +153,14 @@ const ExerciseLibrary = () => {
     };
     reader.readAsText(file);
     event.target.value = '';
+  };
+
+  const handleReset = () => {
+    resetToDefaults();
+    toast({
+      title: "Reset Complete",
+      description: "Exercise library has been reset to defaults."
+    });
   };
 
   return (
@@ -171,26 +182,45 @@ const ExerciseLibrary = () => {
               </div>
             </div>
             
-            <div className="flex gap-2">
-              <input
-                type="file"
-                accept=".tsv,.csv,.txt"
-                onChange={handleImport}
-                className="hidden"
-                id="import-file"
-              />
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => document.getElementById('import-file')?.click()}
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                Import
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleExport}>
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
+            <div className="flex items-center gap-3">
+              {/* Import Mode Toggle */}
+              <div className="flex items-center gap-2 text-sm">
+                <Label htmlFor="import-mode">Import:</Label>
+                <Switch
+                  id="import-mode"
+                  checked={importMode === 'replace'}
+                  onCheckedChange={(checked) => setImportMode(checked ? 'replace' : 'append')}
+                />
+                <span className="text-muted-foreground">
+                  {importMode === 'replace' ? 'Replace' : 'Append'}
+                </span>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="file"
+                  accept=".tsv,.csv,.txt"
+                  onChange={handleImport}
+                  className="hidden"
+                  id="import-file"
+                />
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => document.getElementById('import-file')?.click()}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Import
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleExport}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Export
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleReset}>
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Reset
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -240,7 +270,7 @@ const ExerciseLibrary = () => {
         </div>
 
         {/* Table Container with Controlled Height */}
-        <div className="max-h-[60vh] overflow-hidden border rounded-lg bg-card">
+        <div className="max-h-[60vh] overflow-auto border rounded-lg bg-card">
           <EditableTable
             exercises={filteredExercises}
             onUpdateExercise={updateEntry}
