@@ -14,7 +14,7 @@ export function useExerciseData() {
           const parsed = JSON.parse(stored) as ExerciseDatabase;
           setData(parsed);
         } else {
-          setData(defaultExerciseDatabase);
+          setData(completeExerciseDatabase);
           localStorage.setItem("exercise-database", JSON.stringify(completeExerciseDatabase));
         }
       } catch (error) {
