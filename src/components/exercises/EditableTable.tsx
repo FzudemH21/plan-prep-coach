@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, ChevronUp, ChevronDown, Plus, Trash2, X } from 'lucide-react';
+import { Search, ChevronUp, ChevronDown, Plus, Trash2, X, Filter } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { ColumnFilter } from './ColumnFilter';
 
