@@ -334,7 +334,49 @@ export const defaultToolboxData: ToolboxDatabase = {
 
     // Recovery Modalities
     { id: "335", category: "Recovery Modalities", subCategory: "", parameter: "Frequency" },
-    { id: "336", category: "Recovery Modalities", subCategory: "", parameter: "Modality [Ice bath, Contrast bath, Red Light Therapy, Massage, Physiotherapy, Self Myofascial Release (Foam Rolling, Massage Gun)  Sauna, Cryotherapy, Hyperbaric Therapy, Breathwork/Meditation, Non-Sleep Deep Rest, Yoga, Compression garments]" }
+    { id: "336", category: "Recovery Modalities", subCategory: "", parameter: "Modality [Ice bath, Contrast bath, Red Light Therapy, Massage, Physiotherapy, Self Myofascial Release (Foam Rolling, Massage Gun)  Sauna, Cryotherapy, Hyperbaric Therapy, Breathwork/Meditation, Non-Sleep Deep Rest, Yoga, Compression garments]" },
+
+    // Extensive Plyometrics - Reactive-Tier
+    { id: "337", category: "Extensive Plyometrics", subCategory: "Reactive-Tier", parameter: "Frequency" },
+    { id: "338", category: "Extensive Plyometrics", subCategory: "Reactive-Tier", parameter: "Surface [Grass, Track, Hardwood, Concrete, Sand]" },
+    { id: "339", category: "Extensive Plyometrics", subCategory: "Reactive-Tier", parameter: "Footwear [Trainers, Barefoot, Other (specify)]" },
+    { id: "340", category: "Extensive Plyometrics", subCategory: "Reactive-Tier", parameter: "Subjective Intensity [%max]" },
+    { id: "341", category: "Extensive Plyometrics", subCategory: "Reactive-Tier", parameter: "Total Ground contacts [#]" },
+    { id: "342", category: "Extensive Plyometrics", subCategory: "Reactive-Tier", parameter: "Ground Contacts per session [#of jumps]" },
+    { id: "343", category: "Extensive Plyometrics", subCategory: "Reactive-Tier", parameter: "Relative stance volume  distribution [Bipedal (%), Alternating (%), Unipedal (%)]" },
+    { id: "344", category: "Extensive Plyometrics", subCategory: "Reactive-Tier", parameter: "Absolute stance volume stance distribution [Bipedal (#), Alternating (#), Unipedal (#)]" },
+    { id: "345", category: "Extensive Plyometrics", subCategory: "Reactive-Tier", parameter: "Relative directional volume distribution [Horizontal (%), Vertical (%), Lateral (%), Multidirectional (%)]" },
+    { id: "346", category: "Extensive Plyometrics", subCategory: "Reactive-Tier", parameter: "Absolute directional volume  distribution [Horizontal (#), Vertical (#), Lateral (#), Multidirectional (#)]" },
+    { id: "347", category: "Extensive Plyometrics", subCategory: "Reactive-Tier", parameter: "Inter-Set Rest Duration [s]" },
+    { id: "348", category: "Extensive Plyometrics", subCategory: "Reactive-Tier", parameter: "Comments" },
+
+    // Extensive Plyometrics - Elastic-Tier
+    { id: "349", category: "Extensive Plyometrics", subCategory: "Elastic-Tier", parameter: "Frequency" },
+    { id: "350", category: "Extensive Plyometrics", subCategory: "Elastic-Tier", parameter: "Surface [Grass, Track, Hardwood, Concrete, Sand]" },
+    { id: "351", category: "Extensive Plyometrics", subCategory: "Elastic-Tier", parameter: "Footwear [Trainers, Barefoot, Other (specify)]" },
+    { id: "352", category: "Extensive Plyometrics", subCategory: "Elastic-Tier", parameter: "Subjective Intensity [%max]" },
+    { id: "353", category: "Extensive Plyometrics", subCategory: "Elastic-Tier", parameter: "Total Ground contacts [#]" },
+    { id: "354", category: "Extensive Plyometrics", subCategory: "Elastic-Tier", parameter: "Ground Contacts per session [#of jumps]" },
+    { id: "355", category: "Extensive Plyometrics", subCategory: "Elastic-Tier", parameter: "Relative stance volume  distribution [Bipedal (%), Alternating (%), Unipedal (%)]" },
+    { id: "356", category: "Extensive Plyometrics", subCategory: "Elastic-Tier", parameter: "Absolute stance volume stance distribution [Bipedal (#), Alternating (#), Unipedal (#)]" },
+    { id: "357", category: "Extensive Plyometrics", subCategory: "Elastic-Tier", parameter: "Relative directional volume distribution [Horizontal (%), Vertical (%), Lateral (%), Multidirectional (%)]" },
+    { id: "358", category: "Extensive Plyometrics", subCategory: "Elastic-Tier", parameter: "Absolute directional volume  distribution [Horizontal (#), Vertical (#), Lateral (#), Multidirectional (#)]" },
+    { id: "359", category: "Extensive Plyometrics", subCategory: "Elastic-Tier", parameter: "Inter-Set Rest Duration [s]" },
+    { id: "360", category: "Extensive Plyometrics", subCategory: "Elastic-Tier", parameter: "Comments" },
+
+    // Extensive Plyometrics - Deep-Tier
+    { id: "361", category: "Extensive Plyometrics", subCategory: "Deep-Tier", parameter: "Frequency" },
+    { id: "362", category: "Extensive Plyometrics", subCategory: "Deep-Tier", parameter: "Surface [Grass, Track, Hardwood, Concrete, Sand]" },
+    { id: "363", category: "Extensive Plyometrics", subCategory: "Deep-Tier", parameter: "Footwear [Trainers, Barefoot, Other (specify)]" },
+    { id: "364", category: "Extensive Plyometrics", subCategory: "Deep-Tier", parameter: "Subjective Intensity [%max]" },
+    { id: "365", category: "Extensive Plyometrics", subCategory: "Deep-Tier", parameter: "Total Ground contacts [#]" },
+    { id: "366", category: "Extensive Plyometrics", subCategory: "Deep-Tier", parameter: "Ground Contacts per session [#of jumps]" },
+    { id: "367", category: "Extensive Plyometrics", subCategory: "Deep-Tier", parameter: "Relative stance volume  distribution [Bipedal (%), Alternating (%), Unipedal (%)]" },
+    { id: "368", category: "Extensive Plyometrics", subCategory: "Deep-Tier", parameter: "Absolute stance volume stance distribution [Bipedal (#), Alternating (#), Unipedal (#)]" },
+    { id: "369", category: "Extensive Plyometrics", subCategory: "Deep-Tier", parameter: "Relative directional volume distribution [Horizontal (%), Vertical (%), Lateral (%), Multidirectional (%)]" },
+    { id: "370", category: "Extensive Plyometrics", subCategory: "Deep-Tier", parameter: "Absolute directional volume  distribution [Horizontal (#), Vertical (#), Lateral (#), Multidirectional (#)]" },
+    { id: "371", category: "Extensive Plyometrics", subCategory: "Deep-Tier", parameter: "Inter-Set Rest Duration [s]" },
+    { id: "372", category: "Extensive Plyometrics", subCategory: "Deep-Tier", parameter: "Comments" }
   ],
   lastUpdated: new Date().toISOString()
 };
