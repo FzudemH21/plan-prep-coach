@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Database, FileText, ArrowLeft, Target, Wrench } from "lucide-react";
+import { Database, FileText, ArrowLeft, Target, Wrench, Activity, ArrowRight } from "lucide-react";
 
 export default function TemplatesPage() {
   const navigate = useNavigate();
@@ -26,7 +26,7 @@ export default function TemplatesPage() {
       </div>
 
       {/* Database Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/templates/athleticism")}>
           <CardHeader>
             <div className="flex items-center space-x-3">
@@ -85,7 +85,28 @@ export default function TemplatesPage() {
             </p>
             <div className="flex items-center justify-between">
               <span className="text-xs bg-secondary px-2 py-1 rounded">Editable</span>
-              <span className="text-xs text-muted-foreground">200+ exercises</span>
+              <span className="text-xs text-muted-foreground">1007 exercises</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/templates/plyometrics")}>
+          <CardHeader>
+            <div className="flex items-center space-x-3">
+              <Activity className="h-8 w-8 text-orange-600" />
+              <div>
+                <CardTitle>Plyometrics Library</CardTitle>
+                <CardDescription>Explosive power training database</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              Comprehensive database of plyometric exercises with intensity levels, tiers, and movement patterns for explosive power development.
+            </p>
+            <div className="flex items-center justify-between">
+              <span className="text-xs bg-secondary px-2 py-1 rounded">Editable</span>
+              <span className="text-xs text-muted-foreground">150+ exercises</span>
             </div>
           </CardContent>
         </Card>
