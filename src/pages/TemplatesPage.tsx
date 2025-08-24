@@ -69,23 +69,23 @@ export default function TemplatesPage() {
           </CardContent>
         </Card>
 
-        <Card className="opacity-50">
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/templates/exercises")}>
           <CardHeader>
             <div className="flex items-center space-x-3">
-              <FileText className="h-8 w-8 text-muted-foreground" />
+              <FileText className="h-8 w-8 text-primary" />
               <div>
-                <CardTitle className="text-muted-foreground">Exercise Glossary</CardTitle>
-                <CardDescription>Comprehensive exercise database</CardDescription>
+                <CardTitle>Exercise Library</CardTitle>
+                <CardDescription>Resistance training exercise database</CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-4">
-              Searchable database of exercises with detailed descriptions, variations, and coaching cues.
+              Excel-like editable database with German exercise names, movement patterns, and detailed variations.
             </p>
             <div className="flex items-center justify-between">
-              <span className="text-xs bg-muted px-2 py-1 rounded">Coming Soon</span>
-              <span className="text-xs text-muted-foreground">500+ exercises</span>
+              <span className="text-xs bg-secondary px-2 py-1 rounded">Editable</span>
+              <span className="text-xs text-muted-foreground">200+ exercises</span>
             </div>
           </CardContent>
         </Card>
