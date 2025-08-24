@@ -618,6 +618,69 @@ export default function AthleticismDatabase() {
                 </div>
               </div>
 
+              {/* Add Method Section - Moved here */}
+              <div className="p-4 border rounded-lg bg-primary/5">
+                <Label className="text-sm font-medium">Add Method</Label>
+                <div className="grid grid-cols-1 gap-2 mt-2">
+                  <select 
+                    className="px-3 py-2 border rounded-md text-sm bg-background"
+                    onChange={(e) => {
+                      const selectedMethodName = e.target.value;
+                      if (selectedMethodName && !editingEntry.mappedMethods.includes(selectedMethodName)) {
+                        const newMethods = [...editingEntry.mappedMethods, selectedMethodName];
+                        const newRecommendations = { ...editingEntry.loadingRecommendations };
+                        // Initialize with empty recommendations for the new method
+                        newRecommendations[selectedMethodName] = {};
+                        setEditingEntry({
+                          ...editingEntry, 
+                          mappedMethods: newMethods,
+                          loadingRecommendations: newRecommendations
+                        });
+                      }
+                      e.target.value = ''; // Reset selection
+                    }}
+                  >
+                    <option value="">Select method to add...</option>
+                    {(() => {
+                      // Get unique methods from toolbox
+                      const uniqueMethods = new Map();
+                      toolboxData.entries.forEach(entry => {
+                        const methodName = entry.subCategory && entry.subCategory.trim() !== '' 
+                          ? `${entry.category} - ${entry.subCategory}`
+                          : entry.category;
+                        if (!editingEntry.mappedMethods.includes(methodName)) {
+                          uniqueMethods.set(methodName, entry);
+                        }
+                      });
+                      
+                      return Array.from(uniqueMethods.values())
+                        .sort((a, b) => {
+                          const methodA = a.subCategory && a.subCategory.trim() !== '' 
+                            ? `${a.category} - ${a.subCategory}`
+                            : a.category;
+                          const methodB = b.subCategory && b.subCategory.trim() !== '' 
+                            ? `${b.category} - ${b.subCategory}`
+                            : b.category;
+                          return methodA.localeCompare(methodB);
+                        })
+                        .map(entry => {
+                          const methodName = entry.subCategory && entry.subCategory.trim() !== '' 
+                            ? `${entry.category} - ${entry.subCategory}`
+                            : entry.category;
+                          return (
+                            <option key={methodName} value={methodName}>
+                              {methodName}
+                            </option>
+                          );
+                        });
+                    })()}
+                  </select>
+                  <span className="text-xs text-muted-foreground">
+                    Select training methods from your toolbox to add to this entry
+                  </span>
+                </div>
+              </div>
+
               {/* Loading Recommendations Table */}
               <div>
                 <Label className="text-base font-semibold">Loading Recommendations</Label>
@@ -635,186 +698,126 @@ export default function AthleticismDatabase() {
                         const methodRecommendations = editingEntry.loadingRecommendations[method] || {};
                         const parameters = Object.entries(methodRecommendations);
                         
-                        if (parameters.length === 0) {
+                        // Get available parameters for this method from toolbox
+                        const availableParams = toolboxData.entries
+                          .filter(entry => {
+                            const methodName = entry.subCategory && entry.subCategory.trim() !== '' 
+                              ? `${entry.category} - ${entry.subCategory}`
+                              : entry.category;
+                            return methodName === method;
+                          })
+                          .map(entry => entry.parameter)
+                          .filter(param => !Object.keys(methodRecommendations).includes(param));
+                        
+                        const uniqueAvailableParams = [...new Set(availableParams)];
+                        
+                        if (parameters.length === 0 && uniqueAvailableParams.length === 0) {
                           return (
                             <TableRow key={method}>
                               <TableCell className="font-medium">{method}</TableCell>
                               <TableCell colSpan={2} className="text-muted-foreground text-sm">
-                                No parameters specified
+                                No parameters available for this method
                               </TableCell>
                             </TableRow>
                           );
                         }
 
-                        return parameters.map(([paramKey, paramValue], paramIndex) => (
-                          <TableRow key={`${method}-${paramKey}`}>
-                            {paramIndex === 0 && (
-                              <TableCell rowSpan={parameters.length} className="font-medium align-top border-r">
-                                {method}
+                        const rowsToRender = [];
+                        
+                        // Add existing parameter rows
+                        parameters.forEach(([paramKey, paramValue], paramIndex) => {
+                          rowsToRender.push(
+                            <TableRow key={`${method}-${paramKey}`}>
+                              {paramIndex === 0 && (
+                                <TableCell rowSpan={parameters.length + (uniqueAvailableParams.length > 0 ? 1 : 0)} className="font-medium align-top border-r">
+                                  {method}
+                                </TableCell>
+                              )}
+                              <TableCell className="font-medium text-sm">
+                                <div className="flex items-center justify-between">
+                                  <span>{paramKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim()}</span>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      const newRecommendations = { ...editingEntry.loadingRecommendations };
+                                      delete newRecommendations[method][paramKey];
+                                      setEditingEntry({...editingEntry, loadingRecommendations: newRecommendations});
+                                    }}
+                                    className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                                  >
+                                    ×
+                                  </Button>
+                                </div>
                               </TableCell>
-                            )}
-                            <TableCell className="font-medium text-sm">
-                              {paramKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim()}
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                value={typeof paramValue === 'object' ? JSON.stringify(paramValue) : String(paramValue)}
-                                onChange={(e) => {
-                                  const newRecommendations = { ...editingEntry.loadingRecommendations };
-                                  if (!newRecommendations[method]) {
-                                    newRecommendations[method] = {};
-                                  }
-                                  
-                                  let newValue: any = e.target.value;
-                                  // Try to parse as JSON if it looks like an object/array
-                                  if (newValue.startsWith('{') || newValue.startsWith('[')) {
-                                    try {
-                                      newValue = JSON.parse(newValue);
-                                    } catch {
-                                      // Keep as string if JSON parsing fails
+                              <TableCell>
+                                <Input
+                                  value={typeof paramValue === 'object' ? JSON.stringify(paramValue) : String(paramValue)}
+                                  onChange={(e) => {
+                                    const newRecommendations = { ...editingEntry.loadingRecommendations };
+                                    if (!newRecommendations[method]) {
+                                      newRecommendations[method] = {};
                                     }
-                                  }
-                                  
-                                  newRecommendations[method][paramKey] = newValue;
-                                  setEditingEntry({...editingEntry, loadingRecommendations: newRecommendations});
-                                }}
-                                className="text-sm"
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ));
-                      })}
+                                    
+                                    let newValue: any = e.target.value;
+                                    // Try to parse as JSON if it looks like an object/array
+                                    if (newValue.startsWith('{') || newValue.startsWith('[')) {
+                                      try {
+                                        newValue = JSON.parse(newValue);
+                                      } catch {
+                                        // Keep as string if JSON parsing fails
+                                      }
+                                    }
+                                    
+                                    newRecommendations[method][paramKey] = newValue;
+                                    setEditingEntry({...editingEntry, loadingRecommendations: newRecommendations});
+                                  }}
+                                  className="text-sm"
+                                />
+                              </TableCell>
+                            </TableRow>
+                          );
+                        });
+
+                        // Add the parameter addition row if there are available parameters
+                        if (uniqueAvailableParams.length > 0) {
+                          rowsToRender.push(
+                            <TableRow key={`${method}-add-param`}>
+                              {parameters.length === 0 && (
+                                <TableCell className="font-medium align-top border-r">
+                                  {method}
+                                </TableCell>
+                              )}
+                              <TableCell colSpan={parameters.length === 0 ? 2 : 2}>
+                                <select 
+                                  className="w-full px-3 py-2 border rounded-md text-sm bg-background"
+                                  onChange={(e) => {
+                                    const selectedParameter = e.target.value;
+                                    if (selectedParameter) {
+                                      const newRecommendations = { ...editingEntry.loadingRecommendations };
+                                      if (!newRecommendations[method]) {
+                                        newRecommendations[method] = {};
+                                      }
+                                      newRecommendations[method][selectedParameter] = '';
+                                      setEditingEntry({...editingEntry, loadingRecommendations: newRecommendations});
+                                      e.target.value = '';
+                                    }
+                                  }}
+                                >
+                                  <option value="">+ Add parameter...</option>
+                                  {uniqueAvailableParams.map(param => (
+                                    <option key={param} value={param}>{param}</option>
+                                  ))}
+                                </select>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        }
+
+                        return rowsToRender;
+                      }).flat()}
                     </TableBody>
                   </Table>
-                </div>
-                
-                {/* Add Method Section */}
-                <div className="mt-4 space-y-4">
-                  <div className="p-4 border rounded-lg bg-primary/5">
-                    <Label className="text-sm font-medium">Add Method</Label>
-                    <div className="grid grid-cols-1 gap-2 mt-2">
-                      <select 
-                        className="px-3 py-2 border rounded-md text-sm bg-background"
-                        onChange={(e) => {
-                          const selectedEntry = toolboxData.entries.find(entry => entry.id === e.target.value);
-                          if (selectedEntry) {
-                            const methodName = selectedEntry.subCategory && selectedEntry.subCategory.trim() !== '' 
-                              ? `${selectedEntry.category} - ${selectedEntry.subCategory}`
-                              : selectedEntry.category;
-                            
-                            if (!editingEntry.mappedMethods.includes(methodName)) {
-                              const newMethods = [...editingEntry.mappedMethods, methodName];
-                              const newRecommendations = { ...editingEntry.loadingRecommendations };
-                              // Initialize with empty recommendations for the new method
-                              newRecommendations[methodName] = {};
-                              setEditingEntry({
-                                ...editingEntry, 
-                                mappedMethods: newMethods,
-                                loadingRecommendations: newRecommendations
-                              });
-                            }
-                            e.target.value = ''; // Reset selection
-                          }
-                        }}
-                      >
-                        <option value="">Select method to add...</option>
-                        {toolboxData.entries
-                          .filter(entry => {
-                            const methodName = entry.subCategory && entry.subCategory.trim() !== '' 
-                              ? `${entry.category} - ${entry.subCategory}`
-                              : entry.category;
-                            return !editingEntry.mappedMethods.includes(methodName);
-                          })
-                          .sort((a, b) => {
-                            if (a.category !== b.category) return a.category.localeCompare(b.category);
-                            if (a.subCategory !== b.subCategory) return a.subCategory.localeCompare(b.subCategory);
-                            return a.parameter.localeCompare(b.parameter);
-                          })
-                          .map(entry => {
-                            const methodName = entry.subCategory && entry.subCategory.trim() !== '' 
-                              ? `${entry.category} - ${entry.subCategory}`
-                              : entry.category;
-                            return (
-                              <option key={entry.id} value={entry.id}>
-                                {methodName}
-                              </option>
-                            );
-                          })
-                        }
-                      </select>
-                      <span className="text-xs text-muted-foreground">
-                        Select training methods from your toolbox to add to this entry
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Add Parameter to Existing Method */}
-                  {editingEntry.mappedMethods.length > 0 && (
-                    <div className="p-4 border rounded-lg bg-muted/20">
-                      <Label className="text-sm font-medium">Add Parameter to Method</Label>
-                      <div className="grid grid-cols-2 gap-2 mt-2">
-                        <select 
-                          className="px-3 py-2 border rounded-md text-sm bg-background"
-                          id="method-select"
-                        >
-                          <option value="">Select method...</option>
-                          {editingEntry.mappedMethods.map(method => (
-                            <option key={method} value={method}>{method}</option>
-                          ))}
-                        </select>
-                        <select 
-                          className="px-3 py-2 border rounded-md text-sm bg-background"
-                          onChange={(e) => {
-                            const selectedParameter = e.target.value;
-                            const methodSelect = document.getElementById('method-select') as HTMLSelectElement;
-                            const selectedMethod = methodSelect.value;
-                            
-                            if (selectedMethod && selectedParameter) {
-                              const newRecommendations = { ...editingEntry.loadingRecommendations };
-                              if (!newRecommendations[selectedMethod]) {
-                                newRecommendations[selectedMethod] = {};
-                              }
-                              if (!newRecommendations[selectedMethod][selectedParameter]) {
-                                newRecommendations[selectedMethod][selectedParameter] = '';
-                                setEditingEntry({...editingEntry, loadingRecommendations: newRecommendations});
-                              }
-                              e.target.value = '';
-                              methodSelect.value = '';
-                            }
-                          }}
-                        >
-                          <option value="">Select parameter...</option>
-                          {(() => {
-                            const methodSelect = document.getElementById('method-select') as HTMLSelectElement;
-                            const selectedMethod = methodSelect?.value;
-                            if (!selectedMethod) return [];
-                            
-                            // Find all toolbox entries that match this method
-                            const matchingEntries = toolboxData.entries.filter(entry => {
-                              const methodName = entry.subCategory && entry.subCategory.trim() !== '' 
-                                ? `${entry.category} - ${entry.subCategory}`
-                                : entry.category;
-                              return methodName === selectedMethod;
-                            });
-                            
-                            // Get all unique parameters from matching entries
-                            const availableParams = [...new Set(matchingEntries.map(entry => entry.parameter))];
-                            
-                            // Filter out parameters that are already added
-                            const existingParams = Object.keys(editingEntry.loadingRecommendations[selectedMethod] || {});
-                            const filteredParams = availableParams.filter(param => !existingParams.includes(param));
-                            
-                            return filteredParams.map(param => (
-                              <option key={param} value={param}>{param}</option>
-                            ));
-                          })()}
-                        </select>
-                      </div>
-                      <span className="text-xs text-muted-foreground mt-1 block">
-                        Select a method first, then choose from its available parameters
-                      </span>
-                    </div>
-                  )}
                 </div>
               </div>
 
