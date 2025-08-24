@@ -61,6 +61,59 @@ export default function AthleticismDatabase() {
 
   const [pendingParam, setPendingParam] = useState<Record<string, string>>({});
 
+  // Helper function to normalize method keys for consistent matching
+  const normalizeMethodKey = (methodName: string): string => {
+    return methodName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  };
+
+  // Parse method label into category and subCategory
+  const parseMethodLabel = (methodLabel: string): { category: string; subCategory: string } => {
+    const parts = methodLabel.split(' - ');
+    return {
+      category: parts[0]?.trim() || '',
+      subCategory: parts[1]?.trim() || ''
+    };
+  };
+
+  // Build method maps from toolbox data for efficient lookups
+  const methodMaps = useMemo(() => {
+    const parameterMap = new Map<string, string[]>();
+    const canonicalNameMap = new Map<string, string>();
+    const availableMethodsSet = new Set<string>();
+
+    toolboxData.entries.forEach(entry => {
+      const canonicalName = entry.subCategory && entry.subCategory.trim() !== '' 
+        ? `${entry.category} - ${entry.subCategory}`
+        : entry.category;
+      const normalizedKey = normalizeMethodKey(canonicalName);
+      
+      // Track all available methods
+      availableMethodsSet.add(canonicalName);
+      
+      // Map normalized key to canonical name
+      canonicalNameMap.set(normalizedKey, canonicalName);
+      
+      // Build parameters map
+      if (!parameterMap.has(normalizedKey)) {
+        parameterMap.set(normalizedKey, []);
+      }
+      
+      if (entry.parameter && entry.parameter.trim() !== '') {
+        const currentParams = parameterMap.get(normalizedKey) || [];
+        if (!currentParams.includes(entry.parameter)) {
+          currentParams.push(entry.parameter);
+          parameterMap.set(normalizedKey, currentParams);
+        }
+      }
+    });
+
+    return {
+      parameterMap,
+      canonicalNameMap,
+      availableMethods: Array.from(availableMethodsSet).sort()
+    };
+  }, [toolboxData.entries]);
+
   const filteredEntries = data.entries.filter(entry => 
     entry.overarchingGoal.toLowerCase().includes(searchTerm.toLowerCase()) ||
     entry.subGoal.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -644,39 +697,13 @@ export default function AthleticismDatabase() {
                     }}
                   >
                     <option value="">Select method to add...</option>
-                    {(() => {
-                      // Get unique methods from toolbox
-                      const uniqueMethods = new Map();
-                      toolboxData.entries.forEach(entry => {
-                        const methodName = entry.subCategory && entry.subCategory.trim() !== '' 
-                          ? `${entry.category} - ${entry.subCategory}`
-                          : entry.category;
-                        if (!editingEntry.mappedMethods.includes(methodName)) {
-                          uniqueMethods.set(methodName, entry);
-                        }
-                      });
-                      
-                      return Array.from(uniqueMethods.values())
-                        .sort((a, b) => {
-                          const methodA = a.subCategory && a.subCategory.trim() !== '' 
-                            ? `${a.category} - ${a.subCategory}`
-                            : a.category;
-                          const methodB = b.subCategory && b.subCategory.trim() !== '' 
-                            ? `${b.category} - ${b.subCategory}`
-                            : b.category;
-                          return methodA.localeCompare(methodB);
-                        })
-                        .map(entry => {
-                          const methodName = entry.subCategory && entry.subCategory.trim() !== '' 
-                            ? `${entry.category} - ${entry.subCategory}`
-                            : entry.category;
-                          return (
-                            <option key={methodName} value={methodName}>
-                              {methodName}
-                            </option>
-                          );
-                        });
-                    })()}
+                    {methodMaps.availableMethods
+                      .filter(methodName => !editingEntry.mappedMethods.includes(methodName))
+                      .map(methodName => (
+                        <option key={methodName} value={methodName}>
+                          {methodName}
+                        </option>
+                      ))}
                   </select>
                   <span className="text-xs text-muted-foreground">
                     Select training methods from your toolbox to add to this entry
@@ -701,18 +728,12 @@ export default function AthleticismDatabase() {
                         const methodRecommendations = editingEntry.loadingRecommendations[method] || {};
                         const parameters = Object.entries(methodRecommendations);
                         
-                        // Get available parameters for this method from toolbox
-                        const availableParams = toolboxData.entries
-                          .filter(entry => {
-                            const methodName = entry.subCategory && entry.subCategory.trim() !== '' 
-                              ? `${entry.category} - ${entry.subCategory}`
-                              : entry.category;
-                            return methodName === method;
-                          })
-                          .map(entry => entry.parameter)
-                          .filter(param => param && param.trim() !== '' && !Object.keys(methodRecommendations).includes(param));
-                        
-                        const uniqueAvailableParams = [...new Set(availableParams)];
+                        // Get available parameters for this method using normalized matching
+                        const normalizedMethodKey = normalizeMethodKey(method);
+                        const allParametersForMethod = methodMaps.parameterMap.get(normalizedMethodKey) || [];
+                        const uniqueAvailableParams = allParametersForMethod.filter(param => 
+                          !Object.keys(methodRecommendations).includes(param)
+                        );
                         
                         if (parameters.length === 0 && uniqueAvailableParams.length === 0) {
                           return (
