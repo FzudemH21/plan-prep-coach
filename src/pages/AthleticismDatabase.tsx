@@ -788,27 +788,38 @@ export default function AthleticismDatabase() {
                                   {method}
                                 </TableCell>
                               )}
-                              <TableCell colSpan={parameters.length === 0 ? 2 : 2}>
-                                <select 
-                                  className="w-full px-3 py-2 border rounded-md text-sm bg-background"
-                                  onChange={(e) => {
-                                    const selectedParameter = e.target.value;
-                                    if (selectedParameter) {
-                                      const newRecommendations = { ...editingEntry.loadingRecommendations };
-                                      if (!newRecommendations[method]) {
-                                        newRecommendations[method] = {};
+                              <TableCell colSpan={2}>
+                                <div className="flex items-center gap-2">
+                                  <select 
+                                    className="flex-1 px-3 py-2 border rounded-md text-sm bg-background"
+                                    id={`param-select-${method}`}
+                                  >
+                                    <option value="">Select parameter to add...</option>
+                                    {uniqueAvailableParams.map(param => (
+                                      <option key={param} value={param}>{param}</option>
+                                    ))}
+                                  </select>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      const selectElement = document.getElementById(`param-select-${method}`) as HTMLSelectElement;
+                                      const selectedParameter = selectElement.value;
+                                      if (selectedParameter) {
+                                        const newRecommendations = { ...editingEntry.loadingRecommendations };
+                                        if (!newRecommendations[method]) {
+                                          newRecommendations[method] = {};
+                                        }
+                                        newRecommendations[method][selectedParameter] = '';
+                                        setEditingEntry({...editingEntry, loadingRecommendations: newRecommendations});
+                                        selectElement.value = '';
                                       }
-                                      newRecommendations[method][selectedParameter] = '';
-                                      setEditingEntry({...editingEntry, loadingRecommendations: newRecommendations});
-                                      e.target.value = '';
-                                    }
-                                  }}
-                                >
-                                  <option value="">+ Add parameter...</option>
-                                  {uniqueAvailableParams.map(param => (
-                                    <option key={param} value={param}>{param}</option>
-                                  ))}
-                                </select>
+                                    }}
+                                    className="h-8 w-8 p-0 rounded-full"
+                                  >
+                                    <span className="text-lg font-bold text-primary">+</span>
+                                  </Button>
+                                </div>
                               </TableCell>
                             </TableRow>
                           );
