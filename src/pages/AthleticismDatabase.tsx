@@ -710,14 +710,9 @@ export default function AthleticismDatabase() {
                             return methodName === method;
                           })
                           .map(entry => entry.parameter)
-                          .filter(param => !Object.keys(methodRecommendations).includes(param));
+                          .filter(param => param && param.trim() !== '' && !Object.keys(methodRecommendations).includes(param));
                         
                         const uniqueAvailableParams = [...new Set(availableParams)];
-                        
-                        // Debug logging
-                        console.log(`Method: ${method}`);
-                        console.log(`Available parameters:`, uniqueAvailableParams);
-                        console.log(`Current parameters:`, Object.keys(methodRecommendations));
                         
                         if (parameters.length === 0 && uniqueAvailableParams.length === 0) {
                           return (
@@ -798,40 +793,46 @@ export default function AthleticismDatabase() {
                               )}
                               <TableCell colSpan={2}>
                                 <div className="flex items-center justify-end">
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <Button
-                                        variant="outline"
-                                        size="icon"
-                                        className="h-8 w-8 rounded-full"
-                                        disabled={uniqueAvailableParams.length === 0}
-                                        aria-label={`Add parameter to ${method}`}
-                                      >
-                                        <Plus className="h-4 w-4" />
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent className="z-50 bg-background">
-                                      {uniqueAvailableParams.length === 0 ? (
-                                        <DropdownMenuItem disabled>All parameters added</DropdownMenuItem>
-                                      ) : (
-                                        uniqueAvailableParams.map(param => (
-                                          <DropdownMenuItem
-                                            key={param}
-                                            onClick={() => {
-                                              const newRecommendations = { ...editingEntry.loadingRecommendations };
-                                              if (!newRecommendations[method]) {
-                                                newRecommendations[method] = {};
-                                              }
-                                              newRecommendations[method][param] = '';
-                                              setEditingEntry({ ...editingEntry, loadingRecommendations: newRecommendations });
-                                            }}
-                                          >
-                                            {param}
-                                          </DropdownMenuItem>
-                                        ))
-                                      )}
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
+                                   <DropdownMenu>
+                                     <DropdownMenuTrigger asChild>
+                                       <Button
+                                         variant="outline"
+                                         size="icon"
+                                         className="h-8 w-8 rounded-full relative z-10"
+                                         aria-label={`Add parameter to ${method}`}
+                                       >
+                                         <Plus className="h-4 w-4" />
+                                       </Button>
+                                     </DropdownMenuTrigger>
+                                     <DropdownMenuContent 
+                                       className="z-[100] bg-popover border border-border shadow-md min-w-[200px]"
+                                       align="end"
+                                       sideOffset={4}
+                                     >
+                                       {uniqueAvailableParams.length === 0 ? (
+                                         <DropdownMenuItem disabled className="text-muted-foreground">
+                                           No more parameters available
+                                         </DropdownMenuItem>
+                                       ) : (
+                                         uniqueAvailableParams.map(param => (
+                                           <DropdownMenuItem
+                                             key={param}
+                                             onClick={() => {
+                                               const newRecommendations = { ...editingEntry.loadingRecommendations };
+                                               if (!newRecommendations[method]) {
+                                                 newRecommendations[method] = {};
+                                               }
+                                               newRecommendations[method][param] = '';
+                                               setEditingEntry({ ...editingEntry, loadingRecommendations: newRecommendations });
+                                             }}
+                                             className="cursor-pointer hover:bg-accent"
+                                           >
+                                             {param}
+                                           </DropdownMenuItem>
+                                         ))
+                                       )}
+                                     </DropdownMenuContent>
+                                   </DropdownMenu>
                                 </div>
                               </TableCell>
                             </TableRow>
