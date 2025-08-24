@@ -665,40 +665,10 @@ export default function AthleticismDatabase() {
                   </Table>
                 </div>
                 
-                {/* Add Parameter Section */}
-                <div className="mt-4 space-y-4">
-                  {/* Add Parameter to Existing Method */}
-                  <div className="p-4 border rounded-lg bg-muted/20">
-                    <Label className="text-sm font-medium">Add Parameter to Existing Method</Label>
-                    <div className="grid grid-cols-3 gap-2 mt-2">
-                      <select 
-                        className="px-3 py-2 border rounded-md text-sm bg-background"
-                        onChange={(e) => {
-                          const method = e.target.value;
-                          if (method) {
-                            const newRecommendations = { ...editingEntry.loadingRecommendations };
-                            if (!newRecommendations[method]) {
-                              newRecommendations[method] = {};
-                            }
-                            newRecommendations[method]['newParameter'] = '';
-                            setEditingEntry({...editingEntry, loadingRecommendations: newRecommendations});
-                          }
-                        }}
-                      >
-                        <option value="">Select method...</option>
-                        {editingEntry.mappedMethods.map(method => (
-                          <option key={method} value={method}>{method}</option>
-                        ))}
-                      </select>
-                      <span className="text-sm text-muted-foreground flex items-center col-span-2">
-                        Add parameter to selected method
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Add Method from Toolbox */}
+                {/* Add Method Section */}
+                <div className="mt-4">
                   <div className="p-4 border rounded-lg bg-primary/5">
-                    <Label className="text-sm font-medium">Add Method from Toolbox</Label>
+                    <Label className="text-sm font-medium">Add Method</Label>
                     <div className="grid grid-cols-1 gap-2 mt-2">
                       <select 
                         className="px-3 py-2 border rounded-md text-sm bg-background"
@@ -718,7 +688,7 @@ export default function AthleticismDatabase() {
                           }
                         }}
                       >
-                        <option value="">Select from toolbox...</option>
+                        <option value="">Select method to add...</option>
                         {toolboxData.entries
                           .filter(entry => !editingEntry.mappedMethods.includes(entry.parameter))
                           .sort((a, b) => {
@@ -728,13 +698,13 @@ export default function AthleticismDatabase() {
                           })
                           .map(entry => (
                             <option key={entry.id} value={entry.parameter}>
-                              {entry.category} - {entry.subCategory} - {entry.parameter}
+                              {entry.category} - {entry.parameter}
                             </option>
                           ))
                         }
                       </select>
                       <span className="text-xs text-muted-foreground">
-                        Methods already in this entry are filtered out
+                        Select training methods from your toolbox to add to this entry
                       </span>
                     </div>
                   </div>
