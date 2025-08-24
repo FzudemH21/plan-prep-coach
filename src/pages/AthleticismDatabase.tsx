@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,23 @@ import {
   Copy
 } from "lucide-react";
 
+// Interface for hierarchical display
+interface HierarchicalRow {
+  id: string;
+  overarchingGoal: string;
+  subGoal: string;
+  quality: string;
+  method: string;
+  loadingRecommendations: Record<string, any>;
+  originalEntry: AthleticismEntry;
+  goalRowspan?: number;
+  subGoalRowspan?: number;
+  qualityRowspan?: number;
+  isFirstInGoal?: boolean;
+  isFirstInSubGoal?: boolean;
+  isFirstInQuality?: boolean;
+}
+
 export default function AthleticismDatabase() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -44,6 +61,124 @@ export default function AthleticismDatabase() {
     entry.quality.toLowerCase().includes(searchTerm.toLowerCase()) ||
     entry.mappedMethods.some(method => method.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  // Transform entries into hierarchical structure with each method as separate row
+  const hierarchicalData = useMemo(() => {
+    const expandedRows: HierarchicalRow[] = [];
+    
+    // First, expand each entry to create separate rows for each method
+    filteredEntries.forEach(entry => {
+      if (entry.mappedMethods.length === 0) {
+        // Handle entries with no methods
+        expandedRows.push({
+          id: `${entry.id}-no-method`,
+          overarchingGoal: entry.overarchingGoal,
+          subGoal: entry.subGoal,
+          quality: entry.quality,
+          method: 'No methods specified',
+          loadingRecommendations: {},
+          originalEntry: entry
+        });
+      } else {
+        entry.mappedMethods.forEach((method, methodIndex) => {
+          const methodRecommendations = entry.loadingRecommendations[method] || {};
+          expandedRows.push({
+            id: `${entry.id}-${methodIndex}`,
+            overarchingGoal: entry.overarchingGoal,
+            subGoal: entry.subGoal,
+            quality: entry.quality,
+            method: method,
+            loadingRecommendations: methodRecommendations,
+            originalEntry: entry
+          });
+        });
+      }
+    });
+
+    // Sort by hierarchy levels
+    expandedRows.sort((a, b) => {
+      if (a.overarchingGoal !== b.overarchingGoal) return a.overarchingGoal.localeCompare(b.overarchingGoal);
+      if (a.subGoal !== b.subGoal) return a.subGoal.localeCompare(b.subGoal);
+      if (a.quality !== b.quality) return a.quality.localeCompare(b.quality);
+      return a.method.localeCompare(b.method);
+    });
+
+    // Calculate rowspan values and mark first occurrences
+    const goalCounts = new Map<string, number>();
+    const subGoalCounts = new Map<string, number>();
+    const qualityCounts = new Map<string, number>();
+
+    // Count occurrences
+    expandedRows.forEach(row => {
+      const goalKey = row.overarchingGoal;
+      const subGoalKey = `${row.overarchingGoal}|${row.subGoal}`;
+      const qualityKey = `${row.overarchingGoal}|${row.subGoal}|${row.quality}`;
+      
+      goalCounts.set(goalKey, (goalCounts.get(goalKey) || 0) + 1);
+      subGoalCounts.set(subGoalKey, (subGoalCounts.get(subGoalKey) || 0) + 1);
+      qualityCounts.set(qualityKey, (qualityCounts.get(qualityKey) || 0) + 1);
+    });
+
+    // Mark first occurrences and set rowspan
+    const seenGoals = new Set<string>();
+    const seenSubGoals = new Set<string>();
+    const seenQualities = new Set<string>();
+
+    expandedRows.forEach(row => {
+      const goalKey = row.overarchingGoal;
+      const subGoalKey = `${row.overarchingGoal}|${row.subGoal}`;
+      const qualityKey = `${row.overarchingGoal}|${row.subGoal}|${row.quality}`;
+
+      if (!seenGoals.has(goalKey)) {
+        row.isFirstInGoal = true;
+        row.goalRowspan = goalCounts.get(goalKey);
+        seenGoals.add(goalKey);
+      }
+
+      if (!seenSubGoals.has(subGoalKey)) {
+        row.isFirstInSubGoal = true;
+        row.subGoalRowspan = subGoalCounts.get(subGoalKey);
+        seenSubGoals.add(subGoalKey);
+      }
+
+      if (!seenQualities.has(qualityKey)) {
+        row.isFirstInQuality = true;
+        row.qualityRowspan = qualityCounts.get(qualityKey);
+        seenQualities.add(qualityKey);
+      }
+    });
+
+    return expandedRows;
+  }, [filteredEntries]);
+
+  // Format loading recommendations as readable parameters
+  const formatLoadingRecommendations = (recommendations: Record<string, any>) => {
+    if (!recommendations || Object.keys(recommendations).length === 0) {
+      return <span className="text-muted-foreground text-sm">No recommendations specified</span>;
+    }
+
+    const formatValue = (key: string, value: any): string => {
+      if (typeof value === 'object' && value !== null) {
+        return JSON.stringify(value);
+      }
+      return String(value);
+    };
+
+    return (
+      <div className="space-y-1">
+        {Object.entries(recommendations).map(([key, value]) => (
+          <div key={key} className="text-sm">
+            <span className="font-medium text-foreground">
+              {key.charAt(0).toUpperCase() + key.slice(1)}:
+            </span>{' '}
+            <span className="text-muted-foreground">
+              {formatValue(key, value)}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   const handleExport = () => {
     const exportedData = exportData();
@@ -156,7 +291,8 @@ export default function AthleticismDatabase() {
           </div>
         </div>
         <div className="flex items-center space-x-2">
-          <Badge variant="secondary">{data.entries.length} entries</Badge>
+          <Badge variant="secondary">{hierarchicalData.length} method entries</Badge>
+          <Badge variant="outline">{data.entries.length} base entries</Badge>
         </div>
       </div>
 
@@ -295,46 +431,82 @@ export default function AthleticismDatabase() {
                   <TableHead className="min-w-[200px]">Overarching Goal</TableHead>
                   <TableHead className="min-w-[200px]">Sub-goal</TableHead>
                   <TableHead className="min-w-[200px]">Quality</TableHead>
-                  <TableHead className="min-w-[300px]">Mapped Methods</TableHead>
+                  <TableHead className="min-w-[250px]">Method</TableHead>
                   <TableHead className="min-w-[400px]">Loading Recommendations</TableHead>
                   <TableHead className="w-[120px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredEntries.map((entry) => (
-                  <TableRow key={entry.id}>
-                    <TableCell className="font-medium">{entry.overarchingGoal}</TableCell>
-                    <TableCell>{entry.subGoal}</TableCell>
-                    <TableCell>{entry.quality}</TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        {entry.mappedMethods.map((method, index) => (
-                          <Badge key={index} variant="outline" className="text-xs">
-                            {method}
-                          </Badge>
-                        ))}
+                {hierarchicalData.map((row) => (
+                  <TableRow key={row.id}>
+                    {/* Overarching Goal - with rowspan */}
+                    {row.isFirstInGoal && (
+                      <TableCell 
+                        rowSpan={row.goalRowspan} 
+                        className="font-bold text-primary border-r-2 border-border bg-muted/30 align-top"
+                      >
+                        <div className="max-w-[180px] break-words">
+                          {row.overarchingGoal}
+                        </div>
+                      </TableCell>
+                    )}
+                    
+                    {/* Sub-goal - with rowspan */}
+                    {row.isFirstInSubGoal && (
+                      <TableCell 
+                        rowSpan={row.subGoalRowspan}
+                        className="font-medium text-muted-foreground border-r border-border bg-muted/10 align-top"
+                      >
+                        <div className="max-w-[180px] break-words">
+                          {row.subGoal}
+                        </div>
+                      </TableCell>
+                    )}
+                    
+                    {/* Quality - with rowspan */}
+                    {row.isFirstInQuality && (
+                      <TableCell 
+                        rowSpan={row.qualityRowspan}
+                        className="text-foreground border-r border-border bg-muted/5 align-top"
+                      >
+                        <div className="max-w-[180px] break-words">
+                          {row.quality}
+                        </div>
+                      </TableCell>
+                    )}
+                    
+                    {/* Method - individual for each row */}
+                    <TableCell className="border-r border-border">
+                      <div className="max-w-[230px]">
+                        <span className="font-bold text-foreground">
+                          {row.method}
+                        </span>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="max-w-[400px] overflow-auto">
-                        <pre className="text-xs bg-muted p-2 rounded">
-                          {JSON.stringify(entry.loadingRecommendations, null, 2)}
-                        </pre>
+                    
+                    {/* Loading Recommendations - formatted as readable list */}
+                    <TableCell className="border-r border-border">
+                      <div className="max-w-[380px]">
+                        {formatLoadingRecommendations(row.loadingRecommendations)}
                       </div>
                     </TableCell>
+                    
+                    {/* Actions - edit original entry */}
                     <TableCell>
                       <div className="flex space-x-1">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleEditEntry(entry)}
+                          onClick={() => handleEditEntry(row.originalEntry)}
+                          title="Edit entry"
                         >
                           <Edit className="h-3 w-3" />
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleDeleteEntry(entry.id)}
+                          onClick={() => handleDeleteEntry(row.originalEntry.id)}
+                          title="Delete entry"
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
