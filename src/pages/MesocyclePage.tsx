@@ -10,8 +10,11 @@ import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { ExtendedMesocycle, Mesocycle, Intensity } from '@/features/planner/types';
 import { TrainingMethod, IntensityLevel } from "@/types/training";
-import { ExtendedMesocycle } from "@/features/planner/types";
+import { useAthleticismData } from '@/hooks/useAthleticismData';
+import { useToolboxData } from '@/hooks/useToolboxData';
 import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Settings } from "lucide-react";
 import MesocycleCalendar from "@/components/mesocycle/MesocycleCalendar";
 import { MicrocycleIntensityChart } from "@/components/mesocycle/MicrocycleIntensityChart";
@@ -35,6 +38,10 @@ export default function MesocyclePage() {
   
   // Parameter values for method periodization (step 4)
   const [parameterValues, setParameterValues] = useState<Record<string, Record<number, Record<string, Record<string, string | number>>>>>({});
+
+  // Load athleticism and toolbox data
+  const { data: athleticismData } = useAthleticismData();
+  const { data: toolboxData } = useToolboxData();
 
   const totalSteps = 4;
 
@@ -414,60 +421,145 @@ export default function MesocyclePage() {
     </Card>
   );
 
-  // Group qualities by sub-goal using the training data - moved to component level
-  const qualitiesBySubGoal = React.useMemo(() => {
-    const trainableQualities = macrocycleData?.qualities || [];
-    const selectedSubGoals = macrocycleData?.subGoals || [];
-    const result: Record<string, Array<{ quality: string; methods: string[] }>> = {};
+  // Helper functions for sub-goal and method management
+  const getSubGoalsFromAthleticismDB = React.useMemo(() => {
+    const subGoalsMap = new Map<string, string>();
     
-    // Extract sub-goal names from the selected sub-goals - handle different formats
-    const selectedSubGoalNames = selectedSubGoals.map((subGoal: any) => {
-      if (typeof subGoal === 'string') return subGoal;
-      // For objects, try to extract the actual sub-goal name
-      const description = subGoal.description || subGoal.name || subGoal.id || 'Unknown Sub-goal';
-      // If description contains " - " separator (formatted as "overarching - sub"), extract the sub-goal part
-      if (description.includes(' - ')) {
-        return description.split(' - ')[1];
-      }
-      return description;
+    athleticismData.entries.forEach(entry => {
+      const formattedSubGoal = `${entry.overarchingGoal} - ${entry.subGoal}`;
+      subGoalsMap.set(entry.subGoal, formattedSubGoal);
     });
     
-    trainableQualities.forEach((quality: any) => {
-      const qualityName = typeof quality === 'string' ? quality : quality.name || quality.id || 'Unknown Quality';
+    return Array.from(subGoalsMap.values());
+  }, [athleticismData]);
+
+  const getMethodsForAllocatedSubGoals = React.useMemo(() => {
+    const allocatedSubGoals = new Set<string>();
+    
+    // Collect all sub-goals allocated to mesocycles
+    mesocycles.forEach(meso => {
+      meso.allocatedSubGoals?.forEach((subGoal: string) => {
+        allocatedSubGoals.add(subGoal);
+      });
+    });
+    
+    const methodsSet = new Set<string>();
+    const selectedQualities = macrocycleData?.qualities || [];
+    
+    // For each allocated sub-goal, find its methods through the selected qualities
+    allocatedSubGoals.forEach(formattedSubGoal => {
+      // Extract the actual sub-goal name from formatted string
+      const subGoalName = formattedSubGoal.includes(' - ') ? 
+        formattedSubGoal.split(' - ')[1] : formattedSubGoal;
       
-      // Find all data entries for this quality to get its sub-goal(s) and methods
-      const qualityEntries = trainingData.filter(item => 
-        item.quality === qualityName && 
-        selectedSubGoalNames.includes(item.subGoal)
-      );
+      // Find qualities for this sub-goal from training data
+      const qualitiesForSubGoal = trainingData
+        .filter(item => item.subGoal === subGoalName)
+        .map(item => item.quality);
       
-      qualityEntries.forEach(entry => {
-        const subGoal = entry.subGoal;
-        if (!result[subGoal]) {
-          result[subGoal] = [];
-        }
+      // Check which of these qualities were selected in macrocycle planning
+      qualitiesForSubGoal.forEach(qualityName => {
+        const isQualitySelected = selectedQualities.some((quality: any) => {
+          const selectedQualityName = typeof quality === 'string' ? quality : quality.name || quality.id;
+          return selectedQualityName === qualityName;
+        });
         
-        // Check if quality already exists in this sub-goal
-        const existingQuality = result[subGoal].find(q => q.quality === qualityName);
-        const methods = getMethodsForQuality(qualityName);
-        
-        if (!existingQuality) {
-          result[subGoal].push({ quality: qualityName, methods });
+        if (isQualitySelected) {
+          const methods = getMethodsForQuality(qualityName);
+          methods.forEach(method => methodsSet.add(method));
         }
       });
     });
     
-    return result;
-  }, [macrocycleData?.qualities, macrocycleData?.subGoals]);
+    return Array.from(methodsSet);
+  }, [mesocycles, macrocycleData?.qualities, trainingData]);
+
+  const groupMethodsByToolboxCategory = React.useMemo(() => {
+    const methods = getMethodsForAllocatedSubGoals;
+    const grouped: Record<string, Record<string, string[]>> = {};
+    
+    methods.forEach(method => {
+      // Try to match method with toolbox categories
+      // For now, use simple heuristics - this could be enhanced with better mapping
+      let category = 'General Training';
+      let subCategory = 'General';
+      
+      if (method.toLowerCase().includes('sprint')) {
+        category = 'Sprinting';
+        if (method.toLowerCase().includes('acceleration')) subCategory = 'Acceleration';
+        else if (method.toLowerCase().includes('resisted')) subCategory = 'Resisted Sprinting';
+        else if (method.toLowerCase().includes('top speed')) subCategory = 'Top Speed';
+        else subCategory = 'General';
+      } else if (method.toLowerCase().includes('resistance') || method.toLowerCase().includes('strength')) {
+        if (method.toLowerCase().includes('lower body')) {
+          category = 'Lower Body Resistance Training';
+          if (method.toLowerCase().includes('strength')) subCategory = 'Strength';
+          else if (method.toLowerCase().includes('power')) subCategory = 'Power';
+          else subCategory = 'General';
+        } else if (method.toLowerCase().includes('upper body')) {
+          category = 'Upper Body Resistance Training';
+          subCategory = 'General';
+        } else {
+          category = 'Resistance Training';
+          subCategory = 'General';
+        }
+      } else if (method.toLowerCase().includes('jump') || method.toLowerCase().includes('plyometric')) {
+        category = 'Plyometrics';
+        if (method.toLowerCase().includes('intensive')) subCategory = 'Intensive Jumps';
+        else if (method.toLowerCase().includes('extensive')) subCategory = 'Extensive Jumps';
+        else subCategory = 'General';
+      }
+      
+      if (!grouped[category]) grouped[category] = {};
+      if (!grouped[category][subCategory]) grouped[category][subCategory] = [];
+      
+      grouped[category][subCategory].push(method);
+    });
+    
+    return grouped;
+  }, [getMethodsForAllocatedSubGoals]);
+
+  const getParametersForMethod = (method: string) => {
+    // Determine method category and subcategory
+    let category = 'General Training';
+    let subCategory = 'General';
+    
+    if (method.toLowerCase().includes('sprint')) {
+      category = 'Sprinting';
+      if (method.toLowerCase().includes('acceleration')) subCategory = 'Acceleration';
+      else if (method.toLowerCase().includes('resisted')) subCategory = 'Resisted Sprinting';
+      else if (method.toLowerCase().includes('top speed')) subCategory = 'Top Speed';
+    } else if (method.toLowerCase().includes('resistance') || method.toLowerCase().includes('strength')) {
+      if (method.toLowerCase().includes('lower body')) {
+        category = 'Lower Body Resistance Training';
+        if (method.toLowerCase().includes('strength')) subCategory = 'Strength';
+        else if (method.toLowerCase().includes('power')) subCategory = 'Power';
+      }
+    } else if (method.toLowerCase().includes('jump') || method.toLowerCase().includes('plyometric')) {
+      category = 'Plyometrics';
+      if (method.toLowerCase().includes('intensive')) subCategory = 'Intensive Jumps';
+      else if (method.toLowerCase().includes('extensive')) subCategory = 'Extensive Jumps';
+    }
+    
+    // Get parameters from toolbox data
+    const parameters = toolboxData.entries
+      .filter(entry => entry.category === category && entry.subCategory === subCategory)
+      .map(entry => ({
+        name: entry.parameter,
+        type: entry.parameter.toLowerCase().includes('intensity') && entry.parameter.includes('[%]') ? 'number' : 
+              entry.parameter.includes('[#]') || entry.parameter.includes('[m]') || entry.parameter.includes('[s]') ? 'number' :
+              entry.parameter.includes('[') ? 'select' : 'text',
+        unit: entry.parameter.match(/\[(.*?)\]/)?.[1] || '',
+        options: entry.parameter.includes('[') && !entry.parameter.includes('%') && !entry.parameter.includes('#') && !entry.parameter.includes('m') && !entry.parameter.includes('s') ?
+                entry.parameter.match(/\[(.*?)\]/)?.[1]?.split(', ') : undefined
+      }));
+    
+    return parameters;
+  };
 
   const renderQualityAllocation = () => {
-    // Extract training qualities and sub-goals from macrocycle data
-    const trainableQualities = macrocycleData?.qualities || [];
-    const subGoals = macrocycleData?.subGoals || {};
-
-    const handleMethodDragStart = (e: React.DragEvent, method: string, quality: string, subGoal: string) => {
-      const dragData = JSON.stringify({ method, quality, subGoal });
-      e.dataTransfer.setData('text/plain', dragData);
+    const handleSubGoalDragStart = (e: React.DragEvent, subGoal: string) => {
+      e.dataTransfer.setData('text/plain', subGoal);
     };
 
     const handleDragOver = (e: React.DragEvent) => {
@@ -476,40 +568,29 @@ export default function MesocyclePage() {
 
     const handleDrop = (e: React.DragEvent, mesocycleId: string) => {
       e.preventDefault();
-      const dragDataString = e.dataTransfer.getData('text/plain');
+      const subGoal = e.dataTransfer.getData('text/plain');
       
-      try {
-        const dragData = JSON.parse(dragDataString);
-        const { method, quality, subGoal } = dragData;
-        
-        // Check if method already exists in this mesocycle
-        const mesocycleIndex = mesocycles.findIndex(m => m.id === mesocycleId);
-        if (mesocycleIndex === -1) return;
-        
-        const currentMethods = mesocycles[mesocycleIndex].trainingMethods || [];
-        const methodExists = currentMethods.some((m: any) => 
-          (typeof m === 'string' ? m : m.method) === method
-        );
-        
-        if (methodExists) return; // Prevent duplicates
-        
-        // Add method with metadata to mesocycle
-        const updated = [...mesocycles];
-        const newMethod = { method, quality, subGoal };
-        updated[mesocycleIndex].trainingMethods = [...currentMethods, newMethod];
-        setMesocycles(updated);
-      } catch (error) {
-        console.error('Failed to parse drag data:', error);
-      }
+      const mesocycleIndex = mesocycles.findIndex(m => m.id === mesocycleId);
+      if (mesocycleIndex === -1) return;
+      
+      const currentSubGoals = mesocycles[mesocycleIndex].allocatedSubGoals || [];
+      const subGoalExists = currentSubGoals.includes(subGoal);
+      
+      if (subGoalExists) return; // Prevent duplicates
+      
+      // Add sub-goal to mesocycle
+      const updated = [...mesocycles];
+      updated[mesocycleIndex].allocatedSubGoals = [...currentSubGoals, subGoal];
+      setMesocycles(updated);
     };
 
-    const removeMethodFromMesocycle = (mesocycleId: string, method: string) => {
+    const removeSubGoalFromMesocycle = (mesocycleId: string, subGoal: string) => {
       const mesocycleIndex = mesocycles.findIndex(m => m.id === mesocycleId);
       if (mesocycleIndex === -1) return;
       
       const updated = [...mesocycles];
-      updated[mesocycleIndex].trainingMethods = (updated[mesocycleIndex].trainingMethods || [])
-        .filter((m: any) => (typeof m === 'string' ? m : m.method) !== method);
+      updated[mesocycleIndex].allocatedSubGoals = (updated[mesocycleIndex].allocatedSubGoals || [])
+        .filter(sg => sg !== subGoal);
       setMesocycles(updated);
     };
 
@@ -518,55 +599,35 @@ export default function MesocyclePage() {
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <GripVertical className="h-5 w-5" />
-            <span>Training Method Allocation</span>
+            <span>Sub-Goal Allocation</span>
           </CardTitle>
           <CardDescription>
-            Expand training qualities to view methods, then drag and drop training methods to assign them to specific mesocycles. Each method can only be used once per mesocycle.
+            Drag and drop sub-goals to assign them to specific mesocycles. Each sub-goal can be assigned to multiple mesocycles.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
-              <Label className="text-sm font-medium mb-2 block">Available Training Methods by Sub-Goal</Label>
-              <div className="space-y-3 p-4 border rounded-lg bg-muted/50 max-h-96 overflow-y-auto">
-                {Object.entries(qualitiesBySubGoal).map(([subGoal, qualities]) => (
-                  <Collapsible key={subGoal} className="space-y-2">
-                    <CollapsibleTrigger className="flex items-center justify-between w-full p-2 bg-background border rounded-lg hover:bg-muted/50 transition-colors">
-                      <span className="font-medium text-sm text-left">{subGoal}</span>
-                      <ChevronDown className="h-4 w-4" />
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="space-y-2 pl-4">
-                      {qualities.map(({ quality, methods }) => (
-                        <Collapsible key={quality} className="space-y-1">
-                          <CollapsibleTrigger className="flex items-center justify-between w-full p-2 bg-muted border rounded text-left hover:bg-muted/80 transition-colors">
-                            <span className="text-sm font-medium">{quality}</span>
-                            <ChevronDown className="h-3 w-3" />
-                          </CollapsibleTrigger>
-                          <CollapsibleContent className="space-y-1 pl-4">
-                            {methods.map((method, index) => (
-                              <div
-                                key={index}
-                                draggable
-                                onDragStart={(e) => handleMethodDragStart(e, method, quality, subGoal)}
-                                className="p-2 bg-background border rounded cursor-grab hover:shadow-md transition-shadow text-xs"
-                                title={method}
-                              >
-                                <div className="line-clamp-2">
-                                  {method.length > 80 ? `${method.substring(0, 80)}...` : method}
-                                </div>
-                              </div>
-                            ))}
-                          </CollapsibleContent>
-                        </Collapsible>
-                      ))}
-                    </CollapsibleContent>
-                  </Collapsible>
+              <Label className="text-sm font-medium mb-2 block">Available Sub-Goals</Label>
+              <div className="space-y-2 p-4 border rounded-lg bg-muted/50 max-h-96 overflow-y-auto">
+                {getSubGoalsFromAthleticismDB.map((subGoal) => (
+                  <div
+                    key={subGoal}
+                    draggable
+                    onDragStart={(e) => handleSubGoalDragStart(e, subGoal)}
+                    className="p-3 bg-background border rounded cursor-grab hover:shadow-md transition-shadow"
+                    title={subGoal}
+                  >
+                    <div className="text-sm font-medium">
+                      {subGoal}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
 
             <div>
-              <Label className="text-sm font-medium mb-2 block">Mesocycle Method Assignments</Label>
+              <Label className="text-sm font-medium mb-2 block">Mesocycle Sub-Goal Assignments</Label>
               <div className="space-y-3">
                 {mesocycles.map((meso) => (
                   <div
@@ -582,38 +643,24 @@ export default function MesocyclePage() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      {(!meso.trainingMethods || meso.trainingMethods.length === 0) ? (
-                        <p className="text-xs text-muted-foreground">Drop training methods here</p>
+                      {(!meso.allocatedSubGoals || meso.allocatedSubGoals.length === 0) ? (
+                        <p className="text-xs text-muted-foreground">Drop sub-goals here</p>
                       ) : (
-                        meso.trainingMethods?.map((methodData: any, index: number) => {
-                          const method = typeof methodData === 'string' ? methodData : methodData.method;
-                          const quality = typeof methodData === 'string' ? '' : methodData.quality;
-                          const subGoal = typeof methodData === 'string' ? '' : methodData.subGoal;
-                          
-                          return (
-                            <div key={index} className="bg-primary/10 rounded p-2 space-y-1">
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1">
-                                  {subGoal && (
-                                    <div className="text-xs font-medium text-muted-foreground">{subGoal}</div>
-                                  )}
-                                  {quality && (
-                                    <div className="text-xs font-medium text-primary">{quality}</div>
-                                  )}
-                                  <div className="text-xs mt-1 line-clamp-2">
-                                    {method.length > 100 ? `${method.substring(0, 100)}...` : method}
-                                  </div>
-                                </div>
-                                <button
-                                  onClick={() => removeMethodFromMesocycle(meso.id, method)}
-                                  className="text-destructive hover:text-destructive/80 text-sm ml-2 shrink-0"
-                                >
-                                  ×
-                                </button>
+                        meso.allocatedSubGoals?.map((subGoal: string, index: number) => (
+                          <div key={index} className="bg-primary/10 rounded p-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="text-sm font-medium">{subGoal}</div>
                               </div>
+                              <button
+                                onClick={() => removeSubGoalFromMesocycle(meso.id, subGoal)}
+                                className="text-destructive hover:text-destructive/80 text-sm ml-2 shrink-0"
+                              >
+                                ×
+                              </button>
                             </div>
-                          );
-                        })
+                          </div>
+                        ))
                       )}
                     </div>
                   </div>
@@ -627,50 +674,46 @@ export default function MesocyclePage() {
   };
 
   const renderMethodPeriodization = () => {
-    // Get ALL allocated methods from mesocycles (not just those with parameters)
-    const getAllocatedMethods = () => {
-      const allocatedMethods = new Set<string>();
-      
-      mesocycles.forEach(meso => {
-        meso.trainingMethods?.forEach((methodData: any) => {
-          const method = typeof methodData === 'string' ? methodData : methodData.method;
-          if (method) {
-            allocatedMethods.add(method);
-          }
-        });
-      });
-      
-      return Array.from(allocatedMethods);
-    };
-
-    const allMethods = getAllocatedMethods();
+    const allMethods = getMethodsForAllocatedSubGoals;
+    const groupedMethods = groupMethodsByToolboxCategory;
     
-    // Helper function to check if a method is allocated to a specific mesocycle
+    // Helper function to check if a method should be shown for a mesocycle
     const isMethodAllocatedToMesocycle = (methodName: string, mesocycleId: string) => {
       const mesocycle = mesocycles.find(m => m.id === mesocycleId);
-      if (!mesocycle || !mesocycle.trainingMethods) return false;
+      if (!mesocycle || !mesocycle.allocatedSubGoals) return false;
       
-      return mesocycle.trainingMethods.some((methodData: any) => {
-        const method = typeof methodData === 'string' ? methodData : methodData.method;
-        return method === methodName;
+      // Check if any of the sub-goals allocated to this mesocycle include this method
+      const selectedQualities = macrocycleData?.qualities || [];
+      
+      return mesocycle.allocatedSubGoals.some((formattedSubGoal: string) => {
+        const subGoalName = formattedSubGoal.includes(' - ') ? 
+          formattedSubGoal.split(' - ')[1] : formattedSubGoal;
+        
+        // Find qualities for this sub-goal
+        const qualitiesForSubGoal = trainingData
+          .filter(item => item.subGoal === subGoalName)
+          .map(item => item.quality);
+        
+        // Check if any selected quality includes this method
+        return qualitiesForSubGoal.some(qualityName => {
+          const isQualitySelected = selectedQualities.some((quality: any) => {
+            const selectedQualityName = typeof quality === 'string' ? quality : quality.name || quality.id;
+            return selectedQualityName === qualityName;
+          });
+          
+          if (isQualitySelected) {
+            const methods = getMethodsForQuality(qualityName);
+            return methods.includes(methodName);
+          }
+          return false;
+        });
       });
     };
 
     // Helper function to get mesocycle overview data
     const getMesocycleOverview = (mesocycle: ExtendedMesocycle) => {
-      const subGoals = new Set<string>();
-      const qualities = new Set<string>();
-      
-      mesocycle.trainingMethods?.forEach((methodData: any) => {
-        if (typeof methodData === 'object') {
-          if (methodData.subGoal) subGoals.add(methodData.subGoal);
-          if (methodData.quality) qualities.add(methodData.quality);
-        }
-      });
-      
       return {
-        subGoals: Array.from(subGoals),
-        qualities: Array.from(qualities)
+        subGoals: mesocycle.allocatedSubGoals || []
       };
     };
 
@@ -757,21 +800,14 @@ export default function MesocyclePage() {
                                  gridColumn: `span ${meso.duration}` 
                                }}
                              >
-                               {overview.subGoals.length > 0 && (
-                                 <div className="flex flex-wrap gap-1">
-                                   <span className="font-medium text-muted-foreground">Goals:</span>
-                                   <span className="text-foreground">{overview.subGoals.join(', ')}</span>
-                                 </div>
-                               )}
-                               {overview.qualities.length > 0 && (
-                                 <div className="flex flex-wrap gap-1">
-                                   <span className="font-medium text-muted-foreground">Qualities:</span>
-                                   <span className="text-foreground">{overview.qualities.join(', ')}</span>
-                                 </div>
-                               )}
-                               {overview.subGoals.length === 0 && overview.qualities.length === 0 && (
-                                 <span className="text-muted-foreground italic">No methods allocated</span>
-                               )}
+                                {overview.subGoals.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    <span className="font-medium text-muted-foreground">Sub-Goals:</span>
+                                    <span className="text-foreground text-xs">{overview.subGoals.join(', ')}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground italic">No sub-goals allocated</span>
+                                )}
                              </div>
                            );
                          })}
@@ -805,97 +841,113 @@ export default function MesocyclePage() {
                        </div>
                      </div>
 
-                     {/* Method Rows */}
-                     <div className="p-4 space-y-4">
-                       {allMethods.map((method: string) => {
-                         const parameters = getParametersForMethod(method);
-                         
-                         return (
-                           <div key={method} className="border rounded-lg bg-card shadow-sm">
-                             {/* Method name header */}
-                           <div className="grid gap-1 bg-muted/20" style={{ 
-                             gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)` 
-                           }}>
-                              <div className="sticky left-0 z-40 p-3 font-medium text-sm border-r bg-background rounded-tl shadow-md">
-                                <div className="line-clamp-3" title={method}>
-                                  {method}
-                                </div>
-                              </div>
-                               {mesocycles.map((meso) => 
-                                 Array.from({ length: meso.duration }, (_, weekIndex) => {
-                                   const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
-                                   return (
-                                     <div 
-                                       key={`${meso.id}-${weekIndex}`} 
-                                       className={`h-16 border-l ${isAllocated ? 'bg-muted/10' : 'bg-gray-100/50 opacity-50'}`}
-                                     />
-                                   );
-                                 })
-                               )}
-                             </div>
-                             
-                             {/* Parameter rows - only show if method has parameters */}
-                             {parameters.length > 0 && (
-                               <div className="divide-y">
-                                 {parameters.map((param) => (
-                                   <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
-                                     gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)` 
-                                   }}>
-                                      <div className="sticky left-0 z-40 p-2 text-xs text-muted-foreground bg-background border-r flex items-center shadow-md">
-                                        <span className="font-medium">{param.name.replace(/_/g, ' ')}</span>
-                                        {param.unit && <span className="ml-1 text-xs opacity-70">({param.unit})</span>}
+                      {/* Method Categories */}
+                      <div className="p-4 space-y-6">
+                        {Object.entries(groupedMethods).map(([category, subCategories]) => (
+                          <div key={category} className="space-y-4">
+                            {/* Category Header */}
+                            <div className="border-b pb-2">
+                              <h4 className="text-lg font-semibold text-primary">{category}</h4>
+                            </div>
+                            
+                            {/* Sub-categories and Methods */}
+                            {Object.entries(subCategories).map(([subCategory, methods]) => (
+                              <div key={subCategory} className="space-y-2">
+                                {/* Sub-category Header */}
+                                <h5 className="text-md font-medium text-muted-foreground">{subCategory}</h5>
+                                
+                                {/* Methods in this sub-category */}
+                                {methods.map((method: string) => {
+                                  const parameters = getParametersForMethod(method);
+                                  
+                                  return (
+                                    <div key={method} className="border rounded-lg bg-card shadow-sm">
+                                      {/* Method name header */}
+                                      <div className="grid gap-1 bg-muted/20" style={{ 
+                                        gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)` 
+                                      }}>
+                                        <div className="sticky left-0 z-40 p-3 font-medium text-sm border-r bg-background rounded-tl shadow-md">
+                                          <div className="line-clamp-3" title={method}>
+                                            {method}
+                                          </div>
+                                        </div>
+                                        {mesocycles.map((meso) => 
+                                          Array.from({ length: meso.duration }, (_, weekIndex) => {
+                                            const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
+                                            return (
+                                              <div 
+                                                key={`${meso.id}-${weekIndex}`} 
+                                                className={`h-16 border-l ${isAllocated ? 'bg-muted/10' : 'bg-gray-100/50 opacity-50'}`}
+                                              />
+                                            );
+                                          })
+                                        )}
                                       </div>
-                                     {mesocycles.map((meso) =>
-                                       Array.from({ length: meso.duration }, (_, weekIndex) => {
-                                         const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
-                                         const currentValue = getParameterValue(meso.id, weekIndex, method, param.name, parameterValues);
-                                         
-                                         return (
-                                           <div 
-                                             key={`${meso.id}-${weekIndex}-${param.name}`} 
-                                             className={`p-1 border-l ${!isAllocated ? 'bg-gray-100/50 opacity-50' : ''}`}
-                                           >
-                                             {param.type === 'select' ? (
-                                               <Select
-                                                 value={isAllocated ? (currentValue?.toString() || '') : ''}
-                                                 onValueChange={(value) => isAllocated && updateParameterValue(meso.id, weekIndex, method, param.name, value)}
-                                                 disabled={!isAllocated}
-                                               >
-                                                 <SelectTrigger className={`h-8 text-xs ${!isAllocated ? 'cursor-not-allowed' : ''}`}>
-                                                   <SelectValue placeholder={!isAllocated ? '' : param.defaultValue?.toString() || ''} />
-                                                 </SelectTrigger>
-                                                 <SelectContent className="z-50">
-                                                   {param.options?.map((option) => (
-                                                     <SelectItem key={option} value={option} className="text-xs">
-                                                       {option}
-                                                     </SelectItem>
-                                                   ))}
-                                                 </SelectContent>
-                                               </Select>
-                                             ) : (
-                                               <Input
-                                                 type={param.type === 'number' ? 'number' : 'text'}
-                                                 value={isAllocated ? (currentValue || '') : ''}
-                                                 onChange={(e) => isAllocated && updateParameterValue(meso.id, weekIndex, method, param.name, param.type === 'number' ? Number(e.target.value) : e.target.value)}
-                                                 className={`h-8 text-xs ${!isAllocated ? 'cursor-not-allowed' : ''}`}
-                                                 min={param.min}
-                                                 max={param.max}
-                                                 placeholder={!isAllocated ? '' : param.defaultValue?.toString() || ''}
-                                                 disabled={!isAllocated}
-                                               />
-                                             )}
-                                           </div>
-                                         );
-                                       })
-                                     )}
-                                   </div>
-                                 ))}
-                               </div>
-                             )}
-                           </div>
-                         );
-                       })}
-                     </div>
+                                      
+                                      {/* Parameter sub-rows */}
+                                      {parameters.length > 0 && (
+                                        <div className="divide-y">
+                                          {parameters.map((param) => (
+                                            <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
+                                              gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)` 
+                                            }}>
+                                              <div className="sticky left-0 z-40 p-2 text-xs text-muted-foreground bg-background border-r flex items-center shadow-md">
+                                                <span className="ml-4 font-medium">{param.name.replace(/\[.*?\]/g, '').trim()}</span>
+                                                {param.unit && <span className="ml-1 text-xs opacity-70">({param.unit})</span>}
+                                              </div>
+                                              {mesocycles.map((meso) =>
+                                                Array.from({ length: meso.duration }, (_, weekIndex) => {
+                                                  const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
+                                                  const currentValue = getParameterValue(meso.id, weekIndex, method, param.name, parameterValues);
+                                                  
+                                                  return (
+                                                    <div 
+                                                      key={`${meso.id}-${weekIndex}-${param.name}`} 
+                                                      className={`p-1 border-l ${!isAllocated ? 'bg-gray-100/50 opacity-50' : ''}`}
+                                                    >
+                                                      {param.type === 'select' ? (
+                                                        <Select
+                                                          value={isAllocated ? (currentValue?.toString() || '') : ''}
+                                                          onValueChange={(value) => isAllocated && updateParameterValue(meso.id, weekIndex, method, param.name, value)}
+                                                          disabled={!isAllocated}
+                                                        >
+                                                          <SelectTrigger className={`h-8 text-xs ${!isAllocated ? 'cursor-not-allowed' : ''}`}>
+                                                            <SelectValue placeholder="" />
+                                                          </SelectTrigger>
+                                                          <SelectContent className="z-50">
+                                                            {param.options?.map((option) => (
+                                                              <SelectItem key={option} value={option} className="text-xs">
+                                                                {option}
+                                                              </SelectItem>
+                                                            ))}
+                                                          </SelectContent>
+                                                        </Select>
+                                                      ) : (
+                                                        <Input
+                                                          type={param.type === 'number' ? 'number' : 'text'}
+                                                          value={isAllocated ? (currentValue || '') : ''}
+                                                          onChange={(e) => isAllocated && updateParameterValue(meso.id, weekIndex, method, param.name, param.type === 'number' ? Number(e.target.value) : e.target.value)}
+                                                          className={`h-8 text-xs ${!isAllocated ? 'cursor-not-allowed' : ''}`}
+                                                          placeholder=""
+                                                          disabled={!isAllocated}
+                                                        />
+                                                      )}
+                                                    </div>
+                                                  );
+                                                })
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
                    </div>
                  </div>
              </div>
@@ -908,7 +960,7 @@ export default function MesocyclePage() {
   const stepTitles = [
     "Mesocycle Setup",
     "Intensity Configuration", 
-    "Training Quality Allocation",
+    "Sub-Goal Allocation",
     "Method Periodization"
   ];
 

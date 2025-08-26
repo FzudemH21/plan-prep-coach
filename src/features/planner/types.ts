@@ -21,6 +21,7 @@ export interface ExtendedMesocycle extends Mesocycle {
   duration: number;
   intensity: Intensity;
   trainingMethods: any[];
+  allocatedSubGoals?: string[];
 }
 
 export interface Plan {
