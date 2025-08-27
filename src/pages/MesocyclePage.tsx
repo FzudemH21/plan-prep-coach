@@ -444,50 +444,35 @@ export default function MesocyclePage() {
 
   const getMethodsForAllocatedSubGoals = React.useMemo(() => {
     if (!macrocycleData) return [];
-    
-    const allocatedSubGoals = new Set<string>();
-    
-    // Collect all sub-goals allocated to mesocycles
-    mesocycles.forEach(meso => {
-      meso.allocatedSubGoals?.forEach((subGoal: string) => {
-        allocatedSubGoals.add(subGoal);
-      });
-    });
-    
+
+    // Collect all allocated sub-goals across mesocycles (strings like "Overarching - Sub-goal")
+    const allocated = new Set<string>();
+    mesocycles.forEach(meso => meso.allocatedSubGoals?.forEach(sg => allocated.add(sg)));
+
     const methodsSet = new Set<string>();
-    
-    // For each allocated sub-goal, find its methods through macrocycle data
-    allocatedSubGoals.forEach(formattedSubGoal => {
-      // Extract the actual sub-goal name from formatted string
-      const subGoalName = formattedSubGoal.includes(' - ') ? 
-        formattedSubGoal.split(' - ')[1] : formattedSubGoal;
-      
-      // Find this sub-goal in macrocycle data
+
+    allocated.forEach(formattedSubGoal => {
+      // Find matching sub-goal in macrocycleData by comparing the full formatted description
       const macroSubGoal = macrocycleData.subGoals?.find((sg: any) => {
-        const sgName = sg.description || sg.name || sg.id || sg;
-        return normalizeForComparison(sgName) === normalizeForComparison(subGoalName);
+        const sgDesc = sg.description || sg.name || sg.id || sg;
+        return normalizeForComparison(sgDesc) === normalizeForComparison(formattedSubGoal);
       });
-      
-      if (macroSubGoal) {
-        // Get qualities associated with this sub-goal from macrocycle qualitiesBySubGoal
-        const qualitiesForSubGoal = macrocycleData.qualitiesBySubGoal?.[macroSubGoal.id || macroSubGoal] || [];
-        
-        // For each quality, get the selected methods from macrocycle methodsByQuality
-        qualitiesForSubGoal.forEach((quality: any) => {
-          const qualityId = typeof quality === 'string' ? quality : quality.id || quality.name;
-          const methodsForQuality = macrocycleData.methodsByQuality?.[qualityId] || [];
-          
-          // Add methods to the set
-          methodsForQuality.forEach((method: any) => {
-            const methodName = typeof method === 'string' ? method : method.name || method.id;
-            if (methodName) {
-              methodsSet.add(methodName);
-            }
-          });
-        });
-      }
+
+      if (!macroSubGoal) return;
+
+      // Get qualities for this sub-goal (structure: { label, list })
+      const qEntry = macrocycleData.qualitiesBySubGoal?.[macroSubGoal.id];
+      const qualityNames: string[] = qEntry?.list || [];
+
+      // For each quality, pull selected methods from methodsByQuality (structure: { subGoalLabel, qualityName, list })
+      qualityNames.forEach((qName: string) => {
+        const qualityId = `${macroSubGoal.id}::${qName}`;
+        const mEntry = macrocycleData.methodsByQuality?.[qualityId];
+        const methodNames: string[] = mEntry?.list || [];
+        methodNames.forEach(m => methodsSet.add(m));
+      });
     });
-    
+
     return Array.from(methodsSet);
   }, [mesocycles, macrocycleData]);
 
@@ -701,32 +686,25 @@ export default function MesocyclePage() {
       
       // Check if any of the sub-goals allocated to this mesocycle include this method
       return mesocycle.allocatedSubGoals.some((formattedSubGoal: string) => {
-        const subGoalName = formattedSubGoal.includes(' - ') ? 
-          formattedSubGoal.split(' - ')[1] : formattedSubGoal;
-        
-        // Find this sub-goal in macrocycle data
+        // Match by full formatted string ("Overarching - Sub-goal")
         const macroSubGoal = macrocycleData.subGoals?.find((sg: any) => {
-          const sgName = sg.description || sg.name || sg.id || sg;
-          return normalizeForComparison(sgName) === normalizeForComparison(subGoalName);
+          const sgDesc = sg.description || sg.name || sg.id || sg;
+          return normalizeForComparison(sgDesc) === normalizeForComparison(formattedSubGoal);
         });
         
-        if (macroSubGoal) {
-          // Get qualities associated with this sub-goal from macrocycle qualitiesBySubGoal
-          const qualitiesForSubGoal = macrocycleData.qualitiesBySubGoal?.[macroSubGoal.id || macroSubGoal] || [];
-          
-          // Check if any quality includes this method
-          return qualitiesForSubGoal.some((quality: any) => {
-            const qualityId = typeof quality === 'string' ? quality : quality.id || quality.name;
-            const methodsForQuality = macrocycleData.methodsByQuality?.[qualityId] || [];
-            
-            return methodsForQuality.some((method: any) => {
-              const methodNameInData = typeof method === 'string' ? method : method.name || method.id;
-              return methodNameInData === methodName;
-            });
-          });
-        }
+        if (!macroSubGoal) return false;
         
-        return false;
+        // Qualities for this sub-goal
+        const qEntry = macrocycleData.qualitiesBySubGoal?.[macroSubGoal.id];
+        const qualityNames: string[] = qEntry?.list || [];
+        
+        // If any quality maps to this method, it's allocated
+        return qualityNames.some((qName: string) => {
+          const qualityId = `${macroSubGoal.id}::${qName}`;
+          const mEntry = macrocycleData.methodsByQuality?.[qualityId];
+          const methodNames: string[] = mEntry?.list || [];
+          return methodNames.includes(methodName);
+        });
       });
     };
 
