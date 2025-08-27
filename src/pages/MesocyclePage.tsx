@@ -216,7 +216,7 @@ export default function MesocyclePage() {
             </div>
             <div className="space-y-1 md:col-span-2">
               <Label className="text-sm font-medium text-muted-foreground">Available Methods</Label>
-              <p className="text-sm text-muted-foreground">{trainingMethods.length} training methods available</p>
+              <p className="text-sm text-muted-foreground">{getMethodsForAllocatedSubGoals.length} unique methods from selected sub-goals</p>
             </div>
           </div>
         ) : (
@@ -421,6 +421,15 @@ export default function MesocyclePage() {
     </Card>
   );
 
+  // Helper function for string normalization
+  const normalizeForComparison = (str: string): string => {
+    return str
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+  };
+
   // Helper functions for sub-goal and method management
   const getSubGoalsFromAthleticismDB = React.useMemo(() => {
     const subGoalsMap = new Map<string, string>();
@@ -434,6 +443,8 @@ export default function MesocyclePage() {
   }, [athleticismData]);
 
   const getMethodsForAllocatedSubGoals = React.useMemo(() => {
+    if (!macrocycleData) return [];
+    
     const allocatedSubGoals = new Set<string>();
     
     // Collect all sub-goals allocated to mesocycles
@@ -444,35 +455,41 @@ export default function MesocyclePage() {
     });
     
     const methodsSet = new Set<string>();
-    const selectedQualities = macrocycleData?.qualities || [];
     
-    // For each allocated sub-goal, find its methods through the selected qualities
+    // For each allocated sub-goal, find its methods through macrocycle data
     allocatedSubGoals.forEach(formattedSubGoal => {
       // Extract the actual sub-goal name from formatted string
       const subGoalName = formattedSubGoal.includes(' - ') ? 
         formattedSubGoal.split(' - ')[1] : formattedSubGoal;
       
-      // Find qualities for this sub-goal from training data
-      const qualitiesForSubGoal = trainingData
-        .filter(item => item.subGoal === subGoalName)
-        .map(item => item.quality);
-      
-      // Check which of these qualities were selected in macrocycle planning
-      qualitiesForSubGoal.forEach(qualityName => {
-        const isQualitySelected = selectedQualities.some((quality: any) => {
-          const selectedQualityName = typeof quality === 'string' ? quality : quality.name || quality.id;
-          return selectedQualityName === qualityName;
-        });
-        
-        if (isQualitySelected) {
-          const methods = getMethodsForQuality(qualityName);
-          methods.forEach(method => methodsSet.add(method));
-        }
+      // Find this sub-goal in macrocycle data
+      const macroSubGoal = macrocycleData.subGoals?.find((sg: any) => {
+        const sgName = sg.description || sg.name || sg.id || sg;
+        return normalizeForComparison(sgName) === normalizeForComparison(subGoalName);
       });
+      
+      if (macroSubGoal) {
+        // Get qualities associated with this sub-goal from macrocycle qualitiesBySubGoal
+        const qualitiesForSubGoal = macrocycleData.qualitiesBySubGoal?.[macroSubGoal.id || macroSubGoal] || [];
+        
+        // For each quality, get the selected methods from macrocycle methodsByQuality
+        qualitiesForSubGoal.forEach((quality: any) => {
+          const qualityId = typeof quality === 'string' ? quality : quality.id || quality.name;
+          const methodsForQuality = macrocycleData.methodsByQuality?.[qualityId] || [];
+          
+          // Add methods to the set
+          methodsForQuality.forEach((method: any) => {
+            const methodName = typeof method === 'string' ? method : method.name || method.id;
+            if (methodName) {
+              methodsSet.add(methodName);
+            }
+          });
+        });
+      }
     });
     
     return Array.from(methodsSet);
-  }, [mesocycles, macrocycleData?.qualities, trainingData]);
+  }, [mesocycles, macrocycleData]);
 
   const groupMethodsByToolboxCategory = React.useMemo(() => {
     const methods = getMethodsForAllocatedSubGoals;
@@ -680,33 +697,36 @@ export default function MesocyclePage() {
     // Helper function to check if a method should be shown for a mesocycle
     const isMethodAllocatedToMesocycle = (methodName: string, mesocycleId: string) => {
       const mesocycle = mesocycles.find(m => m.id === mesocycleId);
-      if (!mesocycle || !mesocycle.allocatedSubGoals) return false;
+      if (!mesocycle || !mesocycle.allocatedSubGoals || !macrocycleData) return false;
       
       // Check if any of the sub-goals allocated to this mesocycle include this method
-      const selectedQualities = macrocycleData?.qualities || [];
-      
       return mesocycle.allocatedSubGoals.some((formattedSubGoal: string) => {
         const subGoalName = formattedSubGoal.includes(' - ') ? 
           formattedSubGoal.split(' - ')[1] : formattedSubGoal;
         
-        // Find qualities for this sub-goal
-        const qualitiesForSubGoal = trainingData
-          .filter(item => item.subGoal === subGoalName)
-          .map(item => item.quality);
-        
-        // Check if any selected quality includes this method
-        return qualitiesForSubGoal.some(qualityName => {
-          const isQualitySelected = selectedQualities.some((quality: any) => {
-            const selectedQualityName = typeof quality === 'string' ? quality : quality.name || quality.id;
-            return selectedQualityName === qualityName;
-          });
-          
-          if (isQualitySelected) {
-            const methods = getMethodsForQuality(qualityName);
-            return methods.includes(methodName);
-          }
-          return false;
+        // Find this sub-goal in macrocycle data
+        const macroSubGoal = macrocycleData.subGoals?.find((sg: any) => {
+          const sgName = sg.description || sg.name || sg.id || sg;
+          return normalizeForComparison(sgName) === normalizeForComparison(subGoalName);
         });
+        
+        if (macroSubGoal) {
+          // Get qualities associated with this sub-goal from macrocycle qualitiesBySubGoal
+          const qualitiesForSubGoal = macrocycleData.qualitiesBySubGoal?.[macroSubGoal.id || macroSubGoal] || [];
+          
+          // Check if any quality includes this method
+          return qualitiesForSubGoal.some((quality: any) => {
+            const qualityId = typeof quality === 'string' ? quality : quality.id || quality.name;
+            const methodsForQuality = macrocycleData.methodsByQuality?.[qualityId] || [];
+            
+            return methodsForQuality.some((method: any) => {
+              const methodNameInData = typeof method === 'string' ? method : method.name || method.id;
+              return methodNameInData === methodName;
+            });
+          });
+        }
+        
+        return false;
       });
     };
 
@@ -751,7 +771,7 @@ export default function MesocyclePage() {
           {allMethods.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-muted-foreground mb-2">No training methods allocated.</p>
-              <p className="text-sm text-muted-foreground">Please allocate training methods to mesocycles in step 3 first.</p>
+              <p className="text-sm text-muted-foreground">Please allocate sub-goals to mesocycles in step 3 first.</p>
             </div>
           ) : (
              <div className="space-y-3">
