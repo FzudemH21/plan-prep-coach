@@ -434,13 +434,19 @@ export default function MesocyclePage() {
   const getSubGoalsFromAthleticismDB = React.useMemo(() => {
     const subGoalsMap = new Map<string, string>();
     
+    // Get selected sub-goals from macrocycle data
+    const selectedSubGoalIds = new Set(macrocycleData?.subGoals?.map((sg: any) => sg.id) || []);
+    
     athleticismData.entries.forEach(entry => {
-      const formattedSubGoal = `${entry.overarchingGoal} - ${entry.subGoal}`;
-      subGoalsMap.set(entry.subGoal, formattedSubGoal);
+      // Only include sub-goals that were selected in macrocycle planning
+      if (selectedSubGoalIds.has(entry.id)) {
+        const formattedSubGoal = `${entry.overarchingGoal} - ${entry.subGoal}`;
+        subGoalsMap.set(entry.subGoal, formattedSubGoal);
+      }
     });
     
     return Array.from(subGoalsMap.values());
-  }, [athleticismData]);
+  }, [athleticismData, macrocycleData]);
 
   const getMethodsForAllocatedSubGoals = React.useMemo(() => {
     if (!macrocycleData) return [];
