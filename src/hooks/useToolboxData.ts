@@ -2,17 +2,70 @@ import { useState, useEffect } from 'react';
 import { ToolboxEntry, ToolboxDatabase } from '@/types/toolbox';
 import { defaultToolboxData } from '@/data/toolboxData';
 
+// Migration function to parse legacy bracket notation
+function migrateLegacyEntry(entry: ToolboxEntry): ToolboxEntry {
+  // If already migrated, return as-is
+  if (entry.parameterName && entry.parameterType && entry.options) {
+    return entry;
+  }
+
+  const parameter = entry.parameter;
+  const bracketMatch = parameter.match(/^(.+?)\s*\[(.+?)\]$/);
+  
+  if (bracketMatch) {
+    const parameterName = bracketMatch[1].trim();
+    const optionsString = bracketMatch[2].trim();
+    const options = optionsString.split(',').map(opt => opt.trim());
+    
+    // Auto-detect parameter type based on options content
+    const hasUnits = options.some(opt => 
+      /^(m|km|s|min|h|%|kg|lbs|reps?|sets?|#)$/i.test(opt) ||
+      opt.toLowerCase().includes('second') ||
+      opt.toLowerCase().includes('minute') ||
+      opt.toLowerCase().includes('meter') ||
+      opt.toLowerCase().includes('percent')
+    );
+    
+    return {
+      ...entry,
+      parameterName,
+      parameterType: hasUnits ? 'quantitative' : 'qualitative',
+      options
+    };
+  } else {
+    // No brackets - treat as qualitative with empty options
+    return {
+      ...entry,
+      parameterName: parameter,
+      parameterType: 'qualitative',
+      options: []
+    };
+  }
+}
+
 export function useToolboxData() {
   const [data, setData] = useState<ToolboxDatabase>(defaultToolboxData);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load data from localStorage on mount
+  // Load data from localStorage on mount with migration
   useEffect(() => {
     try {
       const savedData = localStorage.getItem('toolbox-data');
       if (savedData) {
         const parsedData = JSON.parse(savedData);
-        setData(parsedData);
+        // Migrate legacy entries
+        const migratedEntries = parsedData.entries.map(migrateLegacyEntry);
+        const migratedData = { ...parsedData, entries: migratedEntries };
+        setData(migratedData);
+        // Save migrated data back to localStorage
+        localStorage.setItem('toolbox-data', JSON.stringify(migratedData));
+      } else {
+        // Migrate default data on first load
+        const migratedDefault = {
+          ...defaultToolboxData,
+          entries: defaultToolboxData.entries.map(migrateLegacyEntry)
+        };
+        setData(migratedDefault);
       }
     } catch (error) {
       console.error('Failed to load toolbox data from localStorage:', error);

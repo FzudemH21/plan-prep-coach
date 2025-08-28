@@ -1,45 +1,46 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { ExtendedMesocycle, Mesocycle, Intensity } from '@/features/planner/types';
-import { TrainingMethod, IntensityLevel } from "@/types/training";
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ArrowLeft, ArrowRight, Settings } from 'lucide-react';
+import MesocycleCalendar from '@/components/mesocycle/MesocycleCalendar';
+import { MicrocycleIntensityChart } from '@/components/mesocycle/MicrocycleIntensityChart';
+import { ExtendedMesocycle, Mesocycle, Microcycle, Plan, Intensity } from '@/features/planner/types';
 import { useAthleticismData } from '@/hooks/useAthleticismData';
 import { useToolboxData } from '@/hooks/useToolboxData';
-import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Settings } from "lucide-react";
-import MesocycleCalendar from "@/components/mesocycle/MesocycleCalendar";
-import { MicrocycleIntensityChart } from "@/components/mesocycle/MicrocycleIntensityChart";
+import { QuantitativeParameterInput, QualitativeParameterInput } from '@/components/ui/parameter-input';
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown } from "lucide-react";
 import { format, addWeeks, differenceInWeeks } from "date-fns";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
-import { methodParameters, getParametersForMethod, getParameterValue, setParameterValue } from "@/data/methodParameters";
+import { IntensityLevel } from "@/types/training";
+
+// Helper function for string normalization
+const normalizeForComparison = (str: string): string => {
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+};
 
 export default function MesocyclePage() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [mesocycles, setMesocycles] = useState<ExtendedMesocycle[]>([]);
-  const [trainingMethods, setTrainingMethods] = useState<TrainingMethod[]>([]);
-  const [mesocycleLength, setMesocycleLength] = useState(4);
-  const [uniformLength, setUniformLength] = useState(true);
-  
-  // Macrocycle data from previous step
   const [macrocycleData, setMacrocycleData] = useState<any>(null);
   const [planStartDate, setPlanStartDate] = useState<Date>(new Date());
   const [planEndDate, setPlanEndDate] = useState<Date>(new Date());
   const [totalWeeks, setTotalWeeks] = useState<number>(0);
-  
-  // Parameter values for method periodization (step 4)
+  const [mesocycleLength, setMesocycleLength] = useState(4);
+  const [uniformLength, setUniformLength] = useState(true);
   const [parameterValues, setParameterValues] = useState<Record<string, Record<number, Record<string, Record<string, string | number>>>>>({});
-
-  // Load athleticism and toolbox data
+  
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
 
@@ -123,20 +124,8 @@ export default function MesocyclePage() {
       
       setMesocycles(defaultMesocycles);
       
-      // Load training methods from macrocycle data
-      if (data.methodsByQuality) {
-        const allMethods: TrainingMethod[] = [];
-        Object.values(data.methodsByQuality).forEach((methods: any) => {
-          // Ensure methods is an array before spreading
-          if (Array.isArray(methods)) {
-            allMethods.push(...methods);
-          } else if (methods && typeof methods === 'object') {
-            // If it's a single method object, push it directly
-            allMethods.push(methods);
-          }
-        });
-        setTrainingMethods(allMethods);
-      }
+      // Load training methods from macrocycle data (no longer needed but kept for compatibility)
+      // The methods will now be derived from toolbox data
     }
   }, []);
 
@@ -431,7 +420,7 @@ export default function MesocyclePage() {
   };
 
   // Helper functions for sub-goal and method management
-  const getSubGoalsFromAthleticismDB = React.useMemo(() => {
+  const getSubGoalsFromAthleticismDB = useMemo(() => {
     const subGoalsMap = new Map<string, string>();
     
     // Get selected sub-goal descriptions from macrocycle data
@@ -452,7 +441,7 @@ export default function MesocyclePage() {
     return Array.from(subGoalsMap.values());
   }, [athleticismData, macrocycleData]);
 
-  const getMethodsForAllocatedSubGoals = React.useMemo(() => {
+  const getMethodsForAllocatedSubGoals = useMemo(() => {
     if (!macrocycleData) return [];
 
     // Collect all allocated sub-goals across mesocycles (strings like "Overarching - Sub-goal")
@@ -486,7 +475,7 @@ export default function MesocyclePage() {
     return Array.from(methodsSet);
   }, [mesocycles, macrocycleData]);
 
-  const groupMethodsByToolboxCategory = React.useMemo(() => {
+  const groupMethodsByToolboxCategory = useMemo(() => {
     const methods = getMethodsForAllocatedSubGoals;
     const grouped: Record<string, Record<string, string[]>> = {};
     
@@ -725,8 +714,49 @@ export default function MesocyclePage() {
       };
     };
 
+    // Helper function to get parameters for a method from toolbox data
+    const getParametersForMethodFromToolbox = (methodName: string) => {
+      if (!toolboxData.entries) return [];
+      
+      // Find all toolbox entries that match this method
+      const matchingEntries = toolboxData.entries.filter(entry => {
+        // Look for entries that have the method name in parameter or category
+        const entryKey = `${entry.category}${entry.subCategory ? ` - ${entry.subCategory}` : ''}`;
+        return normalizeForComparison(entryKey) === normalizeForComparison(methodName) ||
+               normalizeForComparison(entry.parameter) === normalizeForComparison(methodName);
+      });
+      
+      // Convert toolbox entries to parameter format
+      return matchingEntries.map(entry => ({
+        name: entry.parameterName || entry.parameter.split('[')[0].trim(),
+        type: entry.parameterType === 'quantitative' ? 'number' : 'text',
+        options: entry.options || [],
+        isQuantitative: entry.parameterType === 'quantitative',
+        isQualitative: entry.parameterType === 'qualitative'
+      }));
+    };
+
     const updateParameterValue = (mesocycleId: string, microcycleIndex: number, methodName: string, parameterName: string, value: string | number) => {
-      setParameterValues(prev => setParameterValue(mesocycleId, microcycleIndex, methodName, parameterName, value, prev));
+      setParameterValues(prev => {
+        const updated = { ...prev };
+        
+        if (!updated[mesocycleId]) {
+          updated[mesocycleId] = {};
+        }
+        if (!updated[mesocycleId][microcycleIndex]) {
+          updated[mesocycleId][microcycleIndex] = {};
+        }
+        if (!updated[mesocycleId][microcycleIndex][methodName]) {
+          updated[mesocycleId][microcycleIndex][methodName] = {};
+        }
+        
+        updated[mesocycleId][microcycleIndex][methodName][parameterName] = value;
+        return updated;
+      });
+    };
+
+    const getParameterValue = (mesocycleId: string, microcycleIndex: number, methodName: string, parameterName: string) => {
+      return parameterValues[mesocycleId]?.[microcycleIndex]?.[methodName]?.[parameterName] || '';
     };
 
     // Helper function for intensity colors (using same logic from other components)
@@ -866,7 +896,7 @@ export default function MesocyclePage() {
                                 
                                 {/* Methods in this sub-category */}
                                 {methods.map((method: string) => {
-                                  const parameters = getParametersForMethod(method);
+                                  const parameters = getParametersForMethodFromToolbox(method);
                                   
                                   return (
                                     <div key={method} className="border rounded-lg bg-card shadow-sm">
@@ -900,40 +930,43 @@ export default function MesocyclePage() {
                                               gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)` 
                                             }}>
                                               <div className="sticky left-0 z-40 p-2 text-xs text-muted-foreground bg-background border-r flex items-center shadow-md">
-                                                <span className="ml-4 font-medium">{param.name.replace(/\[.*?\]/g, '').trim()}</span>
-                                                {param.unit && <span className="ml-1 text-xs opacity-70">({param.unit})</span>}
+                                                <span className="ml-4 font-medium">{param.name}</span>
+                                                {param.isQuantitative && param.options && param.options.length > 0 && (
+                                                  <span className="ml-1 text-xs opacity-70">({param.options[0]})</span>
+                                                )}
                                               </div>
                                               {mesocycles.map((meso) =>
                                                 Array.from({ length: meso.duration }, (_, weekIndex) => {
                                                   const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
-                                                  const currentValue = getParameterValue(meso.id, weekIndex, method, param.name, parameterValues);
+                                                  const currentValue = getParameterValue(meso.id, weekIndex, method, param.name);
                                                   
                                                   return (
                                                     <div 
                                                       key={`${meso.id}-${weekIndex}-${param.name}`} 
                                                       className={`p-1 border-l ${!isAllocated ? 'bg-gray-100/50 opacity-50' : ''}`}
                                                     >
-                                                      {param.type === 'select' ? (
-                                                        <Select
-                                                          value={isAllocated ? (currentValue?.toString() || '') : ''}
+                                                      {param.isQuantitative ? (
+                                                        <QuantitativeParameterInput
+                                                          value={isAllocated ? currentValue.toString() : ''}
                                                           onValueChange={(value) => isAllocated && updateParameterValue(meso.id, weekIndex, method, param.name, value)}
-                                                          disabled={!isAllocated}
-                                                        >
-                                                          <SelectTrigger className={`h-8 text-xs ${!isAllocated ? 'cursor-not-allowed' : ''}`}>
-                                                            <SelectValue placeholder="" />
-                                                          </SelectTrigger>
-                                                          <SelectContent className="z-50">
-                                                            {param.options?.map((option) => (
-                                                              <SelectItem key={option} value={option} className="text-xs">
-                                                                {option}
-                                                              </SelectItem>
-                                                            ))}
-                                                          </SelectContent>
-                                                        </Select>
+                                                          unit={param.options?.[0] || ''}
+                                                          onUnitChange={(unit) => {
+                                                            // For now, we don't change units dynamically
+                                                          }}
+                                                          units={param.options || []}
+                                                          placeholder=""
+                                                        />
+                                                      ) : param.isQualitative ? (
+                                                        <QualitativeParameterInput
+                                                          value={isAllocated ? currentValue.toString() : ''}
+                                                          onValueChange={(value) => isAllocated && updateParameterValue(meso.id, weekIndex, method, param.name, value)}
+                                                          options={param.options || []}
+                                                          placeholder=""
+                                                        />
                                                       ) : (
                                                         <Input
                                                           type={param.type === 'number' ? 'number' : 'text'}
-                                                          value={isAllocated ? (currentValue || '') : ''}
+                                                          value={isAllocated ? currentValue.toString() : ''}
                                                           onChange={(e) => isAllocated && updateParameterValue(meso.id, weekIndex, method, param.name, param.type === 'number' ? Number(e.target.value) : e.target.value)}
                                                           className={`h-8 text-xs ${!isAllocated ? 'cursor-not-allowed' : ''}`}
                                                           placeholder=""

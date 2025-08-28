@@ -7,7 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Plus, Search, Download, Upload, Trash2, Edit } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { ArrowLeft, Plus, Search, Download, Upload, Trash2, Edit, X } from "lucide-react";
 import { useToolboxData } from "@/hooks/useToolboxData";
 import { ToolboxEntry } from "@/types/toolbox";
 import { useToast } from "@/hooks/use-toast";
@@ -24,8 +25,12 @@ export default function ToolboxDatabase() {
   const [newEntry, setNewEntry] = useState({
     category: "",
     subCategory: "",
-    parameter: ""
+    parameter: "",
+    parameterName: "",
+    parameterType: "qualitative" as "qualitative" | "quantitative",
+    options: [] as string[]
   });
+  const [newOption, setNewOption] = useState("");
 
   // Filter entries based on search term
   const filteredEntries = useMemo(() => {
@@ -98,18 +103,40 @@ export default function ToolboxDatabase() {
 
   // Handle add entry
   const handleAddEntry = () => {
-    if (!newEntry.category.trim() || !newEntry.parameter.trim()) {
+    if (!newEntry.category.trim() || !newEntry.parameterName.trim()) {
       toast({
         title: "Validation Error",
-        description: "Category and Parameter are required fields.",
+        description: "Category and Parameter Name are required fields.",
         variant: "destructive"
       });
       return;
     }
 
-    addEntry(newEntry);
-    setNewEntry({ category: "", subCategory: "", parameter: "" });
+    // Build the legacy parameter string for backward compatibility
+    const legacyParameter = newEntry.options.length > 0 
+      ? `${newEntry.parameterName} [${newEntry.options.join(', ')}]`
+      : newEntry.parameterName;
+
+    addEntry({
+      category: newEntry.category.trim(),
+      subCategory: newEntry.subCategory.trim(),
+      parameter: legacyParameter,
+      parameterName: newEntry.parameterName.trim(),
+      parameterType: newEntry.parameterType,
+      options: [...newEntry.options]
+    });
+
+    setNewEntry({
+      category: "",
+      subCategory: "",
+      parameter: "",
+      parameterName: "",
+      parameterType: "qualitative",
+      options: []
+    });
+    setNewOption("");
     setIsAddDialogOpen(false);
+    
     toast({
       title: "Entry Added",
       description: "New toolbox entry has been added successfully."
@@ -118,22 +145,32 @@ export default function ToolboxDatabase() {
 
   // Handle edit entry
   const handleEditEntry = () => {
-    if (!editingEntry || !editingEntry.category.trim() || !editingEntry.parameter.trim()) {
+    if (!editingEntry || !editingEntry.category.trim() || !editingEntry.parameterName?.trim()) {
       toast({
         title: "Validation Error",
-        description: "Category and Parameter are required fields.",
+        description: "Category and Parameter Name are required fields.",
         variant: "destructive"
       });
       return;
     }
 
+    // Build the legacy parameter string for backward compatibility
+    const legacyParameter = editingEntry.options && editingEntry.options.length > 0 
+      ? `${editingEntry.parameterName} [${editingEntry.options.join(', ')}]`
+      : editingEntry.parameterName || editingEntry.parameter;
+
     updateEntry(editingEntry.id, {
-      category: editingEntry.category,
-      subCategory: editingEntry.subCategory,
-      parameter: editingEntry.parameter
+      category: editingEntry.category.trim(),
+      subCategory: editingEntry.subCategory.trim(),
+      parameter: legacyParameter,
+      parameterName: editingEntry.parameterName,
+      parameterType: editingEntry.parameterType,
+      options: editingEntry.options ? [...editingEntry.options] : []
     });
-    setEditingEntry(null);
+    
     setIsEditDialogOpen(false);
+    setEditingEntry(null);
+    
     toast({
       title: "Entry Updated",
       description: "Toolbox entry has been updated successfully."
@@ -196,7 +233,14 @@ export default function ToolboxDatabase() {
 
   // Open edit dialog
   const openEditDialog = (entry: ToolboxEntry) => {
-    setEditingEntry({ ...entry });
+    const editEntry = { 
+      ...entry,
+      // Ensure we have the new structure fields
+      parameterName: entry.parameterName || entry.parameter.split(' [')[0].trim(),
+      parameterType: entry.parameterType || 'qualitative',
+      options: entry.options || []
+    };
+    setEditingEntry(editEntry);
     setIsEditDialogOpen(true);
   };
 
@@ -322,14 +366,100 @@ export default function ToolboxDatabase() {
                 />
               </div>
               <div>
-                <Label htmlFor="parameter">Parameter *</Label>
-                <Textarea
-                  id="parameter"
-                  value={newEntry.parameter}
-                  onChange={(e) => setNewEntry(prev => ({ ...prev, parameter: e.target.value }))}
-                  placeholder="e.g., Frequency, Intensity [%], Surface [Grass, Track, etc.]"
-                  rows={3}
+                <Label htmlFor="parameterName">Parameter Name *</Label>
+                <Input
+                  id="parameterName"
+                  value={newEntry.parameterName}
+                  onChange={(e) => setNewEntry(prev => ({ ...prev, parameterName: e.target.value }))}
+                  placeholder="e.g., Frequency, Intensity, Organization"
                 />
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Parameter Type</Label>
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="parameterType"
+                      checked={newEntry.parameterType === 'quantitative'}
+                      onCheckedChange={(checked) => 
+                        setNewEntry(prev => ({ 
+                          ...prev, 
+                          parameterType: checked ? 'quantitative' : 'qualitative' 
+                        }))
+                      }
+                    />
+                    <Label htmlFor="parameterType" className="text-sm">
+                      {newEntry.parameterType === 'quantitative' ? 'Quantitative (with units)' : 'Qualitative (descriptive)'}
+                    </Label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>
+                  {newEntry.parameterType === 'quantitative' ? 'Units' : 'Options'}
+                </Label>
+                <div className="flex space-x-2">
+                  <Input
+                    value={newOption}
+                    onChange={(e) => setNewOption(e.target.value)}
+                    placeholder={
+                      newEntry.parameterType === 'quantitative' 
+                        ? "e.g., m, km, s, %, kg" 
+                        : "e.g., Regular Sets, Super Sets"
+                    }
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && newOption.trim()) {
+                        setNewEntry(prev => ({ 
+                          ...prev, 
+                          options: [...prev.options, newOption.trim()] 
+                        }));
+                        setNewOption("");
+                      }
+                    }}
+                  />
+                  <Button 
+                    type="button" 
+                    onClick={() => {
+                      if (newOption.trim()) {
+                        setNewEntry(prev => ({ 
+                          ...prev, 
+                          options: [...prev.options, newOption.trim()] 
+                        }));
+                        setNewOption("");
+                      }
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
+                {newEntry.options.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {newEntry.options.map((option, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center bg-secondary text-secondary-foreground px-2 py-1 text-xs rounded"
+                      >
+                        {option}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="ml-1 h-4 w-4 p-0"
+                          onClick={() => {
+                            setNewEntry(prev => ({
+                              ...prev,
+                              options: prev.options.filter((_, i) => i !== index)
+                            }));
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="flex justify-end space-x-2">
                 <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
@@ -381,23 +511,34 @@ export default function ToolboxDatabase() {
                         </TableCell>
                       )}
                       
-                      {/* Parameter cell */}
-                      <TableCell className="border-r border-border">
-                        <div className="max-w-md">
-                          {entry.parameter.includes('[') ? (
-                            <div>
-                              <span className="font-bold">
-                                {entry.parameter.split('[')[0].trim()}
-                              </span>
-                              <span className="text-xs text-muted-foreground ml-1 font-bold">
-                                [{entry.parameter.split('[')[1]}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="font-bold">{entry.parameter}</span>
-                          )}
-                        </div>
-                      </TableCell>
+                       {/* Parameter cell */}
+                       <TableCell className="border-r border-border">
+                         <div className="max-w-md">
+                           {entry.parameterName || entry.parameter ? (
+                             <div>
+                               <span className="font-bold">
+                                 {entry.parameterName || entry.parameter.split('[')[0].trim()}
+                               </span>
+                               {entry.parameterType && (
+                                 <span className={`text-xs ml-2 px-2 py-1 rounded ${
+                                   entry.parameterType === 'quantitative' 
+                                     ? 'bg-blue-100 text-blue-800' 
+                                     : 'bg-green-100 text-green-800'
+                                 }`}>
+                                   {entry.parameterType}
+                                 </span>
+                               )}
+                               {entry.options && entry.options.length > 0 && (
+                                 <div className="text-xs text-muted-foreground mt-1">
+                                   Options: {entry.options.join(', ')}
+                                 </div>
+                               )}
+                             </div>
+                           ) : (
+                             <span className="font-bold">{entry.parameter}</span>
+                           )}
+                         </div>
+                       </TableCell>
                       
                       {/* Actions cell */}
                       <TableCell>
@@ -452,13 +593,100 @@ export default function ToolboxDatabase() {
                 />
               </div>
               <div>
-                <Label htmlFor="edit-parameter">Parameter *</Label>
-                <Textarea
-                  id="edit-parameter"
-                  value={editingEntry.parameter}
-                  onChange={(e) => setEditingEntry(prev => prev ? { ...prev, parameter: e.target.value } : null)}
-                  rows={3}
+                <Label htmlFor="edit-parameterName">Parameter Name *</Label>
+                <Input
+                  id="edit-parameterName"
+                  value={editingEntry.parameterName || ''}
+                  onChange={(e) => setEditingEntry(prev => prev ? { ...prev, parameterName: e.target.value } : null)}
+                  placeholder="e.g., Frequency, Intensity, Organization"
                 />
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Parameter Type</Label>
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="edit-parameterType"
+                      checked={editingEntry.parameterType === 'quantitative'}
+                      onCheckedChange={(checked) => 
+                        setEditingEntry(prev => prev ? ({ 
+                          ...prev, 
+                          parameterType: checked ? 'quantitative' : 'qualitative' 
+                        }) : null)
+                      }
+                    />
+                    <Label htmlFor="edit-parameterType" className="text-sm">
+                      {editingEntry.parameterType === 'quantitative' ? 'Quantitative (with units)' : 'Qualitative (descriptive)'}
+                    </Label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>
+                  {editingEntry.parameterType === 'quantitative' ? 'Units' : 'Options'}
+                </Label>
+                <div className="flex space-x-2">
+                  <Input
+                    value={newOption}
+                    onChange={(e) => setNewOption(e.target.value)}
+                    placeholder={
+                      editingEntry.parameterType === 'quantitative' 
+                        ? "e.g., m, km, s, %, kg" 
+                        : "e.g., Regular Sets, Super Sets"
+                    }
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && newOption.trim()) {
+                        setEditingEntry(prev => prev ? ({ 
+                          ...prev, 
+                          options: [...(prev.options || []), newOption.trim()] 
+                        }) : null);
+                        setNewOption("");
+                      }
+                    }}
+                  />
+                  <Button 
+                    type="button" 
+                    onClick={() => {
+                      if (newOption.trim()) {
+                        setEditingEntry(prev => prev ? ({ 
+                          ...prev, 
+                          options: [...(prev.options || []), newOption.trim()] 
+                        }) : null);
+                        setNewOption("");
+                      }
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
+                {editingEntry.options && editingEntry.options.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {editingEntry.options.map((option, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center bg-secondary text-secondary-foreground px-2 py-1 text-xs rounded"
+                      >
+                        {option}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="ml-1 h-4 w-4 p-0"
+                          onClick={() => {
+                            setEditingEntry(prev => prev ? ({
+                              ...prev,
+                              options: (prev.options || []).filter((_, i) => i !== index)
+                            }) : null);
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="flex justify-end space-x-2">
                 <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
