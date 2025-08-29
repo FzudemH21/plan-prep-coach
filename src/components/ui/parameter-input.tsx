@@ -6,8 +6,8 @@ import { SearchableDropdown } from '@/components/ui/searchable-dropdown';
 interface QuantitativeParameterInputProps {
   value: string;
   onValueChange: (value: string) => void;
-  unit: string;
-  onUnitChange: (unit: string) => void;
+  unit?: string;
+  onUnitChange?: (unit: string) => void;
   units: string[];
   placeholder?: string;
 }
@@ -20,6 +20,10 @@ export function QuantitativeParameterInput({
   units,
   placeholder = "Enter value"
 }: QuantitativeParameterInputProps) {
+  // Check if there are meaningful units (not empty, "#", "number", etc.)
+  const hasMeaningfulUnits = units.length > 0 && 
+    !units.every(unitOption => ['#', 'number', ''].includes(unitOption.toLowerCase().trim()));
+
   return (
     <div className="flex gap-1 items-center w-full">
       <Input
@@ -27,20 +31,22 @@ export function QuantitativeParameterInput({
         value={value}
         onChange={(e) => onValueChange(e.target.value)}
         placeholder={placeholder}
-        className="flex-1 min-w-0"
+        className={hasMeaningfulUnits ? "flex-1 min-w-0" : "w-full"}
       />
-      <Select value={unit} onValueChange={onUnitChange}>
-        <SelectTrigger className="w-20 min-w-0">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent className="z-50 bg-background border">
-          {units.map((unitOption) => (
-            <SelectItem key={unitOption} value={unitOption}>
-              {unitOption}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {hasMeaningfulUnits && (
+        <Select value={unit} onValueChange={onUnitChange}>
+          <SelectTrigger className="w-20 min-w-0">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="z-50 bg-background border">
+            {units.map((unitOption) => (
+              <SelectItem key={unitOption} value={unitOption}>
+                {unitOption}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
     </div>
   );
 }
