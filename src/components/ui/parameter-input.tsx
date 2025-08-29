@@ -20,9 +20,8 @@ export function QuantitativeParameterInput({
   units,
   placeholder = "Enter value"
 }: QuantitativeParameterInputProps) {
-  // Check if there are meaningful units (not empty, "#", "number", etc.)
-  const hasMeaningfulUnits = units.length > 0 && 
-    !units.every(unitOption => ['#', 'number', ''].includes(unitOption.toLowerCase().trim()));
+  // Check if there are any units defined (empty array means no unit dropdown)
+  const hasMeaningfulUnits = units.length > 0;
 
   return (
     <div className="flex gap-1 items-center w-full">
