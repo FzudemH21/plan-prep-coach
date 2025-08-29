@@ -1168,7 +1168,7 @@ export default function MacrocyclePage() {
   };
 
   const renderMacroView = () => (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="w-full max-w-none space-y-8">
       {/* Header */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -1224,7 +1224,7 @@ export default function MacrocyclePage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="w-full max-w-none space-y-6">
       {/* Progress Header */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">

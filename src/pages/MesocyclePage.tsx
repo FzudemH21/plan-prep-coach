@@ -1006,7 +1006,7 @@ export default function MesocyclePage() {
   ];
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="w-full max-w-none space-y-6">
       {/* Progress Header */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
