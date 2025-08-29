@@ -31,10 +31,10 @@ export function AppLayout({ children }: AppLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen w-full bg-background">
       {/* Top Navigation Bar */}
       <header className="border-b bg-card shadow-sm">
-        <div className="flex items-center justify-between px-6 py-4">
+        <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center space-x-6">
             <h1 className="text-2xl font-bold text-primary">
               Training Programming System
@@ -123,7 +123,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         )}
 
         {/* Main Content */}
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-none">
           {children || <Outlet />}
         </main>
       </div>
