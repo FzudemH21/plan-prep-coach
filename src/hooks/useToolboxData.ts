@@ -122,6 +122,53 @@ export function useToolboxData() {
     saveData(newData);
   };
 
+  // Copy an entry (duplicate sub-category with all parameters)
+  const copyEntry = (categorySubCategoryKey: string) => {
+    const [category, subCategory] = categorySubCategoryKey.split('|||');
+    const existingEntries = data.entries.filter(
+      e => e.category === category && e.subCategory === subCategory
+    );
+    
+    if (existingEntries.length === 0) return;
+    
+    // Create a new sub-category name
+    const newSubCategory = `${subCategory} (Copy)`;
+    
+    // Duplicate all parameters for this sub-category
+    const newEntries = existingEntries.map(entry => ({
+      ...entry,
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      subCategory: newSubCategory
+    }));
+    
+    const newData = {
+      ...data,
+      entries: [...data.entries, ...newEntries],
+      lastUpdated: new Date().toISOString()
+    };
+    
+    saveData(newData);
+  };
+
+  // Reorder parameters within a sub-category
+  const reorderParameters = (categorySubCategoryKey: string, reorderedParameters: ToolboxEntry[]) => {
+    const [category, subCategory] = categorySubCategoryKey.split('|||');
+    
+    // Remove old parameters for this sub-category
+    const otherEntries = data.entries.filter(
+      e => !(e.category === category && e.subCategory === subCategory)
+    );
+    
+    // Add reordered parameters
+    const newData = {
+      ...data,
+      entries: [...otherEntries, ...reorderedParameters],
+      lastUpdated: new Date().toISOString()
+    };
+    
+    saveData(newData);
+  };
+
   // Import data from TSV
   const importData = (tsvText: string) => {
     try {
@@ -192,6 +239,8 @@ export function useToolboxData() {
     addEntry,
     updateEntry,
     deleteEntry,
+    copyEntry,
+    reorderParameters,
     importData,
     exportData,
     saveData

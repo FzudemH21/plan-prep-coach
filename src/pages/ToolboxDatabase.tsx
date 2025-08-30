@@ -6,22 +6,33 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, Plus, Search, Download, Upload, Trash2, Edit, X } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ArrowLeft, Plus, Search, Download, Upload, Trash2, Edit, Copy, ArrowUpDown } from "lucide-react";
 import { useToolboxData } from "@/hooks/useToolboxData";
 import { ToolboxEntry } from "@/types/toolbox";
 import { useToast } from "@/hooks/use-toast";
+import { ParameterManagementDialog } from "@/components/toolbox/ParameterManagementDialog";
+
+type SortOrder = 'asc' | 'desc';
+
+interface SubCategoryData {
+  category: string;
+  subCategory: string;
+  parameters: ToolboxEntry[];
+  key: string;
+}
 
 export default function ToolboxDatabase() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { data, isLoading, addEntry, updateEntry, deleteEntry, importData, exportData } = useToolboxData();
+  const { data, isLoading, addEntry, deleteEntry, copyEntry, reorderParameters, importData, exportData } = useToolboxData();
   
   const [searchTerm, setSearchTerm] = useState("");
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [editingEntry, setEditingEntry] = useState<ToolboxEntry | null>(null);
+  const [isParameterDialogOpen, setIsParameterDialogOpen] = useState(false);
+  const [selectedSubCategory, setSelectedSubCategory] = useState<{ category: string; subCategory: string } | null>(null);
   const [newEntry, setNewEntry] = useState({
     category: "",
     subCategory: "",
@@ -32,76 +43,58 @@ export default function ToolboxDatabase() {
   });
   const [newOption, setNewOption] = useState("");
 
-  // Filter entries based on search term
-  const filteredEntries = useMemo(() => {
-    if (!searchTerm.trim()) return data.entries;
-    
-    const term = searchTerm.toLowerCase();
-    return data.entries.filter(entry =>
-      entry.category.toLowerCase().includes(term) ||
-      entry.subCategory.toLowerCase().includes(term) ||
-      entry.parameter.toLowerCase().includes(term)
-    );
-  }, [data.entries, searchTerm]);
+  // Group entries by category + sub-category combination
+  const subCategoryData = useMemo(() => {
+    // Create unique combinations of category + sub-category
+    const combinations = new Map<string, { 
+      category: string; 
+      subCategory: string; 
+      parameters: ToolboxEntry[];
+      key: string;
+    }>();
 
-  // Group entries hierarchically for table display with rowspan
-  const hierarchicalData = useMemo(() => {
-    // Sort entries by category and sub-category only, preserve original parameter order
-    const sortedEntries = [...filteredEntries].sort((a, b) => {
-      if (a.category !== b.category) return a.category.localeCompare(b.category);
-      if (a.subCategory !== b.subCategory) return a.subCategory.localeCompare(b.subCategory);
-      return 0; // Keep original parameter order
-    });
-
-    // Group by category and sub-category
-    const grouped: Array<{
-      category: string;
-      categoryRowspan: number;
-      subCategories: Array<{
-        subCategory: string;
-        subCategoryRowspan: number;
-        parameters: ToolboxEntry[];
-      }>;
-    }> = [];
-
-    sortedEntries.forEach(entry => {
-      let categoryGroup = grouped.find(g => g.category === entry.category);
-      if (!categoryGroup) {
-        categoryGroup = {
+    data.entries.forEach(entry => {
+      const key = `${entry.category}|||${entry.subCategory}`;
+      if (!combinations.has(key)) {
+        combinations.set(key, {
           category: entry.category,
-          categoryRowspan: 0,
-          subCategories: []
-        };
-        grouped.push(categoryGroup);
-      }
-
-      let subCategoryGroup = categoryGroup.subCategories.find(s => s.subCategory === entry.subCategory);
-      if (!subCategoryGroup) {
-        subCategoryGroup = {
           subCategory: entry.subCategory,
-          subCategoryRowspan: 0,
-          parameters: []
-        };
-        categoryGroup.subCategories.push(subCategoryGroup);
+          parameters: [],
+          key
+        });
       }
-
-      subCategoryGroup.parameters.push(entry);
+      combinations.get(key)!.parameters.push(entry);
     });
 
-    // Calculate rowspans
-    grouped.forEach(categoryGroup => {
-      let totalCategoryRows = 0;
-      categoryGroup.subCategories.forEach(subCategoryGroup => {
-        subCategoryGroup.subCategoryRowspan = subCategoryGroup.parameters.length;
-        totalCategoryRows += subCategoryGroup.parameters.length;
-      });
-      categoryGroup.categoryRowspan = totalCategoryRows;
+    // Convert to array and apply filtering and sorting
+    let result = Array.from(combinations.values());
+
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(item =>
+        item.category.toLowerCase().includes(term) ||
+        item.subCategory.toLowerCase().includes(term) ||
+        item.parameters.some(p => p.parameter.toLowerCase().includes(term))
+      );
+    }
+
+    // Apply sorting
+    result.sort((a, b) => {
+      // First sort by category, then by sub-category
+      const categoryCompare = a.category.localeCompare(b.category);
+      if (categoryCompare !== 0) {
+        return sortOrder === 'asc' ? categoryCompare : -categoryCompare;
+      }
+      
+      const subCategoryCompare = a.subCategory.localeCompare(b.subCategory);
+      return sortOrder === 'asc' ? subCategoryCompare : -subCategoryCompare;
     });
 
-    return grouped;
-  }, [filteredEntries]);
+    return result;
+  }, [data.entries, searchTerm, sortOrder]);
 
-  // Handle add entry
+  // Handle add entry (creates a new sub-category)
   const handleAddEntry = () => {
     if (!newEntry.category.trim() || !newEntry.parameterName.trim()) {
       toast({
@@ -138,52 +131,44 @@ export default function ToolboxDatabase() {
     setIsAddDialogOpen(false);
     
     toast({
-      title: "Entry Added",
-      description: "New toolbox entry has been added successfully."
+      title: "Sub-Category Created",
+      description: "New sub-category with parameter has been added successfully."
     });
   };
 
-  // Handle edit entry
-  const handleEditEntry = () => {
-    if (!editingEntry || !editingEntry.category.trim() || !editingEntry.parameterName?.trim()) {
-      toast({
-        title: "Validation Error",
-        description: "Category and Parameter Name are required fields.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Build the legacy parameter string for backward compatibility
-    const legacyParameter = editingEntry.options && editingEntry.options.length > 0 
-      ? `${editingEntry.parameterName} [${editingEntry.options.join(', ')}]`
-      : editingEntry.parameterName || editingEntry.parameter;
-
-    updateEntry(editingEntry.id, {
-      category: editingEntry.category.trim(),
-      subCategory: editingEntry.subCategory.trim(),
-      parameter: legacyParameter,
-      parameterName: editingEntry.parameterName,
-      parameterType: editingEntry.parameterType,
-      options: editingEntry.options ? [...editingEntry.options] : []
-    });
-    
-    setIsEditDialogOpen(false);
-    setEditingEntry(null);
-    
+  // Handle copy sub-category
+  const handleCopySubCategory = (key: string) => {
+    copyEntry(key);
     toast({
-      title: "Entry Updated",
-      description: "Toolbox entry has been updated successfully."
+      title: "Sub-Category Copied",
+      description: "Sub-category and all its parameters have been copied successfully."
     });
   };
 
-  // Handle delete entry
-  const handleDeleteEntry = (id: string) => {
-    deleteEntry(id);
-    toast({
-      title: "Entry Deleted",
-      description: "Toolbox entry has been deleted successfully."
+  // Handle delete sub-category (delete all parameters in it)
+  const handleDeleteSubCategory = (item: SubCategoryData) => {
+    // Delete all parameters in this sub-category using the deleteEntry function from the hook
+    item.parameters.forEach(parameter => {
+      deleteEntry(parameter.id);
     });
+    
+    toast({
+      title: "Sub-Category Deleted",
+      description: `Sub-category "${item.subCategory}" and all its parameters have been deleted.`
+    });
+  };
+
+  // Handle parameter management
+  const handleOpenParameterDialog = (category: string, subCategory: string) => {
+    setSelectedSubCategory({ category, subCategory });
+    setIsParameterDialogOpen(true);
+  };
+
+  const handleUpdateParameters = (parameters: ToolboxEntry[]) => {
+    if (!selectedSubCategory) return;
+    
+    const key = `${selectedSubCategory.category}|||${selectedSubCategory.subCategory}`;
+    reorderParameters(key, parameters);
   };
 
   // Handle file import
@@ -229,19 +214,6 @@ export default function ToolboxDatabase() {
       title: "Export Successful",
       description: "Toolbox database has been exported successfully."
     });
-  };
-
-  // Open edit dialog
-  const openEditDialog = (entry: ToolboxEntry) => {
-    const editEntry = { 
-      ...entry,
-      // Ensure we have the new structure fields
-      parameterName: entry.parameterName || entry.parameter.split(' [')[0].trim(),
-      parameterType: entry.parameterType || 'qualitative',
-      options: entry.options || []
-    };
-    setEditingEntry(editEntry);
-    setIsEditDialogOpen(true);
   };
 
   if (isLoading) {
@@ -292,13 +264,21 @@ export default function ToolboxDatabase() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Total Parameters</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{data.entries.length}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Sub-Categories</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{subCategoryData.length}</div>
           </CardContent>
         </Card>
         <Card>
@@ -324,7 +304,7 @@ export default function ToolboxDatabase() {
       </div>
 
       {/* Search and Actions */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -335,118 +315,132 @@ export default function ToolboxDatabase() {
           />
         </div>
         
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Parameter
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add New Parameter</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="category">Category *</Label>
-                <Input
-                  id="category"
-                  value={newEntry.category}
-                  onChange={(e) => setNewEntry(prev => ({ ...prev, category: e.target.value }))}
-                  placeholder="e.g., Sprinting, Lower Body Resistance Training"
-                />
-              </div>
-              <div>
-                <Label htmlFor="subCategory">Sub-Category</Label>
-                <Input
-                  id="subCategory"
-                  value={newEntry.subCategory}
-                  onChange={(e) => setNewEntry(prev => ({ ...prev, subCategory: e.target.value }))}
-                  placeholder="e.g., Acceleration, Strength (optional)"
-                />
-              </div>
-              <div>
-                <Label htmlFor="parameterName">Parameter Name *</Label>
-                <Input
-                  id="parameterName"
-                  value={newEntry.parameterName}
-                  onChange={(e) => setNewEntry(prev => ({ ...prev, parameterName: e.target.value }))}
-                  placeholder="e.g., Frequency, Intensity, Organization"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Parameter Type</Label>
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="parameterType"
-                      checked={newEntry.parameterType === 'quantitative'}
-                      onCheckedChange={(checked) => 
-                        setNewEntry(prev => ({ 
-                          ...prev, 
-                          parameterType: checked ? 'quantitative' : 'qualitative' 
-                        }))
-                      }
-                    />
-                    <Label htmlFor="parameterType" className="text-sm">
-                      {newEntry.parameterType === 'quantitative' ? 'Quantitative (with units)' : 'Qualitative (descriptive)'}
-                    </Label>
+        <div className="flex items-center gap-2">
+          <Select value={sortOrder} onValueChange={(value: SortOrder) => setSortOrder(value)}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="asc">
+                <div className="flex items-center gap-2">
+                  <ArrowUpDown className="h-4 w-4" />
+                  A-Z
+                </div>
+              </SelectItem>
+              <SelectItem value="desc">
+                <div className="flex items-center gap-2">
+                  <ArrowUpDown className="h-4 w-4 rotate-180" />
+                  Z-A
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Sub-Category
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New Sub-Category</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="category">Category *</Label>
+                  <Input
+                    id="category"
+                    value={newEntry.category}
+                    onChange={(e) => setNewEntry(prev => ({ ...prev, category: e.target.value }))}
+                    placeholder="e.g., Sprinting, Lower Body Resistance Training"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="subCategory">Sub-Category *</Label>
+                  <Input
+                    id="subCategory"
+                    value={newEntry.subCategory}
+                    onChange={(e) => setNewEntry(prev => ({ ...prev, subCategory: e.target.value }))}
+                    placeholder="e.g., Acceleration, Strength"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="parameterName">First Parameter Name *</Label>
+                  <Input
+                    id="parameterName"
+                    value={newEntry.parameterName}
+                    onChange={(e) => setNewEntry(prev => ({ ...prev, parameterName: e.target.value }))}
+                    placeholder="e.g., Frequency, Intensity, Organization"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Parameter Type</Label>
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="parameterType"
+                        checked={newEntry.parameterType === 'quantitative'}
+                        onCheckedChange={(checked) => 
+                          setNewEntry(prev => ({ 
+                            ...prev, 
+                            parameterType: checked ? 'quantitative' : 'qualitative' 
+                          }))
+                        }
+                      />
+                      <Label htmlFor="parameterType" className="text-sm">
+                        {newEntry.parameterType === 'quantitative' ? 'Quantitative (with units)' : 'Qualitative (descriptive)'}
+                      </Label>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label>
-                  {newEntry.parameterType === 'quantitative' ? 'Units' : 'Options'}
-                </Label>
-                <div className="flex space-x-2">
-                  <Input
-                    value={newOption}
-                    onChange={(e) => setNewOption(e.target.value)}
-                    placeholder={
-                      newEntry.parameterType === 'quantitative' 
-                        ? "e.g., m, km, s, %, kg" 
-                        : "e.g., Regular Sets, Super Sets"
-                    }
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter' && newOption.trim()) {
-                        setNewEntry(prev => ({ 
-                          ...prev, 
-                          options: [...prev.options, newOption.trim()] 
-                        }));
-                        setNewOption("");
+                <div className="space-y-2">
+                  <Label>
+                    {newEntry.parameterType === 'quantitative' ? 'Units' : 'Options'}
+                  </Label>
+                  <div className="flex space-x-2">
+                    <Input
+                      value={newOption}
+                      onChange={(e) => setNewOption(e.target.value)}
+                      placeholder={
+                        newEntry.parameterType === 'quantitative' 
+                          ? "e.g., m, km, s, %, kg" 
+                          : "e.g., Regular Sets, Super Sets"
                       }
-                    }}
-                  />
-                  <Button 
-                    type="button" 
-                    onClick={() => {
-                      if (newOption.trim()) {
-                        setNewEntry(prev => ({ 
-                          ...prev, 
-                          options: [...prev.options, newOption.trim()] 
-                        }));
-                        setNewOption("");
-                      }
-                    }}
-                  >
-                    Add
-                  </Button>
-                </div>
-                {newEntry.options.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {newEntry.options.map((option, index) => (
-                      <span
-                        key={index}
-                        className="inline-flex items-center bg-secondary text-secondary-foreground px-2 py-1 text-xs rounded"
-                      >
-                        {option}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="ml-1 h-4 w-4 p-0"
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && newOption.trim()) {
+                          setNewEntry(prev => ({ 
+                            ...prev, 
+                            options: [...prev.options, newOption.trim()] 
+                          }));
+                          setNewOption("");
+                        }
+                      }}
+                    />
+                    <Button 
+                      type="button" 
+                      onClick={() => {
+                        if (newOption.trim()) {
+                          setNewEntry(prev => ({ 
+                            ...prev, 
+                            options: [...prev.options, newOption.trim()] 
+                          }));
+                          setNewOption("");
+                        }
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  {newEntry.options.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {newEntry.options.map((option, index) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center bg-secondary text-secondary-foreground px-2 py-1 text-xs rounded cursor-pointer"
                           onClick={() => {
                             setNewEntry(prev => ({
                               ...prev,
@@ -454,257 +448,109 @@ export default function ToolboxDatabase() {
                             }));
                           }}
                         >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </span>
-                    ))}
-                  </div>
-                )}
+                          {option} ×
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-end space-x-2">
+                  <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleAddEntry}
+                    disabled={!newEntry.category.trim() || !newEntry.subCategory.trim() || !newEntry.parameterName.trim()}
+                  >
+                    Create Sub-Category
+                  </Button>
+                </div>
               </div>
-              <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleAddEntry}>
-                  Add Parameter
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      {/* Parameters Table */}
+      {/* Sub-Categories Table */}
       <Card>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-1/4">Category</TableHead>
-                <TableHead className="w-1/5">Sub-Category</TableHead>
-                <TableHead className="w-2/5">Parameter</TableHead>
-                <TableHead className="w-1/10">Actions</TableHead>
+                <TableHead className="w-1/3">Category</TableHead>
+                <TableHead className="w-1/3">Sub-Category</TableHead>
+                <TableHead className="w-1/6">Parameters</TableHead>
+                <TableHead className="w-1/6">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {hierarchicalData.map((categoryGroup, categoryIndex) => 
-                categoryGroup.subCategories.map((subCategoryGroup, subCategoryIndex) =>
-                  subCategoryGroup.parameters.map((entry, parameterIndex) => (
-                    <TableRow key={entry.id} className="border-b">
-                      {/* Category cell with rowspan */}
-                      {subCategoryIndex === 0 && parameterIndex === 0 && (
-                        <TableCell 
-                          rowSpan={categoryGroup.categoryRowspan}
-                          className="font-bold text-primary border-r-2 border-border bg-muted/30 align-top"
-                        >
-                          {entry.category}
-                        </TableCell>
-                      )}
-                      
-                      {/* Sub-category cell with rowspan */}
-                      {parameterIndex === 0 && (
-                        <TableCell 
-                          rowSpan={subCategoryGroup.subCategoryRowspan}
-                          className="font-medium text-muted-foreground border-r border-border bg-muted/10 align-top"
-                        >
-                          {entry.subCategory || "-"}
-                        </TableCell>
-                      )}
-                      
-                       {/* Parameter cell */}
-                       <TableCell className="border-r border-border">
-                         <div className="max-w-md">
-                           {entry.parameterName || entry.parameter ? (
-                             <div>
-                               <span className="font-bold">
-                                 {entry.parameterName || entry.parameter.split('[')[0].trim()}
-                               </span>
-                               {entry.parameterType && (
-                                 <span className={`text-xs ml-2 px-2 py-1 rounded ${
-                                   entry.parameterType === 'quantitative' 
-                                     ? 'bg-blue-100 text-blue-800' 
-                                     : 'bg-green-100 text-green-800'
-                                 }`}>
-                                   {entry.parameterType}
-                                 </span>
-                               )}
-                               {entry.options && entry.options.length > 0 && (
-                                 <div className="text-xs text-muted-foreground mt-1">
-                                   Options: {entry.options.join(', ')}
-                                 </div>
-                               )}
-                             </div>
-                           ) : (
-                             <span className="font-bold">{entry.parameter}</span>
-                           )}
-                         </div>
-                       </TableCell>
-                      
-                      {/* Actions cell */}
-                      <TableCell>
-                        <div className="flex items-center space-x-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openEditDialog(entry)}
-                          >
-                            <Edit className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteEntry(entry.id)}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )
-              )}
+              {subCategoryData.map((item) => (
+                <TableRow key={item.key} className="border-b">
+                  <TableCell className="font-medium">{item.category}</TableCell>
+                  <TableCell className="font-medium">{item.subCategory || "-"}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {item.parameters.length} parameter{item.parameters.length !== 1 ? 's' : ''}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center space-x-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleOpenParameterDialog(item.category, item.subCategory)}
+                        title="Edit Parameters"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCopySubCategory(item.key)}
+                        title="Copy Sub-Category"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteSubCategory(item)}
+                        title="Delete Sub-Category"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
-      {/* Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Parameter</DialogTitle>
-          </DialogHeader>
-          {editingEntry && (
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="edit-category">Category *</Label>
-                <Input
-                  id="edit-category"
-                  value={editingEntry.category}
-                  onChange={(e) => setEditingEntry(prev => prev ? { ...prev, category: e.target.value } : null)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-subCategory">Sub-Category</Label>
-                <Input
-                  id="edit-subCategory"
-                  value={editingEntry.subCategory}
-                  onChange={(e) => setEditingEntry(prev => prev ? { ...prev, subCategory: e.target.value } : null)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-parameterName">Parameter Name *</Label>
-                <Input
-                  id="edit-parameterName"
-                  value={editingEntry.parameterName || ''}
-                  onChange={(e) => setEditingEntry(prev => prev ? { ...prev, parameterName: e.target.value } : null)}
-                  placeholder="e.g., Frequency, Intensity, Organization"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Parameter Type</Label>
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="edit-parameterType"
-                      checked={editingEntry.parameterType === 'quantitative'}
-                      onCheckedChange={(checked) => 
-                        setEditingEntry(prev => prev ? ({ 
-                          ...prev, 
-                          parameterType: checked ? 'quantitative' : 'qualitative' 
-                        }) : null)
-                      }
-                    />
-                    <Label htmlFor="edit-parameterType" className="text-sm">
-                      {editingEntry.parameterType === 'quantitative' ? 'Quantitative (with units)' : 'Qualitative (descriptive)'}
-                    </Label>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>
-                  {editingEntry.parameterType === 'quantitative' ? 'Units' : 'Options'}
-                </Label>
-                <div className="flex space-x-2">
-                  <Input
-                    value={newOption}
-                    onChange={(e) => setNewOption(e.target.value)}
-                    placeholder={
-                      editingEntry.parameterType === 'quantitative' 
-                        ? "e.g., m, km, s, %, kg" 
-                        : "e.g., Regular Sets, Super Sets"
-                    }
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter' && newOption.trim()) {
-                        setEditingEntry(prev => prev ? ({ 
-                          ...prev, 
-                          options: [...(prev.options || []), newOption.trim()] 
-                        }) : null);
-                        setNewOption("");
-                      }
-                    }}
-                  />
-                  <Button 
-                    type="button" 
-                    onClick={() => {
-                      if (newOption.trim()) {
-                        setEditingEntry(prev => prev ? ({ 
-                          ...prev, 
-                          options: [...(prev.options || []), newOption.trim()] 
-                        }) : null);
-                        setNewOption("");
-                      }
-                    }}
-                  >
-                    Add
-                  </Button>
-                </div>
-                {editingEntry.options && editingEntry.options.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {editingEntry.options.map((option, index) => (
-                      <span
-                        key={index}
-                        className="inline-flex items-center bg-secondary text-secondary-foreground px-2 py-1 text-xs rounded"
-                      >
-                        {option}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="ml-1 h-4 w-4 p-0"
-                          onClick={() => {
-                            setEditingEntry(prev => prev ? ({
-                              ...prev,
-                              options: (prev.options || []).filter((_, i) => i !== index)
-                            }) : null);
-                          }}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleEditEntry}>
-                  Update Parameter
-                </Button>
-              </div>
-            </div>
+      {/* Parameter Management Dialog */}
+      {selectedSubCategory && (
+        <ParameterManagementDialog
+          open={isParameterDialogOpen}
+          onOpenChange={setIsParameterDialogOpen}
+          category={selectedSubCategory.category}
+          subCategory={selectedSubCategory.subCategory}
+          parameters={data.entries.filter(e => 
+            e.category === selectedSubCategory.category && 
+            e.subCategory === selectedSubCategory.subCategory
           )}
-        </DialogContent>
-      </Dialog>
+          onUpdateParameters={handleUpdateParameters}
+        />
+      )}
 
       {/* No results message */}
-      {hierarchicalData.length === 0 && searchTerm && (
+      {subCategoryData.length === 0 && searchTerm && (
         <div className="text-center py-12">
-          <p className="text-muted-foreground">No parameters found matching "{searchTerm}"</p>
+          <p className="text-muted-foreground">No sub-categories found matching "{searchTerm}"</p>
+        </div>
+      )}
+      
+      {subCategoryData.length === 0 && !searchTerm && (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">No sub-categories yet. Click "Add Sub-Category" to get started.</p>
         </div>
       )}
     </div>
