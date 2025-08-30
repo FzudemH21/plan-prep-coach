@@ -167,7 +167,7 @@ const ExerciseLibrary = () => {
     <div className="min-h-screen bg-background">
       {/* Compact Header */}
       <div className="border-b bg-card">
-        <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="w-full max-w-none px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Button variant="ghost" size="sm" onClick={() => navigate('/templates')}>
@@ -227,7 +227,7 @@ const ExerciseLibrary = () => {
       </div>
 
       {/* Compact Statistics Cards */}
-      <div className="max-w-7xl mx-auto px-4 py-3">
+      <div className="w-full max-w-none px-4 py-3">
         <div className="grid grid-cols-3 gap-3 mb-4">
           <Card className="p-3">
             <div className="flex items-center justify-between">

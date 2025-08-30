@@ -167,7 +167,7 @@ export default function PlyometricsLibrary() {
   }
 
   return (
-    <div className="container mx-auto py-8 space-y-6">
+    <div className="w-full max-w-none py-8 space-y-6 px-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">

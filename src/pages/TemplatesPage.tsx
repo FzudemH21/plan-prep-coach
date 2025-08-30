@@ -7,7 +7,7 @@ export default function TemplatesPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
+    <div className="w-full max-w-none space-y-8">
       {/* Header */}
       <div className="flex items-center space-x-4">
         <Button 

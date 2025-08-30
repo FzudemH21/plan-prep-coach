@@ -10,7 +10,7 @@ const Index = () => {
 
   return (
     <main className="min-h-screen bg-background py-10">
-      <header className="max-w-3xl mx-auto px-4">
+      <header className="w-full max-w-none px-4">
         <h1 className="text-3xl font-bold">Strength & Conditioning Planner</h1>
         <p className="text-muted-foreground mt-1">Guided setup → dynamic microcycle intensities. Desktop-like web app now; installable later.</p>
       </header>
