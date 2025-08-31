@@ -8,13 +8,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, Search, Download, Upload, Trash2, Edit, Copy, ArrowUpDown } from "lucide-react";
+import { ArrowLeft, Plus, Search, Download, Upload, Trash2, Edit, Copy, ChevronUp, ChevronDown } from "lucide-react";
 import { useToolboxData } from "@/hooks/useToolboxData";
 import { ToolboxEntry } from "@/types/toolbox";
 import { useToast } from "@/hooks/use-toast";
 import { ParameterManagementDialog } from "@/components/toolbox/ParameterManagementDialog";
 
 type SortOrder = 'asc' | 'desc';
+type SortColumn = 'category' | 'subCategory';
+
+interface ColumnSort {
+  column: SortColumn;
+  order: SortOrder;
+}
 
 interface SubCategoryData {
   category: string;
@@ -29,7 +35,10 @@ export default function ToolboxDatabase() {
   const { data, isLoading, addEntry, deleteEntry, copyEntry, reorderParameters, importData, exportData } = useToolboxData();
   
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+  const [columnSorts, setColumnSorts] = useState<Record<SortColumn, ColumnSort | null>>({
+    category: null,
+    subCategory: null
+  });
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isParameterDialogOpen, setIsParameterDialogOpen] = useState(false);
   const [selectedSubCategory, setSelectedSubCategory] = useState<{ category: string; subCategory: string } | null>(null);
@@ -42,6 +51,19 @@ export default function ToolboxDatabase() {
     options: [] as string[]
   });
   const [newOption, setNewOption] = useState("");
+
+  // Handle column sorting
+  const handleColumnSort = (column: SortColumn) => {
+    setColumnSorts(prev => {
+      const currentSort = prev[column];
+      const newOrder = currentSort?.order === 'asc' ? 'desc' : 'asc';
+      
+      return {
+        ...prev,
+        [column]: { column, order: newOrder }
+      };
+    });
+  };
 
   // Group entries by category + sub-category combination
   const subCategoryData = useMemo(() => {
@@ -79,20 +101,38 @@ export default function ToolboxDatabase() {
       );
     }
 
-    // Apply sorting
-    result.sort((a, b) => {
-      // First sort by category, then by sub-category
-      const categoryCompare = a.category.localeCompare(b.category);
-      if (categoryCompare !== 0) {
-        return sortOrder === 'asc' ? categoryCompare : -categoryCompare;
-      }
-      
-      const subCategoryCompare = a.subCategory.localeCompare(b.subCategory);
-      return sortOrder === 'asc' ? subCategoryCompare : -subCategoryCompare;
-    });
+    // Apply sorting based on column sorts
+    const categorySorter = columnSorts.category;
+    const subCategorySorter = columnSorts.subCategory;
+    
+    if (categorySorter || subCategorySorter) {
+      result.sort((a, b) => {
+        // Apply category sorting if it exists
+        if (categorySorter) {
+          const categoryCompare = a.category.localeCompare(b.category);
+          if (categoryCompare !== 0) {
+            return categorySorter.order === 'asc' ? categoryCompare : -categoryCompare;
+          }
+        }
+        
+        // Apply sub-category sorting if it exists
+        if (subCategorySorter) {
+          const subCategoryCompare = a.subCategory.localeCompare(b.subCategory);
+          if (subCategoryCompare !== 0) {
+            return subCategorySorter.order === 'asc' ? subCategoryCompare : -subCategoryCompare;
+          }
+        }
+        
+        // Default fallback - maintain consistent ordering
+        const fallbackCategoryCompare = a.category.localeCompare(b.category);
+        if (fallbackCategoryCompare !== 0) return fallbackCategoryCompare;
+        
+        return a.subCategory.localeCompare(b.subCategory);
+      });
+    }
 
     return result;
-  }, [data.entries, searchTerm, sortOrder]);
+  }, [data.entries, searchTerm, columnSorts]);
 
   // Handle add entry (creates a new sub-category)
   const handleAddEntry = () => {
@@ -315,27 +355,7 @@ export default function ToolboxDatabase() {
           />
         </div>
         
-        <div className="flex items-center gap-2">
-          <Select value={sortOrder} onValueChange={(value: SortOrder) => setSortOrder(value)}>
-            <SelectTrigger className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="asc">
-                <div className="flex items-center gap-2">
-                  <ArrowUpDown className="h-4 w-4" />
-                  A-Z
-                </div>
-              </SelectItem>
-              <SelectItem value="desc">
-                <div className="flex items-center gap-2">
-                  <ArrowUpDown className="h-4 w-4 rotate-180" />
-                  Z-A
-                </div>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          
+        <div className="flex items-center gap-2">          
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -477,8 +497,28 @@ export default function ToolboxDatabase() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-1/3">Category</TableHead>
-                <TableHead className="w-1/3">Sub-Category</TableHead>
+                <TableHead className="w-1/3">
+                  <Button 
+                    variant="ghost" 
+                    className="flex items-center gap-1 p-0 h-auto font-semibold justify-start"
+                    onClick={() => handleColumnSort('category')}
+                  >
+                    Category
+                    {columnSorts.category?.order === 'asc' && <ChevronUp className="h-4 w-4" />}
+                    {columnSorts.category?.order === 'desc' && <ChevronDown className="h-4 w-4" />}
+                  </Button>
+                </TableHead>
+                <TableHead className="w-1/3">
+                  <Button 
+                    variant="ghost" 
+                    className="flex items-center gap-1 p-0 h-auto font-semibold justify-start"
+                    onClick={() => handleColumnSort('subCategory')}
+                  >
+                    Sub-Category
+                    {columnSorts.subCategory?.order === 'asc' && <ChevronUp className="h-4 w-4" />}
+                    {columnSorts.subCategory?.order === 'desc' && <ChevronDown className="h-4 w-4" />}
+                  </Button>
+                </TableHead>
                 <TableHead className="w-1/6">Parameters</TableHead>
                 <TableHead className="w-1/6">Actions</TableHead>
               </TableRow>
