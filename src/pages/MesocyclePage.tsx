@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ArrowLeft, ArrowRight, Settings } from 'lucide-react';
 import MesocycleCalendar from '@/components/mesocycle/MesocycleCalendar';
 import { MicrocycleIntensityChart } from '@/components/mesocycle/MicrocycleIntensityChart';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ExtendedMesocycle, Mesocycle, Microcycle, Plan, Intensity } from '@/features/planner/types';
 import { useAthleticismData } from '@/hooks/useAthleticismData';
 import { useToolboxData } from '@/hooks/useToolboxData';
@@ -40,6 +41,7 @@ export default function MesocyclePage() {
   const [mesocycleLength, setMesocycleLength] = useState(4);
   const [uniformLength, setUniformLength] = useState(true);
   const [parameterValues, setParameterValues] = useState<Record<string, Record<number, Record<string, Record<string, string | number>>>>>({});
+  const [expandedSubGoals, setExpandedSubGoals] = useState<Record<string, Set<string>>>({});
   
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
@@ -520,6 +522,92 @@ export default function MesocyclePage() {
     return grouped;
   }, [getMethodsForAllocatedSubGoals]);
 
+  // Helper function to get methods with loading recommendations for a specific sub-goal
+  const getMethodsWithRecommendationsForSubGoal = useMemo(() => {
+    return (subGoal: string) => {
+      const methodsWithRecommendations: Array<{
+        method: string;
+        recommendations: Record<string, any>;
+      }> = [];
+
+      // Find all athleticism entries that match this sub-goal
+      athleticismData.entries.forEach(entry => {
+        const formattedSubGoal = `${entry.overarchingGoal} - ${entry.subGoal}`;
+        if (normalizeForComparison(formattedSubGoal) === normalizeForComparison(subGoal)) {
+          // Add all methods from this entry with their recommendations
+          entry.mappedMethods.forEach(method => {
+            const recommendations = entry.loadingRecommendations[method] || {};
+            
+            // Check if we already have this method, if so merge recommendations
+            const existingMethod = methodsWithRecommendations.find(m => m.method === method);
+            if (existingMethod) {
+              // Merge recommendations (keep existing if there's a conflict)
+              Object.entries(recommendations).forEach(([key, value]) => {
+                if (!existingMethod.recommendations[key]) {
+                  existingMethod.recommendations[key] = value;
+                }
+              });
+            } else {
+              methodsWithRecommendations.push({
+                method,
+                recommendations
+              });
+            }
+          });
+        }
+      });
+
+      return methodsWithRecommendations;
+    };
+  }, [athleticismData]);
+
+  // Helper function to format loading recommendations into readable text
+  const formatLoadingRecommendations = (recommendations: Record<string, any>): string => {
+    if (!recommendations || Object.keys(recommendations).length === 0) {
+      return "No specific recommendations available";
+    }
+
+    const formatValue = (key: string, value: any): string => {
+      if (typeof value === 'object' && value !== null) {
+        // Handle nested objects like 'Modes' in Isometrics
+        if (key === 'Modes') {
+          const modeStrings = Object.entries(value).map(([modeName, modeParams]: [string, any]) => {
+            const modeParamStrings = Object.entries(modeParams).map(([paramKey, paramValue]) => 
+              `${paramKey}: ${paramValue}`
+            ).join(', ');
+            return `${modeName} (${modeParamStrings})`;
+          });
+          return `${key}: ${modeStrings.join('; ')}`;
+        }
+        return `${key}: ${JSON.stringify(value)}`;
+      }
+      return `${key}: ${value}`;
+    };
+
+    return Object.entries(recommendations)
+      .map(([key, value]) => formatValue(key, value))
+      .join(', ');
+  };
+
+  // Helper function to toggle sub-goal expansion
+  const toggleSubGoalExpansion = (mesocycleId: string, subGoal: string) => {
+    setExpandedSubGoals(prev => {
+      const mesocycleExpanded = prev[mesocycleId] || new Set();
+      const newMesocycleExpanded = new Set(mesocycleExpanded);
+      
+      if (newMesocycleExpanded.has(subGoal)) {
+        newMesocycleExpanded.delete(subGoal);
+      } else {
+        newMesocycleExpanded.add(subGoal);
+      }
+      
+      return {
+        ...prev,
+        [mesocycleId]: newMesocycleExpanded
+      };
+    });
+  };
+
   const getParametersForMethod = (method: string) => {
     // Determine method category and subcategory
     let category = 'General Training';
@@ -825,30 +913,67 @@ export default function MesocyclePage() {
                        <div className="grid gap-1" style={{
                          gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
                        }}>
-                          <div className="sticky left-0 z-[60] p-2 bg-background border-l border-r text-xs shadow-md">
-                            Focus Areas
-                          </div>
-                         {mesocycles.map((meso) => {
-                           const overview = getMesocycleOverview(meso);
-                           return (
-                             <div 
-                               key={`${meso.id}-overview`} 
-                               className="p-2 bg-muted/30 border-l border-r text-xs space-y-1"
-                               style={{ 
-                                 gridColumn: `span ${meso.duration}` 
-                               }}
-                             >
-                                {overview.subGoals.length > 0 ? (
-                                  <div className="flex flex-wrap gap-1">
-                                    <span className="font-medium text-muted-foreground">Sub-Goals:</span>
-                                    <span className="text-foreground text-xs">{overview.subGoals.join(', ')}</span>
-                                  </div>
-                                ) : (
-                                  <span className="text-muted-foreground italic">No sub-goals allocated</span>
-                                )}
-                             </div>
-                           );
-                         })}
+                           <div className="sticky left-0 z-[60] p-2 bg-background border-l border-r text-xs shadow-md">
+                             Focus Areas
+                           </div>
+                          {mesocycles.map((meso) => {
+                            const overview = getMesocycleOverview(meso);
+                            return (
+                              <div 
+                                key={`${meso.id}-overview`} 
+                                className="p-2 bg-muted/30 border-l border-r text-xs space-y-2"
+                                style={{ 
+                                  gridColumn: `span ${meso.duration}` 
+                                }}
+                              >
+                                 {overview.subGoals.length > 0 ? (
+                                   <div className="space-y-1">
+                                     <span className="font-medium text-muted-foreground">Sub-Goals:</span>
+                                     <ul className="space-y-1">
+                                       {overview.subGoals.map((subGoal) => {
+                                         const methodsWithRecs = getMethodsWithRecommendationsForSubGoal(subGoal);
+                                         const isExpanded = expandedSubGoals[meso.id]?.has(subGoal) || false;
+                                         
+                                         return (
+                                           <li key={subGoal} className="text-xs">
+                                             <Collapsible>
+                                               <CollapsibleTrigger
+                                                 onClick={() => toggleSubGoalExpansion(meso.id, subGoal)}
+                                                 className="flex items-start gap-1 text-left hover:text-primary transition-colors cursor-pointer w-full"
+                                               >
+                                                 <span className="text-primary">•</span>
+                                                 <span className="text-foreground leading-tight">{subGoal}</span>
+                                               </CollapsibleTrigger>
+                                               <CollapsibleContent>
+                                                 {methodsWithRecs.length > 0 ? (
+                                                   <div className="ml-3 mt-1 space-y-1">
+                                                     {methodsWithRecs.map(({ method, recommendations }) => (
+                                                       <div key={method} className="text-xs">
+                                                         <div className="font-medium text-primary">{method}:</div>
+                                                         <div className="text-muted-foreground leading-tight ml-2">
+                                                           {formatLoadingRecommendations(recommendations)}
+                                                         </div>
+                                                       </div>
+                                                     ))}
+                                                   </div>
+                                                 ) : (
+                                                   <div className="ml-3 mt-1 text-xs text-muted-foreground italic">
+                                                     No methods available
+                                                   </div>
+                                                 )}
+                                               </CollapsibleContent>
+                                             </Collapsible>
+                                           </li>
+                                         );
+                                       })}
+                                     </ul>
+                                   </div>
+                                 ) : (
+                                   <span className="text-muted-foreground italic">No sub-goals allocated</span>
+                                 )}
+                              </div>
+                            );
+                          })}
                        </div>
 
                        {/* Level 3: Week Headers with Intensity Colors */}
