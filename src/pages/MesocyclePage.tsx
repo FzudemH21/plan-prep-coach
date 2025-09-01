@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ArrowLeft, ArrowRight, Settings } from 'lucide-react';
 import MesocycleCalendar from '@/components/mesocycle/MesocycleCalendar';
 import { MicrocycleIntensityChart } from '@/components/mesocycle/MicrocycleIntensityChart';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ExtendedMesocycle, Mesocycle, Microcycle, Plan, Intensity } from '@/features/planner/types';
 import { useAthleticismData } from '@/hooks/useAthleticismData';
 import { useToolboxData } from '@/hooks/useToolboxData';
@@ -882,7 +882,7 @@ export default function MesocyclePage() {
           ) : (
              <div className="space-y-3">
                <h3 className="text-lg font-semibold">Method Periodization</h3>
-                 <div className="h-[32rem] w-full border rounded-lg overflow-auto" style={{scrollbarWidth: 'thin'}}>
+                 <div className="w-full border rounded-lg overflow-auto" style={{height: 'calc(100vh - 280px)', scrollbarWidth: 'thin'}}>
                    <div className="min-w-max relative">
                      {/* Multi-Level Sticky Headers */}
                      <div className="sticky top-0 z-[90] bg-background border-b space-y-1 shadow-sm">
@@ -929,44 +929,50 @@ export default function MesocyclePage() {
                                  {overview.subGoals.length > 0 ? (
                                    <div className="space-y-1">
                                      <span className="font-medium text-muted-foreground">Sub-Goals:</span>
-                                     <ul className="space-y-1">
-                                       {overview.subGoals.map((subGoal) => {
-                                         const methodsWithRecs = getMethodsWithRecommendationsForSubGoal(subGoal);
-                                         const isExpanded = expandedSubGoals[meso.id]?.has(subGoal) || false;
-                                         
-                                         return (
-                                           <li key={subGoal} className="text-xs">
-                                             <Collapsible>
-                                               <CollapsibleTrigger
-                                                 onClick={() => toggleSubGoalExpansion(meso.id, subGoal)}
-                                                 className="flex items-start gap-1 text-left hover:text-primary transition-colors cursor-pointer w-full"
-                                               >
-                                                 <span className="text-primary">•</span>
-                                                 <span className="text-foreground leading-tight">{subGoal}</span>
-                                               </CollapsibleTrigger>
-                                               <CollapsibleContent>
-                                                 {methodsWithRecs.length > 0 ? (
-                                                   <div className="ml-3 mt-1 space-y-1">
-                                                     {methodsWithRecs.map(({ method, recommendations }) => (
-                                                       <div key={method} className="text-xs">
-                                                         <div className="font-medium text-primary">{method}:</div>
-                                                         <div className="text-muted-foreground leading-tight ml-2">
-                                                           {formatLoadingRecommendations(recommendations)}
-                                                         </div>
-                                                       </div>
-                                                     ))}
-                                                   </div>
-                                                 ) : (
-                                                   <div className="ml-3 mt-1 text-xs text-muted-foreground italic">
-                                                     No methods available
-                                                   </div>
-                                                 )}
-                                               </CollapsibleContent>
-                                             </Collapsible>
-                                           </li>
-                                         );
-                                       })}
-                                     </ul>
+                                      <ul className="space-y-1">
+                                        {overview.subGoals.map((subGoal) => {
+                                          const methodsWithRecs = getMethodsWithRecommendationsForSubGoal(subGoal);
+                                          
+                                          return (
+                                            <li key={subGoal} className="text-xs">
+                                              <Popover>
+                                                <PopoverTrigger
+                                                  className="flex items-start gap-1 text-left hover:text-primary transition-colors cursor-pointer w-full"
+                                                >
+                                                  <span className="text-primary">•</span>
+                                                  <span className="text-foreground leading-tight">{subGoal}</span>
+                                                </PopoverTrigger>
+                                                <PopoverContent 
+                                                  className="w-80 max-w-[90vw] z-[100]" 
+                                                  align="start"
+                                                  side="bottom"
+                                                  sideOffset={5}
+                                                >
+                                                  <div className="space-y-2">
+                                                    <h4 className="font-semibold text-sm text-foreground">{subGoal}</h4>
+                                                    {methodsWithRecs.length > 0 ? (
+                                                      <div className="space-y-2">
+                                                        {methodsWithRecs.map(({ method, recommendations }) => (
+                                                          <div key={method} className="text-xs border-l-2 border-primary/30 pl-3">
+                                                            <div className="font-medium text-primary mb-1">{method}</div>
+                                                            <div className="text-muted-foreground leading-relaxed">
+                                                              {formatLoadingRecommendations(recommendations)}
+                                                            </div>
+                                                          </div>
+                                                        ))}
+                                                      </div>
+                                                    ) : (
+                                                      <div className="text-xs text-muted-foreground italic">
+                                                        No methods available for this sub-goal
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                </PopoverContent>
+                                              </Popover>
+                                            </li>
+                                          );
+                                        })}
+                                      </ul>
                                    </div>
                                  ) : (
                                    <span className="text-muted-foreground italic">No sub-goals allocated</span>
