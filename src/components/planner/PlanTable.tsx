@@ -44,21 +44,25 @@ export default function PlanTable({ plan, onChange, onEditSetup }: Props) {
             {plan.mesocycles.map((meso, mi) => (
               <div key={meso.id} className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-base font-medium">{meso.name} · {meso.weeks} weeks · {meso.sessionsPerWeek} sessions/week · {meso.sessionLength} min</h3>
+                  <h3 className="text-base font-medium">{meso.name} · {meso.microcycles?.length || 0} microcycles · {meso.sessionsPerWeek} sessions/week · {meso.sessionLength} min</h3>
                   <div className="flex gap-2">
                     <Button variant="secondary" onClick={() => {
                       const next = { ...plan };
-                      next.mesocycles[mi].weeks += 1;
-                      next.mesocycles[mi].microcycles.push({ intensity: "moderate" });
+                      const newMicrocycle = {
+                        id: `micro-${mi + 1}-${next.mesocycles[mi].microcycles.length + 1}`,
+                        name: `Microcycle ${next.mesocycles[mi].microcycles.length + 1}`,
+                        duration: 7,
+                        intensity: "moderate" as Intensity
+                      };
+                      next.mesocycles[mi].microcycles.push(newMicrocycle);
                       onChange(next);
-                    }}>+ Week</Button>
+                    }}>+ Microcycle</Button>
                     <Button variant="secondary" onClick={() => {
-                      if (meso.weeks <= 1) return;
+                      if ((meso.microcycles?.length || 0) <= 1) return;
                       const next = { ...plan };
-                      next.mesocycles[mi].weeks -= 1;
                       next.mesocycles[mi].microcycles.pop();
                       onChange(next);
-                    }}>- Week</Button>
+                    }}>- Microcycle</Button>
                   </div>
                 </div>
 
@@ -66,16 +70,18 @@ export default function PlanTable({ plan, onChange, onEditSetup }: Props) {
                   <table className="w-full border-collapse">
                     <thead>
                       <tr>
-                        {Array.from({ length: meso.weeks }, (_, w) => (
-                          <th key={w} className="border p-2 text-sm font-medium text-muted-foreground">Week {w + 1}</th>
+                        {(meso.microcycles || []).map((mc, w) => (
+                          <th key={w} className="border p-2 text-sm font-medium text-muted-foreground">{mc.name}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       <tr>
-                        {meso.microcycles.map((mc, w) => (
+                        {(meso.microcycles || []).map((mc, w) => (
                           <td key={w} className="border p-2 align-top">
                             <div className={`rounded-md p-3 text-center ${intensityBg(mc.intensity)}`}>
+                              <div className="mb-1 text-xs font-medium uppercase tracking-wide">Duration</div>
+                              <div className="mb-2 text-sm font-bold">{mc.duration} days</div>
                               <div className="mb-2 text-xs font-medium uppercase tracking-wide">Intensity</div>
                               <Select
                                 value={mc.intensity}

@@ -82,17 +82,17 @@ const MesocycleLabel: React.FC<MesocycleLabelProps> = ({
   );
 };
 
-const CustomWeekTick: React.FC<CustomWeekTickProps> = ({ x = 0, y = 0, payload, data }) => {
+const CustomMicrocycleTick: React.FC<CustomWeekTickProps> = ({ x = 0, y = 0, payload, data }) => {
   const value = payload?.value ?? 0;
-  const point = data.find((d) => d.globalWeek === value);
+  const point = data.find((d) => d.globalMicrocycle === value);
   if (!point) return null;
 
-  const isLast = point.isLastWeekOfMeso;
-  const weekLabel = `W${point.weekIndex + 1}`;
+  const isLast = point.isLastMicrocycleOfMeso;
+  const microcycleLabel = `M${point.microcycleIndex + 1}`;
 
   return (
     <g>
-      {/* custom tick line (taller on last week of meso) */}
+      {/* custom tick line (taller on last microcycle of meso) */}
       <line
         x1={x}
         y1={y - (isLast ? 8 : 0)}
@@ -101,9 +101,9 @@ const CustomWeekTick: React.FC<CustomWeekTickProps> = ({ x = 0, y = 0, payload, 
         stroke="hsl(var(--foreground))"
         strokeWidth={isLast ? 2 : 1}
       />
-      {/* week label */}
+      {/* microcycle label */}
       <text x={x} y={y + 18} textAnchor="middle" fill="hsl(var(--foreground))" fontSize={14}>
-        {weekLabel}
+        {microcycleLabel}
       </text>
     </g>
   );
@@ -114,8 +114,8 @@ interface DraggableDotProps {
   cy?: number;
   payload?: any;
   mesocycleIndex: number;
-  weekIndex: number;
-  onIntensityChange: (mesoIndex: number, weekIndex: number, intensity: Intensity) => void;
+  microcycleIndex: number;
+  onIntensityChange: (mesoIndex: number, microIndex: number, intensity: Intensity) => void;
   chartHeight: number;
   yAxisMin: number;
   yAxisMax: number;
@@ -126,7 +126,7 @@ const DraggableDot: React.FC<DraggableDotProps> = ({
   cy,
   payload,
   mesocycleIndex,
-  weekIndex,
+  microcycleIndex,
   onIntensityChange,
   chartHeight,
   yAxisMin,
@@ -189,7 +189,7 @@ const DraggableDot: React.FC<DraggableDotProps> = ({
     
     // Only trigger the actual change on release
     if (currentIntensity !== payload.intensity) {
-      onIntensityChange(mesocycleIndex, weekIndex, currentIntensity);
+      onIntensityChange(mesocycleIndex, microcycleIndex, currentIntensity);
     }
   };
 
@@ -251,30 +251,29 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
   mesocycles,
   onMesocyclesChange
 }) => {
-  // Prepare chart data with mesocycle boundaries
+  // Prepare chart data with microcycle boundaries
   const chartData = React.useMemo(() => {
     const data: any[] = [];
-    let globalWeekIndex = 0;
+    let globalMicrocycleIndex = 0;
     
     mesocycles.forEach((meso, mesoIndex) => {
-      for (let weekIndex = 0; weekIndex < meso.duration; weekIndex++) {
-        const microcycle = meso.microcycles[weekIndex];
-        const intensity = microcycle?.intensity || "moderate";
-        
+      meso.microcycles?.forEach((microcycle, microIndex) => {
         data.push({
-          week: `${meso.name}\nW${weekIndex + 1}`,
-          globalWeek: globalWeekIndex + 1,
+          microcycle: `${meso.name}\n${microcycle.name}`,
+          globalMicrocycle: globalMicrocycleIndex + 1,
           mesocycle: meso.name,
           mesocycleIndex: mesoIndex,
-          weekIndex: weekIndex,
-          intensity: intensity,
-          intensityValue: getIntensityValue(intensity),
+          microcycleIndex: microIndex,
+          microcycleName: microcycle.name,
+          intensity: microcycle.intensity,
+          intensityValue: getIntensityValue(microcycle.intensity),
           mesocycleIntensity: meso.intensity,
-          isFirstWeekOfMeso: weekIndex === 0,
-          isLastWeekOfMeso: weekIndex === meso.duration - 1
+          duration: microcycle.duration,
+          isFirstMicrocycleOfMeso: microIndex === 0,
+          isLastMicrocycleOfMeso: microIndex === (meso.microcycles?.length || 1) - 1
         });
-        globalWeekIndex++;
-      }
+        globalMicrocycleIndex++;
+      });
     });
     
     return data;
@@ -284,11 +283,11 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
   const { mesocycleAreas, mesocycleCenters } = React.useMemo(() => {
     const areas: Array<{ x1: number; x2: number; color: string; name: string }> = [];
     const centers: Array<{ name: string; centerX: number }> = [];
-    let currentStart = 1; // globalWeek is 1-based
+    let currentStart = 1; // globalMicrocycle is 1-based
 
     mesocycles.forEach((meso) => {
       const first = currentStart;
-      const last = currentStart + meso.duration - 1;
+      const last = currentStart + (meso.microcycles?.length || 0) - 1;
       const centerX = (first + last) / 2; // Calculate center position
       
       areas.push({
@@ -309,7 +308,7 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
     return { mesocycleAreas: areas, mesocycleCenters: centers };
   }, [mesocycles]);
 
-  const handleIntensityChange = (mesoIndex: number, weekIndex: number, intensity: Intensity) => {
+  const handleIntensityChange = (mesoIndex: number, microIndex: number, intensity: Intensity) => {
     const updatedMesocycles = [...mesocycles];
     
     // Ensure microcycles array exists and has the right length
@@ -318,11 +317,16 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
     }
     
     // Ensure the specific microcycle exists
-    while (updatedMesocycles[mesoIndex].microcycles.length <= weekIndex) {
-      updatedMesocycles[mesoIndex].microcycles.push({ intensity: "moderate" });
+    while (updatedMesocycles[mesoIndex].microcycles.length <= microIndex) {
+      updatedMesocycles[mesoIndex].microcycles.push({ 
+        id: `micro-${mesoIndex + 1}-${updatedMesocycles[mesoIndex].microcycles.length + 1}`,
+        name: `Microcycle ${updatedMesocycles[mesoIndex].microcycles.length + 1}`,
+        duration: 7,
+        intensity: "moderate" 
+      });
     }
     
-    updatedMesocycles[mesoIndex].microcycles[weekIndex].intensity = intensity;
+    updatedMesocycles[mesoIndex].microcycles[microIndex].intensity = intensity;
     onMesocyclesChange(updatedMesocycles);
   };
 
@@ -378,14 +382,14 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis 
               type="number"
-              dataKey="globalWeek"
+              dataKey="globalMicrocycle"
               domain={[1, chartData.length]}
-              ticks={chartData.map(d => d.globalWeek)}
+              ticks={chartData.map(d => d.globalMicrocycle)}
               interval={0}
               stroke="hsl(var(--foreground))"
               height={80}
               tickLine={false}
-              tick={(props) => <CustomWeekTick {...props} data={chartData} />}
+              tick={(props) => <CustomMicrocycleTick {...props} data={chartData} />}
             />
             
             <YAxis 
@@ -402,8 +406,8 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
                   const data = payload[0].payload;
                   return (
                     <div className="bg-popover border rounded-lg p-3 shadow-lg">
-                      <p className="font-medium">Week {data.globalWeek}</p>
-                      <p className="text-sm text-muted-foreground">{data.mesocycle} - Week {data.weekIndex + 1}</p>
+                      <p className="font-medium">{data.microcycleName}</p>
+                      <p className="text-sm text-muted-foreground">{data.mesocycle} - {data.duration} days</p>
                       <p className="text-sm">
                         Intensity: <span className="capitalize">{data.intensity.replace("-", " ")}</span>
                       </p>
@@ -424,7 +428,7 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
                 <DraggableDot
                   {...props}
                   mesocycleIndex={props.payload?.mesocycleIndex || 0}
-                  weekIndex={props.payload?.weekIndex || 0}
+                  microcycleIndex={props.payload?.microcycleIndex || 0}
                   onIntensityChange={handleIntensityChange}
                   chartHeight={400}
                   yAxisMin={0}
@@ -449,7 +453,7 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
                 />
                 <span className="text-sm font-medium">{meso.name}</span>
                 <span className="text-xs text-muted-foreground capitalize">
-                  ({meso.intensity.replace("-", " ")} - {meso.duration} weeks)
+                  ({meso.intensity.replace("-", " ")} - {meso.microcycles?.length || 0} microcycles)
                 </span>
               </div>
             ))}
@@ -458,7 +462,7 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
       </div>
 
       <div className="text-sm text-muted-foreground">
-        Drag any dot up or down to adjust the intensity for that specific week.
+        Drag any dot up or down to adjust the intensity for that specific microcycle.
       </div>
     </div>
   );

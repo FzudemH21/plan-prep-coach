@@ -1,6 +1,9 @@
 export type Intensity = "off" | "deload" | "easy" | "easy-moderate" | "moderate" | "moderate-hard" | "hard" | "extremely-hard";
 
 export interface Microcycle {
+  id: string;
+  name: string;
+  duration: number; // days
   intensity: Intensity;
 }
 

@@ -113,7 +113,12 @@ export default function PlannerWizard({ onComplete, initial }: WizardProps) {
         weeks,
         sessionsPerWeek: sessions,
         sessionLength,
-        microcycles: Array.from({ length: weeks }, () => ({ intensity: "moderate" as const })),
+        microcycles: Array.from({ length: weeks }, (_, j) => ({ 
+          id: `micro-${i + 1}-${j + 1}`,
+          name: `Microcycle ${j + 1}`,
+          duration: 7,
+          intensity: "moderate" as const 
+        })),
       };
     });
 

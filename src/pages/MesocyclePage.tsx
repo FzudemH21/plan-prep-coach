@@ -42,6 +42,7 @@ export default function MesocyclePage() {
   const [uniformLength, setUniformLength] = useState(true);
   const [parameterValues, setParameterValues] = useState<Record<string, Record<number, Record<string, Record<string, string | number>>>>>({});
   const [expandedSubGoals, setExpandedSubGoals] = useState<Record<string, Set<string>>>({});
+  const [expandedMesocycles, setExpandedMesocycles] = useState<Set<string>>(new Set());
   
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
@@ -101,12 +102,22 @@ export default function MesocyclePage() {
       
       setMesocycleLength(suggestedLength);
       
-      // Create default mesocycles with 4-week blocks
+      // Create default mesocycles with 4-week blocks and auto-calculate microcycles
       const defaultMesocycles: ExtendedMesocycle[] = Array.from({ length: suggestedMesocycleCount }, (_, i) => {
+        const isLastMesocycle = i === suggestedMesocycleCount - 1;
         const remainingWeeks = weeks - (i * 4);
         const mesocycleWeeks = Math.min(4, remainingWeeks);
         let currentStartDate = addWeeks(startDate, i * 4);
         let currentEndDate = addWeeks(currentStartDate, mesocycleWeeks);
+        
+        // Create default microcycles (4 for normal mesocycles, adjusted for last)
+        const microcycleCount = isLastMesocycle ? remainingWeeks : 4;
+        const microcycles: Microcycle[] = Array.from({ length: microcycleCount }, (_, j) => ({
+          id: `micro-${i + 1}-${j + 1}`,
+          name: `Microcycle ${j + 1}`,
+          duration: 7, // 7 days default
+          intensity: "moderate" as Intensity
+        }));
         
         return {
           id: `meso-${i + 1}`,
@@ -120,7 +131,7 @@ export default function MesocyclePage() {
           intensity: i === suggestedMesocycleCount - 1 ? "deload" : "moderate" as IntensityLevel,
           trainingMethods: [],
           trainingQualities: [],
-          microcycles: []
+          microcycles
         };
       });
       
@@ -217,9 +228,48 @@ export default function MesocyclePage() {
     </Card>
   );
 
-  // Calculate total mesocycle weeks
-  const totalMesocycleWeeks = mesocycles.reduce((sum, meso) => sum + meso.duration, 0);
-  const weeksMismatch = totalMesocycleWeeks !== totalWeeks;
+  // Calculate total mesocycle days from microcycles
+  const totalMesocycleDays = mesocycles.reduce((sum, meso) => 
+    sum + meso.microcycles.reduce((mesoSum, micro) => mesoSum + micro.duration, 0), 0
+  );
+  const expectedTotalDays = totalWeeks * 7;
+  const daysMismatch = totalMesocycleDays !== expectedTotalDays;
+
+  // Helper functions for microcycle management
+  const toggleMesocycleExpansion = (mesocycleId: string) => {
+    const newExpanded = new Set(expandedMesocycles);
+    if (newExpanded.has(mesocycleId)) {
+      newExpanded.delete(mesocycleId);
+    } else {
+      newExpanded.add(mesocycleId);
+    }
+    setExpandedMesocycles(newExpanded);
+  };
+
+  const addMicrocycle = (mesocycleIndex: number) => {
+    const updated = [...mesocycles];
+    const mesocycle = updated[mesocycleIndex];
+    const newMicrocycle: Microcycle = {
+      id: `micro-${mesocycleIndex + 1}-${mesocycle.microcycles.length + 1}`,
+      name: `Microcycle ${mesocycle.microcycles.length + 1}`,
+      duration: 7,
+      intensity: "moderate"
+    };
+    mesocycle.microcycles.push(newMicrocycle);
+    setMesocycles(updated);
+  };
+
+  const removeMicrocycle = (mesocycleIndex: number, microcycleIndex: number) => {
+    const updated = [...mesocycles];
+    updated[mesocycleIndex].microcycles.splice(microcycleIndex, 1);
+    setMesocycles(updated);
+  };
+
+  const updateMicrocycle = (mesocycleIndex: number, microcycleIndex: number, field: keyof Microcycle, value: any) => {
+    const updated = [...mesocycles];
+    (updated[mesocycleIndex].microcycles[microcycleIndex] as any)[field] = value;
+    setMesocycles(updated);
+  };
 
   const renderMesocycleSetup = () => (
     <Card>
@@ -233,80 +283,62 @@ export default function MesocyclePage() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Week Validation Warning */}
-        {weeksMismatch && (
+        {/* Duration Validation Warning */}
+        {daysMismatch && (
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
             <div className="flex items-center space-x-2 text-destructive">
               <Info className="h-4 w-4" />
-              <span className="font-medium">Week Mismatch Warning</span>
+              <span className="font-medium">Duration Mismatch Warning</span>
             </div>
             <p className="text-sm text-destructive/80 mt-1">
-              Total mesocycle weeks ({totalMesocycleWeeks}) don't match your macrocycle plan ({totalWeeks} weeks). 
-              Please adjust mesocycle durations to match your training plan.
+              Total microcycle days ({totalMesocycleDays}) don't match your macrocycle plan ({expectedTotalDays} days / {totalWeeks} weeks). 
+              Please adjust microcycle durations to match your training plan.
             </p>
           </div>
         )}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="numMesocycles">Number of Mesocycles</Label>
-            <Input
-              id="numMesocycles"
-              type="number"
-              min="1"
-              max="12"
-              value={mesocycles.length || 3}
-              onChange={(e) => {
-                const count = parseInt(e.target.value);
-                const newMesocycles: ExtendedMesocycle[] = Array.from({ length: count }, (_, i) => ({
+        <div className="space-y-2">
+          <Label htmlFor="numMesocycles">Number of Mesocycles</Label>
+          <Input
+            id="numMesocycles"
+            type="number"
+            min="1"
+            max="12"
+            value={mesocycles.length || 3}
+            onChange={(e) => {
+              const count = parseInt(e.target.value);
+              const newMesocycles: ExtendedMesocycle[] = Array.from({ length: count }, (_, i) => {
+                // Calculate microcycles for each mesocycle
+                const isLastMesocycle = i === count - 1;
+                const baseWeeks = Math.floor(totalWeeks / count);
+                const extraWeeks = totalWeeks % count;
+                const mesocycleWeeks = baseWeeks + (i < extraWeeks ? 1 : 0);
+                
+                const microcycles: Microcycle[] = Array.from({ length: mesocycleWeeks }, (_, j) => ({
+                  id: `micro-${i + 1}-${j + 1}`,
+                  name: `Microcycle ${j + 1}`,
+                  duration: 7,
+                  intensity: "moderate" as Intensity
+                }));
+
+                return {
                   id: `meso-${i + 1}`,
                   name: `Mesocycle ${i + 1}`,
-                  weeks: mesocycleLength,
+                  weeks: mesocycleWeeks,
                   sessionsPerWeek: 3,
                   sessionLength: 60,
                   startDate: new Date(),
                   endDate: new Date(),
-                  duration: mesocycleLength,
+                  duration: mesocycleWeeks,
                   intensity: "moderate" as IntensityLevel,
                   trainingMethods: [],
                   trainingQualities: [],
-                  microcycles: []
-                }));
-                setMesocycles(newMesocycles);
-              }}
-              placeholder="3"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="mesocycleLength">Standard Mesocycle Length (weeks)</Label>
-            <Input
-              id="mesocycleLength"
-              type="number"
-              min="1"
-              max="12"
-              value={mesocycleLength}
-              onChange={(e) => {
-                const length = parseInt(e.target.value);
-                setMesocycleLength(length);
-                if (uniformLength) {
-                  const updated = mesocycles.map(meso => ({ ...meso, duration: length }));
-                  setMesocycles(updated);
-                }
-              }}
-              placeholder="4"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            id="uniformLength"
-            checked={uniformLength}
-            onChange={(e) => setUniformLength(e.target.checked)}
-            className="rounded"
+                  microcycles
+                };
+              });
+              setMesocycles(newMesocycles);
+            }}
+            placeholder="3"
           />
-          <Label htmlFor="uniformLength">Use uniform length for all mesocycles</Label>
         </div>
 
         {mesocycles.length > 0 && (
@@ -315,65 +347,143 @@ export default function MesocyclePage() {
               <h4 className="font-semibold">Mesocycle Configuration</h4>
               <div className="grid grid-cols-1 gap-4">
                 {mesocycles.map((meso, index) => (
-                  <div key={meso.id} className="p-4 border rounded-lg space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2 flex-1">
-                        <Input
-                          value={meso.name}
-                          onChange={(e) => {
-                            const updated = [...mesocycles];
-                            updated[index].name = e.target.value;
-                            setMesocycles(updated);
-                          }}
-                          className="font-medium flex-1"
-                        />
-                        {!uniformLength && (
-                          <div className="flex items-center space-x-2">
-                            <Label>Weeks:</Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              max="12"
-                              value={meso.duration}
-                              onChange={(e) => {
-                                const updated = [...mesocycles];
-                                updated[index].duration = parseInt(e.target.value);
-                                setMesocycles(updated);
-                              }}
-                              className="w-20"
-                            />
-                          </div>
-                        )}
-                        <div className="flex items-center space-x-2">
-                          <Label>Intensity:</Label>
-                          <Select
-                            value={meso.intensity}
-                            onValueChange={(value: IntensityLevel) => {
+                  <div key={meso.id} className="border rounded-lg">
+                    {/* Mesocycle Header - Clickable */}
+                    <div 
+                      className="p-4 cursor-pointer hover:bg-muted/50 transition-colors border-b"
+                      onClick={() => toggleMesocycleExpansion(meso.id)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3 flex-1">
+                          <ChevronDown 
+                            className={`h-4 w-4 transition-transform ${
+                              expandedMesocycles.has(meso.id) ? 'rotate-180' : ''
+                            }`} 
+                          />
+                          <Input
+                            value={meso.name}
+                            onChange={(e) => {
+                              e.stopPropagation();
                               const updated = [...mesocycles];
-                              updated[index].intensity = value;
+                              updated[index].name = e.target.value;
                               setMesocycles(updated);
                             }}
-                          >
-                            <SelectTrigger className="w-36">
-                              <div className="flex items-center space-x-2">
-                                <div className={`w-3 h-3 rounded ${getIntensityColor(meso.intensity)}`}></div>
-                                <SelectValue />
-                              </div>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {intensityLevels.map((level) => (
-                                <SelectItem key={level} value={level}>
-                                  <div className="flex items-center space-x-2">
-                                    <div className={`w-3 h-3 rounded ${getIntensityColor(level)}`}></div>
-                                    <span className="capitalize">{level.replace("-", " ")}</span>
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            onClick={(e) => e.stopPropagation()}
+                            className="font-medium flex-1"
+                          />
+                          <div className="flex items-center space-x-2">
+                            <Label>Intensity:</Label>
+                            <Select
+                              value={meso.intensity}
+                              onValueChange={(value: IntensityLevel) => {
+                                const updated = [...mesocycles];
+                                updated[index].intensity = value;
+                                setMesocycles(updated);
+                              }}
+                            >
+                              <SelectTrigger 
+                                className="w-36"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="flex items-center space-x-2">
+                                  <div className={`w-3 h-3 rounded ${getIntensityColor(meso.intensity)}`}></div>
+                                  <SelectValue />
+                                </div>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {intensityLevels.map((level) => (
+                                  <SelectItem key={level} value={level}>
+                                    <div className="flex items-center space-x-2">
+                                      <div className={`w-3 h-3 rounded ${getIntensityColor(level)}`}></div>
+                                      <span className="capitalize">{level.replace("-", " ")}</span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {meso.microcycles?.length || 0} microcycles 
+                          </div>
                         </div>
                       </div>
                     </div>
+
+                    {/* Microcycles List - Expandable */}
+                    {expandedMesocycles.has(meso.id) && (
+                      <div className="p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h5 className="font-medium text-sm">Microcycles</h5>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => addMicrocycle(index)}
+                          >
+                            Add Microcycle
+                          </Button>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          {meso.microcycles?.map((micro, microIndex) => (
+                            <div key={micro.id} className="flex items-center space-x-3 p-3 border rounded-md bg-muted/20">
+                              <Input
+                                value={micro.name}
+                                onChange={(e) => updateMicrocycle(index, microIndex, 'name', e.target.value)}
+                                className="flex-1"
+                                placeholder="Microcycle name"
+                              />
+                              <div className="flex items-center space-x-2">
+                                <Label className="text-sm">Days:</Label>
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  max="14"
+                                  value={micro.duration}
+                                  onChange={(e) => updateMicrocycle(index, microIndex, 'duration', parseInt(e.target.value))}
+                                  className="w-16"
+                                />
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Label className="text-sm">Intensity:</Label>
+                                <Select
+                                  value={micro.intensity}
+                                  onValueChange={(value: Intensity) => updateMicrocycle(index, microIndex, 'intensity', value)}
+                                >
+                                  <SelectTrigger className="w-32">
+                                    <div className="flex items-center space-x-2">
+                                      <div className={`w-2 h-2 rounded ${getIntensityColor(micro.intensity)}`}></div>
+                                      <SelectValue />
+                                    </div>
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {intensityLevels.map((level) => (
+                                      <SelectItem key={level} value={level}>
+                                        <div className="flex items-center space-x-2">
+                                          <div className={`w-2 h-2 rounded ${getIntensityColor(level)}`}></div>
+                                          <span className="capitalize text-xs">{level.replace("-", " ")}</span>
+                                        </div>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => removeMicrocycle(index, microIndex)}
+                                disabled={meso.microcycles.length <= 1}
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="text-xs text-muted-foreground">
+                          Total days: {meso.microcycles?.reduce((sum, micro) => sum + micro.duration, 0) || 0}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
