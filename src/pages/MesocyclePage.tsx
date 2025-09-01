@@ -943,7 +943,7 @@ export default function MesocyclePage() {
                                                   <span className="text-foreground leading-tight">{subGoal}</span>
                                                 </PopoverTrigger>
                                                 <PopoverContent 
-                                                  className="w-[500px] max-w-[90vw] z-[100]" 
+                                                  className="w-[800px] max-w-[95vw] z-[100]" 
                                                   align="start"
                                                   side="bottom"
                                                   sideOffset={5}
