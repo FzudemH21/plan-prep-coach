@@ -19,38 +19,61 @@ export default function MesocycleCalendar({
   showFullPlan = false, 
   totalWeeks = 0 
 }: MesocycleCalendarProps) {
-  // Calculate dates for all mesocycles
+  // Calculate dates for all mesocycles and their microcycles
   const calculateMesocycleDates = () => {
     let currentDate = startOfDay(startDate);
     
     return mesocycles.map((mesocycle) => {
-      const start = new Date(currentDate);
-      const end = addDays(currentDate, (mesocycle.duration * 7) - 1);
+      const mesoStartDate = new Date(currentDate);
+      let mesoCurrentDate = new Date(currentDate);
+      
+      // Calculate microcycle dates
+      const microcyclesWithDates = (mesocycle.microcycles || []).map((microcycle) => {
+        const microStartDate = new Date(mesoCurrentDate);
+        const microEndDate = addDays(mesoCurrentDate, microcycle.duration - 1);
+        
+        // Move to next microcycle
+        mesoCurrentDate = addDays(microEndDate, 1);
+        
+        return {
+          ...microcycle,
+          startDate: microStartDate,
+          endDate: microEndDate
+        };
+      });
+      
+      // Calculate total mesocycle duration
+      const totalDays = (mesocycle.microcycles || []).reduce((sum, micro) => sum + micro.duration, 0);
+      const mesoEndDate = addDays(mesoStartDate, totalDays - 1);
       
       // Move current date to start of next mesocycle
-      currentDate = addDays(end, 1);
+      currentDate = addDays(mesoEndDate, 1);
       
       return {
         ...mesocycle,
-        startDate: start,
-        endDate: end
+        startDate: mesoStartDate,
+        endDate: mesoEndDate,
+        microcyclesWithDates
       };
     });
   };
 
   const mesocyclesWithDates = calculateMesocycleDates();
 
-  // Find which mesocycle a given date belongs to
+  // Find which mesocycle and microcycle a given date belongs to
   const getMesocycleForDate = (date: Date) => {
     return mesocyclesWithDates.find(meso => 
       isWithinInterval(date, { start: meso.startDate, end: meso.endDate })
     );
   };
 
-  // Get week number within a mesocycle
-  const getWeekInMesocycle = (date: Date, mesocycle: any) => {
-    const daysDiff = Math.floor((date.getTime() - mesocycle.startDate.getTime()) / (1000 * 60 * 60 * 24));
-    return Math.floor(daysDiff / 7) + 1;
+  // Get microcycle for a specific date
+  const getMicrocycleForDate = (date: Date, mesocycle: any) => {
+    if (!mesocycle?.microcyclesWithDates) return null;
+    
+    return mesocycle.microcyclesWithDates.find((micro: any) => 
+      isWithinInterval(date, { start: micro.startDate, end: micro.endDate })
+    );
   };
 
   // Get intensity color using design system tokens
@@ -87,7 +110,7 @@ export default function MesocycleCalendar({
   // Custom day component
   const CustomDay = ({ date, ...props }: DayProps) => {
     const mesocycle = getMesocycleForDate(date);
-    const weekNumber = mesocycle ? getWeekInMesocycle(date, mesocycle) : null;
+    const microcycle = mesocycle ? getMicrocycleForDate(date, mesocycle) : null;
     
     return (
       <div 
@@ -106,9 +129,11 @@ export default function MesocycleCalendar({
             <div className="text-[10px] font-medium truncate">
               {mesocycle.name}
             </div>
-            <div className="text-[9px] opacity-75">
-              W{weekNumber}
-            </div>
+            {microcycle && (
+              <div className="text-[9px] opacity-75">
+                {microcycle.name || 'Mic1'}
+              </div>
+            )}
           </div>
         )}
       </div>

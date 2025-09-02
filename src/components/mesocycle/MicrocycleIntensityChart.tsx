@@ -88,7 +88,7 @@ const CustomMicrocycleTick: React.FC<CustomWeekTickProps> = ({ x = 0, y = 0, pay
   if (!point) return null;
 
   const isLast = point.isLastMicrocycleOfMeso;
-  const microcycleLabel = `M${point.microcycleIndex + 1}`;
+  const microcycleLabel = point.microcycleName || `Mic${point.microcycleIndex + 1}`;
 
   return (
     <g>
