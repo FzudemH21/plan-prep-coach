@@ -1092,32 +1092,30 @@ export default function MesocyclePage() {
                           })}
                        </div>
 
-                       {/* Level 3: Week Headers with Intensity Colors */}
-                       <div className="grid gap-1" style={{
-                         gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
-                       }}>
-                          <div className="sticky left-0 z-[60] p-2 bg-background font-medium text-xs border rounded-b-lg shadow-md border-r">
-                            Parameters
-                          </div>
-                         {mesocycles.map((meso) => 
-                           Array.from({ length: meso.duration }, (_, weekIndex) => {
-                             const globalWeek = mesocycles.slice(0, mesocycles.indexOf(meso)).reduce((sum, m) => sum + m.duration, 0) + weekIndex + 1;
-                             const microcycle = meso.microcycles?.[weekIndex];
-                             const intensity = microcycle?.intensity || meso.intensity;
-                             
-                             return (
-                               <div key={`${meso.id}-week-${weekIndex}`} className={`text-center border rounded-b ${intensityBg(intensity)}`}>
-                                 <div className="text-xs p-1 font-medium">
-                                   Week {globalWeek}
-                                 </div>
-                                 <div className="text-xs px-1 py-0.5 opacity-80 border-t">
-                                   {intensity?.replace('-', ' ') || 'easy'}
-                                 </div>
-                               </div>
-                             );
-                           })
-                         )}
-                       </div>
+                        {/* Level 3: Microcycle Headers with Intensity Colors */}
+                        <div className="grid gap-1" style={{
+                          gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 100px)`
+                        }}>
+                           <div className="sticky left-0 z-[60] p-2 bg-background font-medium text-xs border rounded-b-lg shadow-md border-r">
+                             Parameters
+                           </div>
+                          {mesocycles.map((meso) => 
+                            (meso.microcycles || []).map((microcycle, microcycleIndex) => {
+                              const intensity = microcycle.intensity || meso.intensity;
+                              
+                              return (
+                                <div key={`${meso.id}-micro-${microcycleIndex}`} className={`text-center border rounded-b ${intensityBg(intensity)}`}>
+                                  <div className="text-xs p-1 font-medium">
+                                    {microcycle.name || `Mic${microcycleIndex + 1}`}
+                                  </div>
+                                  <div className="text-xs px-1 py-0.5 opacity-80 border-t">
+                                    {microcycle.duration} days
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
                      </div>
 
                       {/* Method Categories */}
@@ -1141,85 +1139,85 @@ export default function MesocyclePage() {
                                   
                                   return (
                                     <div key={method} className="border rounded-lg bg-card shadow-sm">
-                                      {/* Method name header */}
-                                      <div className="grid gap-1 bg-muted/20" style={{ 
-                                        gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)` 
-                                      }}>
-                                        <div className="sticky left-0 z-40 p-3 font-medium text-sm border-r bg-background rounded-tl shadow-md">
-                                          <div className="line-clamp-3" title={method}>
-                                            {method}
-                                          </div>
-                                        </div>
-                                        {mesocycles.map((meso) => 
-                                          Array.from({ length: meso.duration }, (_, weekIndex) => {
-                                            const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
-                                            return (
-                                              <div 
-                                                key={`${meso.id}-${weekIndex}`} 
-                                                className={`h-16 border-l ${isAllocated ? 'bg-muted/10' : 'bg-gray-100/50 opacity-50'}`}
-                                              />
-                                            );
-                                          })
-                                        )}
-                                      </div>
+                                       {/* Method name header */}
+                                       <div className="grid gap-1 bg-muted/20" style={{ 
+                                         gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 100px)` 
+                                       }}>
+                                         <div className="sticky left-0 z-40 p-3 font-medium text-sm border-r bg-background rounded-tl shadow-md">
+                                           <div className="line-clamp-3" title={method}>
+                                             {method}
+                                           </div>
+                                         </div>
+                                         {mesocycles.map((meso) => 
+                                           (meso.microcycles || []).map((microcycle, microcycleIndex) => {
+                                             const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
+                                             return (
+                                               <div 
+                                                 key={`${meso.id}-${microcycleIndex}`} 
+                                                 className={`h-16 border-l ${isAllocated ? 'bg-muted/10' : 'bg-gray-100/50 opacity-50'}`}
+                                               />
+                                             );
+                                           })
+                                         )}
+                                       </div>
                                       
                                       {/* Parameter sub-rows */}
                                       {parameters.length > 0 && (
                                         <div className="divide-y">
-                                          {parameters.map((param) => (
-                                            <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
-                                              gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)` 
-                                            }}>
-                                              <div className="sticky left-0 z-40 p-2 text-xs text-muted-foreground bg-background border-r flex items-center shadow-md">
-                                                <span className="ml-4 font-medium">{param.name}</span>
-                                                {param.isQuantitative && param.options && param.options.length > 0 && (
-                                                  <span className="ml-1 text-xs opacity-70">({param.options[0]})</span>
-                                                )}
-                                              </div>
-                                              {mesocycles.map((meso) =>
-                                                Array.from({ length: meso.duration }, (_, weekIndex) => {
-                                                  const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
-                                                  const currentValue = getParameterValue(meso.id, weekIndex, method, param.name);
-                                                  
-                                                  return (
-                                                    <div 
-                                                      key={`${meso.id}-${weekIndex}-${param.name}`} 
-                                                      className={`p-1 border-l ${!isAllocated ? 'bg-gray-100/50 opacity-50' : ''}`}
-                                                    >
-                                                      {param.isQuantitative ? (
-                                                        <QuantitativeParameterInput
-                                                          value={isAllocated ? currentValue.toString() : ''}
-                                                          onValueChange={(value) => isAllocated && updateParameterValue(meso.id, weekIndex, method, param.name, value)}
-                                                          unit={param.options?.[0] || ''}
-                                                          onUnitChange={(unit) => {
-                                                            // For now, we don't change units dynamically
-                                                          }}
-                                                          units={param.options || []}
-                                                          placeholder=""
-                                                        />
-                                                      ) : param.isQualitative ? (
-                                                        <QualitativeParameterInput
-                                                          value={isAllocated ? currentValue.toString() : ''}
-                                                          onValueChange={(value) => isAllocated && updateParameterValue(meso.id, weekIndex, method, param.name, value)}
-                                                          options={param.options || []}
-                                                          placeholder=""
-                                                        />
-                                                      ) : (
-                                                        <Input
-                                                          type={param.type === 'number' ? 'number' : 'text'}
-                                                          value={isAllocated ? currentValue.toString() : ''}
-                                                          onChange={(e) => isAllocated && updateParameterValue(meso.id, weekIndex, method, param.name, param.type === 'number' ? Number(e.target.value) : e.target.value)}
-                                                          className={`h-8 text-xs ${!isAllocated ? 'cursor-not-allowed' : ''}`}
-                                                          placeholder=""
-                                                          disabled={!isAllocated}
-                                                        />
-                                                      )}
-                                                    </div>
-                                                  );
-                                                })
-                                              )}
-                                            </div>
-                                          ))}
+                                           {parameters.map((param) => (
+                                             <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
+                                               gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 100px)` 
+                                             }}>
+                                               <div className="sticky left-0 z-40 p-2 text-xs text-muted-foreground bg-background border-r flex items-center shadow-md">
+                                                 <span className="ml-4 font-medium">{param.name}</span>
+                                                 {param.isQuantitative && param.options && param.options.length > 0 && (
+                                                   <span className="ml-1 text-xs opacity-70">({param.options[0]})</span>
+                                                 )}
+                                               </div>
+                                               {mesocycles.map((meso) =>
+                                                 (meso.microcycles || []).map((microcycle, microcycleIndex) => {
+                                                   const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
+                                                   const currentValue = getParameterValue(meso.id, microcycleIndex, method, param.name);
+                                                   
+                                                   return (
+                                                     <div 
+                                                       key={`${meso.id}-${microcycleIndex}-${param.name}`} 
+                                                       className={`p-1 border-l ${!isAllocated ? 'bg-gray-100/50 opacity-50' : ''}`}
+                                                     >
+                                                       {param.isQuantitative ? (
+                                                         <QuantitativeParameterInput
+                                                           value={isAllocated ? currentValue.toString() : ''}
+                                                           onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, value)}
+                                                           unit={param.options?.[0] || ''}
+                                                           onUnitChange={(unit) => {
+                                                             // For now, we don't change units dynamically
+                                                           }}
+                                                           units={param.options || []}
+                                                           placeholder=""
+                                                         />
+                                                       ) : param.isQualitative ? (
+                                                         <QualitativeParameterInput
+                                                           value={isAllocated ? currentValue.toString() : ''}
+                                                           onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, value)}
+                                                           options={param.options || []}
+                                                           placeholder=""
+                                                         />
+                                                       ) : (
+                                                         <Input
+                                                           type={param.type === 'number' ? 'number' : 'text'}
+                                                           value={isAllocated ? currentValue.toString() : ''}
+                                                           onChange={(e) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, param.type === 'number' ? Number(e.target.value) : e.target.value)}
+                                                           className={`h-8 text-xs ${!isAllocated ? 'cursor-not-allowed' : ''}`}
+                                                           placeholder=""
+                                                           disabled={!isAllocated}
+                                                         />
+                                                       )}
+                                                     </div>
+                                                   );
+                                                 })
+                                               )}
+                                             </div>
+                                           ))}
                                         </div>
                                       )}
                                     </div>
