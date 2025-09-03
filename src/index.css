@@ -54,15 +54,15 @@ All colors MUST be HSL.
 
     --sidebar-ring: 217.2 91.2% 59.8%;
     
-    /* Intensity scale tokens (HSL) - less intense colors */
-    --intensity-off: 0 0% 92%;           /* light gray */
-    --intensity-deload: 120 30% 45%;     /* muted green */
-    --intensity-easy: 120 40% 65%;       /* lighter green */
-    --intensity-easy-moderate: 210 50% 75%; /* lighter blue */
-    --intensity-moderate: 45 70% 75%;    /* muted yellow */
-    --intensity-moderate-hard: 25 70% 70%; /* muted orange */
-    --intensity-hard: 0 60% 70%;         /* lighter red */
-    --intensity-extremely-hard: 0 50% 50%;    /* muted dark red */
+    /* Intensity scale tokens (HSL) - vibrant with transparency */
+    --intensity-off: 0 0% 95%;           /* light gray */
+    --intensity-deload: 120 40% 30%;     /* dark green */
+    --intensity-easy: 120 60% 50%;       /* green */
+    --intensity-easy-moderate: 210 80% 60%; /* blue */
+    --intensity-moderate: 45 95% 55%;    /* yellow */
+    --intensity-moderate-hard: 25 95% 55%; /* orange */
+    --intensity-hard: 0 80% 55%;         /* red */
+    --intensity-extremely-hard: 0 60% 35%;    /* dark red */
 
     --intensity-foreground: 0 0% 100%;
   }
@@ -104,15 +104,15 @@ All colors MUST be HSL.
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
 
-    /* Intensity scale tokens (HSL) - dark mode, less intense */
-    --intensity-off: 0 0% 25%;           /* dark gray */
-    --intensity-deload: 120 30% 40%;     /* muted dark green */
-    --intensity-easy: 120 40% 50%;       /* muted green */
-    --intensity-easy-moderate: 210 50% 60%; /* muted blue */
-    --intensity-moderate: 45 70% 60%;    /* muted yellow */
-    --intensity-moderate-hard: 25 70% 55%; /* muted orange */
-    --intensity-hard: 0 60% 55%;         /* muted red */
-    --intensity-extremely-hard: 0 50% 40%;    /* muted dark red */
+    /* Intensity scale tokens (HSL) - dark mode, vibrant */
+    --intensity-off: 0 0% 20%;           /* dark gray */
+    --intensity-deload: 120 40% 35%;     /* dark green */
+    --intensity-easy: 120 60% 45%;       /* green */
+    --intensity-easy-moderate: 210 80% 55%; /* blue */
+    --intensity-moderate: 45 95% 50%;    /* yellow */
+    --intensity-moderate-hard: 25 95% 50%; /* orange */
+    --intensity-hard: 0 80% 50%;         /* red */
+    --intensity-extremely-hard: 0 60% 30%;    /* dark red */
 
     --intensity-foreground: 0 0% 98%;
   }

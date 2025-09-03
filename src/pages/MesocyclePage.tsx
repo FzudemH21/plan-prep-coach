@@ -957,25 +957,25 @@ export default function MesocyclePage() {
       return parameterValues[mesocycleId]?.[microcycleIndex]?.[methodName]?.[parameterName] || '';
     };
 
-    // Helper function for intensity colors with proper contrast
+    // Helper function for intensity colors with transparency
     const intensityBg = (intensity: string) => {
       switch (intensity) {
         case "off":
-          return "bg-[hsl(var(--intensity-off))] text-foreground border-2";
+          return "bg-[hsl(var(--intensity-off)/0.7)] text-foreground border-2";
         case "deload":
-          return "bg-[hsl(var(--intensity-deload))] text-white";
+          return "bg-[hsl(var(--intensity-deload)/0.7)] text-white";
         case "easy":
-          return "bg-[hsl(var(--intensity-easy))] text-foreground";
+          return "bg-[hsl(var(--intensity-easy)/0.7)] text-white";
         case "easy-moderate":
-          return "bg-[hsl(var(--intensity-easy-moderate))] text-foreground";
+          return "bg-[hsl(var(--intensity-easy-moderate)/0.7)] text-white";
         case "moderate":
-          return "bg-[hsl(var(--intensity-moderate))] text-foreground";
+          return "bg-[hsl(var(--intensity-moderate)/0.7)] text-foreground";
         case "moderate-hard":
-          return "bg-[hsl(var(--intensity-moderate-hard))] text-foreground";
+          return "bg-[hsl(var(--intensity-moderate-hard)/0.7)] text-white";
         case "hard":
-          return "bg-[hsl(var(--intensity-hard))] text-white";
+          return "bg-[hsl(var(--intensity-hard)/0.7)] text-white";
         case "extremely-hard":
-          return "bg-[hsl(var(--intensity-extremely-hard))] text-white";
+          return "bg-[hsl(var(--intensity-extremely-hard)/0.7)] text-white";
         default:
           return "bg-muted text-muted-foreground";
       }
