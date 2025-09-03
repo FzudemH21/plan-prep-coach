@@ -957,27 +957,27 @@ export default function MesocyclePage() {
       return parameterValues[mesocycleId]?.[microcycleIndex]?.[methodName]?.[parameterName] || '';
     };
 
-    // Helper function for intensity colors (using same logic from other components)
+    // Helper function for intensity colors with proper contrast
     const intensityBg = (intensity: string) => {
       switch (intensity) {
         case "off":
-          return "bg-[hsl(var(--intensity-off))] text-black border-2";
+          return "bg-[hsl(var(--intensity-off))] text-foreground border-2";
         case "deload":
           return "bg-[hsl(var(--intensity-deload))] text-white";
         case "easy":
-          return "bg-[hsl(var(--intensity-easy))] text-white";
+          return "bg-[hsl(var(--intensity-easy))] text-foreground";
         case "easy-moderate":
-          return "bg-[hsl(var(--intensity-easy-moderate))] text-white";
+          return "bg-[hsl(var(--intensity-easy-moderate))] text-foreground";
         case "moderate":
-          return "bg-[hsl(var(--intensity-moderate))] text-white";
+          return "bg-[hsl(var(--intensity-moderate))] text-foreground";
         case "moderate-hard":
-          return "bg-[hsl(var(--intensity-moderate-hard))] text-white";
+          return "bg-[hsl(var(--intensity-moderate-hard))] text-foreground";
         case "hard":
           return "bg-[hsl(var(--intensity-hard))] text-white";
         case "extremely-hard":
           return "bg-[hsl(var(--intensity-extremely-hard))] text-white";
         default:
-          return "bg-gray-100 text-gray-600";
+          return "bg-muted text-muted-foreground";
       }
     };
 
@@ -1287,4 +1287,4 @@ export default function MesocyclePage() {
         <NavigationButtons />
     </div>
   );
-}
+};
