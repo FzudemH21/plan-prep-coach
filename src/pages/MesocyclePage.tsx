@@ -959,17 +959,26 @@ export default function MesocyclePage() {
 
     // Helper function for intensity colors (using same logic from other components)
     const intensityBg = (intensity: string) => {
-      const intensityMap: Record<string, string> = {
-        'off': 'bg-gray-200 text-gray-700 border-gray-300',
-        'deload': 'bg-blue-100 text-blue-700 border-blue-300',
-        'easy': 'bg-green-100 text-green-700 border-green-300',
-        'easy-moderate': 'bg-emerald-100 text-emerald-700 border-emerald-300',
-        'moderate': 'bg-yellow-100 text-yellow-700 border-yellow-300',
-        'moderate-hard': 'bg-orange-100 text-orange-700 border-orange-300',
-        'hard': 'bg-red-100 text-red-700 border-red-300',
-        'extremely-hard': 'bg-red-200 text-red-800 border-red-400'
-      };
-      return intensityMap[intensity] || intensityMap['easy'];
+      switch (intensity) {
+        case "off":
+          return "bg-[hsl(var(--intensity-off))] text-black border-2";
+        case "deload":
+          return "bg-[hsl(var(--intensity-deload))] text-white";
+        case "easy":
+          return "bg-[hsl(var(--intensity-easy))] text-white";
+        case "easy-moderate":
+          return "bg-[hsl(var(--intensity-easy-moderate))] text-white";
+        case "moderate":
+          return "bg-[hsl(var(--intensity-moderate))] text-white";
+        case "moderate-hard":
+          return "bg-[hsl(var(--intensity-moderate-hard))] text-white";
+        case "hard":
+          return "bg-[hsl(var(--intensity-hard))] text-white";
+        case "extremely-hard":
+          return "bg-[hsl(var(--intensity-extremely-hard))] text-white";
+        default:
+          return "bg-gray-100 text-gray-600";
+      }
     };
 
     return (
@@ -997,45 +1006,45 @@ export default function MesocyclePage() {
                      {/* Multi-Level Sticky Headers */}
                      <div className="sticky top-0 z-[90] bg-background border-b space-y-1 shadow-sm">
                        {/* Level 1: Mesocycle Group Headers */}
-                       <div className="grid gap-1" style={{
-                         gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
-                       }}>
-                          <div className="sticky left-0 z-[60] p-2 bg-background font-medium text-sm border rounded-t-lg shadow-md border-r">
-                            Training Methods
-                          </div>
-                         {mesocycles.map((meso) => (
-                           <div 
-                             key={`${meso.id}-header`} 
-                             className="p-2 bg-primary text-primary-foreground font-medium text-sm border rounded-t-lg text-center"
-                             style={{ 
-                               gridColumn: `span ${meso.duration}` 
-                             }}
-                           >
-                             <div className="flex items-center justify-center space-x-2">
-                               <div className={`w-2 h-2 rounded-full bg-white/80`}></div>
-                               <span>{meso.name}</span>
-                             </div>
+                        <div className="grid gap-1" style={{
+                          gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 100px)`
+                        }}>
+                           <div className="sticky left-0 z-[60] p-2 bg-background font-medium text-sm border rounded-t-lg shadow-md border-r">
+                             Training Methods
                            </div>
-                         ))}
+                          {mesocycles.map((meso) => (
+                            <div 
+                              key={`${meso.id}-header`} 
+                              className={`p-2 font-medium text-sm border rounded-t-lg text-center ${intensityBg(meso.intensity)}`}
+                              style={{ 
+                                gridColumn: `span ${meso.microcycles?.length || 0}` 
+                              }}
+                            >
+                              <div className="flex items-center justify-center space-x-2">
+                                <div className={`w-2 h-2 rounded-full bg-white/80`}></div>
+                                <span>{meso.name}</span>
+                              </div>
+                            </div>
+                          ))}
                        </div>
 
-                       {/* Level 2: Sub-goals and Qualities */}
-                       <div className="grid gap-1" style={{
-                         gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + meso.duration, 0)}, 100px)`
-                       }}>
-                           <div className="sticky left-0 z-[60] p-2 bg-background border-l border-r text-xs shadow-md">
-                             Focus Areas
-                           </div>
-                          {mesocycles.map((meso) => {
-                            const overview = getMesocycleOverview(meso);
-                            return (
-                              <div 
-                                key={`${meso.id}-overview`} 
-                                className="p-2 bg-muted/30 border-l border-r text-xs space-y-2"
-                                style={{ 
-                                  gridColumn: `span ${meso.duration}` 
-                                }}
-                              >
+                        {/* Level 2: Sub-goals and Qualities */}
+                        <div className="grid gap-1" style={{
+                          gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 100px)`
+                        }}>
+                            <div className="sticky left-0 z-[60] p-2 bg-background border-l border-r text-xs shadow-md">
+                              Focus Areas
+                            </div>
+                           {mesocycles.map((meso) => {
+                             const overview = getMesocycleOverview(meso);
+                             return (
+                               <div 
+                                 key={`${meso.id}-overview`} 
+                                 className="p-2 bg-muted/30 border-l border-r text-xs space-y-2"
+                                 style={{ 
+                                   gridColumn: `span ${meso.microcycles?.length || 0}` 
+                                 }}
+                               >
                                  {overview.subGoals.length > 0 ? (
                                    <div className="space-y-1">
                                      <span className="font-medium text-muted-foreground">Sub-Goals:</span>
