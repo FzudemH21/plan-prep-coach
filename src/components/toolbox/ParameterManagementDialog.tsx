@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Plus } from 'lucide-react';
 import { ToolboxEntry } from '@/types/toolbox';
 import { DraggableParameterList } from './DraggableParameterList';
+import { DraggableExerciseCategoryList } from './DraggableExerciseCategoryList';
 import { QuantitativeParameterInput, QualitativeParameterInput } from '@/components/ui/parameter-input';
 
 interface ParameterManagementDialogProps {
@@ -35,12 +36,14 @@ export function ParameterManagementDialog({
 }: ParameterManagementDialogProps) {
   const [editingParameter, setEditingParameter] = useState<ToolboxEntry | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showAddCategoryDialog, setShowAddCategoryDialog] = useState(false);
   const [newParameter, setNewParameter] = useState({
     parameter: '',
     parameterName: '',
     parameterType: 'qualitative' as 'qualitative' | 'quantitative',
     options: [] as string[],
   });
+  const [newExerciseCategory, setNewExerciseCategory] = useState('');
 
   const handleReorderParameters = (reorderedParameters: ToolboxEntry[]) => {
     onUpdateParameters(reorderedParameters);
@@ -121,6 +124,48 @@ export function ParameterManagementDialog({
     });
   };
 
+  // Exercise category management functions
+  const handleReorderExerciseCategories = (reorderedCategories: string[]) => {
+    // Update all parameters for this sub-category with new exercise categories
+    const updatedParameters = parameters.map(p => ({
+      ...p,
+      exerciseCategories: reorderedCategories
+    }));
+    onUpdateParameters(updatedParameters);
+  };
+
+  const handleAddExerciseCategory = () => {
+    if (!newExerciseCategory.trim()) return;
+    
+    const currentCategories = parameters[0]?.exerciseCategories || [];
+    const updatedCategories = [...currentCategories, newExerciseCategory.trim()];
+    
+    // Update all parameters for this sub-category
+    const updatedParameters = parameters.map(p => ({
+      ...p,
+      exerciseCategories: updatedCategories
+    }));
+    
+    onUpdateParameters(updatedParameters);
+    setNewExerciseCategory('');
+    setShowAddCategoryDialog(false);
+  };
+
+  const handleDeleteExerciseCategory = (categoryToDelete: string) => {
+    const currentCategories = parameters[0]?.exerciseCategories || [];
+    const updatedCategories = currentCategories.filter(cat => cat !== categoryToDelete);
+    
+    // Update all parameters for this sub-category
+    const updatedParameters = parameters.map(p => ({
+      ...p,
+      exerciseCategories: updatedCategories
+    }));
+    
+    onUpdateParameters(updatedParameters);
+  };
+
+  const exerciseCategories = parameters[0]?.exerciseCategories || [];
+
   return (
     <>
       {/* Main Parameter Management Dialog */}
@@ -133,26 +178,52 @@ export function ParameterManagementDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold">Parameters ({parameters.length})</h3>
-              <Button onClick={() => setShowAddDialog(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Parameter
-              </Button>
+          <div className="space-y-6">
+            {/* Parameters Section */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-semibold">Parameters ({parameters.length})</h3>
+                <Button onClick={() => setShowAddDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Parameter
+                </Button>
+              </div>
+
+              {parameters.length > 0 ? (
+                <DraggableParameterList
+                  parameters={parameters}
+                  onReorder={handleReorderParameters}
+                  onEditParameter={handleEditParameter}
+                />
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  No parameters yet. Click "Add Parameter" to get started.
+                </div>
+              )}
             </div>
 
-            {parameters.length > 0 ? (
-              <DraggableParameterList
-                parameters={parameters}
-                onReorder={handleReorderParameters}
-                onEditParameter={handleEditParameter}
-              />
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                No parameters yet. Click "Add Parameter" to get started.
+            {/* Exercise Selection Categories Section */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-semibold">Exercise Selection Categories ({exerciseCategories.length})</h3>
+                <Button onClick={() => setShowAddCategoryDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Category
+                </Button>
               </div>
-            )}
+
+              {exerciseCategories.length > 0 ? (
+                <DraggableExerciseCategoryList
+                  categories={exerciseCategories}
+                  onReorder={handleReorderExerciseCategories}
+                  onDeleteCategory={handleDeleteExerciseCategory}
+                />
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  No exercise categories yet. Click "Add Category" to get started.
+                </div>
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -354,6 +425,39 @@ export function ParameterManagementDialog({
                 disabled={!newParameter.parameter.trim()}
               >
                 Add Parameter
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Exercise Category Dialog */}
+      <Dialog open={showAddCategoryDialog} onOpenChange={setShowAddCategoryDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Exercise Category</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="newExerciseCategory">Category Name</Label>
+              <Input
+                id="newExerciseCategory"
+                value={newExerciseCategory}
+                onChange={(e) => setNewExerciseCategory(e.target.value)}
+                placeholder="e.g., Squat, Hinge, Single Leg"
+              />
+            </div>
+
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setShowAddCategoryDialog(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleAddExerciseCategory}
+                disabled={!newExerciseCategory.trim()}
+              >
+                Add Category
               </Button>
             </div>
           </div>

@@ -7,6 +7,8 @@ export interface ToolboxEntry {
   parameterName?: string;
   parameterType?: 'qualitative' | 'quantitative';
   options?: string[];
+  // Exercise selection categories
+  exerciseCategories?: string[];
 }
 
 export interface ToolboxDatabase {

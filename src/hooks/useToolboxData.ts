@@ -5,7 +5,7 @@ import { defaultToolboxData } from '@/data/toolboxData';
 // Migration function to parse legacy bracket notation
 function migrateLegacyEntry(entry: ToolboxEntry): ToolboxEntry {
   // If already migrated, return as-is
-  if (entry.parameterName && entry.parameterType && entry.options) {
+  if (entry.parameterName && entry.parameterType && entry.options && 'exerciseCategories' in entry) {
     return entry;
   }
 
@@ -30,7 +30,8 @@ function migrateLegacyEntry(entry: ToolboxEntry): ToolboxEntry {
       ...entry,
       parameterName,
       parameterType: hasUnits ? 'quantitative' : 'qualitative',
-      options
+      options,
+      exerciseCategories: entry.exerciseCategories || []
     };
   } else {
     // No brackets - treat as qualitative with empty options
@@ -38,7 +39,8 @@ function migrateLegacyEntry(entry: ToolboxEntry): ToolboxEntry {
       ...entry,
       parameterName: parameter,
       parameterType: 'qualitative',
-      options: []
+      options: [],
+      exerciseCategories: entry.exerciseCategories || []
     };
   }
 }

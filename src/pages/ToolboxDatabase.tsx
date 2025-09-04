@@ -497,7 +497,7 @@ export default function ToolboxDatabase() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-1/3">
+                <TableHead className="w-1/4">
                   <Button 
                     variant="ghost" 
                     className="flex items-center gap-1 p-0 h-auto font-semibold justify-start"
@@ -508,7 +508,7 @@ export default function ToolboxDatabase() {
                     {columnSorts.category?.order === 'desc' && <ChevronDown className="h-4 w-4" />}
                   </Button>
                 </TableHead>
-                <TableHead className="w-1/3">
+                <TableHead className="w-1/4">
                   <Button 
                     variant="ghost" 
                     className="flex items-center gap-1 p-0 h-auto font-semibold justify-start"
@@ -520,6 +520,7 @@ export default function ToolboxDatabase() {
                   </Button>
                 </TableHead>
                 <TableHead className="w-1/6">Parameters</TableHead>
+                <TableHead className="w-1/6">Exercise Categories</TableHead>
                 <TableHead className="w-1/6">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -530,6 +531,9 @@ export default function ToolboxDatabase() {
                   <TableCell className="font-medium">{item.subCategory || "-"}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {item.parameters.length} parameter{item.parameters.length !== 1 ? 's' : ''}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {(item.parameters[0]?.exerciseCategories || []).length} categor{(item.parameters[0]?.exerciseCategories || []).length !== 1 ? 'ies' : 'y'}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center space-x-1">
