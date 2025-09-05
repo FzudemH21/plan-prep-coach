@@ -1,3 +1,4 @@
+import { MicrocyclePlanningTable } from '@/components/microcycle-planning';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,7 +48,7 @@ export default function MesocyclePage() {
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
 
-  const totalSteps = 4;
+  const totalSteps = 5;
 
   // Navigation component for top and bottom
   const NavigationButtons = () => (
@@ -1241,16 +1242,53 @@ export default function MesocyclePage() {
                  </div>
              </div>
             )}
-        </CardContent>
+         </CardContent>
       </Card>
     );
   };
+
+  // Get allocated methods for exercise selection
+  const getAllocatedMethods = () => {
+    if (!macrocycleData?.subGoals) return [];
+    
+    return Object.entries(expandedSubGoals).flatMap(([subGoalId, methods]) => 
+      Array.from(methods).filter(method => {
+        // Check if method is allocated to any mesocycle
+        return mesocycles.some(meso => 
+          Object.entries(expandedSubGoals).some(([sgId, sgMethods]) => 
+            sgMethods.has(method)
+          )
+        );
+      })
+    );
+  };
+
+  const renderExerciseSelection = () => (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center space-x-2">
+          <Target className="h-5 w-5" />
+          <span>Step 5: Exercise Selection</span>
+        </CardTitle>
+        <CardDescription>
+          Select specific exercises for each training method across your mesocycles and microcycles.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <MicrocyclePlanningTable 
+          mesocycles={mesocycles}
+          selectedMethods={getAllocatedMethods()}
+        />
+      </CardContent>
+    </Card>
+  );
 
   const stepTitles = [
     "Mesocycle Setup",
     "Intensity Configuration", 
     "Sub-Goal Allocation",
-    "Method Periodization"
+    "Method Periodization",
+    "Exercise Selection"
   ];
 
   return (
@@ -1282,6 +1320,7 @@ export default function MesocyclePage() {
           {currentStep === 2 && renderIntensitySetup()}
           {currentStep === 3 && renderQualityAllocation()}
           {currentStep === 4 && renderMethodPeriodization()}
+          {currentStep === 5 && renderExerciseSelection()}
         </div>
 
         <NavigationButtons />
