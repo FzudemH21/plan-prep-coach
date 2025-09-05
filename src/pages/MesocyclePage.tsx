@@ -1249,18 +1249,8 @@ export default function MesocyclePage() {
 
   // Get allocated methods for exercise selection
   const getAllocatedMethods = () => {
-    if (!macrocycleData?.subGoals) return [];
-    
-    return Object.entries(expandedSubGoals).flatMap(([subGoalId, methods]) => 
-      Array.from(methods).filter(method => {
-        // Check if method is allocated to any mesocycle
-        return mesocycles.some(meso => 
-          Object.entries(expandedSubGoals).some(([sgId, sgMethods]) => 
-            sgMethods.has(method)
-          )
-        );
-      })
-    );
+    // Return all methods from allocated sub-goals
+    return getMethodsForAllocatedSubGoals;
   };
 
   const renderExerciseSelection = () => (

@@ -36,7 +36,21 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
     
     toolboxData.entries.forEach(entry => {
       const methodName = `${entry.category} - ${entry.subCategory}`;
-      if (!selectedMethods.includes(methodName)) return;
+      
+      // Check if this toolbox method matches any of the selected methods
+      const isMethodSelected = selectedMethods.some(selectedMethod => {
+        // Try exact match first
+        if (selectedMethod === methodName) return true;
+        
+        // Try partial matches for cases where naming might differ
+        const selectedNormalized = selectedMethod.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const methodNormalized = methodName.toLowerCase().replace(/[^a-z0-9]/g, '');
+        
+        return selectedNormalized.includes(methodNormalized) || 
+               methodNormalized.includes(selectedNormalized);
+      });
+      
+      if (!isMethodSelected) return;
       
       if (!methodsMap.has(methodName)) {
         methodsMap.set(methodName, {
