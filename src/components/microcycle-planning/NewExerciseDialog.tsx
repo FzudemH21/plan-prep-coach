@@ -7,7 +7,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ExerciseSelection, ExerciseLibraryType } from '@/types/microcycle-planning';
 import { useExerciseData } from '@/hooks/useExerciseData';
 import { usePlyometricsData } from '@/hooks/usePlyometricsData';
-import { useAthleticismData } from '@/hooks/useAthleticismData';
 import { useToast } from '@/hooks/use-toast';
 
 interface NewExerciseDialogProps {
@@ -28,7 +27,6 @@ export function NewExerciseDialog({
   
   const { addEntry: addExercise } = useExerciseData();
   const { addEntry: addPlyometrics } = usePlyometricsData();
-  const { addEntry: addAthleticism } = useAthleticismData();
   const { toast } = useToast();
 
   const handleCreate = async () => {
@@ -65,17 +63,6 @@ export function NewExerciseDialog({
             emphasis: '',
             übungsgruppe: category || 'Uncategorized',
             kommentar: ''
-          });
-          newExerciseId = Date.now().toString();
-          break;
-
-        case 'athleticism':
-          addAthleticism({
-            overarchingGoal: category || 'Custom Exercise',
-            subGoal: exerciseName,
-            quality: 'User Created',
-            mappedMethods: [],
-            loadingRecommendations: {}
           });
           newExerciseId = Date.now().toString();
           break;
@@ -128,9 +115,8 @@ export function NewExerciseDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="exercise">Exercise Library</SelectItem>
+                <SelectItem value="exercise">Resistance Exercise Library</SelectItem>
                 <SelectItem value="plyometrics">Plyometrics Library</SelectItem>
-                <SelectItem value="athleticism">Athleticism Library</SelectItem>
               </SelectContent>
             </Select>
           </div>

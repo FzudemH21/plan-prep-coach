@@ -32,4 +32,4 @@ export interface TrainingMethodWithCategories {
   categories: string[];
 }
 
-export type ExerciseLibraryType = 'exercise' | 'plyometrics' | 'athleticism';
+export type ExerciseLibraryType = 'exercise' | 'plyometrics';

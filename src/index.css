@@ -65,6 +65,26 @@ All colors MUST be HSL.
     --intensity-extremely-hard: 0 60% 35%;    /* dark red */
 
     --intensity-foreground: 0 0% 100%;
+
+    /* Mesocycle color system - HSL values for visual distinction */
+    --mesocycle-1: 220 70% 50%;        /* Blue */
+    --mesocycle-1-light: 220 50% 85%;
+    --mesocycle-2: 160 70% 40%;        /* Green */ 
+    --mesocycle-2-light: 160 40% 75%;
+    --mesocycle-3: 280 70% 50%;        /* Purple */
+    --mesocycle-3-light: 280 40% 80%;
+    --mesocycle-4: 25 80% 50%;         /* Orange */
+    --mesocycle-4-light: 25 60% 80%;
+    --mesocycle-5: 0 70% 50%;          /* Red */
+    --mesocycle-5-light: 0 50% 85%;
+    --mesocycle-6: 50 80% 50%;         /* Yellow-Green */
+    --mesocycle-6-light: 50 60% 80%;
+    --mesocycle-7: 190 70% 45%;        /* Cyan */
+    --mesocycle-7-light: 190 50% 80%;
+    --mesocycle-8: 310 70% 50%;        /* Pink */
+    --mesocycle-8-light: 310 40% 85%;
+
+    --mesocycle-foreground: 0 0% 100%;
   }
 
   .dark {
@@ -115,6 +135,26 @@ All colors MUST be HSL.
     --intensity-extremely-hard: 0 60% 30%;    /* dark red */
 
     --intensity-foreground: 0 0% 98%;
+
+    /* Mesocycle color system - Dark mode HSL values */
+    --mesocycle-1: 220 60% 60%;        /* Lighter Blue for dark mode */
+    --mesocycle-1-light: 220 30% 25%;
+    --mesocycle-2: 160 60% 50%;        /* Lighter Green */ 
+    --mesocycle-2-light: 160 25% 25%;
+    --mesocycle-3: 280 60% 60%;        /* Lighter Purple */
+    --mesocycle-3-light: 280 25% 25%;
+    --mesocycle-4: 25 70% 60%;         /* Lighter Orange */
+    --mesocycle-4-light: 25 30% 25%;
+    --mesocycle-5: 0 60% 60%;          /* Lighter Red */
+    --mesocycle-5-light: 0 25% 25%;
+    --mesocycle-6: 50 70% 60%;         /* Lighter Yellow-Green */
+    --mesocycle-6-light: 50 30% 25%;
+    --mesocycle-7: 190 60% 55%;        /* Lighter Cyan */
+    --mesocycle-7-light: 190 25% 25%;
+    --mesocycle-8: 310 60% 60%;        /* Lighter Pink */
+    --mesocycle-8-light: 310 25% 25%;
+
+    --mesocycle-foreground: 0 0% 98%;
   }
 }
 

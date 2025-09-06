@@ -1,18 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Link2, Unlink, Split, Merge } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ChevronDown, ChevronRight, Link, Unlink } from 'lucide-react';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { useToolboxData } from '@/hooks/useToolboxData';
-import { 
-  MicrocyclePlanningState, 
-  TrainingMethodWithCategories,
-  MicrocycleGroup,
-  CellData
-} from '@/types/microcycle-planning';
 import { ExerciseSelectionCell } from './ExerciseSelectionCell';
+import { 
+  TrainingMethodWithCategories,
+  CellData, 
+  MicrocyclePlanningState,
+  MicrocycleGroup
+} from '@/types/microcycle-planning';
 import { cn } from '@/lib/utils';
 
 interface MicrocyclePlanningTableProps {
@@ -29,7 +28,7 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
   });
 
   // Get training methods with their exercise categories
-  const trainingMethods: TrainingMethodWithCategories[] = React.useMemo(() => {
+  const trainingMethods: TrainingMethodWithCategories[] = useMemo(() => {
     if (!toolboxData?.entries) return [];
     
     const methodsMap = new Map<string, TrainingMethodWithCategories>();
@@ -73,49 +72,111 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
     return Array.from(methodsMap.values());
   }, [toolboxData, selectedMethods]);
 
-  // Generate column structure based on split states
-  const columnStructure = React.useMemo(() => {
-    const columns: Array<{
-      id: string;
-      type: 'mesocycle' | 'microcycle';
-      mesocycleId: string;
-      microcycleId?: string;
-      name: string;
-      isLinked?: boolean;
-      groupId?: string;
-    }> = [];
-
-    mesocycles.forEach(mesocycle => {
-      const isSplit = planningState.splitStates[mesocycle.id];
+  // Generate column structure for table headers
+  const columnStructure = useMemo(() => {
+    return mesocycles.map(meso => {
+      const isSplit = planningState.splitStates[meso.id] || false;
       
       if (!isSplit) {
-        columns.push({
-          id: mesocycle.id,
-          type: 'mesocycle',
-          mesocycleId: mesocycle.id,
-          name: mesocycle.name
-        });
-      } else {
-        // Add microcycle columns
-        mesocycle.microcycles.forEach((microcycle, index) => {
-          const groupId = Object.values(planningState.microcycleGroups)
-            .find(group => group.microcycleIds.includes(microcycle.id))?.id;
-          
-          columns.push({
-            id: microcycle.id,
-            type: 'microcycle',
-            mesocycleId: mesocycle.id,
-            microcycleId: microcycle.id,
-            name: microcycle.name,
-            isLinked: !!groupId,
-            groupId
-          });
-        });
+        return {
+          type: 'mesocycle' as const,
+          mesocycleId: meso.id,
+          mesocycleName: meso.name,
+          id: meso.id,
+          colSpan: 1
+        };
       }
+
+      // Find groups for this mesocycle
+      const mesocycleGroups = Object.values(planningState.microcycleGroups)
+        .filter(group => group.mesocycleId === meso.id);
+
+      const groupedMicrocycles = new Set(
+        mesocycleGroups.flatMap(group => group.microcycleIds)
+      );
+
+      const columns = [];
+      
+      // Add grouped microcycles
+      mesocycleGroups.forEach(group => {
+        if (group.microcycleIds.length > 1) {
+          columns.push({
+            type: 'microcycle-group' as const,
+            mesocycleId: meso.id,
+            mesocycleName: meso.name,
+            groupId: group.id,
+            groupName: group.name,
+            microcycleIds: group.microcycleIds,
+            id: group.id,
+            colSpan: 1
+          });
+        } else if (group.microcycleIds.length === 1) {
+          // Single microcycle in a group (shouldn't happen, but handle it)
+          const microcycleId = group.microcycleIds[0];
+          const microcycle = meso.microcycles.find(m => m.id === microcycleId);
+          columns.push({
+            type: 'microcycle' as const,
+            mesocycleId: meso.id,
+            mesocycleName: meso.name,
+            microcycleId,
+            microcycleName: microcycle?.name || `Week ${microcycleId}`,
+            id: microcycleId,
+            colSpan: 1
+          });
+        }
+      });
+
+      // Add ungrouped microcycles
+      meso.microcycles.forEach(micro => {
+        if (!groupedMicrocycles.has(micro.id)) {
+          columns.push({
+            type: 'microcycle' as const,
+            mesocycleId: meso.id,
+            mesocycleName: meso.name,
+            microcycleId: micro.id,
+            microcycleName: micro.name,
+            id: micro.id,
+            colSpan: 1
+          });
+        }
+      });
+
+      return columns;
+    }).flat();
+  }, [mesocycles, planningState]);
+
+  // Get mesocycle color based on index
+  const getMesocycleColorClass = (mesocycleIndex: number, isLight: boolean = false) => {
+    const colorIndex = (mesocycleIndex % 8) + 1;
+    return isLight ? `bg-mesocycle-${colorIndex}-light` : `bg-mesocycle-${colorIndex}`;
+  };
+
+  // Create mesocycle header structure for two-row headers
+  const mesocycleHeaders = useMemo(() => {
+    const headers: Array<{
+      mesocycleId: string;
+      mesocycleName: string;
+      colSpan: number;
+      colorClass: string;
+    }> = [];
+
+    mesocycles.forEach((meso, index) => {
+      const isSplit = planningState.splitStates[meso.id] || false;
+      const colSpan = isSplit ? meso.microcycles.length : 1;
+      
+      headers.push({
+        mesocycleId: meso.id,
+        mesocycleName: meso.name,
+        colSpan,
+        colorClass: getMesocycleColorClass(index)
+      });
     });
 
-    return columns;
-  }, [mesocycles, planningState.splitStates, planningState.microcycleGroups]);
+    return headers;
+  }, [mesocycles, planningState]);
+
+  // Check if any mesocycle is split (determines if we need two header rows)
+  const hasSplitMesocycles = Object.values(planningState.splitStates).some(isSplit => isSplit);
 
   const toggleMesocycleSplit = (mesocycleId: string) => {
     setPlanningState(prev => ({
@@ -191,97 +252,156 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
+              {/* First row - Mesocycle headers (only when there are split mesocycles) */}
+              {hasSplitMesocycles && (
+                <TableRow>
+                  <TableHead className="w-64 sticky left-0 bg-background z-10 border-r-2 border-border">
+                    Training Methods
+                  </TableHead>
+                  {mesocycleHeaders.map((header) => (
+                    <TableHead
+                      key={header.mesocycleId}
+                      colSpan={header.colSpan}
+                      className={cn(
+                        "text-center font-semibold text-mesocycle-foreground border-r-2 border-border",
+                        header.colorClass
+                      )}
+                    >
+                      <div className="flex items-center justify-center gap-2 py-1">
+                        <span>{header.mesocycleName}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleMesocycleSplit(header.mesocycleId)}
+                          className="h-6 px-2 text-mesocycle-foreground hover:bg-black/10"
+                        >
+                          <ChevronDown className="h-3 w-3" />
+                          Collapse
+                        </Button>
+                      </div>
+                    </TableHead>
+                  ))}
+                </TableRow>
+              )}
+              
+              {/* Second row - Individual columns */}
               <TableRow>
-                <TableHead className="sticky left-0 bg-background min-w-[200px]">
-                  Training Method
+                <TableHead className="w-64 sticky left-0 bg-background z-10 border-r-2 border-border">
+                  {!hasSplitMesocycles && "Training Methods"}
                 </TableHead>
-                {columnStructure.map((column, index) => (
-                  <TableHead key={column.id} className="text-center min-w-[150px]">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs">{column.name}</span>
+                {columnStructure.map((column, index) => {
+                  const mesocycleIndex = mesocycles.findIndex(m => m.id === column.mesocycleId);
+                  const isLight = column.type !== 'mesocycle';
+                  const colorClass = getMesocycleColorClass(mesocycleIndex, isLight);
+                  
+                  return (
+                    <TableHead 
+                      key={column.id} 
+                      className={cn(
+                        "text-center min-w-[200px] border-r border-border",
+                        colorClass,
+                        column.type === 'mesocycle' ? "text-mesocycle-foreground font-semibold" : "text-foreground"
+                      )}
+                    >
+                      <div className="flex flex-col items-center gap-2 py-2">
+                        <span className="font-medium">
+                          {column.type === 'mesocycle' && column.mesocycleName}
+                          {column.type === 'microcycle' && column.microcycleName}
+                          {column.type === 'microcycle-group' && column.groupName}
+                        </span>
+                        
                         {column.type === 'mesocycle' && (
                           <Button
+                            variant="ghost"
                             size="sm"
-                            variant="outline"
                             onClick={() => toggleMesocycleSplit(column.mesocycleId)}
-                            className="h-6 w-6 p-0"
+                            className="h-6 px-2 text-mesocycle-foreground hover:bg-black/10"
                           >
-                            <Split className="h-3 w-3" />
+                            <ChevronRight className="h-3 w-3" />
+                            Split
+                          </Button>
+                        )}
+                        
+                        {column.type === 'microcycle-group' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => unlinkMicrocycles(column.groupId)}
+                            className="h-6 px-2 hover:bg-black/10"
+                          >
+                            <Unlink className="h-3 w-3" />
+                            Unlink
                           </Button>
                         )}
                       </div>
-                      
-                      {column.type === 'microcycle' && (
-                        <div className="flex items-center justify-center gap-1">
-                          {index > 0 && columnStructure[index - 1].type === 'microcycle' && 
-                           columnStructure[index - 1].mesocycleId === column.mesocycleId && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => {
-                                const prevColumn = columnStructure[index - 1];
-                                if (column.isLinked && prevColumn.groupId === column.groupId) {
-                                  unlinkMicrocycles(column.groupId!);
-                                } else {
-                                  createMicrocycleGroup([prevColumn.id, column.id], column.mesocycleId);
-                                }
-                              }}
-                              className="h-4 w-4 p-0"
-                            >
-                              {column.isLinked && 
-                               columnStructure[index - 1].groupId === column.groupId ? (
-                                <Unlink className="h-2 w-2" />
-                              ) : (
-                                <Link2 className="h-2 w-2" />
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </TableHead>
-                ))}
+                    </TableHead>
+                  );
+                })}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {trainingMethods.map((method) => {
-                const rows = method.categories.length > 0 
-                  ? method.categories.map(category => ({ method, category }))
-                  : [{ method, category: undefined }];
-
-                return rows.map(({ method: currentMethod, category }, rowIndex) => (
-                  <TableRow key={`${currentMethod.id}-${category || 'main'}`}>
-                    <TableCell className="sticky left-0 bg-background">
+              {trainingMethods.map((method) => (
+                <React.Fragment key={method.id}>
+                  {/* Main method row */}
+                  <TableRow>
+                    <TableCell className="font-medium sticky left-0 bg-background z-10 border-r-2 border-border">
                       <div className="space-y-1">
-                        {rowIndex === 0 && (
-                          <div className="font-medium text-sm">
-                            {currentMethod.name}
+                        <div className="font-semibold">{method.name}</div>
+                        {method.categories.length > 0 && (
+                          <div className="text-xs text-muted-foreground">
+                            Categories: {method.categories.join(', ')}
                           </div>
-                        )}
-                        {category && (
-                          <Badge variant="secondary" className="text-xs">
-                            {category}
-                          </Badge>
                         )}
                       </div>
                     </TableCell>
-                    {columnStructure.map((column) => (
-                      <TableCell key={column.id} className="p-2">
-                        <ExerciseSelectionCell
-                          cellData={getCellData(currentMethod.id, category, column.id)}
-                          onUpdate={(newData) => 
-                            updateCellData(
-                              getCellId(currentMethod.id, category, column.id), 
-                              newData
-                            )
-                          }
-                        />
-                      </TableCell>
-                    ))}
+                    {columnStructure.map((column) => {
+                      const mesocycleIndex = mesocycles.findIndex(m => m.id === column.mesocycleId);
+                      const isLight = column.type !== 'mesocycle';
+                      const colorClass = getMesocycleColorClass(mesocycleIndex, isLight);
+                      
+                      return (
+                        <TableCell 
+                          key={`${method.id}-${column.id}`} 
+                          className={cn("p-2 border-r border-border", colorClass)}
+                        >
+                          <ExerciseSelectionCell
+                            cellData={getCellData(method.id, undefined, column.id)}
+                            onUpdate={(newData) => updateCellData(getCellId(method.id, undefined, column.id), newData)}
+                          />
+                        </TableCell>
+                      );
+                    })}
                   </TableRow>
-                ));
-              })}
+
+                  {/* Category rows */}
+                  {method.categories.map((categoryName) => (
+                    <TableRow key={`${method.id}-${categoryName}`}>
+                      <TableCell className="font-medium pl-8 sticky left-0 bg-background z-10 border-r-2 border-border">
+                        <div className="text-sm text-muted-foreground">
+                          {categoryName}
+                        </div>
+                      </TableCell>
+                      {columnStructure.map((column) => {
+                        const mesocycleIndex = mesocycles.findIndex(m => m.id === column.mesocycleId);
+                        const isLight = column.type !== 'mesocycle';
+                        const colorClass = getMesocycleColorClass(mesocycleIndex, isLight);
+                        
+                        return (
+                          <TableCell 
+                            key={`${method.id}-${categoryName}-${column.id}`} 
+                            className={cn("p-2 border-r border-border", colorClass)}
+                          >
+                            <ExerciseSelectionCell
+                              cellData={getCellData(method.id, categoryName, column.id)}
+                              onUpdate={(newData) => updateCellData(getCellId(method.id, categoryName, column.id), newData)}
+                            />
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  ))}
+                </React.Fragment>
+              ))}
             </TableBody>
           </Table>
         </div>

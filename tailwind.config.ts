@@ -72,6 +72,25 @@ export default {
 					hard: 'hsl(var(--intensity-hard))',
 					'extremely-hard': 'hsl(var(--intensity-extremely-hard))',
 					foreground: 'hsl(var(--intensity-foreground))'
+				},
+				mesocycle: {
+					1: 'hsl(var(--mesocycle-1))',
+					'1-light': 'hsl(var(--mesocycle-1-light))',
+					2: 'hsl(var(--mesocycle-2))',
+					'2-light': 'hsl(var(--mesocycle-2-light))',
+					3: 'hsl(var(--mesocycle-3))',
+					'3-light': 'hsl(var(--mesocycle-3-light))',
+					4: 'hsl(var(--mesocycle-4))',
+					'4-light': 'hsl(var(--mesocycle-4-light))',
+					5: 'hsl(var(--mesocycle-5))',
+					'5-light': 'hsl(var(--mesocycle-5-light))',
+					6: 'hsl(var(--mesocycle-6))',
+					'6-light': 'hsl(var(--mesocycle-6-light))',
+					7: 'hsl(var(--mesocycle-7))',
+					'7-light': 'hsl(var(--mesocycle-7-light))',
+					8: 'hsl(var(--mesocycle-8))',
+					'8-light': 'hsl(var(--mesocycle-8-light))',
+					foreground: 'hsl(var(--mesocycle-foreground))'
 				}
 			},
 			borderRadius: {
