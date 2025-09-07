@@ -69,47 +69,56 @@ export default function TemplatesPage() {
           </CardContent>
         </Card>
 
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/templates/exercises")}>
-          <CardHeader>
-            <div className="flex items-center space-x-3">
-              <FileText className="h-8 w-8 text-primary" />
-              <div>
-                <CardTitle>Exercise Library</CardTitle>
-                <CardDescription>Resistance training exercise database</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">
-              Excel-like editable database with German exercise names, movement patterns, and detailed variations.
-            </p>
-            <div className="flex items-center justify-between">
-              <span className="text-xs bg-secondary px-2 py-1 rounded">Editable</span>
-              <span className="text-xs text-muted-foreground">1007 exercises</span>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Exercise Libraries Section */}
+        <div className="md:col-span-2 lg:col-span-2 xl:col-span-3">
+          <h2 className="text-xl font-semibold mb-4 flex items-center space-x-2">
+            <FileText className="h-5 w-5" />
+            <span>Exercise Libraries</span>
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/templates/exercises")}>
+              <CardHeader>
+                <div className="flex items-center space-x-3">
+                  <FileText className="h-8 w-8 text-primary" />
+                  <div>
+                    <CardTitle>Resistance Exercise Library</CardTitle>
+                    <CardDescription>Resistance training exercise database</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Excel-like editable database with German exercise names, movement patterns, and detailed variations.
+                </p>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs bg-secondary px-2 py-1 rounded">Editable</span>
+                  <span className="text-xs text-muted-foreground">1007 exercises</span>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/templates/plyometrics")}>
-          <CardHeader>
-            <div className="flex items-center space-x-3">
-              <Activity className="h-8 w-8 text-orange-600" />
-              <div>
-                <CardTitle>Plyometrics Library</CardTitle>
-                <CardDescription>Explosive power training database</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">
-              Comprehensive database of plyometric exercises with intensity levels, tiers, and movement patterns for explosive power development.
-            </p>
-            <div className="flex items-center justify-between">
-              <span className="text-xs bg-secondary px-2 py-1 rounded">Editable</span>
-              <span className="text-xs text-muted-foreground">150+ exercises</span>
-            </div>
-          </CardContent>
-        </Card>
+            <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/templates/plyometrics")}>
+              <CardHeader>
+                <div className="flex items-center space-x-3">
+                  <Activity className="h-8 w-8 text-orange-600" />
+                  <div>
+                    <CardTitle>Plyometrics Library</CardTitle>
+                    <CardDescription>Explosive power training database</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Comprehensive database of plyometric exercises with intensity levels, tiers, and movement patterns for explosive power development.
+                </p>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs bg-secondary px-2 py-1 rounded">Editable</span>
+                  <span className="text-xs text-muted-foreground">150+ exercises</span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
 
         <Card className="opacity-50">
           <CardHeader>

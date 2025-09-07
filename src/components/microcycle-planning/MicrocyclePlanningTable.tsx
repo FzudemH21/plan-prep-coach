@@ -145,10 +145,20 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
     }).flat();
   }, [mesocycles, planningState]);
 
-  // Get mesocycle color based on index
-  const getMesocycleColorClass = (mesocycleIndex: number, isLight: boolean = false) => {
-    const colorIndex = (mesocycleIndex % 8) + 1;
-    return isLight ? `bg-mesocycle-${colorIndex}-light` : `bg-mesocycle-${colorIndex}`;
+  // Get intensity-based color for mesocycles and microcycles
+  const getIntensityColor = (intensity: string, isLight: boolean = false) => {
+    const opacity = isLight ? '0.3' : '0.7';
+    const colors = {
+      "off": `bg-[hsl(var(--intensity-off)/${opacity})] text-foreground border-2`,
+      "deload": `bg-[hsl(var(--intensity-deload)/${opacity})] text-white`,
+      "easy": `bg-[hsl(var(--intensity-easy)/${opacity})] text-white`, 
+      "easy-moderate": `bg-[hsl(var(--intensity-easy-moderate)/${opacity})] text-white`,
+      "moderate": `bg-[hsl(var(--intensity-moderate)/${opacity})] text-foreground`,
+      "moderate-hard": `bg-[hsl(var(--intensity-moderate-hard)/${opacity})] text-white`,
+      "hard": `bg-[hsl(var(--intensity-hard)/${opacity})] text-white`,
+      "extremely-hard": `bg-[hsl(var(--intensity-extremely-hard)/${opacity})] text-white`
+    };
+    return colors[intensity as keyof typeof colors] || "bg-muted text-muted-foreground";
   };
 
   // Create mesocycle header structure for two-row headers
@@ -160,7 +170,7 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
       colorClass: string;
     }> = [];
 
-    mesocycles.forEach((meso, index) => {
+    mesocycles.forEach((meso) => {
       const isSplit = planningState.splitStates[meso.id] || false;
       const colSpan = isSplit ? meso.microcycles.length : 1;
       
@@ -168,7 +178,7 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
         mesocycleId: meso.id,
         mesocycleName: meso.name,
         colSpan,
-        colorClass: getMesocycleColorClass(index)
+        colorClass: getIntensityColor(meso.intensity)
       });
     });
 
@@ -273,7 +283,7 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
                           variant="ghost"
                           size="sm"
                           onClick={() => toggleMesocycleSplit(header.mesocycleId)}
-                          className="h-6 px-2 text-mesocycle-foreground hover:bg-black/10"
+                         className="h-6 px-2 text-white hover:bg-black/10"
                         >
                           <ChevronDown className="h-3 w-3" />
                           Collapse
@@ -290,9 +300,23 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
                   {!hasSplitMesocycles && "Training Methods"}
                 </TableHead>
                 {columnStructure.map((column, index) => {
-                  const mesocycleIndex = mesocycles.findIndex(m => m.id === column.mesocycleId);
-                  const isLight = column.type !== 'mesocycle';
-                  const colorClass = getMesocycleColorClass(mesocycleIndex, isLight);
+                  const mesocycle = mesocycles.find(m => m.id === column.mesocycleId);
+                  let intensity = mesocycle?.intensity || 'moderate';
+                  let isLight = false;
+                  
+                  // For individual microcycles, use their specific intensity
+                  if (column.type === 'microcycle' && mesocycle) {
+                    const microcycle = mesocycle.microcycles.find(m => m.id === column.microcycleId);
+                    if (microcycle) {
+                      intensity = microcycle.intensity;
+                      isLight = true; // Make microcycles lighter than mesocycles
+                    }
+                  } else if (column.type === 'microcycle-group') {
+                    // For grouped microcycles, use a lighter version of mesocycle intensity
+                    isLight = true;
+                  }
+                  
+                  const colorClass = getIntensityColor(intensity, isLight);
                   
                   return (
                     <TableHead 
@@ -300,7 +324,7 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
                       className={cn(
                         "text-center min-w-[200px] border-r border-border",
                         colorClass,
-                        column.type === 'mesocycle' ? "text-mesocycle-foreground font-semibold" : "text-foreground"
+                        column.type === 'mesocycle' ? "text-white font-semibold" : "text-foreground"
                       )}
                     >
                       <div className="flex flex-col items-center gap-2 py-2">
@@ -315,7 +339,7 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
                             variant="ghost"
                             size="sm"
                             onClick={() => toggleMesocycleSplit(column.mesocycleId)}
-                            className="h-6 px-2 text-mesocycle-foreground hover:bg-black/10"
+                            className="h-6 px-2 text-white hover:bg-black/10"
                           >
                             <ChevronRight className="h-3 w-3" />
                             Split
@@ -355,9 +379,23 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
                       </div>
                     </TableCell>
                     {columnStructure.map((column) => {
-                      const mesocycleIndex = mesocycles.findIndex(m => m.id === column.mesocycleId);
-                      const isLight = column.type !== 'mesocycle';
-                      const colorClass = getMesocycleColorClass(mesocycleIndex, isLight);
+                      const mesocycle = mesocycles.find(m => m.id === column.mesocycleId);
+                      let intensity = mesocycle?.intensity || 'moderate';
+                      let isLight = false;
+                      
+                      // For individual microcycles, use their specific intensity
+                      if (column.type === 'microcycle' && mesocycle) {
+                        const microcycle = mesocycle.microcycles.find(m => m.id === column.microcycleId);
+                        if (microcycle) {
+                          intensity = microcycle.intensity;
+                          isLight = true; // Make microcycles lighter than mesocycles
+                        }
+                      } else if (column.type === 'microcycle-group') {
+                        // For grouped microcycles, use a lighter version of mesocycle intensity
+                        isLight = true;
+                      }
+                      
+                      const colorClass = getIntensityColor(intensity, isLight);
                       
                       return (
                         <TableCell 
@@ -382,9 +420,23 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
                         </div>
                       </TableCell>
                       {columnStructure.map((column) => {
-                        const mesocycleIndex = mesocycles.findIndex(m => m.id === column.mesocycleId);
-                        const isLight = column.type !== 'mesocycle';
-                        const colorClass = getMesocycleColorClass(mesocycleIndex, isLight);
+                        const mesocycle = mesocycles.find(m => m.id === column.mesocycleId);
+                        let intensity = mesocycle?.intensity || 'moderate';
+                        let isLight = false;
+                        
+                        // For individual microcycles, use their specific intensity
+                        if (column.type === 'microcycle' && mesocycle) {
+                          const microcycle = mesocycle.microcycles.find(m => m.id === column.microcycleId);
+                          if (microcycle) {
+                            intensity = microcycle.intensity;
+                            isLight = true; // Make microcycles lighter than mesocycles
+                          }
+                        } else if (column.type === 'microcycle-group') {
+                          // For grouped microcycles, use a lighter version of mesocycle intensity
+                          isLight = true;
+                        }
+                        
+                        const colorClass = getIntensityColor(intensity, isLight);
                         
                         return (
                           <TableCell 
