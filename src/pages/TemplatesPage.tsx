@@ -1,10 +1,13 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Database, FileText, ArrowLeft, Target, Wrench, Activity, ArrowRight } from "lucide-react";
+import { Database, FileText, ArrowLeft, Target, Wrench, Activity, Plus } from "lucide-react";
+import { AddLibraryDialog } from "@/components/templates/AddLibraryDialog";
 
 export default function TemplatesPage() {
   const navigate = useNavigate();
+  const [isAddLibraryDialogOpen, setIsAddLibraryDialogOpen] = useState(false);
 
   return (
     <div className="w-full max-w-none space-y-8">
@@ -71,10 +74,20 @@ export default function TemplatesPage() {
 
         {/* Exercise Libraries Section */}
         <div className="md:col-span-2 lg:col-span-2 xl:col-span-3">
-          <h2 className="text-xl font-semibold mb-4 flex items-center space-x-2">
-            <FileText className="h-5 w-5" />
-            <span>Exercise Libraries</span>
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold flex items-center space-x-2">
+              <FileText className="h-5 w-5" />
+              <span>Exercise Libraries</span>
+            </h2>
+            <Button
+              onClick={() => setIsAddLibraryDialogOpen(true)}
+              size="sm"
+              className="flex items-center space-x-2"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Add Library</span>
+            </Button>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/templates/exercises")}>
               <CardHeader>
@@ -141,6 +154,11 @@ export default function TemplatesPage() {
           </CardContent>
         </Card>
       </div>
+
+      <AddLibraryDialog
+        isOpen={isAddLibraryDialogOpen}
+        onClose={() => setIsAddLibraryDialogOpen(false)}
+      />
     </div>
   );
 }
