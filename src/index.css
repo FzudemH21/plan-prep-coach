@@ -167,3 +167,24 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+/* Intensity background utility classes for consistent transparent coloring */
+@layer components {
+  .bg-intensity-off { background-color: hsl(var(--intensity-off) / 0.24); }
+  .bg-intensity-deload { background-color: hsl(var(--intensity-deload) / 0.24); }
+  .bg-intensity-easy { background-color: hsl(var(--intensity-easy) / 0.24); }
+  .bg-intensity-easy-moderate { background-color: hsl(var(--intensity-easy-moderate) / 0.24); }
+  .bg-intensity-moderate { background-color: hsl(var(--intensity-moderate) / 0.24); }
+  .bg-intensity-moderate-hard { background-color: hsl(var(--intensity-moderate-hard) / 0.24); }
+  .bg-intensity-hard { background-color: hsl(var(--intensity-hard) / 0.24); }
+  .bg-intensity-extremely-hard { background-color: hsl(var(--intensity-extremely-hard) / 0.24); }
+
+  .bg-intensity-off-light { background-color: hsl(var(--intensity-off) / 0.12); }
+  .bg-intensity-deload-light { background-color: hsl(var(--intensity-deload) / 0.12); }
+  .bg-intensity-easy-light { background-color: hsl(var(--intensity-easy) / 0.12); }
+  .bg-intensity-easy-moderate-light { background-color: hsl(var(--intensity-easy-moderate) / 0.12); }
+  .bg-intensity-moderate-light { background-color: hsl(var(--intensity-moderate) / 0.12); }
+  .bg-intensity-moderate-hard-light { background-color: hsl(var(--intensity-moderate-hard) / 0.12); }
+  .bg-intensity-hard-light { background-color: hsl(var(--intensity-hard) / 0.12); }
+  .bg-intensity-extremely-hard-light { background-color: hsl(var(--intensity-extremely-hard) / 0.12); }
+}

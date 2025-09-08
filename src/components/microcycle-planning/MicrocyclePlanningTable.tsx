@@ -145,45 +145,53 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
     }).flat();
   }, [mesocycles, planningState]);
 
-  // Get intensity-based color for mesocycles and microcycles
-  const getIntensityColor = (intensity: string, isLight: boolean = false) => {
-    const opacity = isLight ? '0.15' : '0.4';
-    const colors = {
-      "off": `bg-[hsl(var(--intensity-off)/${opacity})] text-foreground border-2`,
-      "deload": `bg-[hsl(var(--intensity-deload)/${opacity})] text-foreground`,
-      "easy": `bg-[hsl(var(--intensity-easy)/${opacity})] text-foreground`, 
-      "easy-moderate": `bg-[hsl(var(--intensity-easy-moderate)/${opacity})] text-foreground`,
-      "moderate": `bg-[hsl(var(--intensity-moderate)/${opacity})] text-foreground`,
-      "moderate-hard": `bg-[hsl(var(--intensity-moderate-hard)/${opacity})] text-foreground`,
-      "hard": `bg-[hsl(var(--intensity-hard)/${opacity})] text-foreground`,
-      "extremely-hard": `bg-[hsl(var(--intensity-extremely-hard)/${opacity})] text-foreground`
-    };
-    return colors[intensity as keyof typeof colors] || "bg-muted text-muted-foreground";
+// Get intensity-based color for mesocycles and microcycles
+const getIntensityColor = (intensity: string, isLight: boolean = false) => {
+  const suffix = isLight ? '-light' : '';
+  const colors: Record<string, string> = {
+    'off': `bg-intensity-off${suffix} text-foreground`,
+    'deload': `bg-intensity-deload${suffix} text-foreground`,
+    'easy': `bg-intensity-easy${suffix} text-foreground`,
+    'easy-moderate': `bg-intensity-easy-moderate${suffix} text-foreground`,
+    'moderate': `bg-intensity-moderate${suffix} text-foreground`,
+    'moderate-hard': `bg-intensity-moderate-hard${suffix} text-foreground`,
+    'hard': `bg-intensity-hard${suffix} text-foreground`,
+    'extremely-hard': `bg-intensity-extremely-hard${suffix} text-foreground`,
   };
-
+  return colors[intensity] || 'bg-muted text-muted-foreground';
+};
   // Create mesocycle header structure for two-row headers
-  const mesocycleHeaders = useMemo(() => {
-    const headers: Array<{
-      mesocycleId: string;
-      mesocycleName: string;
-      colSpan: number;
-      colorClass: string;
-    }> = [];
+const mesocycleHeaders = useMemo(() => {
+  const headers: Array<{
+    mesocycleId: string;
+    mesocycleName: string;
+    colSpan: number;
+    colorClass: string;
+  }> = [];
 
-    mesocycles.forEach((meso) => {
-      const isSplit = planningState.splitStates[meso.id] || false;
-      const colSpan = isSplit ? meso.microcycles.length : 1;
-      
-      headers.push({
-        mesocycleId: meso.id,
-        mesocycleName: meso.name,
-        colSpan,
-        colorClass: getIntensityColor(meso.intensity)
-      });
+  mesocycles.forEach((meso) => {
+    const isSplit = planningState.splitStates[meso.id] || false;
+
+    let colSpan = 1;
+    if (isSplit) {
+      const mesocycleGroups = Object.values(planningState.microcycleGroups)
+        .filter(group => group.mesocycleId === meso.id);
+      const groupedIds = new Set(mesocycleGroups.flatMap(g => g.microcycleIds));
+      const ungroupedCount = meso.microcycles.filter(m => !groupedIds.has(m.id)).length;
+      colSpan = mesocycleGroups.length + ungroupedCount;
+      if (colSpan === 0) colSpan = 1;
+    }
+    
+    headers.push({
+      mesocycleId: meso.id,
+      mesocycleName: meso.name,
+      colSpan,
+      colorClass: getIntensityColor(meso.intensity)
     });
+  });
 
-    return headers;
-  }, [mesocycles, planningState]);
+  return headers;
+}, [mesocycles, planningState]);
 
   // Check if any mesocycle is split (determines if we need two header rows)
   const hasSplitMesocycles = Object.values(planningState.splitStates).some(isSplit => isSplit);
@@ -226,19 +234,44 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
     });
   };
 
-  const updateCellData = (cellId: string, newData: Partial<CellData>) => {
-    setPlanningState(prev => ({
-      ...prev,
-      cellData: {
-        ...prev.cellData,
-        [cellId]: {
-          ...prev.cellData[cellId],
-          ...newData
-        }
-      }
-    }));
-  };
+// Helpers to manage linking microcycles
+const isMicrocycleGrouped = (mesocycleId: string, microcycleId: string) => {
+  return Object.values(planningState.microcycleGroups).some(
+    g => g.mesocycleId === mesocycleId && g.microcycleIds.includes(microcycleId)
+  );
+};
 
+const canLinkWithNext = (mesocycleId: string, microcycleId: string) => {
+  const meso = mesocycles.find(m => m.id === mesocycleId);
+  if (!meso) return false;
+  const idx = meso.microcycles.findIndex(m => m.id === microcycleId);
+  if (idx === -1 || idx === meso.microcycles.length - 1) return false;
+  const nextId = meso.microcycles[idx + 1].id;
+  return !isMicrocycleGrouped(mesocycleId, microcycleId) && !isMicrocycleGrouped(mesocycleId, nextId);
+};
+
+const linkWithNext = (mesocycleId: string, microcycleId: string) => {
+  const meso = mesocycles.find(m => m.id === mesocycleId);
+  if (!meso) return;
+  const idx = meso.microcycles.findIndex(m => m.id === microcycleId);
+  if (idx === -1 || idx === meso.microcycles.length - 1) return;
+  const nextId = meso.microcycles[idx + 1].id;
+  if (!canLinkWithNext(mesocycleId, microcycleId)) return;
+  createMicrocycleGroup([microcycleId, nextId], mesocycleId);
+};
+
+const updateCellData = (cellId: string, newData: Partial<CellData>) => {
+  setPlanningState(prev => ({
+    ...prev,
+    cellData: {
+      ...prev.cellData,
+      [cellId]: {
+        ...prev.cellData[cellId],
+        ...newData
+      }
+    }
+  }));
+};
   const getCellId = (methodId: string, categoryName: string | undefined, columnId: string) => {
     return `${methodId}-${categoryName || 'main'}-${columnId}`;
   };
@@ -343,6 +376,19 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
                           >
                             <ChevronRight className="h-3 w-3" />
                             Split
+                          </Button>
+                        )}
+
+                        {column.type === 'microcycle' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => linkWithNext(column.mesocycleId, column.microcycleId!)}
+                            disabled={!canLinkWithNext(column.mesocycleId, column.microcycleId!)}
+                            className="h-6 px-2 hover:bg-black/10"
+                          >
+                            <Link className="h-3 w-3" />
+                            Link
                           </Button>
                         )}
                         
