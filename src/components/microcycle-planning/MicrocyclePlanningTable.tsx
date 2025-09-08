@@ -97,38 +97,32 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
 
       const columns = [];
       
-      // Add grouped microcycles
-      mesocycleGroups.forEach(group => {
-        if (group.microcycleIds.length > 1) {
-          columns.push({
-            type: 'microcycle-group' as const,
-            mesocycleId: meso.id,
-            mesocycleName: meso.name,
-            groupId: group.id,
-            groupName: group.name,
-            microcycleIds: group.microcycleIds,
-            id: group.id,
-            colSpan: 1
-          });
-        } else if (group.microcycleIds.length === 1) {
-          // Single microcycle in a group (shouldn't happen, but handle it)
-          const microcycleId = group.microcycleIds[0];
-          const microcycle = meso.microcycles.find(m => m.id === microcycleId);
-          columns.push({
-            type: 'microcycle' as const,
-            mesocycleId: meso.id,
-            mesocycleName: meso.name,
-            microcycleId,
-            microcycleName: microcycle?.name || `Week ${microcycleId}`,
-            id: microcycleId,
-            colSpan: 1
-          });
-        }
-      });
-
-      // Add ungrouped microcycles
-      meso.microcycles.forEach(micro => {
-        if (!groupedMicrocycles.has(micro.id)) {
+      // Process microcycles in chronological order
+      meso.microcycles.forEach((micro, index) => {
+        // Check if this microcycle is part of a group
+        const group = mesocycleGroups.find(g => g.microcycleIds.includes(micro.id));
+        
+        if (group && group.microcycleIds.length > 1) {
+          // Only add the group once (at the first microcycle's position)
+          const firstMicrocycleId = group.microcycleIds
+            .map(id => ({ id, index: meso.microcycles.findIndex(m => m.id === id) }))
+            .sort((a, b) => a.index - b.index)[0].id;
+            
+          if (micro.id === firstMicrocycleId) {
+            columns.push({
+              type: 'microcycle-group' as const,
+              mesocycleId: meso.id,
+              mesocycleName: meso.name,
+              groupId: group.id,
+              groupName: group.name,
+              microcycleIds: group.microcycleIds,
+              id: group.id,
+              colSpan: 1
+            });
+          }
+          // Skip individual microcycles that are part of this group
+        } else if (!group) {
+          // Add ungrouped microcycles
           columns.push({
             type: 'microcycle' as const,
             mesocycleId: meso.id,
@@ -138,6 +132,19 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
             id: micro.id,
             colSpan: 1
           });
+          
+          // Add link area after this microcycle (if not the last one and can link)
+          if (index < meso.microcycles.length - 1 && canLinkWithNext(meso.id, micro.id)) {
+            columns.push({
+              type: 'link-area' as const,
+              mesocycleId: meso.id,
+              mesocycleName: meso.name,
+              microcycleId: micro.id,
+              nextMicrocycleId: meso.microcycles[index + 1].id,
+              id: `link-${micro.id}-${meso.microcycles[index + 1].id}`,
+              colSpan: 1
+            });
+          }
         }
       });
 
@@ -146,7 +153,12 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
   }, [mesocycles, planningState]);
 
 // Get intensity-based color for mesocycles and microcycles
-const getIntensityColor = (intensity: string, isLight: boolean = false) => {
+const getIntensityColor = (intensity: string, isLight: boolean = false, isGroup: boolean = false) => {
+  // Use neutral colors for grouped microcycles
+  if (isGroup) {
+    return 'bg-muted/20 text-foreground';
+  }
+  
   const suffix = isLight ? '-light' : '';
   const colors: Record<string, string> = {
     'off': `bg-intensity-off${suffix} text-foreground`,
@@ -208,11 +220,19 @@ const mesocycleHeaders = useMemo(() => {
 
   const createMicrocycleGroup = (microcycleIds: string[], mesocycleId: string) => {
     const groupId = `group-${Date.now()}`;
+    
+    // Get microcycle names for group naming
+    const mesocycle = mesocycles.find(m => m.id === mesocycleId);
+    const microcycleNames = microcycleIds
+      .map(id => mesocycle?.microcycles.find(m => m.id === id)?.name)
+      .filter(Boolean)
+      .join(' & ');
+    
     const group: MicrocycleGroup = {
       id: groupId,
       mesocycleId,
       microcycleIds,
-      name: `Group ${Object.keys(planningState.microcycleGroups).length + 1}`
+      name: microcycleNames || `Group ${Object.keys(planningState.microcycleGroups).length + 1}`
     };
 
     setPlanningState(prev => ({
@@ -336,8 +356,9 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                   const mesocycle = mesocycles.find(m => m.id === column.mesocycleId);
                   let intensity = mesocycle?.intensity || 'moderate';
                   let isLight = false;
+                  let isGroup = false;
                   
-                  // For individual microcycles, use their specific intensity
+                  // Handle different column types
                   if (column.type === 'microcycle' && mesocycle) {
                     const microcycle = mesocycle.microcycles.find(m => m.id === column.microcycleId);
                     if (microcycle) {
@@ -345,11 +366,29 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                       isLight = true; // Make microcycles lighter than mesocycles
                     }
                   } else if (column.type === 'microcycle-group') {
-                    // For grouped microcycles, use a lighter version of mesocycle intensity
-                    isLight = true;
+                    isGroup = true; // Use neutral color for groups
+                  } else if (column.type === 'link-area') {
+                    // Link areas should be transparent/minimal
+                    return (
+                      <TableHead 
+                        key={column.id} 
+                        className="text-center w-12 border-r border-border bg-muted/10"
+                      >
+                        <div className="flex items-center justify-center py-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => linkWithNext(column.mesocycleId, column.microcycleId!)}
+                            className="h-8 w-8 p-0 hover:bg-primary/10"
+                          >
+                            <Link className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableHead>
+                    );
                   }
                   
-                  const colorClass = getIntensityColor(intensity, isLight);
+                  const colorClass = getIntensityColor(intensity, isLight, isGroup);
                   
                   return (
                     <TableHead 
@@ -376,19 +415,6 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                           >
                             <ChevronRight className="h-3 w-3" />
                             Split
-                          </Button>
-                        )}
-
-                        {column.type === 'microcycle' && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => linkWithNext(column.mesocycleId, column.microcycleId!)}
-                            disabled={!canLinkWithNext(column.mesocycleId, column.microcycleId!)}
-                            className="h-6 px-2 hover:bg-black/10"
-                          >
-                            <Link className="h-3 w-3" />
-                            Link
                           </Button>
                         )}
                         
@@ -425,9 +451,22 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                       </div>
                     </TableCell>
                     {columnStructure.map((column) => {
+                      // Skip link areas for table cells
+                      if (column.type === 'link-area') {
+                        return (
+                          <TableCell 
+                            key={`${method.id}-${column.id}`} 
+                            className="p-2 border-r border-border bg-muted/5 w-12"
+                          >
+                            {/* Empty cell for link area */}
+                          </TableCell>
+                        );
+                      }
+                      
                       const mesocycle = mesocycles.find(m => m.id === column.mesocycleId);
                       let intensity = mesocycle?.intensity || 'moderate';
                       let isLight = false;
+                      let isGroup = false;
                       
                       // For individual microcycles, use their specific intensity
                       if (column.type === 'microcycle' && mesocycle) {
@@ -437,11 +476,10 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                           isLight = true; // Make microcycles lighter than mesocycles
                         }
                       } else if (column.type === 'microcycle-group') {
-                        // For grouped microcycles, use a lighter version of mesocycle intensity
-                        isLight = true;
+                        isGroup = true; // Use neutral color for groups
                       }
                       
-                      const colorClass = getIntensityColor(intensity, isLight);
+                      const colorClass = getIntensityColor(intensity, isLight, isGroup);
                       
                       return (
                         <TableCell 
@@ -466,9 +504,22 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                         </div>
                       </TableCell>
                       {columnStructure.map((column) => {
+                        // Skip link areas for table cells
+                        if (column.type === 'link-area') {
+                          return (
+                            <TableCell 
+                              key={`${method.id}-${categoryName}-${column.id}`} 
+                              className="p-2 border-r border-border bg-muted/5 w-12"
+                            >
+                              {/* Empty cell for link area */}
+                            </TableCell>
+                          );
+                        }
+                        
                         const mesocycle = mesocycles.find(m => m.id === column.mesocycleId);
                         let intensity = mesocycle?.intensity || 'moderate';
                         let isLight = false;
+                        let isGroup = false;
                         
                         // For individual microcycles, use their specific intensity
                         if (column.type === 'microcycle' && mesocycle) {
@@ -478,11 +529,10 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                             isLight = true; // Make microcycles lighter than mesocycles
                           }
                         } else if (column.type === 'microcycle-group') {
-                          // For grouped microcycles, use a lighter version of mesocycle intensity
-                          isLight = true;
+                          isGroup = true; // Use neutral color for groups
                         }
                         
-                        const colorClass = getIntensityColor(intensity, isLight);
+                        const colorClass = getIntensityColor(intensity, isLight, isGroup);
                         
                         return (
                           <TableCell 

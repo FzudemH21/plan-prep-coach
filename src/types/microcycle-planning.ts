@@ -33,3 +33,38 @@ export interface TrainingMethodWithCategories {
 }
 
 export type ExerciseLibraryType = 'exercise' | 'plyometrics';
+
+// Column structure types for the planning table
+export type ColumnType = 'mesocycle' | 'microcycle' | 'microcycle-group' | 'link-area';
+
+export interface BaseColumn {
+  mesocycleId: string;
+  mesocycleName: string;
+  id: string;
+  colSpan: number;
+}
+
+export interface MesocycleColumn extends BaseColumn {
+  type: 'mesocycle';
+}
+
+export interface MicrocycleColumn extends BaseColumn {
+  type: 'microcycle';
+  microcycleId: string;
+  microcycleName: string;
+}
+
+export interface MicrocycleGroupColumn extends BaseColumn {
+  type: 'microcycle-group';
+  groupId: string;
+  groupName: string;
+  microcycleIds: string[];
+}
+
+export interface LinkAreaColumn extends BaseColumn {
+  type: 'link-area';
+  microcycleId: string;
+  nextMicrocycleId: string;
+}
+
+export type TableColumn = MesocycleColumn | MicrocycleColumn | MicrocycleGroupColumn | LinkAreaColumn;
