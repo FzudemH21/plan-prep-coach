@@ -181,14 +181,22 @@ const mesocycleHeaders = useMemo(() => {
     colorClass: string;
   }> = [];
 
-  mesocycles.forEach((meso) => {
+  for (const meso of mesocycles) {
     const isSplit = planningState.splitStates[meso.id] || false;
-
     let colSpan = 1;
+    
     if (isSplit) {
       const mesocycleGroups = Object.values(planningState.microcycleGroups)
         .filter(group => group.mesocycleId === meso.id);
-      const groupedIds = new Set(mesocycleGroups.flatMap(g => g.microcycleIds));
+      const groupedIds = new Set();
+      
+      // Collect grouped microcycle IDs
+      for (const group of mesocycleGroups) {
+        for (const id of group.microcycleIds) {
+          groupedIds.add(id);
+        }
+      }
+      
       const ungroupedCount = meso.microcycles.filter(m => !groupedIds.has(m.id)).length;
       colSpan = mesocycleGroups.length + ungroupedCount;
       if (colSpan === 0) colSpan = 1;
@@ -200,7 +208,7 @@ const mesocycleHeaders = useMemo(() => {
       colSpan,
       colorClass: getIntensityColor(meso.intensity)
     });
-  });
+  }
 
   return headers;
 }, [mesocycles, planningState]);
