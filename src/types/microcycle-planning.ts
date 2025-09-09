@@ -2,7 +2,7 @@ export interface ExerciseSelection {
   id: string;
   exerciseId: string;
   exerciseName: string;
-  library: 'exercise' | 'plyometrics' | 'athleticism';
+  library: string; // Allow any library ID including custom ones
 }
 
 export interface CellData {
@@ -32,7 +32,7 @@ export interface TrainingMethodWithCategories {
   categories: string[];
 }
 
-export type ExerciseLibraryType = 'exercise' | 'plyometrics';
+export type ExerciseLibraryType = 'exercise' | 'plyometrics' | string; // Allow custom library IDs
 
 // Column structure types for the planning table
 export type ColumnType = 'mesocycle' | 'microcycle' | 'microcycle-group' | 'link-area';

@@ -2,10 +2,9 @@ import React, { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { X, Plus, Search } from 'lucide-react';
+import { X, Plus } from 'lucide-react';
 import { CellData, ExerciseSelection, ExerciseLibraryType } from '@/types/microcycle-planning';
 import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
-import { NewExerciseDialog } from './NewExerciseDialog';
 
 interface ExerciseSelectionCellProps {
   cellData: CellData;
@@ -13,27 +12,7 @@ interface ExerciseSelectionCellProps {
 }
 
 export function ExerciseSelectionCell({ cellData, onUpdate }: ExerciseSelectionCellProps) {
-  const [inputValue, setInputValue] = useState('');
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
-  const [isNewExerciseDialogOpen, setIsNewExerciseDialogOpen] = useState(false);
-  const [newExerciseName, setNewExerciseName] = useState('');
-
-  const handleInputSubmit = (value: string) => {
-    const trimmedValue = value.trim();
-    if (!trimmedValue) return;
-
-    // Check if exercise already exists in any library
-    // For now, we'll just show the new exercise dialog
-    setNewExerciseName(trimmedValue);
-    setIsNewExerciseDialogOpen(true);
-    setInputValue('');
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleInputSubmit(inputValue);
-    }
-  };
 
   const addExercise = (exercise: ExerciseSelection) => {
     const newExercises = [...cellData.exercises, exercise];
@@ -47,30 +26,10 @@ export function ExerciseSelectionCell({ cellData, onUpdate }: ExerciseSelectionC
 
   const handleExerciseCreated = (exercise: ExerciseSelection) => {
     addExercise(exercise);
-    setIsNewExerciseDialogOpen(false);
-    setNewExerciseName('');
   };
 
   return (
     <div className="space-y-2 min-h-[60px]">
-      {/* Exercise input */}
-      <div className="flex items-center gap-1">
-        <Input
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyPress={handleKeyPress}
-          placeholder="Type exercise..."
-          className="text-xs h-6"
-        />
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setIsLibraryOpen(true)}
-          className="h-6 w-6 p-0"
-        >
-          <Search className="h-3 w-3" />
-        </Button>
-      </div>
 
       {/* Selected exercises */}
       <div className="space-y-1">
@@ -96,8 +55,8 @@ export function ExerciseSelectionCell({ cellData, onUpdate }: ExerciseSelectionC
         ))}
       </div>
 
-      {/* Add exercise button when no exercises */}
-      {cellData.exercises.length === 0 && !inputValue && (
+      {/* Add exercise button */}
+      {cellData.exercises.length === 0 && (
         <Button
           size="sm"
           variant="ghost"
@@ -118,16 +77,6 @@ export function ExerciseSelectionCell({ cellData, onUpdate }: ExerciseSelectionC
           setIsLibraryOpen(false);
         }}
         selectedExerciseIds={cellData.exercises.map(ex => ex.exerciseId)}
-      />
-
-      {/* New Exercise Dialog */}
-      <NewExerciseDialog
-        isOpen={isNewExerciseDialogOpen}
-        onClose={() => {
-          setIsNewExerciseDialogOpen(false);
-          setNewExerciseName('');
-        }}
-        exerciseName={newExerciseName}
         onExerciseCreated={handleExerciseCreated}
       />
     </div>

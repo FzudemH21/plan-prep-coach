@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ExerciseSelection, ExerciseLibraryType } from '@/types/microcycle-planning';
+import { ExerciseSelection } from '@/types/microcycle-planning';
 import { useExerciseData } from '@/hooks/useExerciseData';
 import { usePlyometricsData } from '@/hooks/usePlyometricsData';
+import { useCustomLibraries } from '@/hooks/useCustomLibraries';
 import { useToast } from '@/hooks/use-toast';
 
 interface NewExerciseDialogProps {
@@ -22,67 +23,85 @@ export function NewExerciseDialog({
   exerciseName, 
   onExerciseCreated 
 }: NewExerciseDialogProps) {
-  const [selectedLibrary, setSelectedLibrary] = useState<ExerciseLibraryType>('exercise');
+  const [selectedLibrary, setSelectedLibrary] = useState<string>('exercise');
   const [category, setCategory] = useState('');
   
   const { addEntry: addExercise } = useExerciseData();
   const { addEntry: addPlyometrics } = usePlyometricsData();
+  const { libraries: customLibraries, addExerciseToLibrary } = useCustomLibraries();
   const { toast } = useToast();
 
   const handleCreate = async () => {
     try {
       let newExerciseId: string;
+      let library = selectedLibrary;
 
-      switch (selectedLibrary) {
-        case 'exercise':
-          addExercise({
-            übungsname: exerciseName,
-            akzentuierteKörperregion: category || 'Uncategorized',
-            dominantesBewegungsmuster: '',
-            forcesActingOnSpine: '',
-            übungsausführung: '',
-            trunkTrainingFramework: '',
-            mainMovementPlane: '',
-            level: '',
-            artDesWiderstandes: '',
-            stand: '',
-            variationen: ''
-          });
-          newExerciseId = Date.now().toString();
-          break;
+      if (['exercise', 'plyometrics'].includes(selectedLibrary)) {
+        // Built-in libraries
+        switch (selectedLibrary) {
+          case 'exercise':
+            addExercise({
+              übungsname: exerciseName,
+              akzentuierteKörperregion: category || 'Uncategorized',
+              dominantesBewegungsmuster: '',
+              forcesActingOnSpine: '',
+              übungsausführung: '',
+              trunkTrainingFramework: '',
+              mainMovementPlane: '',
+              level: '',
+              artDesWiderstandes: '',
+              stand: '',
+              variationen: ''
+            });
+            newExerciseId = Date.now().toString();
+            break;
 
-        case 'plyometrics':
-          addPlyometrics({
-            übung: exerciseName,
-            intensität: '',
-            tier: '',
-            dauerDVZ: '',
-            fokusrichtung: '',
-            bewegungsart: '',
-            modus: '',
-            emphasis: '',
-            übungsgruppe: category || 'Uncategorized',
-            kommentar: ''
-          });
-          newExerciseId = Date.now().toString();
-          break;
+          case 'plyometrics':
+            addPlyometrics({
+              übung: exerciseName,
+              intensität: '',
+              tier: '',
+              dauerDVZ: '',
+              fokusrichtung: '',
+              bewegungsart: '',
+              modus: '',
+              emphasis: '',
+              übungsgruppe: category || 'Uncategorized',
+              kommentar: ''
+            });
+            newExerciseId = Date.now().toString();
+            break;
 
-        default:
-          throw new Error('Invalid library selected');
+          default:
+            throw new Error('Invalid built-in library selected');
+        }
+      } else {
+        // Custom library
+        const customLib = customLibraries.find(lib => lib.id === selectedLibrary);
+        if (!customLib) throw new Error('Custom library not found');
+        
+        const newExercise = addExerciseToLibrary(selectedLibrary, {
+          name: exerciseName,
+          category: category || 'Uncategorized',
+          type: '',
+          metadata: {}
+        });
+        newExerciseId = newExercise.id;
+        library = selectedLibrary;
       }
 
       const newExercise: ExerciseSelection = {
-        id: `new-${selectedLibrary}-${newExerciseId}-${Date.now()}`,
+        id: `new-${library}-${newExerciseId}-${Date.now()}`,
         exerciseId: newExerciseId,
         exerciseName: exerciseName,
-        library: selectedLibrary
+        library: library
       };
 
       onExerciseCreated(newExercise);
       
       toast({
         title: "Exercise created",
-        description: `"${exerciseName}" has been added to the ${selectedLibrary} library.`
+        description: `"${exerciseName}" has been added to the ${customLibraries.find(lib => lib.id === selectedLibrary)?.name || selectedLibrary} library.`
       });
 
     } catch (error) {
@@ -110,13 +129,16 @@ export function NewExerciseDialog({
 
           <div>
             <Label>Add to Library</Label>
-            <Select value={selectedLibrary} onValueChange={(value: ExerciseLibraryType) => setSelectedLibrary(value)}>
+            <Select value={selectedLibrary} onValueChange={(value: string) => setSelectedLibrary(value)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="exercise">Resistance Exercise Library</SelectItem>
                 <SelectItem value="plyometrics">Plyometrics Library</SelectItem>
+                {customLibraries.map(lib => (
+                  <SelectItem key={lib.id} value={lib.id}>{lib.name}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

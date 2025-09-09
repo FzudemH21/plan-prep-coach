@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useCustomLibraries } from '@/hooks/useCustomLibraries';
 
 interface AddLibraryDialogProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ export function AddLibraryDialog({ isOpen, onClose }: AddLibraryDialogProps) {
   const [libraryType, setLibraryType] = useState('');
   const [description, setDescription] = useState('');
   const { toast } = useToast();
+  const { addLibrary } = useCustomLibraries();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,17 +33,31 @@ export function AddLibraryDialog({ isOpen, onClose }: AddLibraryDialogProps) {
       return;
     }
 
-    // Here you would typically save the library to your backend or local storage
-    toast({
-      title: "Library Created",
-      description: `${libraryName} has been created successfully.`,
-    });
+    try {
+      // Create the actual library
+      const newLibrary = addLibrary({
+        name: libraryName,
+        type: libraryType,
+        description: description
+      });
 
-    // Reset form and close dialog
-    setLibraryName('');
-    setLibraryType('');
-    setDescription('');
-    onClose();
+      toast({
+        title: "Library Created",
+        description: `${libraryName} has been created successfully and is now available for exercise selection.`,
+      });
+
+      // Reset form and close dialog
+      setLibraryName('');
+      setLibraryType('');
+      setDescription('');
+      onClose();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create library. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleClose = () => {
