@@ -27,6 +27,22 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
     microcycleGroups: {}
   });
 
+  // Helper functions (moved before useMemos that use them)
+  const isMicrocycleGrouped = (mesocycleId: string, microcycleId: string) => {
+    return Object.values(planningState.microcycleGroups).some(
+      g => g.mesocycleId === mesocycleId && g.microcycleIds.includes(microcycleId)
+    );
+  };
+
+  const canLinkWithNext = (mesocycleId: string, microcycleId: string) => {
+    const meso = mesocycles.find(m => m.id === mesocycleId);
+    if (!meso) return false;
+    const idx = meso.microcycles.findIndex(m => m.id === microcycleId);
+    if (idx === -1 || idx === meso.microcycles.length - 1) return false;
+    const nextId = meso.microcycles[idx + 1].id;
+    return !isMicrocycleGrouped(mesocycleId, microcycleId) && !isMicrocycleGrouped(mesocycleId, nextId);
+  };
+
   // Get training methods with their exercise categories
   const trainingMethods: TrainingMethodWithCategories[] = useMemo(() => {
     if (!toolboxData?.entries) return [];
@@ -262,31 +278,15 @@ const mesocycleHeaders = useMemo(() => {
     });
   };
 
-// Helpers to manage linking microcycles
-const isMicrocycleGrouped = (mesocycleId: string, microcycleId: string) => {
-  return Object.values(planningState.microcycleGroups).some(
-    g => g.mesocycleId === mesocycleId && g.microcycleIds.includes(microcycleId)
-  );
-};
-
-const canLinkWithNext = (mesocycleId: string, microcycleId: string) => {
-  const meso = mesocycles.find(m => m.id === mesocycleId);
-  if (!meso) return false;
-  const idx = meso.microcycles.findIndex(m => m.id === microcycleId);
-  if (idx === -1 || idx === meso.microcycles.length - 1) return false;
-  const nextId = meso.microcycles[idx + 1].id;
-  return !isMicrocycleGrouped(mesocycleId, microcycleId) && !isMicrocycleGrouped(mesocycleId, nextId);
-};
-
-const linkWithNext = (mesocycleId: string, microcycleId: string) => {
-  const meso = mesocycles.find(m => m.id === mesocycleId);
-  if (!meso) return;
-  const idx = meso.microcycles.findIndex(m => m.id === microcycleId);
-  if (idx === -1 || idx === meso.microcycles.length - 1) return;
-  const nextId = meso.microcycles[idx + 1].id;
-  if (!canLinkWithNext(mesocycleId, microcycleId)) return;
-  createMicrocycleGroup([microcycleId, nextId], mesocycleId);
-};
+  const linkWithNext = (mesocycleId: string, microcycleId: string) => {
+    const meso = mesocycles.find(m => m.id === mesocycleId);
+    if (!meso) return;
+    const idx = meso.microcycles.findIndex(m => m.id === microcycleId);
+    if (idx === -1 || idx === meso.microcycles.length - 1) return;
+    const nextId = meso.microcycles[idx + 1].id;
+    if (!canLinkWithNext(mesocycleId, microcycleId)) return;
+    createMicrocycleGroup([microcycleId, nextId], mesocycleId);
+  };
 
 const updateCellData = (cellId: string, newData: Partial<CellData>) => {
   setPlanningState(prev => ({
