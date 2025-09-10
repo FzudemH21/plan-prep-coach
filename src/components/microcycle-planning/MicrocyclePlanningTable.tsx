@@ -97,21 +97,27 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
       
       // If no mesocycles are split, show all mesocycles as columns
       if (!hasSplit) {
-        return {
+        return [{
           type: 'mesocycle' as const,
           mesocycleId: meso.id,
           mesocycleName: meso.name,
           id: meso.id,
           colSpan: 1
-        };
+        }];
       }
       
-      // If there are split mesocycles, only show columns for split mesocycles
+      // If this mesocycle is not split, show it as a single column
       if (!isSplit) {
-        return []; // Non-split mesocycles won't appear in individual column row
+        return [{
+          type: 'mesocycle' as const,
+          mesocycleId: meso.id,
+          mesocycleName: meso.name,
+          id: meso.id,
+          colSpan: 1
+        }];
       }
 
-      // Find groups for this mesocycle
+      // Find groups for this split mesocycle
       const mesocycleGroups = Object.values(planningState.microcycleGroups)
         .filter(group => group.mesocycleId === meso.id);
 
@@ -338,7 +344,8 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
-          <Table>
+          <div className="min-w-full">
+            <Table className="min-w-[1200px]">
             <TableHeader>
               {/* First row - Mesocycle headers (only when there are split mesocycles) */}
               {hasSplitMesocycles && (
@@ -576,7 +583,8 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                 </React.Fragment>
               ))}
             </TableBody>
-          </Table>
+            </Table>
+          </div>
         </div>
       </CardContent>
     </Card>
