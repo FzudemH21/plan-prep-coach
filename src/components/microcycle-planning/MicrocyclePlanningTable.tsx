@@ -90,10 +90,13 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
 
   // Generate column structure for table headers
   const columnStructure = useMemo(() => {
+    const hasSplit = Object.values(planningState.splitStates).some(isSplit => isSplit);
+    
     return mesocycles.map(meso => {
       const isSplit = planningState.splitStates[meso.id] || false;
       
-      if (!isSplit) {
+      // If no mesocycles are split, show all mesocycles as columns
+      if (!hasSplit) {
         return {
           type: 'mesocycle' as const,
           mesocycleId: meso.id,
@@ -101,6 +104,11 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
           id: meso.id,
           colSpan: 1
         };
+      }
+      
+      // If there are split mesocycles, only show columns for split mesocycles
+      if (!isSplit) {
+        return []; // Non-split mesocycles won't appear in individual column row
       }
 
       // Find groups for this mesocycle
@@ -213,8 +221,17 @@ const mesocycleHeaders = useMemo(() => {
         }
       }
       
-      const ungroupedCount = meso.microcycles.filter(m => !groupedIds.has(m.id)).length;
-      colSpan = mesocycleGroups.length + ungroupedCount;
+      const ungroupedMicrocycles = meso.microcycles.filter(m => !groupedIds.has(m.id));
+      
+      // Count link areas between ungrouped microcycles
+      let linkAreasCount = 0;
+      ungroupedMicrocycles.forEach((micro, index) => {
+        if (index < ungroupedMicrocycles.length - 1 && canLinkWithNext(meso.id, micro.id)) {
+          linkAreasCount++;
+        }
+      });
+      
+      colSpan = mesocycleGroups.length + ungroupedMicrocycles.length + linkAreasCount;
       if (colSpan === 0) colSpan = 1;
     }
     
