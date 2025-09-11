@@ -55,18 +55,16 @@ export function ExerciseSelectionCell({ cellData, onUpdate }: ExerciseSelectionC
         ))}
       </div>
 
-      {/* Add exercise button */}
-      {cellData.exercises.length === 0 && (
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => setIsLibraryOpen(true)}
-          className="h-6 w-full text-xs text-muted-foreground border-dashed border"
-        >
-          <Plus className="h-3 w-3 mr-1" />
-          Add exercises
-        </Button>
-      )}
+      {/* Add exercise button - always visible */}
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => setIsLibraryOpen(true)}
+        className="h-6 w-full text-xs text-muted-foreground border-dashed border"
+      >
+        <Plus className="h-3 w-3 mr-1" />
+        Add exercises
+      </Button>
 
       {/* Exercise Library Popup */}
       <ExerciseLibraryPopup

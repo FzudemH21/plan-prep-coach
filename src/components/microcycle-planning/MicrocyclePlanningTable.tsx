@@ -40,7 +40,22 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
     const idx = meso.microcycles.findIndex(m => m.id === microcycleId);
     if (idx === -1 || idx === meso.microcycles.length - 1) return false;
     const nextId = meso.microcycles[idx + 1].id;
-    return !isMicrocycleGrouped(mesocycleId, microcycleId) && !isMicrocycleGrouped(mesocycleId, nextId);
+    
+    // Check if current microcycle is already in a group
+    const currentGroup = Object.values(planningState.microcycleGroups).find(
+      g => g.mesocycleId === mesocycleId && g.microcycleIds.includes(microcycleId)
+    );
+    
+    // If current is in a group and group already has 3 microcycles, can't link
+    if (currentGroup && currentGroup.microcycleIds.length >= 3) return false;
+    
+    // If next microcycle is already in a different group, can't link
+    const nextGroup = Object.values(planningState.microcycleGroups).find(
+      g => g.mesocycleId === mesocycleId && g.microcycleIds.includes(nextId)
+    );
+    if (nextGroup && (!currentGroup || nextGroup.id !== currentGroup.id)) return false;
+    
+    return true;
   };
 
   // Get training methods with their exercise categories
@@ -308,7 +323,35 @@ const mesocycleHeaders = useMemo(() => {
     if (idx === -1 || idx === meso.microcycles.length - 1) return;
     const nextId = meso.microcycles[idx + 1].id;
     if (!canLinkWithNext(mesocycleId, microcycleId)) return;
-    createMicrocycleGroup([microcycleId, nextId], mesocycleId);
+    
+    // Check if current microcycle is already in a group
+    const existingGroup = Object.values(planningState.microcycleGroups).find(
+      g => g.mesocycleId === mesocycleId && g.microcycleIds.includes(microcycleId)
+    );
+    
+    if (existingGroup) {
+      // Extend existing group by adding the next microcycle
+      const updatedGroup = {
+        ...existingGroup,
+        microcycleIds: [...existingGroup.microcycleIds, nextId],
+        name: existingGroup.microcycleIds
+          .concat(nextId)
+          .map(id => meso.microcycles.find(m => m.id === id)?.name)
+          .filter(Boolean)
+          .join(' & ')
+      };
+      
+      setPlanningState(prev => ({
+        ...prev,
+        microcycleGroups: {
+          ...prev.microcycleGroups,
+          [existingGroup.id]: updatedGroup
+        }
+      }));
+    } else {
+      // Create new group with current and next microcycles
+      createMicrocycleGroup([microcycleId, nextId], mesocycleId);
+    }
   };
 
 const updateCellData = (cellId: string, newData: Partial<CellData>) => {
