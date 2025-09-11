@@ -164,6 +164,25 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
               id: group.id,
               colSpan: 1
             });
+            
+            // Add link area after group if it has fewer than 3 microcycles and can extend
+            const lastMicrocycleInGroup = group.microcycleIds
+              .map(id => ({ id, index: meso.microcycles.findIndex(m => m.id === id) }))
+              .sort((a, b) => b.index - a.index)[0];
+              
+            if (group.microcycleIds.length < 3 && 
+                lastMicrocycleInGroup.index < meso.microcycles.length - 1 &&
+                canLinkWithNext(meso.id, lastMicrocycleInGroup.id)) {
+              columns.push({
+                type: 'link-area' as const,
+                mesocycleId: meso.id,
+                mesocycleName: meso.name,
+                microcycleId: lastMicrocycleInGroup.id,
+                nextMicrocycleId: meso.microcycles[lastMicrocycleInGroup.index + 1].id,
+                id: `link-${lastMicrocycleInGroup.id}-${meso.microcycles[lastMicrocycleInGroup.index + 1].id}`,
+                colSpan: 1
+              });
+            }
           }
           // Skip individual microcycles that are part of this group
         } else if (!group) {

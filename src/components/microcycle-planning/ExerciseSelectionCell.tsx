@@ -29,10 +29,20 @@ export function ExerciseSelectionCell({ cellData, onUpdate }: ExerciseSelectionC
   };
 
   return (
-    <div className="space-y-2 min-h-[60px]">
+    <div className="space-y-2 min-h-[60px] flex flex-col">
+      {/* Add exercise button - always at top for visibility */}
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => setIsLibraryOpen(true)}
+        className="h-6 w-full text-xs text-muted-foreground border-dashed border shrink-0"
+      >
+        <Plus className="h-3 w-3 mr-1" />
+        Add exercises
+      </Button>
 
       {/* Selected exercises */}
-      <div className="space-y-1">
+      <div className="space-y-1 flex-1">
         {cellData.exercises.map((exercise) => (
           <div key={exercise.id} className="flex items-center justify-between bg-muted/50 rounded px-2 py-1">
             <span className="text-xs font-medium truncate flex-1">
@@ -54,17 +64,6 @@ export function ExerciseSelectionCell({ cellData, onUpdate }: ExerciseSelectionC
           </div>
         ))}
       </div>
-
-      {/* Add exercise button - always visible */}
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={() => setIsLibraryOpen(true)}
-        className="h-6 w-full text-xs text-muted-foreground border-dashed border"
-      >
-        <Plus className="h-3 w-3 mr-1" />
-        Add exercises
-      </Button>
 
       {/* Exercise Library Popup */}
       <ExerciseLibraryPopup
