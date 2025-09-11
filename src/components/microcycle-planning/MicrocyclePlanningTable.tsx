@@ -2,9 +2,11 @@ import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ChevronDown, ChevronRight, Link, Unlink } from 'lucide-react';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { useToolboxData } from '@/hooks/useToolboxData';
+import { useAthleticismData } from '@/hooks/useAthleticismData';
 import { ExerciseSelectionCell } from './ExerciseSelectionCell';
 import { 
   TrainingMethodWithCategories,
@@ -21,11 +23,96 @@ interface MicrocyclePlanningTableProps {
 
 export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: MicrocyclePlanningTableProps) {
   const { data: toolboxData } = useToolboxData();
+  const { data: athleticismData } = useAthleticismData();
   const [planningState, setPlanningState] = useState<MicrocyclePlanningState>({
     cellData: {},
     splitStates: {},
     microcycleGroups: {}
   });
+
+  // Helper function for string normalization
+  const normalizeForComparison = (str: string): string => {
+    return str
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+  };
+
+  // Helper function to get methods with loading recommendations for a specific sub-goal
+  const getMethodsWithRecommendationsForSubGoal = useMemo(() => {
+    return (subGoal: string) => {
+      if (!athleticismData?.entries) return [];
+      
+      const methodsWithRecommendations: Array<{
+        method: string;
+        recommendations: Record<string, any>;
+      }> = [];
+
+      // Find all athleticism entries that match this sub-goal
+      athleticismData.entries.forEach(entry => {
+        const formattedSubGoal = `${entry.overarchingGoal} - ${entry.subGoal}`;
+        if (normalizeForComparison(formattedSubGoal) === normalizeForComparison(subGoal)) {
+          // Add all methods from this entry with their recommendations
+          entry.mappedMethods.forEach(method => {
+            const recommendations = entry.loadingRecommendations[method] || {};
+            
+            // Check if we already have this method, if so merge recommendations
+            const existingMethod = methodsWithRecommendations.find(m => m.method === method);
+            if (existingMethod) {
+              // Merge recommendations (keep existing if there's a conflict)
+              Object.entries(recommendations).forEach(([key, value]) => {
+                if (!existingMethod.recommendations[key]) {
+                  existingMethod.recommendations[key] = value;
+                }
+              });
+            } else {
+              methodsWithRecommendations.push({
+                method,
+                recommendations
+              });
+            }
+          });
+        }
+      });
+
+      return methodsWithRecommendations;
+    };
+  }, [athleticismData]);
+
+  // Helper function to format loading recommendations into readable text
+  const formatLoadingRecommendations = (recommendations: Record<string, any>): string => {
+    if (!recommendations || Object.keys(recommendations).length === 0) {
+      return "No specific recommendations available";
+    }
+
+    const formatValue = (key: string, value: any): string => {
+      if (typeof value === 'object' && value !== null) {
+        // Handle nested objects like 'Modes' in Isometrics
+        if (key === 'Modes') {
+          const modeStrings = Object.entries(value).map(([modeName, modeParams]: [string, any]) => {
+            const modeParamStrings = Object.entries(modeParams).map(([paramKey, paramValue]) => 
+              `${paramKey}: ${paramValue}`
+            ).join(', ');
+            return `${modeName} (${modeParamStrings})`;
+          });
+          return modeStrings.join('; ');
+        }
+        // Handle other nested objects
+        return Object.entries(value).map(([k, v]) => `${k}: ${v}`).join(', ');
+      }
+      return String(value);
+    };
+
+    const parts: string[] = [];
+    Object.entries(recommendations).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        parts.push(`${key}: ${formatValue(key, value)}`);
+      }
+    });
+    
+    return parts.length > 0 ? parts.join('. ') : "No specific recommendations available";
+  };
 
   // Helper functions (moved before useMemos that use them)
   const isMicrocycleGrouped = (mesocycleId: string, microcycleId: string) => {
@@ -493,12 +580,63 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                         column.type === 'mesocycle' ? "text-foreground font-semibold" : "text-foreground"
                       )}
                     >
-                      <div className="flex flex-col items-center gap-2 py-2">
-                        <span className="font-medium">
-                          {column.type === 'mesocycle' && column.mesocycleName}
-                          {column.type === 'microcycle' && column.microcycleName}
-                          {column.type === 'microcycle-group' && column.groupName}
-                        </span>
+                       <div className="flex flex-col items-center gap-2 py-2">
+                         <span className="font-medium">
+                           {column.type === 'mesocycle' && column.mesocycleName}
+                           {column.type === 'microcycle' && column.microcycleName}
+                           {column.type === 'microcycle-group' && column.groupName}
+                         </span>
+                         
+                         {/* Sub-goals display for mesocycles */}
+                         {column.type === 'mesocycle' && mesocycle?.allocatedSubGoals && mesocycle.allocatedSubGoals.length > 0 && (
+                           <div className="space-y-1 w-full">
+                             <span className="text-xs font-medium text-muted-foreground">Sub-Goals:</span>
+                             <ul className="space-y-1">
+                               {mesocycle.allocatedSubGoals.map((subGoal) => {
+                                 const methodsWithRecs = getMethodsWithRecommendationsForSubGoal(subGoal);
+                                 
+                                 return (
+                                   <li key={subGoal} className="text-xs">
+                                     <Popover>
+                                       <PopoverTrigger
+                                         className="flex items-start gap-1 text-left hover:text-primary transition-colors cursor-pointer w-full"
+                                       >
+                                         <span className="text-primary">•</span>
+                                         <span className="text-foreground leading-tight text-xs">{subGoal}</span>
+                                       </PopoverTrigger>
+                                       <PopoverContent 
+                                         className="w-[800px] max-w-[95vw] z-[100]" 
+                                         align="start"
+                                         side="bottom"
+                                         sideOffset={5}
+                                       >
+                                         <div className="space-y-2">
+                                           <h4 className="font-semibold text-sm text-foreground">{subGoal}</h4>
+                                           {methodsWithRecs.length > 0 ? (
+                                             <div className="space-y-2">
+                                               {methodsWithRecs.map(({ method, recommendations }) => (
+                                                 <div key={method} className="text-xs border-l-2 border-primary/30 pl-3">
+                                                   <div className="font-medium text-primary mb-1">{method}</div>
+                                                   <div className="text-muted-foreground leading-relaxed">
+                                                     {formatLoadingRecommendations(recommendations)}
+                                                   </div>
+                                                 </div>
+                                               ))}
+                                             </div>
+                                           ) : (
+                                             <div className="text-xs text-muted-foreground italic">
+                                               No methods available for this sub-goal
+                                             </div>
+                                           )}
+                                         </div>
+                                       </PopoverContent>
+                                     </Popover>
+                                   </li>
+                                 );
+                               })}
+                             </ul>
+                           </div>
+                         )}
                         
                         {column.type === 'mesocycle' && (
                           <Button
