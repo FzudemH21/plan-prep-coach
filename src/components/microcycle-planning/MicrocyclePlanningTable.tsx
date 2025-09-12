@@ -638,7 +638,7 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                     >
                        <div className="flex flex-col items-center gap-2 py-2">
                          <span className="font-medium">
-                           {column.type === 'mesocycle' && column.mesocycleName}
+                           {column.type === 'mesocycle' && (!hasSplitMesocycles ? column.mesocycleName : null)}
                            {column.type === 'microcycle' && column.microcycleName}
                            {column.type === 'microcycle-group' && column.groupName}
                          </span>
