@@ -637,13 +637,18 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                       )}
                     >
                        <div className="flex flex-col items-center gap-2 py-2">
-                         <span className="font-medium">
-                           {column.type === 'mesocycle' && (!hasSplitMesocycles ? column.mesocycleName : null)}
-                           {column.type === 'microcycle' && column.microcycleName}
-                           {column.type === 'microcycle-group' && column.groupName}
-                         </span>
+                         {/* Title line: show microcycle/group names; only show mesocycle name here when no split headers are shown */}
+                         {column.type === 'microcycle' && (
+                           <span className="font-medium">{column.microcycleName}</span>
+                         )}
+                         {column.type === 'microcycle-group' && (
+                           <span className="font-medium">{column.groupName}</span>
+                         )}
+                         {column.type === 'mesocycle' && !hasSplitMesocycles && (
+                           <span className="font-medium">{column.mesocycleName}</span>
+                         )}
                          
-                         {/* Sub-goals display only for non-split mesocycles */}
+                         {/* Sub-goals display only when not using split headers */}
                          {column.type === 'mesocycle' && !hasSplitMesocycles && mesocycle?.allocatedSubGoals && mesocycle.allocatedSubGoals.length > 0 && (
                            <div className="space-y-1 w-full">
                              <span className="text-xs font-medium text-muted-foreground">Sub-Goals:</span>
@@ -694,6 +699,7 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                            </div>
                          )}
                         
+                        {/* Split/Unlink actions */}
                         {column.type === 'mesocycle' && (
                           <Button
                             variant="ghost"
