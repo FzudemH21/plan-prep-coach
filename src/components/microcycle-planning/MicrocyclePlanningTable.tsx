@@ -502,29 +502,85 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                   <TableHead className="w-64 sticky left-0 bg-background z-10 border-r-2 border-border">
                     Training Methods
                   </TableHead>
-                  {mesocycleHeaders.map((header) => (
-                    <TableHead
-                      key={header.mesocycleId}
-                      colSpan={header.colSpan}
-                      className={cn(
-                        "text-center font-semibold text-mesocycle-foreground border-r-2 border-border",
-                        header.colorClass
-                      )}
-                    >
-                      <div className="flex items-center justify-center gap-2 py-1">
-                        <span>{header.mesocycleName}</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleMesocycleSplit(header.mesocycleId)}
-                         className="h-6 px-2 text-foreground hover:bg-black/10"
-                        >
-                          <ChevronDown className="h-3 w-3" />
-                          Collapse
-                        </Button>
-                      </div>
-                    </TableHead>
-                  ))}
+                  {mesocycleHeaders.map((header) => {
+                    const mesocycle = mesocycles.find(m => m.id === header.mesocycleId);
+                    return (
+                      <TableHead
+                        key={header.mesocycleId}
+                        colSpan={header.colSpan}
+                        className={cn(
+                          "text-center font-semibold text-mesocycle-foreground border-r-2 border-border",
+                          header.colorClass
+                        )}
+                      >
+                        <div className="flex flex-col items-center gap-2 py-2">
+                          <div className="flex items-center gap-2">
+                            <span>{header.mesocycleName}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => toggleMesocycleSplit(header.mesocycleId)}
+                              className="h-6 px-2 text-foreground hover:bg-black/10"
+                            >
+                              <ChevronDown className="h-3 w-3" />
+                              Collapse
+                            </Button>
+                          </div>
+                          
+                          {/* Sub-goals display for split mesocycles */}
+                          {mesocycle?.allocatedSubGoals && mesocycle.allocatedSubGoals.length > 0 && (
+                            <div className="space-y-1 w-full">
+                              <span className="text-xs font-medium text-muted-foreground">Sub-Goals:</span>
+                              <ul className="space-y-1">
+                                {mesocycle.allocatedSubGoals.map((subGoal) => {
+                                  const methodsWithRecs = getMethodsWithRecommendationsForSubGoal(subGoal);
+                                  
+                                  return (
+                                    <li key={subGoal} className="text-xs">
+                                      <Popover>
+                                        <PopoverTrigger
+                                          className="flex items-start gap-1 text-left hover:text-primary transition-colors cursor-pointer w-full"
+                                        >
+                                          <span className="text-primary">•</span>
+                                          <span className="text-foreground leading-tight text-xs">{subGoal}</span>
+                                        </PopoverTrigger>
+                                        <PopoverContent 
+                                          className="w-[800px] max-w-[95vw] z-[100]" 
+                                          align="start"
+                                          side="bottom"
+                                          sideOffset={5}
+                                        >
+                                          <div className="space-y-2">
+                                            <h4 className="font-semibold text-sm text-foreground">{subGoal}</h4>
+                                            {methodsWithRecs.length > 0 ? (
+                                              <div className="space-y-2">
+                                                {methodsWithRecs.map(({ method, recommendations }) => (
+                                                  <div key={method} className="text-xs border-l-2 border-primary/30 pl-3">
+                                                    <div className="font-medium text-primary mb-1">{method}</div>
+                                                    <div className="text-muted-foreground leading-relaxed">
+                                                      {formatLoadingRecommendations(recommendations)}
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            ) : (
+                                              <div className="text-xs text-muted-foreground italic">
+                                                No methods available for this sub-goal
+                                              </div>
+                                            )}
+                                          </div>
+                                        </PopoverContent>
+                                      </Popover>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </TableHead>
+                    );
+                  })}
                 </TableRow>
               )}
               
@@ -587,8 +643,8 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                            {column.type === 'microcycle-group' && column.groupName}
                          </span>
                          
-                         {/* Sub-goals display for mesocycles */}
-                         {column.type === 'mesocycle' && mesocycle?.allocatedSubGoals && mesocycle.allocatedSubGoals.length > 0 && (
+                         {/* Sub-goals display only for non-split mesocycles */}
+                         {column.type === 'mesocycle' && !hasSplitMesocycles && mesocycle?.allocatedSubGoals && mesocycle.allocatedSubGoals.length > 0 && (
                            <div className="space-y-1 w-full">
                              <span className="text-xs font-medium text-muted-foreground">Sub-Goals:</span>
                              <ul className="space-y-1">
