@@ -500,7 +500,10 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
               {hasSplitMesocycles && (
                 <TableRow>
                   <TableHead className="w-64 sticky left-0 bg-background z-10 border-r-2 border-border">
-                    Training Methods
+                    Method
+                  </TableHead>
+                  <TableHead className="w-64 sticky left-64 bg-background z-10 border-r-2 border-border">
+                    Category
                   </TableHead>
                   {mesocycleHeaders.map((header) => {
                     const mesocycle = mesocycles.find(m => m.id === header.mesocycleId);
@@ -586,9 +589,12 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
               
               {/* Second row - Individual columns */}
               <TableRow>
-                <TableHead className="w-64 sticky left-0 bg-background z-10 border-r-2 border-border">
-                  {!hasSplitMesocycles && "Training Methods"}
-                </TableHead>
+                  <TableHead className="w-64 sticky left-0 bg-background z-10 border-r-2 border-border">
+                    {!hasSplitMesocycles ? "Method" : null}
+                  </TableHead>
+                  <TableHead className="w-64 sticky left-64 bg-background z-10 border-r-2 border-border">
+                    {!hasSplitMesocycles ? "Category" : null}
+                  </TableHead>
                 {columnStructure.map((column, index) => {
                   const mesocycle = mesocycles.find(m => m.id === column.mesocycleId);
                   let intensity = mesocycle?.intensity || 'moderate';
@@ -736,10 +742,11 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                   {method.categories.length === 0 ? (
                     // If no categories, render one row for the method itself
                     <TableRow key={`${method.id}-main`}>
-                      <TableCell className="font-medium sticky left-0 bg-background z-10 border-r-2 border-border">
-                        <div className="flex flex-col justify-center">
-                          <div className="font-medium">{method.name}</div>
-                        </div>
+                      <TableCell rowSpan={1} className="sticky left-0 bg-background z-10 border-r-2 border-border w-64">
+                        <div className="font-semibold text-primary">{method.name}</div>
+                      </TableCell>
+                      <TableCell className="sticky left-64 bg-background z-10 border-r-2 border-border w-64">
+                        <div className="text-sm text-muted-foreground">—</div>
                       </TableCell>
                       {columnStructure.map((column) => {
                         // Skip link areas for table cells
@@ -789,30 +796,13 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                     // Render category rows with method name spanning
                     method.categories.map((categoryName, categoryIndex) => (
                       <TableRow key={`${method.id}-${categoryName}`}>
-                        <TableCell className="font-medium sticky left-0 bg-background z-10 border-r-2 border-border">
-                          <div className="flex">
-                            {/* Method name spans all category rows */}
-                            {categoryIndex === 0 && (
-                              <div 
-                                className="font-semibold text-primary border-r border-border pr-4 mr-4 flex items-center justify-center min-w-[200px]"
-                                style={{
-                                  height: `${method.categories.length * 57}px`,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center'
-                                }}
-                              >
-                                <span className="text-center">
-                                  {method.name}
-                                </span>
-                              </div>
-                            )}
-                            <div className="flex flex-col justify-center">
-                              <div className="text-sm text-muted-foreground pl-2">
-                                {categoryName}
-                              </div>
-                            </div>
-                          </div>
+                        {categoryIndex === 0 && (
+                          <TableCell rowSpan={method.categories.length} className="sticky left-0 bg-background z-10 border-r-2 border-border w-64">
+                            <div className="font-semibold text-primary">{method.name}</div>
+                          </TableCell>
+                        )}
+                        <TableCell className="sticky left-64 bg-background z-10 border-r-2 border-border w-64">
+                          <div className="text-sm text-muted-foreground">{categoryName}</div>
                         </TableCell>
                         {columnStructure.map((column) => {
                           // Skip link areas for table cells
