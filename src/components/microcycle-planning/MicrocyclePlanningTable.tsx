@@ -794,14 +794,17 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                             {/* Method name spans all category rows */}
                             {categoryIndex === 0 && (
                               <div 
-                                className="font-semibold text-primary border-r border-border pr-4 mr-4 flex items-center justify-center min-w-[200px] text-center"
+                                className="font-semibold text-primary border-r border-border pr-4 mr-4 flex items-center justify-center min-w-[200px]"
                                 style={{
-                                  writingMode: 'vertical-rl',
-                                  textOrientation: 'mixed',
-                                  height: `${method.categories.length * 57}px`
+                                  height: `${method.categories.length * 57}px`,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
                                 }}
                               >
-                                {method.name}
+                                <span className="text-center">
+                                  {method.name}
+                                </span>
                               </div>
                             )}
                             <div className="flex flex-col justify-center">
