@@ -1007,9 +1007,9 @@ export default function MesocyclePage() {
                      {/* Multi-Level Sticky Headers */}
                      <div className="sticky top-0 z-[90] bg-background border-b space-y-1 shadow-sm">
                        {/* Level 1: Mesocycle Group Headers */}
-                        <div className="grid gap-1" style={{
-                          gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 100px)`
-                        }}>
+                         <div className="grid gap-1" style={{
+                           gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 180px)`
+                         }}>
                            <div className="sticky left-0 z-[60] p-2 bg-background font-medium text-sm border rounded-t-lg shadow-md border-r">
                              Training Methods
                            </div>
@@ -1030,9 +1030,9 @@ export default function MesocyclePage() {
                        </div>
 
                         {/* Level 2: Sub-goals and Qualities */}
-                        <div className="grid gap-1" style={{
-                          gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 100px)`
-                        }}>
+                         <div className="grid gap-1" style={{
+                           gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 180px)`
+                         }}>
                             <div className="sticky left-0 z-[60] p-2 bg-background border-l border-r text-xs shadow-md">
                               Focus Areas
                             </div>
@@ -1103,9 +1103,9 @@ export default function MesocyclePage() {
                        </div>
 
                         {/* Level 3: Microcycle Headers with Intensity Colors */}
-                        <div className="grid gap-1" style={{
-                          gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 100px)`
-                        }}>
+                         <div className="grid gap-1" style={{
+                           gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 180px)`
+                         }}>
                            <div className="sticky left-0 z-[60] p-2 bg-background font-medium text-xs border rounded-b-lg shadow-md border-r">
                              Parameters
                            </div>
@@ -1151,8 +1151,8 @@ export default function MesocyclePage() {
                                     <div key={method} className="border rounded-lg bg-card shadow-sm">
                                        {/* Method name header */}
                                        <div className="grid gap-1 bg-muted/20" style={{ 
-                                         gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 100px)` 
-                                       }}>
+                                          gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 180px)` 
+                                        }}>
                                          <div className="sticky left-0 z-40 p-3 font-medium text-sm border-r bg-background rounded-tl shadow-md">
                                            <div className="line-clamp-3" title={method}>
                                              {method}
@@ -1175,9 +1175,9 @@ export default function MesocyclePage() {
                                       {parameters.length > 0 && (
                                         <div className="divide-y">
                                            {parameters.map((param) => (
-                                             <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
-                                               gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 100px)` 
-                                             }}>
+                                              <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
+                                                gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 180px)` 
+                                              }}>
                                                <div className="sticky left-0 z-40 p-2 text-xs text-muted-foreground bg-background border-r flex items-center shadow-md">
                                                  <span className="ml-4 font-medium">{param.name}</span>
                                                  {param.isQuantitative && param.options && param.options.length > 0 && (

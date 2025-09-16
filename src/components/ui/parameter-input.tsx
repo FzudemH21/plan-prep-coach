@@ -30,16 +30,16 @@ export function QuantitativeParameterInput({
         value={value}
         onChange={(e) => onValueChange(e.target.value)}
         placeholder={placeholder}
-        className={hasMeaningfulUnits ? "flex-1 min-w-0" : "w-full"}
+        className={hasMeaningfulUnits ? "flex-1 min-w-0 h-8 text-xs" : "w-full h-8 text-xs"}
       />
       {hasMeaningfulUnits && (
         <Select value={unit} onValueChange={onUnitChange}>
-          <SelectTrigger className="w-20 min-w-0">
+          <SelectTrigger className="w-16 min-w-0 h-8 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="z-50 bg-background border">
             {units.map((unitOption) => (
-              <SelectItem key={unitOption} value={unitOption}>
+              <SelectItem key={unitOption} value={unitOption} className="text-xs">
                 {unitOption}
               </SelectItem>
             ))}
@@ -70,7 +70,7 @@ export function QualitativeParameterInput({
       options={options}
       placeholder={placeholder}
       allowCustomInput={true}
-      className="w-full"
+      className="w-full h-8 text-xs"
     />
   );
 }
