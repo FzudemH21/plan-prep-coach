@@ -51,8 +51,8 @@ export function QuantitativeParameterInput({
     <div 
       className={cn(
         "flex gap-1 items-center w-full relative",
-        isDragSource && "ring-2 ring-primary",
-        isInDragSelection && "bg-primary/20"
+        isDragSource && "ring-2 ring-primary bg-primary/10",
+        isInDragSelection && "bg-primary/20 ring-1 ring-primary"
       )}
       data-drag-cell={cellId}
     >
@@ -130,8 +130,8 @@ export function QualitativeParameterInput({
     <div 
       className={cn(
         "relative w-full",
-        isDragSource && "ring-2 ring-primary",
-        isInDragSelection && "bg-primary/20"
+        isDragSource && "ring-2 ring-primary bg-primary/10",
+        isInDragSelection && "bg-primary/20 ring-1 ring-primary"
       )}
       data-drag-cell={cellId}
     >

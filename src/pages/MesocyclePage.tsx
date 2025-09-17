@@ -894,19 +894,24 @@ export default function MesocyclePage() {
 
   // Drag fill handlers (hooks must be at component level)
   const handleDragStart = useCallback((cellId: string, value: string | number) => {
+    console.log('Drag started from cell:', cellId, 'with value:', value);
     startDrag(cellId, value);
   }, [startDrag]);
 
   const handleDragEnd = useCallback(() => {
+    console.log('Drag ended. Selected cells:', Array.from(dragState.selectedCells));
+    console.log('Source value:', dragState.sourceValue);
+    
     fillCells((cellId: string, value: string | number) => {
+      console.log('Filling cell:', cellId, 'with value:', value);
       const [mesocycleId, microcycleIndex, methodName, parameterName] = cellId.split('::');
-      if (mesocycleId && microcycleIndex && methodName && parameterName) {
+      if (mesocycleId && microcycleIndex !== undefined && methodName && parameterName) {
         updateParameterValue(mesocycleId, parseInt(microcycleIndex), methodName, parameterName, value);
       }
     });
     endDrag();
     setTimeout(clearSelection, 100);
-  }, [fillCells, endDrag, clearSelection]);
+  }, [fillCells, endDrag, clearSelection, dragState.selectedCells, dragState.sourceValue]);
 
   // Global keyboard shortcuts for drag-fill UX
   useEffect(() => {
@@ -933,7 +938,9 @@ export default function MesocyclePage() {
 
     const handleDragFill = (e: CustomEvent) => {
       const cellId = (e.detail as any)?.target?.getAttribute('data-drag-cell');
-      if (cellId && dragState.isDragging) addToSelection(cellId);
+      if (cellId && dragState.isDragging) {
+        addToSelection(cellId, dragState.sourceCell);
+      }
     };
 
     document.addEventListener('keydown', handleKeyDown);

@@ -16,6 +16,9 @@ export function DragHandle({ onDragStart, onDragEnd, className }: DragHandleProp
     setIsDragging(true);
     onDragStart(e);
 
+    const startX = e.clientX;
+    const startY = e.clientY;
+
     const handleMouseUp = (e: MouseEvent) => {
       setIsDragging(false);
       onDragEnd(e as any);
@@ -24,6 +27,15 @@ export function DragHandle({ onDragStart, onDragEnd, className }: DragHandleProp
     };
 
     const handleMouseMove = (e: MouseEvent) => {
+      // Only allow horizontal dragging (ignore vertical movement)
+      const deltaX = Math.abs(e.clientX - startX);
+      const deltaY = Math.abs(e.clientY - startY);
+      
+      // If moving more vertically than horizontally, ignore
+      if (deltaY > deltaX && deltaY > 10) {
+        return;
+      }
+      
       // Trigger drag over events for cells under cursor
       const elementUnder = document.elementFromPoint(e.clientX, e.clientY);
       const cell = elementUnder?.closest('[data-drag-cell]');
@@ -32,7 +44,9 @@ export function DragHandle({ onDragStart, onDragEnd, className }: DragHandleProp
           detail: {
             target: cell,
             mouseX: e.clientX,
-            mouseY: e.clientY
+            mouseY: e.clientY,
+            startX: startX,
+            startY: startY
           }
         });
         document.dispatchEvent(event);

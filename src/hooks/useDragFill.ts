@@ -11,7 +11,7 @@ export interface DragFillHook {
   dragState: DragFillState;
   startDrag: (cellId: string, value: string | number) => void;
   endDrag: () => void;
-  addToSelection: (cellId: string) => void;
+  addToSelection: (cellId: string, sourceCell?: string) => void;
   clearSelection: () => void;
   fillCells: (onFill: (cellId: string, value: string | number) => void) => void;
 }
@@ -40,11 +40,27 @@ export function useDragFill(): DragFillHook {
     }));
   }, []);
 
-  const addToSelection = useCallback((cellId: string) => {
-    setDragState(prev => ({
-      ...prev,
-      selectedCells: new Set([...prev.selectedCells, cellId]),
-    }));
+  const addToSelection = useCallback((cellId: string, sourceCell?: string) => {
+    setDragState(prev => {
+      // For horizontal-only dragging, only allow cells from the same row
+      if (sourceCell || prev.sourceCell) {
+        const source = sourceCell || prev.sourceCell;
+        if (source) {
+          const [sourceMeso, sourceMicro, sourceMethod, sourceParam] = source.split('::');
+          const [targetMeso, targetMicro, targetMethod, targetParam] = cellId.split('::');
+          
+          // Only allow if same method and parameter (same row)
+          if (sourceMethod !== targetMethod || sourceParam !== targetParam) {
+            return prev;
+          }
+        }
+      }
+      
+      return {
+        ...prev,
+        selectedCells: new Set([...prev.selectedCells, cellId]),
+      };
+    });
   }, []);
 
   const clearSelection = useCallback(() => {
@@ -57,28 +73,25 @@ export function useDragFill(): DragFillHook {
   }, []);
 
   const fillCells = useCallback((onFill: (cellId: string, value: string | number) => void) => {
-    if (!dragState.sourceValue || !dragState.sourceCell) return;
+    if (!dragState.sourceValue || !dragState.sourceCell) {
+      console.log('No source value or cell to fill from');
+      return;
+    }
 
     const cellsToFill = Array.from(dragState.selectedCells).filter(
       cellId => cellId !== dragState.sourceCell
     );
 
-    // Smart fill logic
+    console.log('Cells to fill:', cellsToFill);
+    console.log('Source value to copy:', dragState.sourceValue);
+
+    // Simple fill logic - just copy the source value to all selected cells
     const sourceValue = dragState.sourceValue;
     
-    if (typeof sourceValue === 'number') {
-      // For numbers, try to detect patterns
-      const increment = cellsToFill.length > 1 ? 1 : 0;
-      cellsToFill.forEach((cellId, index) => {
-        const newValue = sourceValue + (increment * (index + 1));
-        onFill(cellId, newValue);
-      });
-    } else {
-      // For strings, just copy the value
-      cellsToFill.forEach(cellId => {
-        onFill(cellId, sourceValue);
-      });
-    }
+    cellsToFill.forEach(cellId => {
+      console.log('Copying value', sourceValue, 'to cell', cellId);
+      onFill(cellId, sourceValue);
+    });
   }, [dragState]);
 
   return {
