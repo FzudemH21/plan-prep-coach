@@ -2,6 +2,8 @@ import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableDropdown } from '@/components/ui/searchable-dropdown';
+import { DragHandle } from '@/components/ui/drag-handle';
+import { cn } from '@/lib/utils';
 
 interface QuantitativeParameterInputProps {
   value: string;
@@ -10,6 +12,11 @@ interface QuantitativeParameterInputProps {
   onUnitChange?: (unit: string) => void;
   units: string[];
   placeholder?: string;
+  cellId?: string;
+  onDragStart?: (cellId: string, value: string | number) => void;
+  onDragEnd?: () => void;
+  isDragSource?: boolean;
+  isInDragSelection?: boolean;
 }
 
 export function QuantitativeParameterInput({
@@ -18,19 +25,47 @@ export function QuantitativeParameterInput({
   unit,
   onUnitChange,
   units,
-  placeholder = "Enter value"
+  placeholder = "Enter value",
+  cellId,
+  onDragStart,
+  onDragEnd,
+  isDragSource = false,
+  isInDragSelection = false
 }: QuantitativeParameterInputProps) {
   // Check if there are any units defined (empty array means no unit dropdown)
   const hasMeaningfulUnits = units.length > 0;
 
+  const handleDragStart = (e: React.MouseEvent) => {
+    if (cellId && onDragStart) {
+      onDragStart(cellId, parseFloat(value) || 0);
+    }
+  };
+
+  const handleDragEnd = (e: React.MouseEvent) => {
+    if (onDragEnd) {
+      onDragEnd();
+    }
+  };
+
   return (
-    <div className="flex gap-1 items-center w-full">
+    <div 
+      className={cn(
+        "flex gap-1 items-center w-full relative",
+        isDragSource && "ring-2 ring-primary",
+        isInDragSelection && "bg-primary/20"
+      )}
+      data-drag-cell={cellId}
+    >
       <Input
         type="number"
         value={value}
         onChange={(e) => onValueChange(e.target.value)}
         placeholder={placeholder}
-        className={hasMeaningfulUnits ? "flex-1 min-w-0 h-8 text-xs" : "w-full h-8 text-xs"}
+        className={cn(
+          hasMeaningfulUnits ? "flex-1 min-w-0 h-8 text-xs" : "w-full h-8 text-xs",
+          isDragSource && "ring-1 ring-primary",
+          isInDragSelection && "bg-primary/10"
+        )}
       />
       {hasMeaningfulUnits && (
         <Select value={unit} onValueChange={onUnitChange}>
@@ -46,6 +81,12 @@ export function QuantitativeParameterInput({
           </SelectContent>
         </Select>
       )}
+      {cellId && onDragStart && onDragEnd && (
+        <DragHandle
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        />
+      )}
     </div>
   );
 }
@@ -55,22 +96,63 @@ interface QualitativeParameterInputProps {
   onValueChange: (value: string) => void;
   options: string[];
   placeholder?: string;
+  cellId?: string;
+  onDragStart?: (cellId: string, value: string | number) => void;
+  onDragEnd?: () => void;
+  isDragSource?: boolean;
+  isInDragSelection?: boolean;
 }
 
 export function QualitativeParameterInput({
   value,
   onValueChange,
   options,
-  placeholder = "Select or type..."
+  placeholder = "Select or type...",
+  cellId,
+  onDragStart,
+  onDragEnd,
+  isDragSource = false,
+  isInDragSelection = false
 }: QualitativeParameterInputProps) {
+  const handleDragStart = (e: React.MouseEvent) => {
+    if (cellId && onDragStart) {
+      onDragStart(cellId, value);
+    }
+  };
+
+  const handleDragEnd = (e: React.MouseEvent) => {
+    if (onDragEnd) {
+      onDragEnd();
+    }
+  };
+
   return (
-    <SearchableDropdown
-      value={value}
-      onValueChange={onValueChange}
-      options={options}
-      placeholder={placeholder}
-      allowCustomInput={true}
-      className="w-full h-8 text-xs"
-    />
+    <div 
+      className={cn(
+        "relative w-full",
+        isDragSource && "ring-2 ring-primary",
+        isInDragSelection && "bg-primary/20"
+      )}
+      data-drag-cell={cellId}
+    >
+      <SearchableDropdown
+        value={value}
+        onValueChange={onValueChange}
+        options={options}
+        placeholder={placeholder}
+        allowCustomInput={true}
+        className={cn(
+          "w-full h-8 text-xs",
+          isDragSource && "ring-1 ring-primary",
+          isInDragSelection && "bg-primary/10"
+        )}
+      />
+      {cellId && onDragStart && onDragEnd && (
+        <DragHandle
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        />
+      )}
+    </div>
   );
 }

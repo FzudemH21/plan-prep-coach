@@ -1,5 +1,5 @@
 import { MicrocyclePlanningTable } from '@/components/microcycle-planning';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ExtendedMesocycle, Mesocycle, Microcycle, Plan, Intensity } from '@/features/planner/types';
 import { useAthleticismData } from '@/hooks/useAthleticismData';
 import { useToolboxData } from '@/hooks/useToolboxData';
+import { useDragFill } from '@/hooks/useDragFill';
 import { QuantitativeParameterInput, QualitativeParameterInput } from '@/components/ui/parameter-input';
+import { KeyboardShortcutsPanel } from '@/components/ui/keyboard-shortcuts-panel';
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -47,6 +49,7 @@ export default function MesocyclePage() {
   
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
+  const { dragState, startDrag, endDrag, addToSelection, clearSelection, fillCells } = useDragFill();
 
   const totalSteps = 5;
 
@@ -935,28 +938,89 @@ export default function MesocyclePage() {
       }));
     };
 
-    const updateParameterValue = (mesocycleId: string, microcycleIndex: number, methodName: string, parameterName: string, value: string | number) => {
-      setParameterValues(prev => {
-        const updated = { ...prev };
-        
-        if (!updated[mesocycleId]) {
-          updated[mesocycleId] = {};
+  const updateParameterValue = (mesocycleId: string, microcycleIndex: number, methodName: string, parameterName: string, value: string | number) => {
+    setParameterValues(prev => {
+      const updated = { ...prev };
+      
+      if (!updated[mesocycleId]) {
+        updated[mesocycleId] = {};
+      }
+      if (!updated[mesocycleId][microcycleIndex]) {
+        updated[mesocycleId][microcycleIndex] = {};
+      }
+      if (!updated[mesocycleId][microcycleIndex][methodName]) {
+        updated[mesocycleId][microcycleIndex][methodName] = {};
+      }
+      
+      updated[mesocycleId][microcycleIndex][methodName][parameterName] = value;
+      return updated;
+    });
+  };
+
+  const getParameterValue = (mesocycleId: string, microcycleIndex: number, methodName: string, parameterName: string) => {
+    return parameterValues[mesocycleId]?.[microcycleIndex]?.[methodName]?.[parameterName] || '';
+  };
+
+  // Drag fill functionality
+  const handleDragStart = useCallback((cellId: string, value: string | number) => {
+    startDrag(cellId, value);
+  }, [startDrag]);
+
+  const handleDragEnd = useCallback(() => {
+    fillCells((cellId: string, value: string | number) => {
+      // Parse cellId to extract mesocycleId, microcycleIndex, methodName, parameterName
+      const [mesocycleId, microcycleIndex, methodName, parameterName] = cellId.split('::');
+      if (mesocycleId && microcycleIndex && methodName && parameterName) {
+        updateParameterValue(mesocycleId, parseInt(microcycleIndex), methodName, parameterName, value);
+      }
+    });
+    endDrag();
+    setTimeout(clearSelection, 100); // Clear selection after a brief delay
+  }, [fillCells, endDrag, clearSelection]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key.toLowerCase()) {
+          case 'd':
+            e.preventDefault();
+            // Fill down logic - would need more implementation
+            break;
+          case 'r':
+            e.preventDefault();
+            // Fill right logic - would need more implementation  
+            break;
+          case 'c':
+            e.preventDefault();
+            // Copy logic - would need more implementation
+            break;
+          case 'v':
+            e.preventDefault();
+            // Paste logic - would need more implementation
+            break;
         }
-        if (!updated[mesocycleId][microcycleIndex]) {
-          updated[mesocycleId][microcycleIndex] = {};
-        }
-        if (!updated[mesocycleId][microcycleIndex][methodName]) {
-          updated[mesocycleId][microcycleIndex][methodName] = {};
-        }
-        
-        updated[mesocycleId][microcycleIndex][methodName][parameterName] = value;
-        return updated;
-      });
+      } else if (e.key === 'Escape') {
+        clearSelection();
+      }
     };
 
-    const getParameterValue = (mesocycleId: string, microcycleIndex: number, methodName: string, parameterName: string) => {
-      return parameterValues[mesocycleId]?.[microcycleIndex]?.[methodName]?.[parameterName] || '';
+    // Listen for drag events
+    const handleDragFill = (e: CustomEvent) => {
+      const cellId = e.detail.target?.getAttribute('data-drag-cell');
+      if (cellId && dragState.isDragging) {
+        addToSelection(cellId);
+      }
     };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('dragFill', handleDragFill as EventListener);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('dragFill', handleDragFill as EventListener);
+    };
+  }, [clearSelection, dragState.isDragging, addToSelection]);
 
     // Helper function for intensity colors with transparency
     const intensityBg = (intensity: string) => {
@@ -1189,41 +1253,55 @@ export default function MesocyclePage() {
                                                    const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
                                                    const currentValue = getParameterValue(meso.id, microcycleIndex, method, param.name);
                                                    
-                                                   return (
-                                                     <div 
-                                                       key={`${meso.id}-${microcycleIndex}-${param.name}`} 
-                                                       className={`p-1 border-l ${!isAllocated ? 'bg-gray-100/50 opacity-50' : ''}`}
-                                                     >
-                                                       {param.isQuantitative ? (
-                                                         <QuantitativeParameterInput
-                                                           value={isAllocated ? currentValue.toString() : ''}
-                                                           onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, value)}
-                                                           unit={param.options?.[0] || ''}
-                                                           onUnitChange={(unit) => {
-                                                             // For now, we don't change units dynamically
-                                                           }}
-                                                           units={param.options || []}
-                                                           placeholder=""
-                                                         />
-                                                       ) : param.isQualitative ? (
-                                                         <QualitativeParameterInput
-                                                           value={isAllocated ? currentValue.toString() : ''}
-                                                           onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, value)}
-                                                           options={param.options || []}
-                                                           placeholder=""
-                                                         />
-                                                       ) : (
-                                                         <Input
-                                                           type={param.type === 'number' ? 'number' : 'text'}
-                                                           value={isAllocated ? currentValue.toString() : ''}
-                                                           onChange={(e) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, param.type === 'number' ? Number(e.target.value) : e.target.value)}
-                                                           className={`h-8 text-xs ${!isAllocated ? 'cursor-not-allowed' : ''}`}
-                                                           placeholder=""
-                                                           disabled={!isAllocated}
-                                                         />
-                                                       )}
-                                                     </div>
-                                                   );
+                                                    const cellId = `${meso.id}::${microcycleIndex}::${method}::${param.name}`;
+                                                    const isDragSource = dragState.sourceCell === cellId;
+                                                    const isInSelection = dragState.selectedCells.has(cellId);
+                                                    
+                                                    return (
+                                                      <div 
+                                                        key={`${meso.id}-${microcycleIndex}-${param.name}`} 
+                                                        className={`p-1 border-l ${!isAllocated ? 'bg-gray-100/50 opacity-50' : ''}`}
+                                                      >
+                                                        {param.isQuantitative ? (
+                                                          <QuantitativeParameterInput
+                                                            value={isAllocated ? currentValue.toString() : ''}
+                                                            onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, value)}
+                                                            unit={param.options?.[0] || ''}
+                                                            onUnitChange={(unit) => {
+                                                              // For now, we don't change units dynamically
+                                                            }}
+                                                            units={param.options || []}
+                                                            placeholder=""
+                                                            cellId={cellId}
+                                                            onDragStart={handleDragStart}
+                                                            onDragEnd={handleDragEnd}
+                                                            isDragSource={isDragSource}
+                                                            isInDragSelection={isInSelection}
+                                                          />
+                                                        ) : param.isQualitative ? (
+                                                          <QualitativeParameterInput
+                                                            value={isAllocated ? currentValue.toString() : ''}
+                                                            onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, value)}
+                                                            options={param.options || []}
+                                                            placeholder=""
+                                                            cellId={cellId}
+                                                            onDragStart={handleDragStart}
+                                                            onDragEnd={handleDragEnd}
+                                                            isDragSource={isDragSource}
+                                                            isInDragSelection={isInSelection}
+                                                          />
+                                                        ) : (
+                                                          <Input
+                                                            type={param.type === 'number' ? 'number' : 'text'}
+                                                            value={isAllocated ? currentValue.toString() : ''}
+                                                            onChange={(e) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, param.type === 'number' ? Number(e.target.value) : e.target.value)}
+                                                            className={`h-8 text-xs ${!isAllocated ? 'cursor-not-allowed' : ''}`}
+                                                            placeholder=""
+                                                            disabled={!isAllocated}
+                                                          />
+                                                        )}
+                                                      </div>
+                                                    );
                                                  })
                                                )}
                                              </div>
@@ -1314,6 +1392,9 @@ export default function MesocyclePage() {
         </div>
 
         <NavigationButtons />
+        
+        {/* Keyboard Shortcuts Panel - only show on Method Periodization step */}
+        {currentStep === 4 && <KeyboardShortcutsPanel />}
     </div>
   );
 };
