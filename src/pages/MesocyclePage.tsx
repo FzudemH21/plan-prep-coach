@@ -876,6 +876,74 @@ export default function MesocyclePage() {
     );
   };
 
+  // Parameter value helpers (moved out to keep hooks stable)
+  const updateParameterValue = (mesocycleId: string, microcycleIndex: number, methodName: string, parameterName: string, value: string | number) => {
+    setParameterValues(prev => {
+      const updated = { ...prev };
+      if (!updated[mesocycleId]) updated[mesocycleId] = {};
+      if (!updated[mesocycleId][microcycleIndex]) updated[mesocycleId][microcycleIndex] = {};
+      if (!updated[mesocycleId][microcycleIndex][methodName]) updated[mesocycleId][microcycleIndex][methodName] = {};
+      updated[mesocycleId][microcycleIndex][methodName][parameterName] = value;
+      return updated;
+    });
+  };
+
+  const getParameterValue = (mesocycleId: string, microcycleIndex: number, methodName: string, parameterName: string) => {
+    return parameterValues[mesocycleId]?.[microcycleIndex]?.[methodName]?.[parameterName] || '';
+  };
+
+  // Drag fill handlers (hooks must be at component level)
+  const handleDragStart = useCallback((cellId: string, value: string | number) => {
+    startDrag(cellId, value);
+  }, [startDrag]);
+
+  const handleDragEnd = useCallback(() => {
+    fillCells((cellId: string, value: string | number) => {
+      const [mesocycleId, microcycleIndex, methodName, parameterName] = cellId.split('::');
+      if (mesocycleId && microcycleIndex && methodName && parameterName) {
+        updateParameterValue(mesocycleId, parseInt(microcycleIndex), methodName, parameterName, value);
+      }
+    });
+    endDrag();
+    setTimeout(clearSelection, 100);
+  }, [fillCells, endDrag, clearSelection]);
+
+  // Global keyboard shortcuts for drag-fill UX
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key.toLowerCase()) {
+          case 'd':
+            e.preventDefault();
+            break;
+          case 'r':
+            e.preventDefault();
+            break;
+          case 'c':
+            e.preventDefault();
+            break;
+          case 'v':
+            e.preventDefault();
+            break;
+        }
+      } else if (e.key === 'Escape') {
+        clearSelection();
+      }
+    };
+
+    const handleDragFill = (e: CustomEvent) => {
+      const cellId = (e.detail as any)?.target?.getAttribute('data-drag-cell');
+      if (cellId && dragState.isDragging) addToSelection(cellId);
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('dragFill', handleDragFill as EventListener);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('dragFill', handleDragFill as EventListener);
+    };
+  }, [clearSelection, dragState.isDragging, addToSelection]);
+
   const renderMethodPeriodization = () => {
     const allMethods = getMethodsForAllocatedSubGoals;
     const groupedMethods = groupMethodsByToolboxCategory;
@@ -938,89 +1006,6 @@ export default function MesocyclePage() {
       }));
     };
 
-  const updateParameterValue = (mesocycleId: string, microcycleIndex: number, methodName: string, parameterName: string, value: string | number) => {
-    setParameterValues(prev => {
-      const updated = { ...prev };
-      
-      if (!updated[mesocycleId]) {
-        updated[mesocycleId] = {};
-      }
-      if (!updated[mesocycleId][microcycleIndex]) {
-        updated[mesocycleId][microcycleIndex] = {};
-      }
-      if (!updated[mesocycleId][microcycleIndex][methodName]) {
-        updated[mesocycleId][microcycleIndex][methodName] = {};
-      }
-      
-      updated[mesocycleId][microcycleIndex][methodName][parameterName] = value;
-      return updated;
-    });
-  };
-
-  const getParameterValue = (mesocycleId: string, microcycleIndex: number, methodName: string, parameterName: string) => {
-    return parameterValues[mesocycleId]?.[microcycleIndex]?.[methodName]?.[parameterName] || '';
-  };
-
-  // Drag fill functionality
-  const handleDragStart = useCallback((cellId: string, value: string | number) => {
-    startDrag(cellId, value);
-  }, [startDrag]);
-
-  const handleDragEnd = useCallback(() => {
-    fillCells((cellId: string, value: string | number) => {
-      // Parse cellId to extract mesocycleId, microcycleIndex, methodName, parameterName
-      const [mesocycleId, microcycleIndex, methodName, parameterName] = cellId.split('::');
-      if (mesocycleId && microcycleIndex && methodName && parameterName) {
-        updateParameterValue(mesocycleId, parseInt(microcycleIndex), methodName, parameterName, value);
-      }
-    });
-    endDrag();
-    setTimeout(clearSelection, 100); // Clear selection after a brief delay
-  }, [fillCells, endDrag, clearSelection]);
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        switch (e.key.toLowerCase()) {
-          case 'd':
-            e.preventDefault();
-            // Fill down logic - would need more implementation
-            break;
-          case 'r':
-            e.preventDefault();
-            // Fill right logic - would need more implementation  
-            break;
-          case 'c':
-            e.preventDefault();
-            // Copy logic - would need more implementation
-            break;
-          case 'v':
-            e.preventDefault();
-            // Paste logic - would need more implementation
-            break;
-        }
-      } else if (e.key === 'Escape') {
-        clearSelection();
-      }
-    };
-
-    // Listen for drag events
-    const handleDragFill = (e: CustomEvent) => {
-      const cellId = e.detail.target?.getAttribute('data-drag-cell');
-      if (cellId && dragState.isDragging) {
-        addToSelection(cellId);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('dragFill', handleDragFill as EventListener);
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('dragFill', handleDragFill as EventListener);
-    };
-  }, [clearSelection, dragState.isDragging, addToSelection]);
 
     // Helper function for intensity colors with transparency
     const intensityBg = (intensity: string) => {
