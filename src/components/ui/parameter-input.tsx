@@ -17,6 +17,7 @@ interface QuantitativeParameterInputProps {
   onDragEnd?: () => void;
   isDragSource?: boolean;
   isInDragSelection?: boolean;
+  isEnabled?: boolean;
 }
 
 export function QuantitativeParameterInput({
@@ -30,7 +31,8 @@ export function QuantitativeParameterInput({
   onDragStart,
   onDragEnd,
   isDragSource = false,
-  isInDragSelection = false
+  isInDragSelection = false,
+  isEnabled = true
 }: QuantitativeParameterInputProps) {
   // Check if there are any units defined (empty array means no unit dropdown)
   const hasMeaningfulUnits = units.length > 0;
@@ -55,6 +57,7 @@ export function QuantitativeParameterInput({
         isInDragSelection && "bg-primary/20 ring-1 ring-primary"
       )}
       data-drag-cell={cellId}
+      data-allocated={isEnabled ? 'true' : 'false'}
     >
       <Input
         type="number"
@@ -81,7 +84,7 @@ export function QuantitativeParameterInput({
           </SelectContent>
         </Select>
       )}
-      {cellId && onDragStart && onDragEnd && (
+      {cellId && onDragStart && onDragEnd && isEnabled && (
         <DragHandle
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
@@ -101,6 +104,7 @@ interface QualitativeParameterInputProps {
   onDragEnd?: () => void;
   isDragSource?: boolean;
   isInDragSelection?: boolean;
+  isEnabled?: boolean;
 }
 
 export function QualitativeParameterInput({
@@ -112,7 +116,8 @@ export function QualitativeParameterInput({
   onDragStart,
   onDragEnd,
   isDragSource = false,
-  isInDragSelection = false
+  isInDragSelection = false,
+  isEnabled = true
 }: QualitativeParameterInputProps) {
   const handleDragStart = (e: React.MouseEvent) => {
     if (cellId && onDragStart) {
@@ -134,6 +139,7 @@ export function QualitativeParameterInput({
         isInDragSelection && "bg-primary/20 ring-1 ring-primary"
       )}
       data-drag-cell={cellId}
+      data-allocated={isEnabled ? 'true' : 'false'}
     >
       <SearchableDropdown
         value={value}
@@ -147,7 +153,7 @@ export function QualitativeParameterInput({
           isInDragSelection && "bg-primary/10"
         )}
       />
-      {cellId && onDragStart && onDragEnd && (
+      {cellId && onDragStart && onDragEnd && isEnabled && (
         <DragHandle
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}

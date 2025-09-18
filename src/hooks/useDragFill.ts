@@ -73,7 +73,7 @@ export function useDragFill(): DragFillHook {
   }, []);
 
   const fillCells = useCallback((onFill: (cellId: string, value: string | number) => void) => {
-    if (!dragState.sourceValue || !dragState.sourceCell) {
+    if ((dragState.sourceValue === null || dragState.sourceValue === undefined) || !dragState.sourceCell) {
       console.log('No source value or cell to fill from');
       return;
     }

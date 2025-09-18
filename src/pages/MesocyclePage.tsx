@@ -937,9 +937,11 @@ export default function MesocyclePage() {
     };
 
     const handleDragFill = (e: CustomEvent) => {
-      const cellId = (e.detail as any)?.target?.getAttribute('data-drag-cell');
-      if (cellId && dragState.isDragging) {
-        addToSelection(cellId, dragState.sourceCell);
+      const targetEl = (e.detail as any)?.target as HTMLElement | null;
+      const cellId = targetEl?.getAttribute('data-drag-cell');
+      const isAllocated = targetEl?.getAttribute('data-allocated') === 'true';
+      if (cellId && isAllocated && dragState.isDragging) {
+        addToSelection(cellId);
       }
     };
 
@@ -1249,39 +1251,43 @@ export default function MesocyclePage() {
                                                     const isDragSource = dragState.sourceCell === cellId;
                                                     const isInSelection = dragState.selectedCells.has(cellId);
                                                     
-                                                    return (
-                                                      <div 
-                                                        key={`${meso.id}-${microcycleIndex}-${param.name}`} 
-                                                        className={`p-1 border-l ${!isAllocated ? 'bg-gray-100/50 opacity-50' : ''}`}
-                                                      >
-                                                        {param.isQuantitative ? (
-                                                          <QuantitativeParameterInput
-                                                            value={isAllocated ? currentValue.toString() : ''}
-                                                            onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, value)}
-                                                            unit={param.options?.[0] || ''}
-                                                            onUnitChange={(unit) => {
-                                                              // For now, we don't change units dynamically
-                                                            }}
-                                                            units={param.options || []}
-                                                            placeholder=""
-                                                            cellId={cellId}
-                                                            onDragStart={handleDragStart}
-                                                            onDragEnd={handleDragEnd}
-                                                            isDragSource={isDragSource}
-                                                            isInDragSelection={isInSelection}
-                                                          />
-                                                        ) : param.isQualitative ? (
-                                                          <QualitativeParameterInput
-                                                            value={isAllocated ? currentValue.toString() : ''}
-                                                            onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, value)}
-                                                            options={param.options || []}
-                                                            placeholder=""
-                                                            cellId={cellId}
-                                                            onDragStart={handleDragStart}
-                                                            onDragEnd={handleDragEnd}
-                                                            isDragSource={isDragSource}
-                                                            isInDragSelection={isInSelection}
-                                                          />
+                return (
+                  <div 
+                    key={`${meso.id}-${microcycleIndex}-${param.name}`} 
+                    className={`p-1 border-l ${!isAllocated ? 'bg-gray-100/50 opacity-50' : ''}`}
+                    data-drag-cell={cellId}
+                    data-allocated={isAllocated ? 'true' : 'false'}
+                  >
+                  {param.isQuantitative ? (
+                    <QuantitativeParameterInput
+                      value={isAllocated ? currentValue.toString() : ''}
+                      onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, value)}
+                      unit={param.options?.[0] || ''}
+                      onUnitChange={(unit) => {
+                        // For now, we don't change units dynamically
+                      }}
+                      units={param.options || []}
+                      placeholder=""
+                      cellId={cellId}
+                      onDragStart={handleDragStart}
+                      onDragEnd={handleDragEnd}
+                      isDragSource={isDragSource}
+                      isInDragSelection={isInSelection}
+                      isEnabled={isAllocated}
+                    />
+                  ) : param.isQualitative ? (
+                    <QualitativeParameterInput
+                      value={isAllocated ? currentValue.toString() : ''}
+                      onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, value)}
+                      options={param.options || []}
+                      placeholder=""
+                      cellId={cellId}
+                      onDragStart={handleDragStart}
+                      onDragEnd={handleDragEnd}
+                      isDragSource={isDragSource}
+                      isInDragSelection={isInSelection}
+                      isEnabled={isAllocated}
+                    />
                                                         ) : (
                                                           <Input
                                                             type={param.type === 'number' ? 'number' : 'text'}
