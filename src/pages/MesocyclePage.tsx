@@ -15,6 +15,8 @@ import { useToolboxData } from '@/hooks/useToolboxData';
 import { useDragFill } from '@/hooks/useDragFill';
 import { QuantitativeParameterInput, QualitativeParameterInput } from '@/components/ui/parameter-input';
 import { KeyboardShortcutsPanel } from '@/components/ui/keyboard-shortcuts-panel';
+import { ParameterContextMenu } from '@/components/ui/parameter-context-menu';
+import { ParameterFillControl } from '@/components/ui/parameter-fill-control';
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -892,6 +894,35 @@ export default function MesocyclePage() {
     return parameterValues[mesocycleId]?.[microcycleIndex]?.[methodName]?.[parameterName] || '';
   };
 
+  // Helper function to check if a method should be shown for a mesocycle
+  const isMethodAllocatedToMesocycle = useCallback((methodName: string, mesocycleId: string) => {
+    const mesocycle = mesocycles.find(m => m.id === mesocycleId);
+    if (!mesocycle || !mesocycle.allocatedSubGoals || !macrocycleData) return false;
+    
+    // Check if any of the sub-goals allocated to this mesocycle include this method
+    return mesocycle.allocatedSubGoals.some((formattedSubGoal: string) => {
+      // Match by full formatted string ("Overarching - Sub-goal")
+      const macroSubGoal = macrocycleData.subGoals?.find((sg: any) => {
+        const sgDesc = sg.description || sg.name || sg.id || sg;
+        return normalizeForComparison(sgDesc) === normalizeForComparison(formattedSubGoal);
+      });
+      
+      if (!macroSubGoal) return false;
+      
+      // Qualities for this sub-goal
+      const qEntry = macrocycleData.qualitiesBySubGoal?.[macroSubGoal.id];
+      const qualityNames: string[] = qEntry?.list || [];
+      
+      // If any quality maps to this method, it's allocated
+      return qualityNames.some((qName: string) => {
+        const qualityId = `${macroSubGoal.id}::${qName}`;
+        const mEntry = macrocycleData.methodsByQuality?.[qualityId];
+        const methodNames: string[] = mEntry?.list || [];
+        return methodNames.includes(methodName);
+      });
+    });
+  }, [mesocycles, macrocycleData]);
+
   // Drag fill handlers (hooks must be at component level)
   const handleDragStart = useCallback((cellId: string, value: string | number) => {
     console.log('Drag started from cell:', cellId, 'with value:', value);
@@ -913,6 +944,76 @@ export default function MesocyclePage() {
     setTimeout(clearSelection, 100);
   }, [fillCells, endDrag, clearSelection, dragState.selectedCells, dragState.sourceValue]);
 
+  // Fill functionality handlers
+  const handleFillRight = useCallback((cellId: string, value: string | number, fillEmptyOnly = false) => {
+    const [mesocycleId, microcycleIndex, methodName, parameterName] = cellId.split('::');
+    const mesocycle = mesocycles.find(m => m.id === mesocycleId);
+    if (!mesocycle) return;
+
+    const startingMicrocycleIndex = parseInt(microcycleIndex);
+    
+    // Fill to the right within the same mesocycle
+    for (let i = startingMicrocycleIndex + 1; i < (mesocycle.microcycles?.length || 0); i++) {
+      const targetCellId = `${mesocycleId}::${i}::${methodName}::${parameterName}`;
+      const currentValue = getParameterValue(mesocycleId, i, methodName, parameterName);
+      
+      if (!fillEmptyOnly || !currentValue) {
+        updateParameterValue(mesocycleId, i, methodName, parameterName, value);
+      }
+    }
+  }, [mesocycles, getParameterValue, updateParameterValue]);
+
+  const handleFillRow = useCallback((cellId: string, value: string | number, allMesocycles = false, fillEmptyOnly = false) => {
+    const [, microcycleIndex, methodName, parameterName] = cellId.split('::');
+    const targetMicrocycleIndex = parseInt(microcycleIndex);
+
+    const targetMesocycles = allMesocycles ? mesocycles : 
+      mesocycles.filter(m => cellId.startsWith(m.id));
+
+    targetMesocycles.forEach(mesocycle => {
+      // Check if method is allocated to this mesocycle
+      if (!isMethodAllocatedToMesocycle(methodName, mesocycle.id)) return;
+      
+      if (targetMicrocycleIndex < (mesocycle.microcycles?.length || 0)) {
+        const targetCellId = `${mesocycle.id}::${targetMicrocycleIndex}::${methodName}::${parameterName}`;
+        const currentValue = getParameterValue(mesocycle.id, targetMicrocycleIndex, methodName, parameterName);
+        
+        if (!fillEmptyOnly || !currentValue) {
+          updateParameterValue(mesocycle.id, targetMicrocycleIndex, methodName, parameterName, value);
+        }
+      }
+    });
+  }, [mesocycles, getParameterValue, updateParameterValue]);
+
+  const handleRowFill = useCallback((methodName: string, parameterName: string, value: string | number, allMesocycles = false, fillEmptyOnly = false) => {
+    const targetMesocycles = mesocycles.filter(mesocycle => 
+      isMethodAllocatedToMesocycle(methodName, mesocycle.id)
+    );
+
+    if (!allMesocycles) {
+      // Fill only first mesocycle that has this method
+      const firstMesocycle = targetMesocycles[0];
+      if (firstMesocycle) {
+        for (let i = 0; i < (firstMesocycle.microcycles?.length || 0); i++) {
+          const currentValue = getParameterValue(firstMesocycle.id, i, methodName, parameterName);
+          if (!fillEmptyOnly || !currentValue) {
+            updateParameterValue(firstMesocycle.id, i, methodName, parameterName, value);
+          }
+        }
+      }
+    } else {
+      // Fill all mesocycles
+      targetMesocycles.forEach(mesocycle => {
+        for (let i = 0; i < (mesocycle.microcycles?.length || 0); i++) {
+          const currentValue = getParameterValue(mesocycle.id, i, methodName, parameterName);
+          if (!fillEmptyOnly || !currentValue) {
+            updateParameterValue(mesocycle.id, i, methodName, parameterName, value);
+          }
+        }
+      });
+    }
+  }, [mesocycles, getParameterValue, updateParameterValue]);
+
   // Global keyboard shortcuts for drag-fill UX
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -922,7 +1023,23 @@ export default function MesocyclePage() {
             e.preventDefault();
             break;
           case 'r':
-            e.preventDefault();
+            if (e.shiftKey) {
+              e.preventDefault();
+              // Fill right functionality - find focused input
+              const activeElement = document.activeElement as HTMLInputElement;
+              if (activeElement && activeElement.type === 'number' || activeElement.type === 'text') {
+                const cell = activeElement.closest('[data-drag-cell]');
+                const cellId = cell?.getAttribute('data-drag-cell');
+                const isAllocated = cell?.getAttribute('data-allocated') === 'true';
+                
+                if (cellId && isAllocated && activeElement.value) {
+                  const value = activeElement.type === 'number' ? 
+                    (isNaN(Number(activeElement.value)) ? activeElement.value : Number(activeElement.value)) : 
+                    activeElement.value;
+                  handleFillRight(cellId, value);
+                }
+              }
+            }
             break;
           case 'c':
             e.preventDefault();
@@ -951,40 +1068,13 @@ export default function MesocyclePage() {
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('dragFill', handleDragFill as EventListener);
     };
-  }, [clearSelection, dragState.isDragging, addToSelection]);
+  }, [clearSelection, dragState.isDragging, addToSelection, handleFillRight]);
 
   const renderMethodPeriodization = () => {
     const allMethods = getMethodsForAllocatedSubGoals;
     const groupedMethods = groupMethodsByToolboxCategory;
     
     // Helper function to check if a method should be shown for a mesocycle
-    const isMethodAllocatedToMesocycle = (methodName: string, mesocycleId: string) => {
-      const mesocycle = mesocycles.find(m => m.id === mesocycleId);
-      if (!mesocycle || !mesocycle.allocatedSubGoals || !macrocycleData) return false;
-      
-      // Check if any of the sub-goals allocated to this mesocycle include this method
-      return mesocycle.allocatedSubGoals.some((formattedSubGoal: string) => {
-        // Match by full formatted string ("Overarching - Sub-goal")
-        const macroSubGoal = macrocycleData.subGoals?.find((sg: any) => {
-          const sgDesc = sg.description || sg.name || sg.id || sg;
-          return normalizeForComparison(sgDesc) === normalizeForComparison(formattedSubGoal);
-        });
-        
-        if (!macroSubGoal) return false;
-        
-        // Qualities for this sub-goal
-        const qEntry = macrocycleData.qualitiesBySubGoal?.[macroSubGoal.id];
-        const qualityNames: string[] = qEntry?.list || [];
-        
-        // If any quality maps to this method, it's allocated
-        return qualityNames.some((qName: string) => {
-          const qualityId = `${macroSubGoal.id}::${qName}`;
-          const mEntry = macrocycleData.methodsByQuality?.[qualityId];
-          const methodNames: string[] = mEntry?.list || [];
-          return methodNames.includes(methodName);
-        });
-      });
-    };
 
     // Helper function to get mesocycle overview data
     const getMesocycleOverview = (mesocycle: ExtendedMesocycle) => {
@@ -1233,15 +1323,27 @@ export default function MesocyclePage() {
                                       {parameters.length > 0 && (
                                         <div className="divide-y">
                                            {parameters.map((param) => (
-                                              <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
-                                                gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 180px)` 
-                                              }}>
-                                               <div className="sticky left-0 z-40 p-2 text-xs text-muted-foreground bg-background border-r flex items-center shadow-md">
-                                                 <span className="ml-4 font-medium">{param.name}</span>
-                                                 {param.isQuantitative && param.options && param.options.length > 0 && (
-                                                   <span className="ml-1 text-xs opacity-70">({param.options[0]})</span>
-                                                 )}
-                                               </div>
+                                               <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
+                                                 gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 180px)` 
+                                               }}>
+                                                <div className="sticky left-0 z-40 p-2 text-xs text-muted-foreground bg-background border-r flex items-center justify-between shadow-md">
+                                                  <div className="flex items-center">
+                                                    <span className="ml-4 font-medium">{param.name}</span>
+                                                    {param.isQuantitative && param.options && param.options.length > 0 && (
+                                                      <span className="ml-1 text-xs opacity-70">({param.options[0]})</span>
+                                                    )}
+                                                  </div>
+                                                  <ParameterFillControl
+                                                    methodName={method}
+                                                    parameterName={param.name}
+                                                    parameterType={param.isQuantitative ? 'quantitative' : 'qualitative'}
+                                                    parameterOptions={param.options}
+                                                    onFillRow={(value, allMesocycles, fillEmptyOnly) => 
+                                                      handleRowFill(method, param.name, value, allMesocycles, fillEmptyOnly)
+                                                    }
+                                                    disabled={!mesocycles.some(meso => isMethodAllocatedToMesocycle(method, meso.id))}
+                                                  />
+                                                </div>
                                                {mesocycles.map((meso) =>
                                                  (meso.microcycles || []).map((microcycle, microcycleIndex) => {
                                                    const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
@@ -1258,47 +1360,55 @@ export default function MesocyclePage() {
                     data-drag-cell={cellId}
                     data-allocated={isAllocated ? 'true' : 'false'}
                   >
-                  {param.isQuantitative ? (
-                    <QuantitativeParameterInput
-                      value={isAllocated ? currentValue.toString() : ''}
-                      onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, value)}
-                      unit={param.options?.[0] || ''}
-                      onUnitChange={(unit) => {
-                        // For now, we don't change units dynamically
-                      }}
-                      units={param.options || []}
-                      placeholder=""
-                      cellId={cellId}
-                      onDragStart={handleDragStart}
-                      onDragEnd={handleDragEnd}
-                      isDragSource={isDragSource}
-                      isInDragSelection={isInSelection}
-                      isEnabled={isAllocated}
-                    />
-                  ) : param.isQualitative ? (
-                    <QualitativeParameterInput
-                      value={isAllocated ? currentValue.toString() : ''}
-                      onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, value)}
-                      options={param.options || []}
-                      placeholder=""
-                      cellId={cellId}
-                      onDragStart={handleDragStart}
-                      onDragEnd={handleDragEnd}
-                      isDragSource={isDragSource}
-                      isInDragSelection={isInSelection}
-                      isEnabled={isAllocated}
-                    />
-                                                        ) : (
-                                                          <Input
-                                                            type={param.type === 'number' ? 'number' : 'text'}
-                                                            value={isAllocated ? currentValue.toString() : ''}
-                                                            onChange={(e) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, param.type === 'number' ? Number(e.target.value) : e.target.value)}
-                                                            className={`h-8 text-xs ${!isAllocated ? 'cursor-not-allowed' : ''}`}
-                                                            placeholder=""
-                                                            disabled={!isAllocated}
-                                                          />
-                                                        )}
-                                                      </div>
+                  <ParameterContextMenu
+                    cellId={cellId}
+                    value={currentValue}
+                    onFillRight={handleFillRight}
+                    onFillRow={handleFillRow}
+                    disabled={!isAllocated || !currentValue}
+                  >
+                    {param.isQuantitative ? (
+                      <QuantitativeParameterInput
+                        value={isAllocated ? currentValue.toString() : ''}
+                        onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, value)}
+                        unit={param.options?.[0] || ''}
+                        onUnitChange={(unit) => {
+                          // For now, we don't change units dynamically
+                        }}
+                        units={param.options || []}
+                        placeholder=""
+                        cellId={cellId}
+                        onDragStart={handleDragStart}
+                        onDragEnd={handleDragEnd}
+                        isDragSource={isDragSource}
+                        isInDragSelection={isInSelection}
+                        isEnabled={isAllocated}
+                      />
+                    ) : param.isQualitative ? (
+                      <QualitativeParameterInput
+                        value={isAllocated ? currentValue.toString() : ''}
+                        onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, value)}
+                        options={param.options || []}
+                        placeholder=""
+                        cellId={cellId}
+                        onDragStart={handleDragStart}
+                        onDragEnd={handleDragEnd}
+                        isDragSource={isDragSource}
+                        isInDragSelection={isInSelection}
+                        isEnabled={isAllocated}
+                      />
+                    ) : (
+                      <Input
+                        type={param.type === 'number' ? 'number' : 'text'}
+                        value={isAllocated ? currentValue.toString() : ''}
+                        onChange={(e) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, param.type === 'number' ? Number(e.target.value) : e.target.value)}
+                        className={`h-8 text-xs ${!isAllocated ? 'cursor-not-allowed' : ''}`}
+                        placeholder=""
+                        disabled={!isAllocated}
+                      />
+                    )}
+                  </ParameterContextMenu>
+                  </div>
                                                     );
                                                  })
                                                )}
