@@ -13,6 +13,7 @@ interface AthleticismColumnFilterProps {
   allData: FlatAthleticismRow[];
   selectedValues: string[];
   onSelectionChange: (values: string[]) => void;
+  onSortChange: (columnKey: keyof FlatAthleticismRow, direction: 'asc' | 'desc') => void;
 }
 
 export function AthleticismColumnFilter({ 
@@ -20,11 +21,11 @@ export function AthleticismColumnFilter({
   columnLabel, 
   allData, 
   selectedValues, 
-  onSelectionChange 
+  onSelectionChange,
+  onSortChange 
 }: AthleticismColumnFilterProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [alphaFilter, setAlphaFilter] = useState<string>('');
   const [listSort, setListSort] = useState<'asc' | 'desc'>('asc');
 
   const uniqueValues = useMemo(() => {
@@ -54,17 +55,6 @@ export function AthleticismColumnFilter({
       );
     }
 
-    // Apply alphabet filter
-    if (alphaFilter) {
-      if (alphaFilter === '#') {
-        filtered = filtered.filter(value => /^[0-9]/.test(value));
-      } else {
-        filtered = filtered.filter(value => 
-          value.toLowerCase().startsWith(alphaFilter.toLowerCase())
-        );
-      }
-    }
-
     // Apply sorting
     filtered = filtered.sort((a, b) => {
       const comparison = a.localeCompare(b, undefined, { numeric: true });
@@ -72,9 +62,9 @@ export function AthleticismColumnFilter({
     });
 
     return filtered;
-  }, [uniqueValues, searchTerm, alphaFilter, listSort]);
+  }, [uniqueValues, searchTerm, listSort]);
 
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+  
 
   const handleSelectAll = () => {
     if (selectedValues.length === uniqueValues.length) {
@@ -133,10 +123,33 @@ export function AthleticismColumnFilter({
           />
         </div>
 
-        {/* Alphabet Filter */}
+        {/* Column Sort */}
         <div className="p-3 border-b">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-muted-foreground">Alphabetical Filter</span>
+            <span className="text-xs font-medium text-muted-foreground">Sort Column</span>
+            <div className="flex gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 px-2"
+                onClick={() => onSortChange(columnKey, 'asc')}
+              >
+                <ArrowUpAZ className="h-3 w-3 mr-1" />
+                A-Z
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 px-2"
+                onClick={() => onSortChange(columnKey, 'desc')}
+              >
+                <ArrowDownZA className="h-3 w-3 mr-1" />
+                Z-A
+              </Button>
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">Filter Options</span>
             <div className="flex gap-1">
               <Button
                 variant={listSort === 'asc' ? 'secondary' : 'ghost'}
@@ -155,35 +168,6 @@ export function AthleticismColumnFilter({
                 <ArrowDownZA className="h-3 w-3" />
               </Button>
             </div>
-          </div>
-          <div className="flex flex-wrap gap-1">
-            <Button
-              variant={alphaFilter === '' ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-6 px-2 text-xs"
-              onClick={() => setAlphaFilter('')}
-            >
-              All
-            </Button>
-            {alphabet.map(letter => (
-              <Button
-                key={letter}
-                variant={alphaFilter === letter ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-6 w-6 p-0 text-xs"
-                onClick={() => setAlphaFilter(letter)}
-              >
-                {letter}
-              </Button>
-            ))}
-            <Button
-              variant={alphaFilter === '#' ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-6 w-6 p-0 text-xs"
-              onClick={() => setAlphaFilter('#')}
-            >
-              #
-            </Button>
           </div>
         </div>
 

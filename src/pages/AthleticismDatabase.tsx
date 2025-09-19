@@ -561,6 +561,7 @@ export default function AthleticismDatabase() {
                         allData={flatData}
                         selectedValues={filterState.columnFilters.overarchingGoal || []}
                         onSelectionChange={(values) => handleColumnFilter('overarchingGoal', values)}
+                        onSortChange={handleSort}
                       />
                     </div>
                   </TableHead>
@@ -579,6 +580,7 @@ export default function AthleticismDatabase() {
                         allData={flatData}
                         selectedValues={filterState.columnFilters.subGoal || []}
                         onSelectionChange={(values) => handleColumnFilter('subGoal', values)}
+                        onSortChange={handleSort}
                       />
                     </div>
                   </TableHead>
@@ -597,6 +599,7 @@ export default function AthleticismDatabase() {
                         allData={flatData}
                         selectedValues={filterState.columnFilters.quality || []}
                         onSelectionChange={(values) => handleColumnFilter('quality', values)}
+                        onSortChange={handleSort}
                       />
                     </div>
                   </TableHead>
@@ -615,6 +618,7 @@ export default function AthleticismDatabase() {
                         allData={flatData}
                         selectedValues={filterState.columnFilters.method || []}
                         onSelectionChange={(values) => handleColumnFilter('method', values)}
+                        onSortChange={handleSort}
                       />
                     </div>
                   </TableHead>
@@ -633,6 +637,7 @@ export default function AthleticismDatabase() {
                         allData={flatData}
                         selectedValues={filterState.columnFilters.loadingRecommendations || []}
                         onSelectionChange={(values) => handleColumnFilter('loadingRecommendations', values)}
+                        onSortChange={handleSort}
                       />
                     </div>
                   </TableHead>
