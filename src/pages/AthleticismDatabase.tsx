@@ -23,7 +23,9 @@ import {
   Trash2, 
   Search,
   Copy,
-  X
+  X,
+  ChevronUp,
+  ChevronDown
 } from "lucide-react";
 
 export default function AthleticismDatabase() {
@@ -179,12 +181,39 @@ export default function AthleticismDatabase() {
       }
     });
 
-    return filtered.sort((a, b) => {
-      if (a.overarchingGoal !== b.overarchingGoal) return a.overarchingGoal.localeCompare(b.overarchingGoal);
-      if (a.subGoal !== b.subGoal) return a.subGoal.localeCompare(b.subGoal);
-      if (a.quality !== b.quality) return a.quality.localeCompare(b.quality);
-      return a.method.localeCompare(b.method);
-    });
+    // Apply sorting
+    if (filterState.sortColumn) {
+      filtered.sort((a, b) => {
+        const aValue = String(a[filterState.sortColumn!] || '');
+        const bValue = String(b[filterState.sortColumn!] || '');
+        
+        if (filterState.sortColumn === 'loadingRecommendations') {
+          // Special handling for loading recommendations
+          const aRecommendations = typeof a.loadingRecommendations === 'object' && a.loadingRecommendations !== null
+            ? Object.entries(a.loadingRecommendations).map(([k, v]) => `${k}: ${v}`).join(', ')
+            : '';
+          const bRecommendations = typeof b.loadingRecommendations === 'object' && b.loadingRecommendations !== null
+            ? Object.entries(b.loadingRecommendations).map(([k, v]) => `${k}: ${v}`).join(', ')
+            : '';
+          
+          const result = aRecommendations.localeCompare(bRecommendations);
+          return filterState.sortDirection === 'asc' ? result : -result;
+        }
+        
+        const result = aValue.localeCompare(bValue);
+        return filterState.sortDirection === 'asc' ? result : -result;
+      });
+    } else {
+      // Default sorting when no specific sort is applied
+      filtered.sort((a, b) => {
+        if (a.overarchingGoal !== b.overarchingGoal) return a.overarchingGoal.localeCompare(b.overarchingGoal);
+        if (a.subGoal !== b.subGoal) return a.subGoal.localeCompare(b.subGoal);
+        if (a.quality !== b.quality) return a.quality.localeCompare(b.quality);
+        return a.method.localeCompare(b.method);
+      });
+    }
+
+    return filtered;
   }, [flatData, filterState]);
 
   const handleColumnFilter = (columnKey: keyof FlatAthleticismRow, selectedValues: string[]) => {
@@ -195,6 +224,21 @@ export default function AthleticismDatabase() {
         [columnKey]: selectedValues
       }
     }));
+  };
+
+  const handleSort = (columnKey: keyof FlatAthleticismRow) => {
+    setFilterState(prev => ({
+      ...prev,
+      sortColumn: columnKey,
+      sortDirection: prev.sortColumn === columnKey && prev.sortDirection === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const getSortIcon = (columnKey: keyof FlatAthleticismRow) => {
+    if (filterState.sortColumn !== columnKey) {
+      return null;
+    }
+    return filterState.sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />;
   };
 
   // Format loading recommendations as readable parameters
@@ -495,7 +539,13 @@ export default function AthleticismDatabase() {
                 <TableRow>
                   <TableHead className="min-w-[200px]">
                     <div className="flex items-center justify-between">
-                      Overarching Goal
+                      <button
+                        onClick={() => handleSort('overarchingGoal')}
+                        className="flex items-center space-x-1 font-medium hover:text-primary transition-colors"
+                      >
+                        <span>Overarching Goal</span>
+                        {getSortIcon('overarchingGoal')}
+                      </button>
                       <AthleticismColumnFilter
                         columnKey="overarchingGoal"
                         columnLabel="Overarching Goal"
@@ -507,7 +557,13 @@ export default function AthleticismDatabase() {
                   </TableHead>
                   <TableHead className="min-w-[200px]">
                     <div className="flex items-center justify-between">
-                      Sub-goal
+                      <button
+                        onClick={() => handleSort('subGoal')}
+                        className="flex items-center space-x-1 font-medium hover:text-primary transition-colors"
+                      >
+                        <span>Sub-goal</span>
+                        {getSortIcon('subGoal')}
+                      </button>
                       <AthleticismColumnFilter
                         columnKey="subGoal"
                         columnLabel="Sub-goal"
@@ -519,7 +575,13 @@ export default function AthleticismDatabase() {
                   </TableHead>
                   <TableHead className="min-w-[200px]">
                     <div className="flex items-center justify-between">
-                      Quality
+                      <button
+                        onClick={() => handleSort('quality')}
+                        className="flex items-center space-x-1 font-medium hover:text-primary transition-colors"
+                      >
+                        <span>Quality</span>
+                        {getSortIcon('quality')}
+                      </button>
                       <AthleticismColumnFilter
                         columnKey="quality"
                         columnLabel="Quality"
@@ -531,7 +593,13 @@ export default function AthleticismDatabase() {
                   </TableHead>
                   <TableHead className="min-w-[250px]">
                     <div className="flex items-center justify-between">
-                      Method
+                      <button
+                        onClick={() => handleSort('method')}
+                        className="flex items-center space-x-1 font-medium hover:text-primary transition-colors"
+                      >
+                        <span>Method</span>
+                        {getSortIcon('method')}
+                      </button>
                       <AthleticismColumnFilter
                         columnKey="method"
                         columnLabel="Method"
@@ -543,7 +611,13 @@ export default function AthleticismDatabase() {
                   </TableHead>
                   <TableHead className="min-w-[400px]">
                     <div className="flex items-center justify-between">
-                      Loading Recommendations
+                      <button
+                        onClick={() => handleSort('loadingRecommendations')}
+                        className="flex items-center space-x-1 font-medium hover:text-primary transition-colors"
+                      >
+                        <span>Loading Recommendations</span>
+                        {getSortIcon('loadingRecommendations')}
+                      </button>
                       <AthleticismColumnFilter
                         columnKey="loadingRecommendations"
                         columnLabel="Loading Recommendations"
