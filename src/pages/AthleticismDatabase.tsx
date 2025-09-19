@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAthleticismData } from '@/hooks/useAthleticismData';
 import { useToolboxData } from '@/hooks/useToolboxData';
-import { AthleticismEntry } from '@/types/athleticism';
+import { AthleticismEntry, AthleticismFilterState, FlatAthleticismRow } from '@/types/athleticism';
+import { AthleticismColumnFilter } from '@/components/athleticism/AthleticismColumnFilter';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { 
   ArrowLeft, 
@@ -25,23 +26,6 @@ import {
   X
 } from "lucide-react";
 
-// Interface for hierarchical display
-interface HierarchicalRow {
-  id: string;
-  overarchingGoal: string;
-  subGoal: string;
-  quality: string;
-  method: string;
-  loadingRecommendations: Record<string, any>;
-  originalEntry: AthleticismEntry;
-  goalRowspan?: number;
-  subGoalRowspan?: number;
-  qualityRowspan?: number;
-  isFirstInGoal?: boolean;
-  isFirstInSubGoal?: boolean;
-  isFirstInQuality?: boolean;
-}
-
 export default function AthleticismDatabase() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -51,6 +35,12 @@ export default function AthleticismDatabase() {
   const [searchTerm, setSearchTerm] = useState('');
   const [editingEntry, setEditingEntry] = useState<AthleticismEntry | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [filterState, setFilterState] = useState<AthleticismFilterState>({
+    search: '',
+    columnFilters: {},
+    sortColumn: null,
+    sortDirection: 'asc'
+  });
   const [newEntry, setNewEntry] = useState<Omit<AthleticismEntry, 'id'>>({
     overarchingGoal: '',
     subGoal: '',
@@ -121,12 +111,12 @@ export default function AthleticismDatabase() {
     entry.mappedMethods.some(method => method.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  // Transform entries into hierarchical structure with each method as separate row
-  const hierarchicalData = useMemo(() => {
-    const expandedRows: HierarchicalRow[] = [];
+  // Transform entries into flat rows - each method gets its own row
+  const flatData = useMemo(() => {
+    const expandedRows: FlatAthleticismRow[] = [];
     
-    // First, expand each entry to create separate rows for each method
-    filteredEntries.forEach(entry => {
+    // First, create flat rows for each method
+    data.entries.forEach(entry => {
       if (entry.mappedMethods.length === 0) {
         // Handle entries with no methods
         expandedRows.push({
@@ -154,61 +144,58 @@ export default function AthleticismDatabase() {
       }
     });
 
-    // Sort by hierarchy levels
-    expandedRows.sort((a, b) => {
+    return expandedRows;
+  }, [data.entries]);
+
+  // Apply filters to flat data
+  const filteredData = useMemo(() => {
+    let filtered = flatData;
+
+    // Apply global search
+    if (filterState.search) {
+      filtered = filtered.filter(row => 
+        row.overarchingGoal.toLowerCase().includes(filterState.search.toLowerCase()) ||
+        row.subGoal.toLowerCase().includes(filterState.search.toLowerCase()) ||
+        row.quality.toLowerCase().includes(filterState.search.toLowerCase()) ||
+        row.method.toLowerCase().includes(filterState.search.toLowerCase())
+      );
+    }
+
+    // Apply column filters
+    Object.entries(filterState.columnFilters).forEach(([columnKey, selectedValues]) => {
+      if (selectedValues.length > 0) {
+        filtered = filtered.filter(row => {
+          const key = columnKey as keyof FlatAthleticismRow;
+          if (key === 'loadingRecommendations') {
+            const value = row[key];
+            if (typeof value === 'object' && value !== null) {
+              const params = Object.entries(value).map(([k, v]) => `${k}: ${v}`).join(', ');
+              return selectedValues.includes(params || 'No recommendations');
+            }
+            return selectedValues.includes('No recommendations');
+          }
+          return selectedValues.includes(String(row[key] || ''));
+        });
+      }
+    });
+
+    return filtered.sort((a, b) => {
       if (a.overarchingGoal !== b.overarchingGoal) return a.overarchingGoal.localeCompare(b.overarchingGoal);
       if (a.subGoal !== b.subGoal) return a.subGoal.localeCompare(b.subGoal);
       if (a.quality !== b.quality) return a.quality.localeCompare(b.quality);
       return a.method.localeCompare(b.method);
     });
+  }, [flatData, filterState]);
 
-    // Calculate rowspan values and mark first occurrences
-    const goalCounts = new Map<string, number>();
-    const subGoalCounts = new Map<string, number>();
-    const qualityCounts = new Map<string, number>();
-
-    // Count occurrences
-    expandedRows.forEach(row => {
-      const goalKey = row.overarchingGoal;
-      const subGoalKey = `${row.overarchingGoal}|${row.subGoal}`;
-      const qualityKey = `${row.overarchingGoal}|${row.subGoal}|${row.quality}`;
-      
-      goalCounts.set(goalKey, (goalCounts.get(goalKey) || 0) + 1);
-      subGoalCounts.set(subGoalKey, (subGoalCounts.get(subGoalKey) || 0) + 1);
-      qualityCounts.set(qualityKey, (qualityCounts.get(qualityKey) || 0) + 1);
-    });
-
-    // Mark first occurrences and set rowspan
-    const seenGoals = new Set<string>();
-    const seenSubGoals = new Set<string>();
-    const seenQualities = new Set<string>();
-
-    expandedRows.forEach(row => {
-      const goalKey = row.overarchingGoal;
-      const subGoalKey = `${row.overarchingGoal}|${row.subGoal}`;
-      const qualityKey = `${row.overarchingGoal}|${row.subGoal}|${row.quality}`;
-
-      if (!seenGoals.has(goalKey)) {
-        row.isFirstInGoal = true;
-        row.goalRowspan = goalCounts.get(goalKey);
-        seenGoals.add(goalKey);
+  const handleColumnFilter = (columnKey: keyof FlatAthleticismRow, selectedValues: string[]) => {
+    setFilterState(prev => ({
+      ...prev,
+      columnFilters: {
+        ...prev.columnFilters,
+        [columnKey]: selectedValues
       }
-
-      if (!seenSubGoals.has(subGoalKey)) {
-        row.isFirstInSubGoal = true;
-        row.subGoalRowspan = subGoalCounts.get(subGoalKey);
-        seenSubGoals.add(subGoalKey);
-      }
-
-      if (!seenQualities.has(qualityKey)) {
-        row.isFirstInQuality = true;
-        row.qualityRowspan = qualityCounts.get(qualityKey);
-        seenQualities.add(qualityKey);
-      }
-    });
-
-    return expandedRows;
-  }, [filteredEntries]);
+    }));
+  };
 
   // Format loading recommendations as readable parameters
   const formatLoadingRecommendations = (recommendations: Record<string, any>) => {
@@ -369,7 +356,7 @@ export default function AthleticismDatabase() {
           </div>
         </div>
         <div className="flex items-center space-x-2">
-          <Badge variant="secondary">{hierarchicalData.length} method entries</Badge>
+          <Badge variant="secondary">{filteredData.length} method entries</Badge>
           <Badge variant="outline">{data.entries.length} base entries</Badge>
         </div>
       </div>
@@ -383,8 +370,8 @@ export default function AthleticismDatabase() {
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search by goal, quality, or method..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={filterState.search}
+                  onChange={(e) => setFilterState(prev => ({ ...prev, search: e.target.value }))}
                   className="pl-10"
                 />
               </div>
@@ -506,55 +493,91 @@ export default function AthleticismDatabase() {
             <Table>
               <TableHeader className="sticky top-0 bg-background z-10">
                 <TableRow>
-                  <TableHead className="min-w-[200px]">Overarching Goal</TableHead>
-                  <TableHead className="min-w-[200px]">Sub-goal</TableHead>
-                  <TableHead className="min-w-[200px]">Quality</TableHead>
-                  <TableHead className="min-w-[250px]">Method</TableHead>
-                  <TableHead className="min-w-[400px]">Loading Recommendations</TableHead>
+                  <TableHead className="min-w-[200px]">
+                    <div className="flex items-center justify-between">
+                      Overarching Goal
+                      <AthleticismColumnFilter
+                        columnKey="overarchingGoal"
+                        columnLabel="Overarching Goal"
+                        allData={flatData}
+                        selectedValues={filterState.columnFilters.overarchingGoal || []}
+                        onSelectionChange={(values) => handleColumnFilter('overarchingGoal', values)}
+                      />
+                    </div>
+                  </TableHead>
+                  <TableHead className="min-w-[200px]">
+                    <div className="flex items-center justify-between">
+                      Sub-goal
+                      <AthleticismColumnFilter
+                        columnKey="subGoal"
+                        columnLabel="Sub-goal"
+                        allData={flatData}
+                        selectedValues={filterState.columnFilters.subGoal || []}
+                        onSelectionChange={(values) => handleColumnFilter('subGoal', values)}
+                      />
+                    </div>
+                  </TableHead>
+                  <TableHead className="min-w-[200px]">
+                    <div className="flex items-center justify-between">
+                      Quality
+                      <AthleticismColumnFilter
+                        columnKey="quality"
+                        columnLabel="Quality"
+                        allData={flatData}
+                        selectedValues={filterState.columnFilters.quality || []}
+                        onSelectionChange={(values) => handleColumnFilter('quality', values)}
+                      />
+                    </div>
+                  </TableHead>
+                  <TableHead className="min-w-[250px]">
+                    <div className="flex items-center justify-between">
+                      Method
+                      <AthleticismColumnFilter
+                        columnKey="method"
+                        columnLabel="Method"
+                        allData={flatData}
+                        selectedValues={filterState.columnFilters.method || []}
+                        onSelectionChange={(values) => handleColumnFilter('method', values)}
+                      />
+                    </div>
+                  </TableHead>
+                  <TableHead className="min-w-[400px]">
+                    <div className="flex items-center justify-between">
+                      Loading Recommendations
+                      <AthleticismColumnFilter
+                        columnKey="loadingRecommendations"
+                        columnLabel="Loading Recommendations"
+                        allData={flatData}
+                        selectedValues={filterState.columnFilters.loadingRecommendations || []}
+                        onSelectionChange={(values) => handleColumnFilter('loadingRecommendations', values)}
+                      />
+                    </div>
+                  </TableHead>
                   <TableHead className="w-[120px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {hierarchicalData.map((row) => (
+                {filteredData.map((row) => (
                   <TableRow key={row.id}>
-                    {/* Overarching Goal - with rowspan */}
-                    {row.isFirstInGoal && (
-                      <TableCell 
-                        rowSpan={row.goalRowspan} 
-                        className="font-bold text-primary border-r-2 border-border bg-muted/30 align-top"
-                      >
-                        <div className="max-w-[180px] break-words">
-                          {row.overarchingGoal}
-                        </div>
-                      </TableCell>
-                    )}
+                    <TableCell className="font-medium">
+                      <div className="max-w-[180px] break-words">
+                        {row.overarchingGoal}
+                      </div>
+                    </TableCell>
                     
-                    {/* Sub-goal - with rowspan */}
-                    {row.isFirstInSubGoal && (
-                      <TableCell 
-                        rowSpan={row.subGoalRowspan}
-                        className="font-medium text-muted-foreground border-r border-border bg-muted/10 align-top"
-                      >
-                        <div className="max-w-[180px] break-words">
-                          {row.subGoal}
-                        </div>
-                      </TableCell>
-                    )}
+                    <TableCell className="text-muted-foreground">
+                      <div className="max-w-[180px] break-words">
+                        {row.subGoal}
+                      </div>
+                    </TableCell>
                     
-                    {/* Quality - with rowspan */}
-                    {row.isFirstInQuality && (
-                      <TableCell 
-                        rowSpan={row.qualityRowspan}
-                        className="text-foreground border-r border-border bg-muted/5 align-top"
-                      >
-                        <div className="max-w-[180px] break-words">
-                          {row.quality}
-                        </div>
-                      </TableCell>
-                    )}
+                    <TableCell>
+                      <div className="max-w-[180px] break-words">
+                        {row.quality}
+                      </div>
+                    </TableCell>
                     
-                    {/* Method - individual for each row */}
-                    <TableCell className="border-r border-border">
+                    <TableCell>
                       <div className="max-w-[230px]">
                         <span className="font-bold text-foreground">
                           {row.method}
@@ -562,14 +585,12 @@ export default function AthleticismDatabase() {
                       </div>
                     </TableCell>
                     
-                    {/* Loading Recommendations - formatted as readable list */}
-                    <TableCell className="border-r border-border">
+                    <TableCell>
                       <div className="max-w-[380px]">
                         {formatLoadingRecommendations(row.loadingRecommendations)}
                       </div>
                     </TableCell>
                     
-                    {/* Actions - edit original entry */}
                     <TableCell>
                       <div className="flex space-x-1">
                         <Button
