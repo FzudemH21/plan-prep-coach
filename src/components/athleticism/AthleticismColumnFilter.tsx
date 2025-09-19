@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Filter } from 'lucide-react';
+import { Filter, ArrowUpAZ, ArrowDownZA } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,8 @@ export function AthleticismColumnFilter({
 }: AthleticismColumnFilterProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [alphaFilter, setAlphaFilter] = useState<string>('');
+  const [listSort, setListSort] = useState<'asc' | 'desc'>('asc');
 
   const uniqueValues = useMemo(() => {
     const values = allData.map(item => {
@@ -39,15 +41,40 @@ export function AthleticismColumnFilter({
       return String(value || '');
     }).filter(value => value.trim() !== '');
     
-    return [...new Set(values)].sort();
+    return [...new Set(values)];
   }, [allData, columnKey]);
 
-  const filteredValues = useMemo(
-    () => uniqueValues.filter(value =>
-      value.toLowerCase().includes(searchTerm.toLowerCase())
-    ),
-    [uniqueValues, searchTerm]
-  );
+  const processedValues = useMemo(() => {
+    let filtered = uniqueValues;
+
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(value =>
+        value.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Apply alphabet filter
+    if (alphaFilter) {
+      if (alphaFilter === '#') {
+        filtered = filtered.filter(value => /^[0-9]/.test(value));
+      } else {
+        filtered = filtered.filter(value => 
+          value.toLowerCase().startsWith(alphaFilter.toLowerCase())
+        );
+      }
+    }
+
+    // Apply sorting
+    filtered = filtered.sort((a, b) => {
+      const comparison = a.localeCompare(b, undefined, { numeric: true });
+      return listSort === 'asc' ? comparison : -comparison;
+    });
+
+    return filtered;
+  }, [uniqueValues, searchTerm, alphaFilter, listSort]);
+
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
   const handleSelectAll = () => {
     if (selectedValues.length === uniqueValues.length) {
@@ -55,6 +82,16 @@ export function AthleticismColumnFilter({
     } else {
       onSelectionChange(uniqueValues);
     }
+  };
+
+  const handleSelectFiltered = () => {
+    const newSelected = [...new Set([...selectedValues, ...processedValues])];
+    onSelectionChange(newSelected);
+  };
+
+  const handleClearFiltered = () => {
+    const newSelected = selectedValues.filter(v => !processedValues.includes(v));
+    onSelectionChange(newSelected);
   };
 
   const handleValueToggle = (value: string) => {
@@ -67,6 +104,7 @@ export function AthleticismColumnFilter({
 
   const isAllSelected = selectedValues.length === uniqueValues.length;
   const isPartiallySelected = selectedValues.length > 0 && selectedValues.length < uniqueValues.length;
+  const filteredSelectedCount = processedValues.filter(v => selectedValues.includes(v)).length;
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -84,7 +122,7 @@ export function AthleticismColumnFilter({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0" align="start">
+      <PopoverContent className="w-96 p-0" align="start">
         <div className="p-3 border-b">
           <h4 className="font-medium text-sm mb-2">Filter {columnLabel}</h4>
           <Input
@@ -94,7 +132,63 @@ export function AthleticismColumnFilter({
             className="h-8"
           />
         </div>
+
+        {/* Alphabet Filter */}
         <div className="p-3 border-b">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-muted-foreground">Alphabetical Filter</span>
+            <div className="flex gap-1">
+              <Button
+                variant={listSort === 'asc' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-6 px-2"
+                onClick={() => setListSort('asc')}
+              >
+                <ArrowUpAZ className="h-3 w-3" />
+              </Button>
+              <Button
+                variant={listSort === 'desc' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-6 px-2"
+                onClick={() => setListSort('desc')}
+              >
+                <ArrowDownZA className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            <Button
+              variant={alphaFilter === '' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-6 px-2 text-xs"
+              onClick={() => setAlphaFilter('')}
+            >
+              All
+            </Button>
+            {alphabet.map(letter => (
+              <Button
+                key={letter}
+                variant={alphaFilter === letter ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-6 w-6 p-0 text-xs"
+                onClick={() => setAlphaFilter(letter)}
+              >
+                {letter}
+              </Button>
+            ))}
+            <Button
+              variant={alphaFilter === '#' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-6 w-6 p-0 text-xs"
+              onClick={() => setAlphaFilter('#')}
+            >
+              #
+            </Button>
+          </div>
+        </div>
+
+        {/* Selection Controls */}
+        <div className="p-3 border-b space-y-2">
           <div className="flex items-center space-x-2">
             <Checkbox
               id="select-all"
@@ -110,10 +204,33 @@ export function AthleticismColumnFilter({
               Select All ({uniqueValues.length})
             </label>
           </div>
+          {processedValues.length < uniqueValues.length && (
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={handleSelectFiltered}
+                disabled={filteredSelectedCount === processedValues.length}
+              >
+                Select Filtered ({processedValues.length})
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={handleClearFiltered}
+                disabled={filteredSelectedCount === 0}
+              >
+                Clear Filtered
+              </Button>
+            </div>
+          )}
         </div>
+
         <ScrollArea className="h-64">
           <div className="p-3 space-y-2">
-            {filteredValues.map((value) => (
+            {processedValues.map((value) => (
               <div key={value} className="flex items-center space-x-2">
                 <Checkbox
                   id={`filter-${value}`}
@@ -129,13 +246,14 @@ export function AthleticismColumnFilter({
                 </label>
               </div>
             ))}
-            {filteredValues.length === 0 && (
+            {processedValues.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-4">
                 No matches found
               </p>
             )}
           </div>
         </ScrollArea>
+        
         <div className="p-3 border-t flex justify-between">
           <Button
             variant="outline"
