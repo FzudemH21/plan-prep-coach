@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { SearchableDropdown } from '@/components/ui/searchable-dropdown';
 import { Copy, Layers, Settings2 } from 'lucide-react';
 
 interface ParameterFillControlProps {
@@ -25,6 +26,12 @@ export function ParameterFillControl({
 }: ParameterFillControlProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [fillValue, setFillValue] = useState('');
+
+  const handleDropdownChange = (value: string | string[]) => {
+    // Handle single selection for our use case
+    const stringValue = Array.isArray(value) ? value[0] || '' : value;
+    setFillValue(stringValue);
+  };
 
   const handleFill = (allMesocycles: boolean, fillEmptyOnly: boolean) => {
     if (!fillValue.trim()) return;
@@ -67,18 +74,24 @@ export function ParameterFillControl({
             <Label htmlFor="fill-value" className="text-xs">
               Value to fill
             </Label>
-            <Input
-              id="fill-value"
-              type={parameterType === 'quantitative' ? 'number' : 'text'}
-              value={fillValue}
-              onChange={(e) => setFillValue(e.target.value)}
-              placeholder={`Enter ${parameterType === 'quantitative' ? 'number' : 'text'}`}
-              className="h-8 text-xs"
-            />
-            {parameterOptions.length > 0 && parameterType === 'qualitative' && (
-              <div className="text-xs text-muted-foreground">
-                Options: {parameterOptions.join(', ')}
-              </div>
+            {parameterType === 'qualitative' ? (
+              <SearchableDropdown
+                value={fillValue}
+                onValueChange={handleDropdownChange}
+                options={parameterOptions}
+                placeholder="Select option or type..."
+                className="h-8 text-xs"
+                allowCustomInput={true}
+              />
+            ) : (
+              <Input
+                id="fill-value"
+                type="number"
+                value={fillValue}
+                onChange={(e) => setFillValue(e.target.value)}
+                placeholder="Enter number"
+                className="h-8 text-xs"
+              />
             )}
           </div>
 
