@@ -2,7 +2,6 @@ import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableDropdown } from '@/components/ui/searchable-dropdown';
-import { DragHandle } from '@/components/ui/drag-handle';
 import { cn } from '@/lib/utils';
 
 interface QuantitativeParameterInputProps {
@@ -84,12 +83,6 @@ export function QuantitativeParameterInput({
           </SelectContent>
         </Select>
       )}
-      {cellId && onDragStart && onDragEnd && isEnabled && (
-        <DragHandle
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        />
-      )}
     </div>
   );
 }
@@ -153,12 +146,6 @@ export function QualitativeParameterInput({
           isInDragSelection && "bg-primary/10"
         )}
       />
-      {cellId && onDragStart && onDragEnd && isEnabled && (
-        <DragHandle
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        />
-      )}
     </div>
   );
 }
