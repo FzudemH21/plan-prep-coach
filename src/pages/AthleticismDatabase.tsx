@@ -235,10 +235,19 @@ export default function AthleticismDatabase() {
   };
 
   const getSortIcon = (columnKey: keyof FlatAthleticismRow) => {
-    if (filterState.sortColumn !== columnKey) {
-      return null;
+    if (filterState.sortColumn === columnKey) {
+      return filterState.sortDirection === 'asc' ? 
+        <ChevronUp className="h-4 w-4 text-primary" /> : 
+        <ChevronDown className="h-4 w-4 text-primary" />;
     }
-    return filterState.sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />;
+    
+    // Show inactive sort indicator when column is not sorted
+    return (
+      <div className="flex flex-col opacity-50">
+        <ChevronUp className="h-2 w-2 -mb-1" />
+        <ChevronDown className="h-2 w-2" />
+      </div>
+    );
   };
 
   // Format loading recommendations as readable parameters
