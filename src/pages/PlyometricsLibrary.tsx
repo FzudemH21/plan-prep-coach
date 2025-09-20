@@ -8,11 +8,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { toast } from "../hooks/use-toast";
 import { usePlyometricsData } from "../hooks/usePlyometricsData";
 import { PlyometricsFilterState } from "../types/plyometrics";
-import EditablePlyometricsTable from "../components/plyometrics/EditablePlyometricsTable";
+import EnhancedEditableTable from "../components/shared/EnhancedEditableTable";
 
 export default function PlyometricsLibrary() {
   const navigate = useNavigate();
-  const { data, isLoading, addEntry, updateEntry, deleteEntry, importData, exportData, resetToDefaults } = usePlyometricsData();
+  const { 
+    data, 
+    isLoading, 
+    columns,
+    addEntry, 
+    updateEntry, 
+    deleteEntry, 
+    importData, 
+    exportData, 
+    resetToDefaults,
+    addColumn,
+    updateColumn,
+    deleteColumn
+  } = usePlyometricsData();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importMode, setImportMode] = useState<'append' | 'replace'>('append');
 
@@ -319,12 +332,20 @@ export default function PlyometricsLibrary() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <EditablePlyometricsTable
-            exercises={filteredExercises}
-            onUpdateExercise={updateEntry}
-            onDeleteExercise={deleteEntry}
+          <EnhancedEditableTable
+            data={filteredExercises}
+            columns={columns}
+            onUpdateEntry={updateEntry}
+            onDeleteEntry={deleteEntry}
+            onAddEntry={handleAddExercise}
             filterState={filterState}
             onFilterChange={(changes) => setFilterState(prev => ({ ...prev, ...changes }))}
+            columnManagement={{
+              columns,
+              onAddColumn: addColumn,
+              onUpdateColumn: updateColumn,
+              onDeleteColumn: deleteColumn
+            }}
           />
         </CardContent>
       </Card>

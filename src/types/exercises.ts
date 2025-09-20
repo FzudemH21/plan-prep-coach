@@ -1,4 +1,4 @@
-export interface ExerciseEntry {
+export interface ExerciseEntry extends Record<string, string> {
   id: string;
   übungsname: string;
   akzentuierteKörperregion: string;
@@ -17,6 +17,13 @@ export interface ExerciseDatabase {
   exercises: ExerciseEntry[];
   lastUpdated: string;
   version: string;
+  columnDefinitions?: Array<{
+    key: string;
+    label: string;
+    type: 'text' | 'multiline' | 'select';
+    options?: string[];
+    required?: boolean;
+  }>;
 }
 
 export interface FilterState {

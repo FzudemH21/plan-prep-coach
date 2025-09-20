@@ -1,4 +1,4 @@
-export interface PlyometricsEntry {
+export interface PlyometricsEntry extends Record<string, string> {
   id: string;
   übung: string;
   intensität: string;
@@ -16,6 +16,13 @@ export interface PlyometricsDatabase {
   exercises: PlyometricsEntry[];
   lastUpdated: string;
   version: string;
+  columnDefinitions?: Array<{
+    key: string;
+    label: string;
+    type: 'text' | 'multiline' | 'select';
+    options?: string[];
+    required?: boolean;
+  }>;
 }
 
 export interface PlyometricsFilterState {

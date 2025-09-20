@@ -8,12 +8,24 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useExerciseData } from '@/hooks/useExerciseData';
 import { FilterState, ExerciseEntry } from '@/types/exercises';
-import EditableTable from '@/components/exercises/EditableTable';
+import EnhancedEditableTable from '@/components/shared/EnhancedEditableTable';
 
 const ExerciseLibrary = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { data, addEntry, updateEntry, deleteEntry, importData, exportData, resetToDefaults } = useExerciseData();
+  const { 
+    data, 
+    columns,
+    addEntry, 
+    updateEntry, 
+    deleteEntry, 
+    importData, 
+    exportData, 
+    resetToDefaults,
+    addColumn,
+    updateColumn,
+    deleteColumn
+  } = useExerciseData();
   const [importMode, setImportMode] = useState<'replace' | 'append'>('replace');
   
   const [filterState, setFilterState] = useState<FilterState>({
@@ -271,13 +283,20 @@ const ExerciseLibrary = () => {
 
         {/* Table Container with Controlled Height */}
         <div className="max-h-[60vh] overflow-auto border rounded-lg bg-card">
-          <EditableTable
-            exercises={filteredExercises}
-            onUpdateExercise={updateEntry}
-            onDeleteExercise={deleteEntry}
-            onAddExercise={handleAddExercise}
+          <EnhancedEditableTable
+            data={filteredExercises}
+            columns={columns}
+            onUpdateEntry={updateEntry}
+            onDeleteEntry={deleteEntry}
+            onAddEntry={handleAddExercise}
             filterState={filterState}
             onFilterChange={setFilterState}
+            columnManagement={{
+              columns,
+              onAddColumn: addColumn,
+              onUpdateColumn: updateColumn,
+              onDeleteColumn: deleteColumn
+            }}
           />
         </div>
       </div>

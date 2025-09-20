@@ -1435,8 +1435,19 @@ const defaultExercises: Omit<ExerciseEntry, 'id'>[] = [
 
 export const defaultExerciseDatabase: ExerciseDatabase = {
   exercises: defaultExercises.map((exercise, index) => ({
-    ...exercise,
-    id: (index + 1).toString()
+    id: (index + 1).toString(),
+    übungsname: exercise.übungsname || '',
+    akzentuierteKörperregion: exercise.akzentuierteKörperregion || '',
+    dominantesBewegungsmuster: exercise.dominantesBewegungsmuster || '',
+    forcesActingOnSpine: exercise.forcesActingOnSpine || '',
+    übungsausführung: exercise.übungsausführung || '',
+    trunkTrainingFramework: exercise.trunkTrainingFramework || '',
+    mainMovementPlane: exercise.mainMovementPlane || '',
+    level: exercise.level || '',
+    artDesWiderstandes: exercise.artDesWiderstandes || '',
+    stand: exercise.stand || '',
+    variationen: exercise.variationen || '',
+    ...exercise
   })),
   lastUpdated: new Date().toISOString(),
   version: "2.0.0"

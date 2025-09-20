@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ExerciseDatabase, ExerciseEntry } from "@/types/exercises";
 import { completeExerciseDatabase } from "@/data/exerciseDataComplete";
+import { TableColumn } from "@/components/shared/EnhancedEditableTable";
 
 export function useExerciseData() {
   const [data, setData] = useState<ExerciseDatabase>(completeExerciseDatabase);
@@ -44,8 +45,19 @@ export function useExerciseData() {
   const addEntry = (entry: Omit<ExerciseEntry, 'id'>) => {
     const newId = (Math.max(...data.exercises.map(e => parseInt(e.id) || 0)) + 1).toString();
     const newEntry: ExerciseEntry = {
-      ...entry,
-      id: newId
+      id: newId,
+      übungsname: entry.übungsname || '',
+      akzentuierteKörperregion: entry.akzentuierteKörperregion || '',
+      dominantesBewegungsmuster: entry.dominantesBewegungsmuster || '',
+      forcesActingOnSpine: entry.forcesActingOnSpine || '',
+      übungsausführung: entry.übungsausführung || '',
+      trunkTrainingFramework: entry.trunkTrainingFramework || '',
+      mainMovementPlane: entry.mainMovementPlane || '',
+      level: entry.level || '',
+      artDesWiderstandes: entry.artDesWiderstandes || '',
+      stand: entry.stand || '',
+      variationen: entry.variationen || '',
+      ...entry
     };
     
     const newData: ExerciseDatabase = {
@@ -170,15 +182,89 @@ export function useExerciseData() {
     return [headers, ...rows].join('\n');
   };
 
+  // Default column definitions - preserve existing structure
+  const getDefaultColumns = (): TableColumn[] => [
+    { key: 'übungsname', label: 'Übungsname', type: 'text', required: true },
+    { key: 'akzentuierteKörperregion', label: 'Akzentuierte Körperregion', type: 'select', options: ['Unterkörper', 'Oberkörper', 'Ganzkörper', 'Rumpf', 'Schulter'], required: true },
+    { key: 'dominantesBewegungsmuster', label: 'Dominantes Bewegungsmuster', type: 'select', options: ['Hinge', 'Squat', 'Vertical Pull', 'Vertical Push', 'Horizontal Pull', 'Horizontal Push', '-', 'x'], required: true },
+    { key: 'forcesActingOnSpine', label: 'Forces Acting on Spine', type: 'select', options: ['Compression', 'Shear', 'Distraction', 'Rotation', 'Torque', 'Multi', 'Shear/Compression', 'Shear/Rotation', 'Shear/Distraction'], required: true },
+    { key: 'übungsausführung', label: 'Übungsausführung', type: 'select', options: ['isometrisch', 'dynamisch', 'ballistisch', 'quasi-isometrisch'], required: true },
+    { key: 'trunkTrainingFramework', label: 'Trunk Training Framework', type: 'text' },
+    { key: 'mainMovementPlane', label: 'Main Movement Plane', type: 'select', options: ['Sagittal', 'Frontal', 'Transversal', 'Sagittal/Frontal', 'Sagittal/Transversal', 'Frontal/Transversal'] },
+    { key: 'level', label: 'Level', type: 'text' },
+    { key: 'artDesWiderstandes', label: 'Art des Widerstandes', type: 'select', options: ['Körpergewicht', 'Kurzhantel', 'Langhantel', 'Kettlebell', 'Kabelzug', 'Maschine', 'Medizinball', 'Sonstiges', 'Partner', 'Prowler', 'Safety Squat Bar', 'Trap Bar'], required: true },
+    { key: 'stand', label: 'Stand', type: 'select', options: ['bilateral', 'unilateral', 'x', 'sitting', 'liegend', 'kneeling', 'half-kneeling', 'staggered', 'prone', 'supine', 'gehend', 'quadruped', 'unimanual', 'bimanual'] },
+    { key: 'variationen', label: 'Variationen', type: 'multiline' }
+  ];
+
+  // Initialize columns if not present
+  const columns = data.columnDefinitions || getDefaultColumns();
+
+  // Column management functions
+  const addColumn = (column: Omit<TableColumn, 'key'>) => {
+    const newColumn: TableColumn = {
+      ...column,
+      key: `custom_${Date.now()}`
+    };
+    
+    const newData = {
+      ...data,
+      columnDefinitions: [...columns, newColumn],
+      // Add empty values for new column to all existing exercises
+      exercises: data.exercises.map(exercise => ({
+        ...exercise,
+        [newColumn.key]: ''
+      }))
+    };
+    
+    saveData(newData);
+  };
+
+  const updateColumn = (key: string, updates: Partial<TableColumn>) => {
+    const newColumns = columns.map(col => 
+      col.key === key ? { ...col, ...updates } : col
+    );
+    
+    const newData = {
+      ...data,
+      columnDefinitions: newColumns
+    };
+    
+    saveData(newData);
+  };
+
+  const deleteColumn = (key: string) => {
+    const column = columns.find(col => col.key === key);
+    if (column?.required) return; // Don't delete required columns
+    
+    const newColumns = columns.filter(col => col.key !== key);
+    const newData = {
+      ...data,
+      columnDefinitions: newColumns,
+      // Remove column data from all exercises
+      exercises: data.exercises.map(exercise => {
+        const { [key]: deletedField, ...rest } = exercise;
+        return rest as ExerciseEntry;
+      })
+    };
+    
+    saveData(newData);
+  };
+
   return {
     data,
     isLoading,
+    columns,
     addEntry,
     updateEntry, 
     deleteEntry,
     importData,
     exportData,
     saveData,
-    resetToDefaults
+    resetToDefaults,
+    // Column management
+    addColumn,
+    updateColumn,
+    deleteColumn,
   };
 }

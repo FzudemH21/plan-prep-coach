@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { PlyometricsDatabase, PlyometricsEntry } from "../types/plyometrics";
 import { completePlyometricsDatabase } from "../data/plyometricsData";
+import { TableColumn } from "@/components/shared/EnhancedEditableTable";
 
 export function usePlyometricsData() {
   const [data, setData] = useState<PlyometricsDatabase>(completePlyometricsDatabase);
@@ -39,8 +40,18 @@ export function usePlyometricsData() {
 
   const addEntry = (entry: Omit<PlyometricsEntry, 'id'>) => {
     const newEntry: PlyometricsEntry = {
-      ...entry,
       id: `plyometric-${Date.now()}`,
+      übung: entry.übung || '',
+      intensität: entry.intensität || '',
+      tier: entry.tier || '',
+      dauerDVZ: entry.dauerDVZ || '',
+      fokusrichtung: entry.fokusrichtung || '',
+      bewegungsart: entry.bewegungsart || '',
+      modus: entry.modus || '',
+      emphasis: entry.emphasis || '',
+      übungsgruppe: entry.übungsgruppe || '',
+      kommentar: entry.kommentar || '',
+      ...entry
     };
     const newData = {
       ...data,
@@ -142,6 +153,74 @@ export function usePlyometricsData() {
     return tsvContent;
   };
 
+  // Default column definitions - preserve existing structure
+  const getDefaultColumns = (): TableColumn[] => [
+    { key: 'übung', label: 'Übung', type: 'text', required: true },
+    { key: 'intensität', label: 'Intensität', type: 'select', options: ['Extensive', 'Intensive', 'Extensive/Intensive'], required: true },
+    { key: 'tier', label: 'Tier', type: 'select', options: ['Elastic', 'Deep', 'Reactive', 'Frog', 'Gazelle', 'Tiger', 'Deep/Reactive', 'Reactive/Gazelle'], required: true },
+    { key: 'dauerDVZ', label: 'Dauer DVZ', type: 'select', options: ['kurz', 'lang', 'kurz/lang'] },
+    { key: 'fokusrichtung', label: 'Fokusrichtung', type: 'select', options: ['Horizontal', 'Vertikal', 'Lateral', 'Multidirektional', 'Horizontal/Vertikal'] },
+    { key: 'bewegungsart', label: 'Bewegungsart', type: 'select', options: ['zyklisch', 'azyklisch'] },
+    { key: 'modus', label: 'Modus', type: 'select', options: ['Alternating', 'Double Leg', 'Single Leg', 'Double Leg/Single Leg', 'Single Leg '] },
+    { key: 'emphasis', label: 'Emphasis', type: 'select', options: ['Achilles/Hip', 'Knee/Hip', 'Achilles/Knee/Hip', 'Hip', 'Achilles/Knee', 'Knee', 'Achilles'] },
+    { key: 'übungsgruppe', label: 'Übungsgruppe', type: 'select', options: ['Bounding', 'Skipping', 'Landing', 'Sonstiges', 'Deep Bouncing', 'Hopping', 'Max Jump', 'Pogos', 'Bouncing'] },
+    { key: 'kommentar', label: 'Kommentar', type: 'multiline' },
+  ];
+
+  // Initialize columns if not present
+  const columns = data.columnDefinitions || getDefaultColumns();
+
+  // Column management functions
+  const addColumn = (column: Omit<TableColumn, 'key'>) => {
+    const newColumn: TableColumn = {
+      ...column,
+      key: `custom_${Date.now()}`
+    };
+    
+    const newData = {
+      ...data,
+      columnDefinitions: [...columns, newColumn],
+      // Add empty values for new column to all existing exercises
+      exercises: data.exercises.map(exercise => ({
+        ...exercise,
+        [newColumn.key]: ''
+      }))
+    };
+    
+    saveData(newData);
+  };
+
+  const updateColumn = (key: string, updates: Partial<TableColumn>) => {
+    const newColumns = columns.map(col => 
+      col.key === key ? { ...col, ...updates } : col
+    );
+    
+    const newData = {
+      ...data,
+      columnDefinitions: newColumns
+    };
+    
+    saveData(newData);
+  };
+
+  const deleteColumn = (key: string) => {
+    const column = columns.find(col => col.key === key);
+    if (column?.required) return; // Don't delete required columns
+    
+    const newColumns = columns.filter(col => col.key !== key);
+    const newData = {
+      ...data,
+      columnDefinitions: newColumns,
+      // Remove column data from all exercises
+      exercises: data.exercises.map(exercise => {
+        const { [key]: deletedField, ...rest } = exercise;
+        return rest as PlyometricsEntry;
+      })
+    };
+    
+    saveData(newData);
+  };
+
   const resetToDefaults = () => {
     localStorage.removeItem("plyometrics-database");
     setData(completePlyometricsDatabase);
@@ -151,11 +230,16 @@ export function usePlyometricsData() {
   return {
     data,
     isLoading,
+    columns,
     addEntry,
     updateEntry,
     deleteEntry,
     importData,
     exportData,
     resetToDefaults,
+    // Column management
+    addColumn,
+    updateColumn,
+    deleteColumn,
   };
 }
