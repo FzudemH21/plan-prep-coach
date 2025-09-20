@@ -542,11 +542,11 @@ export default function AthleticismDatabase() {
           <CardTitle>Database Entries</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="border rounded-lg overflow-auto max-h-[70vh] relative">
+          <div className="border rounded-lg overflow-auto max-h-[70vh]">
             <Table>
-              <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">
+              <TableHeader>
                 <TableRow>
-                  <TableHead className="min-w-[200px]">
+                  <TableHead className="min-w-[200px] sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">
                     <div className="flex items-center justify-between">
                       <button
                         onClick={() => handleSort('overarchingGoal')}
@@ -565,7 +565,7 @@ export default function AthleticismDatabase() {
                       />
                     </div>
                   </TableHead>
-                  <TableHead className="min-w-[200px]">
+                  <TableHead className="min-w-[200px] sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">
                     <div className="flex items-center justify-between">
                       <button
                         onClick={() => handleSort('subGoal')}
@@ -584,7 +584,7 @@ export default function AthleticismDatabase() {
                       />
                     </div>
                   </TableHead>
-                  <TableHead className="min-w-[200px]">
+                  <TableHead className="min-w-[200px] sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">
                     <div className="flex items-center justify-between">
                       <button
                         onClick={() => handleSort('quality')}
@@ -603,7 +603,7 @@ export default function AthleticismDatabase() {
                       />
                     </div>
                   </TableHead>
-                  <TableHead className="min-w-[250px]">
+                  <TableHead className="min-w-[250px] sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">
                     <div className="flex items-center justify-between">
                       <button
                         onClick={() => handleSort('method')}
@@ -622,7 +622,7 @@ export default function AthleticismDatabase() {
                       />
                     </div>
                   </TableHead>
-                  <TableHead className="min-w-[400px]">
+                  <TableHead className="min-w-[400px] sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">
                     <div className="flex items-center justify-between">
                       <button
                         onClick={() => handleSort('loadingRecommendations')}
@@ -641,7 +641,7 @@ export default function AthleticismDatabase() {
                       />
                     </div>
                   </TableHead>
-                  <TableHead className="w-[120px]">Actions</TableHead>
+                  <TableHead className="w-[120px] sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
