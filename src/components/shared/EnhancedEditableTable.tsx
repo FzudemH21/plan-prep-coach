@@ -10,6 +10,8 @@ import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
+import { ColumnRenameDialog } from '@/components/shared/ColumnRenameDialog';
+import { ColumnDeleteDialog } from '@/components/shared/ColumnDeleteDialog';
 
 // Generic interfaces for column management
 export interface TableColumn {
@@ -300,6 +302,16 @@ function EnhancedEditableTable<T extends Record<string, any>>({
 }: EnhancedEditableTableProps<T>) {
   const { toast } = useToast();
   const [showNewColumnDialog, setShowNewColumnDialog] = useState(false);
+  const [renameDialog, setRenameDialog] = useState<{ isOpen: boolean; columnKey: string; currentName: string }>({
+    isOpen: false,
+    columnKey: '',
+    currentName: ''
+  });
+  const [deleteDialog, setDeleteDialog] = useState<{ isOpen: boolean; columnKey: string; columnName: string }>({
+    isOpen: false,
+    columnKey: '',
+    columnName: ''
+  });
 
   const handleSort = (columnKey: string) => {
     const newDirection = filterState.sortColumn === columnKey && filterState.sortDirection === 'asc' ? 'desc' : 'asc';
@@ -331,35 +343,45 @@ function EnhancedEditableTable<T extends Record<string, any>>({
     });
   };
 
-  const handleDeleteColumn = (columnKey: string) => {
+  const handleDeleteColumn = () => {
     if (!columnManagement) return;
     
-    const column = columns.find(col => col.key === columnKey);
+    const column = columns.find(c => c.key === deleteDialog.columnKey);
     if (column?.required) {
       toast({
         title: "Cannot Delete Column",
         description: "This column is required and cannot be deleted.",
         variant: "destructive"
       });
+      setDeleteDialog({ isOpen: false, columnKey: '', columnName: '' });
       return;
     }
 
-    if (window.confirm(`Are you sure you want to delete the column "${column?.label}"? This action cannot be undone.`)) {
-      columnManagement.onDeleteColumn(columnKey);
-      toast({
-        title: "Column Deleted",
-        description: `Column "${column?.label}" has been deleted.`
-      });
-    }
+    columnManagement.onDeleteColumn(deleteDialog.columnKey);
+    toast({
+      title: "Column Deleted",
+      description: `Column "${deleteDialog.columnName}" has been deleted.`
+    });
+    setDeleteDialog({ isOpen: false, columnKey: '', columnName: '' });
   };
 
-  const handleRenameColumn = (columnKey: string, newLabel: string) => {
+  const handleRenameColumn = (newLabel: string) => {
     if (!columnManagement) return;
-    columnManagement.onUpdateColumn(columnKey, { label: newLabel });
+    
+    columnManagement.onUpdateColumn(renameDialog.columnKey, { label: newLabel });
     toast({
       title: "Column Renamed",
-      description: `Column has been renamed to "${newLabel}".`
+      description: `Column renamed to "${newLabel}".`
     });
+    setRenameDialog({ isOpen: false, columnKey: '', currentName: '' });
+  };
+
+  const openRenameDialog = (columnKey: string, currentName: string) => {
+    setRenameDialog({ isOpen: true, columnKey, currentName });
+  };
+
+  const openDeleteDialog = (columnKey: string, columnName: string) => {
+    setDeleteDialog({ isOpen: true, columnKey, columnName });
   };
 
   const hasActiveFilters = filterState.search || Object.keys(filterState.columnFilters).length > 0;
@@ -437,18 +459,13 @@ function EnhancedEditableTable<T extends Record<string, any>>({
                             <span className="truncate">{column.label}</span>
                           </ContextMenuTrigger>
                           <ContextMenuContent>
-                            <ContextMenuItem onClick={() => {
-                              const newLabel = prompt('Enter new column name:', column.label);
-                              if (newLabel && newLabel !== column.label) {
-                                handleRenameColumn(column.key, newLabel);
-                              }
-                            }}>
+                            <ContextMenuItem onClick={() => openRenameDialog(column.key, column.label)}>
                               <Edit className="h-4 w-4 mr-2" />
                               Rename Column
                             </ContextMenuItem>
                             {!column.required && (
                               <ContextMenuItem 
-                                onClick={() => handleDeleteColumn(column.key)}
+                                onClick={() => openDeleteDialog(column.key, column.label)}
                                 className="text-destructive"
                               >
                                 <Trash2 className="h-4 w-4 mr-2" />
@@ -527,6 +544,22 @@ function EnhancedEditableTable<T extends Record<string, any>>({
           onAdd={columnManagement.onAddColumn}
         />
       )}
+
+      {/* Rename Column Dialog */}
+      <ColumnRenameDialog
+        isOpen={renameDialog.isOpen}
+        onClose={() => setRenameDialog({ isOpen: false, columnKey: '', currentName: '' })}
+        onRename={handleRenameColumn}
+        currentName={renameDialog.currentName}
+      />
+
+      {/* Delete Column Dialog */}
+      <ColumnDeleteDialog
+        isOpen={deleteDialog.isOpen}
+        onClose={() => setDeleteDialog({ isOpen: false, columnKey: '', columnName: '' })}
+        onConfirm={handleDeleteColumn}
+        columnName={deleteDialog.columnName}
+      />
     </div>
   );
 }

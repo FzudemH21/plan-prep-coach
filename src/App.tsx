@@ -37,6 +37,7 @@ const App = () => (
               <Route path="/templates" element={<TemplatesPage />} />
               <Route path="/templates/athleticism" element={<AthleticismDatabase />} />
               <Route path="/templates/toolbox" element={<ToolboxDatabase />} />
+              
               <Route path="/templates/library/:id" element={<CustomLibraryPage />} />
               <Route path="/templates/exercises" element={<ExerciseLibrary />} />
               <Route path="/templates/plyometrics" element={<PlyometricsLibrary />} />

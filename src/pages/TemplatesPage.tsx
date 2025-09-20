@@ -39,6 +39,9 @@ export default function TemplatesPage() {
   };
 
   const getLibraryRoute = (library: CustomLibrary) => {
+    // Route built-in libraries to their dedicated pages
+    if (library.type === 'Resistance Training') return '/templates/exercises';
+    if (library.type === 'Plyometrics') return '/templates/plyometrics';
     return `/templates/library/${library.id}`;
   };
 
@@ -137,6 +140,50 @@ export default function TemplatesPage() {
             </Button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Built-in Libraries */}
+            <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/templates/exercises")}>
+              <CardHeader>
+                <div className="flex items-center space-x-3">
+                  <FileText className="h-8 w-8 text-primary" />
+                  <div>
+                    <CardTitle>Resistance Training Exercise</CardTitle>
+                    <CardDescription>Resistance Training</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Complete resistance training exercise database with detailed movement patterns and parameters.
+                </p>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs bg-secondary px-2 py-1 rounded">Editable</span>
+                  <span className="text-xs text-muted-foreground">Built-in</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/templates/plyometrics")}>
+              <CardHeader>
+                <div className="flex items-center space-x-3">
+                  <Activity className="h-8 w-8 text-orange-600" />
+                  <div>
+                    <CardTitle>Plyometrics Library</CardTitle>
+                    <CardDescription>Plyometrics</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Comprehensive plyometric exercise database with intensity classifications and movement patterns.
+                </p>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs bg-secondary px-2 py-1 rounded">Editable</span>
+                  <span className="text-xs text-muted-foreground">Built-in</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Custom Libraries */}
             {libraries.map((library) => {
               const IconComponent = getLibraryIcon(library);
               const iconColor = getLibraryIconColor(library);

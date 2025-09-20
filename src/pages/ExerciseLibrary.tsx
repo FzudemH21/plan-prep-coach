@@ -131,12 +131,12 @@ const ExerciseLibrary = () => {
       
       toast({
         title: "Export Successful",
-        description: "Exercise library exported successfully."
+        description: "Resistance training exercise library exported successfully."
       });
     } catch (error) {
       toast({
         title: "Export Failed",
-        description: "Failed to export exercise library.",
+        description: "Failed to export resistance training exercise library.",
         variant: "destructive"
       });
     }
@@ -171,7 +171,7 @@ const ExerciseLibrary = () => {
     resetToDefaults();
     toast({
       title: "Reset Complete",
-      description: "Exercise library has been reset to defaults."
+      description: "Resistance training exercise library has been reset to defaults."
     });
   };
 
@@ -187,7 +187,7 @@ const ExerciseLibrary = () => {
                 Back to Templates
               </Button>
               <div>
-                <h1 className="text-2xl font-bold">Exercise Library</h1>
+                <h1 className="text-2xl font-bold">Resistance Training Exercise</h1>
                 <p className="text-sm text-muted-foreground">
                   Manage your resistance training exercise database
                 </p>
