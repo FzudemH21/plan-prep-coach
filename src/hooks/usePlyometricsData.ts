@@ -155,9 +155,9 @@ export function usePlyometricsData() {
 
   // Default column definitions - preserve existing structure
   const getDefaultColumns = (): TableColumn[] => [
-    { key: 'übung', label: 'Übung', type: 'text', required: true },
-    { key: 'intensität', label: 'Intensität', type: 'select', options: ['Extensive', 'Intensive', 'Extensive/Intensive'], required: true },
-    { key: 'tier', label: 'Tier', type: 'select', options: ['Elastic', 'Deep', 'Reactive', 'Frog', 'Gazelle', 'Tiger', 'Deep/Reactive', 'Reactive/Gazelle'], required: true },
+    { key: 'übung', label: 'Übung', type: 'text' },
+    { key: 'intensität', label: 'Intensität', type: 'select', options: ['Extensive', 'Intensive', 'Extensive/Intensive'] },
+    { key: 'tier', label: 'Tier', type: 'select', options: ['Elastic', 'Deep', 'Reactive', 'Frog', 'Gazelle', 'Tiger', 'Deep/Reactive', 'Reactive/Gazelle'] },
     { key: 'dauerDVZ', label: 'Dauer DVZ', type: 'select', options: ['kurz', 'lang', 'kurz/lang'] },
     { key: 'fokusrichtung', label: 'Fokusrichtung', type: 'select', options: ['Horizontal', 'Vertikal', 'Lateral', 'Multidirektional', 'Horizontal/Vertikal'] },
     { key: 'bewegungsart', label: 'Bewegungsart', type: 'select', options: ['zyklisch', 'azyklisch'] },
@@ -204,14 +204,11 @@ export function usePlyometricsData() {
   };
 
   const deleteColumn = (key: string) => {
-    const column = columns.find(col => col.key === key);
-    if (column?.required) return; // Don't delete required columns
-    
     const newColumns = columns.filter(col => col.key !== key);
     const newData = {
       ...data,
       columnDefinitions: newColumns,
-      // Remove column data from all exercises
+      // Remove column data from all existing exercises
       exercises: data.exercises.map(exercise => {
         const { [key]: deletedField, ...rest } = exercise;
         return rest as PlyometricsEntry;
