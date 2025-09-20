@@ -13,6 +13,7 @@ import { useToolboxData } from "@/hooks/useToolboxData";
 import { ToolboxEntry } from "@/types/toolbox";
 import { useToast } from "@/hooks/use-toast";
 import { ParameterManagementDialog } from "@/components/toolbox/ParameterManagementDialog";
+import { ToolboxColumnFilter } from "@/components/toolbox/ToolboxColumnFilter";
 
 type SortOrder = 'asc' | 'desc';
 type SortColumn = 'category' | 'subCategory';
@@ -39,6 +40,17 @@ export default function ToolboxDatabase() {
     category: null,
     subCategory: null
   });
+  const [filterState, setFilterState] = useState<{
+    columnFilters: {
+      category: string[];
+      subCategory: string[];
+    };
+  }>({
+    columnFilters: {
+      category: [],
+      subCategory: []
+    }
+  });
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isParameterDialogOpen, setIsParameterDialogOpen] = useState(false);
   const [selectedSubCategory, setSelectedSubCategory] = useState<{ category: string; subCategory: string } | null>(null);
@@ -63,6 +75,25 @@ export default function ToolboxDatabase() {
         [column]: { column, order: newOrder }
       };
     });
+  };
+
+  // Handle column filtering
+  const handleColumnFilter = (columnKey: 'category' | 'subCategory', values: string[]) => {
+    setFilterState(prev => ({
+      ...prev,
+      columnFilters: {
+        ...prev.columnFilters,
+        [columnKey]: values
+      }
+    }));
+  };
+
+  // Handle column sort from filter
+  const handleColumnSortFromFilter = (columnKey: 'category' | 'subCategory', direction: 'asc' | 'desc') => {
+    setColumnSorts(prev => ({
+      ...prev,
+      [columnKey]: { column: columnKey, order: direction }
+    }));
   };
 
   // Group entries by category + sub-category combination
@@ -101,6 +132,17 @@ export default function ToolboxDatabase() {
       );
     }
 
+    // Apply column filters
+    const { columnFilters } = filterState;
+    
+    if (columnFilters.category.length > 0) {
+      result = result.filter(item => columnFilters.category.includes(item.category));
+    }
+    
+    if (columnFilters.subCategory.length > 0) {
+      result = result.filter(item => columnFilters.subCategory.includes(item.subCategory));
+    }
+
     // Apply sorting based on column sorts
     const categorySorter = columnSorts.category;
     const subCategorySorter = columnSorts.subCategory;
@@ -132,7 +174,7 @@ export default function ToolboxDatabase() {
     }
 
     return result;
-  }, [data.entries, searchTerm, columnSorts]);
+  }, [data.entries, searchTerm, columnSorts, filterState]);
 
   // Handle add entry (creates a new sub-category)
   const handleAddEntry = () => {
@@ -494,34 +536,54 @@ export default function ToolboxDatabase() {
       {/* Sub-Categories Table */}
       <Card>
         <CardContent className="p-0">
-          <Table containerClassName="border rounded-lg max-h-[600px]">
+          <Table containerClassName="border rounded-lg max-h-[70vh]">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-1/4 sticky top-0 bg-background z-10">
-                  <Button 
-                    variant="ghost" 
-                    className="flex items-center gap-1 p-0 h-auto font-semibold justify-start"
-                    onClick={() => handleColumnSort('category')}
-                  >
-                    Category
-                    {columnSorts.category?.order === 'asc' && <ChevronUp className="h-4 w-4" />}
-                    {columnSorts.category?.order === 'desc' && <ChevronDown className="h-4 w-4" />}
-                  </Button>
+                <TableHead className="w-1/4 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">
+                  <div className="flex items-center justify-between">
+                    <Button 
+                      variant="ghost" 
+                      className="flex items-center gap-1 p-0 h-auto font-semibold justify-start"
+                      onClick={() => handleColumnSort('category')}
+                    >
+                      Category
+                      {columnSorts.category?.order === 'asc' && <ChevronUp className="h-4 w-4" />}
+                      {columnSorts.category?.order === 'desc' && <ChevronDown className="h-4 w-4" />}
+                    </Button>
+                    <ToolboxColumnFilter
+                      columnKey="category"
+                      columnLabel="Category"
+                      allData={subCategoryData}
+                      selectedValues={filterState.columnFilters.category}
+                      onSelectionChange={(values) => handleColumnFilter('category', values)}
+                      onSortChange={handleColumnSortFromFilter}
+                    />
+                  </div>
                 </TableHead>
-                <TableHead className="w-1/4 sticky top-0 bg-background z-10">
-                  <Button 
-                    variant="ghost" 
-                    className="flex items-center gap-1 p-0 h-auto font-semibold justify-start"
-                    onClick={() => handleColumnSort('subCategory')}
-                  >
-                    Sub-Category
-                    {columnSorts.subCategory?.order === 'asc' && <ChevronUp className="h-4 w-4" />}
-                    {columnSorts.subCategory?.order === 'desc' && <ChevronDown className="h-4 w-4" />}
-                  </Button>
+                <TableHead className="w-1/4 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">
+                  <div className="flex items-center justify-between">
+                    <Button 
+                      variant="ghost" 
+                      className="flex items-center gap-1 p-0 h-auto font-semibold justify-start"
+                      onClick={() => handleColumnSort('subCategory')}
+                    >
+                      Sub-Category
+                      {columnSorts.subCategory?.order === 'asc' && <ChevronUp className="h-4 w-4" />}
+                      {columnSorts.subCategory?.order === 'desc' && <ChevronDown className="h-4 w-4" />}
+                    </Button>
+                    <ToolboxColumnFilter
+                      columnKey="subCategory"
+                      columnLabel="Sub-Category"
+                      allData={subCategoryData}
+                      selectedValues={filterState.columnFilters.subCategory}
+                      onSelectionChange={(values) => handleColumnFilter('subCategory', values)}
+                      onSortChange={handleColumnSortFromFilter}
+                    />
+                  </div>
                 </TableHead>
-                <TableHead className="w-1/6 sticky top-0 bg-background z-10">Parameters</TableHead>
-                <TableHead className="w-1/6 sticky top-0 bg-background z-10">Exercise Categories</TableHead>
-                <TableHead className="w-1/6 sticky top-0 bg-background z-10">Actions</TableHead>
+                <TableHead className="w-1/6 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">Parameters</TableHead>
+                <TableHead className="w-1/6 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">Exercise Categories</TableHead>
+                <TableHead className="w-1/6 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
