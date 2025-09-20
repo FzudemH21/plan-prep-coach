@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { completeExerciseDatabase } from '@/data/exerciseDataComplete';
+import { completePlyometricsDatabase } from '@/data/plyometricsData';
 
 export interface LibraryColumn {
   id: string;
@@ -104,7 +106,7 @@ const BUILT_IN_LIBRARIES: CustomLibrary[] = [
 const DEFAULT_DATA: CustomLibraryData = {
   libraries: [...BUILT_IN_LIBRARIES],
   lastUpdated: new Date().toISOString(),
-  version: '2.0.0'
+  version: '2.1.0'
 };
 
 export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -120,7 +122,7 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
         const parsed = JSON.parse(saved);
         
         // Force migration if version is outdated or libraries are empty
-        const currentVersion = '2.0.0'; // Updated to force re-migration
+        const currentVersion = '2.1.0'; // Updated to force re-migration
         const shouldMigrate = !parsed.version || parsed.version < currentVersion ||
                              parsed.libraries.some((lib: CustomLibrary) => lib.isBuiltIn && lib.exercises.length === 0);
         
@@ -165,7 +167,7 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
       } else {
         // First time - migrate data from static files
         const migratedData = migrateStaticData();
-        const finalData = { ...migratedData, version: '2.0.0' };
+const finalData = { ...migratedData, version: '2.1.0' };
         setData(finalData);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(finalData));
       }
@@ -177,7 +179,7 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
         variant: "destructive"
       });
       const migratedData = migrateStaticData();
-      const finalData = { ...migratedData, version: '2.0.0' };
+      const finalData = { ...migratedData, version: '2.1.0' };
       setData(finalData);
     } finally {
       setIsLoading(false);
@@ -185,13 +187,10 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
   }, [toast]);
 
   const migrateStaticData = (): CustomLibraryData => {
-    // Import static data
     const migratedBuiltIns = BUILT_IN_LIBRARIES.map(lib => {
       if (lib.id === 'resistance-training') {
         try {
-          // Import exercise data from static file
-          const { exerciseData } = require('@/data/exerciseDataComplete');
-          const exercises: CustomExercise[] = exerciseData.exercises.map((ex: any, index: number) => ({
+          const exercises: CustomExercise[] = (completeExerciseDatabase.exercises || []).map((ex: any, index: number) => ({
             id: ex.id || `exercise-${index}`,
             data: {
               übungsname: ex.übungsname || '',
@@ -213,12 +212,10 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
           return lib;
         }
       }
-      
+
       if (lib.id === 'plyometrics') {
         try {
-          // Import plyometrics data from static file
-          const { plyometricsData } = require('@/data/plyometricsData');
-          const exercises: CustomExercise[] = plyometricsData.exercises.map((ex: any, index: number) => ({
+          const exercises: CustomExercise[] = (completePlyometricsDatabase.exercises || []).map((ex: any, index: number) => ({
             id: ex.id || `plyometrics-${index}`,
             data: {
               übung: ex.übung || '',
@@ -239,14 +236,14 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
           return lib;
         }
       }
-      
+
       return lib;
     });
 
     return {
       libraries: migratedBuiltIns,
       lastUpdated: new Date().toISOString(),
-      version: '2.0.0'
+      version: '2.1.0'
     };
   };
 
