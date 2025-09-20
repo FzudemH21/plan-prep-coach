@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Filter, ChevronDown } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Filter, ArrowUpAZ, ArrowDownZA } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ColumnFilterProps {
@@ -12,6 +13,7 @@ interface ColumnFilterProps {
   allData: ExerciseEntry[];
   selectedValues: string[];
   onSelectionChange: (values: string[]) => void;
+  onSortChange?: (columnKey: string, direction: 'asc' | 'desc') => void;
 }
 
 export const ColumnFilter: React.FC<ColumnFilterProps> = ({
@@ -19,6 +21,7 @@ export const ColumnFilter: React.FC<ColumnFilterProps> = ({
   allData,
   selectedValues,
   onSelectionChange,
+  onSortChange,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -45,6 +48,16 @@ export const ColumnFilter: React.FC<ColumnFilterProps> = ({
     );
   }, [uniqueValues, searchTerm]);
 
+  const handleSelectFiltered = () => {
+    const newSelected = [...new Set([...selectedValues, ...filteredValues])];
+    onSelectionChange(newSelected);
+  };
+
+  const handleClearFiltered = () => {
+    const newSelected = selectedValues.filter(v => !filteredValues.includes(v));
+    onSelectionChange(newSelected);
+  };
+
   const handleSelectAll = () => {
     if (selectedValues.length === uniqueValues.length) {
       onSelectionChange([]);
@@ -63,6 +76,7 @@ export const ColumnFilter: React.FC<ColumnFilterProps> = ({
 
   const isAllSelected = selectedValues.length === uniqueValues.length;
   const isPartiallySelected = selectedValues.length > 0 && selectedValues.length < uniqueValues.length;
+  const filteredSelectedCount = filteredValues.filter(v => selectedValues.includes(v)).length;
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -70,58 +84,108 @@ export const ColumnFilter: React.FC<ColumnFilterProps> = ({
         <Button
           variant="ghost"
           size="sm"
-          className={cn(
-            "h-8 px-2 flex items-center gap-1",
-            selectedValues.length > 0 && "bg-accent text-accent-foreground"
-          )}
+          className="h-8 px-2 text-xs font-normal hover:bg-muted"
         >
-          <Filter className="h-3 w-3" />
+          <Filter className="h-3 w-3 mr-1" />
           {selectedValues.length > 0 && (
-            <span className="text-xs bg-primary text-primary-foreground rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center">
+            <span className="ml-1 bg-primary text-primary-foreground rounded-full px-1.5 py-0.5 text-xs">
               {selectedValues.length}
             </span>
           )}
-          <ChevronDown className="h-3 w-3" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-72 p-0" align="start">
-        <div className="p-3 border-b border-border">
+      <PopoverContent className="w-96 p-0" align="start">
+        <div className="p-3 border-b">
+          <h4 className="font-medium text-sm mb-2">Filter {column.label}</h4>
           <Input
-            placeholder="Suchen..."
+            placeholder={`Search ${column.label.toLowerCase()}...`}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="h-8"
           />
         </div>
-        
-        <div className="p-2">
-          <div className="flex items-center space-x-2 p-2 hover:bg-accent hover:text-accent-foreground rounded">
+
+        {/* Column Sort */}
+        {onSortChange && (
+          <div className="p-3 border-b">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">Sort Column</span>
+              <div className="flex gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 px-2"
+                  onClick={() => onSortChange!(column.key as string, 'asc')}
+                >
+                  <ArrowUpAZ className="h-3 w-3 mr-1" />
+                  A-Z
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 px-2"
+                  onClick={() => onSortChange!(column.key as string, 'desc')}
+                >
+                  <ArrowDownZA className="h-3 w-3 mr-1" />
+                  Z-A
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Selection Controls */}
+        <div className="p-3 border-b space-y-2">
+          <div className="flex items-center space-x-2">
             <Checkbox
               id="select-all"
               checked={isAllSelected}
               ref={(el) => {
-                if (el && 'indeterminate' in el) (el as any).indeterminate = isPartiallySelected;
+                if (el && 'indeterminate' in el) {
+                  (el as any).indeterminate = isPartiallySelected;
+                }
               }}
               onCheckedChange={handleSelectAll}
             />
             <label htmlFor="select-all" className="text-sm font-medium cursor-pointer">
-              Alles auswählen
+              Select All ({uniqueValues.length})
             </label>
           </div>
-          
-          <div className="max-h-48 overflow-y-auto">
-            {filteredValues.map((value) => (
-              <div
-                key={value}
-                className="flex items-center space-x-2 p-2 hover:bg-accent hover:text-accent-foreground rounded"
+          {filteredValues.length < uniqueValues.length && (
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={handleSelectFiltered}
+                disabled={filteredSelectedCount === filteredValues.length}
               >
+                Select Filtered ({filteredValues.length})
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={handleClearFiltered}
+                disabled={filteredSelectedCount === 0}
+              >
+                Clear Filtered
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <ScrollArea className="h-64">
+          <div className="p-3 space-y-2">
+            {filteredValues.map((value) => (
+              <div key={value} className="flex items-center space-x-2">
                 <Checkbox
-                  id={`value-${value}`}
+                  id={`filter-${value}`}
                   checked={selectedValues.includes(value)}
                   onCheckedChange={() => handleValueToggle(value)}
                 />
                 <label
-                  htmlFor={`value-${value}`}
+                  htmlFor={`filter-${value}`}
                   className="text-sm cursor-pointer flex-1 truncate"
                   title={value}
                 >
@@ -129,29 +193,28 @@ export const ColumnFilter: React.FC<ColumnFilterProps> = ({
                 </label>
               </div>
             ))}
+            {filteredValues.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No matches found
+              </p>
+            )}
           </div>
-          
-          {filteredValues.length === 0 && (
-            <div className="p-2 text-sm text-muted-foreground text-center">
-              Keine Werte gefunden
-            </div>
-          )}
-        </div>
+        </ScrollArea>
         
-        <div className="p-2 border-t border-border flex justify-between gap-2">
+        <div className="p-3 border-t flex justify-between">
           <Button
             variant="outline"
             size="sm"
             onClick={() => onSelectionChange([])}
             disabled={selectedValues.length === 0}
           >
-            Alle entfernen
+            Clear All
           </Button>
           <Button
             size="sm"
             onClick={() => setIsOpen(false)}
           >
-            Schließen
+            Close
           </Button>
         </div>
       </PopoverContent>

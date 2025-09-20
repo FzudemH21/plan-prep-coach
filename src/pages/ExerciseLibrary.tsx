@@ -290,21 +290,22 @@ const ExerciseLibrary = () => {
 
         {/* Table Container with Controlled Height */}
         <div className="max-h-[60vh] overflow-auto border rounded-lg bg-card">
-          <EnhancedEditableTable
-            data={filteredExercises}
-            columns={columns}
-            onUpdateEntry={updateEntry}
-            onDeleteEntry={deleteEntry}
-            onAddEntry={handleAddExercise}
-            filterState={filterState}
-            onFilterChange={setFilterState}
-            columnManagement={{
-              columns,
-              onAddColumn: addColumn,
-              onUpdateColumn: updateColumn,
-              onDeleteColumn: deleteColumn
-            }}
-          />
+        <EnhancedEditableTable
+          data={filteredExercises}
+          columns={columns}
+          onUpdateEntry={updateEntry}
+          onDeleteEntry={deleteEntry}
+          onAddEntry={handleAddExercise}
+          filterState={filterState}
+          onFilterChange={setFilterState}
+          dataType="exercise"
+          columnManagement={{
+            columns,
+            onAddColumn: addColumn,
+            onUpdateColumn: updateColumn,
+            onDeleteColumn: deleteColumn
+          }}
+        />
         </div>
       </div>
     </div>

@@ -12,6 +12,8 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { ColumnRenameDialog } from '@/components/shared/ColumnRenameDialog';
 import { ColumnDeleteDialog } from '@/components/shared/ColumnDeleteDialog';
+import { ColumnFilter as ExerciseColumnFilter } from '@/components/exercises/ColumnFilter';
+import { PlyometricsColumnFilter } from '@/components/plyometrics/PlyometricsColumnFilter';
 
 // Generic interfaces for column management
 export interface TableColumn {
@@ -275,6 +277,7 @@ interface EnhancedEditableTableProps<T extends Record<string, any>> {
   onFilterChange: (filterState: FilterState) => void;
   columnManagement?: ColumnManagementProps;
   idField?: keyof T;
+  dataType?: 'exercise' | 'plyometrics' | 'default';
 }
 
 function EnhancedEditableTable<T extends Record<string, any>>({
@@ -286,7 +289,8 @@ function EnhancedEditableTable<T extends Record<string, any>>({
   filterState,
   onFilterChange,
   columnManagement,
-  idField = 'id'
+  idField = 'id',
+  dataType = 'default'
 }: EnhancedEditableTableProps<T>) {
   const { toast } = useToast();
   const [showNewColumnDialog, setShowNewColumnDialog] = useState(false);
@@ -321,6 +325,51 @@ function EnhancedEditableTable<T extends Record<string, any>>({
       ...filterState,
       columnFilters: newColumnFilters,
     });
+  };
+
+  const handleColumnSort = (columnKey: string, direction: 'asc' | 'desc') => {
+    onFilterChange({
+      ...filterState,
+      sortColumn: columnKey,
+      sortDirection: direction
+    });
+  };
+
+  const renderColumnFilter = (column: TableColumn) => {
+    const selectedValues = filterState.columnFilters[column.key] || [];
+    const onSelectionChange = (values: string[]) => handleColumnFilter(column.key, values);
+    
+    if (dataType === 'exercise') {
+      return (
+        <ExerciseColumnFilter
+          column={column}
+          allData={data as any}
+          selectedValues={selectedValues}
+          onSelectionChange={onSelectionChange}
+          onSortChange={handleColumnSort}
+        />
+      );
+    } else if (dataType === 'plyometrics') {
+      return (
+        <PlyometricsColumnFilter
+          column={column}
+          allData={data as any}
+          selectedValues={selectedValues}
+          onSelectionChange={onSelectionChange}
+          onSortChange={handleColumnSort}
+        />
+      );
+    } else {
+      // Fallback to basic ColumnFilter
+      return (
+        <ColumnFilter
+          column={column}
+          allData={data}
+          selectedValues={selectedValues}
+          onSelectionChange={onSelectionChange}
+        />
+      );
+    }
   };
 
   const clearAllFilters = () => {
@@ -462,12 +511,7 @@ function EnhancedEditableTable<T extends Record<string, any>>({
                       )}
                     </div>
                     
-                    <ColumnFilter
-                      column={column}
-                      allData={data}
-                      selectedValues={filterState.columnFilters[column.key] || []}
-                      onSelectionChange={(values) => handleColumnFilter(column.key, values)}
-                    />
+                    {renderColumnFilter(column)}
                   </div>
                 </th>
               ))}

@@ -346,7 +346,8 @@ export default function PlyometricsLibrary() {
             onDeleteEntry={deleteEntry}
             onAddEntry={handleAddExercise}
             filterState={filterState}
-            onFilterChange={(changes) => setFilterState(prev => ({ ...prev, ...changes }))}
+            onFilterChange={setFilterState}
+            dataType="plyometrics"
             columnManagement={{
               columns,
               onAddColumn: addColumn,
