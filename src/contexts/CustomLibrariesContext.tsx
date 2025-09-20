@@ -243,9 +243,29 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
   };
 
   const addLibrary = (library: Omit<CustomLibrary, 'id' | 'exercises' | 'createdAt' | 'lastUpdated' | 'isBuiltIn'>) => {
+    // Create URL-safe ID from library name
+    const createSlug = (name: string): string => {
+      return name
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .trim();
+    };
+
+    let baseSlug = createSlug(library.name);
+    let uniqueSlug = baseSlug;
+    let counter = 1;
+
+    // Ensure unique ID
+    while (data.libraries.some(lib => lib.id === uniqueSlug)) {
+      uniqueSlug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+
     const newLibrary: CustomLibrary = {
       ...library,
-      id: Date.now().toString(),
+      id: uniqueSlug,
       columns: library.columns || [
         { id: 'exercise', name: 'Exercise', type: 'text', required: true },
         { id: 'description', name: 'Description', type: 'textarea', required: false }

@@ -38,7 +38,7 @@ const App = () => (
               <Route path="/templates/athleticism" element={<AthleticismDatabase />} />
               <Route path="/templates/toolbox" element={<ToolboxDatabase />} />
               
-              <Route path="/templates/library/:id" element={<CustomLibraryPage />} />
+              <Route path="/templates/:libraryName" element={<CustomLibraryPage />} />
               <Route path="/templates/exercises" element={<ExerciseLibrary />} />
               <Route path="/templates/plyometrics" element={<PlyometricsLibrary />} />
               <Route path="/analytics" element={<div className="text-center py-12">Analytics coming soon...</div>} />

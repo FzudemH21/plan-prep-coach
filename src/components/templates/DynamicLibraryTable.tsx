@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -6,9 +6,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
-import { Plus, Trash2, Edit2, MoreHorizontal } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Plus, Trash2, Edit2, MoreHorizontal, Filter, RotateCcw, FileText } from 'lucide-react';
 import { useCustomLibraries, CustomLibrary, CustomExercise, LibraryColumn } from '@/hooks/useCustomLibraries';
 import { useToast } from '@/hooks/use-toast';
+import { CustomLibraryColumnFilter } from './CustomLibraryColumnFilter';
+import { ColumnDeleteDialog } from '@/components/shared/ColumnDeleteDialog';
+import { ColumnRenameDialog } from '@/components/shared/ColumnRenameDialog';
 
 interface DynamicLibraryTableProps {
   library: CustomLibrary;
@@ -26,6 +31,24 @@ interface NewColumnDialog {
   type: 'text' | 'select' | 'textarea';
   options: string;
   required: boolean;
+}
+
+interface FilterState {
+  searchTerm: string;
+  sortColumn: string | null;
+  sortDirection: 'asc' | 'desc' | null;
+}
+
+interface RenameColumnDialog {
+  isOpen: boolean;
+  columnId: string;
+  currentName: string;
+}
+
+interface DeleteColumnDialog {
+  isOpen: boolean;
+  columnId: string;
+  columnName: string;
 }
 
 export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
@@ -50,6 +73,22 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
   };
   
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [filterState, setFilterState] = useState<FilterState>({
+    searchTerm: '',
+    sortColumn: null,
+    sortDirection: null
+  });
+  const [renameDialog, setRenameDialog] = useState<RenameColumnDialog>({
+    isOpen: false,
+    columnId: '',
+    currentName: ''
+  });
+  const [deleteDialog, setDeleteDialog] = useState<DeleteColumnDialog>({
+    isOpen: false,
+    columnId: '',
+    columnName: ''
+  });
   const [newColumnDialog, setNewColumnDialog] = useState<NewColumnDialog>({
     isOpen: false,
     name: '',
@@ -106,24 +145,75 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
     toast({ title: "Success", description: "Column added successfully" });
   };
 
-  const handleRenameColumn = (columnId: string, newName: string) => {
-    updateColumnInLibrary(library.id, columnId, { name: newName });
+  const handleRenameColumn = (newName: string) => {
+    updateColumnInLibrary(library.id, renameDialog.columnId, { name: newName });
     toast({ title: "Success", description: "Column renamed successfully" });
+    setRenameDialog({ isOpen: false, columnId: '', currentName: '' });
   };
 
-  const handleDeleteColumn = (columnId: string) => {
-    const column = safeLibrary.columns.find(col => col.id === columnId);
-    if (column?.required) {
-      toast({ 
-        title: "Error", 
-        description: "Cannot delete required columns",
-        variant: "destructive"
+  const handleDeleteColumn = () => {
+    deleteColumnFromLibrary(library.id, deleteDialog.columnId);
+    toast({ title: "Success", description: "Column deleted successfully" });
+    setDeleteDialog({ isOpen: false, columnId: '', columnName: '' });
+  };
+
+  // Filter and sort exercises
+  const filteredAndSortedExercises = useMemo(() => {
+    let filtered = safeLibrary.exercises;
+
+    // Apply search filter
+    if (filterState.searchTerm) {
+      const searchLower = filterState.searchTerm.toLowerCase();
+      filtered = filtered.filter(exercise => {
+        return safeLibrary.columns.some(column => {
+          const value = exercise.data[column.id] || '';
+          return value.toString().toLowerCase().includes(searchLower);
+        });
       });
-      return;
     }
 
-    deleteColumnFromLibrary(library.id, columnId);
-    toast({ title: "Success", description: "Column deleted successfully" });
+    // Apply sorting
+    if (filterState.sortColumn && filterState.sortDirection) {
+      filtered = [...filtered].sort((a, b) => {
+        const aValue = a.data[filterState.sortColumn!] || '';
+        const bValue = b.data[filterState.sortColumn!] || '';
+        const comparison = aValue.toString().localeCompare(bValue.toString());
+        return filterState.sortDirection === 'desc' ? -comparison : comparison;
+      });
+    } else {
+      // Default sort by first column
+      const firstColumn = safeLibrary.columns[0];
+      if (firstColumn) {
+        filtered = [...filtered].sort((a, b) => {
+          const aValue = a.data[firstColumn.id] || '';
+          const bValue = b.data[firstColumn.id] || '';
+          return aValue.toString().localeCompare(bValue.toString());
+        });
+      }
+    }
+
+    return filtered;
+  }, [safeLibrary.exercises, safeLibrary.columns, filterState]);
+
+  const handleFilterChange = (column: string, searchTerm: string) => {
+    setFilterState(prev => ({ ...prev, searchTerm }));
+  };
+
+  const handleSortChange = (column: string, direction: 'asc' | 'desc' | null) => {
+    setFilterState(prev => ({
+      ...prev,
+      sortColumn: direction ? column : null,
+      sortDirection: direction
+    }));
+  };
+
+  const handleResetFilters = () => {
+    setFilterState({
+      searchTerm: '',
+      sortColumn: null,
+      sortDirection: null
+    });
+    setSelectedIds([]);
   };
 
   const renderCell = (exercise: CustomExercise, column: LibraryColumn) => {
@@ -209,18 +299,29 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
                 {column.name}
                 {column.required && <span className="text-destructive ml-1">*</span>}
               </span>
-              <MoreHorizontal className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <CustomLibraryColumnFilter
+                  column={column.id}
+                  searchTerm={filterState.sortColumn === column.id ? filterState.searchTerm : ''}
+                  onSearchChange={(value) => handleFilterChange(column.id, value)}
+                  onSortChange={(direction) => handleSortChange(column.id, direction)}
+                  selectedIds={selectedIds}
+                  onSelectionChange={setSelectedIds}
+                  exercises={safeLibrary.exercises}
+                  sortDirection={filterState.sortColumn === column.id ? filterState.sortDirection : null}
+                />
+                <MoreHorizontal className="h-4 w-4" />
+              </div>
             </div>
           </TableHead>
         </ContextMenuTrigger>
         <ContextMenuContent>
           <ContextMenuItem 
-            onClick={() => {
-              const newName = prompt('Enter new column name:', column.name);
-              if (newName && newName !== column.name) {
-                handleRenameColumn(column.id, newName);
-              }
-            }}
+            onClick={() => setRenameDialog({
+              isOpen: true,
+              columnId: column.id,
+              currentName: column.name
+            })}
           >
             <Edit2 className="h-4 w-4 mr-2" />
             Rename Column
@@ -233,11 +334,11 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
           </ContextMenuItem>
           {!column.required && (
             <ContextMenuItem 
-              onClick={() => {
-                if (confirm(`Are you sure you want to delete the "${column.name}" column?`)) {
-                  handleDeleteColumn(column.id);
-                }
-              }}
+              onClick={() => setDeleteDialog({
+                isOpen: true,
+                columnId: column.id,
+                columnName: column.name
+              })}
               className="text-destructive"
             >
               <Trash2 className="h-4 w-4 mr-2" />
@@ -251,16 +352,66 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
 
   return (
     <>
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
+      <div className="space-y-6">
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium">Total Exercises</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{safeLibrary.exercises.length}</div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium">Selected</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{selectedIds.length}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium">Filtered</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{filteredAndSortedExercises.length}</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Action Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg">
           <div className="flex items-center space-x-2">
             <Button onClick={handleAddExercise} size="sm">
               <Plus className="h-4 w-4 mr-2" />
               Add Exercise
             </Button>
+            <Button 
+              onClick={() => setNewColumnDialog({ ...newColumnDialog, isOpen: true })} 
+              variant="outline" 
+              size="sm"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Column
+            </Button>
+            <Button onClick={handleResetFilters} variant="outline" size="sm">
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Reset Filters
+            </Button>
           </div>
-          <div className="text-sm text-muted-foreground">
-            {safeLibrary.exercises.length} exercises
+          
+          <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+            {filterState.searchTerm && (
+              <Badge variant="secondary" className="gap-1">
+                <Filter className="h-3 w-3" />
+                Filtered
+              </Badge>
+            )}
+            <span>{filteredAndSortedExercises.length} of {safeLibrary.exercises.length} exercises</span>
           </div>
         </div>
 
@@ -273,15 +424,21 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {safeLibrary.exercises.length === 0 ? (
+              {filteredAndSortedExercises.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={safeLibrary.columns.length + 1} className="text-center py-12 text-muted-foreground">
-                    No exercises found. Click "Add Exercise" to get started.
+                    {safeLibrary.exercises.length === 0 
+                      ? "No exercises found. Click \"Add Exercise\" to get started."
+                      : "No exercises match the current filters."
+                    }
                   </TableCell>
                 </TableRow>
               ) : (
-                safeLibrary.exercises.map(exercise => (
-                  <TableRow key={exercise.id}>
+                filteredAndSortedExercises.map(exercise => (
+                  <TableRow 
+                    key={exercise.id}
+                    className={selectedIds.includes(exercise.id) ? "bg-muted/50" : ""}
+                  >
                     {safeLibrary.columns.map(column => (
                       <TableCell key={column.id}>
                         {renderCell(exercise, column)}
@@ -305,6 +462,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
         </div>
       </div>
 
+      {/* Dialogs */}
       <Dialog open={newColumnDialog.isOpen} onOpenChange={(open) => setNewColumnDialog({ ...newColumnDialog, isOpen: open })}>
         <DialogContent>
           <DialogHeader>
@@ -347,15 +505,6 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
                 />
               </div>
             )}
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="required"
-                checked={newColumnDialog.required}
-                onChange={(e) => setNewColumnDialog({ ...newColumnDialog, required: e.target.checked })}
-              />
-              <label htmlFor="required" className="text-sm">Required field</label>
-            </div>
           </div>
           <DialogFooter>
             <Button 
@@ -373,6 +522,20 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ColumnRenameDialog
+        isOpen={renameDialog.isOpen}
+        onClose={() => setRenameDialog({ isOpen: false, columnId: '', currentName: '' })}
+        onRename={handleRenameColumn}
+        currentName={renameDialog.currentName}
+      />
+
+      <ColumnDeleteDialog
+        isOpen={deleteDialog.isOpen}
+        onClose={() => setDeleteDialog({ isOpen: false, columnId: '', columnName: '' })}
+        onConfirm={handleDeleteColumn}
+        columnName={deleteDialog.columnName}
+      />
     </>
   );
 }

@@ -27,8 +27,9 @@ export default function TemplatesPage() {
       deleteLibrary(library.id);
       toast({
         title: "Success",
-        description: `${library.name} has been deleted`
+        description: `Library "${library.name}" deleted successfully`
       });
+      // Stay on templates page - no navigation needed
     } catch (error) {
       toast({
         title: "Error",
@@ -38,11 +39,27 @@ export default function TemplatesPage() {
     }
   };
 
+  const createSlug = (name: string): string => {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .trim();
+  };
+
   const getLibraryRoute = (library: CustomLibrary) => {
-    // Route built-in libraries to their dedicated pages
-    if (library.type === 'Resistance Training') return '/templates/exercises';
-    if (library.type === 'Plyometrics') return '/templates/plyometrics';
-    return `/templates/library/${library.id}`;
+    if (library.isBuiltIn) {
+      switch (library.id) {
+        case 'resistance-training':
+          return '/templates/exercises';
+        case 'plyometrics':
+          return '/templates/plyometrics';
+        default:
+          return `/templates/${createSlug(library.name)}`;
+      }
+    }
+    return `/templates/${createSlug(library.name)}`;
   };
 
   const getLibraryIcon = (library: CustomLibrary) => {

@@ -6,13 +6,28 @@ import { useCustomLibraries } from '@/hooks/useCustomLibraries';
 import { DynamicLibraryTable } from '@/components/templates/DynamicLibraryTable';
 import { useToast } from '@/hooks/use-toast';
 
+// Convert library name to URL-safe slug
+const createSlug = (name: string): string => {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .trim();
+};
+
+// Convert slug back to find library
+const findLibraryBySlug = (libraries: any[], slug: string) => {
+  return libraries.find(lib => createSlug(lib.name) === slug);
+};
+
 export default function CustomLibraryPage() {
-  const { id } = useParams<{ id: string }>();
+  const { libraryName } = useParams<{ libraryName: string }>();
   const navigate = useNavigate();
   const { libraries, isLoading } = useCustomLibraries();
   const { toast } = useToast();
 
-  const library = libraries.find(lib => lib.id === id);
+  const library = findLibraryBySlug(libraries, libraryName || '');
 
   if (isLoading) {
     return (
