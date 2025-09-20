@@ -2,12 +2,62 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Database, FileText, ArrowLeft, Target, Wrench, Activity, Plus } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Database, FileText, ArrowLeft, Target, Wrench, Activity, Plus, Edit2, Trash2 } from "lucide-react";
 import { AddLibraryDialog } from "@/components/templates/AddLibraryDialog";
+import { EditLibraryDialog } from "@/components/templates/EditLibraryDialog";
+import { useCustomLibraries, CustomLibrary } from "@/hooks/useCustomLibraries";
+import { useToast } from "@/hooks/use-toast";
 
 export default function TemplatesPage() {
   const navigate = useNavigate();
   const [isAddLibraryDialogOpen, setIsAddLibraryDialogOpen] = useState(false);
+  const [isEditLibraryDialogOpen, setIsEditLibraryDialogOpen] = useState(false);
+  const [editingLibrary, setEditingLibrary] = useState<CustomLibrary | null>(null);
+  const { libraries, deleteLibrary, isLoading } = useCustomLibraries();
+  const { toast } = useToast();
+
+  const handleEditLibrary = (library: CustomLibrary) => {
+    setEditingLibrary(library);
+    setIsEditLibraryDialogOpen(true);
+  };
+
+  const handleDeleteLibrary = async (library: CustomLibrary) => {
+    try {
+      deleteLibrary(library.id);
+      toast({
+        title: "Success",
+        description: `${library.name} has been deleted`
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete library",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const getLibraryRoute = (library: CustomLibrary) => {
+    if (library.id === 'resistance-training') return '/templates/exercises';
+    if (library.id === 'plyometrics') return '/templates/plyometrics';
+    return `/templates/library/${library.id}`;
+  };
+
+  const getLibraryIcon = (library: CustomLibrary) => {
+    if (library.type === 'Resistance Training') return FileText;
+    if (library.type === 'Plyometrics') return Activity;
+    return FileText;
+  };
+
+  const getLibraryIconColor = (library: CustomLibrary) => {
+    if (library.type === 'Plyometrics') return 'text-orange-600';
+    return 'text-primary';
+  };
+
+  if (isLoading) {
+    return <div className="w-full max-w-none space-y-8">Loading...</div>;
+  }
 
   return (
     <div className="w-full max-w-none space-y-8">
@@ -89,47 +139,77 @@ export default function TemplatesPage() {
             </Button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/templates/exercises")}>
-              <CardHeader>
-                <div className="flex items-center space-x-3">
-                  <FileText className="h-8 w-8 text-primary" />
-                  <div>
-                    <CardTitle>Resistance Exercise Library</CardTitle>
-                    <CardDescription>Resistance training exercise database</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Excel-like editable database with German exercise names, movement patterns, and detailed variations.
-                </p>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs bg-secondary px-2 py-1 rounded">Editable</span>
-                  <span className="text-xs text-muted-foreground">1007 exercises</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/templates/plyometrics")}>
-              <CardHeader>
-                <div className="flex items-center space-x-3">
-                  <Activity className="h-8 w-8 text-orange-600" />
-                  <div>
-                    <CardTitle>Plyometrics Library</CardTitle>
-                    <CardDescription>Explosive power training database</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Comprehensive database of plyometric exercises with intensity levels, tiers, and movement patterns for explosive power development.
-                </p>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs bg-secondary px-2 py-1 rounded">Editable</span>
-                  <span className="text-xs text-muted-foreground">150+ exercises</span>
-                </div>
-              </CardContent>
-            </Card>
+            {libraries.map((library) => {
+              const IconComponent = getLibraryIcon(library);
+              const iconColor = getLibraryIconColor(library);
+              
+              return (
+                <Card key={library.id} className="cursor-pointer hover:shadow-md transition-shadow group">
+                  <CardHeader onClick={() => navigate(getLibraryRoute(library))}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <IconComponent className={`h-8 w-8 ${iconColor}`} />
+                        <div>
+                          <CardTitle>{library.name}</CardTitle>
+                          <CardDescription>{library.type}</CardDescription>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditLibrary(library);
+                          }}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => e.stopPropagation()}
+                              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Library</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete "{library.name}"? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDeleteLibrary(library)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent onClick={() => navigate(getLibraryRoute(library))}>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      {library.description}
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs bg-secondary px-2 py-1 rounded">Editable</span>
+                      <span className="text-xs text-muted-foreground">{library.exercises.length} exercises</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
 
@@ -158,6 +238,15 @@ export default function TemplatesPage() {
       <AddLibraryDialog
         isOpen={isAddLibraryDialogOpen}
         onClose={() => setIsAddLibraryDialogOpen(false)}
+      />
+
+      <EditLibraryDialog
+        isOpen={isEditLibraryDialogOpen}
+        onClose={() => {
+          setIsEditLibraryDialogOpen(false);
+          setEditingLibrary(null);
+        }}
+        library={editingLibrary}
       />
     </div>
   );

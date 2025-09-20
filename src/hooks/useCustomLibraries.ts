@@ -9,6 +9,7 @@ export interface CustomLibrary {
   exercises: CustomExercise[];
   createdAt: string;
   lastUpdated: string;
+  isBuiltIn?: boolean;
 }
 
 export interface CustomExercise {
@@ -26,8 +27,32 @@ export interface CustomLibraryData {
 }
 
 const STORAGE_KEY = 'custom_libraries';
+
+const BUILT_IN_LIBRARIES: CustomLibrary[] = [
+  {
+    id: 'resistance-training',
+    name: 'Resistance Exercise Library',
+    type: 'Resistance Training',
+    description: 'Comprehensive database of resistance training exercises',
+    exercises: [],
+    createdAt: '2024-01-01T00:00:00.000Z',
+    lastUpdated: new Date().toISOString(),
+    isBuiltIn: true
+  },
+  {
+    id: 'plyometrics',
+    name: 'Plyometrics Library',
+    type: 'Plyometrics',
+    description: 'Collection of plyometric and explosive movement exercises',
+    exercises: [],
+    createdAt: '2024-01-01T00:00:00.000Z',
+    lastUpdated: new Date().toISOString(),
+    isBuiltIn: true
+  }
+];
+
 const DEFAULT_DATA: CustomLibraryData = {
-  libraries: [],
+  libraries: [...BUILT_IN_LIBRARIES],
   lastUpdated: new Date().toISOString(),
   version: '1.0.0'
 };
@@ -43,7 +68,19 @@ export function useCustomLibraries() {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        setData(parsed);
+        // Ensure built-in libraries are always present
+        const builtInIds = BUILT_IN_LIBRARIES.map(lib => lib.id);
+        const existingBuiltIns = parsed.libraries.filter((lib: CustomLibrary) => lib.isBuiltIn);
+        const missingBuiltIns = BUILT_IN_LIBRARIES.filter(lib => 
+          !existingBuiltIns.some((existing: CustomLibrary) => existing.id === lib.id)
+        );
+        
+        setData({
+          ...parsed,
+          libraries: [...parsed.libraries, ...missingBuiltIns]
+        });
+      } else {
+        setData(DEFAULT_DATA);
       }
     } catch (error) {
       console.error('Error loading custom libraries:', error);
@@ -52,6 +89,7 @@ export function useCustomLibraries() {
         description: "Failed to load custom libraries",
         variant: "destructive"
       });
+      setData(DEFAULT_DATA);
     } finally {
       setIsLoading(false);
     }
@@ -71,13 +109,14 @@ export function useCustomLibraries() {
     }
   };
 
-  const addLibrary = (library: Omit<CustomLibrary, 'id' | 'exercises' | 'createdAt' | 'lastUpdated'>) => {
+  const addLibrary = (library: Omit<CustomLibrary, 'id' | 'exercises' | 'createdAt' | 'lastUpdated' | 'isBuiltIn'>) => {
     const newLibrary: CustomLibrary = {
       ...library,
       id: Date.now().toString(),
       exercises: [],
       createdAt: new Date().toISOString(),
-      lastUpdated: new Date().toISOString()
+      lastUpdated: new Date().toISOString(),
+      isBuiltIn: false
     };
 
     const newData: CustomLibraryData = {
@@ -152,6 +191,20 @@ export function useCustomLibraries() {
     saveData(newData);
   };
 
+  const editLibrary = (libraryId: string, updates: Partial<Pick<CustomLibrary, 'name' | 'description'>>) => {
+    const newData: CustomLibraryData = {
+      ...data,
+      libraries: data.libraries.map(lib => 
+        lib.id === libraryId
+          ? { ...lib, ...updates, lastUpdated: new Date().toISOString() }
+          : lib
+      ),
+      lastUpdated: new Date().toISOString()
+    };
+
+    saveData(newData);
+  };
+
   const deleteLibrary = (libraryId: string) => {
     const newData: CustomLibraryData = {
       ...data,
@@ -167,6 +220,7 @@ export function useCustomLibraries() {
     isLoading,
     libraries: data.libraries,
     addLibrary,
+    editLibrary,
     deleteLibrary,
     addExerciseToLibrary,
     updateExerciseInLibrary,

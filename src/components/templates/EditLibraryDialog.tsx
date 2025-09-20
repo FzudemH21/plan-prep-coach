@@ -1,25 +1,35 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { useCustomLibraries } from '@/hooks/useCustomLibraries';
+import { useCustomLibraries, CustomLibrary } from '@/hooks/useCustomLibraries';
 
-interface AddLibraryDialogProps {
+interface EditLibraryDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  library: CustomLibrary | null;
 }
 
-export function AddLibraryDialog({ isOpen, onClose }: AddLibraryDialogProps) {
+export function EditLibraryDialog({ isOpen, onClose, library }: EditLibraryDialogProps) {
   const [libraryName, setLibraryName] = useState('');
   const [description, setDescription] = useState('');
   const { toast } = useToast();
-  const { addLibrary } = useCustomLibraries();
+  const { editLibrary } = useCustomLibraries();
+
+  useEffect(() => {
+    if (library && isOpen) {
+      setLibraryName(library.name);
+      setDescription(library.description);
+    }
+  }, [library, isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!library) return;
     
     if (!libraryName.trim()) {
       toast({
@@ -31,22 +41,21 @@ export function AddLibraryDialog({ isOpen, onClose }: AddLibraryDialogProps) {
     }
 
     try {
-      addLibrary({
+      editLibrary(library.id, {
         name: libraryName.trim(),
-        type: 'Custom',
         description: description.trim()
       });
 
       toast({
         title: "Success",
-        description: "Library created successfully"
+        description: "Library updated successfully"
       });
 
       handleClose();
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to create library",
+        description: "Failed to update library",
         variant: "destructive"
       });
     }
@@ -58,22 +67,24 @@ export function AddLibraryDialog({ isOpen, onClose }: AddLibraryDialogProps) {
     onClose();
   };
 
+  if (!library) return null;
+
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Add New Library</DialogTitle>
+            <DialogTitle>Edit Library</DialogTitle>
             <DialogDescription>
-              Create a new exercise or training library.
+              Update the name and description of your library.
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="library-name">Library Name</Label>
+              <Label htmlFor="edit-library-name">Library Name</Label>
               <Input
-                id="library-name"
+                id="edit-library-name"
                 value={libraryName}
                 onChange={(e) => setLibraryName(e.target.value)}
                 placeholder="Enter library name"
@@ -82,9 +93,9 @@ export function AddLibraryDialog({ isOpen, onClose }: AddLibraryDialogProps) {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="library-description">Description</Label>
+              <Label htmlFor="edit-library-description">Description</Label>
               <Textarea
-                id="library-description"
+                id="edit-library-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Enter library description"
@@ -98,7 +109,7 @@ export function AddLibraryDialog({ isOpen, onClose }: AddLibraryDialogProps) {
               Cancel
             </Button>
             <Button type="submit">
-              Create Library
+              Update Library
             </Button>
           </DialogFooter>
         </form>
