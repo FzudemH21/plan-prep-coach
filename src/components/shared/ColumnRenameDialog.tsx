@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,12 +14,20 @@ interface ColumnRenameDialogProps {
 export const ColumnRenameDialog = ({ isOpen, onClose, onRename, currentName }: ColumnRenameDialogProps) => {
   const [newName, setNewName] = useState(currentName);
 
+  // Reset newName when dialog opens with a new currentName
+  useEffect(() => {
+    if (isOpen) {
+      setNewName(currentName);
+    }
+  }, [isOpen, currentName]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     if (newName.trim() && newName !== currentName) {
       onRename(newName.trim());
-      onClose();
     }
+    handleClose();
   };
 
   const handleClose = () => {
@@ -27,8 +35,14 @@ export const ColumnRenameDialog = ({ isOpen, onClose, onRename, currentName }: C
     onClose();
   };
 
+  const handleDialogChange = (open: boolean) => {
+    if (!open) {
+      handleClose();
+    }
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
+    <Dialog open={isOpen} onOpenChange={handleDialogChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Rename Column</DialogTitle>
@@ -42,10 +56,23 @@ export const ColumnRenameDialog = ({ isOpen, onClose, onRename, currentName }: C
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Enter new column name"
               autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.stopPropagation();
+                  handleClose();
+                }
+              }}
             />
           </div>
           <div className="flex justify-end space-x-2">
-            <Button type="button" variant="outline" onClick={handleClose}>
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={(e) => {
+                e.stopPropagation();
+                handleClose();
+              }}
+            >
               Cancel
             </Button>
             <Button 

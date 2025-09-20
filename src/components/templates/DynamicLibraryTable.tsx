@@ -151,6 +151,10 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
     setRenameDialog({ isOpen: false, columnId: '', currentName: '' });
   };
 
+  const handleRenameDialogClose = () => {
+    setRenameDialog({ isOpen: false, columnId: '', currentName: '' });
+  };
+
   const handleDeleteColumn = () => {
     deleteColumnFromLibrary(library.id, deleteDialog.columnId);
     toast({ title: "Success", description: "Column deleted successfully" });
@@ -317,28 +321,40 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
         </ContextMenuTrigger>
         <ContextMenuContent>
           <ContextMenuItem 
-            onClick={() => setRenameDialog({
-              isOpen: true,
-              columnId: column.id,
-              currentName: column.name
-            })}
+            key={`rename-${column.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setRenameDialog({
+                isOpen: true,
+                columnId: column.id,
+                currentName: column.name
+              });
+            }}
           >
             <Edit2 className="h-4 w-4 mr-2" />
             Rename Column
           </ContextMenuItem>
           <ContextMenuItem 
-            onClick={() => setNewColumnDialog({ ...newColumnDialog, isOpen: true })}
+            key={`add-${column.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setNewColumnDialog({ ...newColumnDialog, isOpen: true });
+            }}
           >
             <Plus className="h-4 w-4 mr-2" />
             Add Column
           </ContextMenuItem>
           {!column.required && (
             <ContextMenuItem 
-              onClick={() => setDeleteDialog({
-                isOpen: true,
-                columnId: column.id,
-                columnName: column.name
-              })}
+              key={`delete-${column.id}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteDialog({
+                  isOpen: true,
+                  columnId: column.id,
+                  columnName: column.name
+                });
+              }}
               className="text-destructive"
             >
               <Trash2 className="h-4 w-4 mr-2" />
@@ -525,7 +541,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
 
       <ColumnRenameDialog
         isOpen={renameDialog.isOpen}
-        onClose={() => setRenameDialog({ isOpen: false, columnId: '', currentName: '' })}
+        onClose={handleRenameDialogClose}
         onRename={handleRenameColumn}
         currentName={renameDialog.currentName}
       />
