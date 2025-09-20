@@ -494,10 +494,10 @@ export default function ToolboxDatabase() {
       {/* Sub-Categories Table */}
       <Card>
         <CardContent className="p-0">
-          <Table>
+          <Table containerClassName="border rounded-lg max-h-[600px]">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-1/4">
+                <TableHead className="w-1/4 sticky top-0 bg-background z-10">
                   <Button 
                     variant="ghost" 
                     className="flex items-center gap-1 p-0 h-auto font-semibold justify-start"
@@ -508,7 +508,7 @@ export default function ToolboxDatabase() {
                     {columnSorts.category?.order === 'desc' && <ChevronDown className="h-4 w-4" />}
                   </Button>
                 </TableHead>
-                <TableHead className="w-1/4">
+                <TableHead className="w-1/4 sticky top-0 bg-background z-10">
                   <Button 
                     variant="ghost" 
                     className="flex items-center gap-1 p-0 h-auto font-semibold justify-start"
@@ -519,9 +519,9 @@ export default function ToolboxDatabase() {
                     {columnSorts.subCategory?.order === 'desc' && <ChevronDown className="h-4 w-4" />}
                   </Button>
                 </TableHead>
-                <TableHead className="w-1/6">Parameters</TableHead>
-                <TableHead className="w-1/6">Exercise Categories</TableHead>
-                <TableHead className="w-1/6">Actions</TableHead>
+                <TableHead className="w-1/6 sticky top-0 bg-background z-10">Parameters</TableHead>
+                <TableHead className="w-1/6 sticky top-0 bg-background z-10">Exercise Categories</TableHead>
+                <TableHead className="w-1/6 sticky top-0 bg-background z-10">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
