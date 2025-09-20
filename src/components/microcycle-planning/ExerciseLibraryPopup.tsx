@@ -8,8 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Search, Plus, ChevronUp, ChevronDown, X } from 'lucide-react';
 import { ExerciseSelection, ExerciseLibraryType } from '@/types/microcycle-planning';
 import { FilterState } from '@/types/exercises';
-import { useExerciseData } from '@/hooks/useExerciseData';
-import { usePlyometricsData } from '@/hooks/usePlyometricsData';
 import { useCustomLibraries } from '@/hooks/useCustomLibraries';
 import { ColumnFilter } from '@/components/exercises/ColumnFilter';
 import { NewExerciseDialog } from './NewExerciseDialog';
@@ -38,7 +36,7 @@ export function ExerciseLibraryPopup({
   onExerciseCreated 
 }: ExerciseLibraryPopupProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<string>('exercise');
+  const [activeTab, setActiveTab] = useState<string>('');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [filterState, setFilterState] = useState<FilterState>({
     search: '',
@@ -50,80 +48,21 @@ export function ExerciseLibraryPopup({
   const [isNewExerciseDialogOpen, setIsNewExerciseDialogOpen] = useState(false);
   const [newExerciseName, setNewExerciseName] = useState('');
 
-  const { data: exerciseData } = useExerciseData();
-  const { data: plyometricsData } = usePlyometricsData();
-  const { libraries: customLibraries } = useCustomLibraries();
+  const { libraries } = useCustomLibraries();
 
-  // Prepare data for all libraries (built-in + custom)
+  // Set default active tab when libraries are loaded
+  useEffect(() => {
+    if (libraries.length > 0 && !activeTab) {
+      setActiveTab(libraries[0].id);
+    }
+  }, [libraries, activeTab]);
+
+  // Prepare data for all libraries using CustomLibrariesContext
   const allLibraries = useMemo(() => {
-    const libraries: Record<string, any> = {};
+    const result: Record<string, any> = {};
     
-    // Built-in libraries (use legacy data format)
-    libraries['exercise'] = {
-      name: 'Resistance Exercise Library',
-      columns: [
-        { key: 'übungsname', label: 'Übungsname', type: 'text' },
-        { key: 'akzentuierteKörperregion', label: 'Körperregion', type: 'text' },
-        { key: 'dominantesBewegungsmuster', label: 'Bewegungsmuster', type: 'text' },
-        { key: 'forcesActingOnSpine', label: 'Forces on Spine', type: 'text' },
-        { key: 'übungsausführung', label: 'Ausführung', type: 'text' },
-        { key: 'trunkTrainingFramework', label: 'Trunk Framework', type: 'text' },
-        { key: 'mainMovementPlane', label: 'Movement Plane', type: 'text' },
-        { key: 'level', label: 'Level', type: 'text' },
-        { key: 'artDesWiderstandes', label: 'Widerstand', type: 'text' },
-        { key: 'stand', label: 'Stand', type: 'text' },
-        { key: 'variationen', label: 'Variationen', type: 'text' }
-      ],
-      data: exerciseData?.exercises?.map(ex => ({
-        id: ex.id,
-        übungsname: ex.übungsname,
-        akzentuierteKörperregion: ex.akzentuierteKörperregion,
-        dominantesBewegungsmuster: ex.dominantesBewegungsmuster,
-        forcesActingOnSpine: ex.forcesActingOnSpine,
-        übungsausführung: ex.übungsausführung,
-        trunkTrainingFramework: ex.trunkTrainingFramework,
-        mainMovementPlane: ex.mainMovementPlane,
-        level: ex.level,
-        artDesWiderstandes: ex.artDesWiderstandes,
-        stand: ex.stand,
-        variationen: ex.variationen,
-        library: 'exercise'
-      })) || []
-    };
-
-    libraries['plyometrics'] = {
-      name: 'Plyometrics',
-      columns: [
-        { key: 'übung', label: 'Übung', type: 'text' },
-        { key: 'intensität', label: 'Intensität', type: 'text' },
-        { key: 'tier', label: 'Tier', type: 'text' },
-        { key: 'dauerDVZ', label: 'Dauer DVZ', type: 'text' },
-        { key: 'fokusrichtung', label: 'Fokusrichtung', type: 'text' },
-        { key: 'bewegungsart', label: 'Bewegungsart', type: 'text' },
-        { key: 'modus', label: 'Modus', type: 'text' },
-        { key: 'emphasis', label: 'Emphasis', type: 'text' },
-        { key: 'übungsgruppe', label: 'Übungsgruppe', type: 'text' },
-        { key: 'kommentar', label: 'Kommentar', type: 'text' }
-      ],
-      data: plyometricsData?.exercises?.map(ex => ({
-        id: ex.id,
-        übung: ex.übung,
-        intensität: ex.intensität,
-        tier: ex.tier,
-        dauerDVZ: ex.dauerDVZ,
-        fokusrichtung: ex.fokusrichtung,
-        bewegungsart: ex.bewegungsart,
-        modus: ex.modus,
-        emphasis: ex.emphasis,
-        übungsgruppe: ex.übungsgruppe,
-        kommentar: ex.kommentar,
-        library: 'plyometrics'
-      })) || []
-    };
-
-    // Custom libraries - use actual column definitions and data structure
-    customLibraries.forEach(lib => {
-      libraries[lib.id] = {
+    libraries.forEach(lib => {
+      result[lib.id] = {
         name: lib.name,
         columns: lib.columns.map(col => ({
           key: col.id,
@@ -133,14 +72,14 @@ export function ExerciseLibraryPopup({
         })),
         data: lib.exercises.map(ex => ({
           id: ex.id,
-          ...ex.data, // Use actual exercise data with column IDs as keys
+          ...ex.data,
           library: lib.id
         }))
       };
     });
 
-    return libraries;
-  }, [exerciseData, plyometricsData, customLibraries]);
+    return result;
+  }, [libraries]);
 
   const libraryData = useMemo(() => {
     const result: Record<string, any[]> = {};
@@ -228,23 +167,16 @@ export function ExerciseLibraryPopup({
       const timeout = setTimeout(() => {
         const allExercises = Object.values(libraryData).flat();
         const exerciseExists = allExercises.some(exercise => {
-          // Check name field based on library type
-          if (exercise.library === 'exercise') {
-            return exercise.übungsname && exercise.übungsname.toLowerCase() === value.toLowerCase();
-          } else if (exercise.library === 'plyometrics') {
-            return exercise.übung && exercise.übung.toLowerCase() === value.toLowerCase();
-          } else {
-            // For custom libraries, check the first column (usually the name field)
-            const library = allLibraries[exercise.library];
-            if (library && library.columns && library.columns.length > 0) {
-              const firstColumnKey = library.columns[0].key;
-              const nameValue = exercise[firstColumnKey];
-              return nameValue && nameValue.toLowerCase() === value.toLowerCase();
-            }
-            // Fallback to common name fields
-            const nameField = exercise.name || exercise.übungsname || exercise.übung || '';
-            return nameField.toLowerCase() === value.toLowerCase();
+          // Get library info and find the name field
+          const library = allLibraries[exercise.library];
+          if (library && library.columns && library.columns.length > 0) {
+            const nameField = exercise[library.columns[0].key];
+            return nameField && nameField.toLowerCase() === value.toLowerCase();
           }
+          
+          // Fallback to common name fields
+          const nameField = exercise.name || exercise.übungsname || exercise.übung || '';
+          return nameField.toLowerCase() === value.toLowerCase();
         });
         
         if (!exerciseExists && value.trim().length > 2) {
@@ -318,17 +250,13 @@ export function ExerciseLibraryPopup({
       // Get exercise name from appropriate field based on library
       let exerciseName = 'Unknown Exercise';
       
-      if (activeTab === 'exercise') {
-        exerciseName = exercise.übungsname || 'Unknown Exercise';
-      } else if (activeTab === 'plyometrics') {
-        exerciseName = exercise.übung || 'Unknown Exercise';
+      // Get exercise name from first column or common name field
+      const library = allLibraries[activeTab];
+      if (library && library.columns && library.columns.length > 0) {
+        const firstColumn = library.columns[0];
+        exerciseName = exercise[firstColumn.key] || 'Unknown Exercise';
       } else {
-        // For custom libraries, use the first column or look for common name fields
-        const library = allLibraries[activeTab];
-        if (library && library.columns && library.columns.length > 0) {
-          const firstColumnKey = library.columns[0].key;
-          exerciseName = exercise[firstColumnKey] || exercise.name || exercise.übungsname || exercise.übung || 'Unknown Exercise';
-        }
+        exerciseName = exercise.name || 'Unknown Exercise';
       }
 
       return {

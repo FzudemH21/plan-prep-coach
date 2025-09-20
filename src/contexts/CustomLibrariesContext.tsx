@@ -104,7 +104,7 @@ const BUILT_IN_LIBRARIES: CustomLibrary[] = [
 const DEFAULT_DATA: CustomLibraryData = {
   libraries: [...BUILT_IN_LIBRARIES],
   lastUpdated: new Date().toISOString(),
-  version: '1.0.0'
+  version: '2.0.0'
 };
 
 export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -118,33 +118,56 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Ensure built-in libraries are always present and up-to-date
-        const existingBuiltIns = parsed.libraries.filter((lib: CustomLibrary) => lib.isBuiltIn);
-        const nonBuiltIns = parsed.libraries.filter((lib: CustomLibrary) => !lib.isBuiltIn);
         
-        // Always use the latest built-in library definitions
-        const updatedBuiltIns = BUILT_IN_LIBRARIES.map(builtInLib => {
-          const existing = existingBuiltIns.find((lib: CustomLibrary) => lib.id === builtInLib.id);
-          if (existing && existing.exercises && existing.exercises.length > 0) {
-            // Keep existing exercises but update columns structure
-            return {
-              ...builtInLib,
-              exercises: existing.exercises,
-              lastUpdated: existing.lastUpdated
-            };
-          }
-          return builtInLib;
-        });
+        // Force migration if version is outdated or libraries are empty
+        const currentVersion = '2.0.0'; // Updated to force re-migration
+        const shouldMigrate = !parsed.version || parsed.version < currentVersion ||
+                             parsed.libraries.some((lib: CustomLibrary) => lib.isBuiltIn && lib.exercises.length === 0);
         
-        setData({
-          ...parsed,
-          libraries: [...updatedBuiltIns, ...nonBuiltIns]
-        });
+        if (shouldMigrate) {
+          console.log('Triggering data migration due to version update or empty built-in libraries');
+          const migratedData = migrateStaticData();
+          
+          // Preserve any custom libraries from existing data
+          const customLibraries = parsed.libraries?.filter((lib: CustomLibrary) => !lib.isBuiltIn) || [];
+          const finalData = {
+            ...migratedData,
+            libraries: [...migratedData.libraries, ...customLibraries],
+            version: currentVersion
+          };
+          
+          setData(finalData);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(finalData));
+        } else {
+          // Ensure built-in libraries are always present and up-to-date
+          const existingBuiltIns = parsed.libraries.filter((lib: CustomLibrary) => lib.isBuiltIn);
+          const nonBuiltIns = parsed.libraries.filter((lib: CustomLibrary) => !lib.isBuiltIn);
+          
+          // Always use the latest built-in library definitions
+          const updatedBuiltIns = BUILT_IN_LIBRARIES.map(builtInLib => {
+            const existing = existingBuiltIns.find((lib: CustomLibrary) => lib.id === builtInLib.id);
+            if (existing && existing.exercises && existing.exercises.length > 0) {
+              // Keep existing exercises but update columns structure
+              return {
+                ...builtInLib,
+                exercises: existing.exercises,
+                lastUpdated: existing.lastUpdated
+              };
+            }
+            return builtInLib;
+          });
+          
+          setData({
+            ...parsed,
+            libraries: [...updatedBuiltIns, ...nonBuiltIns]
+          });
+        }
       } else {
         // First time - migrate data from static files
         const migratedData = migrateStaticData();
-        setData(migratedData);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(migratedData));
+        const finalData = { ...migratedData, version: '2.0.0' };
+        setData(finalData);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(finalData));
       }
     } catch (error) {
       console.error('Error loading custom libraries:', error);
@@ -154,7 +177,8 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
         variant: "destructive"
       });
       const migratedData = migrateStaticData();
-      setData(migratedData);
+      const finalData = { ...migratedData, version: '2.0.0' };
+      setData(finalData);
     } finally {
       setIsLoading(false);
     }
@@ -165,26 +189,25 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
     const migratedBuiltIns = BUILT_IN_LIBRARIES.map(lib => {
       if (lib.id === 'resistance-training') {
         try {
-          // Import would need to be dynamic or we can populate with sample data
-          const sampleExercises: CustomExercise[] = [
-            {
-              id: 'sample-1',
-              data: {
-                übungsname: 'Push-ups',
-                akzentuierteKörperregion: 'Oberkörper',
-                dominantesBewegungsmuster: 'Push',
-                forcesActingOnSpine: 'Compression',
-                übungsausführung: 'dynamisch',
-                trunkTrainingFramework: '',
-                mainMovementPlane: 'Sagittal',
-                level: '1',
-                artDesWiderstandes: 'Körpergewicht',
-                stand: 'bilateral',
-                variationen: 'Incline, decline, diamond'
-              }
+          // Import exercise data from static file
+          const { exerciseData } = require('@/data/exerciseDataComplete');
+          const exercises: CustomExercise[] = exerciseData.exercises.map((ex: any, index: number) => ({
+            id: ex.id || `exercise-${index}`,
+            data: {
+              übungsname: ex.übungsname || '',
+              akzentuierteKörperregion: ex.akzentuierteKörperregion || '',
+              dominantesBewegungsmuster: ex.dominantesBewegungsmuster || '',
+              forcesActingOnSpine: ex.forcesActingOnSpine || '',
+              übungsausführung: ex.übungsausführung || '',
+              trunkTrainingFramework: ex.trunkTrainingFramework || '',
+              mainMovementPlane: ex.mainMovementPlane || '',
+              level: ex.level || '',
+              artDesWiderstandes: ex.artDesWiderstandes || '',
+              stand: ex.stand || '',
+              variationen: ex.variationen || ''
             }
-          ];
-          return { ...lib, exercises: sampleExercises };
+          }));
+          return { ...lib, exercises };
         } catch (error) {
           console.error('Error migrating resistance training data:', error);
           return lib;
@@ -193,24 +216,24 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
       
       if (lib.id === 'plyometrics') {
         try {
-          const sampleExercises: CustomExercise[] = [
-            {
-              id: 'sample-ply-1',
-              data: {
-                übung: 'Jump Squat',
-                intensität: 'Medium',
-                tier: '2',
-                dauerDVZ: '<250ms',
-                fokusrichtung: 'Vertical',
-                bewegungsart: 'Jump',
-                modus: 'Bilateral',
-                emphasis: 'Power',
-                übungsgruppe: 'Basic',
-                kommentar: 'Basic explosive movement'
-              }
+          // Import plyometrics data from static file
+          const { plyometricsData } = require('@/data/plyometricsData');
+          const exercises: CustomExercise[] = plyometricsData.exercises.map((ex: any, index: number) => ({
+            id: ex.id || `plyometrics-${index}`,
+            data: {
+              übung: ex.übung || '',
+              intensität: ex.intensität || '',
+              tier: ex.tier || '',
+              dauerDVZ: ex.dauerDVZ || '',
+              fokusrichtung: ex.fokusrichtung || '',
+              bewegungsart: ex.bewegungsart || '',
+              modus: ex.modus || '',
+              emphasis: ex.emphasis || '',
+              übungsgruppe: ex.übungsgruppe || '',
+              kommentar: ex.kommentar || ''
             }
-          ];
-          return { ...lib, exercises: sampleExercises };
+          }));
+          return { ...lib, exercises };
         } catch (error) {
           console.error('Error migrating plyometrics data:', error);
           return lib;
@@ -223,7 +246,7 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
     return {
       libraries: migratedBuiltIns,
       lastUpdated: new Date().toISOString(),
-      version: '1.0.0'
+      version: '2.0.0'
     };
   };
 

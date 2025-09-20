@@ -52,7 +52,7 @@ export default function TemplatesPage() {
     if (library.isBuiltIn) {
       switch (library.id) {
         case 'resistance-training':
-          return '/templates/exercises';
+          return '/templates/resistancetrainingexercises';
         case 'plyometrics':
           return '/templates/plyometrics';
         default:
