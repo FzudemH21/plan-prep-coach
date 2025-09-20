@@ -1,164 +1,18 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Search, Plus, ChevronUp, ChevronDown, X, Filter } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { ExerciseSelection } from '@/types/microcycle-planning';
+import { Search, Plus, ChevronUp, ChevronDown, X } from 'lucide-react';
+import { ExerciseSelection, ExerciseLibraryType } from '@/types/microcycle-planning';
 import { FilterState } from '@/types/exercises';
+import { useExerciseData } from '@/hooks/useExerciseData';
+import { usePlyometricsData } from '@/hooks/usePlyometricsData';
 import { useCustomLibraries } from '@/hooks/useCustomLibraries';
+import { ColumnFilter } from '@/components/exercises/ColumnFilter';
 import { NewExerciseDialog } from './NewExerciseDialog';
-
-// Simple column filter component for the popup
-interface PopupColumnFilterProps {
-  columnKey: string;
-  columnLabel: string;
-  allData: any[];
-  selectedValues: string[];
-  onSelectionChange: (values: string[]) => void;
-}
-
-const PopupColumnFilter: React.FC<PopupColumnFilterProps> = ({
-  columnKey,
-  columnLabel,
-  allData,
-  selectedValues,
-  onSelectionChange,
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-
-  const uniqueValues = useMemo(() => {
-    const values = allData
-      .map(item => item[columnKey])
-      .filter(value => value != null && value !== '')
-      .map(value => String(value));
-    
-    return Array.from(new Set(values)).sort();
-  }, [allData, columnKey]);
-
-  const filteredValues = useMemo(() => {
-    if (!searchTerm) return uniqueValues;
-    return uniqueValues.filter(value =>
-      value.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [uniqueValues, searchTerm]);
-
-  const handleSelectFiltered = () => {
-    const newSelection = Array.from(new Set([...selectedValues, ...filteredValues]));
-    onSelectionChange(newSelection);
-  };
-
-  const handleClearFiltered = () => {
-    const filteredSet = new Set(filteredValues);
-    const newSelection = selectedValues.filter(value => !filteredSet.has(value));
-    onSelectionChange(newSelection);
-  };
-
-  const handleSelectAll = () => {
-    onSelectionChange([...uniqueValues]);
-  };
-
-  const handleValueToggle = (value: string) => {
-    const newSelection = selectedValues.includes(value)
-      ? selectedValues.filter(v => v !== value)
-      : [...selectedValues, value];
-    onSelectionChange(newSelection);
-  };
-
-  const hasActiveFilters = selectedValues.length > 0;
-
-  return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={`h-6 w-6 p-0 ${hasActiveFilters ? 'text-primary' : 'text-muted-foreground'}`}
-        >
-          <Filter className="h-3 w-3" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-64 p-3" align="start">
-        <div className="space-y-3">
-          <Input
-            placeholder={`Search ${columnLabel.toLowerCase()}...`}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="h-8"
-          />
-          
-          <div className="flex gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleSelectFiltered}
-              className="h-6 text-xs"
-            >
-              Select Filtered
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleClearFiltered}
-              className="h-6 text-xs"
-            >
-              Clear Filtered
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleSelectAll}
-              className="h-6 text-xs"
-            >
-              Select All
-            </Button>
-          </div>
-
-          <ScrollArea className="h-48">
-            <div className="space-y-1">
-              {filteredValues.map((value) => (
-                <label
-                  key={value}
-                  className="flex items-center space-x-2 cursor-pointer hover:bg-muted/50 rounded px-1 py-0.5"
-                >
-                  <Checkbox
-                    checked={selectedValues.includes(value)}
-                    onCheckedChange={() => handleValueToggle(value)}
-                  />
-                  <span className="text-sm">{value}</span>
-                </label>
-              ))}
-            </div>
-          </ScrollArea>
-
-          <div className="flex justify-between pt-2 border-t">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onSelectionChange([])}
-              className="h-6 text-xs"
-            >
-              Clear All
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsOpen(false)}
-              className="h-6 text-xs"
-            >
-              Close
-            </Button>
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-};
 
 // Define a more flexible column type for the popup
 interface PopupTableColumn {
@@ -184,7 +38,7 @@ export function ExerciseLibraryPopup({
   onExerciseCreated 
 }: ExerciseLibraryPopupProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<string>('resistance-training');
+  const [activeTab, setActiveTab] = useState<string>('exercise');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [filterState, setFilterState] = useState<FilterState>({
     search: '',
@@ -196,82 +50,130 @@ export function ExerciseLibraryPopup({
   const [isNewExerciseDialogOpen, setIsNewExerciseDialogOpen] = useState(false);
   const [newExerciseName, setNewExerciseName] = useState('');
 
-  // Data hooks - only use CustomLibrariesContext
-  const { libraries: allLibrariesData } = useCustomLibraries();
+  const { data: exerciseData } = useExerciseData();
+  const { data: plyometricsData } = usePlyometricsData();
+  const { libraries: customLibraries } = useCustomLibraries();
 
-  // Prepare all available libraries with their data
+  // Prepare data for all libraries (built-in + custom)
   const allLibraries = useMemo(() => {
-    return allLibrariesData.map(lib => ({
-      id: lib.id,
-      name: lib.name,
-      exerciseCount: lib.exercises.length
-    }));
-  }, [allLibrariesData]);
+    const libraries: Record<string, any> = {};
+    
+    // Built-in libraries (use legacy data format)
+    libraries['exercise'] = {
+      name: 'Resistance Exercise Library',
+      columns: [
+        { key: 'übungsname', label: 'Übungsname', type: 'text' },
+        { key: 'akzentuierteKörperregion', label: 'Körperregion', type: 'text' },
+        { key: 'dominantesBewegungsmuster', label: 'Bewegungsmuster', type: 'text' },
+        { key: 'forcesActingOnSpine', label: 'Forces on Spine', type: 'text' },
+        { key: 'übungsausführung', label: 'Ausführung', type: 'text' },
+        { key: 'trunkTrainingFramework', label: 'Trunk Framework', type: 'text' },
+        { key: 'mainMovementPlane', label: 'Movement Plane', type: 'text' },
+        { key: 'level', label: 'Level', type: 'text' },
+        { key: 'artDesWiderstandes', label: 'Widerstand', type: 'text' },
+        { key: 'stand', label: 'Stand', type: 'text' },
+        { key: 'variationen', label: 'Variationen', type: 'text' }
+      ],
+      data: exerciseData?.exercises?.map(ex => ({
+        id: ex.id,
+        übungsname: ex.übungsname,
+        akzentuierteKörperregion: ex.akzentuierteKörperregion,
+        dominantesBewegungsmuster: ex.dominantesBewegungsmuster,
+        forcesActingOnSpine: ex.forcesActingOnSpine,
+        übungsausführung: ex.übungsausführung,
+        trunkTrainingFramework: ex.trunkTrainingFramework,
+        mainMovementPlane: ex.mainMovementPlane,
+        level: ex.level,
+        artDesWiderstandes: ex.artDesWiderstandes,
+        stand: ex.stand,
+        variationen: ex.variationen,
+        library: 'exercise'
+      })) || []
+    };
 
-  // Prepare library data for the current tab
+    libraries['plyometrics'] = {
+      name: 'Plyometrics',
+      columns: [
+        { key: 'übung', label: 'Übung', type: 'text' },
+        { key: 'intensität', label: 'Intensität', type: 'text' },
+        { key: 'tier', label: 'Tier', type: 'text' },
+        { key: 'dauerDVZ', label: 'Dauer DVZ', type: 'text' },
+        { key: 'fokusrichtung', label: 'Fokusrichtung', type: 'text' },
+        { key: 'bewegungsart', label: 'Bewegungsart', type: 'text' },
+        { key: 'modus', label: 'Modus', type: 'text' },
+        { key: 'emphasis', label: 'Emphasis', type: 'text' },
+        { key: 'übungsgruppe', label: 'Übungsgruppe', type: 'text' },
+        { key: 'kommentar', label: 'Kommentar', type: 'text' }
+      ],
+      data: plyometricsData?.exercises?.map(ex => ({
+        id: ex.id,
+        übung: ex.übung,
+        intensität: ex.intensität,
+        tier: ex.tier,
+        dauerDVZ: ex.dauerDVZ,
+        fokusrichtung: ex.fokusrichtung,
+        bewegungsart: ex.bewegungsart,
+        modus: ex.modus,
+        emphasis: ex.emphasis,
+        übungsgruppe: ex.übungsgruppe,
+        kommentar: ex.kommentar,
+        library: 'plyometrics'
+      })) || []
+    };
+
+    // Custom libraries - use actual column definitions and data structure
+    customLibraries.forEach(lib => {
+      libraries[lib.id] = {
+        name: lib.name,
+        columns: lib.columns.map(col => ({
+          key: col.id,
+          label: col.name,
+          type: col.type,
+          options: col.options
+        })),
+        data: lib.exercises.map(ex => ({
+          id: ex.id,
+          ...ex.data, // Use actual exercise data with column IDs as keys
+          library: lib.id
+        }))
+      };
+    });
+
+    return libraries;
+  }, [exerciseData, plyometricsData, customLibraries]);
+
   const libraryData = useMemo(() => {
-    const library = allLibrariesData.find(lib => lib.id === activeTab);
-    if (library) {
-      return library.exercises.map(exercise => ({
-        id: exercise.id,
-        library: library.id,
-        ...exercise.data
-      }));
-    }
-    return [];
-  }, [activeTab, allLibrariesData]);
+    const result: Record<string, any[]> = {};
+    Object.keys(allLibraries).forEach(key => {
+      result[key] = allLibraries[key].data;
+    });
+    return result;
+  }, [allLibraries]);
 
-  // Get column definitions for the current library
-  const getColumnsForLibrary = useCallback((libraryId: string): PopupTableColumn[] => {
-    const library = allLibrariesData.find(lib => lib.id === libraryId);
-    if (library) {
-      return library.columns.map(col => ({
-        key: col.id,
-        label: col.name,
-        type: col.type as 'text' | 'select',
-        options: col.options
-      }));
-    }
-    return [];
-  }, [allLibrariesData]);
+  // Get column definitions based on active library
+  const getColumnsForLibrary = (libraryKey: string): PopupTableColumn[] => {
+    const library = allLibraries[libraryKey];
+    if (!library) return [];
+    
+    return library.columns || [];
+  };
 
-  const currentColumns = useMemo(() => getColumnsForLibrary(activeTab), [activeTab, getColumnsForLibrary]);
+  const currentColumns = useMemo(() => getColumnsForLibrary(activeTab), [activeTab]);
 
-  // Get exercise name from data based on library type
-  const getExerciseName = useCallback((exercise: any, libraryId: string): string => {
-    const library = allLibrariesData.find(lib => lib.id === libraryId);
-    if (library) {
-      // Try to find a column that likely contains the exercise name
-      const nameColumn = library.columns.find(col => 
-        col.name.toLowerCase().includes('name') || 
-        col.name.toLowerCase().includes('exercise') ||
-        col.name.toLowerCase().includes('übung')
-      );
-      if (nameColumn) {
-        return exercise[nameColumn.id] || '';
-      }
-      // Fallback to first text column
-      const firstTextColumn = library.columns.find(col => col.type === 'text');
-      if (firstTextColumn) {
-        return exercise[firstTextColumn.id] || '';
-      }
-    }
-    return exercise.name || exercise.exercise || Object.values(exercise)[0] || '';
-  }, [allLibrariesData]);
-
-  // Search logic with debouncing
+  // Filter and sort exercises
   const filteredAndSortedExercises = useMemo(() => {
-    let filtered = libraryData;
+    const exercises = libraryData[activeTab] || [];
+    let filtered = exercises;
 
-    // Apply search filter
-    if (searchTerm.trim()) {
+    // Apply search filter - search across all fields
+    const searchTerm = filterState.search.trim();
+    if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(exercise => {
-        // Search across all data fields for any library
-        return Object.values(exercise).some(value => 
-          String(value).toLowerCase().includes(searchLower)
-        );
-      });
+      filtered = filtered.filter(exercise =>
+        Object.values(exercise).some(value => 
+          value && value.toString().toLowerCase().includes(searchLower)
+        )
+      );
     }
 
     // Apply column filters
@@ -297,52 +199,90 @@ export function ExerciseLibraryPopup({
     }
 
     return filtered;
-  }, [libraryData, searchTerm, filterState]);
+  }, [libraryData, activeTab, filterState]);
 
-  // Handle search input changes with debouncing
-  const handleSearchChange = (value: string) => {
-    setSearchTerm(value);
+  // Check if search term exists in any library
+  const searchExistsInAllLibraries = useMemo(() => {
+    const searchTerm = filterState.search.trim();
+    if (!searchTerm) return true;
     
+    const allExercises = Object.values(libraryData).flat();
+    return allExercises.some(exercise =>
+      Object.values(exercise).some(value => 
+        value && value.toString().toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    );
+  }, [libraryData, filterState.search]);
+
+  // Handle search with smart detection for new exercises
+  const handleSearchChange = (value: string) => {
+    setFilterState(prev => ({ ...prev, search: value }));
+    
+    // Clear existing timeout
     if (searchTimeout) {
       clearTimeout(searchTimeout);
     }
     
-    const timeout = setTimeout(() => {
-      setFilterState(prev => ({ ...prev, search: value }));
-    }, 300);
-    
-    setSearchTimeout(timeout);
+    // Set new timeout to check if exercise exists
+    if (value.trim()) {
+      const timeout = setTimeout(() => {
+        const allExercises = Object.values(libraryData).flat();
+        const exerciseExists = allExercises.some(exercise => {
+          // Check name field based on library type
+          if (exercise.library === 'exercise') {
+            return exercise.übungsname && exercise.übungsname.toLowerCase() === value.toLowerCase();
+          } else if (exercise.library === 'plyometrics') {
+            return exercise.übung && exercise.übung.toLowerCase() === value.toLowerCase();
+          } else {
+            // For custom libraries, check the first column (usually the name field)
+            const library = allLibraries[exercise.library];
+            if (library && library.columns && library.columns.length > 0) {
+              const firstColumnKey = library.columns[0].key;
+              const nameValue = exercise[firstColumnKey];
+              return nameValue && nameValue.toLowerCase() === value.toLowerCase();
+            }
+            // Fallback to common name fields
+            const nameField = exercise.name || exercise.übungsname || exercise.übung || '';
+            return nameField.toLowerCase() === value.toLowerCase();
+          }
+        });
+        
+        if (!exerciseExists && value.trim().length > 2) {
+          // Exercise doesn't exist, suggest creating it
+          setNewExerciseName(value.trim());
+        }
+      }, 500);
+      
+      setSearchTimeout(timeout);
+    }
   };
 
-  // Suggest creating new exercise if search doesn't match anything
-  const shouldSuggestNewExercise = useMemo(() => {
-    if (!searchTerm.trim() || filteredAndSortedExercises.length > 0) return false;
-    return searchTerm.length >= 3; // Only suggest if search term is meaningful
-  }, [searchTerm, filteredAndSortedExercises.length]);
-
   // Handle sorting
-  const handleSort = (column: string) => {
+  const handleSort = (columnKey: string) => {
+    const newDirection = filterState.sortColumn === columnKey && filterState.sortDirection === 'asc' ? 'desc' : 'asc';
     setFilterState(prev => ({
       ...prev,
-      sortColumn: column,
-      sortDirection: prev.sortColumn === column && prev.sortDirection === 'asc' ? 'desc' : 'asc'
+      sortColumn: columnKey,
+      sortDirection: newDirection
     }));
   };
 
   // Handle column filtering
-  const handleColumnFilter = (columnKey: string, selectedValues: string[]) => {
+  const handleColumnFilter = (columnKey: string, values: string[]) => {
+    const newColumnFilters = { ...filterState.columnFilters };
+    if (values.length === 0) {
+      delete newColumnFilters[columnKey];
+    } else {
+      newColumnFilters[columnKey] = values;
+    }
     setFilterState(prev => ({
       ...prev,
-      columnFilters: {
-        ...prev.columnFilters,
-        [columnKey]: selectedValues
-      }
+      columnFilters: newColumnFilters
     }));
   };
 
   // Clear all filters
   const clearAllFilters = () => {
-    setSearchTerm('');
     setFilterState({
       search: '',
       columnFilters: {},
@@ -360,222 +300,289 @@ export function ExerciseLibraryPopup({
     };
   }, [searchTimeout]);
 
-  // Handle item selection
-  const toggleItemSelection = (itemId: string) => {
+  const handleItemSelect = (exerciseId: string, isSelected: boolean) => {
     const newSelected = new Set(selectedItems);
-    if (newSelected.has(itemId)) {
-      newSelected.delete(itemId);
+    if (isSelected) {
+      newSelected.add(exerciseId);
     } else {
-      newSelected.add(itemId);
+      newSelected.delete(exerciseId);
     }
     setSelectedItems(newSelected);
   };
 
-  const selectAll = () => {
-    setSelectedItems(new Set(filteredAndSortedExercises.map(ex => ex.id)));
-  };
-
-  const clearSelection = () => {
-    setSelectedItems(new Set());
-  };
-
-  // Handle confirmation
   const handleConfirm = () => {
-    const exerciseSelections: ExerciseSelection[] = Array.from(selectedItems)
-      .map(id => {
-        const exercise = filteredAndSortedExercises.find(ex => ex.id === id);
-        if (exercise) {
-          return {
-            id: `selection-${Date.now()}-${id}`,
-            exerciseId: exercise.id,
-            exerciseName: getExerciseName(exercise, activeTab),
-            library: activeTab
-          };
+    const selectedExercises: ExerciseSelection[] = Array.from(selectedItems).map(id => {
+      const exercise = filteredAndSortedExercises.find(ex => ex.id === id);
+      if (!exercise) throw new Error('Exercise not found');
+
+      // Get exercise name from appropriate field based on library
+      let exerciseName = 'Unknown Exercise';
+      
+      if (activeTab === 'exercise') {
+        exerciseName = exercise.übungsname || 'Unknown Exercise';
+      } else if (activeTab === 'plyometrics') {
+        exerciseName = exercise.übung || 'Unknown Exercise';
+      } else {
+        // For custom libraries, use the first column or look for common name fields
+        const library = allLibraries[activeTab];
+        if (library && library.columns && library.columns.length > 0) {
+          const firstColumnKey = library.columns[0].key;
+          exerciseName = exercise[firstColumnKey] || exercise.name || exercise.übungsname || exercise.übung || 'Unknown Exercise';
         }
-        return null;
-      })
-      .filter(Boolean) as ExerciseSelection[];
+      }
 
-    onSelectExercises(exerciseSelections);
-    onClose();
+      return {
+        id: `${exercise.library}-${id}-${Date.now()}`,
+        exerciseId: id,
+        exerciseName: exerciseName,
+        library: exercise.library
+      };
+    });
+
+    onSelectExercises(selectedExercises);
+  };
+
+  const handleClose = () => {
     setSelectedItems(new Set());
-  };
-
-  // Handle new exercise creation
-  const handleNewExercise = () => {
-    setNewExerciseName(searchTerm);
-    setIsNewExerciseDialogOpen(true);
-  };
-
-  // Ensure we have a valid activeTab when libraries change
-  useEffect(() => {
-    if (allLibraries.length > 0 && !allLibraries.find(lib => lib.id === activeTab)) {
-      setActiveTab(allLibraries[0].id);
+    setFilterState({
+      search: '',
+      columnFilters: {},
+      sortColumn: null,
+      sortDirection: 'asc'
+    });
+    setNewExerciseName('');
+    setIsNewExerciseDialogOpen(false);
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
     }
-  }, [allLibraries, activeTab]);
+    onClose();
+  };
+
+  const handleCreateNewExercise = () => {
+    if (newExerciseName.trim()) {
+      setIsNewExerciseDialogOpen(true);
+    }
+  };
+
+  const handleExerciseCreated = (exercise: ExerciseSelection) => {
+    onExerciseCreated(exercise);
+    setIsNewExerciseDialogOpen(false);
+    setNewExerciseName('');
+  };
+
+  const hasActiveFilters = filterState.search || Object.keys(filterState.columnFilters).length > 0;
 
   return (
-    <>
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-6xl h-[800px] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Select Exercises</DialogTitle>
-          </DialogHeader>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="max-w-[95vw] max-h-[90vh]">
+        <DialogHeader>
+          <DialogTitle>Select Exercises</DialogTitle>
+        </DialogHeader>
 
-          <div className="flex-1 flex flex-col min-h-0">
-            {/* Library Tabs */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-              <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${allLibraries.length}, 1fr)` }}>
-                {allLibraries.map(library => (
-                  <TabsTrigger key={library.id} value={library.id} className="text-xs">
-                    {library.name} ({library.exerciseCount})
+        <div className="space-y-4 flex flex-col overflow-hidden">
+          {/* Search and Filter Controls */}
+          <div className="flex items-center justify-between gap-4 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search exercises..."
+                  value={filterState.search}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  className="pl-8 w-64"
+                />
+                {/* Show create new exercise option when search doesn't match any exercise */}
+                {filterState.search.trim() && !searchExistsInAllLibraries && filterState.search.trim().length > 2 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-md p-2 shadow-md z-10">
+                    <Button
+                      variant="ghost" 
+                      size="sm"
+                      className="w-full justify-start text-left"
+                      onClick={handleCreateNewExercise}
+                    >
+                      <Plus className="h-3 w-3 mr-2" />
+                      Create "{filterState.search}" as new exercise
+                    </Button>
+                  </div>
+                )}
+              </div>
+              
+              {hasActiveFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearAllFilters}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  Clear Filters
+                </Button>
+              )}
+            </div>
+
+            <div className="text-sm text-muted-foreground">
+              {filteredAndSortedExercises.length} exercises
+            </div>
+          </div>
+
+          {/* Library Tabs */}
+          <div className="space-y-3 flex-1 flex flex-col overflow-hidden">
+            <h3 className="text-sm font-medium text-muted-foreground shrink-0">Exercise Libraries</h3>
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value)} className="flex-1 flex flex-col overflow-hidden">
+              <TabsList className="grid w-full shrink-0" style={{ gridTemplateColumns: `repeat(${Object.keys(allLibraries).length}, 1fr)` }}>
+                {Object.entries(allLibraries).map(([key, library]) => (
+                  <TabsTrigger key={key} value={key}>
+                    {library.name} ({library.data.length})
                   </TabsTrigger>
                 ))}
               </TabsList>
 
-              {allLibraries.map(library => (
-                <TabsContent key={library.id} value={library.id} className="flex-1 flex flex-col min-h-0 mt-4">
-                  <div className="space-y-4 flex-1 flex flex-col">
-                    {/* Search and Controls */}
-                    <div className="flex items-center gap-2">
-                      <div className="relative flex-1">
-                        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          placeholder="Search exercises..."
-                          value={searchTerm}
-                          onChange={(e) => handleSearchChange(e.target.value)}
-                          className="pl-8"
-                        />
-                      </div>
-                      <Button 
-                        variant="outline" 
-                        onClick={clearAllFilters}
-                        className="whitespace-nowrap"
-                      >
-                        Clear Filters
-                      </Button>
-                      {shouldSuggestNewExercise && (
-                        <Button 
-                          variant="outline" 
-                          onClick={handleNewExercise}
-                          className="whitespace-nowrap"
-                        >
-                          <Plus className="h-4 w-4 mr-1" />
-                          Create "{searchTerm}"
-                        </Button>
-                      )}
-                    </div>
-
-                    {/* Selection Controls */}
-                    <div className="flex items-center gap-2 py-2 border-b">
-                      <Button variant="ghost" size="sm" onClick={selectAll}>
-                        Select All ({filteredAndSortedExercises.length})
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={clearSelection}>
-                        Clear Selection
-                      </Button>
-                      {selectedItems.size > 0 && (
-                        <Badge variant="secondary">
-                          {selectedItems.size} selected
-                        </Badge>
-                      )}
-                    </div>
-
-                    {/* Table */}
-                    <div className="flex-1 overflow-auto border rounded-md">
-                      <div className="min-w-full">
-                        {/* Header */}
-                        <div className="bg-muted/50 border-b sticky top-0 z-10">
-                          <div className="flex">
-                            <div className="w-12 p-2 border-r">
-                              <Checkbox
-                                checked={filteredAndSortedExercises.length > 0 && selectedItems.size === filteredAndSortedExercises.length}
-                                onCheckedChange={(checked) => {
-                                  if (checked) {
-                                    selectAll();
-                                  } else {
-                                    clearSelection();
-                                  }
-                                }}
-                              />
+              <TabsContent value={activeTab} className="mt-4 flex-1 flex flex-col overflow-hidden">
+                {/* Table with sticky headers and horizontal scroll */}
+                <div className="flex-1 border rounded-lg overflow-hidden">
+                  <div className="overflow-auto max-h-[50vh]" style={{scrollbarWidth: 'thin'}}>
+                    <table className="w-full min-w-[1400px] border-collapse">
+                      {/* Sticky Header */}
+                      <thead className="bg-muted/50 sticky top-0 z-10">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium text-muted-foreground border-b border-border w-12 bg-background sticky left-0 z-20">
+                            <div className="flex items-center">
+                              <span className="text-xs">Select</span>
                             </div>
-                            {currentColumns.map((column) => (
-                              <div key={column.key} className="flex-1 min-w-[120px] p-2 border-r last:border-r-0">
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    onClick={() => handleSort(column.key)}
-                                    className="flex items-center gap-1 text-sm font-medium hover:text-primary"
-                                  >
-                                    {column.label}
-                                    {filterState.sortColumn === column.key ? (
-                                      filterState.sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
-                                    ) : null}
-                                  </button>
-                                  <PopupColumnFilter
-                                    columnKey={column.key}
-                                    columnLabel={column.label}
-                                    allData={libraryData}
-                                    selectedValues={filterState.columnFilters[column.key] || []}
-                                    onSelectionChange={(values) => handleColumnFilter(column.key, values)}
-                                  />
+                          </th>
+                          {currentColumns.map((column) => (
+                            <th
+                              key={column.key}
+                              className="px-3 py-2 text-left font-medium text-muted-foreground border-b border-border text-xs min-w-[120px]"
+                            >
+                              <div className="flex items-center justify-between gap-1">
+                                <div 
+                                  className="flex items-center gap-1 cursor-pointer hover:text-foreground transition-colors"
+                                  onClick={() => handleSort(column.key)}
+                                >
+                                  <span className="truncate">{column.label}</span>
+                                  {filterState.sortColumn === column.key && (
+                                    filterState.sortDirection === 'asc' ? (
+                                      <ChevronUp className="h-3 w-3 shrink-0" />
+                                    ) : (
+                                      <ChevronDown className="h-3 w-3 shrink-0" />
+                                    )
+                                  )}
                                 </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Body */}
-                        <div className="divide-y">
-                          {filteredAndSortedExercises.map((exercise) => (
-                            <div key={exercise.id} className="flex hover:bg-muted/30">
-                              <div className="w-12 p-2 border-r flex items-center">
-                                <Checkbox
-                                  checked={selectedItems.has(exercise.id)}
-                                  onCheckedChange={() => toggleItemSelection(exercise.id)}
+                                <ColumnFilter
+                                  column={column as any}
+                                  allData={libraryData[activeTab] || []}
+                                  selectedValues={filterState.columnFilters[column.key] || []}
+                                  onSelectionChange={(values) => handleColumnFilter(column.key, values)}
                                 />
                               </div>
-                              {currentColumns.map((column) => (
-                                <div key={column.key} className="flex-1 min-w-[120px] p-2 border-r last:border-r-0 text-sm">
-                                  {exercise[column.key] || '-'}
-                                </div>
-                              ))}
-                            </div>
+                            </th>
                           ))}
-                        </div>
-
-                        {filteredAndSortedExercises.length === 0 && (
-                          <div className="p-8 text-center text-muted-foreground">
-                            {searchTerm ? 'No exercises found matching your search.' : 'No exercises available.'}
-                          </div>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredAndSortedExercises.map((exercise) => {
+                          const isAlreadySelected = selectedExerciseIds.includes(exercise.id);
+                          const isCurrentlySelected = selectedItems.has(exercise.id);
+                          
+                          return (
+                            <tr key={exercise.id} className={`border-b hover:bg-muted/25 transition-colors ${isAlreadySelected ? 'opacity-50' : ''}`}>
+                              <td className="px-3 py-2 border-r border-border bg-background sticky left-0 z-10">
+                                <Checkbox
+                                  checked={isCurrentlySelected}
+                                  disabled={isAlreadySelected}
+                                  onCheckedChange={(checked) => 
+                                    handleItemSelect(exercise.id, checked as boolean)
+                                  }
+                                />
+                              </td>
+                              {currentColumns.map(column => (
+                                <td key={column.key} className="px-3 py-2 border-r border-border text-xs min-w-[120px]">
+                                  <div className="max-w-[200px] truncate" title={exercise[column.key] || ''}>
+                                    {column.key === currentColumns[0].key && isAlreadySelected && (
+                                      <>
+                                        {exercise[column.key] || '-'}
+                                        <Badge variant="secondary" className="ml-2 text-xs">
+                                          Already selected
+                                        </Badge>
+                                      </>
+                                    )}
+                                    {(column.key !== currentColumns[0].key || !isAlreadySelected) && (
+                                      exercise[column.key] || '-'
+                                    )}
+                                  </div>
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                        {filteredAndSortedExercises.length === 0 && filterState.search.trim() && (
+                          <tr>
+                            <td colSpan={currentColumns.length + 1} className="text-center py-8">
+                              <div className="space-y-2">
+                                <p className="text-muted-foreground">No exercises found matching "{filterState.search}"</p>
+                                {filterState.search.trim().length > 2 && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleCreateNewExercise}
+                                  >
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    Create "{filterState.search}" as new exercise
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
                         )}
-                      </div>
-                    </div>
+                        {filteredAndSortedExercises.length === 0 && !filterState.search.trim() && hasActiveFilters && (
+                          <tr>
+                            <td colSpan={currentColumns.length + 1} className="text-center py-8">
+                              <div className="space-y-2">
+                                <p className="text-muted-foreground">No exercises match the current filters</p>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={clearAllFilters}
+                                >
+                                  Clear All Filters
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
                   </div>
-                </TabsContent>
-              ))}
+                </div>
+              </TabsContent>
             </Tabs>
           </div>
+        </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleConfirm} 
-              disabled={selectedItems.size === 0}
-            >
-              Add Selected ({selectedItems.size})
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        <DialogFooter>
+          <Button variant="outline" onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleConfirm}
+            disabled={selectedItems.size === 0}
+          >
+            Add Selected ({selectedItems.size})
+          </Button>
+        </DialogFooter>
 
-      <NewExerciseDialog
-        isOpen={isNewExerciseDialogOpen}
-        onClose={() => setIsNewExerciseDialogOpen(false)}
-        exerciseName={newExerciseName}
-        onExerciseCreated={onExerciseCreated}
-      />
-    </>
+        {/* New Exercise Dialog */}
+        <NewExerciseDialog
+          isOpen={isNewExerciseDialogOpen}
+          onClose={() => {
+            setIsNewExerciseDialogOpen(false);
+            setNewExerciseName('');
+          }}
+          exerciseName={newExerciseName}
+          onExerciseCreated={handleExerciseCreated}
+        />
+      </DialogContent>
+    </Dialog>
   );
 }
