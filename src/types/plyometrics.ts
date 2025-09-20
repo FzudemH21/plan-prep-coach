@@ -21,7 +21,6 @@ export interface PlyometricsDatabase {
     label: string;
     type: 'text' | 'multiline' | 'select';
     options?: string[];
-    required?: boolean;
   }>;
 }
 

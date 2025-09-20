@@ -188,8 +188,6 @@ const NewColumnDialog: React.FC<NewColumnDialogProps> = ({ isOpen, onClose, onAd
   const [name, setName] = useState('');
   const [type, setType] = useState<'text' | 'multiline' | 'select'>('text');
   const [options, setOptions] = useState('');
-  const [required, setRequired] = useState(false);
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
@@ -197,7 +195,6 @@ const NewColumnDialog: React.FC<NewColumnDialogProps> = ({ isOpen, onClose, onAd
     const newColumn: Omit<TableColumn, 'key'> = {
       label: name.trim(),
       type,
-      required,
       ...(type === 'select' && options.trim() && {
         options: options.split(',').map(opt => opt.trim()).filter(Boolean)
       })
@@ -207,7 +204,6 @@ const NewColumnDialog: React.FC<NewColumnDialogProps> = ({ isOpen, onClose, onAd
     setName('');
     setType('text');
     setOptions('');
-    setRequired(false);
     onClose();
   };
 
@@ -254,14 +250,6 @@ const NewColumnDialog: React.FC<NewColumnDialogProps> = ({ isOpen, onClose, onAd
             </div>
           )}
 
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="column-required"
-              checked={required}
-              onCheckedChange={setRequired}
-            />
-            <Label htmlFor="column-required">Required Field</Label>
-          </div>
 
           <div className="flex justify-end space-x-2">
             <Button type="button" variant="outline" onClick={onClose}>
@@ -346,17 +334,6 @@ function EnhancedEditableTable<T extends Record<string, any>>({
   const handleDeleteColumn = () => {
     if (!columnManagement) return;
     
-    const column = columns.find(c => c.key === deleteDialog.columnKey);
-    if (column?.required) {
-      toast({
-        title: "Cannot Delete Column",
-        description: "This column is required and cannot be deleted.",
-        variant: "destructive"
-      });
-      setDeleteDialog({ isOpen: false, columnKey: '', columnName: '' });
-      return;
-    }
-
     columnManagement.onDeleteColumn(deleteDialog.columnKey);
     toast({
       title: "Column Deleted",
@@ -463,15 +440,13 @@ function EnhancedEditableTable<T extends Record<string, any>>({
                               <Edit className="h-4 w-4 mr-2" />
                               Rename Column
                             </ContextMenuItem>
-                            {!column.required && (
-                              <ContextMenuItem 
-                                onClick={() => openDeleteDialog(column.key, column.label)}
-                                className="text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete Column
-                              </ContextMenuItem>
-                            )}
+                            <ContextMenuItem 
+                              onClick={() => openDeleteDialog(column.key, column.label)}
+                              className="text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete Column
+                            </ContextMenuItem>
                           </ContextMenuContent>
                         </ContextMenu>
                       ) : (

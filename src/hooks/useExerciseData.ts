@@ -29,6 +29,17 @@ export function useExerciseData() {
     loadData();
   }, []);
 
+  // Migration: Remove required property from existing column definitions
+  useEffect(() => {
+    if (data.columnDefinitions) {
+      const cleanedDefinitions = data.columnDefinitions.map(({ required, ...col }: any) => col);
+      if (JSON.stringify(cleanedDefinitions) !== JSON.stringify(data.columnDefinitions)) {
+        const migratedData = { ...data, columnDefinitions: cleanedDefinitions };
+        saveData(migratedData);
+      }
+    }
+  }, [data.columnDefinitions]);
+
   const saveData = (newData: ExerciseDatabase) => {
     try {
       const updatedData = {
