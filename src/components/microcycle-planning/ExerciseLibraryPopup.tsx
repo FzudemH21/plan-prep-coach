@@ -58,9 +58,22 @@ export function ExerciseLibraryPopup({
   const allLibraries = useMemo(() => {
     const libraries: Record<string, any> = {};
     
-    // Built-in libraries
+    // Built-in libraries (use legacy data format)
     libraries['exercise'] = {
       name: 'Resistance Exercise Library',
+      columns: [
+        { key: 'übungsname', label: 'Übungsname', type: 'text' },
+        { key: 'akzentuierteKörperregion', label: 'Körperregion', type: 'text' },
+        { key: 'dominantesBewegungsmuster', label: 'Bewegungsmuster', type: 'text' },
+        { key: 'forcesActingOnSpine', label: 'Forces on Spine', type: 'text' },
+        { key: 'übungsausführung', label: 'Ausführung', type: 'text' },
+        { key: 'trunkTrainingFramework', label: 'Trunk Framework', type: 'text' },
+        { key: 'mainMovementPlane', label: 'Movement Plane', type: 'text' },
+        { key: 'level', label: 'Level', type: 'text' },
+        { key: 'artDesWiderstandes', label: 'Widerstand', type: 'text' },
+        { key: 'stand', label: 'Stand', type: 'text' },
+        { key: 'variationen', label: 'Variationen', type: 'text' }
+      ],
       data: exerciseData?.exercises?.map(ex => ({
         id: ex.id,
         übungsname: ex.übungsname,
@@ -80,6 +93,18 @@ export function ExerciseLibraryPopup({
 
     libraries['plyometrics'] = {
       name: 'Plyometrics',
+      columns: [
+        { key: 'übung', label: 'Übung', type: 'text' },
+        { key: 'intensität', label: 'Intensität', type: 'text' },
+        { key: 'tier', label: 'Tier', type: 'text' },
+        { key: 'dauerDVZ', label: 'Dauer DVZ', type: 'text' },
+        { key: 'fokusrichtung', label: 'Fokusrichtung', type: 'text' },
+        { key: 'bewegungsart', label: 'Bewegungsart', type: 'text' },
+        { key: 'modus', label: 'Modus', type: 'text' },
+        { key: 'emphasis', label: 'Emphasis', type: 'text' },
+        { key: 'übungsgruppe', label: 'Übungsgruppe', type: 'text' },
+        { key: 'kommentar', label: 'Kommentar', type: 'text' }
+      ],
       data: plyometricsData?.exercises?.map(ex => ({
         id: ex.id,
         übung: ex.übung,
@@ -96,15 +121,19 @@ export function ExerciseLibraryPopup({
       })) || []
     };
 
-    // Custom libraries
+    // Custom libraries - use actual column definitions and data structure
     customLibraries.forEach(lib => {
       libraries[lib.id] = {
         name: lib.name,
+        columns: lib.columns.map(col => ({
+          key: col.id,
+          label: col.name,
+          type: col.type,
+          options: col.options
+        })),
         data: lib.exercises.map(ex => ({
           id: ex.id,
-          name: ex.data.exercise || ex.data.name || ex.data.übungsname || ex.data.übung || 'Unnamed Exercise',
-          category: ex.data.category || ex.data.type || '',
-          type: ex.data.type || lib.type || '',
+          ...ex.data, // Use actual exercise data with column IDs as keys
           library: lib.id
         }))
       };
@@ -123,41 +152,10 @@ export function ExerciseLibraryPopup({
 
   // Get column definitions based on active library
   const getColumnsForLibrary = (libraryKey: string): PopupTableColumn[] => {
-    if (libraryKey === 'exercise') {
-      return [
-        { key: 'übungsname', label: 'Übungsname', type: 'text' },
-        { key: 'akzentuierteKörperregion', label: 'Körperregion', type: 'text' },
-        { key: 'dominantesBewegungsmuster', label: 'Bewegungsmuster', type: 'text' },
-        { key: 'forcesActingOnSpine', label: 'Forces on Spine', type: 'text' },
-        { key: 'übungsausführung', label: 'Ausführung', type: 'text' },
-        { key: 'trunkTrainingFramework', label: 'Trunk Framework', type: 'text' },
-        { key: 'mainMovementPlane', label: 'Movement Plane', type: 'text' },
-        { key: 'level', label: 'Level', type: 'text' },
-        { key: 'artDesWiderstandes', label: 'Widerstand', type: 'text' },
-        { key: 'stand', label: 'Stand', type: 'text' },
-        { key: 'variationen', label: 'Variationen', type: 'text' }
-      ];
-    } else if (libraryKey === 'plyometrics') {
-      return [
-        { key: 'übung', label: 'Übung', type: 'text' },
-        { key: 'intensität', label: 'Intensität', type: 'text' },
-        { key: 'tier', label: 'Tier', type: 'text' },
-        { key: 'dauerDVZ', label: 'Dauer DVZ', type: 'text' },
-        { key: 'fokusrichtung', label: 'Fokusrichtung', type: 'text' },
-        { key: 'bewegungsart', label: 'Bewegungsart', type: 'text' },
-        { key: 'modus', label: 'Modus', type: 'text' },
-        { key: 'emphasis', label: 'Emphasis', type: 'text' },
-        { key: 'übungsgruppe', label: 'Übungsgruppe', type: 'text' },
-        { key: 'kommentar', label: 'Kommentar', type: 'text' }
-      ];
-    } else {
-      // Custom library - show basic fields
-      return [
-        { key: 'name', label: 'Name', type: 'text' },
-        { key: 'category', label: 'Category', type: 'text' },
-        { key: 'type', label: 'Type', type: 'text' }
-      ];
-    }
+    const library = allLibraries[libraryKey];
+    if (!library) return [];
+    
+    return library.columns || [];
   };
 
   const currentColumns = useMemo(() => getColumnsForLibrary(activeTab), [activeTab]);
@@ -230,8 +228,23 @@ export function ExerciseLibraryPopup({
       const timeout = setTimeout(() => {
         const allExercises = Object.values(libraryData).flat();
         const exerciseExists = allExercises.some(exercise => {
-          const nameField = exercise.übungsname || exercise.übung || exercise.name || '';
-          return nameField.toLowerCase() === value.toLowerCase();
+          // Check name field based on library type
+          if (exercise.library === 'exercise') {
+            return exercise.übungsname && exercise.übungsname.toLowerCase() === value.toLowerCase();
+          } else if (exercise.library === 'plyometrics') {
+            return exercise.übung && exercise.übung.toLowerCase() === value.toLowerCase();
+          } else {
+            // For custom libraries, check the first column (usually the name field)
+            const library = allLibraries[exercise.library];
+            if (library && library.columns && library.columns.length > 0) {
+              const firstColumnKey = library.columns[0].key;
+              const nameValue = exercise[firstColumnKey];
+              return nameValue && nameValue.toLowerCase() === value.toLowerCase();
+            }
+            // Fallback to common name fields
+            const nameField = exercise.name || exercise.übungsname || exercise.übung || '';
+            return nameField.toLowerCase() === value.toLowerCase();
+          }
         });
         
         if (!exerciseExists && value.trim().length > 2) {
@@ -303,7 +316,20 @@ export function ExerciseLibraryPopup({
       if (!exercise) throw new Error('Exercise not found');
 
       // Get exercise name from appropriate field based on library
-      const exerciseName = exercise.übungsname || exercise.übung || exercise.name || 'Unknown Exercise';
+      let exerciseName = 'Unknown Exercise';
+      
+      if (activeTab === 'exercise') {
+        exerciseName = exercise.übungsname || 'Unknown Exercise';
+      } else if (activeTab === 'plyometrics') {
+        exerciseName = exercise.übung || 'Unknown Exercise';
+      } else {
+        // For custom libraries, use the first column or look for common name fields
+        const library = allLibraries[activeTab];
+        if (library && library.columns && library.columns.length > 0) {
+          const firstColumnKey = library.columns[0].key;
+          exerciseName = exercise[firstColumnKey] || exercise.name || exercise.übungsname || exercise.übung || 'Unknown Exercise';
+        }
+      }
 
       return {
         id: `${exercise.library}-${id}-${Date.now()}`,
