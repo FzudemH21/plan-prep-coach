@@ -71,6 +71,9 @@ export default function PlyometricsLibrary() {
         const comparison = aStr.localeCompare(bStr);
         return filterState.sortDirection === 'asc' ? comparison : -comparison;
       });
+    } else {
+      // Default alphabetical sorting when no specific sort is applied
+      filtered.sort((a, b) => a.übung.localeCompare(b.übung));
     }
 
     return filtered;
@@ -195,7 +198,7 @@ export default function PlyometricsLibrary() {
             className="flex items-center gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
-            Zurück zu Templates
+            Back to Templates
           </Button>
           <div>
             <h1 className="text-3xl font-bold">Plyometrics Library</h1>

@@ -76,6 +76,9 @@ const ExerciseLibrary = () => {
           return bStr.localeCompare(aStr, 'de');
         }
       });
+    } else {
+      // Default alphabetical sorting when no specific sort is applied
+      filtered.sort((a, b) => a.übungsname.localeCompare(b.übungsname));
     }
 
     return filtered;
