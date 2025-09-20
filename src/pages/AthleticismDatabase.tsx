@@ -542,9 +542,9 @@ export default function AthleticismDatabase() {
           <CardTitle>Database Entries</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="border rounded-lg overflow-auto max-h-[70vh]">
+          <div className="border rounded-lg overflow-auto max-h-[70vh] relative">
             <Table>
-              <TableHeader className="sticky top-0 bg-background z-10">
+              <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">
                 <TableRow>
                   <TableHead className="min-w-[200px]">
                     <div className="flex items-center justify-between">
