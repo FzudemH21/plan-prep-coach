@@ -125,7 +125,7 @@ export function AthleticismColumnFilter({
 
         {/* Column Sort */}
         <div className="p-3 border-b">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">Sort Column</span>
             <div className="flex gap-1">
               <Button
@@ -145,27 +145,6 @@ export function AthleticismColumnFilter({
               >
                 <ArrowDownZA className="h-3 w-3 mr-1" />
                 Z-A
-              </Button>
-            </div>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Filter Options</span>
-            <div className="flex gap-1">
-              <Button
-                variant={listSort === 'asc' ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-6 px-2"
-                onClick={() => setListSort('asc')}
-              >
-                <ArrowUpAZ className="h-3 w-3" />
-              </Button>
-              <Button
-                variant={listSort === 'desc' ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-6 px-2"
-                onClick={() => setListSort('desc')}
-              >
-                <ArrowDownZA className="h-3 w-3" />
               </Button>
             </div>
           </div>
