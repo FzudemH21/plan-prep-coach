@@ -38,16 +38,6 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
     deleteColumnFromLibrary
   } = useCustomLibraries();
   const { toast } = useToast();
-
-  // Ensure library has proper structure with defaults
-  const safeLibrary = {
-    ...library,
-    columns: library.columns || [
-      { id: 'exercise', name: 'Exercise', type: 'text' as const, required: true },
-      { id: 'description', name: 'Description', type: 'textarea' as const, required: false }
-    ],
-    exercises: library.exercises || []
-  };
   
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [newColumnDialog, setNewColumnDialog] = useState<NewColumnDialog>({
@@ -59,10 +49,10 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
   });
 
   const handleCellEdit = (exerciseId: string, columnId: string, value: string) => {
-    const exercise = safeLibrary.exercises.find(ex => ex.id === exerciseId);
+    const exercise = library.exercises.find(ex => ex.id === exerciseId);
     if (exercise) {
       updateExerciseInLibrary(library.id, exerciseId, {
-        data: { ...(exercise.data || {}), [columnId]: value }
+        data: { ...exercise.data, [columnId]: value }
       });
     }
     setEditingCell(null);
@@ -70,7 +60,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
 
   const handleAddExercise = () => {
     const newExerciseData: Record<string, any> = {};
-    safeLibrary.columns.forEach(col => {
+    library.columns.forEach(col => {
       newExerciseData[col.id] = col.required && col.type === 'text' ? 'New Exercise' : '';
     });
 
@@ -112,7 +102,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
   };
 
   const handleDeleteColumn = (columnId: string) => {
-    const column = safeLibrary.columns.find(col => col.id === columnId);
+    const column = library.columns.find(col => col.id === columnId);
     if (column?.required) {
       toast({ 
         title: "Error", 
@@ -127,7 +117,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
   };
 
   const renderCell = (exercise: CustomExercise, column: LibraryColumn) => {
-    const value = (exercise.data || {})[column.id] || '';
+    const value = exercise.data[column.id] || '';
     const isEditing = editingCell?.exerciseId === exercise.id && editingCell?.columnId === column.id;
 
     if (isEditing) {
@@ -260,7 +250,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
             </Button>
           </div>
           <div className="text-sm text-muted-foreground">
-            {safeLibrary.exercises.length} exercises
+            {library.exercises.length} exercises
           </div>
         </div>
 
@@ -268,21 +258,21 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
           <Table>
             <TableHeader>
               <TableRow>
-                {safeLibrary.columns.map(column => renderColumnHeader(column))}
+                {library.columns.map(column => renderColumnHeader(column))}
                 <TableHead className="w-20">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {safeLibrary.exercises.length === 0 ? (
+              {library.exercises.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={safeLibrary.columns.length + 1} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={library.columns.length + 1} className="text-center py-12 text-muted-foreground">
                     No exercises found. Click "Add Exercise" to get started.
                   </TableCell>
                 </TableRow>
               ) : (
-                safeLibrary.exercises.map(exercise => (
+                library.exercises.map(exercise => (
                   <TableRow key={exercise.id}>
-                    {safeLibrary.columns.map(column => (
+                    {library.columns.map(column => (
                       <TableCell key={column.id}>
                         {renderCell(exercise, column)}
                       </TableCell>
