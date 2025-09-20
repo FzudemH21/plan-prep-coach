@@ -91,7 +91,7 @@ export function useAthleticismData() {
   };
 
   const exportData = () => {
-    const headers = ['Overarching Goal', 'Sub-goal', 'Quality or Determining Factor', 'Mapped Methods', 'Loading Recommendations (JSON)'];
+    const headers = ['Overarching Goal', 'Sub-goal', 'Quality or Determining Factor', 'Mapped Methods', 'Loading Recommendations'];
     const rows = data.entries.map(entry => [
       entry.overarchingGoal,
       entry.subGoal,

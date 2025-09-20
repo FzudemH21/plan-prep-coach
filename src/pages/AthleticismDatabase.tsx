@@ -486,7 +486,7 @@ export default function AthleticismDatabase() {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="loading">Loading Recommendations (JSON)</Label>
+                      <Label htmlFor="loading">Loading Recommendations</Label>
                       <Textarea
                         id="loading"
                         value={JSON.stringify(newEntry.loadingRecommendations, null, 2)}
