@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { DisplayModeProvider } from "@/contexts/DisplayModeContext";
+import { CustomLibrariesProvider } from "@/contexts/CustomLibrariesContext";
 import HomePage from "./pages/HomePage";
 import MacrocyclePage from "./pages/MacrocyclePage";
 import MesocyclePage from "./pages/MesocyclePage";
@@ -21,9 +22,10 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <DisplayModeProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
+        <CustomLibrariesProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
           <AppLayout>
             <Routes>
               <Route path="/" element={<HomePage />} />
@@ -41,7 +43,8 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AppLayout>
-        </BrowserRouter>
+          </BrowserRouter>
+        </CustomLibrariesProvider>
       </DisplayModeProvider>
     </TooltipProvider>
   </QueryClientProvider>
