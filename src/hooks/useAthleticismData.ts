@@ -56,10 +56,44 @@ export function useAthleticismData() {
     saveData({ ...data, entries: newEntries });
   };
 
+  const parseCsvLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    let i = 0;
+    
+    while (i < line.length) {
+      const char = line[i];
+      
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          // Escaped quote
+          current += '"';
+          i += 2;
+        } else {
+          // Toggle quote state
+          inQuotes = !inQuotes;
+          i++;
+        }
+      } else if (char === ',' && !inQuotes) {
+        // End of field
+        result.push(current);
+        current = '';
+        i++;
+      } else {
+        current += char;
+        i++;
+      }
+    }
+    
+    result.push(current);
+    return result;
+  };
+
   const importData = (csvText: string) => {
     try {
       const lines = csvText.split('\n').filter(line => line.trim());
-      const headers = lines[0].split('\t');
+      const headers = parseCsvLine(lines[0]);
       
       if (headers.length < 5) {
         throw new Error('Invalid format. Expected at least 5 columns.');
@@ -68,7 +102,7 @@ export function useAthleticismData() {
       const entries: AthleticismEntry[] = [];
       
       for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split('\t');
+        const values = parseCsvLine(lines[i]);
         if (values.length >= 5) {
           const entry: AthleticismEntry = {
             id: Date.now().toString() + i,
@@ -90,6 +124,14 @@ export function useAthleticismData() {
     }
   };
 
+  const escapeCsvValue = (value: string): string => {
+    // If value contains comma, quote, or newline, wrap in quotes and escape internal quotes
+    if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+      return '"' + value.replace(/"/g, '""') + '"';
+    }
+    return value;
+  };
+
   const exportData = () => {
     const headers = ['Overarching Goal', 'Sub-goal', 'Quality or Determining Factor', 'Mapped Methods', 'Loading Recommendations'];
     const rows = data.entries.map(entry => [
@@ -100,7 +142,9 @@ export function useAthleticismData() {
       JSON.stringify(entry.loadingRecommendations)
     ]);
     
-    return [headers, ...rows].map(row => row.join('\t')).join('\n');
+    return [headers, ...rows].map(row => 
+      row.map(escapeCsvValue).join(',')
+    ).join('\n');
   };
 
   return {
