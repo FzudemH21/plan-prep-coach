@@ -322,13 +322,14 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
         <ContextMenuContent>
           <ContextMenuItem 
             key={`rename-${column.id}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              setRenameDialog({
-                isOpen: true,
-                columnId: column.id,
-                currentName: column.name
-              });
+            onSelect={() => {
+              setTimeout(() => {
+                setRenameDialog({
+                  isOpen: true,
+                  columnId: column.id,
+                  currentName: column.name
+                });
+              }, 0);
             }}
           >
             <Edit2 className="h-4 w-4 mr-2" />
@@ -336,9 +337,10 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
           </ContextMenuItem>
           <ContextMenuItem 
             key={`add-${column.id}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              setNewColumnDialog({ ...newColumnDialog, isOpen: true });
+            onSelect={() => {
+              setTimeout(() => {
+                setNewColumnDialog({ ...newColumnDialog, isOpen: true });
+              }, 0);
             }}
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -347,13 +349,14 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
           {!column.required && (
             <ContextMenuItem 
               key={`delete-${column.id}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                setDeleteDialog({
-                  isOpen: true,
-                  columnId: column.id,
-                  columnName: column.name
-                });
+              onSelect={() => {
+                setTimeout(() => {
+                  setDeleteDialog({
+                    isOpen: true,
+                    columnId: column.id,
+                    columnName: column.name
+                  });
+                }, 0);
               }}
               className="text-destructive"
             >

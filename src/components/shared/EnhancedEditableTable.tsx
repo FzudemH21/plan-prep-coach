@@ -485,12 +485,12 @@ function EnhancedEditableTable<T extends Record<string, any>>({
                             <span className="truncate">{column.label}</span>
                           </ContextMenuTrigger>
                           <ContextMenuContent>
-                            <ContextMenuItem onClick={() => openRenameDialog(column.key, column.label)}>
+                            <ContextMenuItem onSelect={() => { setTimeout(() => openRenameDialog(column.key, column.label), 0); }}>
                               <Edit className="h-4 w-4 mr-2" />
                               Rename Column
                             </ContextMenuItem>
                             <ContextMenuItem 
-                              onClick={() => openDeleteDialog(column.key, column.label)}
+                              onSelect={() => { setTimeout(() => openDeleteDialog(column.key, column.label), 0); }}
                               className="text-destructive"
                             >
                               <Trash2 className="h-4 w-4 mr-2" />
