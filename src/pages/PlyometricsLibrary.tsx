@@ -64,7 +64,11 @@ export default function PlyometricsLibrary() {
         const aValue = a[filterState.sortColumn!];
         const bValue = b[filterState.sortColumn!];
         
-        const comparison = aValue.localeCompare(bValue);
+        // Handle undefined/null values and convert to strings for comparison
+        const aStr = (aValue ?? '').toString();
+        const bStr = (bValue ?? '').toString();
+        
+        const comparison = aStr.localeCompare(bStr);
         return filterState.sortDirection === 'asc' ? comparison : -comparison;
       });
     }

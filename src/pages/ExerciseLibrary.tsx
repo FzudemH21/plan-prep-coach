@@ -66,10 +66,14 @@ const ExerciseLibrary = () => {
         const aValue = a[filterState.sortColumn!];
         const bValue = b[filterState.sortColumn!];
         
+        // Handle undefined/null values and convert to strings for comparison
+        const aStr = (aValue ?? '').toString();
+        const bStr = (bValue ?? '').toString();
+        
         if (filterState.sortDirection === 'asc') {
-          return aValue.localeCompare(bValue, 'de');
+          return aStr.localeCompare(bStr, 'de');
         } else {
-          return bValue.localeCompare(aValue, 'de');
+          return bStr.localeCompare(aStr, 'de');
         }
       });
     }
