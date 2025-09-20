@@ -10,6 +10,7 @@ import { ExerciseSelection, ExerciseLibraryType } from '@/types/microcycle-plann
 import { FilterState } from '@/types/exercises';
 import { useCustomLibraries } from '@/hooks/useCustomLibraries';
 import { ColumnFilter } from '@/components/exercises/ColumnFilter';
+import { PlyometricsColumnFilter } from '@/components/plyometrics/PlyometricsColumnFilter';
 import { NewExerciseDialog } from './NewExerciseDialog';
 
 // Define a more flexible column type for the popup
@@ -397,12 +398,31 @@ export function ExerciseLibraryPopup({
                                     )
                                   )}
                                 </div>
-                                <ColumnFilter
-                                  column={column as any}
-                                  allData={libraryData[activeTab] || []}
-                                  selectedValues={filterState.columnFilters[column.key] || []}
-                                  onSelectionChange={(values) => handleColumnFilter(column.key, values)}
-                                />
+                                {activeTab === 'resistance-training' ? (
+                                  <ColumnFilter
+                                    column={column as any}
+                                    allData={libraryData[activeTab] || []}
+                                    selectedValues={filterState.columnFilters[column.key] || []}
+                                    onSelectionChange={(values) => handleColumnFilter(column.key, values)}
+                                    onSortChange={handleSort}
+                                  />
+                                ) : activeTab === 'plyometrics' ? (
+                                  <PlyometricsColumnFilter
+                                    column={column as any}
+                                    allData={libraryData[activeTab] || []}
+                                    selectedValues={filterState.columnFilters[column.key] || []}
+                                    onSelectionChange={(values) => handleColumnFilter(column.key, values)}
+                                    onSortChange={handleSort}
+                                  />
+                                ) : (
+                                  <ColumnFilter
+                                    column={column as any}
+                                    allData={libraryData[activeTab] || []}
+                                    selectedValues={filterState.columnFilters[column.key] || []}
+                                    onSelectionChange={(values) => handleColumnFilter(column.key, values)}
+                                    onSortChange={handleSort}
+                                  />
+                                )}
                               </div>
                             </th>
                           ))}
