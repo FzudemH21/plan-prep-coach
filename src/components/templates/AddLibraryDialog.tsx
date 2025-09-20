@@ -34,7 +34,11 @@ export function AddLibraryDialog({ isOpen, onClose }: AddLibraryDialogProps) {
       addLibrary({
         name: libraryName.trim(),
         type: 'Custom',
-        description: description.trim()
+        description: description.trim(),
+        columns: [
+          { id: 'exercise', name: 'Exercise', type: 'text', required: true },
+          { id: 'description', name: 'Description', type: 'textarea', required: false }
+        ]
       });
 
       toast({

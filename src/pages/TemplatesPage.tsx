@@ -39,8 +39,6 @@ export default function TemplatesPage() {
   };
 
   const getLibraryRoute = (library: CustomLibrary) => {
-    if (library.id === 'resistance-training') return '/templates/exercises';
-    if (library.id === 'plyometrics') return '/templates/plyometrics';
     return `/templates/library/${library.id}`;
   };
 

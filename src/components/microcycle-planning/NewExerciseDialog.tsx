@@ -81,10 +81,10 @@ export function NewExerciseDialog({
         if (!customLib) throw new Error('Custom library not found');
         
         const newExercise = addExerciseToLibrary(selectedLibrary, {
-          name: exerciseName,
-          category: category || 'Uncategorized',
-          type: '',
-          metadata: {}
+          data: {
+            exercise: exerciseName,
+            description: category || 'Uncategorized'
+          }
         });
         newExerciseId = newExercise.id;
         library = selectedLibrary;

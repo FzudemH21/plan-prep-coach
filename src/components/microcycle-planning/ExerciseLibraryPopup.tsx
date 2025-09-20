@@ -102,9 +102,9 @@ export function ExerciseLibraryPopup({
         name: lib.name,
         data: lib.exercises.map(ex => ({
           id: ex.id,
-          name: ex.name,
-          category: ex.category || '',
-          type: ex.type || '',
+          name: ex.data.exercise || ex.data.name || ex.data.übungsname || ex.data.übung || 'Unnamed Exercise',
+          category: ex.data.category || ex.data.type || '',
+          type: ex.data.type || lib.type || '',
           library: lib.id
         }))
       };
