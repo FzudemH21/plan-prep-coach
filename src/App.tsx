@@ -14,7 +14,7 @@ import AthleticismDatabase from "./pages/AthleticismDatabase";
 import ToolboxDatabase from "./pages/ToolboxDatabase";
 import ExerciseLibrary from "./pages/ExerciseLibrary";
 import PlyometricsLibrary from "./pages/PlyometricsLibrary";
-import CustomLibraryPage from "./pages/CustomLibraryPage";
+import LibraryPage from "./pages/LibraryPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,9 +38,9 @@ const App = () => (
               <Route path="/templates/athleticism" element={<AthleticismDatabase />} />
               <Route path="/templates/toolbox" element={<ToolboxDatabase />} />
               
-              <Route path="/templates/resistancetrainingexercises" element={<ExerciseLibrary />} />
-              <Route path="/templates/plyometrics" element={<PlyometricsLibrary />} />
-              <Route path="/templates/:libraryName" element={<CustomLibraryPage />} />
+              <Route path="/templates/libraries/resistancetraining" element={<ExerciseLibrary />} />
+              <Route path="/templates/libraries/plyometrics" element={<PlyometricsLibrary />} />
+              <Route path="/templates/libraries/:libraryName" element={<LibraryPage />} />
               <Route path="/analytics" element={<div className="text-center py-12">Analytics coming soon...</div>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

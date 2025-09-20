@@ -52,14 +52,14 @@ export default function TemplatesPage() {
     if (library.isBuiltIn) {
       switch (library.id) {
         case 'resistance-training':
-          return '/templates/resistancetrainingexercises';
+          return '/templates/libraries/resistancetraining';
         case 'plyometrics':
-          return '/templates/plyometrics';
+          return '/templates/libraries/plyometrics';
         default:
-          return `/templates/${createSlug(library.name)}`;
+          return `/templates/libraries/${createSlug(library.name)}`;
       }
     }
-    return `/templates/${createSlug(library.name)}`;
+    return `/templates/libraries/${createSlug(library.name)}`;
   };
 
   const getLibraryIcon = (library: CustomLibrary) => {

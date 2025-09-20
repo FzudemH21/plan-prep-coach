@@ -1,10 +1,8 @@
-import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { useCustomLibraries } from '@/hooks/useCustomLibraries';
 import { DynamicLibraryTable } from '@/components/templates/DynamicLibraryTable';
-import { useToast } from '@/hooks/use-toast';
 
 // Convert library name to URL-safe slug
 const createSlug = (name: string): string => {
@@ -21,11 +19,10 @@ const findLibraryBySlug = (libraries: any[], slug: string) => {
   return libraries.find(lib => createSlug(lib.name) === slug);
 };
 
-export default function CustomLibraryPage() {
+export default function LibraryPage() {
   const { libraryName } = useParams<{ libraryName: string }>();
   const navigate = useNavigate();
   const { libraries, isLoading } = useCustomLibraries();
-  const { toast } = useToast();
 
   const library = findLibraryBySlug(libraries, libraryName || '');
 
