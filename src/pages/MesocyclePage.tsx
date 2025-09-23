@@ -25,6 +25,7 @@ import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info
 import { format, addWeeks, differenceInWeeks } from "date-fns";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 import { IntensityLevel } from "@/types/training";
+import { getParametersForMethod as getCanonicalParameters, MethodParameter as CanonicalMethodParameter } from "@/data/methodParameters";
 
 // Helper function for string normalization
 const normalizeForComparison = (str: string): string => {
@@ -1149,10 +1150,12 @@ export default function MesocyclePage() {
 
     // Helper function to get frequency per week for a method
     const getMethodFrequency = (methodName: string) => {
-      const parameters = getParametersForMethodFromToolbox(methodName);
-      const frequencyParam = parameters.find(p => p.name === 'frequency_per_week');
-      // Default to 1 if no frequency parameter found
-      return 1;
+      // Use canonical method parameter definitions to determine frequency
+      const params = getCanonicalParameters(methodName) as CanonicalMethodParameter[];
+      const freq = params.find(p => p.name === 'frequency_per_week')?.defaultValue;
+      if (typeof freq === 'number') return freq;
+      const parsed = typeof freq === 'string' ? Number(freq) : NaN;
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
     };
 
     // Helper function to get number of sessions for a method
