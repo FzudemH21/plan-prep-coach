@@ -972,22 +972,46 @@ export default function MesocyclePage() {
     return frequency; // Always return the actual frequency regardless of split state
   };
 
-  // Helper function to calculate dynamic column width based on global split state
-  const calculateMicrocycleWidth = (mesocycleId: string, microcycleIndex: number, methodName: string) => {
-    const frequency = getCellFrequency(mesocycleId, microcycleIndex, methodName);
-    const isSplit = isMicrocycleSplit(mesocycleId, microcycleIndex);
-    return isSplit && frequency > 1 ? `${frequency * 120}px` : '180px';
-  };
+  // Helper function to get global microcycle width (max frequency across all allocated methods)
+  const getGlobalMicrocycleWidth = useCallback((mesocycleId: string, microcycleIndex: number) => {
+    let maxFrequency = 1;
+    
+    // Scan all allocated methods for this specific microcycle
+    getMethodsForAllocatedSubGoals.forEach((method: string) => {
+      if (isMethodAllocatedToMesocycle(method, mesocycleId)) {
+        const frequency = getCellFrequency(mesocycleId, microcycleIndex, method);
+        const isSplit = isMicrocycleSplit(mesocycleId, microcycleIndex);
+        if (isSplit && frequency > maxFrequency) {
+          maxFrequency = frequency;
+        }
+      }
+    });
+    
+    return maxFrequency > 1 ? maxFrequency * 120 : 180;
+  }, [mesocycles, getMethodsForAllocatedSubGoals, isMethodAllocatedToMesocycle, getCellFrequency, isMicrocycleSplit]);
 
-  // Helper function to calculate grid template for dynamic widths
-  const calculateGridTemplate = (methodName: string) => {
-    const columns = ['300px']; // Fixed left column
+  // Helper function to generate dynamic header grid template using global widths
+  const generateHeaderGridTemplate = useCallback(() => {
+    const widths = ['300px']; // Fixed left column
     mesocycles.forEach((meso) => {
       (meso.microcycles || []).forEach((_, microcycleIndex) => {
-        columns.push(calculateMicrocycleWidth(meso.id, microcycleIndex, methodName));
+        const width = getGlobalMicrocycleWidth(meso.id, microcycleIndex);
+        widths.push(`${width}px`);
       });
     });
-    return columns.join(' ');
+    return widths.join(' ');
+  }, [mesocycles, getGlobalMicrocycleWidth]);
+
+  // Helper function to calculate grid template for dynamic widths using global calculation
+  const calculateGridTemplate = (methodName: string) => {
+    const widths = ['300px']; // Fixed left column
+    mesocycles.forEach((meso) => {
+      (meso.microcycles || []).forEach((_, microcycleIndex) => {
+        const width = getGlobalMicrocycleWidth(meso.id, microcycleIndex);
+        widths.push(`${width}px`);
+      });
+    });
+    return widths.join(' ');
   };
 
   // Helper function to check if parameter is frequency-related
@@ -1251,10 +1275,10 @@ export default function MesocyclePage() {
                    <div className="min-w-max relative">
                      {/* Multi-Level Sticky Headers */}
                      <div className="sticky top-0 z-[90] bg-background border-b space-y-1 shadow-sm">
-                        {/* Level 1: Mesocycle Group Headers */}
-                          <div className="grid gap-1" style={{
-                            gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 180px)`
-                          }}>
+                         {/* Level 1: Mesocycle Group Headers */}
+                           <div className="grid gap-1" style={{
+                             gridTemplateColumns: generateHeaderGridTemplate()
+                           }}>
                            <div className="sticky left-0 z-[60] p-2 bg-background font-medium text-sm border rounded-t-lg shadow-md border-r">
                              Training Methods
                            </div>
@@ -1274,10 +1298,10 @@ export default function MesocyclePage() {
                           ))}
                        </div>
 
-                        {/* Level 2: Sub-goals and Qualities */}
-                         <div className="grid gap-1" style={{
-                           gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 180px)`
-                         }}>
+                         {/* Level 2: Sub-goals and Qualities */}
+                          <div className="grid gap-1" style={{
+                            gridTemplateColumns: generateHeaderGridTemplate()
+                          }}>
                             <div className="sticky left-0 z-[60] p-2 bg-background border-l border-r text-xs shadow-md">
                               Focus Areas
                             </div>
@@ -1347,10 +1371,10 @@ export default function MesocyclePage() {
                           })}
                        </div>
 
-                        {/* Level 3: Microcycle Headers with Intensity Colors */}
-                         <div className="grid gap-1" style={{
-                           gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 180px)`
-                         }}>
+                         {/* Level 3: Microcycle Headers with Intensity Colors */}
+                          <div className="grid gap-1" style={{
+                            gridTemplateColumns: generateHeaderGridTemplate()
+                          }}>
                            <div className="sticky left-0 z-[60] p-2 bg-background font-medium text-xs border rounded-b-lg shadow-md border-r">
                              Parameters
                            </div>
@@ -1549,14 +1573,13 @@ export default function MesocyclePage() {
                                                        const isDragSource = dragState.sourceCell === cellId;
                                                        const isInSelection = dragState.selectedCells.has(cellId);
                                                        
-                                                        return (
-                                                          <div 
-                                                            key={`${meso.id}-${microcycleIndex}-${param.name}`} 
-                                                            className={`p-1 border-l ${!isAllocated ? 'bg-gray-100/50 opacity-50' : ''}`}
-                                                            style={{ width: calculateMicrocycleWidth(meso.id, microcycleIndex, method) }}
-                                                            data-drag-cell={cellId}
-                                                            data-allocated={isAllocated ? 'true' : 'false'}
-                                                          >
+                                                         return (
+                                                           <div 
+                                                             key={`${meso.id}-${microcycleIndex}-${param.name}`} 
+                                                             className={`p-1 border-l ${!isAllocated ? 'bg-gray-100/50 opacity-50' : ''}`}
+                                                             data-drag-cell={cellId}
+                                                             data-allocated={isAllocated ? 'true' : 'false'}
+                                                           >
                                                            <ParameterContextMenu
                                                              cellId={cellId}
                                                              value={currentValue}
