@@ -969,7 +969,30 @@ export default function MesocyclePage() {
   // Helper function to get number of sessions for a cell
   const getCellSessions = (mesocycleId: string, microcycleIndex: number, methodName: string) => {
     const frequency = getCellFrequency(mesocycleId, microcycleIndex, methodName);
-    return isCellSplit(mesocycleId, microcycleIndex, methodName) ? frequency : 1;
+    return frequency; // Always return the actual frequency regardless of split state
+  };
+
+  // Helper function to calculate dynamic column width based on split state
+  const calculateMicrocycleWidth = (mesocycleId: string, microcycleIndex: number, methodName: string) => {
+    const frequency = getCellFrequency(mesocycleId, microcycleIndex, methodName);
+    const isSplit = isCellSplit(mesocycleId, microcycleIndex, methodName);
+    return isSplit && frequency > 1 ? `${frequency * 120}px` : '180px';
+  };
+
+  // Helper function to calculate grid template for dynamic widths
+  const calculateGridTemplate = (methodName: string) => {
+    const columns = ['300px']; // Fixed left column
+    mesocycles.forEach((meso) => {
+      (meso.microcycles || []).forEach((_, microcycleIndex) => {
+        columns.push(calculateMicrocycleWidth(meso.id, microcycleIndex, methodName));
+      });
+    });
+    return columns.join(' ');
+  };
+
+  // Helper function to check if parameter is frequency-related
+  const isFrequencyParameter = (paramName: string) => {
+    return paramName.toLowerCase().includes('frequency');
   };
 
   // Drag fill handlers (hooks must be at component level)
@@ -1373,7 +1396,7 @@ export default function MesocyclePage() {
                                     <div key={method} className="border rounded-lg bg-card shadow-sm">
                                         {/* Method name header */}
                                         <div className="grid gap-1 bg-muted/20" style={{ 
-                                           gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 180px)` 
+                                           gridTemplateColumns: calculateGridTemplate(method)
                                          }}>
                                           <div className="sticky left-0 z-40 p-3 font-medium text-sm border-r bg-background rounded-tl shadow-md">
                                             <div className="flex items-center justify-between">
@@ -1395,15 +1418,15 @@ export default function MesocyclePage() {
                                                   className={`p-2 text-xs text-center font-medium border-l ${intensityBg(microcycle.intensity)} ${!isAllocated ? 'opacity-50' : ''} flex flex-col items-center gap-1`}
                                                 >
                                                   <div className="flex items-center gap-1">
-                                                    {frequency > 1 && (
-                                                      <button
-                                                        onClick={() => toggleCellSplit(meso.id, microcycleIndex, method)}
-                                                        className="p-0.5 text-xs text-current hover:bg-black/20 rounded transition-colors"
-                                                        title={`${isSplit ? 'Unsplit' : 'Split'} sessions (${frequency}×/wk)`}
-                                                      >
-                                                        {isSplit ? '📋' : '📑'}
-                                                      </button>
-                                                    )}
+                                                     {frequency > 1 && (
+                                                       <button
+                                                         onClick={() => toggleCellSplit(meso.id, microcycleIndex, method)}
+                                                         className="px-1.5 py-0.5 text-[10px] text-current hover:bg-black/20 rounded transition-colors font-medium"
+                                                         title={`${isSplit ? 'Merge' : 'Split'} sessions (${frequency}×/wk)`}
+                                                       >
+                                                         {isSplit ? 'Merge' : 'Split'}
+                                                       </button>
+                                                     )}
                                                   </div>
                                                   {isSplit && (
                                                     <div className="flex gap-0.5 text-[10px]">
@@ -1422,9 +1445,9 @@ export default function MesocyclePage() {
                                        {parameters.length > 0 && (
                                          <div className="divide-y">
                                              {parameters.map((param) => (
-                                                 <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
-                                                   gridTemplateColumns: `300px repeat(${mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length || 0), 0)}, 180px)` 
-                                                 }}>
+                                                  <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
+                                                    gridTemplateColumns: calculateGridTemplate(method)
+                                                  }}>
                                                  <div className="sticky left-0 z-40 p-2 text-xs text-muted-foreground bg-background border-r flex items-center justify-between shadow-md">
                                                    <div className="flex items-center">
                                                      <span className="ml-4 font-medium">{param.name}</span>
@@ -1446,10 +1469,11 @@ export default function MesocyclePage() {
                                                  {mesocycles.map((meso) =>
                                                    (meso.microcycles || []).map((microcycle, microcycleIndex) => {
                                                      const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
-                                                     const isSplit = isCellSplit(meso.id, microcycleIndex, method);
-                                                     const sessionsCount = getCellSessions(meso.id, microcycleIndex, method);
-                                                     
-                                                     if (isSplit) {
+                                                      const isSplit = isCellSplit(meso.id, microcycleIndex, method);
+                                                      const sessionsCount = getCellSessions(meso.id, microcycleIndex, method);
+                                                      const isFrequency = isFrequencyParameter(param.name);
+                                                      
+                                                      if (isSplit && !isFrequency) {
                                                        return (
                                                          <div key={`${meso.id}-${microcycleIndex}`} className="flex">
                                                            {Array.from({ length: sessionsCount }, (_, sessionIndex) => {
@@ -1525,13 +1549,14 @@ export default function MesocyclePage() {
                                                        const isDragSource = dragState.sourceCell === cellId;
                                                        const isInSelection = dragState.selectedCells.has(cellId);
                                                        
-                                                       return (
-                                                         <div 
-                                                           key={`${meso.id}-${microcycleIndex}-${param.name}`} 
-                                                           className={`p-1 border-l ${!isAllocated ? 'bg-gray-100/50 opacity-50' : ''}`}
-                                                           data-drag-cell={cellId}
-                                                           data-allocated={isAllocated ? 'true' : 'false'}
-                                                         >
+                                                        return (
+                                                          <div 
+                                                            key={`${meso.id}-${microcycleIndex}-${param.name}`} 
+                                                            className={`p-1 border-l ${!isAllocated ? 'bg-gray-100/50 opacity-50' : ''}`}
+                                                            style={{ width: calculateMicrocycleWidth(meso.id, microcycleIndex, method) }}
+                                                            data-drag-cell={cellId}
+                                                            data-allocated={isAllocated ? 'true' : 'false'}
+                                                          >
                                                            <ParameterContextMenu
                                                              cellId={cellId}
                                                              value={currentValue}
