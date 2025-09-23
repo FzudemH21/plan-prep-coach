@@ -48,7 +48,7 @@ export default function MesocyclePage() {
   const [parameterValues, setParameterValues] = useState<Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>>({});
   const [expandedSubGoals, setExpandedSubGoals] = useState<Record<string, Set<string>>>({});
   const [expandedMesocycles, setExpandedMesocycles] = useState<Set<string>>(new Set());
-  const [cellSplitStates, setCellSplitStates] = useState<Record<string, boolean>>({});
+  const [globalMicrocycleSplitStates, setGlobalMicrocycleSplitStates] = useState<Record<string, boolean>>({});
   
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
@@ -946,24 +946,24 @@ export default function MesocyclePage() {
     return 1;
   };
 
-  // Helper function to get cell split key
-  const getCellSplitKey = (mesocycleId: string, microcycleIndex: number, methodName: string) => {
-    return `${mesocycleId}-${microcycleIndex}-${methodName}`;
+  // Helper function to get microcycle split key (global across all methods)
+  const getMicrocycleSplitKey = (mesocycleId: string, microcycleIndex: number) => {
+    return `${mesocycleId}-${microcycleIndex}`;
   };
 
-  // Helper function to toggle cell split
-  const toggleCellSplit = (mesocycleId: string, microcycleIndex: number, methodName: string) => {
-    const key = getCellSplitKey(mesocycleId, microcycleIndex, methodName);
-    setCellSplitStates(prev => ({
+  // Helper function to toggle microcycle split (affects all methods in that microcycle)
+  const toggleMicrocycleSplit = (mesocycleId: string, microcycleIndex: number) => {
+    const key = getMicrocycleSplitKey(mesocycleId, microcycleIndex);
+    setGlobalMicrocycleSplitStates(prev => ({
       ...prev,
       [key]: !prev[key]
     }));
   };
 
-  // Helper function to check if cell is split
-  const isCellSplit = (mesocycleId: string, microcycleIndex: number, methodName: string) => {
-    const key = getCellSplitKey(mesocycleId, microcycleIndex, methodName);
-    return cellSplitStates[key] || false;
+  // Helper function to check if microcycle is split (global across all methods)
+  const isMicrocycleSplit = (mesocycleId: string, microcycleIndex: number) => {
+    const key = getMicrocycleSplitKey(mesocycleId, microcycleIndex);
+    return globalMicrocycleSplitStates[key] || false;
   };
 
   // Helper function to get number of sessions for a cell
@@ -972,10 +972,10 @@ export default function MesocyclePage() {
     return frequency; // Always return the actual frequency regardless of split state
   };
 
-  // Helper function to calculate dynamic column width based on split state
+  // Helper function to calculate dynamic column width based on global split state
   const calculateMicrocycleWidth = (mesocycleId: string, microcycleIndex: number, methodName: string) => {
     const frequency = getCellFrequency(mesocycleId, microcycleIndex, methodName);
-    const isSplit = isCellSplit(mesocycleId, microcycleIndex, methodName);
+    const isSplit = isMicrocycleSplit(mesocycleId, microcycleIndex);
     return isSplit && frequency > 1 ? `${frequency * 120}px` : '180px';
   };
 
@@ -1409,7 +1409,7 @@ export default function MesocyclePage() {
                                             (meso.microcycles || []).map((microcycle, microcycleIndex) => {
                                               const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
                                               const frequency = getCellFrequency(meso.id, microcycleIndex, method);
-                                              const isSplit = isCellSplit(meso.id, microcycleIndex, method);
+                                              const isSplit = isMicrocycleSplit(meso.id, microcycleIndex);
                                               const sessionsCount = getCellSessions(meso.id, microcycleIndex, method);
                                               
                                               return (
@@ -1419,9 +1419,9 @@ export default function MesocyclePage() {
                                                 >
                                                   <div className="flex items-center gap-1">
                                                      {frequency > 1 && (
-                                                       <button
-                                                         onClick={() => toggleCellSplit(meso.id, microcycleIndex, method)}
-                                                         className="px-1.5 py-0.5 text-[10px] text-current hover:bg-black/20 rounded transition-colors font-medium"
+                                                        <button
+                                                          onClick={() => toggleMicrocycleSplit(meso.id, microcycleIndex)}
+                                                          className="px-1.5 py-0.5 text-[10px] text-current hover:bg-black/20 rounded transition-colors font-medium"
                                                          title={`${isSplit ? 'Merge' : 'Split'} sessions (${frequency}×/wk)`}
                                                        >
                                                          {isSplit ? 'Merge' : 'Split'}
@@ -1468,9 +1468,9 @@ export default function MesocyclePage() {
                                                  </div>
                                                  {mesocycles.map((meso) =>
                                                    (meso.microcycles || []).map((microcycle, microcycleIndex) => {
-                                                     const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
-                                                      const isSplit = isCellSplit(meso.id, microcycleIndex, method);
-                                                      const sessionsCount = getCellSessions(meso.id, microcycleIndex, method);
+                                                      const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
+                                                       const isSplit = isMicrocycleSplit(meso.id, microcycleIndex);
+                                                       const sessionsCount = getCellSessions(meso.id, microcycleIndex, method);
                                                       const isFrequency = isFrequencyParameter(param.name);
                                                       
                                                       if (isSplit && !isFrequency) {
