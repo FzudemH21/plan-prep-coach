@@ -1,5 +1,6 @@
 import { MicrocyclePlanningTable } from '@/components/microcycle-planning';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { AddMethodDialog } from '@/components/ui/add-method-dialog';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -49,6 +50,8 @@ export default function MesocyclePage() {
   const [expandedSubGoals, setExpandedSubGoals] = useState<Record<string, Set<string>>>({});
   const [expandedMesocycles, setExpandedMesocycles] = useState<Set<string>>(new Set());
   const [globalMicrocycleSplitStates, setGlobalMicrocycleSplitStates] = useState<Record<string, boolean>>({});
+  const [manuallyAddedMethods, setManuallyAddedMethods] = useState<string[]>([]);
+  const [isAddMethodDialogOpen, setIsAddMethodDialogOpen] = useState(false);
   
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
@@ -591,8 +594,11 @@ export default function MesocyclePage() {
       });
     });
 
+    // Add manually added methods
+    manuallyAddedMethods.forEach(method => methodsSet.add(method));
+
     return Array.from(methodsSet);
-  }, [mesocycles, macrocycleData]);
+  }, [mesocycles, macrocycleData, manuallyAddedMethods]);
 
   const groupMethodsByToolboxCategory = useMemo(() => {
     const methods = getMethodsForAllocatedSubGoals;
@@ -637,7 +643,7 @@ export default function MesocyclePage() {
     });
     
     return grouped;
-  }, [getMethodsForAllocatedSubGoals]);
+  }, [getMethodsForAllocatedSubGoals, manuallyAddedMethods]);
 
   // Helper function to get methods with loading recommendations for a specific sub-goal
   const getMethodsWithRecommendationsForSubGoal = useMemo(() => {
@@ -1168,6 +1174,24 @@ export default function MesocyclePage() {
     };
   }, [clearSelection, dragState.isDragging, addToSelection, handleFillRight]);
 
+  // Manual method management functions
+  const handleAddMethod = useCallback((method: string) => {
+    const newManualMethods = [...manuallyAddedMethods, method];
+    setManuallyAddedMethods(newManualMethods);
+    localStorage.setItem('manuallyAddedMethods', JSON.stringify(newManualMethods));
+  }, [manuallyAddedMethods]);
+
+  const handleRemoveMethod = useCallback((method: string) => {
+    const newManualMethods = manuallyAddedMethods.filter(m => m !== method);
+    setManuallyAddedMethods(newManualMethods);
+    localStorage.setItem('manuallyAddedMethods', JSON.stringify(newManualMethods));
+  }, [manuallyAddedMethods]);
+
+  // Get methods that are already selected (to exclude from add dialog)
+  const getExcludedMethods = useCallback(() => {
+    return getMethodsForAllocatedSubGoals;
+  }, [getMethodsForAllocatedSubGoals]);
+
   const renderMethodPeriodization = () => {
     const allMethods = getMethodsForAllocatedSubGoals;
     const groupedMethods = groupMethodsByToolboxCategory;
@@ -1647,9 +1671,56 @@ export default function MesocyclePage() {
                       </div>
                    </div>
                  </div>
+              </div>
+             )}
+
+             {/* Add Method Section */}
+             <div className="mt-4 pt-4 border-t">
+               <div className="flex items-center justify-between">
+                 <div className="space-y-1">
+                   <h4 className="font-medium">Manual Method Selection</h4>
+                   <p className="text-sm text-muted-foreground">
+                     Add training methods from the toolbox that are not covered by your selected sub-goals.
+                   </p>
+                 </div>
+                 <Button 
+                   onClick={() => setIsAddMethodDialogOpen(true)}
+                   variant="outline"
+                   className="shrink-0"
+                 >
+                   Add Method
+                 </Button>
+               </div>
+               
+               {/* Show manually added methods */}
+               {manuallyAddedMethods.length > 0 && (
+                 <div className="mt-3 space-y-2">
+                   <Label className="text-sm font-medium">Manually Added Methods:</Label>
+                   <div className="flex flex-wrap gap-2">
+                     {manuallyAddedMethods.map((method) => (
+                       <Badge 
+                         key={method} 
+                         variant="secondary"
+                         className="flex items-center gap-1"
+                       >
+                         <span className="text-xs">Manual:</span>
+                         {method}
+                         <Button
+                           variant="ghost"
+                           size="sm"
+                           className="h-4 w-4 p-0 ml-1"
+                           onClick={() => handleRemoveMethod(method)}
+                         >
+                           ×
+                         </Button>
+                       </Badge>
+                     ))}
+                   </div>
+                 </div>
+               )}
              </div>
-            )}
-         </CardContent>
+
+          </CardContent>
       </Card>
     );
   };
@@ -1724,6 +1795,14 @@ export default function MesocyclePage() {
         
         {/* Keyboard Shortcuts Panel - only show on Method Periodization step */}
         {currentStep === 4 && <KeyboardShortcutsPanel />}
+        
+        {/* Add Method Dialog */}
+        <AddMethodDialog
+          open={isAddMethodDialogOpen}
+          onOpenChange={setIsAddMethodDialogOpen}
+          onAddMethod={handleAddMethod}
+          excludedMethods={getExcludedMethods()}
+        />
     </div>
   );
 };
