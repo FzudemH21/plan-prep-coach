@@ -927,7 +927,13 @@ export default function MesocyclePage() {
 
   // Helper function to get cell-specific frequency from user input
   const getCellFrequency = (mesocycleId: string, microcycleIndex: number, methodName: string) => {
-    const frequencyValue = getParameterValue(mesocycleId, microcycleIndex, methodName, 'frequency_per_week', 0);
+    // Look for frequency parameter case-insensitively
+    const cellData = parameterValues[mesocycleId]?.[microcycleIndex]?.[methodName]?.[0] || {};
+    const frequencyKey = Object.keys(cellData).find(key => key.toLowerCase().includes('frequency'));
+    
+    if (!frequencyKey) return 1;
+    
+    const frequencyValue = cellData[frequencyKey];
     if (!frequencyValue) return 1;
     
     // Parse frequency from various formats like "2", "2/wk", "1-2", "1-2/wk"
@@ -1389,7 +1395,6 @@ export default function MesocyclePage() {
                                                   className={`p-2 text-xs text-center font-medium border-l ${intensityBg(microcycle.intensity)} ${!isAllocated ? 'opacity-50' : ''} flex flex-col items-center gap-1`}
                                                 >
                                                   <div className="flex items-center gap-1">
-                                                    <span>{microcycle.name}</span>
                                                     {frequency > 1 && (
                                                       <button
                                                         onClick={() => toggleCellSplit(meso.id, microcycleIndex, method)}
