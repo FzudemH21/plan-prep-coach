@@ -26,7 +26,7 @@ export function AddMethodDialog({ open, onOpenChange, onAddMethod, excludedMetho
   const { data: toolboxData } = useToolboxData();
   const [selectedMethod, setSelectedMethod] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   // Generate available methods from toolbox data
   const availableMethods = useMemo(() => {
@@ -68,7 +68,7 @@ export function AddMethodDialog({ open, onOpenChange, onAddMethod, excludedMetho
   const filteredMethods = useMemo(() => {
     let filtered = availableMethods;
 
-    if (selectedCategory) {
+    if (selectedCategory && selectedCategory !== 'all') {
       filtered = filtered.filter(item => item.category === selectedCategory);
     }
 
@@ -89,7 +89,7 @@ export function AddMethodDialog({ open, onOpenChange, onAddMethod, excludedMetho
       onAddMethod(selectedMethod);
       setSelectedMethod('');
       setSearchQuery('');
-      setSelectedCategory('');
+      setSelectedCategory('all');
       onOpenChange(false);
     }
   };
@@ -97,7 +97,7 @@ export function AddMethodDialog({ open, onOpenChange, onAddMethod, excludedMetho
   const handleCancel = () => {
     setSelectedMethod('');
     setSearchQuery('');
-    setSelectedCategory('');
+    setSelectedCategory('all');
     onOpenChange(false);
   };
 
@@ -135,7 +135,7 @@ export function AddMethodDialog({ open, onOpenChange, onAddMethod, excludedMetho
                   <SelectValue placeholder="All categories" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All categories</SelectItem>
+                  <SelectItem value="all">All categories</SelectItem>
                   {categories.map(category => (
                     <SelectItem key={category} value={category}>
                       {category}
