@@ -6,8 +6,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogOverlay,
-  DialogPortal,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -105,9 +103,7 @@ export function AddMethodDialog({ open, onOpenChange, onAddMethod, excludedMetho
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogPortal>
-        <DialogOverlay className="!z-[110]" />
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col !z-[100]">
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col !z-[100] [&>.fixed.inset-0]:!z-[110]">
         <DialogHeader>
           <DialogTitle>Add Training Method</DialogTitle>
           <DialogDescription>
@@ -219,8 +215,7 @@ export function AddMethodDialog({ open, onOpenChange, onAddMethod, excludedMetho
             Add Method
           </Button>
         </DialogFooter>
-        </DialogContent>
-      </DialogPortal>
+      </DialogContent>
     </Dialog>
   );
 }
