@@ -1514,13 +1514,13 @@ export default function MesocyclePage() {
                                                <div className="line-clamp-3" title={method}>
                                                  {method}
                                                </div>
-                                               <Button
-                                                 variant="ghost"
-                                                 size="sm"
-                                                 className="absolute right-0 top-1/2 -translate-y-1/2 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive/80 hover:bg-destructive/10"
-                                                 onClick={() => handleDeleteMethod(method)}
-                                                 title="Delete method"
-                                               >
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  className="absolute right-0 top-1/2 -translate-y-1/2 h-6 w-6 p-0 text-destructive hover:text-destructive/80 hover:bg-destructive/10"
+                                                  onClick={() => handleDeleteMethod(method)}
+                                                  title="Delete method"
+                                                >
                                                  <Trash2 className="h-4 w-4" />
                                                </Button>
                                              </div>
