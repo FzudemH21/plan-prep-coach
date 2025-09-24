@@ -103,7 +103,7 @@ export function AddMethodDialog({ open, onOpenChange, onAddMethod, excludedMetho
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col !z-[100]">
         <DialogHeader>
           <DialogTitle>Add Training Method</DialogTitle>
           <DialogDescription>
@@ -163,7 +163,7 @@ export function AddMethodDialog({ open, onOpenChange, onAddMethod, excludedMetho
                     key={item.method}
                     className={`p-3 border rounded-md cursor-pointer transition-colors ${
                       selectedMethod === item.method
-                        ? 'bg-primary text-primary-foreground border-primary'
+                        ? 'bg-primary text-primary-foreground border-primary [&_*]:!text-primary-foreground'
                         : 'hover:bg-muted border-border'
                     }`}
                     onClick={() => setSelectedMethod(item.method)}
