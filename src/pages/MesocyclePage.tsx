@@ -1,6 +1,8 @@
 import { MicrocyclePlanningTable } from '@/components/microcycle-planning';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { AddMethodDialog } from '@/components/ui/add-method-dialog';
+import { MethodDeleteDialog } from '@/components/shared/MethodDeleteDialog';
+import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,7 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown } from "lucide-react";
+import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2 } from "lucide-react";
 import { format, addWeeks, differenceInWeeks } from "date-fns";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 import { IntensityLevel } from "@/types/training";
@@ -52,10 +54,13 @@ export default function MesocyclePage() {
   const [globalMicrocycleSplitStates, setGlobalMicrocycleSplitStates] = useState<Record<string, boolean>>({});
   const [manuallyAddedMethods, setManuallyAddedMethods] = useState<string[]>([]);
   const [isAddMethodDialogOpen, setIsAddMethodDialogOpen] = useState(false);
+  const [methodToDelete, setMethodToDelete] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
   const { dragState, startDrag, endDrag, addToSelection, clearSelection, fillCells } = useDragFill();
+  const { toast } = useToast();
 
   const totalSteps = 5;
 
@@ -1187,6 +1192,64 @@ export default function MesocyclePage() {
     localStorage.setItem('manuallyAddedMethods', JSON.stringify(newManualMethods));
   }, [manuallyAddedMethods]);
 
+  // Method classification helpers
+  const isManualMethod = useCallback((method: string): boolean => {
+    return manuallyAddedMethods.includes(method);
+  }, [manuallyAddedMethods]);
+
+  const isAutoAllocatedMethod = useCallback((method: string): boolean => {
+    return getMethodsForAllocatedSubGoals.includes(method) && !manuallyAddedMethods.includes(method);
+  }, [getMethodsForAllocatedSubGoals, manuallyAddedMethods]);
+
+  // Enhanced delete handler for table headers
+  const handleDeleteMethod = useCallback((method: string) => {
+    setMethodToDelete(method);
+    setIsDeleteDialogOpen(true);
+  }, []);
+
+  const confirmDeleteMethod = useCallback(() => {
+    if (!methodToDelete) return;
+
+    if (isManualMethod(methodToDelete)) {
+      // Direct removal for manual methods
+      handleRemoveMethod(methodToDelete);
+      toast({
+        title: "Method deleted",
+        description: `${methodToDelete} has been removed from your training plan.`,
+      });
+    } else {
+      // For auto-allocated methods, remove from macrocycleData.methodsByQuality
+      const updatedMacrocycleData = { ...macrocycleData };
+      
+      // Find and remove method from all quality-method associations
+      if (updatedMacrocycleData.methodsByQuality) {
+        Object.keys(updatedMacrocycleData.methodsByQuality).forEach(qualityId => {
+          const entry = updatedMacrocycleData.methodsByQuality[qualityId];
+          if (entry?.list && Array.isArray(entry.list)) {
+            entry.list = entry.list.filter((m: string) => m !== methodToDelete);
+          }
+        });
+      }
+      
+      // Update state and localStorage
+      setMacrocycleData(updatedMacrocycleData);
+      localStorage.setItem('macrocycleData', JSON.stringify(updatedMacrocycleData));
+      
+      toast({
+        title: "Method removed",
+        description: `${methodToDelete} has been removed from your sub-goal allocations.`,
+      });
+    }
+
+    setMethodToDelete(null);
+    setIsDeleteDialogOpen(false);
+  }, [methodToDelete, isManualMethod, handleRemoveMethod, macrocycleData, toast]);
+
+  const cancelDeleteMethod = useCallback(() => {
+    setMethodToDelete(null);
+    setIsDeleteDialogOpen(false);
+  }, []);
+
   // Get methods that are already selected (to exclude from add dialog)
   const getExcludedMethods = useCallback(() => {
     return getMethodsForAllocatedSubGoals;
@@ -1446,13 +1509,22 @@ export default function MesocyclePage() {
                                         <div className="grid gap-1 bg-muted/20" style={{ 
                                            gridTemplateColumns: calculateGridTemplate(method)
                                          }}>
-                                          <div className="sticky left-0 z-40 p-3 font-medium text-sm border-r bg-background rounded-tl shadow-md">
-                                            <div className="flex items-center justify-between">
-                                              <div className="line-clamp-3" title={method}>
-                                                {method}
-                                              </div>
-                                            </div>
-                                          </div>
+                                           <div className="sticky left-0 z-40 p-3 font-medium text-sm border-r bg-background rounded-tl shadow-md">
+                                             <div className="flex items-center justify-between group pr-8 relative">
+                                               <div className="line-clamp-3" title={method}>
+                                                 {method}
+                                               </div>
+                                               <Button
+                                                 variant="ghost"
+                                                 size="sm"
+                                                 className="absolute right-0 top-1/2 -translate-y-1/2 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive/80 hover:bg-destructive/10"
+                                                 onClick={() => handleDeleteMethod(method)}
+                                                 title="Delete method"
+                                               >
+                                                 <Trash2 className="h-4 w-4" />
+                                               </Button>
+                                             </div>
+                                           </div>
                                           {mesocycles.map((meso) => 
                                             (meso.microcycles || []).map((microcycle, microcycleIndex) => {
                                               const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
@@ -1802,6 +1874,15 @@ export default function MesocyclePage() {
           onOpenChange={setIsAddMethodDialogOpen}
           onAddMethod={handleAddMethod}
           excludedMethods={getExcludedMethods()}
+        />
+        
+        {/* Delete Method Dialog */}
+        <MethodDeleteDialog
+          isOpen={isDeleteDialogOpen}
+          onClose={cancelDeleteMethod}
+          onConfirm={confirmDeleteMethod}
+          methodName={methodToDelete || ''}
+          isManualMethod={methodToDelete ? isManualMethod(methodToDelete) : false}
         />
     </div>
   );
