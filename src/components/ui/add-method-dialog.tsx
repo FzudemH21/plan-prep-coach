@@ -103,7 +103,7 @@ export function AddMethodDialog({ open, onOpenChange, onAddMethod, excludedMetho
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col !z-[100] [&>.fixed.inset-0]:!z-[110]">
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Add Training Method</DialogTitle>
           <DialogDescription>
