@@ -6,6 +6,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogOverlay,
+  DialogPortal,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -103,7 +105,9 @@ export function AddMethodDialog({ open, onOpenChange, onAddMethod, excludedMetho
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col !z-[100]">
+      <DialogPortal>
+        <DialogOverlay className="!z-[110]" />
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col !z-[100]">
         <DialogHeader>
           <DialogTitle>Add Training Method</DialogTitle>
           <DialogDescription>
@@ -134,7 +138,7 @@ export function AddMethodDialog({ open, onOpenChange, onAddMethod, excludedMetho
                 <SelectTrigger>
                   <SelectValue placeholder="All categories" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="!z-[120] bg-popover">
                   <SelectItem value="all">All categories</SelectItem>
                   {categories.map(category => (
                     <SelectItem key={category} value={category}>
@@ -163,7 +167,7 @@ export function AddMethodDialog({ open, onOpenChange, onAddMethod, excludedMetho
                     key={item.method}
                     className={`p-3 border rounded-md cursor-pointer transition-colors ${
                       selectedMethod === item.method
-                        ? 'bg-primary text-primary-foreground border-primary [&_*]:!text-primary-foreground'
+                        ? 'bg-primary text-primary-foreground border-primary [&_*]:!text-primary-foreground [&_.badge]:!bg-primary-foreground [&_.badge]:!text-primary'
                         : 'hover:bg-muted border-border'
                     }`}
                     onClick={() => setSelectedMethod(item.method)}
@@ -172,11 +176,25 @@ export function AddMethodDialog({ open, onOpenChange, onAddMethod, excludedMetho
                       <div className="space-y-1">
                         <p className="font-medium text-sm">{item.method}</p>
                         <div className="flex gap-1">
-                          <Badge variant="outline" className="text-xs">
+                          <Badge 
+                            variant="outline" 
+                            className={`text-xs badge ${
+                              selectedMethod === item.method 
+                                ? '!bg-primary-foreground !text-primary !border-primary-foreground' 
+                                : ''
+                            }`}
+                          >
                             {item.category}
                           </Badge>
                           {item.subCategory !== 'General' && (
-                            <Badge variant="secondary" className="text-xs">
+                            <Badge 
+                              variant="secondary" 
+                              className={`text-xs badge ${
+                                selectedMethod === item.method 
+                                  ? '!bg-primary-foreground !text-primary' 
+                                  : ''
+                              }`}
+                            >
                               {item.subCategory}
                             </Badge>
                           )}
@@ -201,7 +219,8 @@ export function AddMethodDialog({ open, onOpenChange, onAddMethod, excludedMetho
             Add Method
           </Button>
         </DialogFooter>
-      </DialogContent>
+        </DialogContent>
+      </DialogPortal>
     </Dialog>
   );
 }
