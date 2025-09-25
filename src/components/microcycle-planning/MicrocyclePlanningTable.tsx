@@ -10,6 +10,7 @@ import { useAthleticismData } from '@/hooks/useAthleticismData';
 import { ExerciseSelectionCell } from './ExerciseSelectionCell';
 import { 
   TrainingMethodWithCategories,
+  MethodCategory,
   CellData, 
   MicrocyclePlanningState,
   MicrocycleGroup
@@ -29,6 +30,7 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
     splitStates: {},
     microcycleGroups: {}
   });
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
   // Helper function for string normalization
   const normalizeForComparison = (str: string): string => {
@@ -145,7 +147,7 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
     return true;
   };
 
-  // Get training methods with their exercise categories for hierarchical display
+  // Get training methods grouped by main category for hierarchical display
   const hierarchicalMethods = useMemo(() => {
     if (!toolboxData?.entries) return [];
     
@@ -172,12 +174,14 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
       if (!methodsMap.has(methodName)) {
         methodsMap.set(methodName, {
           id: methodName,
-          name: methodName,
+          name: entry.subCategory, // Only show subcategory name in rows
           categories: []
         });
       }
       
       const method = methodsMap.get(methodName)!;
+      method.mainCategory = entry.category; // Store main category for grouping
+      
       if (entry.exerciseCategories?.length) {
         entry.exerciseCategories.forEach(category => {
           if (!method.categories.includes(category)) {
@@ -187,8 +191,51 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
       }
     });
     
-    return Array.from(methodsMap.values());
+    // Group methods by main category
+    const categoryGroups = new Map<string, MethodCategory>();
+    
+    Array.from(methodsMap.values()).forEach(method => {
+      const mainCategory = method.mainCategory || 'Other';
+      
+      if (!categoryGroups.has(mainCategory)) {
+        categoryGroups.set(mainCategory, {
+          categoryName: mainCategory,
+          methods: []
+        });
+      }
+      
+      categoryGroups.get(mainCategory)!.methods.push(method);
+    });
+    
+    // Sort categories and methods within categories
+    const sortedCategories = Array.from(categoryGroups.values()).sort((a, b) => 
+      a.categoryName.localeCompare(b.categoryName)
+    );
+    
+    sortedCategories.forEach(category => {
+      category.methods.sort((a, b) => a.name.localeCompare(b.name));
+    });
+    
+    return sortedCategories;
   }, [toolboxData, selectedMethods]);
+
+  // Initialize expanded categories with all categories expanded
+  React.useEffect(() => {
+    const allCategories = new Set(hierarchicalMethods.map(cat => cat.categoryName));
+    setExpandedCategories(allCategories);
+  }, [hierarchicalMethods]);
+
+  const toggleCategoryExpansion = (categoryName: string) => {
+    setExpandedCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(categoryName)) {
+        newSet.delete(categoryName);
+      } else {
+        newSet.add(categoryName);
+      }
+      return newSet;
+    });
+  };
 
   // Generate column structure for table headers
   const columnStructure = useMemo(() => {
@@ -736,120 +783,154 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {hierarchicalMethods.map((method) => (
-                <React.Fragment key={method.id}>
-                  {/* Render category rows for each method */}
-                  {method.categories.length === 0 ? (
-                    // If no categories, render one row for the method itself
-                    <TableRow key={`${method.id}-main`}>
-                      <TableCell rowSpan={1} className="sticky left-0 bg-background z-10 border-r-2 border-border w-64">
-                        <div className="font-semibold text-primary">{method.name}</div>
-                      </TableCell>
-                      <TableCell className="sticky left-64 bg-background z-10 border-r-2 border-border w-64">
-                        <div className="text-sm text-muted-foreground">—</div>
-                      </TableCell>
-                      {columnStructure.map((column) => {
-                        // Skip link areas for table cells
-                        if (column.type === 'link-area') {
-                          return (
-                            <TableCell 
-                              key={`${method.id}-main-${column.id}`} 
-                              className="p-2 border-r border-border bg-muted/5 w-12"
-                            >
-                              {/* Empty cell for link area */}
-                            </TableCell>
-                          );
-                        }
-                        
-                        const mesocycle = mesocycles.find(m => m.id === column.mesocycleId);
-                        let intensity = mesocycle?.intensity || 'moderate';
-                        let isLight = false;
-                        let isGroup = false;
-                        
-                        // For individual microcycles, use their specific intensity
-                        if (column.type === 'microcycle' && mesocycle) {
-                          const microcycle = mesocycle.microcycles.find(m => m.id === column.microcycleId);
-                          if (microcycle) {
-                            intensity = microcycle.intensity;
-                            isLight = true; // Make microcycles lighter than mesocycles
-                          }
-                        } else if (column.type === 'microcycle-group') {
-                          isGroup = true; // Use neutral color for groups
-                        }
-                        
-                        const colorClass = getIntensityColor(intensity, isLight, isGroup);
-                        
-                        return (
-                          <TableCell 
-                            key={`${method.id}-main-${column.id}`} 
-                            className={cn("p-2 border-r border-border", colorClass)}
-                          >
-                            <ExerciseSelectionCell
-                              cellData={getCellData(method.id, undefined, column.id)}
-                              onUpdate={(newData) => updateCellData(getCellId(method.id, undefined, column.id), newData)}
-                            />
-                          </TableCell>
-                        );
-                      })}
-                    </TableRow>
-                  ) : (
-                    // Render category rows with method name spanning
-                    method.categories.map((categoryName, categoryIndex) => (
-                      <TableRow key={`${method.id}-${categoryName}`}>
-                        {categoryIndex === 0 && (
-                          <TableCell rowSpan={method.categories.length} className="sticky left-0 bg-background z-10 border-r-2 border-border w-64">
-                            <div className="font-semibold text-primary">{method.name}</div>
-                          </TableCell>
+              {hierarchicalMethods.map((categoryGroup) => (
+                <React.Fragment key={categoryGroup.categoryName}>
+                  {/* Category Header Row */}
+                  <TableRow className="bg-muted/30 hover:bg-muted/40">
+                    <TableCell 
+                      colSpan={2} 
+                      className="sticky left-0 bg-muted/30 z-10 border-r-2 border-border"
+                    >
+                      <Button
+                        variant="ghost"
+                        onClick={() => toggleCategoryExpansion(categoryGroup.categoryName)}
+                        className="flex items-center gap-2 p-2 h-auto font-semibold text-foreground hover:bg-muted/50 w-full justify-start"
+                      >
+                        {expandedCategories.has(categoryGroup.categoryName) ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
                         )}
-                        <TableCell className="sticky left-64 bg-background z-10 border-r-2 border-border w-64">
-                          <div className="text-sm text-muted-foreground">{categoryName}</div>
-                        </TableCell>
-                        {columnStructure.map((column) => {
-                          // Skip link areas for table cells
-                          if (column.type === 'link-area') {
+                        {categoryGroup.categoryName}
+                        <span className="text-muted-foreground text-sm">({categoryGroup.methods.length})</span>
+                      </Button>
+                    </TableCell>
+                    {columnStructure.map((column) => (
+                      <TableCell 
+                        key={`${categoryGroup.categoryName}-header-${column.id}`}
+                        className="bg-muted/30 border-r border-border"
+                      >
+                        {/* Empty header cells for category row */}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+
+                  {/* Method Rows (only show if category is expanded) */}
+                  {expandedCategories.has(categoryGroup.categoryName) && categoryGroup.methods.map((method) => (
+                    <React.Fragment key={method.id}>
+                      {method.categories.length === 0 ? (
+                        // If no exercise categories, render one row for the method itself
+                        <TableRow key={`${method.id}-main`}>
+                          <TableCell className="sticky left-0 bg-background z-10 border-r-2 border-border w-64 pl-8">
+                            <div className="font-medium text-foreground">{method.name}</div>
+                          </TableCell>
+                          <TableCell className="sticky left-64 bg-background z-10 border-r-2 border-border w-64">
+                            <div className="text-sm text-muted-foreground">—</div>
+                          </TableCell>
+                          {columnStructure.map((column) => {
+                            // Skip link areas for table cells
+                            if (column.type === 'link-area') {
+                              return (
+                                <TableCell 
+                                  key={`${method.id}-main-${column.id}`} 
+                                  className="p-2 border-r border-border bg-muted/5 w-12"
+                                >
+                                  {/* Empty cell for link area */}
+                                </TableCell>
+                              );
+                            }
+                            
+                            const mesocycle = mesocycles.find(m => m.id === column.mesocycleId);
+                            let intensity = mesocycle?.intensity || 'moderate';
+                            let isLight = false;
+                            let isGroup = false;
+                            
+                            // For individual microcycles, use their specific intensity
+                            if (column.type === 'microcycle' && mesocycle) {
+                              const microcycle = mesocycle.microcycles.find(m => m.id === column.microcycleId);
+                              if (microcycle) {
+                                intensity = microcycle.intensity;
+                                isLight = true; // Make microcycles lighter than mesocycles
+                              }
+                            } else if (column.type === 'microcycle-group') {
+                              isGroup = true; // Use neutral color for groups
+                            }
+                            
+                            const colorClass = getIntensityColor(intensity, isLight, isGroup);
+                            
                             return (
                               <TableCell 
-                                key={`${method.id}-${categoryName}-${column.id}`} 
-                                className="p-2 border-r border-border bg-muted/5 w-12"
+                                key={`${method.id}-main-${column.id}`} 
+                                className={cn("p-2 border-r border-border", colorClass)}
                               >
-                                {/* Empty cell for link area */}
+                                <ExerciseSelectionCell
+                                  cellData={getCellData(method.id, undefined, column.id)}
+                                  onUpdate={(newData) => updateCellData(getCellId(method.id, undefined, column.id), newData)}
+                                />
                               </TableCell>
                             );
-                          }
-                          
-                          const mesocycle = mesocycles.find(m => m.id === column.mesocycleId);
-                          let intensity = mesocycle?.intensity || 'moderate';
-                          let isLight = false;
-                          let isGroup = false;
-                          
-                          // For individual microcycles, use their specific intensity
-                          if (column.type === 'microcycle' && mesocycle) {
-                            const microcycle = mesocycle.microcycles.find(m => m.id === column.microcycleId);
-                            if (microcycle) {
-                              intensity = microcycle.intensity;
-                              isLight = true; // Make microcycles lighter than mesocycles
-                            }
-                          } else if (column.type === 'microcycle-group') {
-                            isGroup = true; // Use neutral color for groups
-                          }
-                          
-                          const colorClass = getIntensityColor(intensity, isLight, isGroup);
-                          
-                          return (
-                            <TableCell 
-                              key={`${method.id}-${categoryName}-${column.id}`} 
-                              className={cn("p-2 border-r border-border", colorClass)}
-                            >
-                              <ExerciseSelectionCell
-                                cellData={getCellData(method.id, categoryName, column.id)}
-                                onUpdate={(newData) => updateCellData(getCellId(method.id, categoryName, column.id), newData)}
-                              />
+                          })}
+                        </TableRow>
+                      ) : (
+                        // Render exercise category rows with method name spanning
+                        method.categories.map((categoryName, categoryIndex) => (
+                          <TableRow key={`${method.id}-${categoryName}`}>
+                            {categoryIndex === 0 && (
+                              <TableCell rowSpan={method.categories.length} className="sticky left-0 bg-background z-10 border-r-2 border-border w-64 pl-8">
+                                <div className="font-medium text-foreground">{method.name}</div>
+                              </TableCell>
+                            )}
+                            <TableCell className="sticky left-64 bg-background z-10 border-r-2 border-border w-64">
+                              <div className="text-sm text-muted-foreground">{categoryName}</div>
                             </TableCell>
-                          );
-                        })}
-                      </TableRow>
-                    ))
-                  )}
+                            {columnStructure.map((column) => {
+                              // Skip link areas for table cells
+                              if (column.type === 'link-area') {
+                                return (
+                                  <TableCell 
+                                    key={`${method.id}-${categoryName}-${column.id}`} 
+                                    className="p-2 border-r border-border bg-muted/5 w-12"
+                                  >
+                                    {/* Empty cell for link area */}
+                                  </TableCell>
+                                );
+                              }
+                              
+                              const mesocycle = mesocycles.find(m => m.id === column.mesocycleId);
+                              let intensity = mesocycle?.intensity || 'moderate';
+                              let isLight = false;
+                              let isGroup = false;
+                              
+                              // For individual microcycles, use their specific intensity
+                              if (column.type === 'microcycle' && mesocycle) {
+                                const microcycle = mesocycle.microcycles.find(m => m.id === column.microcycleId);
+                                if (microcycle) {
+                                  intensity = microcycle.intensity;
+                                  isLight = true; // Make microcycles lighter than mesocycles
+                                }
+                              } else if (column.type === 'microcycle-group') {
+                                isGroup = true; // Use neutral color for groups
+                              }
+                              
+                              const colorClass = getIntensityColor(intensity, isLight, isGroup);
+                              
+                              return (
+                                <TableCell 
+                                  key={`${method.id}-${categoryName}-${column.id}`} 
+                                  className={cn("p-2 border-r border-border", colorClass)}
+                                >
+                                  <ExerciseSelectionCell
+                                    cellData={getCellData(method.id, categoryName, column.id)}
+                                    onUpdate={(newData) => updateCellData(getCellId(method.id, categoryName, column.id), newData)}
+                                  />
+                                </TableCell>
+                              );
+                            })}
+                          </TableRow>
+                        ))
+                      )}
+                    </React.Fragment>
+                  ))}
                 </React.Fragment>
               ))}
             </TableBody>

@@ -30,6 +30,12 @@ export interface TrainingMethodWithCategories {
   id: string;
   name: string;
   categories: string[];
+  mainCategory?: string; // Store the main category for grouping
+}
+
+export interface MethodCategory {
+  categoryName: string;
+  methods: TrainingMethodWithCategories[];
 }
 
 export type ExerciseLibraryType = 'exercise' | 'plyometrics' | string; // Allow custom library IDs
