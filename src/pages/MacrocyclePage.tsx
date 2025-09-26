@@ -12,7 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { useToast } from "@/hooks/use-toast";
-import { AthleteInfo, SmartGoal, SubGoal, TrainableQuality } from "@/types/training";
+import { AthleteInfo, SmartGoal, SubGoal, TrainableQuality, Event } from "@/types/training";
 import { User, Target, Calendar as CalendarIcon, Plus, Bot, X } from "lucide-react";
 import { 
   getUniqueQualities, 
@@ -33,7 +33,9 @@ export default function MacrocyclePage() {
   const [qualities, setQualities] = useState<TrainableQuality[]>([]);
   const [qualitiesBySubGoal, setQualitiesBySubGoal] = useState<Record<string, { label: string; list: string[] }>>({});
   const [methodsByQuality, setMethodsByQuality] = useState<Record<string, { subGoalLabel: string; qualityName: string; list: string[] }>>({});
+  const [events, setEvents] = useState<Event[]>([]);
   const [selectedTest, setSelectedTest] = useState<string | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
   const [selectionPhase, setSelectionPhase] = useState<'start' | 'end'>('start');
 
   // Load saved data and step on mount
@@ -59,10 +61,16 @@ export default function MacrocyclePage() {
           testDates: (sg.testDates || []).map((d: any) => new Date(d))
         }));
         setSubGoals(parsedSubGoals);
+        const parsedEvents = (data.events || []).map((event: Event) => ({
+          ...event,
+          eventDates: (event.eventDates || []).map((d: any) => new Date(d))
+        }));
+        setEvents(parsedEvents);
         setQualities(data.qualities || []);
         setQualitiesBySubGoal(data.qualitiesBySubGoal || {});
         setMethodsByQuality(data.methodsByQuality || {});
         setSelectedTest(data.selectedTest || null);
+        setSelectedEvent(data.selectedEvent || null);
       } catch (error) {
         console.error('Error loading saved macrocycle data:', error);
       }
@@ -83,14 +91,16 @@ export default function MacrocyclePage() {
       athleteInfo,
       smartGoal,
       subGoals,
+      events,
       qualities,
       qualitiesBySubGoal,
       methodsByQuality,
       selectedTest,
+      selectedEvent,
       lastUpdated: new Date().toISOString()
     };
     localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
-  }, [athleteInfo, smartGoal, subGoals, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest]);
+  }, [athleteInfo, smartGoal, subGoals, events, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest, selectedEvent]);
 
   // Save step whenever it changes (step persistence)
   useEffect(() => {
@@ -436,6 +446,50 @@ export default function MacrocyclePage() {
     ));
   };
 
+  // Event management functions
+  const addEvent = (name: string) => {
+    const newEvent: Event = {
+      id: `event-${Date.now()}`,
+      name: name.trim(),
+      description: '',
+      eventDates: []
+    };
+    setEvents([...events, newEvent]);
+    toast({ title: 'Event Added', description: `Created event "${name}"` });
+  };
+
+  const removeEvent = (eventId: string) => {
+    const event = events.find(e => e.id === eventId);
+    setEvents(events.filter(e => e.id !== eventId));
+    if (selectedEvent === eventId) {
+      setSelectedEvent(null);
+    }
+    if (event) {
+      toast({ title: 'Event Removed', description: `Deleted event "${event.name}"` });
+    }
+  };
+
+  const scheduleEvent = (eventId: string, date: Date) => {
+    const updated = [...events];
+    const eventIndex = updated.findIndex(e => e.id === eventId);
+    if (eventIndex !== -1) {
+      const currentDates = updated[eventIndex].eventDates || [];
+      const isAlreadyScheduled = currentDates.some(eventDate => 
+        eventDate.toDateString() === date.toDateString()
+      );
+      if (isAlreadyScheduled) {
+        updated[eventIndex].eventDates = currentDates.filter(eventDate => 
+          eventDate.toDateString() !== date.toDateString()
+        );
+        toast({ title: 'Event Unscheduled', description: `Removed "${updated[eventIndex].name}" from ${date.toLocaleDateString()}` });
+      } else {
+        updated[eventIndex].eventDates = [...currentDates, date];
+        toast({ title: 'Event Scheduled', description: `Added "${updated[eventIndex].name}" to ${date.toLocaleDateString()}` });
+      }
+      setEvents(updated);
+    }
+  };
+
   const totalSteps = 5;
   const progress = (currentStep / totalSteps) * 100;
 
@@ -737,164 +791,249 @@ export default function MacrocyclePage() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
-          <Target className="h-5 w-5" />
-          <span>Sub-Goals & Testing Methods</span>
+          <CalendarIcon className="h-5 w-5" />
+          <span>Calendar Planning</span>
         </CardTitle>
         <CardDescription>
-          Break down your main goal into measurable sub-goals and define testing methods.
+          Break down your main goal into measurable sub-goals and schedule events that may affect your training plan.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="space-y-4">
-          {subGoals.map((subGoal, index) => (
-            <div key={subGoal.id} className="p-4 border rounded-lg space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Sub-Goal Description</Label>
-                   <SearchableDropdown
-                     value={subGoal.description}
-                     onChange={(value) => {
-                       const updated = [...subGoals];
-                       updated[index].description = value;
-                       setSubGoals(updated);
-                     }}
-                     options={getSubGoalsFromAthleticismDB()}
-                     placeholder="Select or type sub-goal..."
-                   />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Test Method</Label>
-                  <SearchableDropdown
-                    value={subGoal.testMethod}
-                    onChange={(value) => {
-                      const updated = [...subGoals];
-                      updated[index].testMethod = value;
-                      setSubGoals(updated);
-                    }}
-                    options={["1RM Back Squat", "1RM Front Squat", "1RM Deadlift", "CMJ Height", "CMJ RSI", "Drop Jump RSI", "10m Sprint", "20m Sprint", "40m Sprint", "505 COD Test", "T-Test", "Yo-Yo IR1"]}
-                    placeholder="Select or type test method..."
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Pre-Test Value</Label>
-                  <div className="flex space-x-2">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={subGoal.preTestValue || ""}
-                      onChange={(e) => {
-                        const updated = [...subGoals];
-                        updated[index].preTestValue = parseFloat(e.target.value);
-                        const percentChange = updated[index].preTestValue > 0 ? 
-                          ((updated[index].goalValue - updated[index].preTestValue) / updated[index].preTestValue) * 100 : 0;
-                        updated[index].percentChange = percentChange;
-                        setSubGoals(updated);
-                      }}
-                      placeholder="150"
-                    />
-                    <Input
-                      value={subGoal.unit}
-                      onChange={(e) => {
-                        const updated = [...subGoals];
-                        updated[index].unit = e.target.value;
-                        setSubGoals(updated);
-                      }}
-                      placeholder="kg"
-                      className="w-20"
-                    />
+        {/* Two-column layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+          {/* Left Column: Sub-Goals */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg">Sub-Goals & Testing</h3>
+            
+            <div className="space-y-4">
+              {subGoals.map((subGoal, index) => (
+                <div key={subGoal.id} className="p-4 border rounded-lg space-y-4">
+                  <div className="grid grid-cols-1 gap-4">
+                    <div className="space-y-2">
+                      <Label>Sub-Goal Description</Label>
+                       <SearchableDropdown
+                         value={subGoal.description}
+                         onChange={(value) => {
+                           const updated = [...subGoals];
+                           updated[index].description = value;
+                           setSubGoals(updated);
+                         }}
+                         options={getSubGoalsFromAthleticismDB()}
+                         placeholder="Select or type sub-goal..."
+                       />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label>Test Method</Label>
+                      <SearchableDropdown
+                        value={subGoal.testMethod}
+                        onChange={(value) => {
+                          const updated = [...subGoals];
+                          updated[index].testMethod = value;
+                          setSubGoals(updated);
+                        }}
+                        options={["1RM Back Squat", "1RM Front Squat", "1RM Deadlift", "CMJ Height", "CMJ RSI", "Drop Jump RSI", "10m Sprint", "20m Sprint", "40m Sprint", "505 COD Test", "T-Test", "Yo-Yo IR1"]}
+                        placeholder="Select or type test method..."
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label>Goal Value</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={subGoal.goalValue || ""}
-                    onChange={(e) => {
-                      const updated = [...subGoals];
-                      updated[index].goalValue = parseFloat(e.target.value);
-                      const percentChange = updated[index].preTestValue > 0 ? 
-                        ((updated[index].goalValue - updated[index].preTestValue) / updated[index].preTestValue) * 100 : 0;
-                      updated[index].percentChange = percentChange;
-                      setSubGoals(updated);
-                    }}
-                    placeholder="180"
-                  />
-                </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>Pre-Test Value</Label>
+                      <div className="flex space-x-2">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={subGoal.preTestValue || ""}
+                          onChange={(e) => {
+                            const updated = [...subGoals];
+                            updated[index].preTestValue = parseFloat(e.target.value);
+                            const percentChange = updated[index].preTestValue > 0 ? 
+                              ((updated[index].goalValue - updated[index].preTestValue) / updated[index].preTestValue) * 100 : 0;
+                            updated[index].percentChange = percentChange;
+                            setSubGoals(updated);
+                          }}
+                          placeholder="150"
+                        />
+                        <Input
+                          value={subGoal.unit}
+                          onChange={(e) => {
+                            const updated = [...subGoals];
+                            updated[index].unit = e.target.value;
+                            setSubGoals(updated);
+                          }}
+                          placeholder="kg"
+                          className="w-20"
+                        />
+                      </div>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label>Change</Label>
-                  <div className="flex items-center h-10">
-                    <Badge variant={subGoal.percentChange && subGoal.percentChange > 0 ? "default" : "destructive"}>
-                      {subGoal.percentChange ? `${subGoal.percentChange.toFixed(1)}%` : "0%"}
-                    </Badge>
+                    <div className="space-y-2">
+                      <Label>Goal Value</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={subGoal.goalValue || ""}
+                        onChange={(e) => {
+                          const updated = [...subGoals];
+                          updated[index].goalValue = parseFloat(e.target.value);
+                          const percentChange = updated[index].preTestValue > 0 ? 
+                            ((updated[index].goalValue - updated[index].preTestValue) / updated[index].preTestValue) * 100 : 0;
+                          updated[index].percentChange = percentChange;
+                          setSubGoals(updated);
+                        }}
+                        placeholder="180"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Change</Label>
+                      <div className="flex items-center h-10">
+                        <Badge variant={subGoal.percentChange && subGoal.percentChange > 0 ? "default" : "destructive"}>
+                          {subGoal.percentChange ? `${subGoal.percentChange.toFixed(1)}%` : "0%"}
+                        </Badge>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => {
-                  setSubGoals(subGoals.filter((_, i) => i !== index));
-                }}
-              >
-                Remove Sub-Goal
-              </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      setSubGoals(subGoals.filter((_, i) => i !== index));
+                    }}
+                  >
+                    Remove Sub-Goal
+                  </Button>
+                </div>
+              ))}
             </div>
-          ))}
+
+            <Button
+              onClick={() => {
+                const newSubGoal: SubGoal = {
+                  id: `subgoal-${Date.now()}`,
+                  description: "",
+                  testMethod: "",
+                  preTestValue: 0,
+                  goalValue: 0,
+                  unit: "",
+                  percentChange: 0,
+                  testDates: []
+                };
+                setSubGoals([...subGoals, newSubGoal]);
+              }}
+              variant="outline"
+              className="w-full"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Sub-Goal
+            </Button>
+          </div>
+          
+          {/* Right Column: Other Events */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg">Other Events</h3>
+            
+            <div className="space-y-4">
+              {events.map((event) => (
+                <div key={event.id} className="p-4 border rounded-lg space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="font-medium">{event.name}</div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => removeEvent(event.id)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Event Name</Label>
+              <div className="flex space-x-2">
+                <Input
+                  placeholder="Enter event name (e.g., Match, Vacation)"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const target = e.target as HTMLInputElement;
+                      const eventName = target.value.trim();
+                      if (eventName) {
+                        addEvent(eventName);
+                        target.value = '';
+                      }
+                    }
+                  }}
+                />
+                <Button
+                  onClick={(e) => {
+                    const input = (e.target as HTMLElement).parentElement?.querySelector('input') as HTMLInputElement;
+                    const eventName = input?.value?.trim();
+                    if (eventName) {
+                      addEvent(eventName);
+                      input.value = '';
+                    }
+                  }}
+                  variant="outline"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <Button
-          onClick={() => {
-            const newSubGoal: SubGoal = {
-              id: `subgoal-${Date.now()}`,
-              description: "",
-              testMethod: "",
-              preTestValue: 0,
-              goalValue: 0,
-              unit: "",
-              percentChange: 0,
-              testDates: []
-            };
-            setSubGoals([...subGoals, newSubGoal]);
-          }}
-          variant="outline"
-          className="w-full"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Sub-Goal
-        </Button>
-
-        {subGoals.length > 0 && smartGoal.startDate && smartGoal.endDate && (
-          <div className="space-y-6">
-            <h4 className="font-semibold text-center">Test Scheduling</h4>
+        {/* Calendar Section - Full Width */}
+        {(subGoals.length > 0 || events.length > 0) && smartGoal.startDate && smartGoal.endDate && (
+          <div className="space-y-6 mt-8 border-t pt-6">
+            <h4 className="font-semibold text-center">Calendar Scheduling</h4>
             
-            {/* Available Tests - Centered */}
+            {/* Available Items - Centered */}
             <div className="flex flex-col items-center">
-              <Label className="text-sm font-medium mb-3">Available Tests</Label>
-              <div className="flex flex-wrap justify-center gap-2 p-4 border rounded-lg bg-muted/50 min-h-24 max-w-2xl">
+              <Label className="text-sm font-medium mb-3">Available Items</Label>
+              <div className="flex flex-wrap justify-center gap-2 p-4 border rounded-lg bg-muted/50 min-h-24 max-w-4xl">
+                {/* Tests */}
                 {subGoals.map((subGoal) => (
                   <div
-                    key={subGoal.id}
+                    key={`test-${subGoal.id}`}
                     className={`p-3 bg-background border rounded cursor-pointer hover:bg-accent transition-colors ${
                       selectedTest === subGoal.id ? 'ring-2 ring-primary bg-primary/10' : ''
                     }`}
-                    onClick={() => setSelectedTest(selectedTest === subGoal.id ? null : subGoal.id)}
+                    onClick={() => {
+                      setSelectedTest(selectedTest === subGoal.id ? null : subGoal.id);
+                      setSelectedEvent(null);
+                    }}
                   >
                     <div className="font-medium text-sm text-center">{subGoal.testMethod || "Unnamed Test"}</div>
                     <div className="text-xs text-muted-foreground text-center">{subGoal.description}</div>
+                    <div className="text-xs text-blue-600 text-center">Test</div>
+                  </div>
+                ))}
+                {/* Events */}
+                {events.map((event) => (
+                  <div
+                    key={`event-${event.id}`}
+                    className={`p-3 bg-background border rounded cursor-pointer hover:bg-accent transition-colors ${
+                      selectedEvent === event.id ? 'ring-2 ring-secondary bg-secondary/10' : ''
+                    }`}
+                    onClick={() => {
+                      setSelectedEvent(selectedEvent === event.id ? null : event.id);
+                      setSelectedTest(null);
+                    }}
+                  >
+                    <div className="font-medium text-sm text-center">{event.name}</div>
+                    <div className="text-xs text-orange-600 text-center">Event</div>
                   </div>
                 ))}
               </div>
-              {selectedTest && (
+              {(selectedTest || selectedEvent) && (
                 <p className="text-sm text-muted-foreground mt-2 text-center">
-                  Click on a date in the calendar below to schedule this test
+                  Click on a date in the calendar below to schedule this item
                 </p>
               )}
             </div>
@@ -912,7 +1051,10 @@ export default function MacrocyclePage() {
                     return date < smartGoal.startDate || date > smartGoal.endDate;
                   }}
                   modifiers={{
-                    scheduled: subGoals.flatMap(sg => sg.testDates || [])
+                    scheduled: [
+                      ...subGoals.flatMap(sg => sg.testDates || []),
+                      ...events.flatMap(e => e.eventDates || [])
+                    ]
                   }}
                   modifiersStyles={{
                     scheduled: { 
@@ -928,32 +1070,40 @@ export default function MacrocyclePage() {
                           testDate.toDateString() === date.toDateString()
                         )
                       );
+                      const scheduledEvents = events.filter(e => 
+                        e.eventDates?.some(eventDate => 
+                          eventDate.toDateString() === date.toDateString()
+                        )
+                      );
 
                       const handleClick = (e: any) => {
                         dayProps?.onClick?.(e);
                         e.preventDefault();
                         e.stopPropagation();
-                        if (!selectedTest) {
-                          toast({ title: 'Select a test', description: 'Choose a test above, then click a date.' });
-                          return;
-                        }
-                        const updated = [...subGoals];
-                        const subGoalIndex = updated.findIndex(sg => sg.id === selectedTest);
-                        if (subGoalIndex !== -1) {
-                          const currentDates = updated[subGoalIndex].testDates || [];
-                          const isAlreadyScheduled = currentDates.some(testDate => 
-                            testDate.toDateString() === date.toDateString()
-                          );
-                          if (isAlreadyScheduled) {
-                            updated[subGoalIndex].testDates = currentDates.filter(testDate => 
-                              testDate.toDateString() !== date.toDateString()
+                        
+                        if (selectedTest) {
+                          const updated = [...subGoals];
+                          const subGoalIndex = updated.findIndex(sg => sg.id === selectedTest);
+                          if (subGoalIndex !== -1) {
+                            const currentDates = updated[subGoalIndex].testDates || [];
+                            const isAlreadyScheduled = currentDates.some(testDate => 
+                              testDate.toDateString() === date.toDateString()
                             );
-                            toast({ title: 'Test Unscheduled', description: `Removed "${updated[subGoalIndex].testMethod}" from ${date.toLocaleDateString()}` });
-                          } else {
-                            updated[subGoalIndex].testDates = [...currentDates, date];
-                            toast({ title: 'Test Scheduled', description: `Added "${updated[subGoalIndex].testMethod}" to ${date.toLocaleDateString()}` });
+                            if (isAlreadyScheduled) {
+                              updated[subGoalIndex].testDates = currentDates.filter(testDate => 
+                                testDate.toDateString() !== date.toDateString()
+                              );
+                              toast({ title: 'Test Unscheduled', description: `Removed "${updated[subGoalIndex].testMethod}" from ${date.toLocaleDateString()}` });
+                            } else {
+                              updated[subGoalIndex].testDates = [...currentDates, date];
+                              toast({ title: 'Test Scheduled', description: `Added "${updated[subGoalIndex].testMethod}" to ${date.toLocaleDateString()}` });
+                            }
+                            setSubGoals(updated);
                           }
-                          setSubGoals(updated);
+                        } else if (selectedEvent) {
+                          scheduleEvent(selectedEvent, date);
+                        } else {
+                          toast({ title: 'Select an item', description: 'Choose a test or event above, then click a date.' });
                         }
                       };
                       
@@ -962,7 +1112,7 @@ export default function MacrocyclePage() {
                           {...dayProps}
                           onClick={handleClick}
                           className={`relative h-9 w-9 p-0 font-normal flex items-center justify-center ${
-                            scheduledTests.length > 0 ? 'bg-foreground text-background rounded-full font-bold' : ''
+                            (scheduledTests.length > 0 || scheduledEvents.length > 0) ? 'bg-foreground text-background rounded-full font-bold' : ''
                           } ${dayProps.className || ''}`}
                         >
                           <span>
@@ -971,8 +1121,8 @@ export default function MacrocyclePage() {
                         </button>
                       );
 
-                      // If there are scheduled tests, always show hover card
-                      if (scheduledTests.length > 0) {
+                      // If there are scheduled items, always show hover card
+                      if (scheduledTests.length > 0 || scheduledEvents.length > 0) {
                         return (
                           <HoverCard>
                             <HoverCardTrigger asChild>
@@ -981,13 +1131,24 @@ export default function MacrocyclePage() {
                             <HoverCardContent className="w-80" side="top">
                               <div className="space-y-2">
                                 <h4 className="font-semibold">
-                                  Scheduled Tests for {date.toLocaleDateString()}
+                                  Scheduled Items for {date.toLocaleDateString()}
                                 </h4>
                                 <div className="space-y-1">
                                   {scheduledTests.map((test, index) => (
-                                    <div key={index} className="text-sm">
-                                      <div className="font-medium">{test.testMethod || "Unnamed Test"}</div>
+                                    <div key={`test-${index}`} className="text-sm">
+                                      <div className="font-medium flex items-center gap-1">
+                                        <span className="text-blue-600">📋</span>
+                                        {test.testMethod || "Unnamed Test"}
+                                      </div>
                                       <div className="text-muted-foreground text-xs">{test.description}</div>
+                                    </div>
+                                  ))}
+                                  {scheduledEvents.map((event, index) => (
+                                    <div key={`event-${index}`} className="text-sm">
+                                      <div className="font-medium flex items-center gap-1">
+                                        <span className="text-orange-600">📅</span>
+                                        {event.name}
+                                      </div>
                                     </div>
                                   ))}
                                 </div>

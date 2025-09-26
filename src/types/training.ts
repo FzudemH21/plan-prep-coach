@@ -47,6 +47,13 @@ export interface SubGoal {
   testDates: Date[];
 }
 
+export interface Event {
+  id: string;
+  name: string;
+  description?: string;
+  eventDates: Date[];
+}
+
 export interface TrainableQuality {
   id: string;
   name: string;
