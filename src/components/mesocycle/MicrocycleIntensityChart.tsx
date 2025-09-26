@@ -227,7 +227,7 @@ const DraggableDot: React.FC<DraggableDotProps> = ({
       {dragging && (
         <text
           x={displayCx}
-          y={displayCy - 20}
+          y={Math.max(15, displayCy - 20)}
           textAnchor="middle"
           fill="hsl(var(--foreground))"
           fontSize={12}
@@ -352,8 +352,8 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
         <h4 className="font-semibold mb-4 text-lg">Microcycle Intensity Progression</h4>
         <div className="overflow-x-auto">
           <div style={{ minWidth: Math.max(800, chartData.length * 100), paddingRight: '50px' }}>
-            <ResponsiveContainer width="100%" height={450}>
-              <LineChart data={chartData} margin={{ top: 20, right: 50, left: 100, bottom: 100 }}>
+            <ResponsiveContainer width="100%" height={470}>
+              <LineChart data={chartData} margin={{ top: 40, right: 50, left: 100, bottom: 100 }}>
             {/* Mesocycle labels positioned correctly */}
             {mesocycleCenters.map((center, index) => (
               <MesocycleLabel
@@ -361,7 +361,7 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
                 mesocycleName={center.name}
                 centerX={center.centerX}
                 chartWidth={800}
-                chartHeight={450}
+                chartHeight={470}
                 margin={{ left: 100, right: 50, bottom: 100 }}
                 xDomain={[1, chartData.length]}
               />
