@@ -10,6 +10,7 @@ import {
   ReferenceArea,
 } from 'recharts';
 import { ExtendedMesocycle, Intensity } from '@/features/planner/types';
+import { ChartGeometryProvider, useChartGeometry } from '@/contexts/ChartGeometryContext';
 
 const intensityLevels: Intensity[] = [
   "off",
@@ -116,9 +117,6 @@ interface DraggableDotProps {
   mesocycleIndex: number;
   microcycleIndex: number;
   onIntensityChange: (mesoIndex: number, microIndex: number, intensity: Intensity) => void;
-  chartHeight: number;
-  yAxisMin: number;
-  yAxisMax: number;
 }
 
 const DraggableDot: React.FC<DraggableDotProps> = ({
@@ -128,15 +126,11 @@ const DraggableDot: React.FC<DraggableDotProps> = ({
   mesocycleIndex,
   microcycleIndex,
   onIntensityChange,
-  chartHeight,
-  yAxisMin,
-  yAxisMax,
 }) => {
   const [dragging, setDragging] = React.useState(false);
   const [dragPosition, setDragPosition] = React.useState<{ x: number; y: number } | null>(null);
   const [currentIntensity, setCurrentIntensity] = React.useState<Intensity>(() => payload?.intensity as Intensity || "moderate");
-  const startYRef = React.useRef<number>(0);
-  const startCyRef = React.useRef<number>(0);
+  const geometry = useChartGeometry();
 
   React.useEffect(() => {
     if (payload?.intensity) {
@@ -144,7 +138,7 @@ const DraggableDot: React.FC<DraggableDotProps> = ({
     }
   }, [payload?.intensity]);
 
-  if (!payload || cx === undefined || cy === undefined) return null;
+  if (!payload || cx === undefined || cy === undefined || !geometry.isReady) return null;
 
   const color = intensityColors[currentIntensity];
   const displayCx = dragPosition?.x ?? cx;
@@ -155,8 +149,6 @@ const DraggableDot: React.FC<DraggableDotProps> = ({
     e.stopPropagation();
     (e.target as Element).setPointerCapture?.(e.pointerId);
     setDragging(true);
-    startYRef.current = e.clientY;
-    startCyRef.current = cy;
     setDragPosition({ x: cx, y: cy });
   };
 
@@ -164,20 +156,20 @@ const DraggableDot: React.FC<DraggableDotProps> = ({
     if (!dragging) return;
     e.preventDefault();
     
-    const dy = e.clientY - startYRef.current;
-    const newY = Math.max(0, Math.min(chartHeight, startCyRef.current + dy));
+    // Use real measured geometry for precise coordinate mapping
+    const localY = Math.max(0, Math.min(geometry.plotHeight, e.clientY - geometry.plotTop));
     
-    // Calculate which intensity level this Y position corresponds to
-    const stepHeight = chartHeight / (intensityLevels.length - 1); // Use full plotting area
-    const normalizedPosition = (chartHeight - newY) / stepHeight; // Invert Y axis (0 = bottom, chartHeight = top)
-    
-    // Use direct mapping without premature snapping
-    const intensityIndex = Math.max(0, Math.min(intensityLevels.length - 1, Math.round(normalizedPosition)));
+    // Calculate intensity level using actual plot dimensions
+    const step = geometry.plotHeight / (intensityLevels.length - 1);
+    const normalized = (geometry.plotHeight - localY) / step; // Invert Y axis
+    const intensityIndex = Math.max(0, Math.min(intensityLevels.length - 1, Math.round(normalized)));
     const newIntensity = getIntensityFromValue(intensityIndex);
     
-    setDragPosition({ x: cx, y: newY });
+    // Convert back to SVG coordinates for visual positioning
+    const svgY = localY;
+    
+    setDragPosition({ x: cx, y: svgY });
     setCurrentIntensity(newIntensity);
-    // Don't update the actual data during drag to prevent re-renders that break dragging
   };
 
   const onPointerUp = (e: React.PointerEvent<SVGCircleElement>) => {
@@ -227,11 +219,12 @@ const DraggableDot: React.FC<DraggableDotProps> = ({
       {dragging && (
         <text
           x={displayCx}
-          y={Math.max(15, displayCy - 20)}
+          y={Math.max(16, Math.min(geometry.plotHeight - 6, displayCy - 20))}
           textAnchor="middle"
           fill="hsl(var(--foreground))"
           fontSize={12}
           fontWeight="bold"
+          dominantBaseline="middle"
           className="pointer-events-none"
         >
           {currentIntensity.replace("-", " ")}
@@ -250,6 +243,7 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
   mesocycles,
   onMesocyclesChange
 }) => {
+  const chartWrapperRef = React.useRef<HTMLDivElement>(null);
   // Prepare chart data with microcycle boundaries
   const chartData = React.useMemo(() => {
     const data: any[] = [];
@@ -352,7 +346,9 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
         <h4 className="font-semibold mb-4 text-lg">Microcycle Intensity Progression</h4>
         <div className="overflow-x-auto">
           <div style={{ minWidth: Math.max(800, chartData.length * 100), paddingRight: '50px' }}>
-            <ResponsiveContainer width="100%" height={470}>
+            <ChartGeometryProvider chartWrapperRef={chartWrapperRef} dependencies={[mesocycles]}>
+              <div ref={chartWrapperRef}>
+                <ResponsiveContainer width="100%" height={470}>
               <LineChart data={chartData} margin={{ top: 40, right: 50, left: 100, bottom: 100 }}>
             {/* Mesocycle labels positioned correctly */}
             {mesocycleCenters.map((center, index) => (
@@ -429,14 +425,13 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
                   mesocycleIndex={props.payload?.mesocycleIndex || 0}
                   microcycleIndex={props.payload?.microcycleIndex || 0}
                   onIntensityChange={handleIntensityChange}
-                  chartHeight={330}
-                  yAxisMin={0}
-                  yAxisMax={intensityLevels.length - 1}
                 />
               )}
             />
           </LineChart>
-            </ResponsiveContainer>
+                </ResponsiveContainer>
+              </div>
+            </ChartGeometryProvider>
           </div>
         </div>
         
