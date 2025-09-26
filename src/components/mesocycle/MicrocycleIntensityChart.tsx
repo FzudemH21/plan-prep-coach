@@ -165,12 +165,11 @@ const DraggableDot: React.FC<DraggableDotProps> = ({
     e.preventDefault();
     
     const dy = e.clientY - startYRef.current;
-    const newY = Math.max(20, Math.min(chartHeight - 20, startCyRef.current + dy));
+    const newY = Math.max(0, Math.min(chartHeight, startCyRef.current + dy));
     
     // Calculate which intensity level this Y position corresponds to
-    const stepHeight = (chartHeight - 40) / (intensityLevels.length - 1); // 20px margin top/bottom
-    const relativeY = newY - 20; // Remove top margin
-    const normalizedPosition = (chartHeight - 40 - relativeY) / stepHeight; // Invert Y axis
+    const stepHeight = chartHeight / (intensityLevels.length - 1); // Use full plotting area
+    const normalizedPosition = (chartHeight - newY) / stepHeight; // Invert Y axis (0 = bottom, chartHeight = top)
     
     // Use direct mapping without premature snapping
     const intensityIndex = Math.max(0, Math.min(intensityLevels.length - 1, Math.round(normalizedPosition)));
@@ -430,7 +429,7 @@ export const MicrocycleIntensityChart: React.FC<MicrocycleIntensityChartProps> =
                   mesocycleIndex={props.payload?.mesocycleIndex || 0}
                   microcycleIndex={props.payload?.microcycleIndex || 0}
                   onIntensityChange={handleIntensityChange}
-                  chartHeight={400}
+                  chartHeight={330}
                   yAxisMin={0}
                   yAxisMax={intensityLevels.length - 1}
                 />
