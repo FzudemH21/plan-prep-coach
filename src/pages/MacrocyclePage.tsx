@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
+import { useToast } from "@/hooks/use-toast";
 import { AthleteInfo, SmartGoal, SubGoal, TrainableQuality } from "@/types/training";
 import { User, Target, Calendar as CalendarIcon, Plus, Bot, X } from "lucide-react";
 import { 
@@ -23,6 +24,7 @@ import { useAthleticismData } from "@/hooks/useAthleticismData";
 export default function MacrocyclePage() {
   const { displayMode } = useDisplayMode();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const { data: athleticismData } = useAthleticismData();
   const [currentStep, setCurrentStep] = useState(1);
   const [athleteInfo, setAthleteInfo] = useState<Partial<AthleteInfo>>({});
@@ -902,6 +904,7 @@ export default function MacrocyclePage() {
                   selected={undefined}
                   onSelect={(date) => {
                     if (date && selectedTest) {
+                      console.log('Scheduling test:', selectedTest, 'on date:', date);
                       const updated = [...subGoals];
                       const subGoalIndex = updated.findIndex(sg => sg.id === selectedTest);
                       if (subGoalIndex !== -1) {
@@ -915,9 +918,19 @@ export default function MacrocyclePage() {
                           updated[subGoalIndex].testDates = currentDates.filter(testDate => 
                             testDate.toDateString() !== date.toDateString()
                           );
+                          console.log('Unscheduled test from:', date.toDateString());
+                          toast({
+                            title: "Test Unscheduled",
+                            description: `Removed "${updated[subGoalIndex].testMethod}" from ${date.toLocaleDateString()}`,
+                          });
                         } else {
                           // Add the test to this date (schedule)
                           updated[subGoalIndex].testDates = [...currentDates, date];
+                          console.log('Scheduled test on:', date.toDateString(), 'Total dates:', updated[subGoalIndex].testDates);
+                          toast({
+                            title: "Test Scheduled",
+                            description: `Added "${updated[subGoalIndex].testMethod}" to ${date.toLocaleDateString()}`,
+                          });
                         }
                         
                         setSubGoals(updated);
@@ -952,11 +965,11 @@ export default function MacrocyclePage() {
                         <button 
                           {...buttonProps}
                           className={`relative h-9 w-9 p-0 font-normal flex items-center justify-center ${
-                            scheduledTests.length > 0 ? 'ring-2 ring-primary rounded-full' : ''
+                            scheduledTests.length > 0 ? 'bg-foreground text-background rounded-full font-bold' : ''
                           } ${buttonProps.className || ''}`}
                         >
                           {scheduledTests.length > 0 && (
-                            <span className="absolute top-0 left-1/2 -translate-x-1/2 text-[8px] leading-none text-primary truncate max-w-[36px]">
+                            <span className="absolute top-0 left-1/2 -translate-x-1/2 text-[8px] leading-none text-background truncate max-w-[36px]">
                               {scheduledTests[0].testMethod || "Test"}{scheduledTests.length > 1 ? ` +${scheduledTests.length - 1}` : ""}
                             </span>
                           )}
@@ -966,8 +979,8 @@ export default function MacrocyclePage() {
                         </button>
                       );
 
-                      // If there are scheduled tests and no test is currently selected, show hover card
-                      if (scheduledTests.length > 0 && !selectedTest) {
+                      // If there are scheduled tests, always show hover card
+                      if (scheduledTests.length > 0) {
                         return (
                           <HoverCard>
                             <HoverCardTrigger asChild>
