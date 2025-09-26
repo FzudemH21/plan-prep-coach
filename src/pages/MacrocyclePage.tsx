@@ -54,7 +54,11 @@ export default function MacrocyclePage() {
           parsedSmartGoal.endDate = new Date(parsedSmartGoal.endDate);
         }
         setSmartGoal(parsedSmartGoal);
-        setSubGoals(data.subGoals || []);
+        const parsedSubGoals = (data.subGoals || []).map((sg: SubGoal) => ({
+          ...sg,
+          testDates: (sg.testDates || []).map((d: any) => new Date(d))
+        }));
+        setSubGoals(parsedSubGoals);
         setQualities(data.qualities || []);
         setQualitiesBySubGoal(data.qualitiesBySubGoal || {});
         setMethodsByQuality(data.methodsByQuality || {});
@@ -954,7 +958,7 @@ export default function MacrocyclePage() {
                     }
                   }}
                   components={{
-                    Day: ({ date, ...buttonProps }: any) => {
+                    Day: ({ date, buttonProps }: any) => {
                       const scheduledTests = subGoals.filter(sg => 
                         sg.testDates?.some(testDate => 
                           testDate.toDateString() === date.toDateString()
