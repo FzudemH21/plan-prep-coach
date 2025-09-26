@@ -965,12 +965,7 @@ export default function MacrocyclePage() {
                             scheduledTests.length > 0 ? 'bg-foreground text-background rounded-full font-bold' : ''
                           } ${dayProps.className || ''}`}
                         >
-                          {scheduledTests.length > 0 && (
-                            <span className="absolute top-0 left-1/2 -translate-x-1/2 text-[8px] leading-none text-background truncate max-w-[36px]">
-                              {scheduledTests[0].testMethod || "Test"}{scheduledTests.length > 1 ? ` +${scheduledTests.length - 1}` : ""}
-                            </span>
-                          )}
-                          <span className={scheduledTests.length > 0 ? "mt-1" : ""}>
+                          <span>
                             {date.getDate()}
                           </span>
                         </button>
