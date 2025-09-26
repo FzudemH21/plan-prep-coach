@@ -906,42 +906,6 @@ export default function MacrocyclePage() {
                 <Calendar
                   mode="single"
                   selected={undefined}
-                  onSelect={(date) => {
-                    if (date && selectedTest) {
-                      console.log('Scheduling test:', selectedTest, 'on date:', date);
-                      const updated = [...subGoals];
-                      const subGoalIndex = updated.findIndex(sg => sg.id === selectedTest);
-                      if (subGoalIndex !== -1) {
-                        const currentDates = updated[subGoalIndex].testDates || [];
-                        const isAlreadyScheduled = currentDates.some(testDate => 
-                          testDate.toDateString() === date.toDateString()
-                        );
-                        
-                        if (isAlreadyScheduled) {
-                          // Remove the test from this date (unschedule)
-                          updated[subGoalIndex].testDates = currentDates.filter(testDate => 
-                            testDate.toDateString() !== date.toDateString()
-                          );
-                          console.log('Unscheduled test from:', date.toDateString());
-                          toast({
-                            title: "Test Unscheduled",
-                            description: `Removed "${updated[subGoalIndex].testMethod}" from ${date.toLocaleDateString()}`,
-                          });
-                        } else {
-                          // Add the test to this date (schedule)
-                          updated[subGoalIndex].testDates = [...currentDates, date];
-                          console.log('Scheduled test on:', date.toDateString(), 'Total dates:', updated[subGoalIndex].testDates);
-                          toast({
-                            title: "Test Scheduled",
-                            description: `Added "${updated[subGoalIndex].testMethod}" to ${date.toLocaleDateString()}`,
-                          });
-                        }
-                        
-                        setSubGoals(updated);
-                        // Keep the test selected for multiple scheduling
-                      }
-                    }
-                  }}
                   className="rounded-md scale-110"
                   disabled={(date) => {
                     if (!smartGoal.startDate || !smartGoal.endDate) return true;
@@ -958,19 +922,48 @@ export default function MacrocyclePage() {
                     }
                   }}
                   components={{
-                    Day: ({ date, buttonProps }: any) => {
+                    Day: ({ date, ...dayProps }: any) => {
                       const scheduledTests = subGoals.filter(sg => 
                         sg.testDates?.some(testDate => 
                           testDate.toDateString() === date.toDateString()
                         )
                       );
+
+                      const handleClick = (e: any) => {
+                        dayProps?.onClick?.(e);
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!selectedTest) {
+                          toast({ title: 'Select a test', description: 'Choose a test above, then click a date.' });
+                          return;
+                        }
+                        const updated = [...subGoals];
+                        const subGoalIndex = updated.findIndex(sg => sg.id === selectedTest);
+                        if (subGoalIndex !== -1) {
+                          const currentDates = updated[subGoalIndex].testDates || [];
+                          const isAlreadyScheduled = currentDates.some(testDate => 
+                            testDate.toDateString() === date.toDateString()
+                          );
+                          if (isAlreadyScheduled) {
+                            updated[subGoalIndex].testDates = currentDates.filter(testDate => 
+                              testDate.toDateString() !== date.toDateString()
+                            );
+                            toast({ title: 'Test Unscheduled', description: `Removed "${updated[subGoalIndex].testMethod}" from ${date.toLocaleDateString()}` });
+                          } else {
+                            updated[subGoalIndex].testDates = [...currentDates, date];
+                            toast({ title: 'Test Scheduled', description: `Added "${updated[subGoalIndex].testMethod}" to ${date.toLocaleDateString()}` });
+                          }
+                          setSubGoals(updated);
+                        }
+                      };
                       
                       const dayContent = (
                         <button 
-                          {...buttonProps}
+                          {...dayProps}
+                          onClick={handleClick}
                           className={`relative h-9 w-9 p-0 font-normal flex items-center justify-center ${
                             scheduledTests.length > 0 ? 'bg-foreground text-background rounded-full font-bold' : ''
-                          } ${buttonProps.className || ''}`}
+                          } ${dayProps.className || ''}`}
                         >
                           {scheduledTests.length > 0 && (
                             <span className="absolute top-0 left-1/2 -translate-x-1/2 text-[8px] leading-none text-background truncate max-w-[36px]">
