@@ -1112,7 +1112,13 @@ export default function MacrocyclePage() {
                           {...dayProps}
                           onClick={handleClick}
                           className={`relative h-9 w-9 p-0 font-normal flex items-center justify-center ${
-                            (scheduledTests.length > 0 || scheduledEvents.length > 0) ? 'bg-foreground text-background rounded-full font-bold' : ''
+                            scheduledTests.length > 0 && scheduledEvents.length > 0 
+                              ? 'bg-gradient-to-r from-foreground to-red-500 text-white rounded-full font-bold' 
+                              : scheduledEvents.length > 0 
+                                ? 'bg-red-500 text-white rounded-full font-bold'
+                                : scheduledTests.length > 0 
+                                  ? 'bg-foreground text-background rounded-full font-bold' 
+                                  : ''
                           } ${dayProps.className || ''}`}
                         >
                           <span>
