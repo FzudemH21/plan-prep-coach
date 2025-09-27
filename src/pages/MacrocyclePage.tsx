@@ -99,6 +99,8 @@ export default function MacrocyclePage() {
       selectedEvent,
       lastUpdated: new Date().toISOString()
     };
+    console.log('DEBUG: Saving macrocycle data to localStorage:', macrocycleData);
+    console.log('DEBUG: Events being saved:', events);
     localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
   }, [athleteInfo, smartGoal, subGoals, events, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest, selectedEvent]);
 
@@ -484,9 +486,11 @@ export default function MacrocyclePage() {
         toast({ title: 'Event Unscheduled', description: `Removed "${updated[eventIndex].name}" from ${date.toLocaleDateString()}` });
       } else {
         updated[eventIndex].eventDates = [...currentDates, date];
+        console.log(`DEBUG: Scheduled event "${updated[eventIndex].name}" for ${date.toISOString()}`);
         toast({ title: 'Event Scheduled', description: `Added "${updated[eventIndex].name}" to ${date.toLocaleDateString()}` });
       }
       setEvents(updated);
+      console.log('DEBUG: Updated events array:', updated);
     }
   };
 

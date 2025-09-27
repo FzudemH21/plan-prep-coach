@@ -103,6 +103,9 @@ export default function MesocyclePage() {
     const savedMacrocycleData = localStorage.getItem('macrocycleData');
     if (savedMacrocycleData) {
       const data = JSON.parse(savedMacrocycleData);
+      console.log('DEBUG: Loaded macrocycle data:', data);
+      console.log('DEBUG: Events in data:', data.events);
+      console.log('DEBUG: SubGoals in data:', data.subGoals);
       setMacrocycleData(data);
       
       // Calculate total weeks from date range (inclusive calculation to match MacrocyclePage)
@@ -1836,6 +1839,10 @@ export default function MesocyclePage() {
     const testDates = macrocycleData.subGoals?.flatMap((sg: any) => sg.testDates || []).map((d: string) => new Date(d)) || [];
     const eventDates = macrocycleData.events?.flatMap((e: any) => e.eventDates || []).map((d: string) => new Date(d)) || [];
     
+    console.log('DEBUG: Processing dates for daily intensity:');
+    console.log('DEBUG: testDates:', testDates);
+    console.log('DEBUG: eventDates:', eventDates);
+    
     let currentDate = new Date(planStartDate);
     
     mesocycles.forEach((meso, mesoIndex) => {
@@ -1849,6 +1856,10 @@ export default function MesocyclePage() {
           const dateStr = dayDate.toISOString().split('T')[0];
           const isTestDay = testDates.some(td => td.toISOString().split('T')[0] === dateStr);
           const isEventDay = eventDates.some(ed => ed.toISOString().split('T')[0] === dateStr);
+          
+          if (isTestDay || isEventDay) {
+            console.log(`DEBUG: Found special day ${dateStr} - isTestDay: ${isTestDay}, isEventDay: ${isEventDay}`);
+          }
           
           days.push({
             date: dateStr,
@@ -2032,19 +2043,29 @@ export default function MesocyclePage() {
                     {trainingDays.map((day) => (
                       <TableHead 
                         key={day.date}
-                        className={`text-center text-xs min-w-[80px] border-r ${
-                          day.isTestDay ? 'bg-muted-foreground/20' : 
-                          day.isEventDay ? 'bg-destructive/30' : 'bg-primary/10'
+                        className={`text-center text-xs min-w-[80px] border-r relative ${
+                          day.isTestDay ? 'bg-blue-100 border-blue-300' : 
+                          day.isEventDay ? 'bg-orange-100 border-orange-300' : 'bg-primary/10'
                         }`}
                       >
-                        <div>
-                          <div className="font-semibold">{day.dayName}</div>
-                          <div className="text-xs opacity-70">{format(new Date(day.date), 'MM/dd')}</div>
+                        <div className="p-1">
+                          <div className="font-medium">{format(new Date(day.date), 'MMM d')}</div>
+                          <div className="text-xs">{day.dayName}</div>
+                          {day.isTestDay && (
+                            <div className="text-xs font-semibold text-blue-700 bg-blue-200 rounded px-1 mt-1">
+                              TEST
+                            </div>
+                          )}
+                          {day.isEventDay && (
+                            <div className="text-xs font-semibold text-orange-700 bg-orange-200 rounded px-1 mt-1">
+                              EVENT
+                            </div>
+                          )}
                         </div>
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
+                       </TableHead>
+                     ))}
+                   </TableRow>
+                 </TableHeader>
                 
                  <TableBody>
                   {intensityLevels.slice().reverse().map((intensityLevel) => (
@@ -2058,9 +2079,9 @@ export default function MesocyclePage() {
                         return (
                           <TableCell 
                             key={`${intensityLevel}-${day.date}`}
-                            className={`text-center cursor-pointer border-r transition-colors ${
+                            className={`text-center cursor-pointer border-r transition-colors relative ${
                               isSelected ? getIntensityColor(intensityLevel) : 'hover:bg-muted/50'
-                            } ${day.isTestDay ? 'bg-muted-foreground/10' : day.isEventDay ? 'bg-destructive/10' : ''}`}
+                            } ${day.isTestDay ? 'bg-blue-50 border-blue-200' : day.isEventDay ? 'bg-orange-50 border-orange-200' : ''}`}
                             onClick={() => handleIntensityClick(day.date, intensityLevel)}
                           >
                             {isSelected ? '●' : '○'}
