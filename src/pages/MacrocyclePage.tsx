@@ -1325,17 +1325,21 @@ export default function MacrocyclePage() {
 
   const handleNext = () => {
     if (currentStep === totalSteps) {
-      // Save macrocycle data to localStorage before navigation
+      // Save macrocycle data to localStorage before navigation - INCLUDE EVENTS!
       const macrocycleData = {
         athleteInfo,
         smartGoal,
         subGoals,
+        events, // ✅ CRITICAL FIX: Include events in final save
         qualities,
         qualitiesBySubGoal,
         methodsByQuality,
         selectedTest,
+        selectedEvent,
         completedAt: new Date().toISOString()
       };
+      console.log('DEBUG: Final macrocycle save - events included:', events);
+      console.log('DEBUG: Final macrocycle data being saved:', macrocycleData);
       localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
       navigate('/mesocycle');
     } else {

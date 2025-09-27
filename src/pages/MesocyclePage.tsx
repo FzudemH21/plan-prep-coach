@@ -106,6 +106,10 @@ export default function MesocyclePage() {
       console.log('DEBUG: Loaded macrocycle data:', data);
       console.log('DEBUG: Events in data:', data.events);
       console.log('DEBUG: SubGoals in data:', data.subGoals);
+      console.log('DEBUG: Events details:', data.events?.map((e: any) => ({ 
+        name: e.name, 
+        eventDates: e.eventDates 
+      })));
       setMacrocycleData(data);
       
       // Calculate total weeks from date range (inclusive calculation to match MacrocyclePage)
@@ -1842,6 +1846,8 @@ export default function MesocyclePage() {
     console.log('DEBUG: Processing dates for daily intensity:');
     console.log('DEBUG: testDates:', testDates);
     console.log('DEBUG: eventDates:', eventDates);
+    console.log('DEBUG: testDates converted:', testDates.map(d => d.toISOString().split('T')[0]));
+    console.log('DEBUG: eventDates converted:', eventDates.map(d => d.toISOString().split('T')[0]));
     
     let currentDate = new Date(planStartDate);
     
