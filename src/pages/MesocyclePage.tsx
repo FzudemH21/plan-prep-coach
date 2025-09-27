@@ -13,6 +13,7 @@ import MesocycleCalendar from '@/components/mesocycle/MesocycleCalendar';
 import { MicrocycleIntensityChart } from '@/components/mesocycle/MicrocycleIntensityChart';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ExtendedMesocycle, Mesocycle, Microcycle, Plan, Intensity } from '@/features/planner/types';
+import { DailyIntensity, TrainingDay } from '@/types/daily-intensity';
 import { useAthleticismData } from '@/hooks/useAthleticismData';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useDragFill } from '@/hooks/useDragFill';
@@ -57,12 +58,16 @@ export default function MesocyclePage() {
   const [methodToDelete, setMethodToDelete] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   
+  // Daily intensity planning state
+  const [dailyIntensityData, setDailyIntensityData] = useState<DailyIntensity[]>([]);
+  const [trainingDays, setTrainingDays] = useState<TrainingDay[]>([]);
+  
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
   const { dragState, startDrag, endDrag, addToSelection, clearSelection, fillCells } = useDragFill();
   const { toast } = useToast();
 
-  const totalSteps = 5;
+  const totalSteps = 6;
 
   // Navigation component for top and bottom
   const NavigationButtons = () => (
@@ -1808,7 +1813,7 @@ export default function MesocyclePage() {
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
           <Target className="h-5 w-5" />
-          <span>Step 5: Exercise Selection</span>
+          <span>Step 6: Exercise Selection</span>
         </CardTitle>
         <CardDescription>
           Select specific exercises for each training method across your mesocycles and microcycles.
@@ -1823,9 +1828,283 @@ export default function MesocyclePage() {
     </Card>
   );
 
+  // Calculate training days based on macrocycle data and mesocycle structure
+  const calculateTrainingDays = (): TrainingDay[] => {
+    if (!macrocycleData || !mesocycles.length) return [];
+    
+    const days: TrainingDay[] = [];
+    const firstTrainingDay = macrocycleData.firstTrainingDay || 1; // Default to Monday (1)
+    const testDates = macrocycleData.subGoals?.flatMap((sg: any) => sg.testDates || []).map((d: string) => new Date(d)) || [];
+    const eventDates = macrocycleData.events?.flatMap((e: any) => e.eventDates || []).map((d: string) => new Date(d)) || [];
+    
+    let currentDate = new Date(planStartDate);
+    
+    mesocycles.forEach((meso, mesoIndex) => {
+      meso.microcycles.forEach((micro, microIndex) => {
+        // Calculate sessions for this microcycle based on sessionsPerWeek
+        const sessionsPerWeek = meso.sessionsPerWeek || 3;
+        const sessionDays = [];
+        
+        // Generate session days starting from firstTrainingDay
+        for (let i = 0; i < sessionsPerWeek; i++) {
+          const dayOffset = i * Math.floor(7 / sessionsPerWeek);
+          const sessionDay = (firstTrainingDay + dayOffset) % 7;
+          sessionDays.push(sessionDay);
+        }
+        
+        // Add training days for this microcycle
+        for (let dayInMicro = 0; dayInMicro < micro.duration; dayInMicro++) {
+          const dayDate = new Date(currentDate);
+          dayDate.setDate(currentDate.getDate() + dayInMicro);
+          
+          const dayOfWeek = dayDate.getDay();
+          
+          if (sessionDays.includes(dayOfWeek)) {
+            const dateStr = dayDate.toISOString().split('T')[0];
+            const isTestDay = testDates.some(td => td.toISOString().split('T')[0] === dateStr);
+            const isEventDay = eventDates.some(ed => ed.toISOString().split('T')[0] === dateStr);
+            
+            days.push({
+              date: dateStr,
+              dayOfWeek,
+              dayName: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dayOfWeek],
+              mesocycleId: meso.id,
+              microcycleId: micro.id,
+              isTestDay,
+              isEventDay
+            });
+          }
+        }
+        
+        currentDate.setDate(currentDate.getDate() + micro.duration);
+      });
+    });
+    
+    return days;
+  };
+
+  // Update training days when mesocycles change
+  useEffect(() => {
+    const days = calculateTrainingDays();
+    setTrainingDays(days);
+    
+    // Initialize daily intensity data if not exists
+    const existingIntensities = dailyIntensityData.reduce((acc, di) => {
+      acc[di.date] = di;
+      return acc;
+    }, {} as Record<string, DailyIntensity>);
+    
+    const newIntensities = days.map(day => 
+      existingIntensities[day.date] || {
+        date: day.date,
+        mesocycleId: day.mesocycleId,
+        microcycleId: day.microcycleId,
+        dayOfWeek: day.dayOfWeek,
+        intensity: "moderate" as IntensityLevel,
+        isTestDay: day.isTestDay,
+        isEventDay: day.isEventDay
+      }
+    );
+    
+    setDailyIntensityData(newIntensities);
+  }, [mesocycles, macrocycleData, planStartDate]);
+
+  // Handle intensity selection
+  const handleIntensityClick = (date: string, intensity: IntensityLevel) => {
+    setDailyIntensityData(prev => 
+      prev.map(di => 
+        di.date === date ? { ...di, intensity } : di
+      )
+    );
+  };
+
+  // Copy previous week function
+  const copyPreviousWeek = (microcycleId: string) => {
+    const microcycleDays = trainingDays.filter(day => day.microcycleId === microcycleId);
+    if (microcycleDays.length === 0) return;
+    
+    // Find the previous microcycle's days
+    const currentMesoId = microcycleDays[0].mesocycleId;
+    const currentMeso = mesocycles.find(m => m.id === currentMesoId);
+    if (!currentMeso) return;
+    
+    const currentMicroIndex = currentMeso.microcycles.findIndex(m => m.id === microcycleId);
+    if (currentMicroIndex <= 0) return; // No previous microcycle
+    
+    const prevMicrocycleId = currentMeso.microcycles[currentMicroIndex - 1].id;
+    const prevMicrocycleDays = trainingDays.filter(day => day.microcycleId === prevMicrocycleId);
+    
+    if (prevMicrocycleDays.length === 0) return;
+    
+    // Copy intensities from previous week
+    setDailyIntensityData(prev => {
+      const updated = [...prev];
+      microcycleDays.forEach((currentDay, index) => {
+        if (prevMicrocycleDays[index]) {
+          const prevIntensity = prev.find(di => di.date === prevMicrocycleDays[index].date)?.intensity || "moderate";
+          const currentIndex = updated.findIndex(di => di.date === currentDay.date);
+          if (currentIndex !== -1) {
+            updated[currentIndex] = { ...updated[currentIndex], intensity: prevIntensity };
+          }
+        }
+      });
+      return updated;
+    });
+    
+    toast({
+      title: "Copied from previous week",
+      description: "Intensity pattern has been applied to this microcycle."
+    });
+  };
+
+  const renderDailyIntensityPlanning = () => (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center space-x-2">
+          <CalendarDays className="h-5 w-5" />
+          <span>Step 3: Daily Training Intensity Planning</span>
+        </CardTitle>
+        <CardDescription>
+          Set the training intensity for each training day across all mesocycles and microcycles.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {/* Legend */}
+          <div className="flex flex-wrap gap-4 p-4 bg-muted/30 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-muted-foreground/20 rounded"></div>
+              <span className="text-xs">Test Day</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-destructive/30 rounded"></div>
+              <span className="text-xs">Event Day</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-4 bg-primary rounded"></div>
+              <span className="text-xs">Training Day</span>
+            </div>
+          </div>
+          
+          {/* Horizontal scrollable grid */}
+          <div className="border rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table className="min-w-full">
+                <TableHeader>
+                  {/* Mesocycle Headers */}
+                  <TableRow>
+                    <TableHead className="sticky left-0 bg-background z-20 border-r-2 w-32">Intensity</TableHead>
+                    {mesocycles.map((meso) => {
+                      const mesoTrainingDays = trainingDays.filter(day => day.mesocycleId === meso.id);
+                      const colSpan = mesoTrainingDays.length;
+                      return colSpan > 0 ? (
+                        <TableHead 
+                          key={meso.id}
+                          colSpan={colSpan}
+                          className={`text-center border-r-2 min-w-[120px] ${getIntensityColor(meso.intensity)} font-semibold`}
+                        >
+                          {meso.name}
+                        </TableHead>
+                      ) : null;
+                    })}
+                  </TableRow>
+                  
+                  {/* Microcycle Headers */}
+                  <TableRow>
+                    <TableHead className="sticky left-0 bg-background z-20 border-r-2"></TableHead>
+                    {mesocycles.map((meso) => {
+                      return meso.microcycles.map((micro) => {
+                        const microTrainingDays = trainingDays.filter(day => day.microcycleId === micro.id);
+                        const colSpan = microTrainingDays.length;
+                        return colSpan > 0 ? (
+                          <TableHead 
+                            key={micro.id}
+                            colSpan={colSpan}
+                            className={`text-center border-r text-xs ${getIntensityColor(micro.intensity)} relative`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span>{micro.name}</span>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-5 w-5 p-0 ml-1 opacity-70 hover:opacity-100"
+                                onClick={() => copyPreviousWeek(micro.id)}
+                                title="Copy from previous week"
+                              >
+                                📋
+                              </Button>
+                            </div>
+                          </TableHead>
+                        ) : null;
+                      });
+                    })}
+                  </TableRow>
+                  
+                  {/* Date Headers */}
+                  <TableRow className="border-b-2">
+                    <TableHead className="sticky left-0 bg-background z-20 border-r-2"></TableHead>
+                    {trainingDays.map((day) => (
+                      <TableHead 
+                        key={day.date}
+                        className={`text-center text-xs min-w-[80px] border-r ${
+                          day.isTestDay ? 'bg-muted-foreground/20' : 
+                          day.isEventDay ? 'bg-destructive/30' : 'bg-primary/10'
+                        }`}
+                      >
+                        <div>
+                          <div className="font-semibold">{day.dayName}</div>
+                          <div className="text-xs opacity-70">{format(new Date(day.date), 'MM/dd')}</div>
+                        </div>
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                
+                <TableBody>
+                  {intensityLevels.map((intensityLevel) => (
+                    <TableRow key={intensityLevel} className="hover:bg-muted/30">
+                      <TableCell className={`sticky left-0 bg-background z-10 border-r-2 font-medium ${getIntensityColor(intensityLevel)} text-center`}>
+                        {intensityLevel.charAt(0).toUpperCase() + intensityLevel.slice(1).replace('-', ' ')}
+                      </TableCell>
+                      {trainingDays.map((day) => {
+                        const dayIntensity = dailyIntensityData.find(di => di.date === day.date);
+                        const isSelected = dayIntensity?.intensity === intensityLevel;
+                        return (
+                          <TableCell 
+                            key={`${intensityLevel}-${day.date}`}
+                            className={`text-center cursor-pointer border-r transition-colors ${
+                              isSelected ? getIntensityColor(intensityLevel) : 'hover:bg-muted/50'
+                            } ${day.isTestDay ? 'bg-muted-foreground/10' : day.isEventDay ? 'bg-destructive/10' : ''}`}
+                            onClick={() => handleIntensityClick(day.date, intensityLevel)}
+                          >
+                            {isSelected ? '●' : '○'}
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+          
+          {/* Intensity Chart */}
+          <div className="mt-6">
+            <h4 className="font-semibold mb-3">Intensity Progression Chart</h4>
+            <MicrocycleIntensityChart 
+              mesocycles={mesocycles} 
+              onMesocyclesChange={setMesocycles}
+            />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   const stepTitles = [
     "Mesocycle Setup",
-    "Intensity Configuration", 
+    "Intensity Configuration",
+    "Daily Training Intensity Planning", 
     "Sub-Goal Allocation",
     "Method Periodization",
     "Exercise Selection"
@@ -1858,15 +2137,16 @@ export default function MesocyclePage() {
           {renderTrainingPlanOverview()}
           {currentStep === 1 && renderMesocycleSetup()}
           {currentStep === 2 && renderIntensitySetup()}
-          {currentStep === 3 && renderQualityAllocation()}
-          {currentStep === 4 && renderMethodPeriodization()}
-          {currentStep === 5 && renderExerciseSelection()}
+          {currentStep === 3 && renderDailyIntensityPlanning()}
+          {currentStep === 4 && renderQualityAllocation()}
+          {currentStep === 5 && renderMethodPeriodization()}
+          {currentStep === 6 && renderExerciseSelection()}
         </div>
 
         <NavigationButtons />
         
         {/* Keyboard Shortcuts Panel - only show on Method Periodization step */}
-        {currentStep === 4 && <KeyboardShortcutsPanel />}
+        {currentStep === 5 && <KeyboardShortcutsPanel />}
         
         {/* Add Method Dialog */}
         <AddMethodDialog
