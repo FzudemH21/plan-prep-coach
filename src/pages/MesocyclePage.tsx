@@ -1828,12 +1828,11 @@ export default function MesocyclePage() {
     </Card>
   );
 
-  // Calculate training days based on macrocycle data and mesocycle structure
+  // Calculate all days based on macrocycle data and mesocycle structure
   const calculateTrainingDays = (): TrainingDay[] => {
     if (!macrocycleData || !mesocycles.length) return [];
     
     const days: TrainingDay[] = [];
-    const firstTrainingDay = macrocycleData.firstTrainingDay || 1; // Default to Monday (1)
     const testDates = macrocycleData.subGoals?.flatMap((sg: any) => sg.testDates || []).map((d: string) => new Date(d)) || [];
     const eventDates = macrocycleData.events?.flatMap((e: any) => e.eventDates || []).map((d: string) => new Date(d)) || [];
     
@@ -1841,18 +1840,7 @@ export default function MesocyclePage() {
     
     mesocycles.forEach((meso, mesoIndex) => {
       meso.microcycles.forEach((micro, microIndex) => {
-        // Calculate sessions for this microcycle based on sessionsPerWeek
-        const sessionsPerWeek = meso.sessionsPerWeek || 3;
-        const sessionDays = [];
-        
-        // Generate session days starting from firstTrainingDay
-        for (let i = 0; i < sessionsPerWeek; i++) {
-          const dayOffset = i * Math.floor(7 / sessionsPerWeek);
-          const sessionDay = (firstTrainingDay + dayOffset) % 7;
-          sessionDays.push(sessionDay);
-        }
-        
-        // Add all days for this microcycle
+        // Add all days for this microcycle (no predetermined training day restrictions)
         for (let dayInMicro = 0; dayInMicro < micro.duration; dayInMicro++) {
           const dayDate = new Date(currentDate);
           dayDate.setDate(currentDate.getDate() + dayInMicro);
@@ -1861,7 +1849,6 @@ export default function MesocyclePage() {
           const dateStr = dayDate.toISOString().split('T')[0];
           const isTestDay = testDates.some(td => td.toISOString().split('T')[0] === dateStr);
           const isEventDay = eventDates.some(ed => ed.toISOString().split('T')[0] === dateStr);
-          const isTrainingDay = sessionDays.includes(dayOfWeek);
           
           days.push({
             date: dateStr,
@@ -1871,7 +1858,7 @@ export default function MesocyclePage() {
             microcycleId: micro.id,
             isTestDay,
             isEventDay,
-            isTrainingDay
+            isTrainingDay: true // All days are now equally selectable
           });
         }
         
@@ -1899,7 +1886,7 @@ export default function MesocyclePage() {
         mesocycleId: day.mesocycleId,
         microcycleId: day.microcycleId,
         dayOfWeek: day.dayOfWeek,
-        intensity: "moderate" as IntensityLevel,
+        intensity: "off" as IntensityLevel,
         isTestDay: day.isTestDay,
         isEventDay: day.isEventDay
       }
@@ -1992,7 +1979,7 @@ export default function MesocyclePage() {
                 <TableHeader>
                   {/* Mesocycle Headers */}
                   <TableRow>
-                    <TableHead className="sticky left-0 bg-background z-20 border-r-2 w-32">Intensity</TableHead>
+                    <TableHead className="sticky left-0 bg-background z-20 border-r-2 min-w-[140px]">Intensity</TableHead>
                     {mesocycles.map((meso) => {
                       const mesoTrainingDays = trainingDays.filter(day => day.mesocycleId === meso.id);
                       const colSpan = mesoTrainingDays.length;
@@ -2021,7 +2008,7 @@ export default function MesocyclePage() {
                             colSpan={colSpan}
                             className={`text-center border-r text-xs ${getIntensityColor(micro.intensity)} relative`}
                           >
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-center">
                               <span>{micro.name}</span>
                               <Button
                                 size="sm"
@@ -2062,7 +2049,7 @@ export default function MesocyclePage() {
                  <TableBody>
                   {intensityLevels.slice().reverse().map((intensityLevel) => (
                     <TableRow key={intensityLevel} className="hover:bg-muted/30">
-                      <TableCell className={`sticky left-0 bg-background z-10 border-r-2 font-medium ${getIntensityColor(intensityLevel)} text-center`}>
+                      <TableCell className={`sticky left-0 bg-background z-10 border-r-2 font-medium min-w-[140px] ${getIntensityColor(intensityLevel)} text-center`}>
                         {intensityLevel.charAt(0).toUpperCase() + intensityLevel.slice(1).replace('-', ' ')}
                       </TableCell>
                       {trainingDays.map((day) => {
@@ -2073,12 +2060,10 @@ export default function MesocyclePage() {
                             key={`${intensityLevel}-${day.date}`}
                             className={`text-center cursor-pointer border-r transition-colors ${
                               isSelected ? getIntensityColor(intensityLevel) : 'hover:bg-muted/50'
-                            } ${day.isTestDay ? 'bg-muted-foreground/10' : day.isEventDay ? 'bg-destructive/10' : ''} ${
-                              !day.isTrainingDay ? 'opacity-40 bg-muted/20' : ''
-                            }`}
+                            } ${day.isTestDay ? 'bg-muted-foreground/10' : day.isEventDay ? 'bg-destructive/10' : ''}`}
                             onClick={() => handleIntensityClick(day.date, intensityLevel)}
                           >
-                            {isSelected ? '●' : day.isTrainingDay ? '○' : '·'}
+                            {isSelected ? '●' : '○'}
                           </TableCell>
                         );
                       })}
