@@ -29,13 +29,13 @@ export function ExerciseSelectionCell({ cellData, onUpdate }: ExerciseSelectionC
   };
 
   return (
-    <div className="space-y-2 min-h-[60px] flex flex-col">
+    <div className="space-y-3 min-h-[60px] flex flex-col">
       {/* Add exercise button - always at top for visibility */}
       <Button
         size="sm"
         variant="ghost"
         onClick={() => setIsLibraryOpen(true)}
-        className="h-6 w-full text-xs text-muted-foreground border-dashed border shrink-0"
+        className="h-6 w-full text-xs text-muted-foreground border-dashed border shrink-0 mt-2"
       >
         <Plus className="h-3 w-3 mr-1" />
         Add exercises

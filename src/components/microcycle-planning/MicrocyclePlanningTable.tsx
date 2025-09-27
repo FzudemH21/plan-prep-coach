@@ -684,7 +684,7 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                     <TableHead 
                       key={column.id} 
                       className={cn(
-                        "text-center min-w-[200px] border-r border-border",
+                        "text-center min-w-[200px] min-h-[120px] border-r border-border",
                         colorClass,
                         column.type === 'mesocycle' ? "text-foreground font-semibold" : "text-foreground"
                       )}
@@ -786,10 +786,10 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
               {hierarchicalMethods.map((categoryGroup) => (
                 <React.Fragment key={categoryGroup.categoryName}>
                   {/* Category Header Row */}
-                  <TableRow className="bg-muted/30 hover:bg-muted/40">
+                  <TableRow className="bg-muted hover:bg-muted/80">
                     <TableCell 
                       colSpan={2} 
-                      className="sticky left-0 bg-muted/30 z-10 border-r-2 border-border"
+                      className="sticky left-0 bg-muted z-20 border-r-2 border-border py-3"
                     >
                       <Button
                         variant="ghost"
@@ -808,7 +808,7 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                     {columnStructure.map((column) => (
                       <TableCell 
                         key={`${categoryGroup.categoryName}-header-${column.id}`}
-                        className="bg-muted/30 border-r border-border"
+                        className="bg-muted border-r border-border py-3"
                       >
                         {/* Empty header cells for category row */}
                       </TableCell>
@@ -821,10 +821,10 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                       {method.categories.length === 0 ? (
                         // If no exercise categories, render one row for the method itself
                         <TableRow key={`${method.id}-main`}>
-                          <TableCell className="sticky left-0 bg-background z-10 border-r-2 border-border w-64 pl-8">
+                          <TableCell className="sticky left-0 bg-background z-15 border-r-2 border-border w-64 pl-8 py-3">
                             <div className="font-medium text-foreground">{method.name}</div>
                           </TableCell>
-                          <TableCell className="sticky left-64 bg-background z-10 border-r-2 border-border w-64">
+                          <TableCell className="sticky left-64 bg-background z-15 border-r-2 border-border w-64 py-3">
                             <div className="text-sm text-muted-foreground">—</div>
                           </TableCell>
                           {columnStructure.map((column) => {
@@ -876,11 +876,11 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                         method.categories.map((categoryName, categoryIndex) => (
                           <TableRow key={`${method.id}-${categoryName}`}>
                             {categoryIndex === 0 && (
-                              <TableCell rowSpan={method.categories.length} className="sticky left-0 bg-background z-10 border-r-2 border-border w-64 pl-8">
+                              <TableCell rowSpan={method.categories.length} className="sticky left-0 bg-background z-15 border-r-2 border-border w-64 pl-8 py-3">
                                 <div className="font-medium text-foreground">{method.name}</div>
                               </TableCell>
                             )}
-                            <TableCell className="sticky left-64 bg-background z-10 border-r-2 border-border w-64">
+                            <TableCell className="sticky left-64 bg-background z-15 border-r-2 border-border w-64 py-3">
                               <div className="text-sm text-muted-foreground">{categoryName}</div>
                             </TableCell>
                             {columnStructure.map((column) => {
