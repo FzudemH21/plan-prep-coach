@@ -1852,28 +1852,27 @@ export default function MesocyclePage() {
           sessionDays.push(sessionDay);
         }
         
-        // Add training days for this microcycle
+        // Add all days for this microcycle
         for (let dayInMicro = 0; dayInMicro < micro.duration; dayInMicro++) {
           const dayDate = new Date(currentDate);
           dayDate.setDate(currentDate.getDate() + dayInMicro);
           
           const dayOfWeek = dayDate.getDay();
+          const dateStr = dayDate.toISOString().split('T')[0];
+          const isTestDay = testDates.some(td => td.toISOString().split('T')[0] === dateStr);
+          const isEventDay = eventDates.some(ed => ed.toISOString().split('T')[0] === dateStr);
+          const isTrainingDay = sessionDays.includes(dayOfWeek);
           
-          if (sessionDays.includes(dayOfWeek)) {
-            const dateStr = dayDate.toISOString().split('T')[0];
-            const isTestDay = testDates.some(td => td.toISOString().split('T')[0] === dateStr);
-            const isEventDay = eventDates.some(ed => ed.toISOString().split('T')[0] === dateStr);
-            
-            days.push({
-              date: dateStr,
-              dayOfWeek,
-              dayName: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dayOfWeek],
-              mesocycleId: meso.id,
-              microcycleId: micro.id,
-              isTestDay,
-              isEventDay
-            });
-          }
+          days.push({
+            date: dateStr,
+            dayOfWeek,
+            dayName: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dayOfWeek],
+            mesocycleId: meso.id,
+            microcycleId: micro.id,
+            isTestDay,
+            isEventDay,
+            isTrainingDay
+          });
         }
         
         currentDate.setDate(currentDate.getDate() + micro.duration);
@@ -2060,8 +2059,8 @@ export default function MesocyclePage() {
                   </TableRow>
                 </TableHeader>
                 
-                <TableBody>
-                  {intensityLevels.map((intensityLevel) => (
+                 <TableBody>
+                  {intensityLevels.slice().reverse().map((intensityLevel) => (
                     <TableRow key={intensityLevel} className="hover:bg-muted/30">
                       <TableCell className={`sticky left-0 bg-background z-10 border-r-2 font-medium ${getIntensityColor(intensityLevel)} text-center`}>
                         {intensityLevel.charAt(0).toUpperCase() + intensityLevel.slice(1).replace('-', ' ')}
@@ -2074,10 +2073,12 @@ export default function MesocyclePage() {
                             key={`${intensityLevel}-${day.date}`}
                             className={`text-center cursor-pointer border-r transition-colors ${
                               isSelected ? getIntensityColor(intensityLevel) : 'hover:bg-muted/50'
-                            } ${day.isTestDay ? 'bg-muted-foreground/10' : day.isEventDay ? 'bg-destructive/10' : ''}`}
+                            } ${day.isTestDay ? 'bg-muted-foreground/10' : day.isEventDay ? 'bg-destructive/10' : ''} ${
+                              !day.isTrainingDay ? 'opacity-40 bg-muted/20' : ''
+                            }`}
                             onClick={() => handleIntensityClick(day.date, intensityLevel)}
                           >
-                            {isSelected ? '●' : '○'}
+                            {isSelected ? '●' : day.isTrainingDay ? '○' : '·'}
                           </TableCell>
                         );
                       })}
@@ -2088,14 +2089,6 @@ export default function MesocyclePage() {
             </div>
           </div>
           
-          {/* Intensity Chart */}
-          <div className="mt-6">
-            <h4 className="font-semibold mb-3">Intensity Progression Chart</h4>
-            <MicrocycleIntensityChart 
-              mesocycles={mesocycles} 
-              onMesocyclesChange={setMesocycles}
-            />
-          </div>
         </div>
       </CardContent>
     </Card>

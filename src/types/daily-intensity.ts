@@ -18,4 +18,5 @@ export interface TrainingDay {
   microcycleId: string;
   isTestDay: boolean;
   isEventDay: boolean;
+  isTrainingDay: boolean;
 }
