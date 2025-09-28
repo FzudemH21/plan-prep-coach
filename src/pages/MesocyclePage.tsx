@@ -12,6 +12,7 @@ import { ArrowLeft, ArrowRight, Settings } from 'lucide-react';
 import MesocycleCalendar from '@/components/mesocycle/MesocycleCalendar';
 import { MicrocycleIntensityChart } from '@/components/mesocycle/MicrocycleIntensityChart';
 import IntensityColumn from '@/components/mesocycle/IntensityColumn';
+import IntensityScale from '@/components/mesocycle/IntensityScale';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ExtendedMesocycle, Mesocycle, Microcycle, Plan, Intensity } from '@/features/planner/types';
 import { DailyIntensity, TrainingDay } from '@/types/daily-intensity';
@@ -2230,15 +2231,10 @@ export default function MesocyclePage() {
               {/* Column Chart */}
               <div className="flex items-end">
                 {/* Intensity Scale */}
-                <div className="sticky left-0 bg-background z-20 min-w-[140px] mr-4 flex flex-col justify-end" style={{ height: '280px' }}>
-                  <div className="flex flex-col justify-between h-full py-4">
-                    {intensityLevels.slice().reverse().map((level, index) => (
-                      <div key={level} className={`text-xs text-center py-1 rounded ${getIntensityColor(level)} font-medium`}>
-                        {level.charAt(0).toUpperCase() + level.slice(1).replace('-', ' ')}
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <IntensityScale
+                  intensityLevels={intensityLevels}
+                  getIntensityColor={getIntensityColor}
+                />
 
                 {/* Training Day Columns */}
                 <TooltipProvider>

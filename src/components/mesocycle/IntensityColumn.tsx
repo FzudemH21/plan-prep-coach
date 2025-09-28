@@ -25,52 +25,64 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
   intensityLevels,
   getIntensityColor
 }) => {
+  const chartHeight = 200; // Fixed chart area height
+  
   // Calculate column height based on intensity level
   const calculateColumnHeight = (intensityLevel: IntensityLevel): number => {
-    const intensityIndex = intensityLevels.indexOf(intensityLevel);
-    if (intensityIndex === -1) return 10; // fallback for "off"
-    
-    // Map intensity levels to heights (10% to 100%)
+    // Map intensity levels to heights that align with grid (0% to 100%)
     const heightMappings = {
-      "off": 10,
-      "deload": 15,
+      "off": 0,
+      "deload": 12.5,
       "easy": 25,
-      "easy-moderate": 40,
-      "moderate": 55,
-      "moderate-hard": 70,
-      "hard": 85,
-      "extremely-hard": 100
+      "easy-moderate": 37.5,
+      "moderate": 50,
+      "moderate-hard": 62.5,
+      "hard": 75,
+      "extremely-hard": 87.5
     };
     
-    return heightMappings[intensityLevel] || 10;
+    return heightMappings[intensityLevel] || 0;
   };
 
   const columnHeight = calculateColumnHeight(intensity);
-  const maxHeight = 200; // Maximum height in pixels
-  const actualHeight = (columnHeight / 100) * maxHeight;
+  const actualHeight = (columnHeight / 100) * chartHeight;
 
-  // Handle column click - cycle through intensity levels
+  // Handle column click with precise intensity mapping
   const handleColumnClick = (e: React.MouseEvent) => {
     e.preventDefault();
     
-    // Calculate which intensity level based on click position
     const rect = e.currentTarget.getBoundingClientRect();
     const clickY = rect.bottom - e.clientY; // Distance from bottom
     const clickPercentage = (clickY / rect.height) * 100;
     
-    // Find the closest intensity level based on click position
+    // Map click position to intensity levels based on grid lines
     let targetIntensity: IntensityLevel = "off";
     
-    if (clickPercentage >= 95) targetIntensity = "extremely-hard";
-    else if (clickPercentage >= 80) targetIntensity = "hard";
-    else if (clickPercentage >= 65) targetIntensity = "moderate-hard";
-    else if (clickPercentage >= 50) targetIntensity = "moderate";
-    else if (clickPercentage >= 35) targetIntensity = "easy-moderate";
-    else if (clickPercentage >= 20) targetIntensity = "easy";
-    else if (clickPercentage >= 10) targetIntensity = "deload";
+    if (clickPercentage >= 81.25) targetIntensity = "extremely-hard"; // 87.5% midpoint
+    else if (clickPercentage >= 68.75) targetIntensity = "hard"; // 75% midpoint  
+    else if (clickPercentage >= 56.25) targetIntensity = "moderate-hard"; // 62.5% midpoint
+    else if (clickPercentage >= 43.75) targetIntensity = "moderate"; // 50% midpoint
+    else if (clickPercentage >= 31.25) targetIntensity = "easy-moderate"; // 37.5% midpoint
+    else if (clickPercentage >= 18.75) targetIntensity = "easy"; // 25% midpoint
+    else if (clickPercentage >= 6.25) targetIntensity = "deload"; // 12.5% midpoint
     else targetIntensity = "off";
     
     onIntensityChange(day.date, targetIntensity);
+  };
+
+  // Generate horizontal grid lines
+  const generateGridLines = () => {
+    const gridPercentages = [0, 12.5, 25, 37.5, 50, 62.5, 75, 87.5, 100];
+    return gridPercentages.map((percentage, index) => (
+      <div
+        key={percentage}
+        className="absolute w-full border-t border-border/20"
+        style={{ 
+          bottom: `${percentage}%`,
+          borderStyle: percentage === 0 || percentage === 100 ? 'solid' : 'dashed'
+        }}
+      />
+    ));
   };
 
   // Get border classes for microcycle/mesocycle boundaries
@@ -87,9 +99,9 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
   };
 
   const columnElement = (
-    <div className={`flex flex-col items-center justify-end min-w-[80px] px-1 ${getBorderClasses()}`}>
-      {/* Day header */}
-      <div className={`text-center text-xs mb-2 p-1 rounded w-full ${
+    <div className={`flex flex-col min-w-[80px] px-1 ${getBorderClasses()}`}>
+      {/* Fixed Day header - always at top */}
+      <div className={`text-center text-xs p-1 rounded w-full mb-2 ${
         day.isTestDay ? 'bg-blue-100 border border-blue-300' : 
         day.isEventDay ? 'bg-orange-100 border border-orange-300' : 'bg-primary/10'
       }`}>
@@ -107,16 +119,19 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
         )}
       </div>
       
-      {/* Column container */}
+      {/* Fixed Chart container with grid */}
       <div 
         className="relative cursor-pointer transition-all duration-200 hover:shadow-md w-full"
-        style={{ height: `${maxHeight}px` }}
+        style={{ height: `${chartHeight}px` }}
         onClick={handleColumnClick}
       >
+        {/* Grid lines */}
+        {generateGridLines()}
+        
         {/* Background column (full height, light gray) */}
         <div 
-          className="absolute bottom-0 w-full bg-gray-100 border border-gray-300 rounded-t"
-          style={{ height: `${maxHeight}px` }}
+          className="absolute bottom-0 w-full bg-muted/30 border border-border rounded-t"
+          style={{ height: `${chartHeight}px` }}
         />
         
         {/* Intensity column */}
@@ -132,8 +147,8 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
         <div className="absolute inset-0 bg-black/5 opacity-0 hover:opacity-100 transition-opacity duration-200 rounded-t" />
       </div>
       
-      {/* Intensity label */}
-      <div className="text-xs mt-1 text-center capitalize font-medium">
+      {/* Fixed Intensity label - always at bottom */}
+      <div className="text-xs mt-2 text-center capitalize font-medium">
         {intensity.replace('-', ' ')}
       </div>
     </div>
