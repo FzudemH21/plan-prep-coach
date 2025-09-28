@@ -1927,7 +1927,38 @@ export default function MesocyclePage() {
     );
   };
 
-  // Copy previous week function (enhanced with cross-mesocycle support)
+  // Helper function to get all microcycles in chronological order
+  const getAllMicrocyclesChronologically = () => {
+    const allMicros: Array<{
+      id: string;
+      duration: number;
+      mesocycleId: string;
+      startDate: Date;
+      microcycle: Microcycle;
+    }> = [];
+    
+    mesocycles.forEach(meso => {
+      let mesoStartDate = meso.startDate || planStartDate;
+      let currentDate = mesoStartDate;
+      
+      meso.microcycles.forEach(micro => {
+        allMicros.push({
+          id: micro.id,
+          duration: micro.duration,
+          mesocycleId: meso.id,
+          startDate: new Date(currentDate),
+          microcycle: micro
+        });
+        // Add days for next microcycle start
+        currentDate = new Date(currentDate.getTime() + (micro.duration * 24 * 60 * 60 * 1000));
+      });
+    });
+    
+    // Sort by start date
+    return allMicros.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+  };
+
+  // Copy previous week function (enhanced with automatic cross-mesocycle support)
   const copyPreviousWeek = (microcycleId: string) => {
     const currentMicrocycle = mesocycles.flatMap(m => m.microcycles).find(micro => micro.id === microcycleId);
     if (!currentMicrocycle) return;
@@ -1935,30 +1966,51 @@ export default function MesocyclePage() {
     const microcycleDays = trainingDays.filter(day => day.microcycleId === microcycleId);
     if (microcycleDays.length === 0) return;
     
-    // Find the previous microcycle within the same mesocycle
-    const currentMesoId = microcycleDays[0].mesocycleId;
-    const currentMeso = mesocycles.find(m => m.id === currentMesoId);
-    if (!currentMeso) return;
+    // Get all microcycles in chronological order
+    const chronologicalMicros = getAllMicrocyclesChronologically();
+    const currentIndex = chronologicalMicros.findIndex(m => m.id === microcycleId);
     
-    const currentMicroIndex = currentMeso.microcycles.findIndex(m => m.id === microcycleId);
+    if (currentIndex <= 0) {
+      toast({
+        title: "No previous microcycle",
+        description: "This is the first microcycle in your training plan."
+      });
+      return;
+    }
     
-    if (currentMicroIndex > 0) {
-      // Copy from previous microcycle in same mesocycle
-      const prevMicrocycleId = currentMeso.microcycles[currentMicroIndex - 1].id;
-      const prevMicrocycleDays = trainingDays.filter(day => day.microcycleId === prevMicrocycleId);
-      
-      if (prevMicrocycleDays.length > 0) {
-        copyIntensityPattern(microcycleDays, prevMicrocycleDays, "previous week");
-        return;
+    // Search backwards for the first microcycle with matching duration
+    let compatibleMicro = null;
+    for (let i = currentIndex - 1; i >= 0; i--) {
+      if (chronologicalMicros[i].duration === currentMicrocycle.duration) {
+        compatibleMicro = chronologicalMicros[i];
+        break;
       }
     }
     
-    // If no previous microcycle in same mesocycle, open cross-mesocycle dialog
-    setTargetMicrocycleForCopy({
-      id: microcycleId,
-      duration: currentMicrocycle.duration
-    });
-    setCrossCopyDialogOpen(true);
+    if (!compatibleMicro) {
+      // Only show dialog if no compatible preceding microcycle exists
+      setTargetMicrocycleForCopy({
+        id: microcycleId,
+        duration: currentMicrocycle.duration
+      });
+      setCrossCopyDialogOpen(true);
+      return;
+    }
+    
+    // Copy from the compatible microcycle
+    const sourceDays = trainingDays.filter(day => day.microcycleId === compatibleMicro.id);
+    
+    if (sourceDays.length > 0) {
+      const sourceDescription = compatibleMicro.mesocycleId === microcycleDays[0].mesocycleId 
+        ? "previous week" 
+        : "previous compatible microcycle";
+      copyIntensityPattern(microcycleDays, sourceDays, sourceDescription);
+    } else {
+      toast({
+        title: "No data to copy",
+        description: "The previous compatible microcycle has no intensity data."
+      });
+    }
   };
 
   // Helper function to copy intensity pattern between microcycles
@@ -2067,6 +2119,26 @@ export default function MesocyclePage() {
     return content.length > 0 ? content.join('\n') : '';
   };
 
+  // Helper function to check if a training day is the last day of its microcycle
+  const isLastDayOfMicrocycle = (dayIndex: number): boolean => {
+    if (dayIndex >= trainingDays.length - 1) return true; // Last day overall
+    
+    const currentDay = trainingDays[dayIndex];
+    const nextDay = trainingDays[dayIndex + 1];
+    
+    return currentDay.microcycleId !== nextDay.microcycleId;
+  };
+
+  // Helper function to check if a training day is the last day of its mesocycle
+  const isLastDayOfMesocycle = (dayIndex: number): boolean => {
+    if (dayIndex >= trainingDays.length - 1) return true; // Last day overall
+    
+    const currentDay = trainingDays[dayIndex];
+    const nextDay = trainingDays[dayIndex + 1];
+    
+    return currentDay.mesocycleId !== nextDay.mesocycleId;
+  };
+
   const renderDailyIntensityPlanning = () => (
     <Card>
       <CardHeader>
@@ -2111,7 +2183,7 @@ export default function MesocyclePage() {
                         <TableHead 
                           key={meso.id}
                           colSpan={colSpan}
-                          className={`text-center border-r-2 min-w-[120px] ${getIntensityColor(meso.intensity)} font-semibold`}
+                          className={`text-center border-r-2 min-w-[120px] ${getIntensityColor(meso.intensity)} font-semibold border-r-slate-400`}
                         >
                           {meso.name}
                         </TableHead>
@@ -2130,7 +2202,7 @@ export default function MesocyclePage() {
                           <TableHead 
                             key={micro.id}
                             colSpan={colSpan}
-                            className={`text-center border-r text-xs ${getIntensityColor(micro.intensity)} relative`}
+                            className={`text-center border-r-2 text-xs ${getIntensityColor(micro.intensity)} relative border-r-slate-300`}
                           >
                             <div className="flex items-center justify-center">
                               <span>{micro.name}</span>
@@ -2153,12 +2225,16 @@ export default function MesocyclePage() {
                   {/* Date Headers */}
                   <TableRow className="border-b-2">
                     <TableHead className="sticky left-0 bg-background z-20 border-r-2"></TableHead>
-                    {trainingDays.map((day) => (
+                    {trainingDays.map((day, dayIndex) => (
                       <TableHead 
                         key={day.date}
-                        className={`text-center text-xs min-w-[80px] border-r relative ${
+                        className={`text-center text-xs min-w-[80px] relative ${
                           day.isTestDay ? 'bg-blue-100 border-blue-300' : 
                           day.isEventDay ? 'bg-orange-100 border-orange-300' : 'bg-primary/10'
+                        } ${
+                          isLastDayOfMesocycle(dayIndex) ? 'border-r-2 border-r-slate-400' :
+                          isLastDayOfMicrocycle(dayIndex) ? 'border-r-2 border-r-slate-300' :
+                          'border-r border-r-slate-200'
                         }`}
                       >
                         <div className="p-1">
@@ -2187,14 +2263,23 @@ export default function MesocyclePage() {
                          <TableCell className={`sticky left-0 bg-background z-10 border-r-2 font-medium min-w-[140px] ${getIntensityColor(intensityLevel)} text-center`}>
                            {intensityLevel.charAt(0).toUpperCase() + intensityLevel.slice(1).replace('-', ' ')}
                          </TableCell>
-                          {trainingDays.map((day) => {
+                          {trainingDays.map((day, dayIndex) => {
                             const dayIntensity = dailyIntensityData.find(di => di.date === day.date);
                             const isSelected = dayIntensity?.intensity === intensityLevel;
                             const tooltipContent = getTooltipContent(day);
                             
-                            // Prioritize intensity colors over test/event backgrounds
+                            // Enhanced cell class with microcycle boundary detection
                             const getCellClassName = () => {
-                              let baseClasses = 'text-center cursor-pointer border-r transition-colors relative';
+                              let baseClasses = 'text-center cursor-pointer transition-colors relative';
+                              
+                              // Add microcycle/mesocycle boundary classes
+                              if (isLastDayOfMesocycle(dayIndex)) {
+                                baseClasses += ' border-r-2 border-r-slate-400';
+                              } else if (isLastDayOfMicrocycle(dayIndex)) {
+                                baseClasses += ' border-r-2 border-r-slate-300';
+                              } else {
+                                baseClasses += ' border-r border-r-slate-200';
+                              }
                               
                               if (isSelected) {
                                 // When intensity is selected, use intensity color with subtle borders for test/event indication
@@ -2211,45 +2296,34 @@ export default function MesocyclePage() {
                               return baseClasses;
                             };
 
-                            // Create cell content that can be properly wrapped with tooltip
                             const cellContent = (
-                              <div 
-                                className="w-full h-full flex items-center justify-center p-2"
+                              <TableCell 
+                                className={getCellClassName()}
                                 onClick={() => handleIntensityClick(day.date, intensityLevel)}
                               >
-                                {isSelected ? '●' : '○'}
-                              </div>
+                                <div className="w-full h-full flex items-center justify-center p-2">
+                                  {isSelected ? '●' : '○'}
+                                </div>
+                              </TableCell>
                             );
 
                             // Wrap with tooltip if there are tests or events
                             if (tooltipContent) {
                               return (
-                                <TableCell 
-                                  key={`${intensityLevel}-${day.date}`}
-                                  className={getCellClassName()}
-                                >
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      {cellContent}
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <div className="whitespace-pre-line">
-                                        {tooltipContent}
-                                      </div>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TableCell>
+                                <Tooltip key={`${intensityLevel}-${day.date}`}>
+                                  <TooltipTrigger asChild>
+                                    {cellContent}
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <div className="whitespace-pre-line">
+                                      {tooltipContent}
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
                               );
                             }
 
-                            return (
-                              <TableCell 
-                                key={`${intensityLevel}-${day.date}`}
-                                className={getCellClassName()}
-                              >
-                                {cellContent}
-                              </TableCell>
-                            );
+                            return cellContent;
                          })}
                        </TableRow>
                      ))}
