@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ArrowLeft, ArrowRight, Settings } from 'lucide-react';
 import MesocycleCalendar from '@/components/mesocycle/MesocycleCalendar';
 import { MicrocycleIntensityChart } from '@/components/mesocycle/MicrocycleIntensityChart';
+import IntensityColumn from '@/components/mesocycle/IntensityColumn';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ExtendedMesocycle, Mesocycle, Microcycle, Plan, Intensity } from '@/features/planner/types';
 import { DailyIntensity, TrainingDay } from '@/types/daily-intensity';
@@ -2171,165 +2172,99 @@ export default function MesocyclePage() {
           {/* Horizontal scrollable grid */}
           <div className="border rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
-              <Table className="min-w-full">
-                <TableHeader>
-                  {/* Mesocycle Headers */}
-                  <TableRow>
-                    <TableHead className="sticky left-0 bg-background z-20 border-r-2 min-w-[140px]">Intensity</TableHead>
-                    {mesocycles.map((meso) => {
-                      const mesoTrainingDays = trainingDays.filter(day => day.mesocycleId === meso.id);
-                      const colSpan = mesoTrainingDays.length;
-                      return colSpan > 0 ? (
-                        <TableHead 
-                          key={meso.id}
-                          colSpan={colSpan}
-                          className={`text-center border-r-2 min-w-[120px] ${getIntensityColor(meso.intensity)} font-semibold border-r-slate-400`}
-                        >
-                          {meso.name}
-                        </TableHead>
-                      ) : null;
-                    })}
-                  </TableRow>
-                  
-                  {/* Microcycle Headers */}
-                  <TableRow>
-                    <TableHead className="sticky left-0 bg-background z-20 border-r-2"></TableHead>
-                    {mesocycles.map((meso) => {
-                      return meso.microcycles.map((micro) => {
-                        const microTrainingDays = trainingDays.filter(day => day.microcycleId === micro.id);
-                        const colSpan = microTrainingDays.length;
-                        return colSpan > 0 ? (
-                          <TableHead 
-                            key={micro.id}
-                            colSpan={colSpan}
-                            className={`text-center border-r-2 text-xs ${getIntensityColor(micro.intensity)} relative border-r-slate-300`}
-                          >
-                            <div className="flex items-center justify-center">
-                              <span>{micro.name}</span>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-5 w-5 p-0 ml-1 opacity-70 hover:opacity-100"
-                                onClick={() => copyPreviousWeek(micro.id)}
-                                title="Copy from previous week"
-                              >
-                                📋
-                              </Button>
-                            </div>
-                          </TableHead>
-                        ) : null;
-                      });
-                    })}
-                  </TableRow>
-                  
-                  {/* Date Headers */}
-                  <TableRow className="border-b-2">
-                    <TableHead className="sticky left-0 bg-background z-20 border-r-2"></TableHead>
-                    {trainingDays.map((day, dayIndex) => (
-                      <TableHead 
-                        key={day.date}
-                        className={`text-center text-xs min-w-[80px] relative ${
-                          day.isTestDay ? 'bg-blue-100 border-blue-300' : 
-                          day.isEventDay ? 'bg-orange-100 border-orange-300' : 'bg-primary/10'
-                        } ${
-                          isLastDayOfMesocycle(dayIndex) ? 'border-r-2 border-r-slate-400' :
-                          isLastDayOfMicrocycle(dayIndex) ? 'border-r-2 border-r-slate-300' :
-                          'border-r border-r-slate-200'
-                        }`}
+              {/* Mesocycle Headers */}
+              <div className="flex mb-4">
+                <div className="sticky left-0 bg-background z-20 min-w-[140px] mr-4">
+                  <div className="text-sm font-semibold text-center py-2">Daily Intensity</div>
+                </div>
+                <div className="flex">
+                  {mesocycles.map((meso) => {
+                    const mesoTrainingDays = trainingDays.filter(day => day.mesocycleId === meso.id);
+                    const width = mesoTrainingDays.length * 80; // 80px per day
+                    return mesoTrainingDays.length > 0 ? (
+                      <div 
+                        key={meso.id}
+                        className={`text-center border-r-2 font-semibold border-r-slate-400 ${getIntensityColor(meso.intensity)} py-2`}
+                        style={{ width: `${width}px` }}
                       >
-                        <div className="p-1">
-                          <div className="font-medium">{format(new Date(day.date), 'MMM d')}</div>
-                          <div className="text-xs">{day.dayName}</div>
-                          {day.isTestDay && (
-                            <div className="text-xs font-semibold text-blue-700 bg-blue-200 rounded px-1 mt-1">
-                              TEST
-                            </div>
-                          )}
-                          {day.isEventDay && (
-                            <div className="text-xs font-semibold text-orange-700 bg-orange-200 rounded px-1 mt-1">
-                              EVENT
-                            </div>
-                          )}
+                        {meso.name}
+                      </div>
+                    ) : null;
+                  })}
+                </div>
+              </div>
+
+              {/* Microcycle Headers with Copy Buttons */}
+              <div className="flex mb-4">
+                <div className="sticky left-0 bg-background z-20 min-w-[140px] mr-4"></div>
+                <div className="flex">
+                  {mesocycles.map((meso) => {
+                    return meso.microcycles.map((micro) => {
+                      const microTrainingDays = trainingDays.filter(day => day.microcycleId === micro.id);
+                      const width = microTrainingDays.length * 80; // 80px per day
+                      return microTrainingDays.length > 0 ? (
+                        <div 
+                          key={micro.id}
+                          className={`text-center border-r-2 text-xs border-r-slate-300 ${getIntensityColor(micro.intensity)} py-1 px-2`}
+                          style={{ width: `${width}px` }}
+                        >
+                          <div className="flex items-center justify-center">
+                            <span>{micro.name}</span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-5 w-5 p-0 ml-1 opacity-70 hover:opacity-100"
+                              onClick={() => copyPreviousWeek(micro.id)}
+                              title="Copy from previous week"
+                            >
+                              📋
+                            </Button>
+                          </div>
                         </div>
-                       </TableHead>
-                     ))}
-                   </TableRow>
-                 </TableHeader>
-                
-                 <TooltipProvider>
-                   <TableBody>
-                     {intensityLevels.slice().reverse().map((intensityLevel) => (
-                       <TableRow key={intensityLevel} className="hover:bg-muted/30">
-                         <TableCell className={`sticky left-0 bg-background z-10 border-r-2 font-medium min-w-[140px] ${getIntensityColor(intensityLevel)} text-center`}>
-                           {intensityLevel.charAt(0).toUpperCase() + intensityLevel.slice(1).replace('-', ' ')}
-                         </TableCell>
-                          {trainingDays.map((day, dayIndex) => {
-                            const dayIntensity = dailyIntensityData.find(di => di.date === day.date);
-                            const isSelected = dayIntensity?.intensity === intensityLevel;
-                            const tooltipContent = getTooltipContent(day);
-                            
-                            // Enhanced cell class with microcycle boundary detection
-                            const getCellClassName = () => {
-                              let baseClasses = 'text-center cursor-pointer transition-colors relative';
-                              
-                              // Add microcycle/mesocycle boundary classes
-                              if (isLastDayOfMesocycle(dayIndex)) {
-                                baseClasses += ' border-r-2 border-r-slate-400';
-                              } else if (isLastDayOfMicrocycle(dayIndex)) {
-                                baseClasses += ' border-r-2 border-r-slate-300';
-                              } else {
-                                baseClasses += ' border-r border-r-slate-200';
-                              }
-                              
-                              if (isSelected) {
-                                // When intensity is selected, use intensity color with subtle borders for test/event indication
-                                baseClasses += ` ${getIntensityColor(intensityLevel)}`;
-                                if (day.isTestDay) baseClasses += ' border-blue-400 border-2';
-                                if (day.isEventDay) baseClasses += ' border-orange-400 border-2';
-                              } else {
-                                // When no intensity selected, show test/event backgrounds as before
-                                baseClasses += ' hover:bg-muted/50';
-                                if (day.isTestDay) baseClasses += ' bg-blue-50 border-blue-200';
-                                else if (day.isEventDay) baseClasses += ' bg-orange-50 border-orange-200';
-                              }
-                              
-                              return baseClasses;
-                            };
+                      ) : null;
+                    });
+                  })}
+                </div>
+              </div>
 
-                            const cellContent = (
-                              <TableCell 
-                                className={getCellClassName()}
-                                onClick={() => handleIntensityClick(day.date, intensityLevel)}
-                              >
-                                <div className="w-full h-full flex items-center justify-center p-2">
-                                  {isSelected ? '●' : '○'}
-                                </div>
-                              </TableCell>
-                            );
+              {/* Column Chart */}
+              <div className="flex items-end">
+                {/* Intensity Scale */}
+                <div className="sticky left-0 bg-background z-20 min-w-[140px] mr-4 flex flex-col justify-end" style={{ height: '280px' }}>
+                  <div className="flex flex-col justify-between h-full py-4">
+                    {intensityLevels.slice().reverse().map((level, index) => (
+                      <div key={level} className={`text-xs text-center py-1 rounded ${getIntensityColor(level)} font-medium`}>
+                        {level.charAt(0).toUpperCase() + level.slice(1).replace('-', ' ')}
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-                            // Wrap with tooltip if there are tests or events
-                            if (tooltipContent) {
-                              return (
-                                <Tooltip key={`${intensityLevel}-${day.date}`}>
-                                  <TooltipTrigger asChild>
-                                    {cellContent}
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <div className="whitespace-pre-line">
-                                      {tooltipContent}
-                                    </div>
-                                  </TooltipContent>
-                                </Tooltip>
-                              );
-                            }
-
-                            return cellContent;
-                         })}
-                       </TableRow>
-                     ))}
-                   </TableBody>
-                 </TooltipProvider>
-              </Table>
+                {/* Training Day Columns */}
+                <TooltipProvider>
+                  <div className="flex items-end">
+                    {trainingDays.map((day, dayIndex) => {
+                      const dayIntensity = dailyIntensityData.find(di => di.date === day.date);
+                      const intensity = dayIntensity?.intensity || "off";
+                      const tooltipContent = getTooltipContent(day);
+                      
+                      return (
+                        <IntensityColumn
+                          key={day.date}
+                          day={day}
+                          intensity={intensity}
+                          onIntensityChange={handleIntensityClick}
+                          tooltipContent={tooltipContent}
+                          isLastDayOfMicrocycle={isLastDayOfMicrocycle(dayIndex)}
+                          isLastDayOfMesocycle={isLastDayOfMesocycle(dayIndex)}
+                          intensityLevels={intensityLevels}
+                          getIntensityColor={getIntensityColor}
+                        />
+                      );
+                    })}
+                  </div>
+                </TooltipProvider>
+              </div>
             </div>
           </div>
           
