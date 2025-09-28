@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2 } from "lucide-react";
 import { format, addWeeks, differenceInWeeks } from "date-fns";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
@@ -1960,6 +1961,46 @@ export default function MesocyclePage() {
     });
   };
 
+  // Helper functions for tooltips
+  const getTestsForDate = (date: string): string[] => {
+    if (!macrocycleData?.subGoals) return [];
+    
+    return macrocycleData.subGoals
+      .filter((subGoal: any) => 
+        subGoal.testDates?.some((testDate: string) => 
+          new Date(testDate).toISOString().split('T')[0] === date
+        )
+      )
+      .map((subGoal: any) => subGoal.description || subGoal.testMethod || 'Test');
+  };
+
+  const getEventsForDate = (date: string): string[] => {
+    if (!macrocycleData?.events) return [];
+    
+    return macrocycleData.events
+      .filter((event: any) => 
+        event.eventDates?.some((eventDate: string) => 
+          new Date(eventDate).toISOString().split('T')[0] === date
+        )
+      )
+      .map((event: any) => event.name || 'Event');
+  };
+
+  const getTooltipContent = (day: TrainingDay): string => {
+    const tests = getTestsForDate(day.date);
+    const events = getEventsForDate(day.date);
+    
+    const content: string[] = [];
+    if (tests.length > 0) {
+      content.push(`Tests: ${tests.join(', ')}`);
+    }
+    if (events.length > 0) {
+      content.push(`Events: ${events.join(', ')}`);
+    }
+    
+    return content.length > 0 ? content.join('\n') : '';
+  };
+
   const renderDailyIntensityPlanning = () => (
     <Card>
       <CardHeader>
@@ -2079,20 +2120,59 @@ export default function MesocyclePage() {
                       <TableCell className={`sticky left-0 bg-background z-10 border-r-2 font-medium min-w-[140px] ${getIntensityColor(intensityLevel)} text-center`}>
                         {intensityLevel.charAt(0).toUpperCase() + intensityLevel.slice(1).replace('-', ' ')}
                       </TableCell>
-                      {trainingDays.map((day) => {
-                        const dayIntensity = dailyIntensityData.find(di => di.date === day.date);
-                        const isSelected = dayIntensity?.intensity === intensityLevel;
-                        return (
-                          <TableCell 
-                            key={`${intensityLevel}-${day.date}`}
-                            className={`text-center cursor-pointer border-r transition-colors relative ${
-                              isSelected ? getIntensityColor(intensityLevel) : 'hover:bg-muted/50'
-                            } ${day.isTestDay ? 'bg-blue-50 border-blue-200' : day.isEventDay ? 'bg-orange-50 border-orange-200' : ''}`}
-                            onClick={() => handleIntensityClick(day.date, intensityLevel)}
-                          >
-                            {isSelected ? '●' : '○'}
-                          </TableCell>
-                        );
+                       {trainingDays.map((day) => {
+                         const dayIntensity = dailyIntensityData.find(di => di.date === day.date);
+                         const isSelected = dayIntensity?.intensity === intensityLevel;
+                         const tooltipContent = getTooltipContent(day);
+                         
+                         // Prioritize intensity colors over test/event backgrounds
+                         const getCellClassName = () => {
+                           let baseClasses = 'text-center cursor-pointer border-r transition-colors relative';
+                           
+                           if (isSelected) {
+                             // When intensity is selected, use intensity color with subtle borders for test/event indication
+                             baseClasses += ` ${getIntensityColor(intensityLevel)}`;
+                             if (day.isTestDay) baseClasses += ' border-blue-400 border-2';
+                             if (day.isEventDay) baseClasses += ' border-orange-400 border-2';
+                           } else {
+                             // When no intensity selected, show test/event backgrounds as before
+                             baseClasses += ' hover:bg-muted/50';
+                             if (day.isTestDay) baseClasses += ' bg-blue-50 border-blue-200';
+                             else if (day.isEventDay) baseClasses += ' bg-orange-50 border-orange-200';
+                           }
+                           
+                           return baseClasses;
+                         };
+
+                         const cellContent = (
+                           <TableCell 
+                             key={`${intensityLevel}-${day.date}`}
+                             className={getCellClassName()}
+                             onClick={() => handleIntensityClick(day.date, intensityLevel)}
+                           >
+                             {isSelected ? '●' : '○'}
+                           </TableCell>
+                         );
+
+                         // Wrap with tooltip if there are tests or events
+                         if (tooltipContent) {
+                           return (
+                             <TooltipProvider key={`${intensityLevel}-${day.date}`}>
+                               <Tooltip>
+                                 <TooltipTrigger asChild>
+                                   {cellContent}
+                                 </TooltipTrigger>
+                                 <TooltipContent>
+                                   <div className="whitespace-pre-line">
+                                     {tooltipContent}
+                                   </div>
+                                 </TooltipContent>
+                               </Tooltip>
+                             </TooltipProvider>
+                           );
+                         }
+
+                         return cellContent;
                       })}
                     </TableRow>
                   ))}
