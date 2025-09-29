@@ -2091,7 +2091,7 @@ export default function MesocyclePage() {
           new Date(testDate).toISOString().split('T')[0] === date
         )
       )
-      .map((subGoal: any) => subGoal.description || subGoal.testMethod || 'Test');
+      .map((subGoal: any) => subGoal.testMethod || subGoal.description || 'Test');
   };
 
   const getEventsForDate = (date: string): string[] => {
