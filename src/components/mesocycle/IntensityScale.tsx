@@ -12,20 +12,20 @@ const IntensityScale: React.FC<IntensityScaleProps> = ({
 }) => {
   const chartHeight = 200; // Match IntensityColumn height
   
-  // Intensity levels with their positions (matching IntensityColumn)
+  // Intensity levels centered within their grid bands
   const intensityData = [
-    { level: "extremely-hard", position: 87.5, label: "Extremely Hard" },
-    { level: "hard", position: 75, label: "Hard" },
-    { level: "moderate-hard", position: 62.5, label: "Moderate Hard" },
-    { level: "moderate", position: 50, label: "Moderate" },
-    { level: "easy-moderate", position: 37.5, label: "Easy Moderate" },
-    { level: "easy", position: 25, label: "Easy" },
-    { level: "deload", position: 12.5, label: "Deload" },
-    { level: "off", position: 0, label: "Off" }
+    { level: "extremely-hard", position: 81.25, label: "Extremely Hard" }, // Centered between 75-87.5
+    { level: "hard", position: 68.75, label: "Hard" }, // Centered between 62.5-75
+    { level: "moderate-hard", position: 56.25, label: "Moderate Hard" }, // Centered between 50-62.5
+    { level: "moderate", position: 43.75, label: "Moderate" }, // Centered between 37.5-50
+    { level: "easy-moderate", position: 31.25, label: "Easy Moderate" }, // Centered between 25-37.5
+    { level: "easy", position: 18.75, label: "Easy" }, // Centered between 12.5-25
+    { level: "deload", position: 6.25, label: "Deload" }, // Centered between 0-12.5
+    { level: "off", position: 0, label: "Off" } // Keep at bottom
   ];
 
   return (
-    <div className="flex flex-col items-end mr-4">
+    <div className="w-[140px] flex flex-col items-end">
       {/* Scale header - spacer to align with day headers */}
       <div className="text-xs p-1 mb-2 h-[3.5rem] flex items-end justify-end">
         <span className="font-medium text-muted-foreground">Intensity</span>

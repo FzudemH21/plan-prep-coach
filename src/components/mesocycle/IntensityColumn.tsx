@@ -27,18 +27,18 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
 }) => {
   const chartHeight = 200; // Fixed chart area height
   
-  // Calculate column height based on intensity level
+  // Calculate column height based on intensity level (centered within grid bands)
   const calculateColumnHeight = (intensityLevel: IntensityLevel): number => {
-    // Map intensity levels to heights that align with grid (0% to 100%)
+    // Map intensity levels to band centers for proper visual alignment
     const heightMappings = {
       "off": 0,
-      "deload": 12.5,
-      "easy": 25,
-      "easy-moderate": 37.5,
-      "moderate": 50,
-      "moderate-hard": 62.5,
-      "hard": 75,
-      "extremely-hard": 87.5
+      "deload": 6.25,
+      "easy": 18.75,
+      "easy-moderate": 31.25,
+      "moderate": 43.75,
+      "moderate-hard": 56.25,
+      "hard": 68.75,
+      "extremely-hard": 81.25
     };
     
     return heightMappings[intensityLevel] || 0;
@@ -76,7 +76,7 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
     return gridPercentages.map((percentage, index) => (
       <div
         key={percentage}
-        className="absolute w-full border-t border-border/60"
+        className="absolute w-full border-t border-border/50 z-10"
         style={{ 
           bottom: `${percentage}%`,
           borderStyle: percentage === 0 || percentage === 100 ? 'solid' : 'dashed'
@@ -87,12 +87,12 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
 
   // Get border classes for microcycle/mesocycle boundaries
   const getBorderClasses = () => {
-    let borderClasses = 'border-r-2 border-r-border/30';
+    let borderClasses = 'border-r border-border/60'; // Default day border
     
     if (isLastDayOfMesocycle) {
-      borderClasses = 'border-r-4 border-r-border/80';
+      borderClasses = 'border-r-4 border-border/80';
     } else if (isLastDayOfMicrocycle) {
-      borderClasses = 'border-r-3 border-r-border/60';
+      borderClasses = 'border-r-2 border-border/70';
     }
     
     return borderClasses;
@@ -119,7 +119,7 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
   );
 
   const columnElement = (
-    <div className={`flex flex-col min-w-[80px] px-1 box-border ${getBorderClasses()}`}>
+    <div className={`flex flex-col w-20 box-border ${getBorderClasses()}`}>
       {/* Day header */}
       {dayHeader}
       
@@ -129,18 +129,18 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
         style={{ height: `${chartHeight}px` }}
         onClick={handleColumnClick}
       >
-        {/* Grid lines */}
-        {generateGridLines()}
-        
         {/* Background column (full height, light gray) */}
         <div 
-          className="absolute bottom-0 w-full bg-muted/30 border border-border rounded-t"
+          className="absolute bottom-0 w-full bg-muted/30 border border-border rounded-t z-0"
           style={{ height: `${chartHeight}px` }}
         />
         
+        {/* Grid lines */}
+        {generateGridLines()}
+        
         {/* Intensity column */}
         <div 
-          className={`absolute bottom-0 w-full rounded-t transition-all duration-300 border-2 ${getIntensityColor(intensity)} ${
+          className={`absolute bottom-0 w-full rounded-t transition-all duration-300 border-2 z-20 ${getIntensityColor(intensity)} ${
             day.isTestDay ? 'border-blue-400' :
             day.isEventDay ? 'border-orange-400' : 'border-transparent'
           }`}
@@ -148,11 +148,11 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
         />
         
         {/* Hover overlay */}
-        <div className="absolute inset-0 bg-black/5 opacity-0 hover:opacity-100 transition-opacity duration-200 rounded-t" />
+        <div className="absolute inset-0 bg-black/5 opacity-0 hover:opacity-100 transition-opacity duration-200 rounded-t z-30" />
       </div>
       
-      {/* Fixed Intensity label - always at bottom */}
-      <div className="text-xs mt-2 text-center capitalize font-medium">
+      {/* Fixed Intensity label - prevent width changes */}
+      <div className="text-xs mt-2 text-center capitalize font-medium w-20 whitespace-nowrap overflow-hidden text-ellipsis">
         {intensity.replace('-', ' ')}
       </div>
     </div>
@@ -161,7 +161,7 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
   // Wrap with tooltip if there are tests or events
   if (tooltipContent) {
     return (
-      <div className={`flex flex-col min-w-[80px] px-1 box-border ${getBorderClasses()}`}>
+      <div className={`flex flex-col w-20 box-border ${getBorderClasses()}`}>
         {/* Day header with tooltip */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -182,18 +182,18 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
           style={{ height: `${chartHeight}px` }}
           onClick={handleColumnClick}
         >
-          {/* Grid lines */}
-          {generateGridLines()}
-          
           {/* Background column (full height, light gray) */}
           <div 
-            className="absolute bottom-0 w-full bg-muted/30 border border-border rounded-t"
+            className="absolute bottom-0 w-full bg-muted/30 border border-border rounded-t z-0"
             style={{ height: `${chartHeight}px` }}
           />
           
+          {/* Grid lines */}
+          {generateGridLines()}
+          
           {/* Intensity column */}
           <div 
-            className={`absolute bottom-0 w-full rounded-t transition-all duration-300 border-2 ${getIntensityColor(intensity)} ${
+            className={`absolute bottom-0 w-full rounded-t transition-all duration-300 border-2 z-20 ${getIntensityColor(intensity)} ${
               day.isTestDay ? 'border-blue-400' :
               day.isEventDay ? 'border-orange-400' : 'border-transparent'
             }`}
@@ -201,11 +201,11 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
           />
           
           {/* Hover overlay */}
-          <div className="absolute inset-0 bg-black/5 opacity-0 hover:opacity-100 transition-opacity duration-200 rounded-t" />
+          <div className="absolute inset-0 bg-black/5 opacity-0 hover:opacity-100 transition-opacity duration-200 rounded-t z-30" />
         </div>
         
-        {/* Fixed Intensity label - always at bottom */}
-        <div className="text-xs mt-2 text-center capitalize font-medium">
+        {/* Fixed Intensity label - prevent width changes */}
+        <div className="text-xs mt-2 text-center capitalize font-medium w-20 whitespace-nowrap overflow-hidden text-ellipsis">
           {intensity.replace('-', ' ')}
         </div>
       </div>
