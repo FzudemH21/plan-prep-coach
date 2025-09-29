@@ -27,18 +27,18 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
 }) => {
   const chartHeight = 200; // Fixed chart area height
   
-  // Calculate column height based on intensity level (centered within grid bands)
+  // Calculate column height based on intensity level (full band heights)
   const calculateColumnHeight = (intensityLevel: IntensityLevel): number => {
-    // Map intensity levels to band centers for proper visual alignment
+    // Map intensity levels to full band heights
     const heightMappings = {
-      "off": 0,
-      "deload": 6.25,
-      "easy": 18.75,
-      "easy-moderate": 31.25,
-      "moderate": 43.75,
-      "moderate-hard": 56.25,
-      "hard": 68.75,
-      "extremely-hard": 81.25
+      "off": 12.5,
+      "deload": 25,
+      "easy": 37.5,
+      "easy-moderate": 50,
+      "moderate": 62.5,
+      "moderate-hard": 75,
+      "hard": 87.5,
+      "extremely-hard": 100
     };
     
     return heightMappings[intensityLevel] || 0;
@@ -55,16 +55,16 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
     const clickY = rect.bottom - e.clientY; // Distance from bottom
     const clickPercentage = (clickY / rect.height) * 100;
     
-    // Map click position to intensity levels based on grid lines
+    // Map click position to intensity levels based on full band ranges
     let targetIntensity: IntensityLevel = "off";
     
-    if (clickPercentage >= 81.25) targetIntensity = "extremely-hard"; // 87.5% midpoint
-    else if (clickPercentage >= 68.75) targetIntensity = "hard"; // 75% midpoint  
-    else if (clickPercentage >= 56.25) targetIntensity = "moderate-hard"; // 62.5% midpoint
-    else if (clickPercentage >= 43.75) targetIntensity = "moderate"; // 50% midpoint
-    else if (clickPercentage >= 31.25) targetIntensity = "easy-moderate"; // 37.5% midpoint
-    else if (clickPercentage >= 18.75) targetIntensity = "easy"; // 25% midpoint
-    else if (clickPercentage >= 6.25) targetIntensity = "deload"; // 12.5% midpoint
+    if (clickPercentage >= 87.5) targetIntensity = "extremely-hard";
+    else if (clickPercentage >= 75) targetIntensity = "hard";
+    else if (clickPercentage >= 62.5) targetIntensity = "moderate-hard";
+    else if (clickPercentage >= 50) targetIntensity = "moderate";
+    else if (clickPercentage >= 37.5) targetIntensity = "easy-moderate";
+    else if (clickPercentage >= 25) targetIntensity = "easy";
+    else if (clickPercentage >= 12.5) targetIntensity = "deload";
     else targetIntensity = "off";
     
     onIntensityChange(day.date, targetIntensity);

@@ -12,16 +12,16 @@ const IntensityScale: React.FC<IntensityScaleProps> = ({
 }) => {
   const chartHeight = 200; // Match IntensityColumn height
   
-  // Intensity levels centered within their grid bands
+  // Intensity levels as full bands
   const intensityData = [
-    { level: "extremely-hard", position: 81.25, label: "Extremely Hard" }, // Centered between 75-87.5
-    { level: "hard", position: 68.75, label: "Hard" }, // Centered between 62.5-75
-    { level: "moderate-hard", position: 56.25, label: "Moderate Hard" }, // Centered between 50-62.5
-    { level: "moderate", position: 43.75, label: "Moderate" }, // Centered between 37.5-50
-    { level: "easy-moderate", position: 31.25, label: "Easy Moderate" }, // Centered between 25-37.5
-    { level: "easy", position: 18.75, label: "Easy" }, // Centered between 12.5-25
-    { level: "deload", position: 6.25, label: "Deload" }, // Centered between 0-12.5
-    { level: "off", position: 0, label: "Off" } // Keep at bottom
+    { level: "extremely-hard", bottom: 87.5, top: 100, label: "Extremely Hard" },
+    { level: "hard", bottom: 75, top: 87.5, label: "Hard" },
+    { level: "moderate-hard", bottom: 62.5, top: 75, label: "Moderate Hard" },
+    { level: "moderate", bottom: 50, top: 62.5, label: "Moderate" },
+    { level: "easy-moderate", bottom: 37.5, top: 50, label: "Easy Moderate" },
+    { level: "easy", bottom: 25, top: 37.5, label: "Easy" },
+    { level: "deload", bottom: 12.5, top: 25, label: "Deload" },
+    { level: "off", bottom: 0, top: 12.5, label: "Off" }
   ];
 
   return (
@@ -48,18 +48,21 @@ const IntensityScale: React.FC<IntensityScaleProps> = ({
           />
         ))}
         
-        {/* Intensity level labels */}
+        {/* Intensity level bands */}
         {intensityData.map((item) => (
           <div
             key={item.level}
             className="absolute right-0 flex items-center"
-            style={{ bottom: `${item.position}%`, transform: 'translateY(50%)' }}
+            style={{ 
+              bottom: `${item.bottom}%`, 
+              height: `${item.top - item.bottom}%`
+            }}
           >
-            <span className="text-xs font-medium text-right pr-2 min-w-20">
+            <span className="text-xs font-medium text-right pr-2 min-w-20 text-foreground">
               {item.label}
             </span>
             <div 
-              className={`w-3 h-3 rounded-sm border ${getIntensityColor(item.level as IntensityLevel)}`}
+              className={`w-6 h-full ${getIntensityColor(item.level as IntensityLevel)} flex items-center justify-center`}
             />
           </div>
         ))}
