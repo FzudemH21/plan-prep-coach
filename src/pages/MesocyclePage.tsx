@@ -2173,9 +2173,9 @@ export default function MesocyclePage() {
           
           {/* Horizontal scrollable grid with sticky intensity scale */}
           <div className="border rounded-lg overflow-hidden">
-            <div className="flex">
+            <div className="flex overflow-hidden">
               {/* Sticky Intensity Scale Column */}
-              <div className="sticky left-0 z-20 bg-background border-r">
+              <div className="sticky left-0 z-20 bg-background border-r flex-shrink-0">
                 <IntensityScale
                   intensityLevels={intensityLevels}
                   getIntensityColor={getIntensityColor}
@@ -2183,8 +2183,8 @@ export default function MesocyclePage() {
               </div>
 
               {/* Scrollable Content Area */}
-              <ScrollArea className="w-full">
-                <div className="min-w-max">
+              <ScrollArea className="flex-1 min-w-0">
+                <div className="min-w-max" style={{ minWidth: `${trainingDays.length * 80}px` }}>
                   {/* Mesocycle Headers */}
                   <div className="flex mb-4">
                     <div className="flex">
@@ -2261,7 +2261,7 @@ export default function MesocyclePage() {
                     </div>
                   </TooltipProvider>
                 </div>
-                <ScrollBar orientation="horizontal" />
+                 <ScrollBar orientation="horizontal" />
               </ScrollArea>
             </div>
           </div>
