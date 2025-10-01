@@ -10,6 +10,7 @@ interface MicrocycleIntensityColumnProps {
   isLastMicrocycleOfMesocycle: boolean;
   intensityLevels: IntensityLevel[];
   getIntensityColor: (intensity: IntensityLevel) => string;
+  onCopy?: (mesocycleId: string, microcycleId: string) => void;
 }
 
 const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
@@ -19,7 +20,8 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
   onIntensityChange,
   isLastMicrocycleOfMesocycle,
   intensityLevels,
-  getIntensityColor
+  getIntensityColor,
+  onCopy
 }) => {
   const chartHeight = 200; // Fixed chart area height
   
@@ -97,6 +99,18 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
       <div className="relative h-16 text-center text-xs rounded w-full mb-2 flex flex-col items-center justify-center bg-primary/10">
         <div className="font-medium">{microcycle.name}</div>
         <div className="text-xs">{microcycle.duration}d</div>
+        {onCopy && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onCopy(mesocycleId, microcycle.id);
+            }}
+            className="absolute top-1 right-1 text-xs opacity-60 hover:opacity-100 transition-opacity"
+            title="Copy from previous microcycle"
+          >
+            📋
+          </button>
+        )}
       </div>
       
       {/* Fixed Chart container with grid */}

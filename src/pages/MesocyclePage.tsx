@@ -29,6 +29,7 @@ import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CrossMesocycleCopyDialog } from "@/components/ui/cross-mesocycle-copy-dialog";
+import { CrossMesocycleMicrocycleCopyDialog } from "@/components/ui/cross-mesocycle-microcycle-copy-dialog";
 import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2 } from "lucide-react";
 import { format, addWeeks, differenceInWeeks } from "date-fns";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
@@ -69,6 +70,10 @@ export default function MesocyclePage() {
   // Cross-mesocycle copy dialog state
   const [crossCopyDialogOpen, setCrossCopyDialogOpen] = useState(false);
   const [targetMicrocycleForCopy, setTargetMicrocycleForCopy] = useState<{id: string, duration: number} | null>(null);
+  
+  // Microcycle copy dialog state (for step 2)
+  const [microcycleCopyDialogOpen, setMicrocycleCopyDialogOpen] = useState(false);
+  const [targetMicrocycleForIntensityCopy, setTargetMicrocycleForIntensityCopy] = useState<{mesocycleId: string, microcycleId: string, duration: number} | null>(null);
   
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
@@ -554,6 +559,126 @@ export default function MesocyclePage() {
     );
   };
 
+  // Handle copying microcycle intensity
+  const copyMicrocycleIntensity = (targetMesocycleId: string, targetMicrocycleId: string) => {
+    const targetMicrocycle = mesocycles
+      .find(m => m.id === targetMesocycleId)
+      ?.microcycles.find(micro => micro.id === targetMicrocycleId);
+    
+    if (!targetMicrocycle) return;
+    
+    // Get all microcycles in chronological order
+    const allMicrocycles: Array<{
+      mesocycleId: string;
+      microcycle: Microcycle;
+      index: number;
+    }> = [];
+    
+    mesocycles.forEach(meso => {
+      meso.microcycles.forEach(micro => {
+        allMicrocycles.push({
+          mesocycleId: meso.id,
+          microcycle: micro,
+          index: allMicrocycles.length
+        });
+      });
+    });
+    
+    const currentIndex = allMicrocycles.findIndex(
+      m => m.mesocycleId === targetMesocycleId && m.microcycle.id === targetMicrocycleId
+    );
+    
+    if (currentIndex <= 0) {
+      toast({
+        title: "No previous microcycle",
+        description: "This is the first microcycle in your training plan."
+      });
+      return;
+    }
+    
+    // Search backwards for a compatible microcycle (same duration)
+    let compatibleMicro = null;
+    for (let i = currentIndex - 1; i >= 0; i--) {
+      if (allMicrocycles[i].microcycle.duration === targetMicrocycle.duration) {
+        compatibleMicro = allMicrocycles[i];
+        break;
+      }
+    }
+    
+    if (!compatibleMicro) {
+      // Open dialog to select from other mesocycles
+      setTargetMicrocycleForIntensityCopy({
+        mesocycleId: targetMesocycleId,
+        microcycleId: targetMicrocycleId,
+        duration: targetMicrocycle.duration
+      });
+      setMicrocycleCopyDialogOpen(true);
+      return;
+    }
+    
+    // Copy intensity from compatible microcycle
+    handleMicrocycleIntensityChange(
+      targetMesocycleId, 
+      targetMicrocycleId, 
+      compatibleMicro.microcycle.intensity
+    );
+    
+    toast({
+      title: "Intensity copied",
+      description: `Copied intensity from ${compatibleMicro.microcycle.name}`
+    });
+  };
+
+  // Handle cross-mesocycle microcycle copy
+  const handleCrossMesocycleMicrocycleCopy = (sourceMesocycleId: string, sourceMicrocycleId: string) => {
+    if (!targetMicrocycleForIntensityCopy) return;
+    
+    // Find source microcycle in current mesocycles
+    let sourceIntensity: IntensityLevel = "moderate";
+    
+    const currentSourceMeso = mesocycles.find(m => m.id === sourceMesocycleId);
+    if (currentSourceMeso) {
+      const sourceMicro = currentSourceMeso.microcycles.find(m => m.id === sourceMicrocycleId);
+      if (sourceMicro) {
+        sourceIntensity = sourceMicro.intensity;
+      }
+    } else {
+      // Try to find in localStorage
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('macrocycleData')) {
+          try {
+            const data = JSON.parse(localStorage.getItem(key) || '{}');
+            if (data.mesocycles) {
+              const foundMeso = data.mesocycles.find((m: any) => m.id === sourceMesocycleId);
+              if (foundMeso) {
+                const foundMicro = foundMeso.microcycles?.find((m: any) => m.id === sourceMicrocycleId);
+                if (foundMicro) {
+                  sourceIntensity = foundMicro.intensity || "moderate";
+                  break;
+                }
+              }
+            }
+          } catch (e) {
+            // Skip invalid entries
+          }
+        }
+      }
+    }
+    
+    // Apply the intensity
+    handleMicrocycleIntensityChange(
+      targetMicrocycleForIntensityCopy.mesocycleId,
+      targetMicrocycleForIntensityCopy.microcycleId,
+      sourceIntensity
+    );
+    
+    toast({
+      title: "Intensity copied",
+      description: "Microcycle intensity has been copied successfully."
+    });
+  };
+
   const renderIntensitySetup = () => (
     <Card>
       <CardHeader>
@@ -571,6 +696,7 @@ export default function MesocyclePage() {
           intensityLevels={intensityLevels}
           getIntensityColor={getIntensityColor}
           onMicrocycleIntensityChange={handleMicrocycleIntensityChange}
+          onCopyMicrocycle={copyMicrocycleIntensity}
         />
       </CardContent>
     </Card>
@@ -2360,6 +2486,17 @@ export default function MesocyclePage() {
           targetMicrocycleDuration={targetMicrocycleForCopy?.duration || 7}
           currentMesocycles={mesocycles}
           onCopy={handleCrossMesocycleCopy}
+        />
+        
+        {/* Microcycle Intensity Copy Dialog */}
+        <CrossMesocycleMicrocycleCopyDialog
+          open={microcycleCopyDialogOpen}
+          onOpenChange={setMicrocycleCopyDialogOpen}
+          targetMesocycleId={targetMicrocycleForIntensityCopy?.mesocycleId || ''}
+          targetMicrocycleId={targetMicrocycleForIntensityCopy?.microcycleId || ''}
+          targetMicrocycleDuration={targetMicrocycleForIntensityCopy?.duration || 7}
+          currentMesocycles={mesocycles}
+          onCopy={handleCrossMesocycleMicrocycleCopy}
         />
     </div>
   );

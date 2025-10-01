@@ -10,13 +10,15 @@ interface MicrocycleIntensityPlanningProps {
   intensityLevels: IntensityLevel[];
   getIntensityColor: (intensity: IntensityLevel) => string;
   onMicrocycleIntensityChange: (mesocycleId: string, microcycleId: string, intensity: IntensityLevel) => void;
+  onCopyMicrocycle?: (mesocycleId: string, microcycleId: string) => void;
 }
 
 const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = ({
   mesocycles,
   intensityLevels,
   getIntensityColor,
-  onMicrocycleIntensityChange
+  onMicrocycleIntensityChange,
+  onCopyMicrocycle
 }) => {
   return (
     <div className="space-y-4">
@@ -69,6 +71,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                         isLastMicrocycleOfMesocycle={isLastMicrocycle}
                         intensityLevels={intensityLevels}
                         getIntensityColor={getIntensityColor}
+                        onCopy={onCopyMicrocycle}
                       />
                     );
                   });
