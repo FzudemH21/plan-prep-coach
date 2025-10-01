@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, ArrowRight, Settings } from 'lucide-react';
 import MesocycleCalendar from '@/components/mesocycle/MesocycleCalendar';
-import { MicrocycleIntensityChart } from '@/components/mesocycle/MicrocycleIntensityChart';
+import MicrocycleIntensityPlanning from '@/components/mesocycle/MicrocycleIntensityPlanning';
 import IntensityColumn from '@/components/mesocycle/IntensityColumn';
 import IntensityScale from '@/components/mesocycle/IntensityScale';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -537,21 +537,40 @@ export default function MesocyclePage() {
     </Card>
   );
 
+  // Handler for microcycle intensity changes
+  const handleMicrocycleIntensityChange = (mesocycleId: string, microcycleId: string, intensity: IntensityLevel) => {
+    setMesocycles(prev => 
+      prev.map(meso => {
+        if (meso.id === mesocycleId) {
+          return {
+            ...meso,
+            microcycles: meso.microcycles.map(micro => 
+              micro.id === microcycleId ? { ...micro, intensity } : micro
+            )
+          };
+        }
+        return meso;
+      })
+    );
+  };
+
   const renderIntensitySetup = () => (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
           <Target className="h-5 w-5" />
-          <span>Microcycle Intensity Configuration</span>
+          <span>Step 2: Microcycle Intensity Configuration</span>
         </CardTitle>
         <CardDescription>
-          Configure the training intensity for each week (microcycle) within your mesocycles using the interactive chart.
+          Configure the training intensity for each microcycle within your mesocycles. Click on any column to adjust the intensity.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <MicrocycleIntensityChart 
+        <MicrocycleIntensityPlanning 
           mesocycles={mesocycles}
-          onMesocyclesChange={setMesocycles}
+          intensityLevels={intensityLevels}
+          getIntensityColor={getIntensityColor}
+          onMicrocycleIntensityChange={handleMicrocycleIntensityChange}
         />
       </CardContent>
     </Card>
