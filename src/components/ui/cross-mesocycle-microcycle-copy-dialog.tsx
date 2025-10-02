@@ -15,58 +15,52 @@ interface CrossMesocycleMicrocycleCopyDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   targetMesocycleId: string;
-  targetMicrocycleId: string;
-  targetMicrocycleDuration: number;
+  targetMicrocycleStructure: Array<{id: string, duration: number}>;
   currentMesocycles: ExtendedMesocycle[];
-  onCopy: (sourceMesocycleId: string, sourceMicrocycleId: string) => void;
+  onCopy: (sourceMesocycleId: string) => void;
 }
 
-interface AvailableMicrocycle {
+interface AvailableMesocycle {
   mesocycleId: string;
   mesocycleName: string;
-  microcycles: {
-    id: string;
-    name: string;
-    duration: number;
-  }[];
+  microcycleCount: number;
 }
 
 export function CrossMesocycleMicrocycleCopyDialog({
   open,
   onOpenChange,
   targetMesocycleId,
-  targetMicrocycleId,
-  targetMicrocycleDuration,
+  targetMicrocycleStructure,
   currentMesocycles,
   onCopy
 }: CrossMesocycleMicrocycleCopyDialogProps) {
-  const [availableMicrocycles, setAvailableMicrocycles] = useState<AvailableMicrocycle[]>([]);
+  const [availableMesocycles, setAvailableMesocycles] = useState<AvailableMesocycle[]>([]);
   const [selectedMesocycleId, setSelectedMesocycleId] = useState<string>('');
-  const [selectedMicrocycleId, setSelectedMicrocycleId] = useState<string>('');
 
-  // Load available microcycles from current mesocycles and localStorage
+  // Load available mesocycles from current mesocycles and localStorage
   useEffect(() => {
     if (!open) return;
     
-    const loadAvailableMicrocycles = () => {
-      const microcycles: AvailableMicrocycle[] = [];
+    const loadAvailableMesocycles = () => {
+      const mesocycles: AvailableMesocycle[] = [];
+      
+      // Helper to check if microcycle structure matches
+      const structureMatches = (candidate: any) => {
+        if (!candidate.microcycles || candidate.microcycles.length !== targetMicrocycleStructure.length) {
+          return false;
+        }
+        return candidate.microcycles.every((micro: any, idx: number) => 
+          micro.duration === targetMicrocycleStructure[idx].duration
+        );
+      };
       
       // Add current mesocycles
       currentMesocycles.forEach(meso => {
-        const compatibleMicrocycles = meso.microcycles.filter(micro => 
-          micro.duration === targetMicrocycleDuration && 
-          !(meso.id === targetMesocycleId && micro.id === targetMicrocycleId)
-        );
-        
-        if (compatibleMicrocycles.length > 0) {
-          microcycles.push({
+        if (meso.id !== targetMesocycleId && structureMatches(meso)) {
+          mesocycles.push({
             mesocycleId: meso.id,
             mesocycleName: meso.name,
-            microcycles: compatibleMicrocycles.map(micro => ({
-              id: micro.id,
-              name: micro.name,
-              duration: micro.duration
-            }))
+            microcycleCount: meso.microcycles.length
           });
         }
       });
@@ -84,21 +78,13 @@ export function CrossMesocycleMicrocycleCopyDialog({
                   return;
                 }
                 
-                const compatibleMicrocycles = (meso.microcycles || []).filter((micro: any) => 
-                  micro.duration === targetMicrocycleDuration
-                );
-                
-                if (compatibleMicrocycles.length > 0) {
-                  const existingMeso = microcycles.find(m => m.mesocycleId === meso.id);
+                if (structureMatches(meso)) {
+                  const existingMeso = mesocycles.find(m => m.mesocycleId === meso.id);
                   if (!existingMeso) {
-                    microcycles.push({
+                    mesocycles.push({
                       mesocycleId: meso.id,
                       mesocycleName: meso.name || `Mesocycle from ${key}`,
-                      microcycles: compatibleMicrocycles.map((micro: any) => ({
-                        id: micro.id,
-                        name: micro.name,
-                        duration: micro.duration
-                      }))
+                      microcycleCount: meso.microcycles?.length || 0
                     });
                   }
                 }
@@ -110,44 +96,39 @@ export function CrossMesocycleMicrocycleCopyDialog({
         }
       }
       
-      setAvailableMicrocycles(microcycles);
+      setAvailableMesocycles(mesocycles);
     };
     
-    loadAvailableMicrocycles();
-  }, [open, currentMesocycles, targetMesocycleId, targetMicrocycleId, targetMicrocycleDuration]);
-
-  const selectedMesocycle = availableMicrocycles.find(m => m.mesocycleId === selectedMesocycleId);
-  const compatibleMicrocycles = selectedMesocycle?.microcycles || [];
+    loadAvailableMesocycles();
+  }, [open, currentMesocycles, targetMesocycleId, targetMicrocycleStructure]);
 
   const handleCopy = () => {
-    if (selectedMesocycleId && selectedMicrocycleId) {
-      onCopy(selectedMesocycleId, selectedMicrocycleId);
+    if (selectedMesocycleId) {
+      onCopy(selectedMesocycleId);
       onOpenChange(false);
       setSelectedMesocycleId('');
-      setSelectedMicrocycleId('');
     }
   };
 
   const handleCancel = () => {
     onOpenChange(false);
     setSelectedMesocycleId('');
-    setSelectedMicrocycleId('');
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Copy Microcycle Intensity</DialogTitle>
+          <DialogTitle>Copy Mesocycle Intensity Setup</DialogTitle>
           <DialogDescription>
-            Copy intensity from another microcycle with the same duration ({targetMicrocycleDuration} days).
+            Copy intensity setup from another mesocycle with the same microcycle structure ({targetMicrocycleStructure.length} microcycles).
           </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4">
-          {availableMicrocycles.length === 0 ? (
+          {availableMesocycles.length === 0 ? (
             <div className="text-center py-4 text-muted-foreground">
-              No compatible microcycles found. Only microcycles with {targetMicrocycleDuration} days can be copied.
+              No compatible mesocycles found. Only mesocycles with the same microcycle structure can be copied.
             </div>
           ) : (
             <>
@@ -158,32 +139,14 @@ export function CrossMesocycleMicrocycleCopyDialog({
                     <SelectValue placeholder="Select a mesocycle" />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableMicrocycles.map(meso => (
+                    {availableMesocycles.map(meso => (
                       <SelectItem key={meso.mesocycleId} value={meso.mesocycleId}>
-                        {meso.mesocycleName} ({meso.microcycles.length} compatible microcycles)
+                        {meso.mesocycleName} ({meso.microcycleCount} microcycles)
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              
-              {selectedMesocycleId && (
-                <div className="space-y-2">
-                  <Label htmlFor="source-microcycle">Source Microcycle</Label>
-                  <Select value={selectedMicrocycleId} onValueChange={setSelectedMicrocycleId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a microcycle" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {compatibleMicrocycles.map(micro => (
-                        <SelectItem key={micro.id} value={micro.id}>
-                          {micro.name} ({micro.duration} days)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
               
               <div className="flex justify-end space-x-2 pt-4">
                 <Button variant="outline" onClick={handleCancel}>
@@ -191,9 +154,9 @@ export function CrossMesocycleMicrocycleCopyDialog({
                 </Button>
                 <Button 
                   onClick={handleCopy}
-                  disabled={!selectedMesocycleId || !selectedMicrocycleId}
+                  disabled={!selectedMesocycleId}
                 >
-                  Copy Intensity
+                  Copy Intensity Setup
                 </Button>
               </div>
             </>

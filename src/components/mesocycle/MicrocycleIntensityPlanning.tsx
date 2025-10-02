@@ -10,7 +10,7 @@ interface MicrocycleIntensityPlanningProps {
   intensityLevels: IntensityLevel[];
   getIntensityColor: (intensity: IntensityLevel) => string;
   onMicrocycleIntensityChange: (mesocycleId: string, microcycleId: string, intensity: IntensityLevel) => void;
-  onCopyMicrocycle?: (mesocycleId: string, microcycleId: string) => void;
+  onCopyMesocycle?: (mesocycleId: string) => void;
 }
 
 const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = ({
@@ -18,7 +18,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
   intensityLevels,
   getIntensityColor,
   onMicrocycleIntensityChange,
-  onCopyMicrocycle
+  onCopyMesocycle
 }) => {
   return (
     <div className="space-y-4">
@@ -36,10 +36,22 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                 return meso.microcycles.length > 0 ? (
                   <div 
                     key={meso.id}
-                    className={`text-center border-r-2 font-semibold border-r-slate-400 ${getIntensityColor(meso.intensity)} py-2`}
+                    className={`relative text-center border-r-2 font-semibold border-r-slate-400 ${getIntensityColor(meso.intensity)} py-2`}
                     style={{ width: `${width}px` }}
                   >
                     {meso.name}
+                    {onCopyMesocycle && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onCopyMesocycle(meso.id);
+                        }}
+                        className="absolute top-1 right-1 text-xs opacity-60 hover:opacity-100 transition-opacity"
+                        title="Copy from previous mesocycle"
+                      >
+                        📋
+                      </button>
+                    )}
                   </div>
                 ) : null;
               })}
@@ -71,7 +83,6 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                         isLastMicrocycleOfMesocycle={isLastMicrocycle}
                         intensityLevels={intensityLevels}
                         getIntensityColor={getIntensityColor}
-                        onCopy={onCopyMicrocycle}
                       />
                     );
                   });

@@ -71,9 +71,9 @@ export default function MesocyclePage() {
   const [crossCopyDialogOpen, setCrossCopyDialogOpen] = useState(false);
   const [targetMicrocycleForCopy, setTargetMicrocycleForCopy] = useState<{id: string, duration: number} | null>(null);
   
-  // Microcycle copy dialog state (for step 2)
-  const [microcycleCopyDialogOpen, setMicrocycleCopyDialogOpen] = useState(false);
-  const [targetMicrocycleForIntensityCopy, setTargetMicrocycleForIntensityCopy] = useState<{mesocycleId: string, microcycleId: string, duration: number} | null>(null);
+  // Mesocycle intensity copy dialog state (for step 2)
+  const [mesocycleCopyDialogOpen, setMesocycleCopyDialogOpen] = useState(false);
+  const [targetMesocycleForIntensityCopy, setTargetMesocycleForIntensityCopy] = useState<{mesocycleId: string, microcycleStructure: Array<{id: string, duration: number}>} | null>(null);
   
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
@@ -559,90 +559,84 @@ export default function MesocyclePage() {
     );
   };
 
-  // Handle copying microcycle intensity
-  const copyMicrocycleIntensity = (targetMesocycleId: string, targetMicrocycleId: string) => {
-    const targetMicrocycle = mesocycles
-      .find(m => m.id === targetMesocycleId)
-      ?.microcycles.find(micro => micro.id === targetMicrocycleId);
+  // Handle copying mesocycle intensity setup
+  const copyMesocycleIntensity = (targetMesocycleId: string) => {
+    const targetMesocycle = mesocycles.find(m => m.id === targetMesocycleId);
     
-    if (!targetMicrocycle) return;
+    if (!targetMesocycle || targetMesocycle.microcycles.length === 0) return;
     
-    // Get all microcycles in chronological order
-    const allMicrocycles: Array<{
-      mesocycleId: string;
-      microcycle: Microcycle;
-      index: number;
-    }> = [];
+    // Find the index of the target mesocycle
+    const targetIndex = mesocycles.findIndex(m => m.id === targetMesocycleId);
     
-    mesocycles.forEach(meso => {
-      meso.microcycles.forEach(micro => {
-        allMicrocycles.push({
-          mesocycleId: meso.id,
-          microcycle: micro,
-          index: allMicrocycles.length
-        });
-      });
-    });
-    
-    const currentIndex = allMicrocycles.findIndex(
-      m => m.mesocycleId === targetMesocycleId && m.microcycle.id === targetMicrocycleId
-    );
-    
-    if (currentIndex <= 0) {
+    if (targetIndex <= 0) {
       toast({
-        title: "No previous microcycle",
-        description: "This is the first microcycle in your training plan."
+        title: "No previous mesocycle",
+        description: "This is the first mesocycle in your training plan."
       });
       return;
     }
     
-    // Search backwards for a compatible microcycle (same duration)
-    let compatibleMicro = null;
-    for (let i = currentIndex - 1; i >= 0; i--) {
-      if (allMicrocycles[i].microcycle.duration === targetMicrocycle.duration) {
-        compatibleMicro = allMicrocycles[i];
-        break;
+    // Search backwards for a compatible mesocycle (same microcycle structure)
+    let compatibleMesocycle = null;
+    for (let i = targetIndex - 1; i >= 0; i--) {
+      const candidate = mesocycles[i];
+      
+      // Check if microcycle structure matches (same number and durations)
+      if (candidate.microcycles.length === targetMesocycle.microcycles.length) {
+        const structureMatches = candidate.microcycles.every((micro, idx) => 
+          micro.duration === targetMesocycle.microcycles[idx].duration
+        );
+        
+        if (structureMatches) {
+          compatibleMesocycle = candidate;
+          break;
+        }
       }
     }
     
-    if (!compatibleMicro) {
+    if (!compatibleMesocycle) {
       // Open dialog to select from other mesocycles
-      setTargetMicrocycleForIntensityCopy({
+      setTargetMesocycleForIntensityCopy({
         mesocycleId: targetMesocycleId,
-        microcycleId: targetMicrocycleId,
-        duration: targetMicrocycle.duration
+        microcycleStructure: targetMesocycle.microcycles.map(m => ({
+          id: m.id,
+          duration: m.duration
+        }))
       });
-      setMicrocycleCopyDialogOpen(true);
+      setMesocycleCopyDialogOpen(true);
       return;
     }
     
-    // Copy intensity from compatible microcycle
-    handleMicrocycleIntensityChange(
-      targetMesocycleId, 
-      targetMicrocycleId, 
-      compatibleMicro.microcycle.intensity
+    // Copy intensities from all microcycles
+    setMesocycles(prev => 
+      prev.map(meso => {
+        if (meso.id === targetMesocycleId) {
+          return {
+            ...meso,
+            microcycles: meso.microcycles.map((micro, idx) => ({
+              ...micro,
+              intensity: compatibleMesocycle.microcycles[idx].intensity
+            }))
+          };
+        }
+        return meso;
+      })
     );
     
     toast({
-      title: "Intensity copied",
-      description: `Copied intensity from ${compatibleMicro.microcycle.name}`
+      title: "Mesocycle intensity copied",
+      description: `Copied intensity setup from ${compatibleMesocycle.name}`
     });
   };
 
-  // Handle cross-mesocycle microcycle copy
-  const handleCrossMesocycleMicrocycleCopy = (sourceMesocycleId: string, sourceMicrocycleId: string) => {
-    if (!targetMicrocycleForIntensityCopy) return;
+  // Handle cross-mesocycle intensity copy for Step 2
+  const handleCrossMesocycleIntensityCopy = (sourceMesocycleId: string) => {
+    if (!targetMesocycleForIntensityCopy) return;
     
-    // Find source microcycle in current mesocycles
-    let sourceIntensity: IntensityLevel = "moderate";
+    // Find source mesocycle in current mesocycles
+    let sourceMesocycle = mesocycles.find(m => m.id === sourceMesocycleId);
     
-    const currentSourceMeso = mesocycles.find(m => m.id === sourceMesocycleId);
-    if (currentSourceMeso) {
-      const sourceMicro = currentSourceMeso.microcycles.find(m => m.id === sourceMicrocycleId);
-      if (sourceMicro) {
-        sourceIntensity = sourceMicro.intensity;
-      }
-    } else {
+    if (!sourceMesocycle) {
       // Try to find in localStorage
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -650,14 +644,8 @@ export default function MesocyclePage() {
           try {
             const data = JSON.parse(localStorage.getItem(key) || '{}');
             if (data.mesocycles) {
-              const foundMeso = data.mesocycles.find((m: any) => m.id === sourceMesocycleId);
-              if (foundMeso) {
-                const foundMicro = foundMeso.microcycles?.find((m: any) => m.id === sourceMicrocycleId);
-                if (foundMicro) {
-                  sourceIntensity = foundMicro.intensity || "moderate";
-                  break;
-                }
-              }
+              sourceMesocycle = data.mesocycles.find((m: any) => m.id === sourceMesocycleId);
+              if (sourceMesocycle) break;
             }
           } catch (e) {
             // Skip invalid entries
@@ -666,16 +654,27 @@ export default function MesocyclePage() {
       }
     }
     
-    // Apply the intensity
-    handleMicrocycleIntensityChange(
-      targetMicrocycleForIntensityCopy.mesocycleId,
-      targetMicrocycleForIntensityCopy.microcycleId,
-      sourceIntensity
+    if (!sourceMesocycle || !sourceMesocycle.microcycles) return;
+    
+    // Copy intensities from all microcycles
+    setMesocycles(prev => 
+      prev.map(meso => {
+        if (meso.id === targetMesocycleForIntensityCopy.mesocycleId) {
+          return {
+            ...meso,
+            microcycles: meso.microcycles.map((micro, idx) => ({
+              ...micro,
+              intensity: sourceMesocycle.microcycles[idx]?.intensity || micro.intensity
+            }))
+          };
+        }
+        return meso;
+      })
     );
     
     toast({
-      title: "Intensity copied",
-      description: "Microcycle intensity has been copied successfully."
+      title: "Mesocycle intensity copied",
+      description: "Intensity setup has been copied successfully."
     });
   };
 
@@ -696,7 +695,7 @@ export default function MesocyclePage() {
           intensityLevels={intensityLevels}
           getIntensityColor={getIntensityColor}
           onMicrocycleIntensityChange={handleMicrocycleIntensityChange}
-          onCopyMicrocycle={copyMicrocycleIntensity}
+          onCopyMesocycle={copyMesocycleIntensity}
         />
       </CardContent>
     </Card>
@@ -2488,15 +2487,14 @@ export default function MesocyclePage() {
           onCopy={handleCrossMesocycleCopy}
         />
         
-        {/* Microcycle Intensity Copy Dialog */}
+        {/* Mesocycle Intensity Copy Dialog */}
         <CrossMesocycleMicrocycleCopyDialog
-          open={microcycleCopyDialogOpen}
-          onOpenChange={setMicrocycleCopyDialogOpen}
-          targetMesocycleId={targetMicrocycleForIntensityCopy?.mesocycleId || ''}
-          targetMicrocycleId={targetMicrocycleForIntensityCopy?.microcycleId || ''}
-          targetMicrocycleDuration={targetMicrocycleForIntensityCopy?.duration || 7}
+          open={mesocycleCopyDialogOpen}
+          onOpenChange={setMesocycleCopyDialogOpen}
+          targetMesocycleId={targetMesocycleForIntensityCopy?.mesocycleId || ''}
+          targetMicrocycleStructure={targetMesocycleForIntensityCopy?.microcycleStructure || []}
           currentMesocycles={mesocycles}
-          onCopy={handleCrossMesocycleMicrocycleCopy}
+          onCopy={handleCrossMesocycleIntensityCopy}
         />
     </div>
   );
