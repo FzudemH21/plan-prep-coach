@@ -2,16 +2,23 @@ import React, { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { X, Plus } from 'lucide-react';
+import { X, Plus, Copy } from 'lucide-react';
 import { CellData, ExerciseSelection, ExerciseLibraryType } from '@/types/microcycle-planning';
 import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
 
 interface ExerciseSelectionCellProps {
   cellData: CellData;
   onUpdate: (data: Partial<CellData>) => void;
+  onCopy?: () => void;
+  hasPreviousExercises?: boolean;
 }
 
-export function ExerciseSelectionCell({ cellData, onUpdate }: ExerciseSelectionCellProps) {
+export function ExerciseSelectionCell({ 
+  cellData, 
+  onUpdate, 
+  onCopy,
+  hasPreviousExercises = false 
+}: ExerciseSelectionCellProps) {
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
 
   const addExercise = (exercise: ExerciseSelection) => {
@@ -30,16 +37,29 @@ export function ExerciseSelectionCell({ cellData, onUpdate }: ExerciseSelectionC
 
   return (
     <div className="space-y-3 min-h-[60px] flex flex-col">
-      {/* Add exercise button - always at top for visibility */}
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={() => setIsLibraryOpen(true)}
-        className="h-6 w-full text-xs text-muted-foreground border-dashed border shrink-0 mt-2"
-      >
-        <Plus className="h-3 w-3 mr-1" />
-        Add exercises
-      </Button>
+      {/* Action buttons - always at top for visibility */}
+      <div className="flex gap-1 shrink-0 mt-2">
+        {hasPreviousExercises && onCopy && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onCopy}
+            className="h-6 flex-1 text-xs text-muted-foreground border-dashed border"
+          >
+            <Copy className="h-3 w-3 mr-1" />
+            Copy
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => setIsLibraryOpen(true)}
+          className="h-6 flex-1 text-xs text-muted-foreground border-dashed border"
+        >
+          <Plus className="h-3 w-3 mr-1" />
+          Add exercises
+        </Button>
+      </div>
 
       {/* Selected exercises */}
       <div className="space-y-1 flex-1">

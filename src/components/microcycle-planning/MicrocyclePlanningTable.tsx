@@ -7,7 +7,9 @@ import { ChevronDown, ChevronRight, Link, Unlink } from 'lucide-react';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useAthleticismData } from '@/hooks/useAthleticismData';
+import { useToast } from '@/hooks/use-toast';
 import { ExerciseSelectionCell } from './ExerciseSelectionCell';
+import { ExerciseCopyDialog } from './ExerciseCopyDialog';
 import { 
   TrainingMethodWithCategories,
   MethodCategory,
@@ -25,12 +27,24 @@ interface MicrocyclePlanningTableProps {
 export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: MicrocyclePlanningTableProps) {
   const { data: toolboxData } = useToolboxData();
   const { data: athleticismData } = useAthleticismData();
+  const { toast } = useToast();
   const [planningState, setPlanningState] = useState<MicrocyclePlanningState>({
     cellData: {},
     splitStates: {},
     microcycleGroups: {}
   });
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [copyDialogState, setCopyDialogState] = useState<{
+    isOpen: boolean;
+    methodId: string;
+    categoryName: string | undefined;
+    targetColumnId: string;
+  }>({
+    isOpen: false,
+    methodId: '',
+    categoryName: undefined,
+    targetColumnId: '',
+  });
 
   // Helper function for string normalization
   const normalizeForComparison = (str: string): string => {
@@ -533,12 +547,173 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
     };
   };
 
+  // Check if there are exercises in any previous column for this method
+  const hasPreviousExercisesInMethod = (
+    methodId: string, 
+    categoryName: string | undefined, 
+    currentColumnIndex: number
+  ): boolean => {
+    // Check all previous columns
+    for (let i = 0; i < currentColumnIndex; i++) {
+      const column = columnStructure[i];
+      if (column.type === 'link-area') continue;
+      
+      const cellId = getCellId(methodId, categoryName, column.id);
+      const cell = planningState.cellData[cellId];
+      
+      if (cell && cell.exercises.length > 0) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // Copy exercises from previous column or open dialog
+  const copyExercisesWithinMethod = (
+    methodId: string, 
+    categoryName: string | undefined, 
+    targetColumnId: string
+  ) => {
+    const targetColumnIndex = columnStructure.findIndex(col => col.id === targetColumnId);
+    if (targetColumnIndex === -1) return;
+
+    // Find the most recent previous column with exercises
+    let sourceColumnId: string | null = null;
+    for (let i = targetColumnIndex - 1; i >= 0; i--) {
+      const column = columnStructure[i];
+      if (column.type === 'link-area') continue;
+      
+      const cellId = getCellId(methodId, categoryName, column.id);
+      const cell = planningState.cellData[cellId];
+      
+      if (cell && cell.exercises.length > 0) {
+        sourceColumnId = column.id;
+        break;
+      }
+    }
+
+    if (sourceColumnId) {
+      // Copy exercises immediately
+      const sourceCellId = getCellId(methodId, categoryName, sourceColumnId);
+      const sourceCell = planningState.cellData[sourceCellId];
+      
+      if (sourceCell && sourceCell.exercises.length > 0) {
+        const targetCellId = getCellId(methodId, categoryName, targetColumnId);
+        
+        // Create new exercise selections with new IDs
+        const copiedExercises = sourceCell.exercises.map(ex => ({
+          ...ex,
+          id: `${ex.exerciseId}-${Date.now()}-${Math.random()}`
+        }));
+        
+        updateCellData(targetCellId, {
+          exercises: copiedExercises
+        });
+
+        // Get column labels for toast
+        const sourceColumn = columnStructure.find(col => col.id === sourceColumnId);
+        const targetColumn = columnStructure.find(col => col.id === targetColumnId);
+        
+        let sourceLabel = '';
+        let targetLabel = '';
+        
+        if (sourceColumn) {
+          if (sourceColumn.type === 'mesocycle') {
+            sourceLabel = sourceColumn.mesocycleName;
+          } else if (sourceColumn.type === 'microcycle') {
+            sourceLabel = `${sourceColumn.mesocycleName} - ${sourceColumn.microcycleName}`;
+          } else if (sourceColumn.type === 'microcycle-group') {
+            sourceLabel = `${sourceColumn.mesocycleName} - ${sourceColumn.groupName}`;
+          }
+        }
+        
+        if (targetColumn) {
+          if (targetColumn.type === 'mesocycle') {
+            targetLabel = targetColumn.mesocycleName;
+          } else if (targetColumn.type === 'microcycle') {
+            targetLabel = `${targetColumn.mesocycleName} - ${targetColumn.microcycleName}`;
+          } else if (targetColumn.type === 'microcycle-group') {
+            targetLabel = `${targetColumn.mesocycleName} - ${targetColumn.groupName}`;
+          }
+        }
+
+        toast({
+          title: 'Exercises copied',
+          description: `Copied ${copiedExercises.length} exercise${copiedExercises.length !== 1 ? 's' : ''} from ${sourceLabel} to ${targetLabel}`,
+        });
+      }
+    } else {
+      // No previous exercises found, open dialog for manual selection
+      setCopyDialogState({
+        isOpen: true,
+        methodId,
+        categoryName,
+        targetColumnId,
+      });
+    }
+  };
+
+  // Handle copy from dialog selection
+  const handleCopyFromDialog = (sourceColumnId: string) => {
+    const { methodId, categoryName, targetColumnId } = copyDialogState;
+    
+    const sourceCellId = getCellId(methodId, categoryName, sourceColumnId);
+    const sourceCell = planningState.cellData[sourceCellId];
+    
+    if (sourceCell && sourceCell.exercises.length > 0) {
+      const targetCellId = getCellId(methodId, categoryName, targetColumnId);
+      
+      // Create new exercise selections with new IDs
+      const copiedExercises = sourceCell.exercises.map(ex => ({
+        ...ex,
+        id: `${ex.exerciseId}-${Date.now()}-${Math.random()}`
+      }));
+      
+      updateCellData(targetCellId, {
+        exercises: copiedExercises
+      });
+
+      // Get column labels for toast
+      const sourceColumn = columnStructure.find(col => col.id === sourceColumnId);
+      const targetColumn = columnStructure.find(col => col.id === targetColumnId);
+      
+      let sourceLabel = '';
+      let targetLabel = '';
+      
+      if (sourceColumn) {
+        if (sourceColumn.type === 'mesocycle') {
+          sourceLabel = sourceColumn.mesocycleName;
+        } else if (sourceColumn.type === 'microcycle') {
+          sourceLabel = `${sourceColumn.mesocycleName} - ${sourceColumn.microcycleName}`;
+        } else if (sourceColumn.type === 'microcycle-group') {
+          sourceLabel = `${sourceColumn.mesocycleName} - ${sourceColumn.groupName}`;
+        }
+      }
+      
+      if (targetColumn) {
+        if (targetColumn.type === 'mesocycle') {
+          targetLabel = targetColumn.mesocycleName;
+        } else if (targetColumn.type === 'microcycle') {
+          targetLabel = `${targetColumn.mesocycleName} - ${targetColumn.microcycleName}`;
+        } else if (targetColumn.type === 'microcycle-group') {
+          targetLabel = `${targetColumn.mesocycleName} - ${targetColumn.groupName}`;
+        }
+      }
+
+      toast({
+        title: 'Exercises copied',
+        description: `Copied ${copiedExercises.length} exercise${copiedExercises.length !== 1 ? 's' : ''} from ${sourceLabel} to ${targetLabel}`,
+      });
+    }
+  };
+
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle>Microcycle Exercise Planning</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <>
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle>Microcycle Exercise Planning</CardTitle>
+        </CardHeader>
+        <CardContent>
         <div className="overflow-x-auto">
           <div className="min-w-full">
             <Table className="min-w-[1200px]">
@@ -863,10 +1038,12 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                                 key={`${method.id}-main-${column.id}`} 
                                 className={cn("p-2 border-r border-border", colorClass)}
                               >
-                                <ExerciseSelectionCell
-                                  cellData={getCellData(method.id, undefined, column.id)}
-                                  onUpdate={(newData) => updateCellData(getCellId(method.id, undefined, column.id), newData)}
-                                />
+                                 <ExerciseSelectionCell
+                                   cellData={getCellData(method.id, undefined, column.id)}
+                                   onUpdate={(newData) => updateCellData(getCellId(method.id, undefined, column.id), newData)}
+                                   onCopy={() => copyExercisesWithinMethod(method.id, undefined, column.id)}
+                                   hasPreviousExercises={hasPreviousExercisesInMethod(method.id, undefined, columnStructure.findIndex(col => col.id === column.id))}
+                                 />
                               </TableCell>
                             );
                           })}
@@ -919,10 +1096,12 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                                   key={`${method.id}-${categoryName}-${column.id}`} 
                                   className={cn("p-2 border-r border-border", colorClass)}
                                 >
-                                  <ExerciseSelectionCell
-                                    cellData={getCellData(method.id, categoryName, column.id)}
-                                    onUpdate={(newData) => updateCellData(getCellId(method.id, categoryName, column.id), newData)}
-                                  />
+                                   <ExerciseSelectionCell
+                                     cellData={getCellData(method.id, categoryName, column.id)}
+                                     onUpdate={(newData) => updateCellData(getCellId(method.id, categoryName, column.id), newData)}
+                                     onCopy={() => copyExercisesWithinMethod(method.id, categoryName, column.id)}
+                                     hasPreviousExercises={hasPreviousExercisesInMethod(method.id, categoryName, columnStructure.findIndex(col => col.id === column.id))}
+                                   />
                                 </TableCell>
                               );
                             })}
@@ -939,5 +1118,19 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
         </div>
       </CardContent>
     </Card>
+
+    <ExerciseCopyDialog
+      isOpen={copyDialogState.isOpen}
+      onClose={() => setCopyDialogState({ ...copyDialogState, isOpen: false })}
+      onConfirm={handleCopyFromDialog}
+      methodId={copyDialogState.methodId}
+      categoryName={copyDialogState.categoryName}
+      targetColumnId={copyDialogState.targetColumnId}
+      mesocycles={mesocycles}
+      cellData={planningState.cellData}
+      columnStructure={columnStructure}
+      getCellId={getCellId}
+    />
+  </>
   );
 }
