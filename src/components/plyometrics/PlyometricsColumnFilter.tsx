@@ -14,6 +14,7 @@ interface PlyometricsColumnFilterProps {
   selectedValues: string[];
   onSelectionChange: (values: string[]) => void;
   onSortChange?: (columnKey: string, direction: 'asc' | 'desc') => void;
+  withinModal?: boolean;
 }
 
 export const PlyometricsColumnFilter: React.FC<PlyometricsColumnFilterProps> = ({
@@ -22,6 +23,7 @@ export const PlyometricsColumnFilter: React.FC<PlyometricsColumnFilterProps> = (
   selectedValues,
   onSelectionChange,
   onSortChange,
+  withinModal = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -94,7 +96,7 @@ export const PlyometricsColumnFilter: React.FC<PlyometricsColumnFilterProps> = (
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-96 p-0" align="start">
+      <PopoverContent className={cn("w-96 p-0", withinModal && "z-[120]")} align="start">
         <div className="p-3 border-b">
           <h4 className="font-medium text-sm mb-2">Filter {column.label}</h4>
           <Input

@@ -405,6 +405,7 @@ export function ExerciseLibraryPopup({
                                     selectedValues={filterState.columnFilters[column.key] || []}
                                     onSelectionChange={(values) => handleColumnFilter(column.key, values)}
                                     onSortChange={handleSort}
+                                    withinModal={true}
                                   />
                                 ) : activeTab === 'plyometrics' ? (
                                   <PlyometricsColumnFilter
@@ -413,6 +414,7 @@ export function ExerciseLibraryPopup({
                                     selectedValues={filterState.columnFilters[column.key] || []}
                                     onSelectionChange={(values) => handleColumnFilter(column.key, values)}
                                     onSortChange={handleSort}
+                                    withinModal={true}
                                   />
                                 ) : (
                                   <ColumnFilter
@@ -421,6 +423,7 @@ export function ExerciseLibraryPopup({
                                     selectedValues={filterState.columnFilters[column.key] || []}
                                     onSelectionChange={(values) => handleColumnFilter(column.key, values)}
                                     onSortChange={handleSort}
+                                    withinModal={true}
                                   />
                                 )}
                               </div>
