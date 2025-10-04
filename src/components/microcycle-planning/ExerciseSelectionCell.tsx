@@ -90,7 +90,8 @@ export function ExerciseSelectionCell({
         isOpen={isLibraryOpen}
         onClose={() => setIsLibraryOpen(false)}
         onSelectExercises={(exercises) => {
-          exercises.forEach(addExercise);
+          const newExercises = [...cellData.exercises, ...exercises];
+          onUpdate({ exercises: newExercises });
           setIsLibraryOpen(false);
         }}
         selectedExerciseIds={cellData.exercises.map(ex => ex.exerciseId)}
