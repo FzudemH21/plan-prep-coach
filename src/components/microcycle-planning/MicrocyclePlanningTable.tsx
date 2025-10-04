@@ -547,25 +547,14 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
     };
   };
 
-  // Check if there are exercises in any previous column for this method
+  // Check if there are previous columns (show copy button for all columns except first)
   const hasPreviousExercisesInMethod = (
     methodId: string, 
     categoryName: string | undefined, 
     currentColumnIndex: number
   ): boolean => {
-    // Check all previous columns
-    for (let i = 0; i < currentColumnIndex; i++) {
-      const column = columnStructure[i];
-      if (column.type === 'link-area') continue;
-      
-      const cellId = getCellId(methodId, categoryName, column.id);
-      const cell = planningState.cellData[cellId];
-      
-      if (cell && cell.exercises.length > 0) {
-        return true;
-      }
-    }
-    return false;
+    // Show copy button for all columns except the first one
+    return currentColumnIndex > 0;
   };
 
   // Copy exercises from previous column or open dialog
@@ -644,6 +633,11 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
       }
     } else {
       // No previous exercises found, open dialog for manual selection
+      toast({
+        title: 'Select source column',
+        description: 'Choose a column to copy exercises from',
+      });
+      
       setCopyDialogState({
         isOpen: true,
         methodId,
