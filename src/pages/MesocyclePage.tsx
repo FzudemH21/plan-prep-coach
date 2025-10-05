@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { CrossMesocycleCopyDialog } from "@/components/ui/cross-mesocycle-copy-dialog";
 import { CrossMesocycleMicrocycleCopyDialog } from "@/components/ui/cross-mesocycle-microcycle-copy-dialog";
 import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2 } from "lucide-react";
@@ -2315,8 +2316,8 @@ export default function MesocyclePage() {
           </div>
           
           {/* Horizontal scrollable grid */}
-          <div className="border rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
+          <ScrollArea className="w-full border rounded-lg max-h-[600px]">
+            <div className="min-w-min p-4">
               {/* Mesocycle Headers */}
               <div className="flex mb-4">
                 <div className="sticky left-0 bg-background z-20 min-w-[140px] mr-4">
@@ -2374,11 +2375,13 @@ export default function MesocyclePage() {
 
               {/* Column Chart */}
               <div className="flex items-end">
-                {/* Intensity Scale */}
-                <IntensityScale
-                  intensityLevels={intensityLevels}
-                  getIntensityColor={getIntensityColor}
-                />
+                {/* Intensity Scale - Sticky */}
+                <div className="sticky left-0 z-30 bg-background">
+                  <IntensityScale
+                    intensityLevels={intensityLevels}
+                    getIntensityColor={getIntensityColor}
+                  />
+                </div>
 
                 {/* Training Day Columns */}
                 <TooltipProvider>
@@ -2406,7 +2409,7 @@ export default function MesocyclePage() {
                 </TooltipProvider>
               </div>
             </div>
-          </div>
+          </ScrollArea>
           
         </div>
       </CardContent>
