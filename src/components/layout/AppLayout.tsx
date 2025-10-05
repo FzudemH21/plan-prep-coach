@@ -31,7 +31,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen w-full bg-background">
+    <div className="min-h-screen w-full bg-background overflow-x-hidden">
       {/* Top Navigation Bar */}
       <header className="border-b bg-card shadow-sm">
         <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4">

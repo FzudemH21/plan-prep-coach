@@ -2316,8 +2316,8 @@ export default function MesocyclePage() {
           </div>
           
           {/* Horizontal scrollable grid */}
-          <ScrollArea className="w-full border rounded-lg max-h-[600px]">
-            <div className="min-w-min p-4">
+          <ScrollArea className="w-full border rounded-lg max-h-[60vh]">
+            <div className="w-max p-4">
               {/* Mesocycle Headers */}
               <div className="flex mb-4">
                 <div className="sticky left-0 bg-background z-20 min-w-[140px] mr-4">

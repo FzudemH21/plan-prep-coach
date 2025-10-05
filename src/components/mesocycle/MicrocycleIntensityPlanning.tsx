@@ -4,6 +4,7 @@ import { IntensityLevel } from '@/types/training';
 import IntensityScale from './IntensityScale';
 import MicrocycleIntensityColumn from './MicrocycleIntensityColumn';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface MicrocycleIntensityPlanningProps {
   mesocycles: ExtendedMesocycle[];
@@ -23,8 +24,8 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
   return (
     <div className="space-y-4">
       {/* Horizontal scrollable grid */}
-      <div className="border rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
+      <ScrollArea className="w-full border rounded-lg max-h-[60vh]">
+        <div className="w-max p-4">
           {/* Mesocycle Headers */}
           <div className="flex mb-4">
             <div className="sticky left-0 bg-background z-20 min-w-[140px] mr-4">
@@ -60,11 +61,13 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
 
           {/* Column Chart */}
           <div className="flex items-end">
-            {/* Intensity Scale */}
-            <IntensityScale
-              intensityLevels={intensityLevels}
-              getIntensityColor={getIntensityColor}
-            />
+            {/* Intensity Scale - Sticky */}
+            <div className="sticky left-0 z-30 bg-background">
+              <IntensityScale
+                intensityLevels={intensityLevels}
+                getIntensityColor={getIntensityColor}
+              />
+            </div>
 
             {/* Microcycle Columns */}
             <TooltipProvider>
@@ -91,7 +94,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
             </TooltipProvider>
           </div>
         </div>
-      </div>
+      </ScrollArea>
       
       <div className="text-sm text-muted-foreground">
         Click on any column to adjust the intensity for that microcycle. These intensities are reflected from Step 1 and will be used in Step 3 for daily planning.
