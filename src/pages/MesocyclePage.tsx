@@ -2316,100 +2316,67 @@ export default function MesocyclePage() {
           </div>
           
           {/* Horizontal scrollable grid */}
-          <ScrollArea className="w-full border rounded-lg max-h-[60vh]">
-            <div className="w-max p-4">
-              {/* Mesocycle Headers */}
-              <div className="flex mb-4">
-                <div className="sticky left-0 bg-background z-20 min-w-[140px] mr-4">
-                  <div className="text-sm font-semibold text-center py-2">Daily Intensity</div>
-                </div>
-                <div className="flex">
-                  {mesocycles.map((meso) => {
-                    const mesoTrainingDays = trainingDays.filter(day => day.mesocycleId === meso.id);
-                    const width = mesoTrainingDays.length * 80; // 80px per day
-                    return mesoTrainingDays.length > 0 ? (
-                      <div 
-                        key={meso.id}
-                        className={`text-center border-r-2 font-semibold border-r-slate-400 ${getIntensityColor(meso.intensity)} py-2`}
-                        style={{ width: `${width}px` }}
-                      >
-                        {meso.name}
-                      </div>
-                    ) : null;
-                  })}
-                </div>
-              </div>
-
-              {/* Microcycle Headers with Copy Buttons */}
-              <div className="flex mb-4">
-                <div className="sticky left-0 bg-background z-20 min-w-[140px] mr-4"></div>
-                <div className="flex">
-                  {mesocycles.map((meso) => {
-                    return meso.microcycles.map((micro) => {
-                      const microTrainingDays = trainingDays.filter(day => day.microcycleId === micro.id);
-                      const width = microTrainingDays.length * 80; // 80px per day
-                      return microTrainingDays.length > 0 ? (
+          <div className="w-full border rounded-lg">
+            <div className="overflow-x-auto overflow-y-hidden">
+              <div className="w-max p-4">
+                {/* Mesocycle Headers */}
+                <div className="flex mb-4">
+                  <div className="sticky left-0 bg-background z-20 min-w-[140px] mr-4">
+                    <div className="text-sm font-semibold text-center py-2">Daily Intensity</div>
+                  </div>
+                  <div className="flex">
+                    {mesocycles.map((meso) => {
+                      const width = meso.microcycles.reduce((acc, micro) => acc + micro.duration * 80, 0);
+                      return meso.microcycles.length > 0 ? (
                         <div 
-                          key={micro.id}
-                          className={`text-center border-r-2 text-xs border-r-slate-300 ${getIntensityColor(micro.intensity)} py-1 px-2`}
+                          key={meso.id}
+                          className={`relative text-center border-r-2 font-semibold border-r-slate-400 ${getIntensityColor(meso.intensity)} py-2`}
                           style={{ width: `${width}px` }}
                         >
-                          <div className="flex items-center justify-center">
-                            <span>{micro.name}</span>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-5 w-5 p-0 ml-1 opacity-70 hover:opacity-100"
-                              onClick={() => copyPreviousWeek(micro.id)}
-                              title="Copy from previous week"
-                            >
-                              📋
-                            </Button>
-                          </div>
+                          {meso.name}
                         </div>
                       ) : null;
-                    });
-                  })}
-                </div>
-              </div>
-
-              {/* Column Chart */}
-              <div className="flex items-end">
-                {/* Intensity Scale - Sticky */}
-                <div className="sticky left-0 z-30 bg-background">
-                  <IntensityScale
-                    intensityLevels={intensityLevels}
-                    getIntensityColor={getIntensityColor}
-                  />
-                </div>
-
-                {/* Training Day Columns */}
-                <TooltipProvider>
-                  <div className="flex items-end">
-                    {trainingDays.map((day, dayIndex) => {
-                      const dayIntensity = dailyIntensityData.find(di => di.date === day.date);
-                      const intensity = dayIntensity?.intensity || "off";
-                      const tooltipContent = getTooltipContent(day);
-                      
-                      return (
-                        <IntensityColumn
-                          key={day.date}
-                          day={day}
-                          intensity={intensity}
-                          onIntensityChange={handleIntensityClick}
-                          tooltipContent={tooltipContent}
-                          isLastDayOfMicrocycle={isLastDayOfMicrocycle(dayIndex)}
-                          isLastDayOfMesocycle={isLastDayOfMesocycle(dayIndex)}
-                          intensityLevels={intensityLevels}
-                          getIntensityColor={getIntensityColor}
-                        />
-                      );
                     })}
                   </div>
-                </TooltipProvider>
+                </div>
+
+                {/* Column Chart */}
+                <div className="flex items-end">
+                  {/* Intensity Scale - Sticky */}
+                  <div className="sticky left-0 z-30 bg-background">
+                    <IntensityScale
+                      intensityLevels={intensityLevels}
+                      getIntensityColor={getIntensityColor}
+                    />
+                  </div>
+
+                  {/* Day Columns */}
+                  <TooltipProvider>
+                    <div className="flex items-end">
+                      {trainingDays.map((day, index) => {
+                        const dayIntensity = dailyIntensityData.find(di => di.date === day.date)?.intensity || "moderate";
+                        const isLastDayOfMicro = index === trainingDays.length - 1 || 
+                          (index < trainingDays.length - 1 && trainingDays[index + 1].microcycleId !== day.microcycleId);
+                        
+                        return (
+                          <IntensityColumn
+                            key={day.date}
+                            day={day}
+                            intensity={dayIntensity}
+                            onIntensityChange={handleIntensityClick}
+                            isLastDayOfMicrocycle={isLastDayOfMicro}
+                            isLastDayOfMesocycle={isLastDayOfMesocycle(index)}
+                            intensityLevels={intensityLevels}
+                            getIntensityColor={getIntensityColor}
+                          />
+                        );
+                      })}
+                    </div>
+                  </TooltipProvider>
+                </div>
               </div>
             </div>
-          </ScrollArea>
+          </div>
           
         </div>
       </CardContent>
