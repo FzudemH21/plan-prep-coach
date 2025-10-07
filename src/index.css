@@ -168,6 +168,12 @@ All colors MUST be HSL.
   }
 }
 
+/* Force horizontal scrollbar visibility */
+.force-scrollbar-x {
+  overflow-x: scroll !important;
+  scrollbar-width: thin;
+}
+
 /* Intensity background utility classes for consistent transparent coloring */
 @layer components {
   .bg-intensity-off { background-color: hsl(var(--intensity-off) / 0.24); }

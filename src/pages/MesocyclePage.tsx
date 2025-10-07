@@ -2316,8 +2316,8 @@ export default function MesocyclePage() {
           </div>
           
           {/* Horizontal scrollable grid */}
-          <div className="w-full min-w-0 border rounded-lg">
-            <div className="overflow-x-auto overflow-y-hidden" style={{ scrollbarWidth: 'thin' }}>
+          <div className="w-full max-w-6xl mx-auto min-w-0 border rounded-lg">
+            <div className="force-scrollbar-x overflow-y-hidden" style={{ scrollbarWidth: 'thin', maxHeight: '400px' }}>
               <div className="w-max p-4">
                 {/* Mesocycle Headers */}
                 <div className="flex mb-4 flex-nowrap">
