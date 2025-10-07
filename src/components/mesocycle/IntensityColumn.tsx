@@ -119,7 +119,7 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
   );
 
   const columnElement = (
-    <div className={`flex flex-col w-20 box-border ${getBorderClasses()}`}>
+    <div className={`flex flex-col w-20 shrink-0 box-border ${getBorderClasses()}`}>
       {/* Day header */}
       {dayHeader}
       
@@ -161,7 +161,7 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
   // Wrap with tooltip if there are tests or events
   if (tooltipContent) {
     return (
-      <div className={`flex flex-col w-20 box-border ${getBorderClasses()}`}>
+      <div className={`flex flex-col w-20 shrink-0 box-border ${getBorderClasses()}`}>
         {/* Day header with tooltip */}
         <Tooltip>
           <TooltipTrigger asChild>

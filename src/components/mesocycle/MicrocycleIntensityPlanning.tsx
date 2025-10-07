@@ -4,7 +4,7 @@ import { IntensityLevel } from '@/types/training';
 import IntensityScale from './IntensityScale';
 import MicrocycleIntensityColumn from './MicrocycleIntensityColumn';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 
 interface MicrocycleIntensityPlanningProps {
   mesocycles: ExtendedMesocycle[];
@@ -24,21 +24,21 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
   return (
     <div className="space-y-4">
       {/* Horizontal scrollable grid */}
-      <div className="w-full border rounded-lg">
-        <div className="overflow-x-auto overflow-y-hidden">
+      <div className="w-full min-w-0 border rounded-lg">
+        <div className="overflow-x-auto overflow-y-hidden" style={{ scrollbarWidth: 'thin' }}>
           <div className="w-max p-4">
             {/* Mesocycle Headers */}
             <div className="flex mb-4">
-              <div className="sticky left-0 bg-background z-20 min-w-[140px] mr-4">
+              <div className="sticky left-0 bg-background z-20 min-w-[140px] mr-4 shrink-0">
                 <div className="text-sm font-semibold text-center py-2">Microcycle Intensity</div>
               </div>
-              <div className="flex">
+              <div className="flex flex-nowrap">
                 {mesocycles.map((meso) => {
                   const width = meso.microcycles.length * 80; // 80px per microcycle
                   return meso.microcycles.length > 0 ? (
                     <div 
                       key={meso.id}
-                      className={`relative text-center border-r-2 font-semibold border-r-slate-400 ${getIntensityColor(meso.intensity)} py-2`}
+                      className={`relative text-center border-r-2 font-semibold border-r-slate-400 ${getIntensityColor(meso.intensity)} py-2 shrink-0`}
                       style={{ width: `${width}px` }}
                     >
                       {meso.name}
@@ -63,7 +63,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
             {/* Column Chart */}
             <div className="flex items-end">
               {/* Intensity Scale - Sticky */}
-              <div className="sticky left-0 z-30 bg-background">
+              <div className="sticky left-0 z-30 bg-background shrink-0">
                 <IntensityScale
                   intensityLevels={intensityLevels}
                   getIntensityColor={getIntensityColor}
@@ -72,7 +72,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
 
               {/* Microcycle Columns */}
               <TooltipProvider>
-                <div className="flex items-end">
+                <div className="flex items-end flex-nowrap">
                   {mesocycles.map((meso) => {
                     return meso.microcycles.map((micro, microIndex) => {
                       const isLastMicrocycle = microIndex === meso.microcycles.length - 1;

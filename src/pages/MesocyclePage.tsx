@@ -2316,21 +2316,21 @@ export default function MesocyclePage() {
           </div>
           
           {/* Horizontal scrollable grid */}
-          <div className="w-full border rounded-lg">
-            <div className="overflow-x-auto overflow-y-hidden">
+          <div className="w-full min-w-0 border rounded-lg">
+            <div className="overflow-x-auto overflow-y-hidden" style={{ scrollbarWidth: 'thin' }}>
               <div className="w-max p-4">
                 {/* Mesocycle Headers */}
-                <div className="flex mb-4">
-                  <div className="sticky left-0 bg-background z-20 min-w-[140px] mr-4">
+                <div className="flex mb-4 flex-nowrap">
+                  <div className="sticky left-0 bg-background z-20 min-w-[140px] mr-4 shrink-0">
                     <div className="text-sm font-semibold text-center py-2">Daily Intensity</div>
                   </div>
-                  <div className="flex">
+                  <div className="flex flex-nowrap">
                     {mesocycles.map((meso) => {
                       const width = meso.microcycles.reduce((acc, micro) => acc + micro.duration * 80, 0);
                       return meso.microcycles.length > 0 ? (
                         <div 
                           key={meso.id}
-                          className={`relative text-center border-r-2 font-semibold border-r-slate-400 ${getIntensityColor(meso.intensity)} py-2`}
+                          className={`relative text-center border-r-2 font-semibold border-r-slate-400 ${getIntensityColor(meso.intensity)} py-2 shrink-0`}
                           style={{ width: `${width}px` }}
                         >
                           {meso.name}
@@ -2341,9 +2341,9 @@ export default function MesocyclePage() {
                 </div>
 
                 {/* Column Chart */}
-                <div className="flex items-end">
+                <div className="flex items-end flex-nowrap">
                   {/* Intensity Scale - Sticky */}
-                  <div className="sticky left-0 z-30 bg-background">
+                  <div className="sticky left-0 z-30 bg-background shrink-0">
                     <IntensityScale
                       intensityLevels={intensityLevels}
                       getIntensityColor={getIntensityColor}
@@ -2352,7 +2352,7 @@ export default function MesocyclePage() {
 
                   {/* Day Columns */}
                   <TooltipProvider>
-                    <div className="flex items-end">
+                    <div className="flex items-end flex-nowrap">
                       {trainingDays.map((day, index) => {
                         const dayIntensity = dailyIntensityData.find(di => di.date === day.date)?.intensity || "moderate";
                         const isLastDayOfMicro = index === trainingDays.length - 1 || 

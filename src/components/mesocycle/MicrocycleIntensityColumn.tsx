@@ -92,7 +92,7 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
   };
 
   return (
-    <div className={`flex flex-col w-20 box-border ${getBorderClasses()}`}>
+    <div className={`flex flex-col w-20 shrink-0 box-border ${getBorderClasses()}`}>
       {/* Microcycle header */}
       <div className="relative h-16 text-center text-xs rounded w-full mb-2 flex flex-col items-center justify-center bg-primary/10">
         <div className="font-medium">{microcycle.name}</div>
