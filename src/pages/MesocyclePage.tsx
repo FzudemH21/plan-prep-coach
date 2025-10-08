@@ -85,7 +85,7 @@ export default function MesocyclePage() {
 
   // Navigation component for top and bottom
   const NavigationButtons = () => (
-    <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 w-full max-w-full px-2 sm:px-0">
+    <div className="flex flex-col md:flex-row md:justify-between items-stretch md:items-center gap-3 w-full max-w-full px-2 md:px-0 md:flex-nowrap">
       <Button 
         onClick={() => {
           if (currentStep <= 1) {
@@ -99,14 +99,14 @@ export default function MesocyclePage() {
           }
         }}
         variant="outline"
-        className="w-full sm:w-auto"
+        className="w-full md:w-auto min-w-0"
       >
         {currentStep <= 1 ? "Back to Macrocycle" : "Previous"}
       </Button>
       <Button 
         onClick={() => setCurrentStep(Math.min(totalSteps, currentStep + 1))}
         disabled={currentStep >= totalSteps}
-        className="w-full sm:w-auto"
+        className="w-full md:w-auto min-w-0"
       >
         Next
       </Button>
