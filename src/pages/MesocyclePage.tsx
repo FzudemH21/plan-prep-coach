@@ -325,7 +325,7 @@ export default function MesocyclePage() {
           Configure the structure and duration of your mesocycles.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 max-w-full">
         {/* Duration Validation Warning */}
         {daysMismatch && (
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
@@ -386,7 +386,7 @@ export default function MesocyclePage() {
 
         {mesocycles.length > 0 && (
           <>
-            <div className="space-y-4">
+            <div className="space-y-4 max-w-full overflow-x-auto">
               <h4 className="font-semibold">Mesocycle Configuration</h4>
               <div className="grid grid-cols-1 gap-4">
                 {mesocycles.map((meso, index) => (
@@ -1981,7 +1981,7 @@ export default function MesocyclePage() {
           Select specific exercises for each training method across your mesocycles and microcycles.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="overflow-x-auto max-w-full">
         <MicrocyclePlanningTable 
           mesocycles={mesocycles}
           selectedMethods={getAllocatedMethods()}
@@ -2318,7 +2318,7 @@ export default function MesocyclePage() {
           </div>
           
           {/* Horizontal scrollable grid */}
-          <div className="w-full max-w-6xl mx-auto min-w-0 border rounded-lg">
+          <div className="w-full min-w-0 border rounded-lg">
             <div className="force-scrollbar-x overflow-y-hidden" style={{ scrollbarWidth: 'thin', maxHeight: '400px' }}>
               <div className="w-max p-4">
                 {/* Mesocycle Headers */}
@@ -2395,7 +2395,7 @@ export default function MesocyclePage() {
   ];
 
   return (
-    <div className="w-full max-w-none space-y-6">
+    <div className="w-full max-w-none space-y-6 min-w-0">
       {/* Progress Header */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
