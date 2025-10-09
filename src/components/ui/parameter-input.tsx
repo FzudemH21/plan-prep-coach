@@ -112,6 +112,9 @@ export function QualitativeParameterInput({
   isInDragSelection = false,
   isEnabled = true
 }: QualitativeParameterInputProps) {
+  // Check if there are any options defined (empty array means plain text input)
+  const hasMeaningfulOptions = options.length > 0;
+
   const handleDragStart = (e: React.MouseEvent) => {
     if (cellId && onDragStart) {
       onDragStart(cellId, value);
@@ -134,18 +137,32 @@ export function QualitativeParameterInput({
       data-drag-cell={cellId}
       data-allocated={isEnabled ? 'true' : 'false'}
     >
-      <SearchableDropdown
-        value={value}
-        onValueChange={onValueChange}
-        options={options}
-        placeholder={placeholder}
-        allowCustomInput={true}
-        className={cn(
-          "w-full h-8 text-xs",
-          isDragSource && "ring-1 ring-primary",
-          isInDragSelection && "bg-primary/10"
-        )}
-      />
+      {hasMeaningfulOptions ? (
+        <SearchableDropdown
+          value={value}
+          onValueChange={onValueChange}
+          options={options}
+          placeholder={placeholder}
+          allowCustomInput={true}
+          className={cn(
+            "w-full h-8 text-xs",
+            isDragSource && "ring-1 ring-primary",
+            isInDragSelection && "bg-primary/10"
+          )}
+        />
+      ) : (
+        <Input
+          type="text"
+          value={value}
+          onChange={(e) => onValueChange(e.target.value)}
+          placeholder={placeholder}
+          className={cn(
+            "w-full h-8 text-xs",
+            isDragSource && "ring-1 ring-primary",
+            isInDragSelection && "bg-primary/10"
+          )}
+        />
+      )}
     </div>
   );
 }
