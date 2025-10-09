@@ -19,7 +19,7 @@ interface QuantitativeParameterInputProps {
   isEnabled?: boolean;
 }
 
-export function QuantitativeParameterInput({
+export const QuantitativeParameterInput = React.memo(function QuantitativeParameterInput({
   value,
   onValueChange,
   unit,
@@ -85,7 +85,7 @@ export function QuantitativeParameterInput({
       )}
     </div>
   );
-}
+});
 
 interface QualitativeParameterInputProps {
   value: string;
@@ -100,7 +100,7 @@ interface QualitativeParameterInputProps {
   isEnabled?: boolean;
 }
 
-export function QualitativeParameterInput({
+export const QualitativeParameterInput = React.memo(function QualitativeParameterInput({
   value,
   onValueChange,
   options,
@@ -165,4 +165,4 @@ export function QualitativeParameterInput({
       )}
     </div>
   );
-}
+});

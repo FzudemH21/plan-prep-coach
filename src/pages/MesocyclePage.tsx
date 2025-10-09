@@ -1058,7 +1058,7 @@ export default function MesocyclePage() {
   };
 
   // Parameter value helpers (moved out to keep hooks stable)
-  const updateParameterValue = (mesocycleId: string, microcycleIndex: number, methodName: string, parameterName: string, value: string | number, sessionIndex: number = 0) => {
+  const updateParameterValue = useCallback((mesocycleId: string, microcycleIndex: number, methodName: string, parameterName: string, value: string | number, sessionIndex: number = 0) => {
     setParameterValues(prev => {
       const updated = { ...prev };
       if (!updated[mesocycleId]) updated[mesocycleId] = {};
@@ -1068,11 +1068,11 @@ export default function MesocyclePage() {
       updated[mesocycleId][microcycleIndex][methodName][sessionIndex][parameterName] = value;
       return updated;
     });
-  };
+  }, []);
 
-  const getParameterValue = (mesocycleId: string, microcycleIndex: number, methodName: string, parameterName: string, sessionIndex: number = 0) => {
+  const getParameterValue = useCallback((mesocycleId: string, microcycleIndex: number, methodName: string, parameterName: string, sessionIndex: number = 0) => {
     return parameterValues[mesocycleId]?.[microcycleIndex]?.[methodName]?.[sessionIndex]?.[parameterName] || '';
-  };
+  }, [parameterValues]);
 
   // Helper function to check if a method should be shown for a mesocycle
   const isMethodAllocatedToMesocycle = useCallback((methodName: string, mesocycleId: string) => {
@@ -1436,7 +1436,7 @@ export default function MesocyclePage() {
     };
 
     // Helper function to get parameters for a method from toolbox data
-    const getParametersForMethodFromToolbox = (methodName: string) => {
+    const getParametersForMethodFromToolbox = useCallback((methodName: string) => {
       if (!toolboxData.entries) return [];
       
       // Find all toolbox entries that match this method
@@ -1455,7 +1455,7 @@ export default function MesocyclePage() {
         isQuantitative: entry.parameterType === 'quantitative',
         isQualitative: entry.parameterType === 'qualitative'
       }));
-    };
+    }, [toolboxData]);
 
 
     // Helper function for intensity colors with transparency
