@@ -24,9 +24,16 @@ interface MicrocyclePlanningTableProps {
   mesocycles: ExtendedMesocycle[];
   selectedMethods?: string[];
   parameterValues?: Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>;
+  methodParametersMap?: Record<string, Array<{
+    name: string;
+    type: string;
+    options: string[];
+    isQuantitative: boolean;
+    isQualitative: boolean;
+  }>>;
 }
 
-export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], parameterValues = {} }: MicrocyclePlanningTableProps) {
+export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], parameterValues = {}, methodParametersMap = {} }: MicrocyclePlanningTableProps) {
   const { data: toolboxData } = useToolboxData();
   const { data: athleticismData } = useAthleticismData();
   const { toast } = useToast();
@@ -177,6 +184,9 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], para
       const paramDefinitions = getParametersForMethod(methodName);
       const hasMultipleSessions = Object.keys(methodParams).length > 1;
       
+      // Get method parameters from methodParametersMap to access options
+      const methodParamDefs = methodParametersMap[methodName] || [];
+      
       const parameters: Array<{
         name: string;
         value: string | number;
@@ -188,11 +198,33 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], para
       Object.entries(methodParams).forEach(([sessionIndex, params]) => {
         Object.entries(params).forEach(([paramName, value]) => {
           if (value) {
-            const paramDef = paramDefinitions.find(p => p.name === paramName);
+            // Try to find unit from methodParametersMap
+            const paramDef = methodParamDefs.find(p => p.name === paramName);
+            let unit: string | undefined;
+            
+            if (paramDef?.options && paramDef.options.length > 0 && paramDef.isQuantitative) {
+              // For quantitative params with options, first option is likely the unit
+              unit = paramDef.options[0];
+            } else if (paramDef?.name && toolboxData?.entries) {
+              // Fallback: try to extract unit from original toolbox data parameter name
+              const toolboxEntry = toolboxData.entries.find(entry => {
+                const entryKey = `${entry.category}${entry.subCategory ? ` - ${entry.subCategory}` : ''}`;
+                return (normalizeForComparison(entryKey) === normalizeForComparison(methodName) ||
+                        normalizeForComparison(entry.parameter) === normalizeForComparison(methodName)) &&
+                       (entry.parameterName === paramName || entry.parameter.split('[')[0].trim() === paramName);
+              });
+              if (toolboxEntry?.parameter) {
+                const unitMatch = toolboxEntry.parameter.match(/\[([^\]]+)\]/);
+                if (unitMatch) {
+                  unit = unitMatch[1];
+                }
+              }
+            }
+            
             parameters.push({
               name: paramName,
               value: value,
-              unit: paramDef?.unit,
+              unit: unit,
               sessionIndex: hasMultipleSessions ? parseInt(sessionIndex) : undefined
             });
           }
@@ -209,7 +241,7 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], para
     });
     
     return methodsData;
-  }, [parameterValues, mesocycles, selectedMethods, athleticismData]);
+  }, [parameterValues, mesocycles, selectedMethods, athleticismData, methodParametersMap, toolboxData]);
 
   // Helper functions (moved before useMemos that use them)
   const isMicrocycleGrouped = (mesocycleId: string, microcycleId: string) => {

@@ -1999,6 +1999,7 @@ export default function MesocyclePage() {
           mesocycles={mesocycles}
           selectedMethods={getAllocatedMethods()}
           parameterValues={parameterValues}
+          methodParametersMap={methodParametersMap}
         />
       </CardContent>
     </Card>
