@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ExtendedMesocycle, Microcycle } from '@/features/planner/types';
@@ -339,6 +340,17 @@ export default function MicrocyclePlanningPage() {
     return warnings;
   }, [currentMesocycle, exerciseDistribution, allocatedExercises, daysByMicrocycle]);
 
+  // Get warnings for a specific microcycle
+  const getWarningsForMicrocycle = (microcycleId: string) => {
+    const freqWarnings = frequencyWarnings.filter(w => w.microcycleId === microcycleId);
+    const allocWarnings = allocationWarnings.filter(w => w.microcycleId === microcycleId);
+    return { 
+      frequencyWarnings: freqWarnings, 
+      allocationWarnings: allocWarnings, 
+      hasWarnings: freqWarnings.length > 0 || allocWarnings.length > 0 
+    };
+  };
+
   // Handle drag start
   const handleDragStart = (e: React.DragEvent, exercise: typeof allocatedExercises[0]) => {
     e.dataTransfer.setData('application/json', JSON.stringify(exercise));
@@ -557,45 +569,6 @@ export default function MicrocyclePlanningPage() {
     </div>
   );
 
-  const renderWarnings = () => {
-    const hasWarnings = frequencyWarnings.length > 0 || allocationWarnings.length > 0;
-    if (!hasWarnings) return null;
-
-    return (
-      <Alert>
-        <AlertTriangle className="h-4 w-4" />
-        <AlertDescription>
-          <div className="space-y-3">
-            {frequencyWarnings.length > 0 && (
-              <div className="space-y-1">
-                <p className="font-semibold">Frequency Warnings:</p>
-                {frequencyWarnings.map((warning, idx) => (
-                  <p key={idx} className="text-sm">
-                    <strong>{warning.methodName}</strong> in <strong>{warning.microcycleName}</strong>: 
-                    {' '}{warning.actual} session{warning.actual !== 1 ? 's' : ''} assigned, 
-                    but frequency is set to {warning.expected}
-                    {' '}({warning.type === 'over' ? 'over' : 'under'}-frequency)
-                  </p>
-                ))}
-              </div>
-            )}
-            
-            {allocationWarnings.length > 0 && (
-              <div className="space-y-1">
-                <p className="font-semibold">Allocation Warnings:</p>
-                {allocationWarnings.map((warning, idx) => (
-                  <p key={idx} className="text-sm">
-                    <strong>{warning.exerciseName}</strong> is placed in <strong>{warning.microcycleName}</strong> but was not allocated to this microcycle in Step 6 of Mesocycle Planning
-                  </p>
-                ))}
-              </div>
-            )}
-          </div>
-        </AlertDescription>
-      </Alert>
-    );
-  };
-
   const renderExerciseDistribution = () => {
     if (!currentMesocycle) {
       return (
@@ -655,6 +628,62 @@ export default function MicrocyclePlanningPage() {
                         >
                           <div className="flex items-center justify-center p-2 relative">
                             <span className="font-semibold">{microcycle.name}</span>
+                            
+                            {/* Warning indicator */}
+                            {(() => {
+                              const { frequencyWarnings: micFreqWarnings, allocationWarnings: micAllocWarnings, hasWarnings } = getWarningsForMicrocycle(microcycle.id);
+                              
+                              if (!hasWarnings) return null;
+                              
+                              return (
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <button className="ml-2 text-amber-600 hover:text-amber-700 transition-colors">
+                                      <AlertTriangle className="h-4 w-4" fill="currentColor" />
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-80" align="start">
+                                    <div className="space-y-3">
+                                      <h4 className="font-semibold text-sm">Warnings for {microcycle.name}</h4>
+                                      
+                                      {micFreqWarnings.length > 0 && (
+                                        <div>
+                                          <h5 className="text-xs font-medium text-muted-foreground mb-1">Frequency Mismatches:</h5>
+                                          <ul className="text-xs space-y-1">
+                                            {micFreqWarnings.map((warning, idx) => (
+                                              <li key={idx} className="flex items-start gap-1">
+                                                <span className="text-amber-600">•</span>
+                                                <span>
+                                                  {warning.methodName}: Expected {warning.expected}×, but has {warning.actual}×
+                                                  {warning.type === 'over' ? ' (too many)' : ' (too few)'}
+                                                </span>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+                                      
+                                      {micAllocWarnings.length > 0 && (
+                                        <div>
+                                          <h5 className="text-xs font-medium text-muted-foreground mb-1">Unallocated Exercises:</h5>
+                                          <ul className="text-xs space-y-1">
+                                            {micAllocWarnings.map((warning, idx) => (
+                                              <li key={idx} className="flex items-start gap-1">
+                                                <span className="text-amber-600">•</span>
+                                                <span>
+                                                  {warning.exerciseName} ({warning.methodId}) was not allocated in Step 6
+                                                </span>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                              );
+                            })()}
+                            
                             {microcycleIndex > 0 && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -857,7 +886,6 @@ export default function MicrocyclePlanningPage() {
 
       {renderTrainingPlanOverview()}
       {renderMesocycleNavigation()}
-      {renderWarnings()}
       {currentStep === 1 && renderExerciseDistribution()}
 
       <NavigationButtons />
