@@ -675,16 +675,59 @@ const mesocycleHeaders = useMemo(() => {
   };
 
 const updateCellData = (cellId: string, newData: Partial<CellData>) => {
-  setPlanningState(prev => ({
-    ...prev,
-    cellData: {
-      ...prev.cellData,
-      [cellId]: {
-        ...prev.cellData[cellId],
-        ...newData
+  setPlanningState(prev => {
+    const existingCell = prev.cellData[cellId];
+    
+    if (!existingCell) {
+      // Parse cellId to extract methodId, categoryName, and columnId
+      // Format: "methodId-categoryName-columnId" or "methodId-main-columnId"
+      const parts = cellId.split('-');
+      const methodId = parts[0];
+      const categoryName = parts[1] === 'main' ? undefined : parts[1];
+      const columnId = parts.slice(2).join('-'); // Handle IDs with dashes
+      
+      // Determine if this is a microcycle or mesocycle column
+      let mesocycleId = columnId; // Default: assume it's a mesocycle ID
+      let microcycleId: string | undefined = undefined;
+      
+      // Check if columnId is actually a microcycle ID
+      for (const meso of mesocycles) {
+        const matchingMicro = meso.microcycles.find(micro => micro.id === columnId);
+        if (matchingMicro) {
+          mesocycleId = meso.id;
+          microcycleId = matchingMicro.id;
+          break;
+        }
       }
+      
+      return {
+        ...prev,
+        cellData: {
+          ...prev.cellData,
+          [cellId]: {
+            methodId,
+            categoryName,
+            mesocycleId,
+            microcycleId,
+            exercises: [],
+            ...newData
+          }
+        }
+      };
     }
-  }));
+    
+    // Cell exists, just update it
+    return {
+      ...prev,
+      cellData: {
+        ...prev.cellData,
+        [cellId]: {
+          ...existingCell,
+          ...newData
+        }
+      }
+    };
+  });
 };
   const getCellId = (methodId: string, categoryName: string | undefined, columnId: string) => {
     return `${methodId}-${categoryName || 'main'}-${columnId}`;
