@@ -1106,7 +1106,8 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                                 );
                               })}
                             </TableRow>
-                          ))
+                          ))}
+                        </>
                       )}
                     </React.Fragment>
                   ))}
