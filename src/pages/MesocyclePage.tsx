@@ -106,11 +106,16 @@ export default function MesocyclePage() {
         {currentStep <= 1 ? "Back to Macrocycle" : "Previous"}
       </Button>
       <Button 
-        onClick={() => setCurrentStep(Math.min(totalSteps, currentStep + 1))}
-        disabled={currentStep >= totalSteps}
+        onClick={() => {
+          if (currentStep >= totalSteps) {
+            navigate('/microcycle');
+          } else {
+            setCurrentStep(Math.min(totalSteps, currentStep + 1));
+          }
+        }}
         className="w-full md:w-auto min-w-0"
       >
-        Next
+        {currentStep >= totalSteps ? "Continue to Microcycle Planning" : "Next"}
       </Button>
     </div>
   );
