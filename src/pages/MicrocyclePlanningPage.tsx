@@ -561,11 +561,11 @@ export default function MicrocyclePlanningPage() {
                             <div key={`${methodId}-${categoryName}`} className="border-b last:border-b-0">
                               <div className="flex">
                                 {/* Left sidebar: Category and Exercises */}
-                                <div className="w-64 shrink-0 border-r p-3 bg-muted/30">
-                                  <div className="text-xs font-medium text-muted-foreground mb-3">
+                                <div className="w-64 shrink-0 border-r px-3 py-2 bg-muted/30">
+                                  <div className="text-xs font-medium text-muted-foreground mb-2">
                                     {categoryName}
                                   </div>
-                                  <div className="space-y-2">
+                                  <div className="space-y-1">
                                     {exercises.map((exercise, idx) => {
                                       const microcycleNames = exercise.microcycleIds
                                         .map(id => currentMesocycle.microcycles.find(m => m.id === id)?.name)
@@ -576,10 +576,10 @@ export default function MicrocyclePlanningPage() {
                                           key={`${exercise.exerciseId}-${idx}`}
                                           draggable
                                           onDragStart={(e) => handleDragStart(e, exercise)}
-                                          className="group p-2 bg-background border rounded cursor-move hover:border-primary transition-colors"
+                                          className="group px-2 py-1 bg-background border rounded cursor-move hover:border-primary transition-colors"
                                         >
                                           <div className="text-xs font-medium">{exercise.exerciseName}</div>
-                                          <div className="flex flex-wrap gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                          <div className="flex flex-wrap gap-1 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                             {microcycleNames.map((name, i) => (
                                               <Badge key={i} variant="secondary" className="text-[10px] px-1 py-0">
                                                 {name}
