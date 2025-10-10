@@ -20,6 +20,7 @@ import {
 } from "@/data/trainingData";
 import { useDisplayMode } from "@/contexts/DisplayModeContext";
 import { useAthleticismData } from "@/hooks/useAthleticismData";
+import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
 
 export default function MacrocyclePage() {
   const { displayMode } = useDisplayMode();
@@ -1353,10 +1354,13 @@ export default function MacrocyclePage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Macrocycle Overview</h1>
-          <Button variant="outline" size="sm">
-            <Bot className="h-4 w-4 mr-2" />
-            Ask AI for Help
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm">
+              <Bot className="h-4 w-4 mr-2" />
+              Ask AI for Help
+            </Button>
+            <PlanningNavigationMenu currentPage="macrocycle" currentPageStep={currentStep} />
+          </div>
         </div>
         <p className="text-muted-foreground">
           Complete overview of your macrocycle planning across all phases.
@@ -1409,10 +1413,13 @@ export default function MacrocyclePage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Macrocycle Planning</h1>
-          <Button variant="outline" size="sm">
-            <Bot className="h-4 w-4 mr-2" />
-            Ask AI for Help
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm">
+              <Bot className="h-4 w-4 mr-2" />
+              Ask AI for Help
+            </Button>
+            <PlanningNavigationMenu currentPage="macrocycle" currentPageStep={currentStep} />
+          </div>
         </div>
         
         <div className="space-y-2">

@@ -36,6 +36,7 @@ import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info
 import { format, addWeeks, differenceInWeeks } from "date-fns";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 import { IntensityLevel } from "@/types/training";
+import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
 
 // Helper function for string normalization
 const normalizeForComparison = (str: string): string => {
@@ -2668,10 +2669,13 @@ export default function MesocyclePage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Mesocycle Planning</h1>
-          <Button variant="outline" size="sm">
-            <Bot className="h-4 w-4 mr-2" />
-            Ask AI for Help
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm">
+              <Bot className="h-4 w-4 mr-2" />
+              Ask AI for Help
+            </Button>
+            <PlanningNavigationMenu currentPage="mesocycle" currentPageStep={currentStep} />
+          </div>
         </div>
         
         <div className="space-y-2">

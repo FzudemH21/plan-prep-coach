@@ -14,6 +14,7 @@ import { CellData, ExerciseSelection } from '@/types/microcycle-planning';
 import { useAthleticismData } from '@/hooks/useAthleticismData';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -954,6 +955,7 @@ export default function MicrocyclePlanningPage() {
     <div className="mx-auto py-6 space-y-6 px-4 w-full max-w-[98vw]">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-3xl font-bold">Microcycle Planning</h1>
+        <PlanningNavigationMenu currentPage="microcycle" currentPageStep={currentStep} />
       </div>
 
       <NavigationButtons />
