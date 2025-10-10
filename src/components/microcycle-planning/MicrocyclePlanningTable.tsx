@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -18,13 +18,15 @@ import {
   MicrocycleGroup
 } from '@/types/microcycle-planning';
 import { cn } from '@/lib/utils';
+import { getParametersForMethod, MethodParameter } from '@/data/methodParameters';
 
 interface MicrocyclePlanningTableProps {
   mesocycles: ExtendedMesocycle[];
   selectedMethods?: string[];
+  parameterValues?: Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>;
 }
 
-export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: MicrocyclePlanningTableProps) {
+export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], parameterValues = {} }: MicrocyclePlanningTableProps) {
   const { data: toolboxData } = useToolboxData();
   const { data: athleticismData } = useAthleticismData();
   const { toast } = useToast();
@@ -129,6 +131,85 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [] }: Mi
     
     return parts.length > 0 ? parts.join('. ') : "No specific recommendations available";
   };
+  
+  // Helper function to get all parameter values for a specific microcycle
+  const getMicrocycleParameters = useCallback((mesocycleId: string, microcycleIndex: number) => {
+    if (!parameterValues) return [];
+    
+    const methodsData: Array<{
+      methodName: string;
+      parameters: Array<{
+        name: string;
+        value: string | number;
+        unit?: string;
+        sessionIndex?: number;
+      }>;
+      hasMultipleSessions: boolean;
+    }> = [];
+    
+    // Get all methods allocated to this mesocycle
+    const mesocycle = mesocycles.find(m => m.id === mesocycleId);
+    if (!mesocycle) return [];
+    
+    const allocatedMethods = selectedMethods.filter(method => {
+      // Check if this method is allocated to this mesocycle via its sub-goals
+      if (!mesocycle.allocatedSubGoals) return false;
+      
+      // Try to find this method in athleticism data for any of the allocated sub-goals
+      return mesocycle.allocatedSubGoals.some(subGoal => {
+        if (!athleticismData?.entries) return false;
+        
+        return athleticismData.entries.some(entry => {
+          const formattedSubGoal = `${entry.overarchingGoal} - ${entry.subGoal}`;
+          if (normalizeForComparison(formattedSubGoal) !== normalizeForComparison(subGoal)) {
+            return false;
+          }
+          return entry.mappedMethods.includes(method);
+        });
+      });
+    });
+    
+    // For each allocated method, get its parameters
+    allocatedMethods.forEach(methodName => {
+      const methodParams = parameterValues[mesocycleId]?.[microcycleIndex]?.[methodName];
+      if (!methodParams) return;
+      
+      const paramDefinitions = getParametersForMethod(methodName);
+      const hasMultipleSessions = Object.keys(methodParams).length > 1;
+      
+      const parameters: Array<{
+        name: string;
+        value: string | number;
+        unit?: string;
+        sessionIndex?: number;
+      }> = [];
+      
+      // Iterate through sessions
+      Object.entries(methodParams).forEach(([sessionIndex, params]) => {
+        Object.entries(params).forEach(([paramName, value]) => {
+          if (value) {
+            const paramDef = paramDefinitions.find(p => p.name === paramName);
+            parameters.push({
+              name: paramName,
+              value: value,
+              unit: paramDef?.unit,
+              sessionIndex: hasMultipleSessions ? parseInt(sessionIndex) : undefined
+            });
+          }
+        });
+      });
+      
+      if (parameters.length > 0) {
+        methodsData.push({
+          methodName,
+          parameters,
+          hasMultipleSessions
+        });
+      }
+    });
+    
+    return methodsData;
+  }, [parameterValues, mesocycles, selectedMethods, athleticismData]);
 
   // Helper functions (moved before useMemos that use them)
   const isMicrocycleGrouped = (mesocycleId: string, microcycleId: string) => {
@@ -855,7 +936,105 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                        <div className="flex flex-col items-center gap-2 py-2">
                          {/* Title line: show microcycle/group names; only show mesocycle name here when no split headers are shown */}
                          {column.type === 'microcycle' && (
-                           <span className="font-medium">{column.microcycleName}</span>
+                           <Popover>
+                             <PopoverTrigger className="font-medium hover:text-primary transition-colors cursor-pointer">
+                               {column.microcycleName}
+                             </PopoverTrigger>
+                             <PopoverContent 
+                               className="w-[800px] max-w-[95vw] z-[100]" 
+                               align="start"
+                               side="bottom"
+                               sideOffset={5}
+                             >
+                               <div className="space-y-3">
+                                 <h4 className="font-semibold text-sm text-foreground">
+                                   {column.mesocycleName} - {column.microcycleName}
+                                 </h4>
+                                 <p className="text-xs text-muted-foreground">
+                                   Method Periodization Parameters
+                                 </p>
+                                 {(() => {
+                                   const microcycleIndex = mesocycles
+                                     .find(m => m.id === column.mesocycleId)
+                                     ?.microcycles.findIndex(mc => mc.id === column.microcycleId);
+                                   
+                                   if (microcycleIndex === undefined || microcycleIndex === -1) {
+                                     return (
+                                       <div className="text-xs text-muted-foreground italic">
+                                         No parameter data available
+                                       </div>
+                                     );
+                                   }
+                                   
+                                   const methodsData = getMicrocycleParameters(column.mesocycleId, microcycleIndex);
+                                   
+                                   if (methodsData.length === 0) {
+                                     return (
+                                       <div className="text-xs text-muted-foreground italic">
+                                         No parameters configured for this microcycle
+                                       </div>
+                                     );
+                                   }
+                                   
+                                   return (
+                                     <div className="space-y-3">
+                                       {methodsData.map(({ methodName, parameters, hasMultipleSessions }) => (
+                                         <div key={methodName} className="border-l-2 border-primary/30 pl-3">
+                                           <div className="font-medium text-primary mb-2 text-sm">
+                                             {methodName}
+                                           </div>
+                                           
+                                           {hasMultipleSessions ? (
+                                             // Group by session
+                                             (() => {
+                                               const sessionGroups = parameters.reduce((acc, param) => {
+                                                 const sessionIdx = param.sessionIndex ?? 0;
+                                                 if (!acc[sessionIdx]) acc[sessionIdx] = [];
+                                                 acc[sessionIdx].push(param);
+                                                 return acc;
+                                               }, {} as Record<number, typeof parameters>);
+                                               
+                                               return Object.entries(sessionGroups).map(([sessionIdx, params]) => (
+                                                 <div key={sessionIdx} className="mb-2">
+                                                   <div className="text-xs font-medium text-muted-foreground mb-1">
+                                                     Session {parseInt(sessionIdx) + 1}:
+                                                   </div>
+                                                   <div className="text-xs text-foreground/90 leading-relaxed">
+                                                     {params.map((param, idx) => (
+                                                       <span key={param.name}>
+                                                         {idx > 0 && ', '}
+                                                         <span className="font-medium">{param.name}</span>
+                                                         {': '}
+                                                         {param.value}
+                                                         {param.unit && ` ${param.unit}`}
+                                                       </span>
+                                                     ))}
+                                                   </div>
+                                                 </div>
+                                               ));
+                                             })()
+                                           ) : (
+                                             // Single session view
+                                             <div className="text-xs text-foreground/90 leading-relaxed">
+                                               {parameters.map((param, idx) => (
+                                                 <span key={param.name}>
+                                                   {idx > 0 && ', '}
+                                                   <span className="font-medium">{param.name}</span>
+                                                   {': '}
+                                                   {param.value}
+                                                   {param.unit && ` ${param.unit}`}
+                                                 </span>
+                                               ))}
+                                             </div>
+                                           )}
+                                         </div>
+                                       ))}
+                                     </div>
+                                   );
+                                 })()}
+                               </div>
+                             </PopoverContent>
+                           </Popover>
                          )}
                          {column.type === 'microcycle-group' && (
                            <span className="font-medium">{column.groupName}</span>

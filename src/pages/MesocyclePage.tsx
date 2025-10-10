@@ -1998,6 +1998,7 @@ export default function MesocyclePage() {
         <MicrocyclePlanningTable 
           mesocycles={mesocycles}
           selectedMethods={getAllocatedMethods()}
+          parameterValues={parameterValues}
         />
       </CardContent>
     </Card>
