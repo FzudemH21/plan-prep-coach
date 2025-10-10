@@ -205,6 +205,62 @@ export default function MesocyclePage() {
     }
   }, []);
 
+  // Load parameter values from localStorage on mount
+  useEffect(() => {
+    const savedParameterValues = localStorage.getItem('parameterValues');
+    if (savedParameterValues) {
+      try {
+        const parsed = JSON.parse(savedParameterValues);
+        setParameterValues(parsed);
+        console.log('DEBUG: Loaded parameter values:', parsed);
+      } catch (e) {
+        console.error('Failed to load parameter values:', e);
+      }
+    }
+  }, []);
+
+  // Load manually added methods from localStorage on mount
+  useEffect(() => {
+    const savedMethods = localStorage.getItem('manuallyAddedMethods');
+    if (savedMethods) {
+      try {
+        const parsed = JSON.parse(savedMethods);
+        setManuallyAddedMethods(parsed);
+        console.log('DEBUG: Loaded manually added methods:', parsed);
+      } catch (e) {
+        console.error('Failed to load manually added methods:', e);
+      }
+    }
+  }, []);
+
+  // Load training days from localStorage on mount
+  useEffect(() => {
+    const savedTrainingDays = localStorage.getItem('trainingDays');
+    if (savedTrainingDays) {
+      try {
+        const parsed = JSON.parse(savedTrainingDays);
+        setTrainingDays(parsed);
+        console.log('DEBUG: Loaded training days:', parsed);
+      } catch (e) {
+        console.error('Failed to load training days:', e);
+      }
+    }
+  }, []);
+
+  // Load daily intensity data from localStorage on mount
+  useEffect(() => {
+    const savedDailyIntensity = localStorage.getItem('dailyIntensityData');
+    if (savedDailyIntensity) {
+      try {
+        const parsed = JSON.parse(savedDailyIntensity);
+        setDailyIntensityData(parsed);
+        console.log('DEBUG: Loaded daily intensity data:', parsed);
+      } catch (e) {
+        console.error('Failed to load daily intensity data:', e);
+      }
+    }
+  }, []);
+
   // Save mesocycle data to localStorage for microcycle planning
   useEffect(() => {
     if (mesocycles.length > 0) {
