@@ -565,7 +565,7 @@ export default function MicrocyclePlanningPage() {
                                   <div className="text-xs font-medium text-muted-foreground mb-2">
                                     {categoryName}
                                   </div>
-                                  <div className="space-y-1">
+                                  <div className="space-y-0.5">
                                     {exercises.map((exercise, idx) => {
                                       const microcycleNames = exercise.microcycleIds
                                         .map(id => currentMesocycle.microcycles.find(m => m.id === id)?.name)
@@ -576,12 +576,12 @@ export default function MicrocyclePlanningPage() {
                                           key={`${exercise.exerciseId}-${idx}`}
                                           draggable
                                           onDragStart={(e) => handleDragStart(e, exercise)}
-                                          className="group px-2 py-1 bg-background border rounded cursor-move hover:border-primary transition-colors"
+                                          className="group px-2 py-0.5 bg-background border rounded cursor-move hover:border-primary transition-colors"
                                         >
-                                          <div className="text-xs font-medium">{exercise.exerciseName}</div>
-                                          <div className="flex flex-wrap gap-1 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                          <div className="text-xs font-medium leading-tight">{exercise.exerciseName}</div>
+                                          <div className="flex flex-wrap gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                             {microcycleNames.map((name, i) => (
-                                              <Badge key={i} variant="secondary" className="text-[10px] px-1 py-0">
+                                              <Badge key={i} variant="secondary" className="text-[10px] px-1 py-0 leading-none">
                                                 {name}
                                               </Badge>
                                             ))}
