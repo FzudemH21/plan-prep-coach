@@ -631,7 +631,7 @@ export default function MicrocyclePlanningPage() {
                 {/* Level 2: Microcycles */}
                 <TooltipProvider>
                   <div className="flex border-b">
-                    <div className="w-64 shrink-0 border-r p-2 font-semibold bg-muted">
+                    <div className="w-64 shrink-0 border-r p-2 font-semibold bg-muted sticky left-0 z-10">
                       Training Methods
                     </div>
                     {currentMesocycle.microcycles.map((microcycle, microcycleIndex) => {
@@ -653,7 +653,7 @@ export default function MicrocyclePlanningPage() {
                           className={cn("flex-1 border-r last:border-r-0", getIntensityColor(microcycle.intensity))}
                           style={{ minWidth: `${dayCount * 120}px` }}
                         >
-                          <div className="flex items-center justify-between p-2">
+                          <div className="flex items-center justify-center p-2 relative">
                             <span className="font-semibold">{microcycle.name}</span>
                             {microcycleIndex > 0 && (
                               <Tooltip>
@@ -663,7 +663,7 @@ export default function MicrocyclePlanningPage() {
                                     variant="ghost"
                                     onClick={() => handleCopyFromPreviousMicrocycle(microcycle.id)}
                                     disabled={!hasMatchingDuration}
-                                    className="h-6 w-6 p-0 ml-2"
+                                    className="h-6 w-6 p-0 absolute right-1"
                                   >
                                     <Copy className="h-3 w-3" />
                                   </Button>
@@ -685,7 +685,7 @@ export default function MicrocyclePlanningPage() {
 
                 {/* Level 3: Days */}
                 <div className="flex border-b">
-                  <div className="w-64 shrink-0 border-r p-2 text-sm bg-muted">
+                  <div className="w-64 shrink-0 border-r p-2 text-sm bg-muted sticky left-0 z-10">
                     Exercise Category
                   </div>
                   {currentMesocycle.microcycles.map(microcycle => {
@@ -732,7 +732,7 @@ export default function MicrocyclePlanningPage() {
                             <div key={`${methodId}-${categoryName}`} className="border-b last:border-b-0">
                               <div className="flex">
                                 {/* Left sidebar: Category and Exercises */}
-                                <div className="w-64 shrink-0 border-r px-3 py-2 bg-muted/30">
+                                <div className="w-64 shrink-0 border-r px-3 py-2 bg-background sticky left-0 z-10">
                                   <div className="text-xs font-medium text-muted-foreground mb-2">
                                     {categoryName}
                                   </div>
