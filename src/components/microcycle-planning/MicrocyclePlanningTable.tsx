@@ -565,7 +565,10 @@ const mesocycleHeaders = useMemo(() => {
       // If we're splitting (going from unsplit to split), copy exercises to all microcycles
       if (willBeSplit && mesocycle) {
         Object.entries(prev.cellData).forEach(([cellId, cellData]) => {
-          if (cellData.mesocycleId === mesocycleId && !cellData.microcycleId && cellData.exercises.length > 0) {
+          const isMesocycleLevel = !cellData.microcycleId;
+          const matchesMesoProp = cellData.mesocycleId === mesocycleId;
+          const matchesByKey = cellId.endsWith(`-${mesocycleId}`);
+          if (isMesocycleLevel && (matchesMesoProp || matchesByKey) && cellData.exercises.length > 0) {
             // Build base id by removing the last "-<mesocycleId>" segment
             const lastDash = cellId.lastIndexOf("-");
             const baseId = lastDash !== -1 ? cellId.slice(0, lastDash) : cellId;
@@ -733,15 +736,44 @@ const updateCellData = (
       };
     }
 
-    // Cell exists, just update it
+    // Cell exists, update it and backfill missing metadata if necessary
     return {
       ...prev,
       cellData: {
         ...prev.cellData,
-        [cellId]: {
-          ...existingCell,
-          ...newData,
-        },
+        [cellId]: (() => {
+          // Infer values when missing (migration safety)
+          const lastDash = cellId.lastIndexOf("-");
+          const inferredColumnId = (context?.columnId) ?? cellId.slice(lastDash + 1);
+          const prefix = cellId.slice(0, lastDash);
+          const secondLastDash = prefix.lastIndexOf("-");
+          const inferredMethodId = (context?.methodId) ?? (secondLastDash !== -1 ? prefix.slice(0, secondLastDash) : existingCell.methodId);
+          const catToken = secondLastDash !== -1 ? prefix.slice(secondLastDash + 1) : undefined;
+          const inferredCategoryName = context?.categoryName ?? (catToken === "main" ? undefined : catToken);
+
+          let mesoId = existingCell.mesocycleId;
+          let microId = existingCell.microcycleId;
+          if (!mesoId) {
+            mesoId = inferredColumnId;
+            for (const meso of mesocycles) {
+              const micro = meso.microcycles.find(m => m.id === inferredColumnId);
+              if (micro) {
+                mesoId = meso.id;
+                microId = micro.id;
+                break;
+              }
+            }
+          }
+
+          return {
+            methodId: existingCell.methodId ?? inferredMethodId!,
+            categoryName: existingCell.categoryName ?? inferredCategoryName,
+            mesocycleId: mesoId!,
+            microcycleId: microId,
+            exercises: existingCell.exercises,
+            ...newData,
+          } as CellData;
+        })(),
       },
     };
   });
