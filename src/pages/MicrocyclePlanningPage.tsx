@@ -619,7 +619,7 @@ export default function MicrocyclePlanningPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto relative">
             <div className="min-w-max">
               {/* Three-level headers */}
               <div className="border rounded-lg mb-4">
@@ -631,7 +631,7 @@ export default function MicrocyclePlanningPage() {
                 {/* Level 2: Microcycles */}
                 <TooltipProvider>
                   <div className="flex border-b">
-                    <div className="w-64 shrink-0 border-r p-2 font-semibold bg-muted sticky left-0 z-10">
+                    <div className="w-64 shrink-0 border-r p-2 font-semibold bg-muted sticky left-0 z-20">
                       Training Methods
                     </div>
                     {currentMesocycle.microcycles.map((microcycle, microcycleIndex) => {
@@ -685,7 +685,7 @@ export default function MicrocyclePlanningPage() {
 
                 {/* Level 3: Days */}
                 <div className="flex border-b">
-                  <div className="w-64 shrink-0 border-r p-2 text-sm bg-muted sticky left-0 z-10">
+                  <div className="w-64 shrink-0 border-r p-2 text-sm bg-muted sticky left-0 z-20">
                     Exercise Category
                   </div>
                   {currentMesocycle.microcycles.map(microcycle => {
@@ -720,7 +720,7 @@ export default function MicrocyclePlanningPage() {
                 ) : (
                   Object.entries(exercisesByMethod).map(([methodId, methodData]) => {
                     return (
-                      <div key={methodId} className="border rounded-lg overflow-hidden">
+                      <div key={methodId} className="border rounded-lg">
                         {/* Method header */}
                         <div className="bg-muted/70 px-4 py-2 font-semibold text-sm border-b">
                           {methodId}
@@ -732,7 +732,7 @@ export default function MicrocyclePlanningPage() {
                             <div key={`${methodId}-${categoryName}`} className="border-b last:border-b-0">
                               <div className="flex">
                                 {/* Left sidebar: Category and Exercises */}
-                                <div className="w-64 shrink-0 border-r px-3 py-2 bg-background sticky left-0 z-10">
+                                <div className="w-64 shrink-0 border-r px-3 py-2 bg-background sticky left-0 z-20">
                                   <div className="text-xs font-medium text-muted-foreground mb-2">
                                     {categoryName}
                                   </div>
