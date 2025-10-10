@@ -21,11 +21,12 @@ export const DebouncedTextInput = React.memo(function DebouncedTextInput({
   const debounceTimerRef = useRef<number | null>(null);
 
   // Sync internal value when external value changes (e.g., from fill/copy operations)
+  // Only sync if we're not in the middle of typing (no pending debounce)
   useEffect(() => {
-    if (value !== internalValue) {
+    if (value !== internalValue && debounceTimerRef.current === null) {
       setInternalValue(value);
     }
-  }, [value]);
+  }, [value, internalValue]);
 
   const commitChange = (newValue: string) => {
     if (debounceTimerRef.current) {
