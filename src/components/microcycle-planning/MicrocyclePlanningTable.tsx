@@ -569,12 +569,9 @@ const mesocycleHeaders = useMemo(() => {
           const matchesMesoProp = cellData.mesocycleId === mesocycleId;
           const matchesByKey = cellId.endsWith(`-${mesocycleId}`);
           if (isMesocycleLevel && (matchesMesoProp || matchesByKey) && cellData.exercises.length > 0) {
-            // Build base id by removing the last "-<mesocycleId>" segment
-            const lastDash = cellId.lastIndexOf("-");
-            const baseId = lastDash !== -1 ? cellId.slice(0, lastDash) : cellId;
-
+            // Clone exercises to each microcycle using proper getCellId
             mesocycle.microcycles.forEach(microcycle => {
-              const microcycleCellId = `${baseId}-${microcycle.id}`;
+              const microcycleCellId = getCellId(cellData.methodId, cellData.categoryName, microcycle.id);
               const existingTarget = newCellData[microcycleCellId];
 
               // Only create if target doesn't exist or has no exercises (don't overwrite user's data)
