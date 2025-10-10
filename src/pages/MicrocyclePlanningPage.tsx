@@ -722,8 +722,11 @@ export default function MicrocyclePlanningPage() {
                     return (
                       <div key={methodId} className="border rounded-lg">
                         {/* Method header */}
-                        <div className="sticky top-0 z-30 bg-background px-4 py-2 font-semibold text-sm border-b shadow-sm">
-                          {methodId}
+                        <div className="flex border-b">
+                          <div className="w-64 shrink-0 sticky left-0 z-30 bg-background px-4 py-2 font-semibold text-sm border-r shadow-sm">
+                            {methodId}
+                          </div>
+                          <div className="flex-1" />
                         </div>
                         
                         {/* Category rows */}
