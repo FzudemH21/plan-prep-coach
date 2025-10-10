@@ -559,43 +559,43 @@ const mesocycleHeaders = useMemo(() => {
     setPlanningState(prev => {
       const willBeSplit = !prev.splitStates[mesocycleId];
       const mesocycle = mesocycles.find(m => m.id === mesocycleId);
-      
+
       let newCellData = { ...prev.cellData };
-      
+
       // If we're splitting (going from unsplit to split), copy exercises to all microcycles
       if (willBeSplit && mesocycle) {
-        // Find all cells that belong to this mesocycle (at mesocycle level)
         Object.entries(prev.cellData).forEach(([cellId, cellData]) => {
-          // Check if this cell is for this mesocycle and has exercises
           if (cellData.mesocycleId === mesocycleId && !cellData.microcycleId && cellData.exercises.length > 0) {
-            // Copy these exercises to each microcycle
+            // Build base id by removing the last "-<mesocycleId>" segment
+            const lastDash = cellId.lastIndexOf("-");
+            const baseId = lastDash !== -1 ? cellId.slice(0, lastDash) : cellId;
+
             mesocycle.microcycles.forEach(microcycle => {
-              const microcycleCellId = getCellId(
-                cellData.methodId,
-                cellData.categoryName,
-                microcycle.id
-              );
-              
-              // Create the microcycle cell with the same exercises
-              newCellData[microcycleCellId] = {
-                methodId: cellData.methodId,
-                categoryName: cellData.categoryName,
-                mesocycleId: mesocycleId,
-                microcycleId: microcycle.id,
-                exercises: [...cellData.exercises] // Clone the exercises array
-              };
+              const microcycleCellId = `${baseId}-${microcycle.id}`;
+              const existingTarget = newCellData[microcycleCellId];
+
+              // Only create if target doesn't exist or has no exercises (don't overwrite user's data)
+              if (!existingTarget || (existingTarget.exercises?.length ?? 0) === 0) {
+                newCellData[microcycleCellId] = {
+                  methodId: cellData.methodId,
+                  categoryName: cellData.categoryName,
+                  mesocycleId: mesocycle.id,
+                  microcycleId: microcycle.id,
+                  exercises: cellData.exercises.map(ex => ({ ...ex })),
+                };
+              }
             });
           }
         });
       }
-      
+
       return {
         ...prev,
         cellData: newCellData,
         splitStates: {
           ...prev.splitStates,
-          [mesocycleId]: willBeSplit
-        }
+          [mesocycleId]: willBeSplit,
+        },
       };
     });
   };
@@ -674,48 +674,65 @@ const mesocycleHeaders = useMemo(() => {
     }
   };
 
-const updateCellData = (cellId: string, newData: Partial<CellData>) => {
+const updateCellData = (
+  cellId: string,
+  newData: Partial<CellData>,
+  context?: { methodId: string; categoryName?: string; columnId: string }
+) => {
   setPlanningState(prev => {
     const existingCell = prev.cellData[cellId];
-    
+
     if (!existingCell) {
-      // Parse cellId to extract methodId, categoryName, and columnId
-      // Format: "methodId-categoryName-columnId" or "methodId-main-columnId"
-      const parts = cellId.split('-');
-      const methodId = parts[0];
-      const categoryName = parts[1] === 'main' ? undefined : parts[1];
-      const columnId = parts.slice(2).join('-'); // Handle IDs with dashes
-      
-      // Determine if this is a microcycle or mesocycle column
-      let mesocycleId = columnId; // Default: assume it's a mesocycle ID
+      // Use explicit context to avoid brittle parsing
+      const methodId = context?.methodId;
+      const categoryName = context?.categoryName;
+      const columnId = context?.columnId;
+
+      // Fallback: best-effort inference when context is missing (legacy safety)
+      let inferredMethodId = methodId;
+      let inferredCategoryName = categoryName;
+      let inferredColumnId = columnId;
+
+      if (!inferredMethodId || !inferredColumnId) {
+        const lastDash = cellId.lastIndexOf("-");
+        inferredColumnId = cellId.slice(lastDash + 1);
+        const prefix = cellId.slice(0, lastDash);
+        const secondLastDash = prefix.lastIndexOf("-");
+        if (secondLastDash !== -1) {
+          inferredMethodId = prefix.slice(0, secondLastDash);
+          const cat = prefix.slice(secondLastDash + 1);
+          inferredCategoryName = cat === "main" ? undefined : cat;
+        }
+      }
+
+      // Determine mesocycle vs microcycle by scanning mesocycles
+      let mesocycleId: string = inferredColumnId!;
       let microcycleId: string | undefined = undefined;
-      
-      // Check if columnId is actually a microcycle ID
       for (const meso of mesocycles) {
-        const matchingMicro = meso.microcycles.find(micro => micro.id === columnId);
-        if (matchingMicro) {
+        const micro = meso.microcycles.find(m => m.id === inferredColumnId);
+        if (micro) {
           mesocycleId = meso.id;
-          microcycleId = matchingMicro.id;
+          microcycleId = micro.id;
           break;
         }
       }
-      
+
       return {
         ...prev,
         cellData: {
           ...prev.cellData,
           [cellId]: {
-            methodId,
-            categoryName,
+            methodId: inferredMethodId!,
+            categoryName: inferredCategoryName,
             mesocycleId,
             microcycleId,
             exercises: [],
-            ...newData
-          }
-        }
+            ...newData,
+          },
+        },
       };
     }
-    
+
     // Cell exists, just update it
     return {
       ...prev,
@@ -723,9 +740,9 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
         ...prev.cellData,
         [cellId]: {
           ...existingCell,
-          ...newData
-        }
-      }
+          ...newData,
+        },
+      },
     };
   });
 };
@@ -735,11 +752,27 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
 
   const getCellData = (methodId: string, categoryName: string | undefined, columnId: string): CellData => {
     const cellId = getCellId(methodId, categoryName, columnId);
-    return planningState.cellData[cellId] || {
+    const existing = planningState.cellData[cellId];
+    if (existing) return existing;
+
+    // Determine mesocycle vs microcycle by scanning mesocycles
+    let mesoId: string = columnId;
+    let microId: string | undefined = undefined;
+    for (const meso of mesocycles) {
+      const micro = meso.microcycles.find(m => m.id === columnId);
+      if (micro) {
+        mesoId = meso.id;
+        microId = micro.id;
+        break;
+      }
+    }
+
+    return {
       methodId,
       categoryName,
-      mesocycleId: columnId,
-      exercises: []
+      mesocycleId: mesoId,
+      microcycleId: microId,
+      exercises: [],
     };
   };
 
@@ -791,9 +824,11 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
           id: `${ex.exerciseId}-${Date.now()}-${Math.random()}`
         }));
         
-        updateCellData(targetCellId, {
-          exercises: copiedExercises
-        });
+        updateCellData(
+          targetCellId,
+          { exercises: copiedExercises },
+          { methodId, categoryName, columnId: targetColumnId }
+        );
 
         // Get column labels for toast
         const sourceColumn = columnStructure.find(col => col.id === sourceColumnId);
@@ -859,9 +894,11 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
         id: `${ex.exerciseId}-${Date.now()}-${Math.random()}`
       }));
       
-      updateCellData(targetCellId, {
-        exercises: copiedExercises
-      });
+      updateCellData(
+        targetCellId,
+        { exercises: copiedExercises },
+        { methodId, categoryName, columnId: targetColumnId }
+      );
 
       // Get column labels for toast
       const sourceColumn = columnStructure.find(col => col.id === sourceColumnId);
@@ -1319,7 +1356,13 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                               >
                                  <ExerciseSelectionCell
                                    cellData={getCellData(method.id, undefined, column.id)}
-                                   onUpdate={(newData) => updateCellData(getCellId(method.id, undefined, column.id), newData)}
+                                   onUpdate={(newData) =>
+                                     updateCellData(
+                                       getCellId(method.id, undefined, column.id),
+                                       newData,
+                                       { methodId: method.id, categoryName: undefined, columnId: column.id }
+                                     )
+                                   }
                                    onCopy={() => copyExercisesWithinMethod(method.id, undefined, column.id)}
                                    hasPreviousExercises={hasPreviousExercisesInMethod(method.id, undefined, columnStructure.findIndex(col => col.id === column.id))}
                                  />
@@ -1392,7 +1435,13 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                                   >
                                     <ExerciseSelectionCell
                                       cellData={getCellData(method.id, categoryName, column.id)}
-                                      onUpdate={(newData) => updateCellData(getCellId(method.id, categoryName, column.id), newData)}
+                                      onUpdate={(newData) =>
+                                        updateCellData(
+                                          getCellId(method.id, categoryName, column.id),
+                                          newData,
+                                          { methodId: method.id, categoryName, columnId: column.id }
+                                        )
+                                      }
                                       onCopy={() => copyExercisesWithinMethod(method.id, categoryName, column.id)}
                                       hasPreviousExercises={hasPreviousExercisesInMethod(method.id, categoryName, columnStructure.findIndex(col => col.id === column.id))}
                                     />
