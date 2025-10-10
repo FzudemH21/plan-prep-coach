@@ -34,49 +34,54 @@ export const QuantitativeParameterInput = React.memo(function QuantitativeParame
   isEnabled = true
 }: QuantitativeParameterInputProps) {
   const [internalValue, setInternalValue] = useState(value);
-  const debounceTimerRef = useRef<number | null>(null);
+  const isEditing = useRef(false);
+  const isComposing = useRef(false);
 
   // Sync internal value when external value changes (e.g., from fill/copy operations)
-  // Only sync if we're not in the middle of typing (no pending debounce)
+  // Only sync if we're not actively editing
   useEffect(() => {
-    if (value !== internalValue && debounceTimerRef.current === null) {
+    if (!isEditing.current && value !== internalValue) {
       setInternalValue(value);
     }
   }, [value, internalValue]);
 
   const commitChange = (newValue: string) => {
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
+    if (newValue !== value) {
+      onValueChange(newValue);
     }
-    onValueChange(newValue);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setInternalValue(newValue);
-
-    // Clear existing timer
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-
-    // Set new debounced timer
-    debounceTimerRef.current = window.setTimeout(() => {
-      onValueChange(newValue);
-    }, 150);
+    isEditing.current = true;
   };
 
   const handleBlur = () => {
-    // Immediately commit on blur
-    commitChange(internalValue);
+    if (!isComposing.current) {
+      commitChange(internalValue);
+      isEditing.current = false;
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      // Immediately commit on Enter
+    if (e.key === 'Enter' && !isComposing.current) {
       commitChange(internalValue);
+      isEditing.current = false;
+      (e.currentTarget as HTMLInputElement).blur();
+    } else if (e.key === 'Escape') {
+      setInternalValue(value);
+      isEditing.current = false;
+      (e.currentTarget as HTMLInputElement).blur();
     }
+  };
+
+  const handleCompositionStart = () => {
+    isComposing.current = true;
+  };
+
+  const handleCompositionEnd = () => {
+    isComposing.current = false;
   };
 
   const handleDragStart = (e: React.MouseEvent) => {
@@ -110,6 +115,8 @@ export const QuantitativeParameterInput = React.memo(function QuantitativeParame
         onChange={handleChange}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
+        onCompositionStart={handleCompositionStart}
+        onCompositionEnd={handleCompositionEnd}
         placeholder={placeholder}
         className={cn(
           hasMeaningfulUnits ? "flex-1 min-w-0 h-8 text-xs" : "w-full h-8 text-xs",
@@ -161,49 +168,54 @@ export const QualitativeParameterInput = React.memo(function QualitativeParamete
   isEnabled = true
 }: QualitativeParameterInputProps) {
   const [internalValue, setInternalValue] = useState(value);
-  const debounceTimerRef = useRef<number | null>(null);
+  const isEditing = useRef(false);
+  const isComposing = useRef(false);
 
   // Sync internal value when external value changes (e.g., from fill/copy operations)
-  // Only sync if we're not in the middle of typing (no pending debounce)
+  // Only sync if we're not actively editing
   useEffect(() => {
-    if (value !== internalValue && debounceTimerRef.current === null) {
+    if (!isEditing.current && value !== internalValue) {
       setInternalValue(value);
     }
   }, [value, internalValue]);
 
   const commitChange = (newValue: string) => {
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
+    if (newValue !== value) {
+      onValueChange(newValue);
     }
-    onValueChange(newValue);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setInternalValue(newValue);
-
-    // Clear existing timer
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-
-    // Set new debounced timer
-    debounceTimerRef.current = window.setTimeout(() => {
-      onValueChange(newValue);
-    }, 150);
+    isEditing.current = true;
   };
 
   const handleBlur = () => {
-    // Immediately commit on blur
-    commitChange(internalValue);
+    if (!isComposing.current) {
+      commitChange(internalValue);
+      isEditing.current = false;
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      // Immediately commit on Enter
+    if (e.key === 'Enter' && !isComposing.current) {
       commitChange(internalValue);
+      isEditing.current = false;
+      (e.currentTarget as HTMLInputElement).blur();
+    } else if (e.key === 'Escape') {
+      setInternalValue(value);
+      isEditing.current = false;
+      (e.currentTarget as HTMLInputElement).blur();
     }
+  };
+
+  const handleCompositionStart = () => {
+    isComposing.current = true;
+  };
+
+  const handleCompositionEnd = () => {
+    isComposing.current = false;
   };
 
   const handleDragStart = (e: React.MouseEvent) => {
@@ -251,6 +263,8 @@ export const QualitativeParameterInput = React.memo(function QualitativeParamete
           onChange={handleChange}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
+          onCompositionStart={handleCompositionStart}
+          onCompositionEnd={handleCompositionEnd}
           placeholder={placeholder}
           className={cn(
             "w-full h-8 text-xs",
