@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -31,9 +31,10 @@ interface MicrocyclePlanningTableProps {
     isQuantitative: boolean;
     isQualitative: boolean;
   }>>;
+  onExerciseSelectionChange?: (cellData: Record<string, CellData>) => void;
 }
 
-export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], parameterValues = {}, methodParametersMap = {} }: MicrocyclePlanningTableProps) {
+export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], parameterValues = {}, methodParametersMap = {}, onExerciseSelectionChange }: MicrocyclePlanningTableProps) {
   const { data: toolboxData } = useToolboxData();
   const { data: athleticismData } = useAthleticismData();
   const { toast } = useToast();
@@ -42,6 +43,23 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], para
     splitStates: {},
     microcycleGroups: {}
   });
+
+  // Load saved state from localStorage
+  useEffect(() => {
+    const savedState = localStorage.getItem('microcyclePlanningState');
+    if (savedState) {
+      setPlanningState(JSON.parse(savedState));
+    }
+  }, []);
+
+  // Save state to localStorage and notify parent whenever it changes
+  useEffect(() => {
+    if (Object.keys(planningState.cellData).length > 0) {
+      localStorage.setItem('microcyclePlanningState', JSON.stringify(planningState));
+      onExerciseSelectionChange?.(planningState.cellData);
+    }
+  }, [planningState, onExerciseSelectionChange]);
+
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [copyDialogState, setCopyDialogState] = useState<{
     isOpen: boolean;

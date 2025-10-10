@@ -187,6 +187,34 @@ export default function MesocyclePage() {
     }
   }, []);
 
+  // Save mesocycle data to localStorage for microcycle planning
+  useEffect(() => {
+    if (mesocycles.length > 0) {
+      localStorage.setItem('mesocycleData', JSON.stringify({ mesocycles }));
+    }
+  }, [mesocycles]);
+
+  // Save parameter values to localStorage
+  useEffect(() => {
+    if (Object.keys(parameterValues).length > 0) {
+      localStorage.setItem('parameterValues', JSON.stringify(parameterValues));
+    }
+  }, [parameterValues]);
+
+  // Save training days to localStorage
+  useEffect(() => {
+    if (trainingDays.length > 0) {
+      localStorage.setItem('trainingDays', JSON.stringify(trainingDays));
+    }
+  }, [trainingDays]);
+
+  // Save daily intensity data to localStorage
+  useEffect(() => {
+    if (dailyIntensityData.length > 0) {
+      localStorage.setItem('dailyIntensityData', JSON.stringify(dailyIntensityData));
+    }
+  }, [dailyIntensityData]);
+
   const intensityLevels: IntensityLevel[] = ["off", "deload", "easy", "easy-moderate", "moderate", "moderate-hard", "hard", "extremely-hard"];
 
   const getIntensityColor = (intensity: IntensityLevel) => {
@@ -2000,6 +2028,9 @@ export default function MesocyclePage() {
           selectedMethods={getAllocatedMethods()}
           parameterValues={parameterValues}
           methodParametersMap={methodParametersMap}
+          onExerciseSelectionChange={(cellData) => {
+            localStorage.setItem('exerciseSelectionData', JSON.stringify(cellData));
+          }}
         />
       </CardContent>
     </Card>

@@ -9,6 +9,7 @@ import { CustomLibrariesProvider } from "@/contexts/CustomLibrariesContext";
 import HomePage from "./pages/HomePage";
 import MacrocyclePage from "./pages/MacrocyclePage";
 import MesocyclePage from "./pages/MesocyclePage";
+import MicrocyclePlanningPage from "./pages/MicrocyclePlanningPage";
 import TemplatesPage from "./pages/TemplatesPage";
 import AthleticismDatabase from "./pages/AthleticismDatabase";
 import ToolboxDatabase from "./pages/ToolboxDatabase";
@@ -32,7 +33,7 @@ const App = () => (
               <Route path="/" element={<HomePage />} />
               <Route path="/macrocycle" element={<MacrocyclePage />} />
               <Route path="/mesocycle" element={<MesocyclePage />} />
-              <Route path="/microcycle" element={<div className="text-center py-12">Microcycle page coming soon...</div>} />
+              <Route path="/microcycle" element={<MicrocyclePlanningPage />} />
               <Route path="/clients" element={<div className="text-center py-12">Client database coming soon...</div>} />
               <Route path="/templates" element={<TemplatesPage />} />
               <Route path="/templates/athleticism" element={<AthleticismDatabase />} />
