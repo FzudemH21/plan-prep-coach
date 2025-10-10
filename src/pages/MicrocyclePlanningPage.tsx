@@ -118,20 +118,23 @@ export default function MicrocyclePlanningPage() {
   const allocatedExercises = useMemo(() => {
     if (!currentMesocycle) return [];
 
-    const exercises: Array<{
+    // Use Map to consolidate exercises (avoid duplicates)
+    const exerciseMap = new Map<string, {
       exerciseId: string;
       exerciseName: string;
       library: string;
       methodId: string;
       categoryName: string;
-      microcycleIds: string[]; // Which microcycles this exercise is allocated to
-    }> = [];
+      microcycleIds: string[];
+    }>();
 
     // Iterate through exercise selection data
     Object.entries(exerciseSelectionData).forEach(([cellId, cellData]) => {
       if (cellData.mesocycleId !== currentMesocycle.id) return;
 
       cellData.exercises.forEach(exercise => {
+        const key = `${exercise.exerciseId}-${cellData.methodId}-${cellData.categoryName}`;
+        
         // Determine which microcycles this exercise applies to
         let microcycleIds: string[] = [];
         
@@ -143,18 +146,29 @@ export default function MicrocyclePlanningPage() {
           microcycleIds = currentMesocycle.microcycles.map(m => m.id);
         }
 
-        exercises.push({
-          exerciseId: exercise.exerciseId,
-          exerciseName: exercise.exerciseName,
-          library: exercise.library,
-          methodId: cellData.methodId,
-          categoryName: cellData.categoryName || '',
-          microcycleIds
-        });
+        if (exerciseMap.has(key)) {
+          // Merge microcycle IDs (avoid duplicates)
+          const existing = exerciseMap.get(key)!;
+          const combinedIds = [...new Set([...existing.microcycleIds, ...microcycleIds])];
+          exerciseMap.set(key, {
+            ...existing,
+            microcycleIds: combinedIds
+          });
+        } else {
+          // Create new entry
+          exerciseMap.set(key, {
+            exerciseId: exercise.exerciseId,
+            exerciseName: exercise.exerciseName,
+            library: exercise.library,
+            methodId: cellData.methodId,
+            categoryName: cellData.categoryName || '',
+            microcycleIds
+          });
+        }
       });
     });
 
-    return exercises;
+    return Array.from(exerciseMap.values());
   }, [currentMesocycle, exerciseSelectionData]);
 
   // Group exercises by method and category
@@ -640,7 +654,7 @@ export default function MicrocyclePlanningPage() {
   };
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
+    <div className="mx-auto py-6 space-y-6 px-4 w-full max-w-[98vw]">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-3xl font-bold">Microcycle Planning</h1>
       </div>

@@ -121,6 +121,19 @@ export default function MesocyclePage() {
   );
   const progress = (currentStep / totalSteps) * 100;
 
+  // Load saved step from localStorage on mount
+  useEffect(() => {
+    const savedStep = localStorage.getItem('mesocycleStep');
+    if (savedStep) {
+      const step = parseInt(savedStep);
+      if (!isNaN(step) && step >= 1 && step <= totalSteps) {
+        setCurrentStep(step);
+      }
+      // Clear the saved step after loading
+      localStorage.removeItem('mesocycleStep');
+    }
+  }, []);
+
   // Load macrocycle data on mount
   useEffect(() => {
     const savedMacrocycleData = localStorage.getItem('macrocycleData');
