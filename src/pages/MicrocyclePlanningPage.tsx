@@ -351,6 +351,43 @@ export default function MicrocyclePlanningPage() {
     };
   };
 
+  // Get periodization parameters for a specific microcycle
+  const getPeriodizationForMicrocycle = (microcycleId: string) => {
+    if (!currentMesocycle) return [];
+    
+    const microcycleIndex = currentMesocycle.microcycles.findIndex(m => m.id === microcycleId);
+    if (microcycleIndex === -1) return [];
+    
+    const methodData = parameterValues[currentMesocycle.id]?.[microcycleIndex];
+    if (!methodData) return [];
+    
+    const periodization: Array<{
+      methodName: string;
+      parameters: Array<{ name: string; value: string | number }>;
+    }> = [];
+    
+    // Iterate through all methods allocated to this microcycle
+    Object.entries(methodData).forEach(([methodName, sessions]) => {
+      // Get parameters from first session (session 0) as representative
+      const sessionParams = sessions[0];
+      if (!sessionParams) return;
+      
+      const parameters = Object.entries(sessionParams).map(([paramName, paramValue]) => ({
+        name: paramName,
+        value: paramValue
+      }));
+      
+      if (parameters.length > 0) {
+        periodization.push({
+          methodName,
+          parameters
+        });
+      }
+    });
+    
+    return periodization;
+  };
+
   // Handle drag start
   const handleDragStart = (e: React.DragEvent, exercise: typeof allocatedExercises[0]) => {
     e.dataTransfer.setData('application/json', JSON.stringify(exercise));
@@ -621,8 +658,50 @@ export default function MicrocyclePlanningPage() {
                           className={cn("flex-1 border-r last:border-r-0", getIntensityColor(microcycle.intensity))}
                           style={{ minWidth: `${dayCount * 120}px` }}
                         >
-                          <div className="flex items-center justify-center p-2 relative">
+                          <div className="flex items-center justify-center p-2 relative gap-1">
                             <span className="font-semibold">{microcycle.name}</span>
+                            
+                            {/* Info icon for periodization */}
+                            {(() => {
+                              const periodization = getPeriodizationForMicrocycle(microcycle.id);
+                              
+                              if (periodization.length === 0) return null;
+                              
+                              return (
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <button className="text-blue-600 hover:text-blue-700 transition-colors">
+                                      <Info className="h-4 w-4" />
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-96" align="start">
+                                    <div className="space-y-3">
+                                      <h4 className="font-semibold text-sm border-b pb-2">
+                                        Periodization for {microcycle.name}
+                                      </h4>
+                                      
+                                      <div className="space-y-3 max-h-80 overflow-y-auto">
+                                        {periodization.map((method, idx) => (
+                                          <div key={idx} className="space-y-1">
+                                            <h5 className="text-xs font-semibold text-blue-700">
+                                              {method.methodName}
+                                            </h5>
+                                            <div className="pl-2 space-y-0.5">
+                                              {method.parameters.map((param, pIdx) => (
+                                                <p key={pIdx} className="text-xs text-gray-700">
+                                                  <span className="font-medium">{param.name}:</span>{' '}
+                                                  {param.value}
+                                                </p>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                              );
+                            })()}
                             
                             {/* Warning indicator */}
                             {(() => {
@@ -633,7 +712,7 @@ export default function MicrocyclePlanningPage() {
                               return (
                                 <Popover>
                                   <PopoverTrigger asChild>
-                                    <button className="ml-2 text-amber-600 hover:text-amber-700 transition-colors">
+                                    <button className="text-amber-600 hover:text-amber-700 transition-colors">
                                       <AlertTriangle className="h-4 w-4" fill="currentColor" />
                                     </button>
                                   </PopoverTrigger>
