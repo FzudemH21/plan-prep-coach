@@ -2357,6 +2357,35 @@ export default function MesocyclePage() {
                   </div>
                 </div>
 
+                {/* Microcycle Names Row */}
+                <div className="flex mb-2 flex-nowrap">
+                  <div className="sticky left-0 bg-background z-20 min-w-[140px] mr-4 shrink-0">
+                    {/* Empty space to align with intensity scale */}
+                  </div>
+                  <div className="flex flex-nowrap">
+                    {mesocycles.map((meso) => 
+                      meso.microcycles.map((micro, microIndex) => {
+                        const width = micro.duration * 80; // 80px per day
+                        const isLastMicro = microIndex === meso.microcycles.length - 1;
+                        return (
+                          <div 
+                            key={micro.id}
+                            className={`text-center text-sm py-1 px-2 shrink-0 ${
+                              isLastMicro ? 'border-r-2 border-r-slate-400' : 'border-r border-border'
+                            }`}
+                            style={{ width: `${width}px` }}
+                          >
+                            {micro.name}
+                            <div className="text-xs text-muted-foreground">
+                              ({micro.duration}d)
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
                 {/* Column Chart */}
                 <div className="flex items-end flex-nowrap">
                   {/* Intensity Scale - Sticky */}
