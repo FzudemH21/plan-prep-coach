@@ -1436,7 +1436,7 @@ export default function MesocyclePage() {
     };
 
     // Helper function to get parameters for a method from toolbox data
-    const getParametersForMethodFromToolbox = useCallback((methodName: string) => {
+    const getParametersForMethodFromToolbox = (methodName: string) => {
       if (!toolboxData.entries) return [];
       
       // Find all toolbox entries that match this method
@@ -1455,7 +1455,7 @@ export default function MesocyclePage() {
         isQuantitative: entry.parameterType === 'quantitative',
         isQualitative: entry.parameterType === 'qualitative'
       }));
-    }, [toolboxData]);
+    };
 
 
     // Helper function for intensity colors with transparency
