@@ -2334,7 +2334,7 @@ export default function MesocyclePage() {
           
           {/* Horizontal scrollable grid */}
           <div className="w-full min-w-0 border rounded-lg">
-            <div className="force-scrollbar-x overflow-y-hidden" style={{ scrollbarWidth: 'thin', maxHeight: '400px' }}>
+            <div className="force-scrollbar-x overflow-x-auto overflow-y-visible" style={{ scrollbarWidth: 'thin' }}>
               <div className="w-max p-4">
                 {/* Mesocycle Headers */}
                 <div className="flex mb-4 flex-nowrap">
@@ -2370,7 +2370,7 @@ export default function MesocyclePage() {
                         return (
                           <div 
                             key={micro.id}
-                            className={`text-center text-sm py-1 px-2 shrink-0 ${
+                            className={`text-center text-sm py-1 px-2 shrink-0 ${getIntensityColor(micro.intensity)} ${
                               isLastMicro ? 'border-r-2 border-r-slate-400' : 'border-r border-border'
                             }`}
                             style={{ width: `${width}px` }}
