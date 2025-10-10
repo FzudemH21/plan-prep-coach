@@ -12,6 +12,7 @@ import { Plan, Mesocycle } from "@/features/planner/types";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { trainingData } from "@/data/trainingData";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
+import { cn } from "@/lib/utils";
 
 const schema = z.object({
   goal: z.string().min(5, "Please describe a SMART goal"),
@@ -33,8 +34,16 @@ type WizardProps = {
   initial?: Partial<Plan>;
 };
 
+const wizardSteps = [
+  { id: 0, label: "SMART Goal" },
+  { id: 1, label: "Mesocycle Structure" },
+  { id: 2, label: "Sub-goals & Qualities" },
+  { id: 3, label: "Review" }
+];
+
 export default function PlannerWizard({ onComplete, initial }: WizardProps) {
   const [step, setStep] = useState(0);
+  const [visitedSteps, setVisitedSteps] = useState<Set<number>>(new Set([0]));
   const [draft, setDraft] = useLocalStorage("planner-wizard-draft", {
     goal: initial?.goal ?? "",
     mesoCount: 3,
@@ -96,10 +105,19 @@ export default function PlannerWizard({ onComplete, initial }: WizardProps) {
   const [sessionLengthPerMeso, setSessionLengthPerMeso] = useState<number[]>(() => Array.from({ length: draft.mesoCount || 0 }, () => draft.sessionLengthAll || 60));
 
   function next() {
-    setStep((s) => Math.min(s + 1, 3));
+    const nextStep = Math.min(step + 1, 3);
+    setStep(nextStep);
+    setVisitedSteps(prev => new Set([...prev, nextStep]));
   }
+  
   function back() {
     setStep((s) => Math.max(s - 1, 0));
+  }
+  
+  function goToStep(targetStep: number) {
+    if (visitedSteps.has(targetStep)) {
+      setStep(targetStep);
+    }
   }
 
   function handleSubmit(values: z.infer<typeof schema>) {
@@ -167,6 +185,48 @@ export default function PlannerWizard({ onComplete, initial }: WizardProps) {
         <CardTitle>Training Plan Wizard</CardTitle>
       </CardHeader>
       <CardContent>
+        {/* Step Navigation */}
+        <div className="mb-6 border-b pb-4">
+          <div className="flex items-center justify-between">
+            {wizardSteps.map((s, idx) => {
+              const isActive = step === s.id;
+              const isVisited = visitedSteps.has(s.id);
+              const isClickable = isVisited;
+              
+              return (
+                <React.Fragment key={s.id}>
+                  <button
+                    type="button"
+                    onClick={() => isClickable && goToStep(s.id)}
+                    disabled={!isClickable}
+                    className={cn(
+                      "flex items-center gap-2 transition-colors",
+                      isClickable ? "cursor-pointer" : "cursor-not-allowed opacity-50",
+                      isActive ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-colors",
+                      isActive ? "border-primary bg-primary text-primary-foreground" : 
+                      isVisited ? "border-primary text-primary" : "border-muted-foreground"
+                    )}>
+                      {s.id + 1}
+                    </div>
+                    <span className="hidden sm:inline text-sm">{s.label}</span>
+                  </button>
+                  
+                  {idx < wizardSteps.length - 1 && (
+                    <div className={cn(
+                      "flex-1 h-0.5 mx-2",
+                      visitedSteps.has(wizardSteps[idx + 1].id) ? "bg-primary" : "bg-muted"
+                    )} />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+
         <Form {...form}>
           <form onChange={onValuesChange} onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
             {step === 0 && (
