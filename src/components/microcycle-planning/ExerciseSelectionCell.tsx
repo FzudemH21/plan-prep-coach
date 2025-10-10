@@ -68,19 +68,14 @@ export function ExerciseSelectionCell({
             <span className="text-xs font-medium truncate flex-1">
               {exercise.exerciseName}
             </span>
-            <div className="flex items-center gap-1">
-              <Badge variant="outline" className="text-xs h-4 px-1">
-                {exercise.library}
-              </Badge>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => removeExercise(exercise.id)}
-                className="h-4 w-4 p-0 text-muted-foreground hover:text-destructive"
-              >
-                <X className="h-3 w-3" />
-              </Button>
-            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => removeExercise(exercise.id)}
+              className="h-4 w-4 p-0 text-muted-foreground hover:text-destructive"
+            >
+              <X className="h-3 w-3" />
+            </Button>
           </div>
         ))}
       </div>

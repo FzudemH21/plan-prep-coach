@@ -556,13 +556,48 @@ const mesocycleHeaders = useMemo(() => {
   const hasSplitMesocycles = Object.values(planningState.splitStates).some(isSplit => isSplit);
 
   const toggleMesocycleSplit = (mesocycleId: string) => {
-    setPlanningState(prev => ({
-      ...prev,
-      splitStates: {
-        ...prev.splitStates,
-        [mesocycleId]: !prev.splitStates[mesocycleId]
+    setPlanningState(prev => {
+      const willBeSplit = !prev.splitStates[mesocycleId];
+      const mesocycle = mesocycles.find(m => m.id === mesocycleId);
+      
+      let newCellData = { ...prev.cellData };
+      
+      // If we're splitting (going from unsplit to split), copy exercises to all microcycles
+      if (willBeSplit && mesocycle) {
+        // Find all cells that belong to this mesocycle (at mesocycle level)
+        Object.entries(prev.cellData).forEach(([cellId, cellData]) => {
+          // Check if this cell is for this mesocycle and has exercises
+          if (cellData.mesocycleId === mesocycleId && !cellData.microcycleId && cellData.exercises.length > 0) {
+            // Copy these exercises to each microcycle
+            mesocycle.microcycles.forEach(microcycle => {
+              const microcycleCellId = getCellId(
+                cellData.methodId,
+                cellData.categoryName,
+                microcycle.id
+              );
+              
+              // Create the microcycle cell with the same exercises
+              newCellData[microcycleCellId] = {
+                methodId: cellData.methodId,
+                categoryName: cellData.categoryName,
+                mesocycleId: mesocycleId,
+                microcycleId: microcycle.id,
+                exercises: [...cellData.exercises] // Clone the exercises array
+              };
+            });
+          }
+        });
       }
-    }));
+      
+      return {
+        ...prev,
+        cellData: newCellData,
+        splitStates: {
+          ...prev.splitStates,
+          [mesocycleId]: willBeSplit
+        }
+      };
+    });
   };
 
   const createMicrocycleGroup = (microcycleIds: string[], mesocycleId: string) => {
