@@ -710,7 +710,7 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
         <CardContent>
         <div className="overflow-x-auto">
           <div className="min-w-full">
-            <Table className="min-w-[1200px]">
+            <Table className="min-w-[1200px]" style={{ paddingLeft: '512px' }}>
             <TableHeader>
               {/* First row - Mesocycle headers (only when there are split mesocycles) */}
               {hasSplitMesocycles && (
