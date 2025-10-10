@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ArrowLeft, ArrowRight, Target, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info } from 'lucide-react';
 import { ExtendedMesocycle, Microcycle } from '@/features/planner/types';
 import { TrainingDay } from '@/types/daily-intensity';
 import { CellData, ExerciseSelection } from '@/types/microcycle-planning';
@@ -42,6 +42,7 @@ export default function MicrocyclePlanningPage() {
   const [exerciseDistribution, setExerciseDistribution] = useState<ExerciseDistribution[]>([]);
   const [parameterValues, setParameterValues] = useState<Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>>({});
   const [dailyIntensityData, setDailyIntensityData] = useState<any[]>([]);
+  const [expandedExerciseId, setExpandedExerciseId] = useState<string | null>(null);
   const { data: athleticismData } = useAthleticismData();
 
   const totalSteps = 1; // Currently only Step 1: Exercise Distribution
@@ -576,16 +577,35 @@ export default function MicrocyclePlanningPage() {
                                           key={`${exercise.exerciseId}-${idx}`}
                                           draggable
                                           onDragStart={(e) => handleDragStart(e, exercise)}
-                                          className="group px-2 py-0.5 bg-background border rounded cursor-move hover:border-primary transition-colors"
+                                          className="px-2 py-0.5 bg-background border rounded cursor-move hover:border-primary transition-colors"
                                         >
-                                          <div className="text-xs font-medium leading-tight">{exercise.exerciseName}</div>
-                                          <div className="flex flex-wrap gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            {microcycleNames.map((name, i) => (
-                                              <Badge key={i} variant="secondary" className="text-[10px] px-1 py-0 leading-none">
-                                                {name}
-                                              </Badge>
-                                            ))}
+                                          <div className="flex items-start justify-between gap-1">
+                                            <div className="text-xs font-medium leading-tight flex-1">{exercise.exerciseName}</div>
+                                            {microcycleNames.length > 0 && (
+                                              <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="h-4 w-4 p-0 shrink-0"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setExpandedExerciseId(
+                                                    expandedExerciseId === exercise.exerciseId ? null : exercise.exerciseId
+                                                  );
+                                                }}
+                                              >
+                                                <Info className="h-3 w-3" />
+                                              </Button>
+                                            )}
                                           </div>
+                                          {expandedExerciseId === exercise.exerciseId && microcycleNames.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 mt-0.5">
+                                              {microcycleNames.map((name, i) => (
+                                                <Badge key={i} variant="secondary" className="text-[10px] px-1 py-0 leading-none">
+                                                  {name}
+                                                </Badge>
+                                              ))}
+                                            </div>
+                                          )}
                                         </div>
                                       );
                                     })}
