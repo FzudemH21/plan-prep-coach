@@ -1,5 +1,5 @@
 import { MicrocyclePlanningTable } from '@/components/microcycle-planning';
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useTransition } from 'react';
 import { AddMethodDialog } from '@/components/ui/add-method-dialog';
 import { MethodDeleteDialog } from '@/components/shared/MethodDeleteDialog';
 import { useToast } from '@/hooks/use-toast';
@@ -20,6 +20,7 @@ import { useAthleticismData } from '@/hooks/useAthleticismData';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useDragFill } from '@/hooks/useDragFill';
 import { QuantitativeParameterInput, QualitativeParameterInput } from '@/components/ui/parameter-input';
+import { DebouncedTextInput } from '@/components/ui/debounced-input';
 import { KeyboardShortcutsPanel } from '@/components/ui/keyboard-shortcuts-panel';
 import { ParameterContextMenu } from '@/components/ui/parameter-context-menu';
 import { ParameterFillControl } from '@/components/ui/parameter-fill-control';
@@ -48,6 +49,7 @@ const normalizeForComparison = (str: string): string => {
 export default function MesocyclePage() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
+  const [isPending, startTransition] = useTransition();
   const [mesocycles, setMesocycles] = useState<ExtendedMesocycle[]>([]);
   const [macrocycleData, setMacrocycleData] = useState<any>(null);
   const [planStartDate, setPlanStartDate] = useState<Date>(new Date());
@@ -1059,16 +1061,18 @@ export default function MesocyclePage() {
 
   // Parameter value helpers (moved out to keep hooks stable)
   const updateParameterValue = useCallback((mesocycleId: string, microcycleIndex: number, methodName: string, parameterName: string, value: string | number, sessionIndex: number = 0) => {
-    setParameterValues(prev => {
-      const updated = { ...prev };
-      if (!updated[mesocycleId]) updated[mesocycleId] = {};
-      if (!updated[mesocycleId][microcycleIndex]) updated[mesocycleId][microcycleIndex] = {};
-      if (!updated[mesocycleId][microcycleIndex][methodName]) updated[mesocycleId][microcycleIndex][methodName] = {};
-      if (!updated[mesocycleId][microcycleIndex][methodName][sessionIndex]) updated[mesocycleId][microcycleIndex][methodName][sessionIndex] = {};
-      updated[mesocycleId][microcycleIndex][methodName][sessionIndex][parameterName] = value;
-      return updated;
+    startTransition(() => {
+      setParameterValues(prev => {
+        const updated = { ...prev };
+        if (!updated[mesocycleId]) updated[mesocycleId] = {};
+        if (!updated[mesocycleId][microcycleIndex]) updated[mesocycleId][microcycleIndex] = {};
+        if (!updated[mesocycleId][microcycleIndex][methodName]) updated[mesocycleId][microcycleIndex][methodName] = {};
+        if (!updated[mesocycleId][microcycleIndex][methodName][sessionIndex]) updated[mesocycleId][microcycleIndex][methodName][sessionIndex] = {};
+        updated[mesocycleId][microcycleIndex][methodName][sessionIndex][parameterName] = value;
+        return updated;
+      });
     });
-  }, []);
+  }, [startTransition]);
 
   const getParameterValue = useCallback((mesocycleId: string, microcycleIndex: number, methodName: string, parameterName: string, sessionIndex: number = 0) => {
     return parameterValues[mesocycleId]?.[microcycleIndex]?.[methodName]?.[sessionIndex]?.[parameterName] || '';
@@ -1422,39 +1426,50 @@ export default function MesocyclePage() {
     return getMethodsForAllocatedSubGoals;
   }, [getMethodsForAllocatedSubGoals]);
 
-  const renderMethodPeriodization = () => {
+  // Precompute method parameters map to avoid recalculation on every render
+  const methodParametersMap = useMemo(() => {
+    const map: Record<string, Array<{
+      name: string;
+      type: string;
+      options: string[];
+      isQuantitative: boolean;
+      isQualitative: boolean;
+    }>> = {};
+
+    if (!toolboxData.entries) return map;
+
     const allMethods = getMethodsForAllocatedSubGoals;
-    const groupedMethods = groupMethodsByToolboxCategory;
     
-    // Helper function to check if a method should be shown for a mesocycle
-
-    // Helper function to get mesocycle overview data
-    const getMesocycleOverview = (mesocycle: ExtendedMesocycle) => {
-      return {
-        subGoals: mesocycle.allocatedSubGoals || []
-      };
-    };
-
-    // Helper function to get parameters for a method from toolbox data
-    const getParametersForMethodFromToolbox = (methodName: string) => {
-      if (!toolboxData.entries) return [];
-      
+    allMethods.forEach(methodName => {
       // Find all toolbox entries that match this method
       const matchingEntries = toolboxData.entries.filter(entry => {
-        // Look for entries that have the method name in parameter or category
         const entryKey = `${entry.category}${entry.subCategory ? ` - ${entry.subCategory}` : ''}`;
         return normalizeForComparison(entryKey) === normalizeForComparison(methodName) ||
                normalizeForComparison(entry.parameter) === normalizeForComparison(methodName);
       });
       
       // Convert toolbox entries to parameter format
-      return matchingEntries.map(entry => ({
+      map[methodName] = matchingEntries.map(entry => ({
         name: entry.parameterName || entry.parameter.split('[')[0].trim(),
         type: entry.parameterType === 'quantitative' ? 'number' : 'text',
         options: entry.options || [],
         isQuantitative: entry.parameterType === 'quantitative',
         isQualitative: entry.parameterType === 'qualitative'
       }));
+    });
+
+    return map;
+  }, [toolboxData.entries, getMethodsForAllocatedSubGoals]);
+
+  const renderMethodPeriodization = () => {
+    const allMethods = getMethodsForAllocatedSubGoals;
+    const groupedMethods = groupMethodsByToolboxCategory;
+    
+    // Helper function to get mesocycle overview data
+    const getMesocycleOverview = (mesocycle: ExtendedMesocycle) => {
+      return {
+        subGoals: mesocycle.allocatedSubGoals || []
+      };
     };
 
 
@@ -1668,7 +1683,7 @@ export default function MesocyclePage() {
                                 
                                 {/* Methods in this sub-category */}
                                 {methods.map((method: string) => {
-                                  const parameters = getParametersForMethodFromToolbox(method);
+                                  const parameters = methodParametersMap[method] || [];
                                   
                                   return (
                                     <div key={method} className="border rounded-lg bg-card shadow-sm">
@@ -1814,16 +1829,15 @@ export default function MesocyclePage() {
                                                                        isInDragSelection={isInSelection}
                                                                        isEnabled={isAllocated}
                                                                      />
-                                                                   ) : (
-                                                                     <Input
-                                                                       type={param.type === 'number' ? 'number' : 'text'}
-                                                                       value={isAllocated ? currentValue.toString() : ''}
-                                                                       onChange={(e) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, param.type === 'number' ? Number(e.target.value) : e.target.value, sessionIndex)}
-                                                                       className={`h-8 text-xs ${!isAllocated ? 'cursor-not-allowed' : ''}`}
-                                                                       placeholder=""
-                                                                       disabled={!isAllocated}
-                                                                     />
-                                                                   )}
+                                                                    ) : (
+                                                                      <DebouncedTextInput
+                                                                        value={isAllocated ? currentValue.toString() : ''}
+                                                                        onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, param.type === 'number' ? Number(value) : value, sessionIndex)}
+                                                                        className={!isAllocated ? 'cursor-not-allowed' : ''}
+                                                                        placeholder=""
+                                                                        disabled={!isAllocated}
+                                                                      />
+                                                                    )}
                                                                  </ParameterContextMenu>
                                                                </div>
                                                              );
@@ -1880,16 +1894,15 @@ export default function MesocyclePage() {
                                                                 isInDragSelection={isInSelection}
                                                                 isEnabled={isAllocated}
                                                               />
-                                                            ) : (
-                                                              <Input
-                                                                type={param.type === 'number' ? 'number' : 'text'}
-                                                                value={isAllocated ? currentValue.toString() : ''}
-                                                                onChange={(e) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, param.type === 'number' ? Number(e.target.value) : e.target.value, 0)}
-                                                                className={`h-8 text-xs ${!isAllocated ? 'cursor-not-allowed' : ''}`}
-                                                                placeholder=""
-                                                                disabled={!isAllocated}
-                                                              />
-                                                            )}
+                                                             ) : (
+                                                               <DebouncedTextInput
+                                                                 value={isAllocated ? currentValue.toString() : ''}
+                                                                 onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, param.type === 'number' ? Number(value) : value, 0)}
+                                                                 className={!isAllocated ? 'cursor-not-allowed' : ''}
+                                                                 placeholder=""
+                                                                 disabled={!isAllocated}
+                                                               />
+                                                             )}
                                                           </ParameterContextMenu>
                                                         </div>
                                                       );

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableDropdown } from '@/components/ui/searchable-dropdown';
@@ -33,12 +33,54 @@ export const QuantitativeParameterInput = React.memo(function QuantitativeParame
   isInDragSelection = false,
   isEnabled = true
 }: QuantitativeParameterInputProps) {
-  // Check if there are any units defined (empty array means no unit dropdown)
-  const hasMeaningfulUnits = units.length > 0;
+  const [internalValue, setInternalValue] = useState(value);
+  const debounceTimerRef = useRef<number | null>(null);
+
+  // Sync internal value when external value changes (e.g., from fill/copy operations)
+  useEffect(() => {
+    if (value !== internalValue) {
+      setInternalValue(value);
+    }
+  }, [value]);
+
+  const commitChange = (newValue: string) => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    onValueChange(newValue);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setInternalValue(newValue);
+
+    // Clear existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Set new debounced timer
+    debounceTimerRef.current = window.setTimeout(() => {
+      onValueChange(newValue);
+    }, 150);
+  };
+
+  const handleBlur = () => {
+    // Immediately commit on blur
+    commitChange(internalValue);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      // Immediately commit on Enter
+      commitChange(internalValue);
+    }
+  };
 
   const handleDragStart = (e: React.MouseEvent) => {
     if (cellId && onDragStart) {
-      onDragStart(cellId, parseFloat(value) || 0);
+      onDragStart(cellId, parseFloat(internalValue) || 0);
     }
   };
 
@@ -47,6 +89,9 @@ export const QuantitativeParameterInput = React.memo(function QuantitativeParame
       onDragEnd();
     }
   };
+
+  // Check if there are any units defined (empty array means no unit dropdown)
+  const hasMeaningfulUnits = units.length > 0;
 
   return (
     <div 
@@ -60,8 +105,10 @@ export const QuantitativeParameterInput = React.memo(function QuantitativeParame
     >
       <Input
         type="number"
-        value={value}
-        onChange={(e) => onValueChange(e.target.value)}
+        value={internalValue}
+        onChange={handleChange}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder}
         className={cn(
           hasMeaningfulUnits ? "flex-1 min-w-0 h-8 text-xs" : "w-full h-8 text-xs",
@@ -112,12 +159,54 @@ export const QualitativeParameterInput = React.memo(function QualitativeParamete
   isInDragSelection = false,
   isEnabled = true
 }: QualitativeParameterInputProps) {
-  // Check if there are any options defined (empty array means plain text input)
-  const hasMeaningfulOptions = options.length > 0;
+  const [internalValue, setInternalValue] = useState(value);
+  const debounceTimerRef = useRef<number | null>(null);
+
+  // Sync internal value when external value changes (e.g., from fill/copy operations)
+  useEffect(() => {
+    if (value !== internalValue) {
+      setInternalValue(value);
+    }
+  }, [value]);
+
+  const commitChange = (newValue: string) => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    onValueChange(newValue);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setInternalValue(newValue);
+
+    // Clear existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Set new debounced timer
+    debounceTimerRef.current = window.setTimeout(() => {
+      onValueChange(newValue);
+    }, 150);
+  };
+
+  const handleBlur = () => {
+    // Immediately commit on blur
+    commitChange(internalValue);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      // Immediately commit on Enter
+      commitChange(internalValue);
+    }
+  };
 
   const handleDragStart = (e: React.MouseEvent) => {
     if (cellId && onDragStart) {
-      onDragStart(cellId, value);
+      onDragStart(cellId, internalValue);
     }
   };
 
@@ -126,6 +215,9 @@ export const QualitativeParameterInput = React.memo(function QualitativeParamete
       onDragEnd();
     }
   };
+
+  // Check if there are any options defined (empty array means plain text input)
+  const hasMeaningfulOptions = options.length > 0;
 
   return (
     <div 
@@ -153,8 +245,10 @@ export const QualitativeParameterInput = React.memo(function QualitativeParamete
       ) : (
         <Input
           type="text"
-          value={value}
-          onChange={(e) => onValueChange(e.target.value)}
+          value={internalValue}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
           placeholder={placeholder}
           className={cn(
             "w-full h-8 text-xs",
