@@ -9,7 +9,6 @@ import {
 import { Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
 
 interface PlanningStep {
   id: number;
@@ -40,28 +39,13 @@ interface PlanningNavigationMenuProps {
 
 export function PlanningNavigationMenu({ currentPage, currentPageStep }: PlanningNavigationMenuProps) {
   const navigate = useNavigate();
-  const [visitedSteps, setVisitedSteps] = useState<Set<number>>(() => {
-    const saved = localStorage.getItem('planningVisitedSteps');
-    return saved ? new Set(JSON.parse(saved)) : new Set([1]);
-  });
 
   // Calculate current absolute step number
   const currentStep = PLANNING_STEPS.find(
     step => step.page === currentPage && step.pageStep === currentPageStep
   )?.id || 1;
 
-  // Update visited steps when current step changes
-  useEffect(() => {
-    setVisitedSteps(prev => {
-      const updated = new Set([...prev, currentStep]);
-      localStorage.setItem('planningVisitedSteps', JSON.stringify([...updated]));
-      return updated;
-    });
-  }, [currentStep]);
-
   const handleStepClick = (step: PlanningStep) => {
-    if (!visitedSteps.has(step.id)) return;
-
     // Save the target step to localStorage so the target page knows which step to show
     if (step.page === 'macrocycle') {
       localStorage.setItem('macrocycleStep', step.pageStep.toString());
@@ -92,18 +76,12 @@ export function PlanningNavigationMenu({ currentPage, currentPageStep }: Plannin
         </div>
         {PLANNING_STEPS.filter(s => s.page === 'macrocycle').map(step => {
           const isActive = step.id === currentStep;
-          const isVisited = visitedSteps.has(step.id);
-          const isClickable = isVisited;
 
           return (
             <DropdownMenuItem
               key={step.id}
-              onClick={() => isClickable && handleStepClick(step)}
-              disabled={!isClickable}
-              className={cn(
-                isActive && "bg-accent font-semibold",
-                !isClickable && "opacity-50 cursor-not-allowed"
-              )}
+              onClick={() => handleStepClick(step)}
+              className={cn(isActive && "bg-accent font-semibold")}
             >
               <span className="mr-2">{step.id}.</span>
               {step.label}
@@ -120,18 +98,12 @@ export function PlanningNavigationMenu({ currentPage, currentPageStep }: Plannin
         </div>
         {PLANNING_STEPS.filter(s => s.page === 'mesocycle').map(step => {
           const isActive = step.id === currentStep;
-          const isVisited = visitedSteps.has(step.id);
-          const isClickable = isVisited;
 
           return (
             <DropdownMenuItem
               key={step.id}
-              onClick={() => isClickable && handleStepClick(step)}
-              disabled={!isClickable}
-              className={cn(
-                isActive && "bg-accent font-semibold",
-                !isClickable && "opacity-50 cursor-not-allowed"
-              )}
+              onClick={() => handleStepClick(step)}
+              className={cn(isActive && "bg-accent font-semibold")}
             >
               <span className="mr-2">{step.id}.</span>
               {step.label}
@@ -148,18 +120,12 @@ export function PlanningNavigationMenu({ currentPage, currentPageStep }: Plannin
         </div>
         {PLANNING_STEPS.filter(s => s.page === 'microcycle').map(step => {
           const isActive = step.id === currentStep;
-          const isVisited = visitedSteps.has(step.id);
-          const isClickable = isVisited;
 
           return (
             <DropdownMenuItem
               key={step.id}
-              onClick={() => isClickable && handleStepClick(step)}
-              disabled={!isClickable}
-              className={cn(
-                isActive && "bg-accent font-semibold",
-                !isClickable && "opacity-50 cursor-not-allowed"
-              )}
+              onClick={() => handleStepClick(step)}
+              className={cn(isActive && "bg-accent font-semibold")}
             >
               <span className="mr-2">{step.id}.</span>
               {step.label}
