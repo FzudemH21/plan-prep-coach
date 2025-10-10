@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info, Copy } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info, Copy, ChevronDown, Columns } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ExtendedMesocycle, Microcycle } from '@/features/planner/types';
 import { TrainingDay } from '@/types/daily-intensity';
@@ -56,6 +57,7 @@ export default function MicrocyclePlanningPage() {
   const [exerciseDistribution, setExerciseDistribution] = useState<ExerciseDistribution[]>([]);
   const [parameterValues, setParameterValues] = useState<Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>>({});
   const [dailyIntensityData, setDailyIntensityData] = useState<any[]>([]);
+  const [daySplitStates, setDaySplitStates] = useState<Record<string, number>>({});
   const { data: athleticismData } = useAthleticismData();
 
   const totalSteps = 1; // Currently only Step 1: Exercise Distribution
@@ -99,6 +101,12 @@ export default function MicrocyclePlanningPage() {
     if (savedDistribution) {
       setExerciseDistribution(JSON.parse(savedDistribution));
     }
+
+    // Load saved day split states
+    const savedDaySplitStates = localStorage.getItem('daySplitStates');
+    if (savedDaySplitStates) {
+      setDaySplitStates(JSON.parse(savedDaySplitStates));
+    }
   }, []);
 
   // Save exercise distribution to localStorage
@@ -107,6 +115,11 @@ export default function MicrocyclePlanningPage() {
       localStorage.setItem('exerciseDistribution', JSON.stringify(exerciseDistribution));
     }
   }, [exerciseDistribution]);
+
+  // Save day split states to localStorage
+  useEffect(() => {
+    localStorage.setItem('daySplitStates', JSON.stringify(daySplitStates));
+  }, [daySplitStates]);
 
   const currentMesocycle = mesocycles[currentMesocycleIndex];
 
@@ -447,6 +460,26 @@ export default function MicrocyclePlanningPage() {
     setExerciseDistribution(prev => prev.filter((_, i) => i !== index));
   };
 
+  // Handle splitting a day into multiple sessions
+  const handleSplitDay = (dayDate: string, numberOfSessions: number) => {
+    setDaySplitStates(prev => ({ ...prev, [dayDate]: numberOfSessions }));
+  };
+
+  // Handle collapsing a day back to single session
+  const handleCollapseDay = (dayDate: string) => {
+    // Consolidate all exercises from multiple sessions into session 0
+    setExerciseDistribution(prev => prev.map(ex => 
+      ex.dayDate === dayDate ? { ...ex, sessionIndex: 0 } : ex
+    ));
+    
+    // Reset split state
+    setDaySplitStates(prev => {
+      const newState = { ...prev };
+      delete newState[dayDate];
+      return newState;
+    });
+  };
+
   // Copy exercises from previous microcycle
   const handleCopyFromPreviousMicrocycle = (targetMicrocycleId: string) => {
     if (!currentMesocycle) return;
@@ -487,6 +520,16 @@ export default function MicrocyclePlanningPage() {
         dayDate: targetDay.date
       };
     }).filter(Boolean) as ExerciseDistribution[];
+    
+    // Also copy split states from previous microcycle days to target days
+    const newSplitStates = { ...daySplitStates };
+    previousDays.forEach((prevDay, idx) => {
+      const targetDay = targetDays[idx];
+      if (targetDay && daySplitStates[prevDay.date]) {
+        newSplitStates[targetDay.date] = daySplitStates[prevDay.date];
+      }
+    });
+    setDaySplitStates(newSplitStates);
     
     // Replace target microcycle's exercises completely (overwrite)
     setExerciseDistribution(prev => {
@@ -799,13 +842,70 @@ export default function MicrocyclePlanningPage() {
                           {days.map(day => {
                             const dailyIntensityRecord = dailyIntensityData.find(di => di.date === day.date);
                             const dailyIntensity = dailyIntensityRecord?.intensity || 'off';
+                            const numberOfSessions = daySplitStates[day.date] || 1;
+                            const isSplit = numberOfSessions > 1;
+                            
                             return (
                               <div 
                                 key={day.date}
-                                className={cn("w-[120px] p-1 text-xs text-center border-r last:border-r-0", getIntensityColor(dailyIntensity))}
+                                className="flex flex-col border-r last:border-r-0"
+                                style={{ width: isSplit ? `${numberOfSessions * 120}px` : '120px' }}
                               >
-                                <div className="font-semibold">{day.dayName}</div>
-                                <div>{format(new Date(day.date), 'MMM d')}</div>
+                                {/* Day header */}
+                                <div className={cn("p-1 text-xs text-center border-b", getIntensityColor(dailyIntensity))}>
+                                  <div className="font-semibold">{day.dayName}</div>
+                                  <div>{format(new Date(day.date), 'MMM d')}</div>
+                                  
+                                  {/* Split/Collapse buttons */}
+                                  <div className="mt-1 flex justify-center gap-1">
+                                    {isSplit ? (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => handleCollapseDay(day.date)}
+                                        className="h-5 px-2 text-[10px]"
+                                      >
+                                        Collapse
+                                      </Button>
+                                    ) : (
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-5 px-2 text-[10px]"
+                                          >
+                                            Split <ChevronDown className="ml-1 h-3 w-3" />
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="center" className="z-50">
+                                          {[2, 3, 4, 5].map(n => (
+                                            <DropdownMenuItem 
+                                              key={n}
+                                              onClick={() => handleSplitDay(day.date, n)}
+                                            >
+                                              {n} sessions
+                                            </DropdownMenuItem>
+                                          ))}
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    )}
+                                  </div>
+                                </div>
+                                
+                                {/* Session sub-headers */}
+                                {isSplit && (
+                                  <div className="flex">
+                                    {Array.from({ length: numberOfSessions }, (_, sessionIdx) => (
+                                      <div 
+                                        key={sessionIdx}
+                                        className="w-[120px] p-1 text-[10px] text-center border-r last:border-r-0 bg-muted/50"
+                                      >
+                                        Session {sessionIdx + 1}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
@@ -896,41 +996,50 @@ export default function MicrocyclePlanningPage() {
                                     const days = daysByMicrocycle[microcycle.id] || [];
                                     return (
                                       <div key={microcycle.id} className="flex flex-1 border-r last:border-r-0">
-                                        {days.map(day => (
-                                          <div 
-                                            key={day.date}
-                                            className="w-[120px] p-2 border-r last:border-r-0 min-h-[100px]"
-                                            onDrop={(e) => handleDrop(e, day.date, 0, methodId, categoryName)}
-                                            onDragOver={handleDragOver}
-                                          >
-                                            <div className="space-y-1">
-                                              {getExercisesForCell(day.date, 0, methodId, categoryName).map((ex, idx) => (
+                                        {days.map(day => {
+                                          const numberOfSessions = daySplitStates[day.date] || 1;
+                                          const isSplit = numberOfSessions > 1;
+                                          
+                                          return (
+                                            <div key={day.date} className="flex border-r last:border-r-0">
+                                              {Array.from({ length: numberOfSessions }, (_, sessionIdx) => (
                                                 <div
-                                                  key={idx}
-                                                  className="text-[10px] p-1 bg-primary/10 border border-primary/20 rounded group relative"
+                                                  key={sessionIdx}
+                                                  className="w-[120px] p-2 border-r last:border-r-0 min-h-[100px]"
+                                                  onDrop={(e) => handleDrop(e, day.date, sessionIdx, methodId, categoryName)}
+                                                  onDragOver={handleDragOver}
                                                 >
-                                                  <div className="pr-4">{ex.exerciseName}</div>
-                                                  <button
-                                                    onClick={() => {
-                                                      const index = exerciseDistribution.findIndex(
-                                                        e => 
-                                                          e.exerciseId === ex.exerciseId && 
-                                                          e.dayDate === ex.dayDate && 
-                                                          e.sessionIndex === ex.sessionIndex &&
-                                                          e.methodId === ex.methodId &&
-                                                          e.categoryName === ex.categoryName
-                                                      );
-                                                      if (index !== -1) removeExercise(index);
-                                                    }}
-                                                    className="absolute top-0 right-0 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                  >
-                                                    ×
-                                                  </button>
+                                                  <div className="space-y-1">
+                                                    {getExercisesForCell(day.date, sessionIdx, methodId, categoryName).map((ex, idx) => (
+                                                      <div
+                                                        key={idx}
+                                                        className="text-[10px] p-1 bg-primary/10 border border-primary/20 rounded group relative"
+                                                      >
+                                                        <div className="pr-4">{ex.exerciseName}</div>
+                                                        <button
+                                                          onClick={() => {
+                                                            const index = exerciseDistribution.findIndex(
+                                                              e => 
+                                                                e.exerciseId === ex.exerciseId && 
+                                                                e.dayDate === ex.dayDate && 
+                                                                e.sessionIndex === ex.sessionIndex &&
+                                                                e.methodId === ex.methodId &&
+                                                                e.categoryName === ex.categoryName
+                                                            );
+                                                            if (index !== -1) removeExercise(index);
+                                                          }}
+                                                          className="absolute top-0 right-0 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        >
+                                                          ×
+                                                        </button>
+                                                      </div>
+                                                    ))}
+                                                  </div>
                                                 </div>
                                               ))}
                                             </div>
-                                          </div>
-                                        ))}
+                                          );
+                                        })}
                                       </div>
                                     );
                                   })}
