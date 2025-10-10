@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info, Copy } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import { ExtendedMesocycle, Microcycle } from '@/features/planner/types';
 import { TrainingDay } from '@/types/daily-intensity';
 import { CellData, ExerciseSelection } from '@/types/microcycle-planning';
@@ -32,8 +33,18 @@ interface FrequencyWarning {
   type: 'over' | 'under';
 }
 
+interface AllocationWarning {
+  exerciseId: string;
+  exerciseName: string;
+  methodId: string;
+  microcycleId: string;
+  microcycleName: string;
+  type: 'not-allocated';
+}
+
 export default function MicrocyclePlanningPage() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(1);
   const [currentMesocycleIndex, setCurrentMesocycleIndex] = useState(0);
   const [mesocycles, setMesocycles] = useState<ExtendedMesocycle[]>([]);
@@ -285,6 +296,49 @@ export default function MicrocyclePlanningPage() {
     return warnings;
   }, [currentMesocycle, allocatedExercises, exerciseDistribution, parameterValues, daysByMicrocycle]);
 
+  // Calculate allocation warnings
+  const allocationWarnings = useMemo((): AllocationWarning[] => {
+    if (!currentMesocycle) return [];
+    
+    const warnings: AllocationWarning[] = [];
+    const processedExercises = new Set<string>();
+    
+    // For each exercise in distribution
+    exerciseDistribution.forEach(distEx => {
+      // Find which microcycle this day belongs to
+      const microcycle = currentMesocycle.microcycles.find(m => 
+        daysByMicrocycle[m.id]?.some(day => day.date === distEx.dayDate)
+      );
+      
+      if (!microcycle) return;
+      
+      // Find if this exercise was allocated to this microcycle in Step 6
+      const wasAllocated = allocatedExercises.some(allocEx => 
+        allocEx.exerciseId === distEx.exerciseId &&
+        allocEx.methodId === distEx.methodId &&
+        allocEx.categoryName === distEx.categoryName &&
+        allocEx.microcycleIds.includes(microcycle.id)
+      );
+      
+      if (!wasAllocated) {
+        const key = `${distEx.exerciseId}-${distEx.methodId}-${microcycle.id}`;
+        if (!processedExercises.has(key)) {
+          processedExercises.add(key);
+          warnings.push({
+            exerciseId: distEx.exerciseId,
+            exerciseName: distEx.exerciseName,
+            methodId: distEx.methodId,
+            microcycleId: microcycle.id,
+            microcycleName: microcycle.name,
+            type: 'not-allocated'
+          });
+        }
+      }
+    });
+    
+    return warnings;
+  }, [currentMesocycle, exerciseDistribution, allocatedExercises, daysByMicrocycle]);
+
   // Handle drag start
   const handleDragStart = (e: React.DragEvent, exercise: typeof allocatedExercises[0]) => {
     e.dataTransfer.setData('application/json', JSON.stringify(exercise));
@@ -341,6 +395,70 @@ export default function MicrocyclePlanningPage() {
   // Remove exercise from distribution
   const removeExercise = (index: number) => {
     setExerciseDistribution(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Copy exercises from previous microcycle
+  const handleCopyFromPreviousMicrocycle = (targetMicrocycleId: string) => {
+    if (!currentMesocycle) return;
+    
+    const targetIndex = currentMesocycle.microcycles.findIndex(m => m.id === targetMicrocycleId);
+    if (targetIndex <= 0) return; // No previous microcycle
+    
+    const previousMicrocycle = currentMesocycle.microcycles[targetIndex - 1];
+    const targetMicrocycle = currentMesocycle.microcycles[targetIndex];
+    
+    const previousDays = daysByMicrocycle[previousMicrocycle.id] || [];
+    const targetDays = daysByMicrocycle[targetMicrocycle.id] || [];
+    
+    // Validate matching duration
+    if (previousDays.length !== targetDays.length) {
+      toast({
+        title: "Cannot Copy",
+        description: "Microcycles have different durations (number of days)",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Get all exercises from previous microcycle
+    const previousExercises = exerciseDistribution.filter(ex => 
+      previousDays.some(day => day.date === ex.dayDate)
+    );
+    
+    // Map to target microcycle (by day position)
+    const newExercises = previousExercises.map(ex => {
+      const previousDayIndex = previousDays.findIndex(d => d.date === ex.dayDate);
+      const targetDay = targetDays[previousDayIndex];
+      
+      if (!targetDay) return null;
+      
+      return {
+        ...ex,
+        dayDate: targetDay.date
+      };
+    }).filter(Boolean) as ExerciseDistribution[];
+    
+    // Add to distribution (avoid duplicates)
+    setExerciseDistribution(prev => {
+      const merged = [...prev];
+      newExercises.forEach(newEx => {
+        const exists = merged.some(ex => 
+          ex.exerciseId === newEx.exerciseId &&
+          ex.dayDate === newEx.dayDate &&
+          ex.sessionIndex === newEx.sessionIndex &&
+          ex.methodId === newEx.methodId &&
+          ex.categoryName === newEx.categoryName
+        );
+        if (!exists) merged.push(newEx);
+      });
+      return merged;
+    });
+    
+    // Show success toast
+    toast({
+      title: "Exercises Copied",
+      description: `Copied ${newExercises.length} exercise${newExercises.length !== 1 ? 's' : ''} from ${previousMicrocycle.name} to ${targetMicrocycle.name}`
+    });
   };
 
   // Get exercises for a specific day/session/method/category
@@ -439,23 +557,39 @@ export default function MicrocyclePlanningPage() {
     </div>
   );
 
-  const renderFrequencyWarnings = () => {
-    if (frequencyWarnings.length === 0) return null;
+  const renderWarnings = () => {
+    const hasWarnings = frequencyWarnings.length > 0 || allocationWarnings.length > 0;
+    if (!hasWarnings) return null;
 
     return (
       <Alert>
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription>
-          <div className="space-y-1">
-            <p className="font-semibold">Frequency Warnings:</p>
-            {frequencyWarnings.map((warning, idx) => (
-              <p key={idx} className="text-sm">
-                <strong>{warning.methodName}</strong> in <strong>{warning.microcycleName}</strong>: 
-                {' '}{warning.actual} session{warning.actual !== 1 ? 's' : ''} assigned, 
-                but frequency is set to {warning.expected}
-                {' '}({warning.type === 'over' ? 'over' : 'under'}-frequency)
-              </p>
-            ))}
+          <div className="space-y-3">
+            {frequencyWarnings.length > 0 && (
+              <div className="space-y-1">
+                <p className="font-semibold">Frequency Warnings:</p>
+                {frequencyWarnings.map((warning, idx) => (
+                  <p key={idx} className="text-sm">
+                    <strong>{warning.methodName}</strong> in <strong>{warning.microcycleName}</strong>: 
+                    {' '}{warning.actual} session{warning.actual !== 1 ? 's' : ''} assigned, 
+                    but frequency is set to {warning.expected}
+                    {' '}({warning.type === 'over' ? 'over' : 'under'}-frequency)
+                  </p>
+                ))}
+              </div>
+            )}
+            
+            {allocationWarnings.length > 0 && (
+              <div className="space-y-1">
+                <p className="font-semibold">Allocation Warnings:</p>
+                {allocationWarnings.map((warning, idx) => (
+                  <p key={idx} className="text-sm">
+                    <strong>{warning.exerciseName}</strong> is placed in <strong>{warning.microcycleName}</strong> but was not allocated to this microcycle in Step 6 of Mesocycle Planning
+                  </p>
+                ))}
+              </div>
+            )}
           </div>
         </AlertDescription>
       </Alert>
@@ -495,23 +629,59 @@ export default function MicrocyclePlanningPage() {
                 </div>
                 
                 {/* Level 2: Microcycles */}
-                <div className="flex border-b">
-                  <div className="w-64 shrink-0 border-r p-2 font-semibold bg-muted">
-                    Training Methods
+                <TooltipProvider>
+                  <div className="flex border-b">
+                    <div className="w-64 shrink-0 border-r p-2 font-semibold bg-muted">
+                      Training Methods
+                    </div>
+                    {currentMesocycle.microcycles.map((microcycle, microcycleIndex) => {
+                      const dayCount = daysByMicrocycle[microcycle.id]?.length || 0;
+                      
+                      // Check if copy button should be shown and enabled
+                      let hasMatchingDuration = false;
+                      let previousMicrocycle = null;
+                      if (microcycleIndex > 0) {
+                        previousMicrocycle = currentMesocycle.microcycles[microcycleIndex - 1];
+                        const currentDays = daysByMicrocycle[microcycle.id] || [];
+                        const previousDays = daysByMicrocycle[previousMicrocycle.id] || [];
+                        hasMatchingDuration = currentDays.length === previousDays.length;
+                      }
+                      
+                      return (
+                        <div 
+                          key={microcycle.id}
+                          className={cn("flex-1 border-r last:border-r-0", getIntensityColor(microcycle.intensity))}
+                          style={{ minWidth: `${dayCount * 120}px` }}
+                        >
+                          <div className="flex items-center justify-between p-2">
+                            <span className="font-semibold">{microcycle.name}</span>
+                            {microcycleIndex > 0 && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button 
+                                    size="sm" 
+                                    variant="ghost"
+                                    onClick={() => handleCopyFromPreviousMicrocycle(microcycle.id)}
+                                    disabled={!hasMatchingDuration}
+                                    className="h-6 w-6 p-0 ml-2"
+                                  >
+                                    <Copy className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {hasMatchingDuration 
+                                    ? `Copy exercises from ${previousMicrocycle?.name}`
+                                    : "Cannot copy - microcycles have different durations"
+                                  }
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  {currentMesocycle.microcycles.map(microcycle => {
-                    const dayCount = daysByMicrocycle[microcycle.id]?.length || 0;
-                    return (
-                      <div 
-                        key={microcycle.id}
-                        className={cn("flex-1 text-center p-2 font-semibold border-r last:border-r-0", getIntensityColor(microcycle.intensity))}
-                        style={{ minWidth: `${dayCount * 120}px` }}
-                      >
-                        {microcycle.name}
-                      </div>
-                    );
-                  })}
-                </div>
+                </TooltipProvider>
 
                 {/* Level 3: Days */}
                 <div className="flex border-b">
@@ -684,7 +854,7 @@ export default function MicrocyclePlanningPage() {
 
       {renderTrainingPlanOverview()}
       {renderMesocycleNavigation()}
-      {renderFrequencyWarnings()}
+      {renderWarnings()}
       {currentStep === 1 && renderExerciseDistribution()}
 
       <NavigationButtons />
