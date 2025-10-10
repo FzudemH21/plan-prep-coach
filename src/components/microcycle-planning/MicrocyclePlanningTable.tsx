@@ -710,7 +710,7 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
         <CardContent>
         <div className="overflow-x-auto">
           <div className="min-w-full">
-            <Table className="min-w-[1200px]" style={{ paddingLeft: '512px' }}>
+            <Table className="min-w-[1200px]">
             <TableHeader>
               {/* First row - Mesocycle headers (only when there are split mesocycles) */}
               {hasSplitMesocycles && (
@@ -721,6 +721,9 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                   <TableHead className="w-64 sticky left-64 bg-background z-10 border-r-2 border-border">
                     Category
                   </TableHead>
+                  {/* Spacer columns to offset content from sticky columns */}
+                  <TableHead className="w-64" />
+                  <TableHead className="w-64" />
                   {mesocycleHeaders.map((header) => {
                     const mesocycle = mesocycles.find(m => m.id === header.mesocycleId);
                     return (
@@ -811,6 +814,9 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                   <TableHead className="w-64 sticky left-64 bg-background z-20 border-r-2 border-border">
                     {!hasSplitMesocycles ? "Category" : null}
                   </TableHead>
+                {/* Spacer columns to offset content from sticky columns */}
+                <TableHead className="w-64" />
+                <TableHead className="w-64" />
                 {columnStructure.map((column, index) => {
                   const mesocycle = mesocycles.find(m => m.id === column.mesocycleId);
                   let intensity = mesocycle?.intensity || 'moderate';
@@ -974,6 +980,9 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                         <span className="text-muted-foreground text-sm">({categoryGroup.methods.length})</span>
                       </Button>
                     </TableCell>
+                    {/* Spacer cells to offset content from sticky columns */}
+                    <TableCell className="w-64 bg-muted" />
+                    <TableCell className="w-64 bg-muted" />
                     {columnStructure.map((column) => (
                       <TableCell 
                         key={`${categoryGroup.categoryName}-header-${column.id}`}
@@ -996,6 +1005,9 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                           <TableCell className="sticky left-64 bg-background z-15 border-r-2 border-border w-64 py-3">
                             <div className="text-sm text-muted-foreground">—</div>
                           </TableCell>
+                          {/* Spacer cells to offset content from sticky columns */}
+                          <TableCell className="w-64" />
+                          <TableCell className="w-64" />
                           {columnStructure.map((column) => {
                             // Skip link areas for table cells
                             if (column.type === 'link-area') {
@@ -1054,6 +1066,9 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                             <TableCell className="sticky left-64 bg-background z-15 border-r-2 border-border w-64 py-3">
                               <div className="text-sm text-muted-foreground">{categoryName}</div>
                             </TableCell>
+                            {/* Spacer cells to offset content from sticky columns */}
+                            <TableCell className="w-64" />
+                            <TableCell className="w-64" />
                             {columnStructure.map((column) => {
                               // Skip link areas for table cells
                               if (column.type === 'link-area') {
