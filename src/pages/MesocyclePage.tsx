@@ -2674,7 +2674,7 @@ export default function MesocyclePage() {
               <Bot className="h-4 w-4 mr-2" />
               Ask AI for Help
             </Button>
-            <PlanningNavigationMenu currentPage="mesocycle" currentPageStep={currentStep} />
+            <PlanningNavigationMenu currentPage="mesocycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
           </div>
         </div>
         

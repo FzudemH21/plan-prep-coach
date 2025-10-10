@@ -1359,7 +1359,7 @@ export default function MacrocyclePage() {
               <Bot className="h-4 w-4 mr-2" />
               Ask AI for Help
             </Button>
-            <PlanningNavigationMenu currentPage="macrocycle" currentPageStep={currentStep} />
+            <PlanningNavigationMenu currentPage="macrocycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
           </div>
         </div>
         <p className="text-muted-foreground">
@@ -1418,7 +1418,7 @@ export default function MacrocyclePage() {
               <Bot className="h-4 w-4 mr-2" />
               Ask AI for Help
             </Button>
-            <PlanningNavigationMenu currentPage="macrocycle" currentPageStep={currentStep} />
+            <PlanningNavigationMenu currentPage="macrocycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
           </div>
         </div>
         

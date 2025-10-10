@@ -35,9 +35,10 @@ const PLANNING_STEPS: PlanningStep[] = [
 interface PlanningNavigationMenuProps {
   currentPage: 'macrocycle' | 'mesocycle' | 'microcycle';
   currentPageStep: number;
+  onChangeCurrentPageStep?: (nextStep: number) => void;
 }
 
-export function PlanningNavigationMenu({ currentPage, currentPageStep }: PlanningNavigationMenuProps) {
+export function PlanningNavigationMenu({ currentPage, currentPageStep, onChangeCurrentPageStep }: PlanningNavigationMenuProps) {
   const navigate = useNavigate();
 
   // Calculate current absolute step number
@@ -46,6 +47,20 @@ export function PlanningNavigationMenu({ currentPage, currentPageStep }: Plannin
   )?.id || 1;
 
   const handleStepClick = (step: PlanningStep) => {
+    // If clicking a step on the current page, update step directly via callback
+    if (step.page === currentPage && onChangeCurrentPageStep) {
+      // Save to localStorage for persistence
+      if (step.page === 'macrocycle') {
+        localStorage.setItem('macrocycleStep', step.pageStep.toString());
+      } else if (step.page === 'mesocycle') {
+        localStorage.setItem('mesocycleStep', step.pageStep.toString());
+      }
+      
+      // Update current step without navigation
+      onChangeCurrentPageStep(step.pageStep);
+      return;
+    }
+
     // Save the target step to localStorage so the target page knows which step to show
     if (step.page === 'macrocycle') {
       localStorage.setItem('macrocycleStep', step.pageStep.toString());
