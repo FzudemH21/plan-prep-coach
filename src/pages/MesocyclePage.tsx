@@ -48,7 +48,10 @@ const normalizeForComparison = (str: string): string => {
 
 export default function MesocyclePage() {
   const navigate = useNavigate();
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(() => {
+    const savedStep = localStorage.getItem('mesocycleStep');
+    return savedStep ? parseInt(savedStep) : 1;
+  });
   const [isPending, startTransition] = useTransition();
   const [mesocycles, setMesocycles] = useState<ExtendedMesocycle[]>([]);
   const [macrocycleData, setMacrocycleData] = useState<any>(null);
@@ -300,6 +303,11 @@ export default function MesocyclePage() {
       localStorage.setItem('dailyIntensityData', JSON.stringify(dailyIntensityData));
     }
   }, [dailyIntensityData]);
+
+  // Save current step to localStorage
+  useEffect(() => {
+    localStorage.setItem('mesocycleStep', currentStep.toString());
+  }, [currentStep]);
 
   const intensityLevels: IntensityLevel[] = ["off", "deload", "easy", "easy-moderate", "moderate", "moderate-hard", "hard", "extremely-hard"];
 
@@ -2625,6 +2633,7 @@ export default function MesocyclePage() {
                             day={day}
                             intensity={dayIntensity}
                             onIntensityChange={handleIntensityClick}
+                            tooltipContent={getTooltipContent(day)}
                             isLastDayOfMicrocycle={isLastDayOfMicro}
                             isLastDayOfMesocycle={isLastDayOfMesocycle(index)}
                             intensityLevels={intensityLevels}
