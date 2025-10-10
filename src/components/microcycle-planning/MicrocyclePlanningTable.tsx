@@ -805,10 +805,10 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
               
               {/* Second row - Individual columns */}
               <TableRow>
-                  <TableHead className="w-64 sticky left-0 bg-background z-10 border-r-2 border-border">
+                  <TableHead className="w-64 sticky left-0 bg-background z-20 border-r-2 border-border">
                     {!hasSplitMesocycles ? "Method" : null}
                   </TableHead>
-                  <TableHead className="w-64 sticky left-64 bg-background z-10 border-r-2 border-border">
+                  <TableHead className="w-64 sticky left-64 bg-background z-20 border-r-2 border-border">
                     {!hasSplitMesocycles ? "Category" : null}
                   </TableHead>
                 {columnStructure.map((column, index) => {
