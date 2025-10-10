@@ -198,28 +198,33 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], para
       Object.entries(methodParams).forEach(([sessionIndex, params]) => {
         Object.entries(params).forEach(([paramName, value]) => {
           if (value) {
-            // Try to find unit from methodParametersMap
+            // Try to find parameter definition from methodParametersMap
             const paramDef = methodParamDefs.find(p => p.name === paramName);
             let unit: string | undefined;
             
-            if (paramDef?.options && paramDef.options.length > 0 && paramDef.isQuantitative) {
-              // For quantitative params with options, first option is likely the unit
-              unit = paramDef.options[0];
-            } else if (paramDef?.name && toolboxData?.entries) {
-              // Fallback: try to extract unit from original toolbox data parameter name
-              const toolboxEntry = toolboxData.entries.find(entry => {
-                const entryKey = `${entry.category}${entry.subCategory ? ` - ${entry.subCategory}` : ''}`;
-                return (normalizeForComparison(entryKey) === normalizeForComparison(methodName) ||
-                        normalizeForComparison(entry.parameter) === normalizeForComparison(methodName)) &&
-                       (entry.parameterName === paramName || entry.parameter.split('[')[0].trim() === paramName);
-              });
-              if (toolboxEntry?.parameter) {
-                const unitMatch = toolboxEntry.parameter.match(/\[([^\]]+)\]/);
-                if (unitMatch) {
-                  unit = unitMatch[1];
+            // ONLY extract units for quantitative parameters
+            // For qualitative parameters, the value already contains the selected option
+            if (paramDef?.isQuantitative) {
+              if (paramDef?.options && paramDef.options.length > 0) {
+                // For quantitative params with options, first option is likely the unit
+                unit = paramDef.options[0];
+              } else if (toolboxData?.entries) {
+                // Fallback: try to extract unit from original toolbox data parameter name
+                const toolboxEntry = toolboxData.entries.find(entry => {
+                  const entryKey = `${entry.category}${entry.subCategory ? ` - ${entry.subCategory}` : ''}`;
+                  return (normalizeForComparison(entryKey) === normalizeForComparison(methodName) ||
+                          normalizeForComparison(entry.parameter) === normalizeForComparison(methodName)) &&
+                         (entry.parameterName === paramName || entry.parameter.split('[')[0].trim() === paramName);
+                });
+                if (toolboxEntry?.parameter) {
+                  const unitMatch = toolboxEntry.parameter.match(/\[([^\]]+)\]/);
+                  if (unitMatch) {
+                    unit = unitMatch[1];
+                  }
                 }
               }
             }
+            // For qualitative parameters (isQualitative === true), we intentionally leave unit as undefined
             
             parameters.push({
               name: paramName,
