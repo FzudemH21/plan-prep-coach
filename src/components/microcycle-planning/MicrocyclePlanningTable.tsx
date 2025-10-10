@@ -715,15 +715,9 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
               {/* First row - Mesocycle headers (only when there are split mesocycles) */}
               {hasSplitMesocycles && (
                 <TableRow>
-                  <TableHead className="w-64 sticky left-0 bg-background z-10 border-r-2 border-border">
+                  <TableHead className="w-64 sticky left-0 bg-background z-20 border-r-2 border-border">
                     Method
                   </TableHead>
-                  <TableHead className="w-64 sticky left-64 bg-background z-10 border-r-2 border-border">
-                    Category
-                  </TableHead>
-                  {/* Spacer columns to offset content from sticky columns */}
-                  <TableHead className="w-64" />
-                  <TableHead className="w-64" />
                   {mesocycleHeaders.map((header) => {
                     const mesocycle = mesocycles.find(m => m.id === header.mesocycleId);
                     return (
@@ -811,12 +805,6 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                   <TableHead className="w-64 sticky left-0 bg-background z-20 border-r-2 border-border">
                     {!hasSplitMesocycles ? "Method" : null}
                   </TableHead>
-                  <TableHead className="w-64 sticky left-64 bg-background z-20 border-r-2 border-border">
-                    {!hasSplitMesocycles ? "Category" : null}
-                  </TableHead>
-                {/* Spacer columns to offset content from sticky columns */}
-                <TableHead className="w-64" />
-                <TableHead className="w-64" />
                 {columnStructure.map((column, index) => {
                   const mesocycle = mesocycles.find(m => m.id === column.mesocycleId);
                   let intensity = mesocycle?.intensity || 'moderate';
@@ -963,7 +951,7 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                   {/* Category Header Row */}
                   <TableRow className="bg-muted hover:bg-muted/80">
                     <TableCell 
-                      colSpan={2} 
+                      colSpan={1} 
                       className="sticky left-0 bg-muted z-20 border-r-2 border-border py-3"
                     >
                       <Button
@@ -980,9 +968,6 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                         <span className="text-muted-foreground text-sm">({categoryGroup.methods.length})</span>
                       </Button>
                     </TableCell>
-                    {/* Spacer cells to offset content from sticky columns */}
-                    <TableCell className="w-64 bg-muted" />
-                    <TableCell className="w-64 bg-muted" />
                     {columnStructure.map((column) => (
                       <TableCell 
                         key={`${categoryGroup.categoryName}-header-${column.id}`}
@@ -1002,12 +987,6 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                           <TableCell className="sticky left-0 bg-background z-15 border-r-2 border-border w-64 pl-8 py-3">
                             <div className="font-medium text-foreground">{method.name}</div>
                           </TableCell>
-                          <TableCell className="sticky left-64 bg-background z-15 border-r-2 border-border w-64 py-3">
-                            <div className="text-sm text-muted-foreground">—</div>
-                          </TableCell>
-                          {/* Spacer cells to offset content from sticky columns */}
-                          <TableCell className="w-64" />
-                          <TableCell className="w-64" />
                           {columnStructure.map((column) => {
                             // Skip link areas for table cells
                             if (column.type === 'link-area') {
@@ -1056,66 +1035,78 @@ const updateCellData = (cellId: string, newData: Partial<CellData>) => {
                         </TableRow>
                       ) : (
                         // Render exercise category rows with method name spanning
-                        method.categories.map((categoryName, categoryIndex) => (
-                          <TableRow key={`${method.id}-${categoryName}`}>
-                            {categoryIndex === 0 && (
-                              <TableCell rowSpan={method.categories.length} className="sticky left-0 bg-background z-15 border-r-2 border-border w-64 pl-8 py-3">
-                                <div className="font-medium text-foreground">{method.name}</div>
-                              </TableCell>
-                            )}
-                            <TableCell className="sticky left-64 bg-background z-15 border-r-2 border-border w-64 py-3">
-                              <div className="text-sm text-muted-foreground">{categoryName}</div>
+                          <> 
+                          <TableRow key={`${method.id}-header`}>
+                            <TableCell className="sticky left-0 bg-background z-15 border-r-2 border-border w-64 pl-8 py-3">
+                              <div className="font-medium text-foreground">{method.name}</div>
                             </TableCell>
-                            {/* Spacer cells to offset content from sticky columns */}
-                            <TableCell className="w-64" />
-                            <TableCell className="w-64" />
                             {columnStructure.map((column) => {
-                              // Skip link areas for table cells
                               if (column.type === 'link-area') {
                                 return (
-                                  <TableCell 
-                                    key={`${method.id}-${categoryName}-${column.id}`} 
+                                  <TableCell
+                                    key={`${method.id}-header-${column.id}`}
                                     className="p-2 border-r border-border bg-muted/5 w-12"
-                                  >
-                                    {/* Empty cell for link area */}
-                                  </TableCell>
+                                  />
                                 );
                               }
-                              
-                              const mesocycle = mesocycles.find(m => m.id === column.mesocycleId);
-                              let intensity = mesocycle?.intensity || 'moderate';
-                              let isLight = false;
-                              let isGroup = false;
-                              
-                              // For individual microcycles, use their specific intensity
-                              if (column.type === 'microcycle' && mesocycle) {
-                                const microcycle = mesocycle.microcycles.find(m => m.id === column.microcycleId);
-                                if (microcycle) {
-                                  intensity = microcycle.intensity;
-                                  isLight = true; // Make microcycles lighter than mesocycles
-                                }
-                              } else if (column.type === 'microcycle-group') {
-                                isGroup = true; // Use neutral color for groups
-                              }
-                              
-                              const colorClass = getIntensityColor(intensity, isLight, isGroup);
-                              
+                              // Placeholder cells to maintain grid alignment
                               return (
-                                <TableCell 
-                                  key={`${method.id}-${categoryName}-${column.id}`} 
-                                  className={cn("p-2 border-r border-border", colorClass)}
-                                >
-                                   <ExerciseSelectionCell
-                                     cellData={getCellData(method.id, categoryName, column.id)}
-                                     onUpdate={(newData) => updateCellData(getCellId(method.id, categoryName, column.id), newData)}
-                                     onCopy={() => copyExercisesWithinMethod(method.id, categoryName, column.id)}
-                                     hasPreviousExercises={hasPreviousExercisesInMethod(method.id, categoryName, columnStructure.findIndex(col => col.id === column.id))}
-                                   />
-                                </TableCell>
+                                <TableCell
+                                  key={`${method.id}-header-${column.id}`}
+                                  className="p-2 border-r border-border bg-muted/5"
+                                />
                               );
                             })}
                           </TableRow>
-                        ))
+                          {method.categories.map((categoryName) => (
+                            <TableRow key={`${method.id}-${categoryName}`}>
+                              <TableCell className="sticky left-0 bg-background z-15 border-r-2 border-border w-64 pl-12 py-3">
+                                <div className="text-sm text-muted-foreground">{categoryName}</div>
+                              </TableCell>
+                              {columnStructure.map((column) => {
+                                // Skip link areas for table cells
+                                if (column.type === 'link-area') {
+                                  return (
+                                    <TableCell
+                                      key={`${method.id}-${categoryName}-${column.id}`}
+                                      className="p-2 border-r border-border bg-muted/5 w-12"
+                                    />
+                                  );
+                                }
+
+                                const mesocycle = mesocycles.find(m => m.id === column.mesocycleId);
+                                let intensity = mesocycle?.intensity || 'moderate';
+                                let isLight = false;
+                                let isGroup = false;
+
+                                if (column.type === 'microcycle' && mesocycle) {
+                                  const microcycle = mesocycle.microcycles.find(m => m.id === column.microcycleId);
+                                  if (microcycle) {
+                                    intensity = microcycle.intensity;
+                                    isLight = true;
+                                  }
+                                } else if (column.type === 'microcycle-group') {
+                                  isGroup = true;
+                                }
+
+                                const colorClass = getIntensityColor(intensity, isLight, isGroup);
+
+                                return (
+                                  <TableCell
+                                    key={`${method.id}-${categoryName}-${column.id}`}
+                                    className={cn("p-2 border-r border-border", colorClass)}
+                                  >
+                                    <ExerciseSelectionCell
+                                      cellData={getCellData(method.id, categoryName, column.id)}
+                                      onUpdate={(newData) => updateCellData(getCellId(method.id, categoryName, column.id), newData)}
+                                      onCopy={() => copyExercisesWithinMethod(method.id, categoryName, column.id)}
+                                      hasPreviousExercises={hasPreviousExercisesInMethod(method.id, categoryName, columnStructure.findIndex(col => col.id === column.id))}
+                                    />
+                                  </TableCell>
+                                );
+                              })}
+                            </TableRow>
+                          ))
                       )}
                     </React.Fragment>
                   ))}
