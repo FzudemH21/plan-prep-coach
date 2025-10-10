@@ -137,27 +137,38 @@ export default function MesocyclePage() {
   // Load macrocycle data on mount
   useEffect(() => {
     const savedMacrocycleData = localStorage.getItem('macrocycleData');
+    const savedMesocycleData = localStorage.getItem('mesocycleData');
+    
     if (savedMacrocycleData) {
       const data = JSON.parse(savedMacrocycleData);
       console.log('DEBUG: Loaded macrocycle data:', data);
-      console.log('DEBUG: Events in data:', data.events);
-      console.log('DEBUG: SubGoals in data:', data.subGoals);
-      console.log('DEBUG: Events details:', data.events?.map((e: any) => ({ 
-        name: e.name, 
-        eventDates: e.eventDates 
-      })));
       setMacrocycleData(data);
       
-      // Calculate total weeks from date range (inclusive calculation to match MacrocyclePage)
+      // Calculate total weeks from date range
       const startDate = data.smartGoal?.startDate ? new Date(data.smartGoal.startDate) : new Date();
       const endDate = data.smartGoal?.endDate ? new Date(data.smartGoal.endDate) : addWeeks(startDate, 12);
       const weeks = data.smartGoal?.startDate && data.smartGoal?.endDate ? 
-        Math.ceil((Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))) / 7) : 12; // match MacrocyclePage calculation
+        Math.ceil((Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))) / 7) : 12;
       setTotalWeeks(weeks);
       
       // Set plan dates
       setPlanStartDate(startDate);
       setPlanEndDate(endDate);
+      
+      // Check if we have saved mesocycle data with allocatedSubGoals
+      if (savedMesocycleData) {
+        try {
+          const savedMesocycles = JSON.parse(savedMesocycleData);
+          if (savedMesocycles.mesocycles && savedMesocycles.mesocycles.length > 0) {
+            console.log('DEBUG: Loading saved mesocycles with allocatedSubGoals:', savedMesocycles);
+            setMesocycles(savedMesocycles.mesocycles);
+            setMesocycleLength(4);
+            return; // Skip default mesocycle creation
+          }
+        } catch (e) {
+          console.error('Failed to load saved mesocycles:', e);
+        }
+      }
       
       // Auto-calculate mesocycles using 4-week blocks as default
       const suggestedMesocycleCount = Math.ceil(weeks / 4);
@@ -264,6 +275,7 @@ export default function MesocyclePage() {
   // Save mesocycle data to localStorage for microcycle planning
   useEffect(() => {
     if (mesocycles.length > 0) {
+      console.log('DEBUG: Saving mesocycles to localStorage:', mesocycles.map(m => ({ id: m.id, allocatedSubGoals: m.allocatedSubGoals })));
       localStorage.setItem('mesocycleData', JSON.stringify({ mesocycles }));
     }
   }, [mesocycles]);
@@ -1066,20 +1078,28 @@ export default function MesocyclePage() {
       
       if (subGoalExists) return; // Prevent duplicates
       
-      // Add sub-goal to mesocycle
-      const updated = [...mesocycles];
-      updated[mesocycleIndex].allocatedSubGoals = [...currentSubGoals, subGoal];
+      // Add sub-goal to mesocycle with proper immutable update
+      const updated = mesocycles.map((meso, idx) => 
+        idx === mesocycleIndex 
+          ? { ...meso, allocatedSubGoals: [...currentSubGoals, subGoal] }
+          : meso
+      );
       setMesocycles(updated);
+      console.log('DEBUG: Added sub-goal to mesocycle:', { mesocycleId, subGoal, allocatedSubGoals: updated[mesocycleIndex].allocatedSubGoals });
     };
 
     const removeSubGoalFromMesocycle = (mesocycleId: string, subGoal: string) => {
       const mesocycleIndex = mesocycles.findIndex(m => m.id === mesocycleId);
       if (mesocycleIndex === -1) return;
       
-      const updated = [...mesocycles];
-      updated[mesocycleIndex].allocatedSubGoals = (updated[mesocycleIndex].allocatedSubGoals || [])
-        .filter(sg => sg !== subGoal);
+      // Proper immutable update
+      const updated = mesocycles.map((meso, idx) => 
+        idx === mesocycleIndex 
+          ? { ...meso, allocatedSubGoals: (meso.allocatedSubGoals || []).filter(sg => sg !== subGoal) }
+          : meso
+      );
       setMesocycles(updated);
+      console.log('DEBUG: Removed sub-goal from mesocycle:', { mesocycleId, subGoal, allocatedSubGoals: updated[mesocycleIndex].allocatedSubGoals });
     };
 
     return (
