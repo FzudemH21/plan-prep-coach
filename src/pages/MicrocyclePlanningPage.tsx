@@ -171,35 +171,28 @@ export default function MicrocyclePlanningPage() {
     return Array.from(exerciseMap.values());
   }, [currentMesocycle, exerciseSelectionData]);
 
-  // Group exercises by method and category
-  const exercisesByMethodCategory = useMemo(() => {
-    const grouped: Record<string, Record<string, typeof allocatedExercises>> = {};
+  // Group exercises by method and category - hierarchical structure
+  const exercisesByMethod = useMemo(() => {
+    const grouped: Record<string, {
+      methodId: string;
+      categories: Record<string, typeof allocatedExercises>;
+    }> = {};
     
     allocatedExercises.forEach(exercise => {
       if (!grouped[exercise.methodId]) {
-        grouped[exercise.methodId] = {};
+        grouped[exercise.methodId] = {
+          methodId: exercise.methodId,
+          categories: {}
+        };
       }
-      if (!grouped[exercise.methodId][exercise.categoryName]) {
-        grouped[exercise.methodId][exercise.categoryName] = [];
+      if (!grouped[exercise.methodId].categories[exercise.categoryName]) {
+        grouped[exercise.methodId].categories[exercise.categoryName] = [];
       }
-      grouped[exercise.methodId][exercise.categoryName].push(exercise);
+      grouped[exercise.methodId].categories[exercise.categoryName].push(exercise);
     });
 
     return grouped;
   }, [allocatedExercises]);
-
-  // Get method names
-  const methodCategories = useMemo(() => {
-    const categories: Array<{ methodId: string; categoryName: string }> = [];
-    
-    Object.entries(exercisesByMethodCategory).forEach(([methodId, categoriesObj]) => {
-      Object.keys(categoriesObj).forEach(categoryName => {
-        categories.push({ methodId, categoryName });
-      });
-    });
-
-    return categories;
-  }, [exercisesByMethodCategory]);
 
   // Calculate frequency for each method/microcycle
   const getMethodFrequency = (methodId: string, microcycleId: string): number => {
@@ -547,99 +540,106 @@ export default function MicrocyclePlanningPage() {
                 </div>
               </div>
 
-              {/* Exercise rows */}
-              <div className="space-y-2">
-                {methodCategories.length === 0 ? (
+              {/* Exercise rows - grouped by method */}
+              <div className="space-y-4">
+                {Object.keys(exercisesByMethod).length === 0 ? (
                   <div className="p-8 text-center text-muted-foreground border rounded-lg">
                     No exercises allocated in Step 6 of Mesocycle Planning
                   </div>
                 ) : (
-                  methodCategories.map(({ methodId, categoryName }) => {
-                    const exercises = exercisesByMethodCategory[methodId]?.[categoryName] || [];
-                    
+                  Object.entries(exercisesByMethod).map(([methodId, methodData]) => {
                     return (
-                      <div key={`${methodId}-${categoryName}`} className="border rounded-lg">
-                        <div className="flex">
-                          {/* Left sidebar: Method/Category and Exercises */}
-                          <div className="w-64 shrink-0 border-r p-3 bg-muted/50">
-                            <div className="font-semibold text-sm mb-2">
-                              {methodId}
-                            </div>
-                            <div className="text-xs text-muted-foreground mb-3">
-                              {categoryName}
-                            </div>
-                            <div className="space-y-2">
-                              {exercises.map((exercise, idx) => {
-                                const microcycleNames = exercise.microcycleIds
-                                  .map(id => currentMesocycle.microcycles.find(m => m.id === id)?.name)
-                                  .filter(Boolean);
-                                
-                                return (
-                                  <div
-                                    key={`${exercise.exerciseId}-${idx}`}
-                                    draggable
-                                    onDragStart={(e) => handleDragStart(e, exercise)}
-                                    className="p-2 bg-background border rounded cursor-move hover:border-primary transition-colors"
-                                  >
-                                    <div className="text-xs font-medium">{exercise.exerciseName}</div>
-                                    <div className="flex flex-wrap gap-1 mt-1">
-                                      {microcycleNames.map((name, i) => (
-                                        <Badge key={i} variant="secondary" className="text-[10px] px-1 py-0">
-                                          {name}
-                                        </Badge>
-                                      ))}
-                                    </div>
+                      <div key={methodId} className="border rounded-lg overflow-hidden">
+                        {/* Method header */}
+                        <div className="bg-muted/70 px-4 py-2 font-semibold text-sm border-b">
+                          {methodId}
+                        </div>
+                        
+                        {/* Category rows */}
+                        <div className="space-y-0">
+                          {Object.entries(methodData.categories).map(([categoryName, exercises]) => (
+                            <div key={`${methodId}-${categoryName}`} className="border-b last:border-b-0">
+                              <div className="flex">
+                                {/* Left sidebar: Category and Exercises */}
+                                <div className="w-64 shrink-0 border-r p-3 bg-muted/30">
+                                  <div className="text-xs font-medium text-muted-foreground mb-3">
+                                    {categoryName}
                                   </div>
-                                );
-                              })}
-                            </div>
-                          </div>
+                                  <div className="space-y-2">
+                                    {exercises.map((exercise, idx) => {
+                                      const microcycleNames = exercise.microcycleIds
+                                        .map(id => currentMesocycle.microcycles.find(m => m.id === id)?.name)
+                                        .filter(Boolean);
+                                      
+                                      return (
+                                        <div
+                                          key={`${exercise.exerciseId}-${idx}`}
+                                          draggable
+                                          onDragStart={(e) => handleDragStart(e, exercise)}
+                                          className="group p-2 bg-background border rounded cursor-move hover:border-primary transition-colors"
+                                        >
+                                          <div className="text-xs font-medium">{exercise.exerciseName}</div>
+                                          <div className="flex flex-wrap gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            {microcycleNames.map((name, i) => (
+                                              <Badge key={i} variant="secondary" className="text-[10px] px-1 py-0">
+                                                {name}
+                                              </Badge>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
 
-                          {/* Day columns */}
-                          <div className="flex flex-1">
-                            {currentMesocycle.microcycles.map(microcycle => {
-                              const days = daysByMicrocycle[microcycle.id] || [];
-                              return (
-                                <div key={microcycle.id} className="flex flex-1 border-r last:border-r-0">
-                                  {days.map(day => (
-                                    <div 
-                                      key={day.date}
-                                      className="w-[120px] p-2 border-r last:border-r-0 min-h-[100px]"
-                                      onDrop={(e) => handleDrop(e, day.date, 0, methodId, categoryName)}
-                                      onDragOver={handleDragOver}
-                                    >
-                                      <div className="space-y-1">
-                                        {getExercisesForCell(day.date, 0, methodId, categoryName).map((ex, idx) => (
-                                          <div
-                                            key={idx}
-                                            className="text-[10px] p-1 bg-primary/10 border border-primary/20 rounded group relative"
+                                {/* Day columns */}
+                                <div className="flex flex-1">
+                                  {currentMesocycle.microcycles.map(microcycle => {
+                                    const days = daysByMicrocycle[microcycle.id] || [];
+                                    return (
+                                      <div key={microcycle.id} className="flex flex-1 border-r last:border-r-0">
+                                        {days.map(day => (
+                                          <div 
+                                            key={day.date}
+                                            className="w-[120px] p-2 border-r last:border-r-0 min-h-[100px]"
+                                            onDrop={(e) => handleDrop(e, day.date, 0, methodId, categoryName)}
+                                            onDragOver={handleDragOver}
                                           >
-                                            <div className="pr-4">{ex.exerciseName}</div>
-                                            <button
-                                              onClick={() => {
-                                                const index = exerciseDistribution.findIndex(
-                                                  e => 
-                                                    e.exerciseId === ex.exerciseId && 
-                                                    e.dayDate === ex.dayDate && 
-                                                    e.sessionIndex === ex.sessionIndex &&
-                                                    e.methodId === ex.methodId &&
-                                                    e.categoryName === ex.categoryName
-                                                );
-                                                if (index !== -1) removeExercise(index);
-                                              }}
-                                              className="absolute top-0 right-0 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            >
-                                              ×
-                                            </button>
+                                            <div className="space-y-1">
+                                              {getExercisesForCell(day.date, 0, methodId, categoryName).map((ex, idx) => (
+                                                <div
+                                                  key={idx}
+                                                  className="text-[10px] p-1 bg-primary/10 border border-primary/20 rounded group relative"
+                                                >
+                                                  <div className="pr-4">{ex.exerciseName}</div>
+                                                  <button
+                                                    onClick={() => {
+                                                      const index = exerciseDistribution.findIndex(
+                                                        e => 
+                                                          e.exerciseId === ex.exerciseId && 
+                                                          e.dayDate === ex.dayDate && 
+                                                          e.sessionIndex === ex.sessionIndex &&
+                                                          e.methodId === ex.methodId &&
+                                                          e.categoryName === ex.categoryName
+                                                      );
+                                                      if (index !== -1) removeExercise(index);
+                                                    }}
+                                                    className="absolute top-0 right-0 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                  >
+                                                    ×
+                                                  </button>
+                                                </div>
+                                              ))}
+                                            </div>
                                           </div>
                                         ))}
                                       </div>
-                                    </div>
-                                  ))}
+                                    );
+                                  })}
                                 </div>
-                              );
-                            })}
-                          </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     );
