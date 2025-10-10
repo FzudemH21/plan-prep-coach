@@ -450,20 +450,15 @@ export default function MicrocyclePlanningPage() {
       };
     }).filter(Boolean) as ExerciseDistribution[];
     
-    // Add to distribution (avoid duplicates)
+    // Replace target microcycle's exercises completely (overwrite)
     setExerciseDistribution(prev => {
-      const merged = [...prev];
-      newExercises.forEach(newEx => {
-        const exists = merged.some(ex => 
-          ex.exerciseId === newEx.exerciseId &&
-          ex.dayDate === newEx.dayDate &&
-          ex.sessionIndex === newEx.sessionIndex &&
-          ex.methodId === newEx.methodId &&
-          ex.categoryName === newEx.categoryName
-        );
-        if (!exists) merged.push(newEx);
-      });
-      return merged;
+      // Step 1: Remove ALL exercises from the target microcycle
+      const filteredPrev = prev.filter(ex => 
+        !targetDays.some(day => day.date === ex.dayDate)
+      );
+      
+      // Step 2: Add ALL exercises from the source microcycle (mapped to target days)
+      return [...filteredPrev, ...newExercises];
     });
     
     // Show success toast
