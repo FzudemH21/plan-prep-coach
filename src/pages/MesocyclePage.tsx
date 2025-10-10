@@ -32,7 +32,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CrossMesocycleCopyDialog } from "@/components/ui/cross-mesocycle-copy-dialog";
 import { CrossMesocycleMicrocycleCopyDialog } from "@/components/ui/cross-mesocycle-microcycle-copy-dialog";
-import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2 } from "lucide-react";
+import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy } from "lucide-react";
 import { format, addWeeks, differenceInWeeks } from "date-fns";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 import { IntensityLevel } from "@/types/training";
@@ -2428,6 +2428,81 @@ export default function MesocyclePage() {
     return currentDay.mesocycleId !== nextDay.mesocycleId;
   };
 
+  // Copy daily intensity pattern from previous microcycle
+  const copyMicrocycleDailyIntensity = (mesocycleId: string, targetMicrocycleId: string) => {
+    const mesocycle = mesocycles.find(m => m.id === mesocycleId);
+    if (!mesocycle) return;
+    
+    const targetMicrocycleIndex = mesocycle.microcycles.findIndex(m => m.id === targetMicrocycleId);
+    if (targetMicrocycleIndex <= 0) return; // Can't copy if it's the first microcycle
+    
+    const targetMicrocycle = mesocycle.microcycles[targetMicrocycleIndex];
+    const previousMicrocycle = mesocycle.microcycles[targetMicrocycleIndex - 1];
+    
+    // Check if durations match
+    if (targetMicrocycle.duration !== previousMicrocycle.duration) {
+      toast({
+        title: "Cannot copy",
+        description: "Microcycles must have matching durations to copy intensity patterns.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Find all days for both microcycles from trainingDays
+    const previousDays = trainingDays.filter(day => day.microcycleId === previousMicrocycle.id);
+    const targetDays = trainingDays.filter(day => day.microcycleId === targetMicrocycle.id);
+    
+    if (previousDays.length !== targetDays.length) {
+      toast({
+        title: "Cannot copy",
+        description: "Day count mismatch between microcycles.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Create a map of previous day intensities by day index
+    const intensityMap = previousDays.map(day => {
+      const intensity = dailyIntensityData.find(di => di.date === day.date)?.intensity || "moderate";
+      return intensity;
+    });
+    
+    // Update dailyIntensityData for target microcycle days
+    setDailyIntensityData(prev => {
+      const updated = [...prev];
+      
+      targetDays.forEach((day, index) => {
+        const existingIndex = updated.findIndex(di => di.date === day.date);
+        const newIntensity = intensityMap[index];
+        
+        if (existingIndex >= 0) {
+          updated[existingIndex] = {
+            ...updated[existingIndex],
+            intensity: newIntensity
+          };
+        } else {
+          updated.push({
+            date: day.date,
+            mesocycleId: mesocycleId,
+            microcycleId: targetMicrocycle.id,
+            dayOfWeek: day.dayOfWeek,
+            intensity: newIntensity,
+            isTestDay: day.isTestDay,
+            isEventDay: day.isEventDay
+          });
+        }
+      });
+      
+      return updated;
+    });
+    
+    toast({
+      title: "Intensity pattern copied",
+      description: `Copied daily intensity from ${previousMicrocycle.name}`
+    });
+  };
+
   const renderDailyIntensityPlanning = () => (
     <Card>
       <CardHeader>
@@ -2492,17 +2567,32 @@ export default function MesocyclePage() {
                       meso.microcycles.map((micro, microIndex) => {
                         const width = micro.duration * 80; // 80px per day
                         const isLastMicro = microIndex === meso.microcycles.length - 1;
+                        
+                        // Check if we can show copy icon (has previous microcycle with matching duration)
+                        const canCopy = microIndex > 0 && 
+                          meso.microcycles[microIndex - 1].duration === micro.duration;
+                        
                         return (
                           <div 
                             key={micro.id}
-                            className={`text-center text-sm py-1 px-2 shrink-0 ${getIntensityColor(micro.intensity)} ${
+                            className={`relative text-center text-sm py-1 px-2 shrink-0 ${getIntensityColor(micro.intensity)} ${
                               isLastMicro ? 'border-r-2 border-r-slate-400' : 'border-r border-border'
                             }`}
                             style={{ width: `${width}px` }}
                           >
-                            {micro.name}
-                            <div className="text-xs text-muted-foreground">
-                              ({micro.duration}d)
+                            <div className="flex items-center justify-center gap-1">
+                              <span>{micro.name}</span>
+                              
+                              {/* Copy icon - only show if can copy from previous microcycle */}
+                              {canCopy && (
+                                <button
+                                  onClick={() => copyMicrocycleDailyIntensity(meso.id, micro.id)}
+                                  className="text-blue-600 hover:text-blue-700 transition-colors"
+                                  title={`Copy intensity pattern from ${meso.microcycles[microIndex - 1].name}`}
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </button>
+                              )}
                             </div>
                           </div>
                         );
