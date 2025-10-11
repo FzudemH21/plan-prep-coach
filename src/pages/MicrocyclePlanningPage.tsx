@@ -7,7 +7,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info, Copy, ChevronDown, Columns, ChevronRight, X } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info, Copy, ChevronDown, Columns, ChevronRight, X, Trash2 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { ExtendedMesocycle, Microcycle } from '@/features/planner/types';
@@ -62,6 +63,16 @@ export default function MicrocyclePlanningPage() {
   const [daySplitStates, setDaySplitStates] = useState<Record<string, number>>({});
   const [splitStates, setSplitStates] = useState<Record<string, boolean>>({});
   const { data: athleticismData } = useAthleticismData();
+  const [clearMesocycleDialogOpen, setClearMesocycleDialogOpen] = useState(false);
+  const [clearMicrocycleDialog, setClearMicrocycleDialog] = useState<{
+    isOpen: boolean;
+    microcycleId: string;
+    microcycleName: string;
+  }>({
+    isOpen: false,
+    microcycleId: '',
+    microcycleName: ''
+  });
 
   const totalSteps = 1; // Currently only Step 1: Exercise Distribution
 
@@ -764,6 +775,48 @@ export default function MicrocyclePlanningPage() {
     });
   };
 
+  // Clear all exercises for the entire mesocycle
+  const handleClearMesocycleExercises = () => {
+    if (!currentMesocycle) return;
+    
+    // Get all microcycle IDs for this mesocycle
+    const microcycleIds = currentMesocycle.microcycles.map(m => m.id);
+    
+    // Filter out exercises that belong to this mesocycle's microcycles
+    const updatedDistribution = exerciseDistribution.filter(exercise => {
+      const exerciseDay = trainingDays.find(d => d.date === exercise.dayDate);
+      if (!exerciseDay) return true;
+      return !microcycleIds.includes(exerciseDay.microcycleId);
+    });
+    
+    setExerciseDistribution(updatedDistribution);
+    setClearMesocycleDialogOpen(false);
+    
+    toast({
+      title: "Mesocycle exercises cleared",
+      description: `All exercises for ${currentMesocycle.name} have been removed.`,
+    });
+  };
+
+  // Clear exercises for a specific microcycle only
+  const handleClearMicrocycleExercises = (microcycleId: string) => {
+    // Filter out exercises that belong to this specific microcycle
+    const updatedDistribution = exerciseDistribution.filter(exercise => {
+      const exerciseDay = trainingDays.find(d => d.date === exercise.dayDate);
+      if (!exerciseDay) return true;
+      return exerciseDay.microcycleId !== microcycleId;
+    });
+    
+    setExerciseDistribution(updatedDistribution);
+    setClearMicrocycleDialog({ isOpen: false, microcycleId: '', microcycleName: '' });
+    
+    const microcycleName = currentMesocycle?.microcycles.find(m => m.id === microcycleId)?.name;
+    toast({
+      title: "Microcycle exercises cleared",
+      description: `All exercises for ${microcycleName} have been removed.`,
+    });
+  };
+
   // Get exercises for a specific day/session/method
   const getExercisesForCell = (dayDate: string, sessionIndex: number, methodId: string) => {
     return exerciseDistribution.filter(
@@ -887,8 +940,18 @@ export default function MicrocyclePlanningPage() {
               {/* Three-level headers */}
               <div className="border rounded-lg mb-4">
                 {/* Level 1: Mesocycle */}
-                <div className={cn("p-2 text-center font-semibold border-b", getIntensityColor(currentMesocycle.intensity))}>
-                  {currentMesocycle.name}
+                <div className={cn("p-2 text-center font-semibold border-b flex items-center justify-center gap-2", getIntensityColor(currentMesocycle.intensity))}>
+                  <span>{currentMesocycle.name}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setClearMesocycleDialogOpen(true)}
+                    className="h-7 px-3 text-foreground hover:bg-destructive/10 border border-destructive/20"
+                    title="Clear all exercises for this mesocycle"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                    Clear Exercises
+                  </Button>
                 </div>
                 
                 {/* Level 2: Microcycles */}
@@ -918,6 +981,28 @@ export default function MicrocyclePlanningPage() {
                         >
                           <div className="flex items-center justify-center p-2 relative gap-1">
                             <span className="font-semibold">{microcycle.name}</span>
+                            
+                            {/* Clear button for this microcycle */}
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setClearMicrocycleDialog({
+                                    isOpen: true,
+                                    microcycleId: microcycle.id,
+                                    microcycleName: microcycle.name
+                                  })}
+                                  className="h-6 px-2 text-foreground hover:bg-destructive/10 border border-destructive/20"
+                                  title="Clear exercises for this microcycle"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Clear all exercises for {microcycle.name}
+                              </TooltipContent>
+                            </Tooltip>
                             
                             {/* Info icon for periodization */}
                             {(() => {
@@ -1334,6 +1419,57 @@ export default function MicrocyclePlanningPage() {
       {currentStep === 1 && renderExerciseDistribution()}
 
       <NavigationButtons />
+
+      {/* Clear Mesocycle Confirmation Dialog */}
+      <AlertDialog open={clearMesocycleDialogOpen} onOpenChange={setClearMesocycleDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear all exercises for {currentMesocycle?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove all distributed exercises for all microcycles in {currentMesocycle?.name}.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleClearMesocycleExercises}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Clear All Exercises
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Clear Microcycle Confirmation Dialog */}
+      <AlertDialog 
+        open={clearMicrocycleDialog.isOpen} 
+        onOpenChange={(isOpen) => {
+          if (!isOpen) {
+            setClearMicrocycleDialog({ isOpen: false, microcycleId: '', microcycleName: '' });
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear exercises for {clearMicrocycleDialog.microcycleName}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove all distributed exercises for {clearMicrocycleDialog.microcycleName} only.
+              Exercises in other microcycles will remain intact. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => handleClearMicrocycleExercises(clearMicrocycleDialog.microcycleId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Clear Microcycle Exercises
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
