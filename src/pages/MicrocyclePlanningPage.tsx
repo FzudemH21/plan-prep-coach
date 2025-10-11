@@ -157,16 +157,45 @@ export default function MicrocyclePlanningPage() {
     return grouped;
   }, [currentMesocycleDays]);
   
-  // Track methods that have microcycle-specific allocations (keyed by full methodId which includes subCategory)
-  const methodsWithMicrocycleAllocations = useMemo(() => {
-    const methods = new Set<string>();
+  // Helper functions for canonical group keys
+  const parseMethod = (fullMethodId: string): { methodMain: string; subCategory: string } => {
+    const parts = fullMethodId.split(/\s*-\s*/);
+    return {
+      methodMain: (parts[0] || '').trim(),
+      subCategory: (parts[1] || '').trim()
+    };
+  };
+
+  const normalizeKey = (s: string): string => {
+    return s
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
+  const methodGroupKey = (fullMethodId: string): string => {
+    const { methodMain, subCategory } = parseMethod(fullMethodId);
+    return `${normalizeKey(methodMain)}|${normalizeKey(subCategory)}`;
+  };
+
+  // Track method groups (methodMain + subCategory) that have microcycle-specific allocations in the CURRENT mesocycle
+  const groupsWithMicrocycleAllocations = useMemo(() => {
+    if (!currentMesocycle) return new Set<string>();
+    
+    const groups = new Set<string>();
     Object.values(exerciseSelectionData).forEach(cellData => {
-      if (cellData.microcycleId) {
-        methods.add(cellData.methodId); // Full methodId like "Lower Body Resistance Training - Strength"
+      // Only consider cells for the current mesocycle that have microcycle-specific allocations
+      if (cellData.mesocycleId === currentMesocycle.id && cellData.microcycleId) {
+        const groupKey = methodGroupKey(cellData.methodId);
+        groups.add(groupKey);
       }
     });
-    return methods;
-  }, [exerciseSelectionData]);
+    
+    console.log('[Step1] Groups with microcycle allocations:', Array.from(groups));
+    return groups;
+  }, [currentMesocycle, exerciseSelectionData]);
 
   // Get exercises allocated to current mesocycle from Step 6, de-duplicated and with proper hierarchy
   const allocatedExercises = useMemo(() => {
@@ -190,9 +219,11 @@ export default function MicrocyclePlanningPage() {
       
       const isMesocycleLevel = !cellData.microcycleId;
       const fullMethodId = cellData.methodId; // e.g., "Lower Body Resistance Training - Strength"
+      const groupKey = methodGroupKey(fullMethodId);
       
-      // Skip mesocycle-level if this method has ANY microcycle-specific allocations
-      if (isMesocycleLevel && methodsWithMicrocycleAllocations.has(fullMethodId)) {
+      // Skip mesocycle-level if this method group has ANY microcycle-specific allocations
+      if (isMesocycleLevel && groupsWithMicrocycleAllocations.has(groupKey)) {
+        console.log('[Step1] Suppressed meso-level cell:', { methodId: fullMethodId, groupKey });
         return;
       }
       
@@ -247,7 +278,7 @@ export default function MicrocyclePlanningPage() {
       ...ex,
       microcycleIds: Array.from(ex.microcycleIds)
     }));
-  }, [currentMesocycle, exerciseSelectionData, methodsWithMicrocycleAllocations]);
+  }, [currentMesocycle, exerciseSelectionData, groupsWithMicrocycleAllocations]);
 
   // Group exercises by methodMain -> subCategory -> exerciseCategory hierarchy (mirror Step 6 structure)
   const exercisesByMethod = useMemo(() => {
