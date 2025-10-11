@@ -1412,7 +1412,6 @@ export default function MicrocyclePlanningPage() {
       <NavigationButtons />
 
       {renderTrainingPlanOverview()}
-      {renderMesocycleNavigation()}
       
       {currentStep === 1 && renderExerciseDistribution()}
       

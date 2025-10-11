@@ -57,7 +57,7 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
     <div
       onClick={hasTraining ? onClick : undefined}
       className={cn(
-        "min-h-[100px] border rounded-lg p-2 transition-all",
+        "min-h-[140px] border rounded-lg p-3 transition-all",
         day.isCurrentMonth ? "bg-card" : "bg-muted/30",
         hasTraining && "cursor-pointer hover:shadow-md hover:border-primary",
         !hasTraining && "cursor-default"
