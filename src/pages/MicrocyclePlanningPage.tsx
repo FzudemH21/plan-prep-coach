@@ -113,7 +113,10 @@ export default function MicrocyclePlanningPage() {
     const savedMicrocyclePlanningState = localStorage.getItem('microcyclePlanningState');
     if (savedMicrocyclePlanningState) {
       const planningState = JSON.parse(savedMicrocyclePlanningState);
+      console.log('[MicrocyclePlanningPage] Loaded microcyclePlanningState.splitStates:', planningState.splitStates);
       setSplitStates(planningState.splitStates || {});
+    } else {
+      console.log('[MicrocyclePlanningPage] No microcyclePlanningState found in localStorage');
     }
   }, []);
 
@@ -155,6 +158,7 @@ export default function MicrocyclePlanningPage() {
 
     // Check if this mesocycle is split
     const isSplit = !!splitStates[currentMesocycle.id];
+    console.log('[allocatedExercises] compute start', { mesocycleId: currentMesocycle.id, isSplit, splitStates });
 
     // Step 1: Separate microcycle-specific and mesocycle-level allocations
     const microcycleSpecific = new Map<string, {
@@ -210,6 +214,11 @@ export default function MicrocyclePlanningPage() {
       });
     });
 
+    // Log categorized counts before building result
+    const microcycleSpecificCount = Array.from(microcycleSpecific.values()).reduce((acc, arr) => acc + arr.length, 0);
+    const mesocycleLevelCount = Array.from(mesocycleLevel.values()).reduce((acc, arr) => acc + arr.length, 0);
+    console.log('[allocatedExercises] categorized', { microcycleSpecificKeys: microcycleSpecific.size, microcycleSpecificCount, mesocycleLevelKeys: mesocycleLevel.size, mesocycleLevelCount });
+
     // Step 3: Build final result with priority logic
     const exerciseMap = new Map<string, {
       exerciseId: string;
@@ -223,6 +232,7 @@ export default function MicrocyclePlanningPage() {
     if (isSplit) {
       // If mesocycle is split, ONLY use microcycle-specific allocations
       // Completely ignore mesocycle-level allocations
+      console.log('[allocatedExercises] split=true -> using ONLY microcycle-specific allocations; ignoring mesocycle-level:', { mesocycleLevelKeys: mesocycleLevel.size });
       currentMesocycle.microcycles.forEach(microcycle => {
         microcycleSpecific.forEach((exercises, key) => {
           if (key.endsWith(`-${microcycle.id}`)) {
@@ -301,7 +311,9 @@ export default function MicrocyclePlanningPage() {
       });
     }
 
-    return Array.from(exerciseMap.values());
+    const result = Array.from(exerciseMap.values());
+    console.log('[allocatedExercises] result', { mesocycleId: currentMesocycle.id, isSplit, resultCount: result.length, result });
+    return result;
   }, [currentMesocycle, exerciseSelectionData, splitStates]);
 
   // Group exercises by method and category - hierarchical structure
