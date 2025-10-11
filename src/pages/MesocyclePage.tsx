@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, ArrowRight, Settings } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Settings, SplitSquareHorizontal, Columns } from 'lucide-react';
 import MesocycleCalendar from '@/components/mesocycle/MesocycleCalendar';
 import MicrocycleIntensityPlanning from '@/components/mesocycle/MicrocycleIntensityPlanning';
 import IntensityColumn from '@/components/mesocycle/IntensityColumn';
@@ -69,6 +69,7 @@ export default function MesocyclePage() {
   const [isAddMethodDialogOpen, setIsAddMethodDialogOpen] = useState(false);
   const [methodToDelete, setMethodToDelete] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [categorySplitStates, setCategorySplitStates] = useState<Record<string, boolean>>({});
   
   // Daily intensity planning state
   const [dailyIntensityData, setDailyIntensityData] = useState<DailyIntensity[]>([]);
@@ -247,6 +248,27 @@ export default function MesocyclePage() {
       }
     }
   }, []);
+
+  // Load category split states from localStorage on mount
+  useEffect(() => {
+    const savedCategorySplitStates = localStorage.getItem('categorySplitStates');
+    if (savedCategorySplitStates) {
+      try {
+        const parsed = JSON.parse(savedCategorySplitStates);
+        setCategorySplitStates(parsed);
+        console.log('DEBUG: Loaded category split states:', parsed);
+      } catch (e) {
+        console.error('Failed to load category split states:', e);
+      }
+    }
+  }, []);
+
+  // Save category split states to localStorage
+  useEffect(() => {
+    if (Object.keys(categorySplitStates).length > 0) {
+      localStorage.setItem('categorySplitStates', JSON.stringify(categorySplitStates));
+    }
+  }, [categorySplitStates]);
 
   // Load training days from localStorage on mount
   useEffect(() => {
@@ -1191,6 +1213,41 @@ export default function MesocyclePage() {
   };
 
   // Parameter value helpers (moved out to keep hooks stable)
+  // Helper functions for category-based method names
+  const getBaseMethodName = (fullMethodName: string): string => {
+    return fullMethodName.split('::')[0];
+  };
+
+  const getCategoryFromMethodName = (fullMethodName: string): string | null => {
+    const parts = fullMethodName.split('::');
+    return parts.length > 1 ? parts[1] : null;
+  };
+
+  const getMethodExerciseCategories = useCallback((methodName: string): string[] => {
+    if (!toolboxData.entries) return [];
+    
+    // Find all toolbox entries that match this method and have exercise categories
+    const matchingEntries = toolboxData.entries.filter(entry => {
+      const entryKey = `${entry.category}${entry.subCategory ? ` - ${entry.subCategory}` : ''}`;
+      return normalizeForComparison(entryKey) === normalizeForComparison(methodName);
+    });
+    
+    // Collect unique exercise categories
+    const categories = new Set<string>();
+    matchingEntries.forEach(entry => {
+      if (entry.exerciseCategories && Array.isArray(entry.exerciseCategories)) {
+        entry.exerciseCategories.forEach(cat => categories.add(cat));
+      }
+    });
+    
+    return Array.from(categories);
+  }, [toolboxData.entries]);
+
+  const hasExerciseCategories = useCallback((methodName: string): boolean => {
+    const categories = getMethodExerciseCategories(methodName);
+    return categories.length > 0;
+  }, [getMethodExerciseCategories]);
+
   const updateParameterValue = useCallback((mesocycleId: string, microcycleIndex: number, methodName: string, parameterName: string, value: string | number, sessionIndex: number = 0) => {
     startTransition(() => {
       setParameterValues(prev => {
@@ -1211,6 +1268,9 @@ export default function MesocyclePage() {
 
   // Helper function to check if a method should be shown for a mesocycle
   const isMethodAllocatedToMesocycle = useCallback((methodName: string, mesocycleId: string) => {
+    // Handle both base method name and category-suffixed names
+    const baseMethodName = getBaseMethodName(methodName);
+    
     const mesocycle = mesocycles.find(m => m.id === mesocycleId);
     if (!mesocycle || !mesocycle.allocatedSubGoals || !macrocycleData) return false;
     
@@ -1233,13 +1293,16 @@ export default function MesocyclePage() {
         const qualityId = `${macroSubGoal.id}::${qName}`;
         const mEntry = macrocycleData.methodsByQuality?.[qualityId];
         const methodNames: string[] = mEntry?.list || [];
-        return methodNames.includes(methodName);
+        return methodNames.includes(baseMethodName);
       });
     });
   }, [mesocycles, macrocycleData]);
 
   // Helper function to get cell-specific frequency from user input
   const getCellFrequency = (mesocycleId: string, microcycleIndex: number, methodName: string) => {
+    // Handle both base method name and category-suffixed names
+    const baseMethodName = getBaseMethodName(methodName);
+    
     // Look for frequency parameter case-insensitively
     const cellData = parameterValues[mesocycleId]?.[microcycleIndex]?.[methodName]?.[0] || {};
     const frequencyKey = Object.keys(cellData).find(key => key.toLowerCase().includes('frequency'));
@@ -1281,9 +1344,105 @@ export default function MesocyclePage() {
 
   // Helper function to get number of sessions for a cell
   const getCellSessions = (mesocycleId: string, microcycleIndex: number, methodName: string) => {
+    // Handle both base method name and category-suffixed names
+    const baseMethodName = getBaseMethodName(methodName);
     const frequency = getCellFrequency(mesocycleId, microcycleIndex, methodName);
     return frequency; // Always return the actual frequency regardless of split state
   };
+
+  // Toggle category split for a method
+  const toggleCategorySplit = useCallback((methodName: string) => {
+    const isSplit = categorySplitStates[methodName];
+    const categories = getMethodExerciseCategories(methodName);
+    
+    if (!isSplit) {
+      // SPLITTING: Copy current method data to each category
+      setParameterValues(prev => {
+        const updated = { ...prev };
+        
+        // For each mesocycle where this method is allocated
+        mesocycles.forEach(meso => {
+          if (!isMethodAllocatedToMesocycle(methodName, meso.id)) return;
+          
+          const mesoData = updated[meso.id] || {};
+          
+          // For each microcycle
+          (meso.microcycles || []).forEach((_, microIndex) => {
+            const microData = mesoData[microIndex] || {};
+            const methodData = microData[methodName];
+            
+            if (methodData) {
+              // Copy to each category
+              categories.forEach(category => {
+                const categoryKey = `${methodName}::${category}`;
+                microData[categoryKey] = JSON.parse(JSON.stringify(methodData)); // Deep copy
+              });
+              
+              // Remove original method data
+              delete microData[methodName];
+            }
+            
+            mesoData[microIndex] = microData;
+          });
+          
+          updated[meso.id] = mesoData;
+        });
+        
+        return updated;
+      });
+      
+      // Update split state
+      setCategorySplitStates(prev => ({ ...prev, [methodName]: true }));
+      
+      toast({
+        title: "Method split by category",
+        description: `${methodName} is now split into ${categories.length} category rows`
+      });
+      
+    } else {
+      // UNSPLITTING: Merge category data back to method
+      setParameterValues(prev => {
+        const updated = { ...prev };
+        
+        mesocycles.forEach(meso => {
+          if (!isMethodAllocatedToMesocycle(methodName, meso.id)) return;
+          
+          const mesoData = updated[meso.id] || {};
+          
+          (meso.microcycles || []).forEach((_, microIndex) => {
+            const microData = mesoData[microIndex] || {};
+            
+            // Take first category's data as the merged data
+            const firstCategoryKey = `${methodName}::${categories[0]}`;
+            const firstCategoryData = microData[firstCategoryKey];
+            
+            if (firstCategoryData) {
+              microData[methodName] = firstCategoryData;
+            }
+            
+            // Remove all category keys
+            categories.forEach(category => {
+              delete microData[`${methodName}::${category}`];
+            });
+            
+            mesoData[microIndex] = microData;
+          });
+          
+          updated[meso.id] = mesoData;
+        });
+        
+        return updated;
+      });
+      
+      // Update split state
+      setCategorySplitStates(prev => ({ ...prev, [methodName]: false }));
+      
+      toast({
+        title: "Categories merged",
+        description: `${methodName} is now a single row`
+      });
+    }
+  }, [categorySplitStates, getMethodExerciseCategories, mesocycles, isMethodAllocatedToMesocycle, toast]);
 
   // Helper function to get global microcycle width (max frequency across all allocated methods)
   const getGlobalMicrocycleWidth = useCallback((mesocycleId: string, microcycleIndex: number) => {
@@ -1815,35 +1974,68 @@ export default function MesocyclePage() {
                                 {/* Methods in this sub-category */}
                                 {methods.map((method: string) => {
                                   const parameters = methodParametersMap[method] || [];
+                                  const categories = getMethodExerciseCategories(method);
+                                  const hasCategoriesAvailable = categories.length > 0;
+                                  const isCategorySplit = categorySplitStates[method];
                                   
-                                  return (
-                                    <div key={method} className="border rounded-lg bg-card shadow-sm">
-                                        {/* Method name header */}
-                                        <div className="grid gap-1 bg-muted/20" style={{ 
-                                           gridTemplateColumns: calculateGridTemplate(method)
-                                         }}>
-                                           <div className="sticky left-0 z-40 p-3 font-medium text-sm border-r bg-background rounded-tl shadow-md">
-                                             <div className="flex items-center justify-between group pr-8 relative">
-                                               <div className="line-clamp-3" title={method}>
-                                                 {method}
+                                  // If split, render one section per category
+                                  const methodsToRender = isCategorySplit 
+                                    ? categories.map(cat => `${method}::${cat}`)
+                                    : [method];
+                                  
+                                  return methodsToRender.map((fullMethodName) => {
+                                    const baseMethodName = getBaseMethodName(fullMethodName);
+                                    const categoryName = getCategoryFromMethodName(fullMethodName);
+                                    const isIndented = categoryName !== null;
+                                    
+                                    return (
+                                      <div key={fullMethodName} className={`border rounded-lg bg-card shadow-sm ${isIndented ? 'ml-4 border-l-4 border-primary/30' : ''}`}>
+                                          {/* Method/Category name header */}
+                                          <div className="grid gap-1 bg-muted/20" style={{ 
+                                             gridTemplateColumns: calculateGridTemplate(baseMethodName)
+                                           }}>
+                                             <div className="sticky left-0 z-40 p-3 font-medium text-sm border-r bg-background rounded-tl shadow-md">
+                                               <div className="flex items-center justify-between group pr-16 relative">
+                                                 <div className="flex items-center gap-2">
+                                                   {categoryName && <span className="text-xs text-muted-foreground">↳</span>}
+                                                   <div className="line-clamp-3" title={fullMethodName}>
+                                                     {categoryName ? `${baseMethodName} - ${categoryName}` : baseMethodName}
+                                                   </div>
+                                                 </div>
+                                                 <div className="absolute right-0 top-1/2 -translate-y-1/2 flex gap-1">
+                                                   {/* Split/Unsplit button - only show for base method or first category */}
+                                                   {hasCategoriesAvailable && (!categoryName || categoryName === categories[0]) && (
+                                                     <Button
+                                                       variant="ghost"
+                                                       size="sm"
+                                                       className="h-6 w-6 p-0 text-primary hover:text-primary/80 hover:bg-primary/10"
+                                                       onClick={() => toggleCategorySplit(baseMethodName)}
+                                                       title={isCategorySplit ? "Merge categories" : "Split by exercise category"}
+                                                     >
+                                                       {isCategorySplit ? <Columns className="h-4 w-4" /> : <SplitSquareHorizontal className="h-4 w-4" />}
+                                                     </Button>
+                                                   )}
+                                                   {/* Delete button - only for base method or first category */}
+                                                   {(!categoryName || categoryName === categories[0]) && (
+                                                     <Button
+                                                       variant="ghost"
+                                                       size="sm"
+                                                       className="h-6 w-6 p-0 text-destructive hover:text-destructive/80 hover:bg-destructive/10"
+                                                       onClick={() => handleDeleteMethod(baseMethodName)}
+                                                       title="Delete method"
+                                                     >
+                                                       <Trash2 className="h-4 w-4" />
+                                                     </Button>
+                                                   )}
+                                                 </div>
                                                </div>
-                                                <Button
-                                                  variant="ghost"
-                                                  size="sm"
-                                                  className="absolute right-0 top-1/2 -translate-y-1/2 h-6 w-6 p-0 text-destructive hover:text-destructive/80 hover:bg-destructive/10"
-                                                  onClick={() => handleDeleteMethod(method)}
-                                                  title="Delete method"
-                                                >
-                                                 <Trash2 className="h-4 w-4" />
-                                               </Button>
                                              </div>
-                                           </div>
                                           {mesocycles.map((meso) => 
                                             (meso.microcycles || []).map((microcycle, microcycleIndex) => {
-                                              const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
-                                              const frequency = getCellFrequency(meso.id, microcycleIndex, method);
+                                              const isAllocated = isMethodAllocatedToMesocycle(fullMethodName, meso.id);
+                                              const frequency = getCellFrequency(meso.id, microcycleIndex, fullMethodName);
                                               const isSplit = isMicrocycleSplit(meso.id, microcycleIndex);
-                                              const sessionsCount = getCellSessions(meso.id, microcycleIndex, method);
+                                              const sessionsCount = getCellSessions(meso.id, microcycleIndex, fullMethodName);
                                               
                                               return (
                                                 <div 
@@ -1879,7 +2071,7 @@ export default function MesocyclePage() {
                                          <div className="divide-y">
                                              {parameters.map((param) => (
                                                   <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
-                                                    gridTemplateColumns: calculateGridTemplate(method)
+                                                    gridTemplateColumns: calculateGridTemplate(baseMethodName)
                                                   }}>
                                                  <div className="sticky left-0 z-40 p-2 text-xs text-muted-foreground bg-background border-r flex items-center justify-between shadow-md">
                                                    <div className="flex items-center">
@@ -1889,29 +2081,29 @@ export default function MesocyclePage() {
                                                      )}
                                                    </div>
                                                    <ParameterFillControl
-                                                     methodName={method}
+                                                     methodName={fullMethodName}
                                                      parameterName={param.name}
                                                      parameterType={param.isQuantitative ? 'quantitative' : 'qualitative'}
                                                      parameterOptions={param.options}
                                                      onFillRow={(value, allMesocycles, fillEmptyOnly) => 
-                                                       handleRowFill(method, param.name, value, allMesocycles, fillEmptyOnly, 0)
+                                                       handleRowFill(fullMethodName, param.name, value, allMesocycles, fillEmptyOnly, 0)
                                                      }
-                                                     disabled={!mesocycles.some(meso => isMethodAllocatedToMesocycle(method, meso.id))}
+                                                     disabled={!mesocycles.some(meso => isMethodAllocatedToMesocycle(fullMethodName, meso.id))}
                                                    />
                                                  </div>
                                                  {mesocycles.map((meso) =>
                                                    (meso.microcycles || []).map((microcycle, microcycleIndex) => {
-                                                      const isAllocated = isMethodAllocatedToMesocycle(method, meso.id);
+                                                      const isAllocated = isMethodAllocatedToMesocycle(fullMethodName, meso.id);
                                                        const isSplit = isMicrocycleSplit(meso.id, microcycleIndex);
-                                                       const sessionsCount = getCellSessions(meso.id, microcycleIndex, method);
+                                                       const sessionsCount = getCellSessions(meso.id, microcycleIndex, fullMethodName);
                                                       const isFrequency = isFrequencyParameter(param.name);
                                                       
                                                       if (isSplit && !isFrequency) {
                                                        return (
                                                          <div key={`${meso.id}-${microcycleIndex}`} className="flex">
                                                            {Array.from({ length: sessionsCount }, (_, sessionIndex) => {
-                                                             const currentValue = getParameterValue(meso.id, microcycleIndex, method, param.name, sessionIndex);
-                                                             const cellId = `${meso.id}::${microcycleIndex}::${method}::${sessionIndex}::${param.name}`;
+                                                             const currentValue = getParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, sessionIndex);
+                                                             const cellId = `${meso.id}::${microcycleIndex}::${fullMethodName}::${sessionIndex}::${param.name}`;
                                                              const isDragSource = dragState.sourceCell === cellId;
                                                              const isInSelection = dragState.selectedCells.has(cellId);
                                                              
@@ -1933,7 +2125,7 @@ export default function MesocyclePage() {
                                                                    {param.isQuantitative ? (
                                                                      <QuantitativeParameterInput
                                                                        value={isAllocated ? currentValue.toString() : ''}
-                                                                       onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, value, sessionIndex)}
+                                                                       onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, value, sessionIndex)}
                                                                        unit={param.options?.[0] || ''}
                                                                        onUnitChange={(unit) => {
                                                                          // For now, we don't change units dynamically
@@ -1950,7 +2142,7 @@ export default function MesocyclePage() {
                                                                    ) : param.isQualitative ? (
                                                                      <QualitativeParameterInput
                                                                        value={isAllocated ? currentValue.toString() : ''}
-                                                                       onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, value, sessionIndex)}
+                                                                       onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, value, sessionIndex)}
                                                                        options={param.options || []}
                                                                        placeholder=""
                                                                        cellId={cellId}
@@ -1963,7 +2155,7 @@ export default function MesocyclePage() {
                                                                     ) : (
                                                                       <DebouncedTextInput
                                                                         value={isAllocated ? currentValue.toString() : ''}
-                                                                        onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, param.type === 'number' ? Number(value) : value, sessionIndex)}
+                                                                        onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, param.type === 'number' ? Number(value) : value, sessionIndex)}
                                                                         className={!isAllocated ? 'cursor-not-allowed' : ''}
                                                                         placeholder=""
                                                                         disabled={!isAllocated}
@@ -1976,8 +2168,8 @@ export default function MesocyclePage() {
                                                          </div>
                                                        );
                                                      } else {
-                                                       const currentValue = getParameterValue(meso.id, microcycleIndex, method, param.name, 0);
-                                                       const cellId = `${meso.id}::${microcycleIndex}::${method}::0::${param.name}`;
+                                                       const currentValue = getParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, 0);
+                                                       const cellId = `${meso.id}::${microcycleIndex}::${fullMethodName}::0::${param.name}`;
                                                        const isDragSource = dragState.sourceCell === cellId;
                                                        const isInSelection = dragState.selectedCells.has(cellId);
                                                        
@@ -1998,7 +2190,7 @@ export default function MesocyclePage() {
                                                              {param.isQuantitative ? (
                                                                <QuantitativeParameterInput
                                                                  value={isAllocated ? currentValue.toString() : ''}
-                                                                 onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, value, 0)}
+                                                                 onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, value, 0)}
                                                                 unit={param.options?.[0] || ''}
                                                                 onUnitChange={(unit) => {
                                                                   // For now, we don't change units dynamically
@@ -2015,7 +2207,7 @@ export default function MesocyclePage() {
                                                             ) : param.isQualitative ? (
                                                               <QualitativeParameterInput
                                                                 value={isAllocated ? currentValue.toString() : ''}
-                                                                onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, value, 0)}
+                                                                onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, value, 0)}
                                                                 options={param.options || []}
                                                                 placeholder=""
                                                                 cellId={cellId}
@@ -2028,7 +2220,7 @@ export default function MesocyclePage() {
                                                              ) : (
                                                                <DebouncedTextInput
                                                                  value={isAllocated ? currentValue.toString() : ''}
-                                                                 onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, method, param.name, param.type === 'number' ? Number(value) : value, 0)}
+                                                                 onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, param.type === 'number' ? Number(value) : value, 0)}
                                                                  className={!isAllocated ? 'cursor-not-allowed' : ''}
                                                                  placeholder=""
                                                                  disabled={!isAllocated}
@@ -2046,7 +2238,8 @@ export default function MesocyclePage() {
                                        )}
                                     </div>
                                   );
-                                })}
+                                });
+                              })}
                               </div>
                             ))}
                           </div>

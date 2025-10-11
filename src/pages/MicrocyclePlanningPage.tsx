@@ -377,13 +377,23 @@ export default function MicrocyclePlanningPage() {
   }, [allocatedExercises]);
 
   // Calculate frequency for each method/microcycle
-  const getMethodFrequency = (methodId: string, microcycleId: string): number => {
+  const getMethodFrequency = (methodId: string, microcycleId: string, categoryName?: string): number => {
     if (!currentMesocycle) return 1;
     
     const microcycleIndex = currentMesocycle.microcycles.findIndex(m => m.id === microcycleId);
     if (microcycleIndex === -1) return 1;
 
-    const cellData = parameterValues[currentMesocycle.id]?.[microcycleIndex]?.[methodId]?.[0] || {};
+    // Try both methodId and methodId::categoryName formats
+    const methodKey = categoryName ? `${methodId}::${categoryName}` : methodId;
+    let cellData = parameterValues[currentMesocycle.id]?.[microcycleIndex]?.[methodKey]?.[0];
+    
+    // If no data found with category suffix, try without it
+    if (!cellData && categoryName) {
+      cellData = parameterValues[currentMesocycle.id]?.[microcycleIndex]?.[methodId]?.[0];
+    }
+    
+    if (!cellData) return 1;
+    
     const frequencyKey = Object.keys(cellData).find(key => key.toLowerCase().includes('frequency'));
     
     if (!frequencyKey) return 1;
@@ -535,7 +545,7 @@ export default function MicrocyclePlanningPage() {
       parameters: Array<{ name: string; value: string | number }>;
     }> = [];
     
-    // Iterate through all methods allocated to this microcycle
+    // Iterate through all methods allocated to this microcycle (including category-split methods)
     Object.entries(methodData).forEach(([methodName, sessions]) => {
       // Get parameters from first session (session 0) as representative
       const sessionParams = sessions[0];
@@ -547,8 +557,13 @@ export default function MicrocyclePlanningPage() {
       }));
       
       if (parameters.length > 0) {
+        // Display full name including category if present (e.g., "Method - Category")
+        const displayName = methodName.includes('::') 
+          ? methodName.replace('::', ' - ') 
+          : methodName;
+        
         periodization.push({
-          methodName,
+          methodName: displayName,
           parameters
         });
       }
