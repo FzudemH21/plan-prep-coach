@@ -32,6 +32,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CrossMesocycleCopyDialog } from "@/components/ui/cross-mesocycle-copy-dialog";
 import { CrossMesocycleMicrocycleCopyDialog } from "@/components/ui/cross-mesocycle-microcycle-copy-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy } from "lucide-react";
 import { format, addWeeks, differenceInWeeks } from "date-fns";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
@@ -70,6 +71,7 @@ export default function MesocyclePage() {
   const [methodToDelete, setMethodToDelete] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [categorySplitStates, setCategorySplitStates] = useState<Record<string, boolean>>({});
+  const [isClearParametersDialogOpen, setIsClearParametersDialogOpen] = useState(false);
   
   // Daily intensity planning state
   const [dailyIntensityData, setDailyIntensityData] = useState<DailyIntensity[]>([]);
@@ -1444,6 +1446,17 @@ export default function MesocyclePage() {
     }
   }, [categorySplitStates, getMethodExerciseCategories, mesocycles, isMethodAllocatedToMesocycle, toast]);
 
+  // Clear all parameter values
+  const handleClearAllParameters = useCallback(() => {
+    setParameterValues({});
+    localStorage.setItem('mesocycle-parameter-values', JSON.stringify({}));
+    setIsClearParametersDialogOpen(false);
+    toast({
+      title: "Parameters cleared",
+      description: "All parameter values have been cleared successfully.",
+    });
+  }, [toast]);
+
   // Helper function to get global microcycle width (max frequency across all allocated methods)
   const getGlobalMicrocycleWidth = useCallback((mesocycleId: string, microcycleIndex: number) => {
     let maxFrequency = 1;
@@ -1811,15 +1824,29 @@ export default function MesocyclePage() {
     };
 
     return (
-      <Card>
+      <>
+      <Card className="w-full" data-step="5">
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Settings className="h-5 w-5" />
-            <span>Step 4: Method Periodization</span>
-          </CardTitle>
-          <CardDescription>
-            Configure loading parameters for each training method across all mesocycles and microcycles.
-          </CardDescription>
+          <div className="flex items-start justify-between">
+            <div className="space-y-1.5">
+              <CardTitle className="flex items-center space-x-2">
+                <Settings className="h-5 w-5" />
+                <span>Step 5: Method Periodization</span>
+              </CardTitle>
+              <CardDescription>
+                Configure loading parameters for each training method across all mesocycles and microcycles.
+              </CardDescription>
+            </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setIsClearParametersDialogOpen(true)}
+              className="shrink-0"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Clear All Parameters
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {allMethods.length === 0 ? (
@@ -2296,8 +2323,31 @@ export default function MesocyclePage() {
                )}
              </div>
 
-          </CardContent>
-      </Card>
+           </CardContent>
+       </Card>
+       
+       {/* Clear Parameters Confirmation Dialog */}
+       <AlertDialog open={isClearParametersDialogOpen} onOpenChange={setIsClearParametersDialogOpen}>
+         <AlertDialogContent>
+           <AlertDialogHeader>
+             <AlertDialogTitle>Clear all parameter values?</AlertDialogTitle>
+             <AlertDialogDescription>
+               This will clear all parameter values you've configured for all methods across all mesocycles and microcycles. 
+               The method structure and allocations will remain intact. This action cannot be undone.
+             </AlertDialogDescription>
+           </AlertDialogHeader>
+           <AlertDialogFooter>
+             <AlertDialogCancel>Cancel</AlertDialogCancel>
+             <AlertDialogAction
+               onClick={handleClearAllParameters}
+               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+             >
+               Clear All Parameters
+             </AlertDialogAction>
+           </AlertDialogFooter>
+         </AlertDialogContent>
+       </AlertDialog>
+      </>
     );
   };
 
