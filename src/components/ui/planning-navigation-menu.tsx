@@ -30,6 +30,7 @@ const PLANNING_STEPS: PlanningStep[] = [
   { id: 10, label: "Method Periodization", page: "mesocycle", pageStep: 5 },
   { id: 11, label: "Exercise Selection", page: "mesocycle", pageStep: 6 },
   { id: 12, label: "Exercise Distribution", page: "microcycle", pageStep: 1 },
+  { id: 13, label: "Training Calendar", page: "microcycle", pageStep: 2 },
 ];
 
 interface PlanningNavigationMenuProps {
@@ -54,6 +55,8 @@ export function PlanningNavigationMenu({ currentPage, currentPageStep, onChangeC
         localStorage.setItem('macrocycleStep', step.pageStep.toString());
       } else if (step.page === 'mesocycle') {
         localStorage.setItem('mesocycleStep', step.pageStep.toString());
+      } else if (step.page === 'microcycle') {
+        localStorage.setItem('microcycleStep', step.pageStep.toString());
       }
       
       // Update current step without navigation
@@ -66,6 +69,8 @@ export function PlanningNavigationMenu({ currentPage, currentPageStep, onChangeC
       localStorage.setItem('macrocycleStep', step.pageStep.toString());
     } else if (step.page === 'mesocycle') {
       localStorage.setItem('mesocycleStep', step.pageStep.toString());
+    } else if (step.page === 'microcycle') {
+      localStorage.setItem('microcycleStep', step.pageStep.toString());
     }
 
     // Navigate to the appropriate page

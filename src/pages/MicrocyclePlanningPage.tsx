@@ -83,6 +83,7 @@ export default function MicrocyclePlanningPage() {
     const savedMesocycleData = localStorage.getItem('mesocycleData');
     const savedParameters = localStorage.getItem('parameterValues');
     const savedTrainingDays = localStorage.getItem('trainingDays');
+    const savedMicrocycleStep = localStorage.getItem('microcycleStep');
 
     if (savedMacrocycleData) {
       setMacrocycleData(JSON.parse(savedMacrocycleData));
@@ -99,6 +100,10 @@ export default function MicrocyclePlanningPage() {
 
     if (savedTrainingDays) {
       setTrainingDays(JSON.parse(savedTrainingDays));
+    }
+
+    if (savedMicrocycleStep) {
+      setCurrentStep(parseInt(savedMicrocycleStep, 10));
     }
 
     const savedDailyIntensity = localStorage.getItem('dailyIntensityData');
@@ -1454,7 +1459,7 @@ export default function MicrocyclePlanningPage() {
     <div className="mx-auto py-6 space-y-6 px-4 w-full max-w-[98vw]">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-3xl font-bold">Microcycle Planning</h1>
-        <PlanningNavigationMenu currentPage="microcycle" currentPageStep={currentStep} />
+        <PlanningNavigationMenu currentPage="microcycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
       </div>
 
       <NavigationButtons />
