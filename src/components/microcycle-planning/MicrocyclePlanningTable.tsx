@@ -55,10 +55,8 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], para
 
   // Save state to localStorage and notify parent whenever it changes
   useEffect(() => {
-    if (Object.keys(planningState.cellData).length > 0) {
-      localStorage.setItem('microcyclePlanningState', JSON.stringify(planningState));
-      onExerciseSelectionChange?.(planningState.cellData);
-    }
+    localStorage.setItem('microcyclePlanningState', JSON.stringify(planningState));
+    onExerciseSelectionChange?.(planningState.cellData);
   }, [planningState, onExerciseSelectionChange]);
 
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());

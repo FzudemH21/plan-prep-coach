@@ -85,6 +85,7 @@ export default function MesocyclePage() {
   // Mesocycle intensity copy dialog state (for step 2)
   const [mesocycleCopyDialogOpen, setMesocycleCopyDialogOpen] = useState(false);
   const [targetMesocycleForIntensityCopy, setTargetMesocycleForIntensityCopy] = useState<{mesocycleId: string, microcycleStructure: Array<{id: string, duration: number}>} | null>(null);
+  const [mpTableKey, setMpTableKey] = useState(0);
   
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
@@ -1464,9 +1465,15 @@ export default function MesocyclePage() {
     localStorage.removeItem('microcyclePlanningState');
     localStorage.removeItem('exerciseSelectionData');
     
-    // Immediately reload - this will reset all component state
-    window.location.reload();
-  }, []);
+    // Force remount of MicrocyclePlanningTable to reset all state
+    setMpTableKey(k => k + 1);
+    setIsClearAllExercisesDialogOpen(false);
+    
+    toast({
+      title: "Exercises cleared",
+      description: "All exercise selections have been cleared successfully.",
+    });
+  }, [toast]);
 
   // Helper function to get global microcycle width (max frequency across all allocated methods)
   const getGlobalMicrocycleWidth = useCallback((mesocycleId: string, microcycleIndex: number) => {
@@ -2395,6 +2402,7 @@ export default function MesocyclePage() {
         </CardHeader>
         <CardContent className="overflow-x-auto max-w-full">
           <MicrocyclePlanningTable 
+            key={mpTableKey}
             mesocycles={mesocycles}
             selectedMethods={getAllocatedMethods()}
             parameterValues={parameterValues}
