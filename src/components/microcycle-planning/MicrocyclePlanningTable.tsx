@@ -82,6 +82,20 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], para
     mesocycleName: '',
   });
 
+  const [clearMicrocycleDialogState, setClearMicrocycleDialogState] = useState<{
+    isOpen: boolean;
+    mesocycleId: string;
+    mesocycleName: string;
+    microcycleIds: string[];
+    microcycleName: string;
+  }>({
+    isOpen: false,
+    mesocycleId: '',
+    mesocycleName: '',
+    microcycleIds: [],
+    microcycleName: '',
+  });
+
   // Helper function for string normalization
   const normalizeForComparison = (str: string): string => {
     return str
@@ -1014,6 +1028,39 @@ const updateCellData = (
     });
   }, [planningState.cellData, clearMesocycleDialogState.mesocycleName, toast]);
 
+  const handleClearMicrocycleExercises = useCallback((mesocycleId: string, microcycleIds: string[]) => {
+    const newCellData = { ...planningState.cellData };
+    
+    // Remove all cell data entries for these microcycles within this mesocycle
+    Object.keys(newCellData).forEach(cellId => {
+      const cell = newCellData[cellId];
+      if (cell.mesocycleId === mesocycleId && 
+          cell.microcycleId && 
+          microcycleIds.includes(cell.microcycleId)) {
+        delete newCellData[cellId];
+      }
+    });
+
+    setPlanningState(prev => ({
+      ...prev,
+      cellData: newCellData
+    }));
+
+    setClearMicrocycleDialogState({ 
+      isOpen: false, 
+      mesocycleId: '', 
+      mesocycleName: '', 
+      microcycleIds: [], 
+      microcycleName: '' 
+    });
+
+    const microcycleName = clearMicrocycleDialogState.microcycleName;
+    toast({
+      title: "Microcycle exercises cleared",
+      description: `All exercise selections for ${microcycleName} have been cleared.`,
+    });
+  }, [planningState.cellData, clearMicrocycleDialogState.microcycleName, toast]);
+
   return (
     <>
       <Card className="w-full">
@@ -1046,6 +1093,19 @@ const updateCellData = (
                           <div className="flex items-center gap-2">
                             <span>{header.mesocycleName}</span>
                             <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setClearMesocycleDialogState({
+                                  isOpen: true,
+                                  mesocycleId: header.mesocycleId,
+                                  mesocycleName: header.mesocycleName
+                                })}
+                                className="h-6 px-2 text-foreground hover:bg-destructive/10"
+                              >
+                                <Trash2 className="h-3 w-3 mr-1" />
+                                Clear
+                              </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1183,10 +1243,11 @@ const updateCellData = (
                        <div className="flex flex-col items-center gap-2 py-2">
                          {/* Title line: show microcycle/group names; only show mesocycle name here when no split headers are shown */}
                          {column.type === 'microcycle' && (
-                           <Popover>
-                             <PopoverTrigger className="font-medium hover:text-primary transition-colors cursor-pointer">
-                               {column.microcycleName}
-                             </PopoverTrigger>
+                           <div className="flex items-center gap-2 w-full justify-center">
+                             <Popover>
+                               <PopoverTrigger className="font-medium hover:text-primary transition-colors cursor-pointer">
+                                 {column.microcycleName}
+                               </PopoverTrigger>
                              <PopoverContent 
                                className="w-[800px] max-w-[95vw] z-[100]" 
                                align="start"
@@ -1280,12 +1341,43 @@ const updateCellData = (
                                    );
                                  })()}
                                </div>
-                             </PopoverContent>
-                           </Popover>
-                         )}
-                         {column.type === 'microcycle-group' && (
-                           <span className="font-medium">{column.groupName}</span>
-                         )}
+                              </PopoverContent>
+                            </Popover>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setClearMicrocycleDialogState({
+                                isOpen: true,
+                                mesocycleId: column.mesocycleId,
+                                mesocycleName: column.mesocycleName,
+                                microcycleIds: [column.microcycleId],
+                                microcycleName: column.microcycleName
+                              })}
+                              className="h-6 px-2 text-foreground hover:bg-destructive/10"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          )}
+                          {column.type === 'microcycle-group' && (
+                            <div className="flex items-center gap-2 w-full justify-center">
+                              <span className="font-medium">{column.groupName}</span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setClearMicrocycleDialogState({
+                                  isOpen: true,
+                                  mesocycleId: column.mesocycleId,
+                                  mesocycleName: column.mesocycleName,
+                                  microcycleIds: column.microcycleIds,
+                                  microcycleName: column.groupName
+                                })}
+                                className="h-6 px-2 text-foreground hover:bg-destructive/10"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          )}
                           {column.type === 'mesocycle' && !hasSplitMesocycles && (
                             <div className="flex items-center gap-2 w-full">
                               <span className="font-medium">{column.mesocycleName}</span>
@@ -1621,6 +1713,44 @@ const updateCellData = (
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
             Clear Mesocycle Exercises
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    {/* Clear Microcycle Exercises Confirmation Dialog */}
+    <AlertDialog 
+      open={clearMicrocycleDialogState.isOpen} 
+      onOpenChange={(isOpen) => {
+        if (!isOpen) {
+          setClearMicrocycleDialogState({ 
+            isOpen: false, 
+            mesocycleId: '', 
+            mesocycleName: '', 
+            microcycleIds: [], 
+            microcycleName: '' 
+          });
+        }
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Clear exercises for {clearMicrocycleDialogState.microcycleName}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will clear all exercise selections for {clearMicrocycleDialogState.microcycleName} in {clearMicrocycleDialogState.mesocycleName} across all methods.
+            Exercise selections in other microcycles will remain intact. This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => handleClearMicrocycleExercises(
+              clearMicrocycleDialogState.mesocycleId,
+              clearMicrocycleDialogState.microcycleIds
+            )}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Clear Microcycle Exercises
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
