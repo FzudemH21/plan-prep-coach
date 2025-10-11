@@ -178,6 +178,9 @@ export default function MicrocyclePlanningPage() {
       categoryName: string;
     }[]>();
 
+    // Track methods that have any microcycle-specific allocations (method-level override)
+    const methodsWithSpecific = new Set<string>();
+
     // Step 2: Iterate through exercise selection data and categorize
     Object.entries(exerciseSelectionData).forEach(([cellId, cellData]) => {
       if (cellData.mesocycleId !== currentMesocycle.id) return;
@@ -197,6 +200,8 @@ export default function MicrocyclePlanningPage() {
             categoryName: cellData.categoryName || '',
             microcycleId: cellData.microcycleId
           });
+          // Mark method as having microcycle-specific allocations
+          methodsWithSpecific.add(cellData.methodId);
         } else {
           // Mesocycle-level allocation
           const key = `${cellData.methodId}-${cellData.categoryName}`;
@@ -229,14 +234,8 @@ export default function MicrocyclePlanningPage() {
       microcycleIds: string[];
     }>();
 
-    // New override logic: microcycle-specific overrides mesocycle-level per method/category across the whole mesocycle
-    // Build set of method/category pairs that have any microcycle-specific allocations
-    const methodCategoryWithSpecific = new Set<string>();
-    microcycleSpecific.forEach((_, key) => {
-      const methodCategory = key.substring(0, key.lastIndexOf('-'));
-      methodCategoryWithSpecific.add(methodCategory);
-    });
-    console.log('[allocatedExercises] override set', { overriddenPairs: Array.from(methodCategoryWithSpecific) });
+    // New override logic: microcycle-specific overrides mesocycle-level per method across the whole mesocycle
+    console.log('[allocatedExercises] override methods', { methodsWithSpecific: Array.from(methodsWithSpecific) });
 
     // Process each microcycle: always add microcycle-specific; add mesocycle-level only when no specific exists anywhere
     currentMesocycle.microcycles.forEach(microcycle => {
@@ -255,9 +254,10 @@ export default function MicrocyclePlanningPage() {
         }
       });
 
-      // Add mesocycle-level allocations only if there is no microcycle-specific anywhere for that method/category
+      // Add mesocycle-level allocations only if there is no microcycle-specific anywhere for that method
       mesocycleLevel.forEach((exercises, methodCategoryKey) => {
-        if (!methodCategoryWithSpecific.has(methodCategoryKey)) {
+        const methodId = methodCategoryKey.split('-')[0];
+        if (!methodsWithSpecific.has(methodId)) {
           exercises.forEach(exercise => {
             const exerciseKey = `${exercise.exerciseId}-${exercise.methodId}-${exercise.categoryName}`;
             if (exerciseMap.has(exerciseKey)) {
