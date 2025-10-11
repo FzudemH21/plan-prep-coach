@@ -2446,26 +2446,51 @@ export default function MesocyclePage() {
     
     // Create maps to store dates with their names
     const testDateMap = new Map<string, string>();
-    macrocycleData.subGoals?.forEach((sg: any) => {
-      const testName = sg.testMethod || sg.name || "Test";
-      sg.testDates?.forEach((dateStr: string) => {
-        const dateKey = new Date(dateStr).toISOString().split('T')[0];
-        testDateMap.set(dateKey, testName);
-      });
+    
+    console.log('DEBUG: macrocycleData.subGoals:', JSON.stringify(macrocycleData.subGoals, null, 2));
+    
+    macrocycleData.subGoals?.forEach((sg: any, idx: number) => {
+      console.log(`DEBUG: SubGoal ${idx}:`, sg);
+      console.log(`DEBUG: SubGoal ${idx} properties:`, Object.keys(sg));
+      
+      // Try multiple possible property names for test name
+      const testName = sg.testMethod || sg.name || sg.testName || sg.method || sg.description || "Test";
+      console.log(`DEBUG: SubGoal ${idx} extracted testName:`, testName);
+      
+      if (sg.testDates) {
+        console.log(`DEBUG: SubGoal ${idx} testDates:`, sg.testDates);
+        sg.testDates?.forEach((dateStr: string) => {
+          const dateKey = new Date(dateStr).toISOString().split('T')[0];
+          testDateMap.set(dateKey, testName);
+          console.log(`DEBUG: Added test "${testName}" for date ${dateKey}`);
+        });
+      }
     });
     
     const eventDateMap = new Map<string, string>();
-    macrocycleData.events?.forEach((e: any) => {
-      const eventName = e.name || "Event";
-      e.eventDates?.forEach((date: any) => {
-        const dateKey = new Date(date).toISOString().split('T')[0];
-        eventDateMap.set(dateKey, eventName);
-      });
+    
+    console.log('DEBUG: macrocycleData.events:', JSON.stringify(macrocycleData.events, null, 2));
+    
+    macrocycleData.events?.forEach((e: any, idx: number) => {
+      console.log(`DEBUG: Event ${idx}:`, e);
+      console.log(`DEBUG: Event ${idx} properties:`, Object.keys(e));
+      
+      // Try multiple possible property names for event name
+      const eventName = e.name || e.eventName || e.title || e.description || "Event";
+      console.log(`DEBUG: Event ${idx} extracted eventName:`, eventName);
+      
+      if (e.eventDates) {
+        console.log(`DEBUG: Event ${idx} eventDates:`, e.eventDates);
+        e.eventDates?.forEach((date: any) => {
+          const dateKey = new Date(date).toISOString().split('T')[0];
+          eventDateMap.set(dateKey, eventName);
+          console.log(`DEBUG: Added event "${eventName}" for date ${dateKey}`);
+        });
+      }
     });
     
-    console.log('DEBUG: Processing dates for daily intensity:');
-    console.log('DEBUG: testDateMap:', testDateMap);
-    console.log('DEBUG: eventDateMap:', eventDateMap);
+    console.log('DEBUG: Final testDateMap:', testDateMap);
+    console.log('DEBUG: Final eventDateMap:', eventDateMap);
     
     let currentDate = new Date(planStartDate);
     

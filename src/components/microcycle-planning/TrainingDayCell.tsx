@@ -63,7 +63,8 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
         "min-h-[140px] border rounded-lg p-3 transition-all",
         day.isCurrentMonth ? "bg-card" : "bg-muted/30",
         hasTraining && "cursor-pointer hover:shadow-md hover:border-primary",
-        !hasTraining && "cursor-default"
+        !hasTraining && "cursor-default",
+        isSpecialDay && "border-red-500 border-2"
       )}
     >
       {/* Day Number + Test/Event Name */}
@@ -73,9 +74,8 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
           <div
             className={cn(
               "text-sm font-medium flex items-center justify-center shrink-0",
-              isTodayDate && isSpecialDay && "bg-black text-white rounded-full w-7 h-7 ring-2 ring-red-500",
-              isTodayDate && !isSpecialDay && "bg-black text-white rounded-full w-7 h-7",
-              !isTodayDate && isSpecialDay && "rounded-full w-7 h-7 ring-2 ring-red-500",
+              isTodayDate && "bg-black text-white rounded-full w-7 h-7",
+              !isTodayDate && isSpecialDay && "rounded-full w-7 h-7",
               !isTodayDate && !day.isCurrentMonth && "text-muted-foreground",
               !isTodayDate && hasTraining && !isSpecialDay && "text-primary font-semibold"
             )}
