@@ -2443,14 +2443,29 @@ export default function MesocyclePage() {
     if (!macrocycleData || !mesocycles.length) return [];
     
     const days: TrainingDay[] = [];
-    const testDates = macrocycleData.subGoals?.flatMap((sg: any) => sg.testDates || []).map((d: string) => new Date(d)) || [];
-    const eventDates = macrocycleData.events?.flatMap((e: any) => e.eventDates || []).map((d: string) => new Date(d)) || [];
+    
+    // Create maps to store dates with their names
+    const testDateMap = new Map<string, string>();
+    macrocycleData.subGoals?.forEach((sg: any) => {
+      const testName = sg.testMethod || sg.name || "Test";
+      sg.testDates?.forEach((dateStr: string) => {
+        const dateKey = new Date(dateStr).toISOString().split('T')[0];
+        testDateMap.set(dateKey, testName);
+      });
+    });
+    
+    const eventDateMap = new Map<string, string>();
+    macrocycleData.events?.forEach((e: any) => {
+      const eventName = e.name || "Event";
+      e.eventDates?.forEach((date: any) => {
+        const dateKey = new Date(date).toISOString().split('T')[0];
+        eventDateMap.set(dateKey, eventName);
+      });
+    });
     
     console.log('DEBUG: Processing dates for daily intensity:');
-    console.log('DEBUG: testDates:', testDates);
-    console.log('DEBUG: eventDates:', eventDates);
-    console.log('DEBUG: testDates converted:', testDates.map(d => d.toISOString().split('T')[0]));
-    console.log('DEBUG: eventDates converted:', eventDates.map(d => d.toISOString().split('T')[0]));
+    console.log('DEBUG: testDateMap:', testDateMap);
+    console.log('DEBUG: eventDateMap:', eventDateMap);
     
     let currentDate = new Date(planStartDate);
     
@@ -2463,11 +2478,14 @@ export default function MesocyclePage() {
           
           const dayOfWeek = dayDate.getDay();
           const dateStr = dayDate.toISOString().split('T')[0];
-          const isTestDay = testDates.some(td => td.toISOString().split('T')[0] === dateStr);
-          const isEventDay = eventDates.some(ed => ed.toISOString().split('T')[0] === dateStr);
+          
+          const testName = testDateMap.get(dateStr);
+          const eventName = eventDateMap.get(dateStr);
+          const isTestDay = !!testName;
+          const isEventDay = !!eventName;
           
           if (isTestDay || isEventDay) {
-            console.log(`DEBUG: Found special day ${dateStr} - isTestDay: ${isTestDay}, isEventDay: ${isEventDay}`);
+            console.log(`DEBUG: Found special day ${dateStr} - isTestDay: ${isTestDay}, isEventDay: ${isEventDay}, testName: ${testName}, eventName: ${eventName}`);
           }
           
           days.push({
@@ -2478,7 +2496,9 @@ export default function MesocyclePage() {
             microcycleId: micro.id,
             isTestDay,
             isEventDay,
-            isTrainingDay: true // All days are now equally selectable
+            isTrainingDay: true,
+            testName,
+            eventName
           });
         }
         

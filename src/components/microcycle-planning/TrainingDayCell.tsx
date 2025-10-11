@@ -23,6 +23,8 @@ interface TrainingDay {
   isTestDay: boolean;
   isEventDay: boolean;
   isTrainingDay: boolean;
+  testName?: string;
+  eventName?: string;
 }
 
 interface CalendarDay {
@@ -49,6 +51,7 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
   const isEventDay = day.trainingDay?.isEventDay;
   const isRestDay = !hasTraining && day.trainingDay?.isTrainingDay === false;
   const isTodayDate = isToday(day.date);
+  const isSpecialDay = isTestDay || isEventDay;
 
   // Get primary method name (first method from first session)
   const primaryMethod = day.sessions[0]?.methods[0]?.split(' - ')[0] || '';
@@ -63,17 +66,29 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
         !hasTraining && "cursor-default"
       )}
     >
-      {/* Day Number */}
+      {/* Day Number + Test/Event Name */}
       <div className="flex items-start justify-between mb-2">
-        <div
-          className={cn(
-            "text-sm font-medium flex items-center justify-center",
-            isTodayDate && "bg-black text-white rounded-full w-7 h-7",
-            !isTodayDate && !day.isCurrentMonth && "text-muted-foreground",
-            !isTodayDate && hasTraining && "text-primary font-semibold"
+        <div className="flex items-center gap-2">
+          {/* Day Number with Red Ring for Special Days */}
+          <div
+            className={cn(
+              "text-sm font-medium flex items-center justify-center shrink-0",
+              isTodayDate && isSpecialDay && "bg-black text-white rounded-full w-7 h-7 ring-2 ring-red-500",
+              isTodayDate && !isSpecialDay && "bg-black text-white rounded-full w-7 h-7",
+              !isTodayDate && isSpecialDay && "rounded-full w-7 h-7 ring-2 ring-red-500",
+              !isTodayDate && !day.isCurrentMonth && "text-muted-foreground",
+              !isTodayDate && hasTraining && !isSpecialDay && "text-primary font-semibold"
+            )}
+          >
+            {format(day.date, 'd')}
+          </div>
+
+          {/* Test/Event Name Display */}
+          {(day.trainingDay?.testName || day.trainingDay?.eventName) && (
+            <div className="text-xs font-medium text-red-600 truncate max-w-[120px]">
+              {day.trainingDay.testName || day.trainingDay.eventName}
+            </div>
           )}
-        >
-          {format(day.date, 'd')}
         </div>
 
         {/* Status Icons */}
