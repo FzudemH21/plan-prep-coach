@@ -1460,16 +1460,13 @@ export default function MesocyclePage() {
 
   // Clear all exercise selections
   const handleClearAllExercises = useCallback(() => {
+    // Clear localStorage items
     localStorage.removeItem('microcyclePlanningState');
     localStorage.removeItem('exerciseSelectionData');
-    setIsClearAllExercisesDialogOpen(false);
-    toast({
-      title: "Exercises cleared",
-      description: "All exercise selections have been cleared successfully.",
-    });
-    // Force reload to reset the MicrocyclePlanningTable state
+    
+    // Immediately reload - this will reset all component state
     window.location.reload();
-  }, [toast]);
+  }, []);
 
   // Helper function to get global microcycle width (max frequency across all allocated methods)
   const getGlobalMicrocycleWidth = useCallback((mesocycleId: string, microcycleIndex: number) => {
