@@ -180,14 +180,11 @@ export function TrainingCalendarView({
         <CardHeader>
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <CardTitle className="flex items-center gap-2">
-                <CalendarIcon className="h-5 w-5" />
-                Training Calendar
-              </CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                {currentMesocycle.name} • {dateRangeDisplay}
-              </p>
-            </div>
+            <CardTitle className="flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5" />
+              Training Calendar
+            </CardTitle>
+          </div>
             
             <div className="flex flex-wrap items-center gap-2">
               {/* View Mode Toggle */}

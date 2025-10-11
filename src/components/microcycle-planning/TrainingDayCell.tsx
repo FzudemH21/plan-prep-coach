@@ -1,5 +1,5 @@
 import React from 'react';
-import { format } from 'date-fns';
+import { format, isToday } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Dumbbell, Trophy, Calendar } from 'lucide-react';
@@ -48,6 +48,7 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
   const isTestDay = day.trainingDay?.isTestDay;
   const isEventDay = day.trainingDay?.isEventDay;
   const isRestDay = !hasTraining && day.trainingDay?.isTrainingDay === false;
+  const isTodayDate = isToday(day.date);
 
   // Get primary method name (first method from first session)
   const primaryMethod = day.sessions[0]?.methods[0]?.split(' - ')[0] || '';
@@ -64,15 +65,16 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
     >
       {/* Day Number */}
       <div className="flex items-start justify-between mb-2">
-        <span
+        <div
           className={cn(
-            "text-sm font-medium",
-            !day.isCurrentMonth && "text-muted-foreground",
-            hasTraining && "text-primary font-semibold"
+            "text-sm font-medium flex items-center justify-center",
+            isTodayDate && "bg-black text-white rounded-full w-7 h-7",
+            !isTodayDate && !day.isCurrentMonth && "text-muted-foreground",
+            !isTodayDate && hasTraining && "text-primary font-semibold"
           )}
         >
           {format(day.date, 'd')}
-        </span>
+        </div>
 
         {/* Status Icons */}
         <div className="flex gap-1">
