@@ -151,6 +151,18 @@ export default function MicrocyclePlanningPage() {
     });
     return grouped;
   }, [currentMesocycleDays]);
+  
+  // Normalization helpers
+  const normalizeMethod = (s: string) => (s || '').trim().replace(/\s-\s$/, '');
+  const normalizeCategory = (name?: string) => {
+    const raw = (name ?? '').trim();
+    const lower = raw.toLowerCase();
+    // Treat undefined/empty, "meso", and microcycle IDs as general
+    if (!raw || lower === 'meso' || (currentMesocycle?.microcycles?.some(m => m.id === raw))) {
+      return 'General';
+    }
+    return raw;
+  };
 
   // Get exercises allocated to current mesocycle from Step 6
   const allocatedExercises = useMemo(() => {
@@ -201,7 +213,7 @@ export default function MicrocyclePlanningPage() {
             microcycleId: cellData.microcycleId
           });
           // Mark method as having microcycle-specific allocations
-          methodsWithSpecific.add(cellData.methodId);
+          methodsWithSpecific.add(normalizeMethod(cellData.methodId));
         } else {
           // Mesocycle-level allocation
           const key = `${cellData.methodId}-${cellData.categoryName}`;
@@ -255,9 +267,10 @@ export default function MicrocyclePlanningPage() {
       });
 
       // Add mesocycle-level allocations only if there is no microcycle-specific anywhere for that method
-      mesocycleLevel.forEach((exercises, methodCategoryKey) => {
-        const methodId = methodCategoryKey.split('-')[0];
-        if (!methodsWithSpecific.has(methodId)) {
+      mesocycleLevel.forEach((exercises) => {
+        const groupMethodId = exercises[0]?.methodId ?? '';
+        const normalized = normalizeMethod(groupMethodId);
+        if (!methodsWithSpecific.has(normalized)) {
           exercises.forEach(exercise => {
             const exerciseKey = `${exercise.exerciseId}-${exercise.methodId}-${exercise.categoryName}`;
             if (exerciseMap.has(exerciseKey)) {
@@ -284,16 +297,19 @@ export default function MicrocyclePlanningPage() {
     }> = {};
     
     allocatedExercises.forEach(exercise => {
-      if (!grouped[exercise.methodId]) {
-        grouped[exercise.methodId] = {
-          methodId: exercise.methodId,
+      const methodKey = normalizeMethod(exercise.methodId);
+      const categoryKey = normalizeCategory(exercise.categoryName);
+
+      if (!grouped[methodKey]) {
+        grouped[methodKey] = {
+          methodId: methodKey,
           categories: {}
         };
       }
-      if (!grouped[exercise.methodId].categories[exercise.categoryName]) {
-        grouped[exercise.methodId].categories[exercise.categoryName] = [];
+      if (!grouped[methodKey].categories[categoryKey]) {
+        grouped[methodKey].categories[categoryKey] = [];
       }
-      grouped[exercise.methodId].categories[exercise.categoryName].push(exercise);
+      grouped[methodKey].categories[categoryKey].push(exercise);
     });
 
     return grouped;
@@ -494,8 +510,9 @@ export default function MicrocyclePlanningPage() {
 
     const exercise = JSON.parse(data);
 
-    // Check if exercise matches the target method/category
-    if (exercise.methodId !== methodId || exercise.categoryName !== categoryName) {
+    // Check if exercise matches the target method/category (normalized)
+    if (normalizeMethod(exercise.methodId) !== normalizeMethod(methodId) || 
+        normalizeCategory(exercise.categoryName) !== normalizeCategory(categoryName)) {
       return; // Don't allow dropping in wrong category
     }
 
@@ -633,8 +650,8 @@ export default function MicrocyclePlanningPage() {
       ex => 
         ex.dayDate === dayDate && 
         ex.sessionIndex === sessionIndex &&
-        ex.methodId === methodId &&
-        ex.categoryName === categoryName
+        normalizeMethod(ex.methodId) === normalizeMethod(methodId) &&
+        normalizeCategory(ex.categoryName) === normalizeCategory(categoryName)
     );
   };
 
@@ -1006,7 +1023,7 @@ export default function MicrocyclePlanningPage() {
                         {/* Method header */}
                         <div className="flex border-b">
                           <div className="w-64 shrink-0 sticky left-0 z-30 bg-background px-4 py-2 font-semibold text-sm border-r shadow-sm">
-                            {methodId}
+                            {normalizeMethod(methodId)}
                           </div>
                           <div className="flex-1" />
                         </div>
@@ -1019,7 +1036,7 @@ export default function MicrocyclePlanningPage() {
                                 {/* Left sidebar: Category and Exercises */}
                                 <div className="w-64 shrink-0 border-r px-3 py-2 bg-background sticky left-0 z-20">
                                   <div className="text-xs font-medium text-muted-foreground mb-2">
-                                    {categoryName}
+                                    {normalizeCategory(categoryName)}
                                   </div>
                                   <div className="space-y-0.5">
                                     {exercises.map((exercise, idx) => {
