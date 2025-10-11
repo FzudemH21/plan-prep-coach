@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ChevronDown, ChevronRight, Link, Unlink, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronLeft, Link, Unlink, Trash2 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { useToolboxData } from '@/hooks/useToolboxData';
@@ -1089,23 +1089,10 @@ const updateCellData = (
                           header.colorClass
                         )}
                       >
-                        <div className="flex flex-col items-center gap-2 py-2">
-                          <div className="flex items-center gap-2">
+                        <div className="flex flex-col items-center gap-2 py-2 w-full">
+                          <div className="flex items-center gap-2 w-full justify-center">
                             <span>{header.mesocycleName}</span>
                             <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setClearMesocycleDialogState({
-                                  isOpen: true,
-                                  mesocycleId: header.mesocycleId,
-                                  mesocycleName: header.mesocycleName
-                                })}
-                                className="h-6 px-2 text-foreground hover:bg-destructive/10"
-                              >
-                                <Trash2 className="h-3 w-3 mr-1" />
-                                Clear
-                              </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1125,7 +1112,7 @@ const updateCellData = (
                                 onClick={() => toggleMesocycleSplit(header.mesocycleId)}
                                 className="h-6 px-2 text-foreground hover:bg-black/10"
                               >
-                                <ChevronDown className="h-3 w-3" />
+                                <ChevronLeft className="h-3 w-3 mr-1" />
                                 Collapse
                               </Button>
                             </div>
@@ -1460,17 +1447,6 @@ const updateCellData = (
                          )}
                         
                         {/* Split/Unlink actions */}
-                        {column.type === 'mesocycle' && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleMesocycleSplit(column.mesocycleId)}
-                            className="h-6 px-2 text-foreground hover:bg-black/10"
-                          >
-                            <ChevronRight className="h-3 w-3" />
-                            Split
-                          </Button>
-                        )}
                         
                         {column.type === 'microcycle-group' && (
                           <Button
