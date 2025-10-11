@@ -898,9 +898,6 @@ export default function MicrocyclePlanningPage() {
         <ArrowLeft className="mr-2 h-4 w-4" />
         Previous Mesocycle
       </Button>
-      <span className="text-sm font-medium">
-        Mesocycle {currentMesocycleIndex + 1} of {mesocycles.length}
-      </span>
       <Button
         variant="outline"
         onClick={() => setCurrentMesocycleIndex(Math.min(mesocycles.length - 1, currentMesocycleIndex + 1))}

@@ -68,21 +68,21 @@ export function TrainingCalendarView({
 
   // Calculate calendar days based on view mode
   const calendarDays = useMemo(() => {
-    const start = startOfWeek(currentDate, { weekStartsOn: 0 });
+    const start = startOfWeek(currentDate, { weekStartsOn: 1 });
     let end: Date;
 
     switch (viewMode) {
       case '1week':
-        end = endOfWeek(currentDate, { weekStartsOn: 0 });
+        end = endOfWeek(currentDate, { weekStartsOn: 1 });
         break;
       case '2week':
-        end = endOfWeek(addWeeks(currentDate, 1), { weekStartsOn: 0 });
+        end = endOfWeek(addWeeks(currentDate, 1), { weekStartsOn: 1 });
         break;
       case '4week':
       default:
         const monthStart = startOfMonth(currentDate);
         const monthEnd = endOfMonth(currentDate);
-        end = endOfWeek(monthEnd, { weekStartsOn: 0 });
+        end = endOfWeek(monthEnd, { weekStartsOn: 1 });
         break;
     }
 
@@ -171,7 +171,7 @@ export function TrainingCalendarView({
     return `${format(firstDay, 'MMM d')} - ${format(lastDay, 'MMM d, yyyy')}`;
   }, [calendarDays]);
 
-  const dayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dayHeaders = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   return (
     <div className="h-full flex flex-col gap-4">
