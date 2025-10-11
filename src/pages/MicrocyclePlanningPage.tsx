@@ -18,6 +18,7 @@ import { useAthleticismData } from '@/hooks/useAthleticismData';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
+import { TrainingCalendarView } from '@/components/microcycle-planning';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -74,7 +75,7 @@ export default function MicrocyclePlanningPage() {
     microcycleName: ''
   });
 
-  const totalSteps = 1; // Currently only Step 1: Exercise Distribution
+  const totalSteps = 2; // Step 1: Exercise Distribution, Step 2: Training Calendar
 
   // Load data from localStorage
   useEffect(() => {
@@ -1416,7 +1417,17 @@ export default function MicrocyclePlanningPage() {
 
       {renderTrainingPlanOverview()}
       {renderMesocycleNavigation()}
+      
       {currentStep === 1 && renderExerciseDistribution()}
+      
+      {currentStep === 2 && currentMesocycle && (
+        <TrainingCalendarView
+          exerciseDistribution={exerciseDistribution}
+          trainingDays={currentMesocycleDays}
+          currentMesocycle={currentMesocycle}
+          mesocycles={mesocycles}
+        />
+      )}
 
       <NavigationButtons />
 

@@ -4,3 +4,6 @@ export { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
 export { NewExerciseDialog } from './NewExerciseDialog';
 export { ExerciseLibraryFilter } from './ExerciseLibraryFilter';
 export { ExerciseCopyDialog } from './ExerciseCopyDialog';
+export { TrainingCalendarView } from './TrainingCalendarView';
+export { TrainingDayCell } from './TrainingDayCell';
+export { DayExercisesDialog } from './DayExercisesDialog';
