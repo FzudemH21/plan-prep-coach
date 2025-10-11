@@ -9,6 +9,7 @@ import { TrainingDay } from '@/types/daily-intensity';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { TrainingDayCell } from './TrainingDayCell';
 import { DayExercisesDialog } from './DayExercisesDialog';
+import { useToast } from '@/hooks/use-toast';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -48,8 +49,9 @@ export function TrainingCalendarView({
   currentMesocycle,
   mesocycles,
 }: TrainingCalendarViewProps) {
+  const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>('4week');
-  const [currentDate, setCurrentDate] = useState(currentMesocycle.startDate);
+  const [currentDate, setCurrentDate] = useState<Date>(currentMesocycle.startDate);
   const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
 
   // Group exercises by date
@@ -147,7 +149,18 @@ export function TrainingCalendarView({
   };
 
   const handleToday = () => {
-    setCurrentDate(currentMesocycle.startDate);
+    const today = new Date();
+    
+    // Always jump to today, even if outside mesocycle range
+    setCurrentDate(today);
+    
+    // Show a toast if today is outside the mesocycle
+    if (today < currentMesocycle.startDate || today > currentMesocycle.endDate) {
+      toast({
+        title: "Today is outside current mesocycle",
+        description: `${currentMesocycle.name} runs from ${format(currentMesocycle.startDate, 'MMM d')} to ${format(currentMesocycle.endDate, 'MMM d, yyyy')}`,
+      });
+    }
   };
 
   // Calculate date range display

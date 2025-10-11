@@ -194,9 +194,8 @@ export default function MicrocyclePlanningPage() {
 
   // Save exercise distribution to localStorage
   useEffect(() => {
-    if (exerciseDistribution.length > 0) {
-      localStorage.setItem('exerciseDistribution', JSON.stringify(exerciseDistribution));
-    }
+    localStorage.setItem('exerciseDistribution', JSON.stringify(exerciseDistribution));
+    console.log('[MicrocyclePlanningPage] Saved exerciseDistribution:', exerciseDistribution.length, 'exercises');
   }, [exerciseDistribution]);
 
   // Save day split states to localStorage
@@ -1421,12 +1420,15 @@ export default function MicrocyclePlanningPage() {
       {currentStep === 1 && renderExerciseDistribution()}
       
       {currentStep === 2 && currentMesocycle && (
-        <TrainingCalendarView
-          exerciseDistribution={exerciseDistribution}
-          trainingDays={currentMesocycleDays}
-          currentMesocycle={currentMesocycle}
-          mesocycles={mesocycles}
-        />
+        <>
+          {console.log('[Step 2] Rendering calendar with', exerciseDistribution.length, 'exercises')}
+          <TrainingCalendarView
+            exerciseDistribution={exerciseDistribution}
+            trainingDays={currentMesocycleDays}
+            currentMesocycle={currentMesocycle}
+            mesocycles={mesocycles}
+          />
+        </>
       )}
 
       <NavigationButtons />
