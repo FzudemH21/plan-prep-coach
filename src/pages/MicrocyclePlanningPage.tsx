@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info, Copy, ChevronDown, Columns, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info, Copy, ChevronDown, Columns, ChevronRight, X } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { ExtendedMesocycle, Microcycle } from '@/features/planner/types';
@@ -124,6 +124,61 @@ export default function MicrocyclePlanningPage() {
       console.log('[MicrocyclePlanningPage] No microcyclePlanningState found, using legacy exerciseSelectionData');
     }
   }, []);
+
+  // Validate and clean up exercise selection data on load
+  useEffect(() => {
+    if (Object.keys(exerciseSelectionData).length === 0 || mesocycles.length === 0) {
+      return;
+    }
+
+    const validMesocycleIds = new Set(mesocycles.map(m => m.id));
+    const validMicrocycleIds = new Set(
+      mesocycles.flatMap(m => m.microcycles.map(mc => mc.id))
+    );
+
+    let hasInvalidData = false;
+    const cleanedData: Record<string, CellData> = {};
+
+    Object.entries(exerciseSelectionData).forEach(([cellId, cellData]) => {
+      // Check if mesocycle is valid
+      if (!validMesocycleIds.has(cellData.mesocycleId)) {
+        hasInvalidData = true;
+        console.log('[Step1] Removed invalid cell - mesocycle not found:', cellId);
+        return;
+      }
+
+      // Check if microcycle is valid (if specified)
+      if (cellData.microcycleId && !validMicrocycleIds.has(cellData.microcycleId)) {
+        hasInvalidData = true;
+        console.log('[Step1] Removed invalid cell - microcycle not found:', cellId);
+        return;
+      }
+
+      // Cell is valid, keep it
+      cleanedData[cellId] = cellData;
+    });
+
+    if (hasInvalidData) {
+      setExerciseSelectionData(cleanedData);
+      
+      // Update localStorage
+      const savedPlanningState = localStorage.getItem('microcyclePlanningState');
+      if (savedPlanningState) {
+        try {
+          const planningState = JSON.parse(savedPlanningState);
+          planningState.cellData = cleanedData;
+          localStorage.setItem('microcyclePlanningState', JSON.stringify(planningState));
+        } catch (error) {
+          console.error('Failed to update planning state:', error);
+        }
+      }
+
+      toast({
+        title: "Data cleaned up",
+        description: "Removed invalid exercise allocations from previous planning sessions.",
+      });
+    }
+  }, [exerciseSelectionData, mesocycles, toast]);
 
   // Save exercise distribution to localStorage
   useEffect(() => {
@@ -578,6 +633,51 @@ export default function MicrocyclePlanningPage() {
       delete newState[dayDate];
       return newState;
     });
+  };
+
+  // Delete an exercise from all cells in exerciseSelectionData
+  const handleDeleteExercise = (exerciseId: string, library: string) => {
+    let removedCount = 0;
+    const updatedData: Record<string, CellData> = {};
+
+    Object.entries(exerciseSelectionData).forEach(([cellId, cellData]) => {
+      const filteredExercises = cellData.exercises.filter(
+        ex => !(ex.exerciseId === exerciseId && ex.library === library)
+      );
+
+      if (filteredExercises.length < cellData.exercises.length) {
+        removedCount++;
+      }
+
+      // Keep cell only if it still has exercises
+      if (filteredExercises.length > 0) {
+        updatedData[cellId] = {
+          ...cellData,
+          exercises: filteredExercises
+        };
+      }
+    });
+
+    if (removedCount > 0) {
+      setExerciseSelectionData(updatedData);
+
+      // Update localStorage
+      const savedPlanningState = localStorage.getItem('microcyclePlanningState');
+      if (savedPlanningState) {
+        try {
+          const planningState = JSON.parse(savedPlanningState);
+          planningState.cellData = updatedData;
+          localStorage.setItem('microcyclePlanningState', JSON.stringify(planningState));
+        } catch (error) {
+          console.error('Failed to update planning state:', error);
+        }
+      }
+
+      toast({
+        title: "Exercise removed",
+        description: `Removed from ${removedCount} allocation${removedCount > 1 ? 's' : ''}.`,
+      });
+    }
   };
 
   // Copy exercises from previous microcycle
@@ -1075,35 +1175,57 @@ export default function MicrocyclePlanningPage() {
                                                   key={`${exercise.exerciseId}-${idx}`}
                                                   draggable
                                                   onDragStart={(e) => handleDragStart(e, exercise)}
-                                                  className="px-2 py-0.5 bg-background border rounded cursor-move hover:border-primary transition-colors"
+                                                  className="px-2 py-0.5 bg-background border rounded cursor-move hover:border-primary transition-colors group"
                                                 >
                                                   <div className="flex items-start justify-between gap-1">
                                                     <div className="text-xs font-medium leading-tight flex-1">{exercise.exerciseName}</div>
-                                                    {microcycleNames.length > 0 && (
+                                                    <div className="flex items-center gap-0.5 shrink-0">
+                                                      {microcycleNames.length > 0 && (
+                                                        <TooltipProvider>
+                                                          <Tooltip delayDuration={200}>
+                                                            <TooltipTrigger asChild>
+                                                              <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                className="h-4 w-4 p-0"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                              >
+                                                                <Info className="h-3 w-3" />
+                                                              </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent side="right" className="z-50 bg-popover">
+                                                              <div className="flex flex-wrap gap-1 max-w-[200px]">
+                                                                {microcycleNames.map((name, i) => (
+                                                                  <Badge key={i} variant="secondary" className="text-[10px] px-1 py-0 leading-none">
+                                                                    {name}
+                                                                  </Badge>
+                                                                ))}
+                                                              </div>
+                                                            </TooltipContent>
+                                                          </Tooltip>
+                                                        </TooltipProvider>
+                                                      )}
                                                       <TooltipProvider>
                                                         <Tooltip delayDuration={200}>
                                                           <TooltipTrigger asChild>
                                                             <Button
                                                               size="sm"
                                                               variant="ghost"
-                                                              className="h-4 w-4 p-0 shrink-0"
-                                                              onClick={(e) => e.stopPropagation()}
+                                                              onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDeleteExercise(exercise.exerciseId, exercise.library);
+                                                              }}
+                                                              className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
                                                             >
-                                                              <Info className="h-3 w-3" />
+                                                              <X className="h-3 w-3 text-destructive" />
                                                             </Button>
                                                           </TooltipTrigger>
-                                                          <TooltipContent side="right" className="z-50 bg-popover">
-                                                            <div className="flex flex-wrap gap-1 max-w-[200px]">
-                                                              {microcycleNames.map((name, i) => (
-                                                                <Badge key={i} variant="secondary" className="text-[10px] px-1 py-0 leading-none">
-                                                                  {name}
-                                                                </Badge>
-                                                              ))}
-                                                            </div>
+                                                          <TooltipContent side="right">
+                                                            Remove from all allocations
                                                           </TooltipContent>
                                                         </Tooltip>
                                                       </TooltipProvider>
-                                                    )}
+                                                    </div>
                                                   </div>
                                                 </div>
                                               );
