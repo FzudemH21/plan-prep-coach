@@ -7,7 +7,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info, Copy, ChevronDown, Columns } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info, Copy, ChevronDown, Columns, ChevronRight } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { ExtendedMesocycle, Microcycle } from '@/features/planner/types';
 import { TrainingDay } from '@/types/daily-intensity';
@@ -22,6 +23,7 @@ interface ExerciseDistribution {
   exerciseName: string;
   methodId: string;
   categoryName: string;
+  subCategory?: string;
   dayDate: string;
   sessionIndex: number;
 }
@@ -152,164 +154,94 @@ export default function MicrocyclePlanningPage() {
     return grouped;
   }, [currentMesocycleDays]);
   
-  // Normalization helpers
-  const normalizeMethod = (s: string) => (s || '').trim().replace(/\s-\s$/, '');
-  const normalizeCategory = (name?: string) => {
-    const raw = (name ?? '').trim();
-    const lower = raw.toLowerCase();
-    // Treat undefined/empty, "meso", and microcycle IDs as general
-    if (!raw || lower === 'meso' || (currentMesocycle?.microcycles?.some(m => m.id === raw))) {
-      return 'General';
-    }
-    return raw;
-  };
+  // Track methods that have microcycle-specific allocations
+  const methodsWithMicrocycleAllocations = useMemo(() => {
+    const methods = new Set<string>();
+    Object.values(exerciseSelectionData).forEach(cellData => {
+      if (cellData.microcycleId) {
+        methods.add(cellData.methodId);
+      }
+    });
+    return methods;
+  }, [exerciseSelectionData]);
 
   // Get exercises allocated to current mesocycle from Step 6
   const allocatedExercises = useMemo(() => {
     if (!currentMesocycle) return [];
 
-    // Check if this mesocycle is split
-    const isSplit = !!splitStates[currentMesocycle.id];
-    console.log('[allocatedExercises] compute start', { mesocycleId: currentMesocycle.id, isSplit, splitStates });
-
-    // Step 1: Separate microcycle-specific and mesocycle-level allocations
-    const microcycleSpecific = new Map<string, {
+    const result: Array<{
       exerciseId: string;
       exerciseName: string;
       library: string;
       methodId: string;
-      categoryName: string;
-      microcycleId: string;
-    }[]>();
-
-    const mesocycleLevel = new Map<string, {
-      exerciseId: string;
-      exerciseName: string;
-      library: string;
-      methodId: string;
-      categoryName: string;
-    }[]>();
-
-    // Track methods that have any microcycle-specific allocations (method-level override)
-    const methodsWithSpecific = new Set<string>();
-
-    // Step 2: Iterate through exercise selection data and categorize
-    Object.entries(exerciseSelectionData).forEach(([cellId, cellData]) => {
-      if (cellData.mesocycleId !== currentMesocycle.id) return;
-
-      cellData.exercises.forEach(exercise => {
-        if (cellData.microcycleId) {
-          // Microcycle-specific allocation
-          const key = `${cellData.methodId}-${cellData.categoryName}-${cellData.microcycleId}`;
-          if (!microcycleSpecific.has(key)) {
-            microcycleSpecific.set(key, []);
-          }
-          microcycleSpecific.get(key)!.push({
-            exerciseId: exercise.exerciseId,
-            exerciseName: exercise.exerciseName,
-            library: exercise.library,
-            methodId: cellData.methodId,
-            categoryName: cellData.categoryName || '',
-            microcycleId: cellData.microcycleId
-          });
-          // Mark method as having microcycle-specific allocations
-          methodsWithSpecific.add(normalizeMethod(cellData.methodId));
-        } else {
-          // Mesocycle-level allocation
-          const key = `${cellData.methodId}-${cellData.categoryName}`;
-          if (!mesocycleLevel.has(key)) {
-            mesocycleLevel.set(key, []);
-          }
-          mesocycleLevel.get(key)!.push({
-            exerciseId: exercise.exerciseId,
-            exerciseName: exercise.exerciseName,
-            library: exercise.library,
-            methodId: cellData.methodId,
-            categoryName: cellData.categoryName || ''
-          });
-        }
-      });
-    });
-
-    // Log categorized counts before building result
-    const microcycleSpecificCount = Array.from(microcycleSpecific.values()).reduce((acc, arr) => acc + arr.length, 0);
-    const mesocycleLevelCount = Array.from(mesocycleLevel.values()).reduce((acc, arr) => acc + arr.length, 0);
-    console.log('[allocatedExercises] categorized', { microcycleSpecificKeys: microcycleSpecific.size, microcycleSpecificCount, mesocycleLevelKeys: mesocycleLevel.size, mesocycleLevelCount });
-
-    // Step 3: Build final result with priority logic
-    const exerciseMap = new Map<string, {
-      exerciseId: string;
-      exerciseName: string;
-      library: string;
-      methodId: string;
+      subCategory?: string;
       categoryName: string;
       microcycleIds: string[];
-    }>();
+    }> = [];
 
-    // New override logic: microcycle-specific overrides mesocycle-level per method across the whole mesocycle
-    console.log('[allocatedExercises] override methods', { methodsWithSpecific: Array.from(methodsWithSpecific) });
-
-    // Process each microcycle: always add microcycle-specific; add mesocycle-level only when no specific exists anywhere
-    currentMesocycle.microcycles.forEach(microcycle => {
-      // Add microcycle-specific allocations for this microcycle
-      microcycleSpecific.forEach((exercises, key) => {
-        if (key.endsWith(`-${microcycle.id}`)) {
-          exercises.forEach(exercise => {
-            const exerciseKey = `${exercise.exerciseId}-${exercise.methodId}-${exercise.categoryName}`;
-            if (exerciseMap.has(exerciseKey)) {
-              const existing = exerciseMap.get(exerciseKey)!;
-              exerciseMap.set(exerciseKey, { ...existing, microcycleIds: [...existing.microcycleIds, microcycle.id] });
-            } else {
-              exerciseMap.set(exerciseKey, { ...exercise, microcycleIds: [microcycle.id] });
-            }
-          });
-        }
-      });
-
-      // Add mesocycle-level allocations only if there is no microcycle-specific anywhere for that method
-      mesocycleLevel.forEach((exercises) => {
-        const groupMethodId = exercises[0]?.methodId ?? '';
-        const normalized = normalizeMethod(groupMethodId);
-        if (!methodsWithSpecific.has(normalized)) {
-          exercises.forEach(exercise => {
-            const exerciseKey = `${exercise.exerciseId}-${exercise.methodId}-${exercise.categoryName}`;
-            if (exerciseMap.has(exerciseKey)) {
-              const existing = exerciseMap.get(exerciseKey)!;
-              exerciseMap.set(exerciseKey, { ...existing, microcycleIds: [...existing.microcycleIds, microcycle.id] });
-            } else {
-              exerciseMap.set(exerciseKey, { ...exercise, microcycleIds: [microcycle.id] });
-            }
-          });
-        }
+    // For each cell in exerciseSelectionData for this mesocycle
+    Object.values(exerciseSelectionData).forEach(cellData => {
+      if (cellData.mesocycleId !== currentMesocycle.id) return;
+      
+      const isMesocycleLevel = !cellData.microcycleId;
+      
+      // Skip mesocycle-level if this method has ANY microcycle-specific allocations
+      if (isMesocycleLevel && methodsWithMicrocycleAllocations.has(cellData.methodId)) {
+        return;
+      }
+      
+      cellData.exercises.forEach(exercise => {
+        result.push({
+          exerciseId: exercise.exerciseId,
+          exerciseName: exercise.exerciseName,
+          library: exercise.library,
+          methodId: cellData.methodId,
+          subCategory: exercise.subCategory,
+          categoryName: cellData.categoryName || '',
+          microcycleIds: cellData.microcycleId ? [cellData.microcycleId] : currentMesocycle.microcycles.map(m => m.id)
+        });
       });
     });
 
-    const result = Array.from(exerciseMap.values());
-    console.log('[allocatedExercises] result', { mesocycleId: currentMesocycle.id, isSplit, resultCount: result.length, result });
     return result;
-  }, [currentMesocycle, exerciseSelectionData, splitStates]);
+  }, [currentMesocycle, exerciseSelectionData, methodsWithMicrocycleAllocations]);
 
-  // Group exercises by method and category - hierarchical structure
+  // Group exercises by method -> subCategory -> exerciseCategory hierarchy
   const exercisesByMethod = useMemo(() => {
     const grouped: Record<string, {
       methodId: string;
-      categories: Record<string, typeof allocatedExercises>;
+      methodName: string;
+      subCategories: Record<string, {
+        subCategoryName: string;
+        exerciseCategories: Record<string, typeof allocatedExercises>;
+      }>;
     }> = {};
     
     allocatedExercises.forEach(exercise => {
-      const methodKey = normalizeMethod(exercise.methodId);
-      const categoryKey = normalizeCategory(exercise.categoryName);
+      const method = exercise.methodId;
+      const subCategory = exercise.subCategory || 'main';
+      const exerciseCategory = exercise.categoryName || '';
 
-      if (!grouped[methodKey]) {
-        grouped[methodKey] = {
-          methodId: methodKey,
-          categories: {}
+      if (!grouped[method]) {
+        grouped[method] = {
+          methodId: method,
+          methodName: method,
+          subCategories: {}
         };
       }
-      if (!grouped[methodKey].categories[categoryKey]) {
-        grouped[methodKey].categories[categoryKey] = [];
+
+      if (!grouped[method].subCategories[subCategory]) {
+        grouped[method].subCategories[subCategory] = {
+          subCategoryName: subCategory,
+          exerciseCategories: {}
+        };
       }
-      grouped[methodKey].categories[categoryKey].push(exercise);
+
+      if (!grouped[method].subCategories[subCategory].exerciseCategories[exerciseCategory]) {
+        grouped[method].subCategories[subCategory].exerciseCategories[exerciseCategory] = [];
+      }
+
+      grouped[method].subCategories[subCategory].exerciseCategories[exerciseCategory].push(exercise);
     });
 
     return grouped;
@@ -510,10 +442,9 @@ export default function MicrocyclePlanningPage() {
 
     const exercise = JSON.parse(data);
 
-    // Check if exercise matches the target method/category (normalized)
-    if (normalizeMethod(exercise.methodId) !== normalizeMethod(methodId) || 
-        normalizeCategory(exercise.categoryName) !== normalizeCategory(categoryName)) {
-      return; // Don't allow dropping in wrong category
+    // Check if exercise matches the target method
+    if (exercise.methodId !== methodId) {
+      return; // Don't allow dropping in wrong method
     }
 
     // Add exercise to distribution
@@ -524,8 +455,7 @@ export default function MicrocyclePlanningPage() {
           ex.exerciseId === exercise.exerciseId && 
           ex.dayDate === dayDate && 
           ex.sessionIndex === sessionIndex &&
-          ex.methodId === methodId &&
-          ex.categoryName === categoryName
+          ex.methodId === methodId
       );
 
       if (exists) return prev;
@@ -537,6 +467,7 @@ export default function MicrocyclePlanningPage() {
           exerciseName: exercise.exerciseName,
           methodId: exercise.methodId,
           categoryName: exercise.categoryName,
+          subCategory: exercise.subCategory,
           dayDate,
           sessionIndex
         }
@@ -644,14 +575,13 @@ export default function MicrocyclePlanningPage() {
     });
   };
 
-  // Get exercises for a specific day/session/method/category
-  const getExercisesForCell = (dayDate: string, sessionIndex: number, methodId: string, categoryName: string) => {
+  // Get exercises for a specific day/session/method
+  const getExercisesForCell = (dayDate: string, sessionIndex: number, methodId: string) => {
     return exerciseDistribution.filter(
       ex => 
         ex.dayDate === dayDate && 
         ex.sessionIndex === sessionIndex &&
-        normalizeMethod(ex.methodId) === normalizeMethod(methodId) &&
-        normalizeCategory(ex.categoryName) === normalizeCategory(categoryName)
+        ex.methodId === methodId
     );
   };
 
@@ -1010,7 +940,7 @@ export default function MicrocyclePlanningPage() {
                 </div>
               </div>
 
-              {/* Exercise rows - grouped by method */}
+              {/* Exercise rows - grouped by method -> subCategory -> exerciseCategory */}
               <div className="space-y-4">
                 {Object.keys(exercisesByMethod).length === 0 ? (
                   <div className="p-8 text-center text-muted-foreground border rounded-lg">
@@ -1019,131 +949,151 @@ export default function MicrocyclePlanningPage() {
                 ) : (
                   Object.entries(exercisesByMethod).map(([methodId, methodData]) => {
                     return (
-                      <div key={methodId} className="border rounded-lg">
-                        {/* Method header */}
-                        <div className="flex border-b">
-                          <div className="w-64 shrink-0 sticky left-0 z-30 bg-background px-4 py-2 font-semibold text-sm border-r shadow-sm">
-                            {normalizeMethod(methodId)}
-                          </div>
-                          <div className="flex-1" />
-                        </div>
-                        
-                        {/* Category rows */}
-                        <div className="space-y-0">
-                          {Object.entries(methodData.categories).map(([categoryName, exercises]) => (
-                            <div key={`${methodId}-${categoryName}`} className="border-b last:border-b-0">
-                              <div className="flex">
-                                {/* Left sidebar: Category and Exercises */}
-                                <div className="w-64 shrink-0 border-r px-3 py-2 bg-background sticky left-0 z-20">
-                                  <div className="text-xs font-medium text-muted-foreground mb-2">
-                                    {normalizeCategory(categoryName)}
+                      <Collapsible key={methodId} defaultOpen={true}>
+                        <div className="border rounded-lg overflow-hidden">
+                          {/* Method header */}
+                          <CollapsibleTrigger className="w-full">
+                            <div className="flex items-center border-b hover:bg-muted/50 transition-colors">
+                              <div className="w-64 shrink-0 sticky left-0 z-30 bg-background px-4 py-2 font-semibold text-sm border-r shadow-sm flex items-center gap-2">
+                                <ChevronRight className="h-4 w-4 transition-transform [[data-state=open]_&]:rotate-90" />
+                                {methodData.methodName}
+                              </div>
+                              <div className="flex-1" />
+                            </div>
+                          </CollapsibleTrigger>
+                          
+                          <CollapsibleContent>
+                            {/* Sub-categories */}
+                            {Object.entries(methodData.subCategories).map(([subCategoryKey, subCategoryData]) => (
+                              <div key={subCategoryKey} className="border-b last:border-b-0">
+                                {/* Sub-category header (only if not 'main') */}
+                                {subCategoryKey !== 'main' && (
+                                  <div className="flex bg-muted/30">
+                                    <div className="w-64 shrink-0 sticky left-0 z-20 bg-muted/30 px-6 py-1 text-sm font-medium border-r">
+                                      {subCategoryData.subCategoryName}
+                                    </div>
+                                    <div className="flex-1" />
                                   </div>
-                                  <div className="space-y-0.5">
-                                    {exercises.map((exercise, idx) => {
-                                      const microcycleNames = exercise.microcycleIds
-                                        .map(id => currentMesocycle.microcycles.find(m => m.id === id)?.name)
-                                        .filter(Boolean);
-                                      
-                                      return (
-                                        <div
-                                          key={`${exercise.exerciseId}-${idx}`}
-                                          draggable
-                                          onDragStart={(e) => handleDragStart(e, exercise)}
-                                          className="px-2 py-0.5 bg-background border rounded cursor-move hover:border-primary transition-colors"
-                                        >
-                                          <div className="flex items-start justify-between gap-1">
-                                            <div className="text-xs font-medium leading-tight flex-1">{exercise.exerciseName}</div>
-                                            {microcycleNames.length > 0 && (
-                                              <TooltipProvider>
-                                                <Tooltip delayDuration={200}>
-                                                  <TooltipTrigger asChild>
-                                                    <Button
-                                                      size="sm"
-                                                      variant="ghost"
-                                                      className="h-4 w-4 p-0 shrink-0"
-                                                      onClick={(e) => e.stopPropagation()}
-                                                    >
-                                                      <Info className="h-3 w-3" />
-                                                    </Button>
-                                                  </TooltipTrigger>
-                                                  <TooltipContent side="right" className="z-50 bg-popover">
-                                                    <div className="flex flex-wrap gap-1 max-w-[200px]">
-                                                      {microcycleNames.map((name, i) => (
-                                                        <Badge key={i} variant="secondary" className="text-[10px] px-1 py-0 leading-none">
-                                                          {name}
-                                                        </Badge>
-                                                      ))}
-                                                    </div>
-                                                  </TooltipContent>
-                                                </Tooltip>
-                                              </TooltipProvider>
-                                            )}
+                                )}
+                                
+                                {/* Exercise Categories (if they exist) */}
+                                {Object.entries(subCategoryData.exerciseCategories).map(([categoryKey, exercises]) => (
+                                  <div key={categoryKey} className="border-b last:border-b-0">
+                                    <div className="flex">
+                                      {/* Left sidebar: Category and Exercises */}
+                                      <div className="w-64 shrink-0 border-r px-3 py-2 bg-background sticky left-0 z-20">
+                                        {categoryKey && (
+                                          <div className="text-xs font-medium text-muted-foreground mb-2">
+                                            {categoryKey}
                                           </div>
+                                        )}
+                                        <div className="space-y-0.5">
+                                          {exercises.map((exercise, idx) => {
+                                            const microcycleNames = exercise.microcycleIds
+                                              .map(id => currentMesocycle.microcycles.find(m => m.id === id)?.name)
+                                              .filter(Boolean) as string[];
+                                            
+                                            return (
+                                              <div
+                                                key={`${exercise.exerciseId}-${idx}`}
+                                                draggable
+                                                onDragStart={(e) => handleDragStart(e, exercise)}
+                                                className="px-2 py-0.5 bg-background border rounded cursor-move hover:border-primary transition-colors"
+                                              >
+                                                <div className="flex items-start justify-between gap-1">
+                                                  <div className="text-xs font-medium leading-tight flex-1">{exercise.exerciseName}</div>
+                                                  {microcycleNames.length > 0 && (
+                                                    <TooltipProvider>
+                                                      <Tooltip delayDuration={200}>
+                                                        <TooltipTrigger asChild>
+                                                          <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            className="h-4 w-4 p-0 shrink-0"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                          >
+                                                            <Info className="h-3 w-3" />
+                                                          </Button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="right" className="z-50 bg-popover">
+                                                          <div className="flex flex-wrap gap-1 max-w-[200px]">
+                                                            {microcycleNames.map((name, i) => (
+                                                              <Badge key={i} variant="secondary" className="text-[10px] px-1 py-0 leading-none">
+                                                                {name}
+                                                              </Badge>
+                                                            ))}
+                                                          </div>
+                                                        </TooltipContent>
+                                                      </Tooltip>
+                                                    </TooltipProvider>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
                                         </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
+                                      </div>
 
-                                {/* Day columns */}
-                                <div className="flex flex-1">
-                                  {currentMesocycle.microcycles.map(microcycle => {
-                                    const days = daysByMicrocycle[microcycle.id] || [];
-                                    return (
-                                      <div key={microcycle.id} className="flex flex-1 border-r last:border-r-0">
-                                        {days.map(day => {
-                                          const numberOfSessions = daySplitStates[day.date] || 1;
-                                          const isSplit = numberOfSessions > 1;
-                                          
+                                      {/* Day columns */}
+                                      <div className="flex flex-1">
+                                        {currentMesocycle.microcycles.map(microcycle => {
+                                          const days = daysByMicrocycle[microcycle.id] || [];
                                           return (
-                                            <div key={day.date} className="flex border-r last:border-r-0">
-                                              {Array.from({ length: numberOfSessions }, (_, sessionIdx) => (
-                                                <div
-                                                  key={sessionIdx}
-                                                  className="w-[120px] p-2 border-r last:border-r-0 min-h-[100px]"
-                                                  onDrop={(e) => handleDrop(e, day.date, sessionIdx, methodId, categoryName)}
-                                                  onDragOver={handleDragOver}
-                                                >
-                                                  <div className="space-y-1">
-                                                    {getExercisesForCell(day.date, sessionIdx, methodId, categoryName).map((ex, idx) => (
+                                            <div key={microcycle.id} className="flex flex-1 border-r last:border-r-0">
+                                              {days.map(day => {
+                                                const numberOfSessions = daySplitStates[day.date] || 1;
+                                                
+                                                return (
+                                                  <div key={day.date} className="flex border-r last:border-r-0">
+                                                    {Array.from({ length: numberOfSessions }, (_, sessionIdx) => (
                                                       <div
-                                                        key={idx}
-                                                        className="text-[10px] p-1 bg-primary/10 border border-primary/20 rounded group relative"
+                                                        key={sessionIdx}
+                                                        className="w-[120px] p-2 border-r last:border-r-0 min-h-[100px]"
+                                                        onDrop={(e) => handleDrop(e, day.date, sessionIdx, methodId, categoryKey)}
+                                                        onDragOver={handleDragOver}
                                                       >
-                                                        <div className="pr-4">{ex.exerciseName}</div>
-                                                        <button
-                                                          onClick={() => {
-                                                            const index = exerciseDistribution.findIndex(
-                                                              e => 
-                                                                e.exerciseId === ex.exerciseId && 
-                                                                e.dayDate === ex.dayDate && 
-                                                                e.sessionIndex === ex.sessionIndex &&
-                                                                e.methodId === ex.methodId &&
-                                                                e.categoryName === ex.categoryName
-                                                            );
-                                                            if (index !== -1) removeExercise(index);
-                                                          }}
-                                                          className="absolute top-0 right-0 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        >
-                                                          ×
-                                                        </button>
+                                                        <div className="space-y-1">
+                                                          {getExercisesForCell(day.date, sessionIdx, methodId).map((ex, idx) => (
+                                                            <div
+                                                              key={idx}
+                                                              className="text-[10px] p-1 bg-primary/10 border border-primary/20 rounded group relative"
+                                                            >
+                                                              <div className="pr-4">{ex.exerciseName}</div>
+                                                              <button
+                                                                onClick={() => {
+                                                                  const index = exerciseDistribution.findIndex(
+                                                                    e => 
+                                                                      e.exerciseId === ex.exerciseId && 
+                                                                      e.dayDate === ex.dayDate && 
+                                                                      e.sessionIndex === ex.sessionIndex &&
+                                                                      e.methodId === ex.methodId
+                                                                  );
+                                                                  if (index !== -1) removeExercise(index);
+                                                                }}
+                                                                className="absolute top-0 right-0 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                              >
+                                                                ×
+                                                              </button>
+                                                            </div>
+                                                          ))}
+                                                        </div>
                                                       </div>
                                                     ))}
                                                   </div>
-                                                </div>
-                                              ))}
+                                                );
+                                              })}
                                             </div>
                                           );
                                         })}
                                       </div>
-                                    );
-                                  })}
-                                </div>
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
-                            </div>
-                          ))}
+                            ))}
+                          </CollapsibleContent>
                         </div>
-                      </div>
+                      </Collapsible>
                     );
                   })
                 )}

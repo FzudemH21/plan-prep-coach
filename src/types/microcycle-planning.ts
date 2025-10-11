@@ -3,6 +3,7 @@ export interface ExerciseSelection {
   exerciseId: string;
   exerciseName: string;
   library: string; // Allow any library ID including custom ones
+  subCategory?: string; // Sub-category like "Frog Tier", "Gazelle Tier", etc.
 }
 
 export interface CellData {
