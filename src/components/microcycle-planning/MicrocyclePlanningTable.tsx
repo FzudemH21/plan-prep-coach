@@ -1288,9 +1288,35 @@ const updateCellData = (
                          {column.type === 'microcycle-group' && (
                            <span className="font-medium">{column.groupName}</span>
                          )}
-                         {column.type === 'mesocycle' && !hasSplitMesocycles && (
-                           <span className="font-medium">{column.mesocycleName}</span>
-                         )}
+                          {column.type === 'mesocycle' && !hasSplitMesocycles && (
+                            <div className="flex items-center gap-2 w-full">
+                              <span className="font-medium">{column.mesocycleName}</span>
+                              <div className="flex items-center gap-1 ml-auto">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setClearMesocycleDialogState({
+                                    isOpen: true,
+                                    mesocycleId: column.mesocycleId,
+                                    mesocycleName: column.mesocycleName
+                                  })}
+                                  className="h-6 px-2 text-foreground hover:bg-destructive/10"
+                                >
+                                  <Trash2 className="h-3 w-3 mr-1" />
+                                  Clear
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => toggleMesocycleSplit(column.mesocycleId)}
+                                  className="h-6 px-2"
+                                >
+                                  <ChevronDown className="h-3 w-3 mr-1" />
+                                  Split
+                                </Button>
+                              </div>
+                            </div>
+                          )}
                          
                          {/* Sub-goals display only when not using split headers */}
                          {column.type === 'mesocycle' && !hasSplitMesocycles && mesocycle?.allocatedSubGoals && mesocycle.allocatedSubGoals.length > 0 && (
