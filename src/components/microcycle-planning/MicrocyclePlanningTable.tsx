@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ChevronDown, ChevronRight, Link, Unlink } from 'lucide-react';
+import { ChevronDown, ChevronRight, Link, Unlink, Trash2 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useAthleticismData } from '@/hooks/useAthleticismData';
@@ -71,6 +72,16 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], para
     methodId: '',
     categoryName: undefined,
     targetColumnId: '',
+  });
+
+  const [clearMesocycleDialogState, setClearMesocycleDialogState] = useState<{
+    isOpen: boolean;
+    mesocycleId: string;
+    mesocycleName: string;
+  }>({
+    isOpen: false,
+    mesocycleId: '',
+    mesocycleName: '',
   });
 
   // Helper function for string normalization
@@ -981,6 +992,30 @@ const updateCellData = (
     }
   };
 
+  // Clear exercises for a specific mesocycle
+  const handleClearMesocycleExercises = useCallback((mesocycleId: string) => {
+    const newCellData = { ...planningState.cellData };
+    
+    // Remove all cell data entries for this mesocycle
+    Object.keys(newCellData).forEach(cellId => {
+      if (newCellData[cellId].mesocycleId === mesocycleId) {
+        delete newCellData[cellId];
+      }
+    });
+
+    setPlanningState(prev => ({
+      ...prev,
+      cellData: newCellData
+    }));
+
+    setClearMesocycleDialogState({ isOpen: false, mesocycleId: '', mesocycleName: '' });
+
+    toast({
+      title: "Mesocycle exercises cleared",
+      description: `All exercise selections for ${clearMesocycleDialogState.mesocycleName} have been cleared.`,
+    });
+  }, [planningState.cellData, clearMesocycleDialogState.mesocycleName, toast]);
+
   return (
     <>
       <Card className="w-full">
@@ -1012,15 +1047,30 @@ const updateCellData = (
                         <div className="flex flex-col items-center gap-2 py-2">
                           <div className="flex items-center gap-2">
                             <span>{header.mesocycleName}</span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => toggleMesocycleSplit(header.mesocycleId)}
-                              className="h-6 px-2 text-foreground hover:bg-black/10"
-                            >
-                              <ChevronDown className="h-3 w-3" />
-                              Collapse
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setClearMesocycleDialogState({
+                                  isOpen: true,
+                                  mesocycleId: header.mesocycleId,
+                                  mesocycleName: header.mesocycleName
+                                })}
+                                className="h-6 px-2 text-foreground hover:bg-destructive/10"
+                              >
+                                <Trash2 className="h-3 w-3 mr-1" />
+                                Clear
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => toggleMesocycleSplit(header.mesocycleId)}
+                                className="h-6 px-2 text-foreground hover:bg-black/10"
+                              >
+                                <ChevronDown className="h-3 w-3" />
+                                Collapse
+                              </Button>
+                            </div>
                           </div>
                           
                           {/* Sub-goals display for split mesocycles */}
@@ -1522,6 +1572,35 @@ const updateCellData = (
       columnStructure={columnStructure}
       getCellId={getCellId}
     />
+
+    {/* Clear Mesocycle Exercises Confirmation Dialog */}
+    <AlertDialog 
+      open={clearMesocycleDialogState.isOpen} 
+      onOpenChange={(isOpen) => {
+        if (!isOpen) {
+          setClearMesocycleDialogState({ isOpen: false, mesocycleId: '', mesocycleName: '' });
+        }
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Clear exercises for {clearMesocycleDialogState.mesocycleName}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will clear all exercise selections for {clearMesocycleDialogState.mesocycleName} across all methods and microcycles. 
+            Exercise selections in other mesocycles will remain intact. This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => handleClearMesocycleExercises(clearMesocycleDialogState.mesocycleId)}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Clear Mesocycle Exercises
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </>
   );
 }

@@ -72,6 +72,7 @@ export default function MesocyclePage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [categorySplitStates, setCategorySplitStates] = useState<Record<string, boolean>>({});
   const [isClearParametersDialogOpen, setIsClearParametersDialogOpen] = useState(false);
+  const [isClearAllExercisesDialogOpen, setIsClearAllExercisesDialogOpen] = useState(false);
   
   // Daily intensity planning state
   const [dailyIntensityData, setDailyIntensityData] = useState<DailyIntensity[]>([]);
@@ -1457,6 +1458,19 @@ export default function MesocyclePage() {
     });
   }, [toast]);
 
+  // Clear all exercise selections
+  const handleClearAllExercises = useCallback(() => {
+    localStorage.removeItem('microcyclePlanningState');
+    localStorage.removeItem('exerciseSelectionData');
+    setIsClearAllExercisesDialogOpen(false);
+    toast({
+      title: "Exercises cleared",
+      description: "All exercise selections have been cleared successfully.",
+    });
+    // Force reload to reset the MicrocyclePlanningTable state
+    window.location.reload();
+  }, [toast]);
+
   // Helper function to get global microcycle width (max frequency across all allocated methods)
   const getGlobalMicrocycleWidth = useCallback((mesocycleId: string, microcycleIndex: number) => {
     let maxFrequency = 1;
@@ -2358,28 +2372,65 @@ export default function MesocyclePage() {
   };
 
   const renderExerciseSelection = () => (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <Target className="h-5 w-5" />
-          <span>Step 6: Exercise Selection</span>
-        </CardTitle>
-        <CardDescription>
-          Select specific exercises for each training method across your mesocycles and microcycles.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="overflow-x-auto max-w-full">
-        <MicrocyclePlanningTable 
-          mesocycles={mesocycles}
-          selectedMethods={getAllocatedMethods()}
-          parameterValues={parameterValues}
-          methodParametersMap={methodParametersMap}
-          onExerciseSelectionChange={(cellData) => {
-            localStorage.setItem('exerciseSelectionData', JSON.stringify(cellData));
-          }}
-        />
-      </CardContent>
-    </Card>
+    <>
+      <Card className="w-full" data-step="6">
+        <CardHeader>
+          <div className="flex items-start justify-between">
+            <div className="space-y-1.5">
+              <CardTitle className="flex items-center space-x-2">
+                <Target className="h-5 w-5" />
+                <span>Step 6: Exercise Selection</span>
+              </CardTitle>
+              <CardDescription>
+                Select specific exercises for each training method across your mesocycles and microcycles.
+              </CardDescription>
+            </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setIsClearAllExercisesDialogOpen(true)}
+              className="shrink-0"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Clear All Exercises
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="overflow-x-auto max-w-full">
+          <MicrocyclePlanningTable 
+            mesocycles={mesocycles}
+            selectedMethods={getAllocatedMethods()}
+            parameterValues={parameterValues}
+            methodParametersMap={methodParametersMap}
+            onExerciseSelectionChange={(cellData) => {
+              localStorage.setItem('exerciseSelectionData', JSON.stringify(cellData));
+            }}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Clear All Exercises Confirmation Dialog */}
+      <AlertDialog open={isClearAllExercisesDialogOpen} onOpenChange={setIsClearAllExercisesDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear all exercise selections?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will clear all exercise selections you've configured for all methods across all mesocycles and microcycles. 
+              The method structure and parameter values will remain intact. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleClearAllExercises}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Clear All Exercises
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 
   // Calculate all days based on macrocycle data and mesocycle structure
