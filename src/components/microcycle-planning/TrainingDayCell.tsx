@@ -56,6 +56,12 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
   // Get primary method name (first method from first session)
   const primaryMethod = day.sessions[0]?.methods[0]?.split(' - ')[0] || '';
 
+  // Compute display label with fallback
+  const displayLabel =
+    day.trainingDay?.testName ??
+    day.trainingDay?.eventName ??
+    (isTestDay ? 'Test' : isEventDay ? 'Event' : '');
+
   return (
     <div
       onClick={hasTraining ? onClick : undefined}
@@ -84,9 +90,9 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
           </div>
 
           {/* Test/Event Name Display */}
-          {(day.trainingDay?.testName || day.trainingDay?.eventName) && (
-            <div className="text-xs font-medium text-red-600 truncate max-w-[120px]">
-              {day.trainingDay.testName || day.trainingDay.eventName}
+          {displayLabel && (
+            <div className="text-xs font-medium text-red-600 truncate max-w-[140px]">
+              {displayLabel}
             </div>
           )}
         </div>

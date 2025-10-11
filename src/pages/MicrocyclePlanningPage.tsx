@@ -203,6 +203,54 @@ export default function MicrocyclePlanningPage() {
     localStorage.setItem('daySplitStates', JSON.stringify(daySplitStates));
   }, [daySplitStates]);
 
+  // Enrich trainingDays with test/event names from macrocycleData
+  useEffect(() => {
+    if (!macrocycleData || trainingDays.length === 0) return;
+
+    const testMap = new Map<string, string>();
+    (macrocycleData.subGoals || []).forEach((sg: any) => {
+      const name = sg.testMethod || sg.name || sg.testName || sg.method || sg.description || 'Test';
+      (sg.testDates || []).forEach((d: any) => {
+        const dateKey = new Date(d).toISOString().split('T')[0];
+        testMap.set(dateKey, name);
+      });
+    });
+
+    const eventMap = new Map<string, string>();
+    (macrocycleData.events || []).forEach((e: any) => {
+      const name = e.name || e.eventName || e.title || e.description || 'Event';
+      (e.eventDates || []).forEach((d: any) => {
+        const dateKey = new Date(d).toISOString().split('T')[0];
+        eventMap.set(dateKey, name);
+      });
+    });
+
+    const updated = trainingDays.map(td => {
+      const tn = td.testName ?? testMap.get(td.date);
+      const en = td.eventName ?? eventMap.get(td.date);
+      return {
+        ...td,
+        testName: tn,
+        eventName: en,
+        isTestDay: !!(td.isTestDay || tn),
+        isEventDay: !!(td.isEventDay || en),
+      };
+    });
+
+    const changed = updated.some((u, i) =>
+      u.testName !== trainingDays[i].testName ||
+      u.eventName !== trainingDays[i].eventName ||
+      u.isTestDay !== trainingDays[i].isTestDay ||
+      u.isEventDay !== trainingDays[i].isEventDay
+    );
+
+    if (changed) {
+      console.log('[Microcycle] Enriched trainingDays with test/event names.');
+      setTrainingDays(updated);
+      localStorage.setItem('trainingDays', JSON.stringify(updated));
+    }
+  }, [macrocycleData, trainingDays]);
+
   const currentMesocycle = mesocycles[currentMesocycleIndex];
 
   // Get training days for current mesocycle
