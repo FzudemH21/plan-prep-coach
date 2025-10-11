@@ -58,6 +58,7 @@ export default function MicrocyclePlanningPage() {
   const [parameterValues, setParameterValues] = useState<Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>>({});
   const [dailyIntensityData, setDailyIntensityData] = useState<any[]>([]);
   const [daySplitStates, setDaySplitStates] = useState<Record<string, number>>({});
+  const [splitStates, setSplitStates] = useState<Record<string, boolean>>({});
   const { data: athleticismData } = useAthleticismData();
 
   const totalSteps = 1; // Currently only Step 1: Exercise Distribution
@@ -107,6 +108,13 @@ export default function MicrocyclePlanningPage() {
     if (savedDaySplitStates) {
       setDaySplitStates(JSON.parse(savedDaySplitStates));
     }
+
+    // Load split states from Step 6 (Exercise Selection)
+    const savedMicrocyclePlanningState = localStorage.getItem('microcyclePlanningState');
+    if (savedMicrocyclePlanningState) {
+      const planningState = JSON.parse(savedMicrocyclePlanningState);
+      setSplitStates(planningState.splitStates || {});
+    }
   }, []);
 
   // Save exercise distribution to localStorage
@@ -144,6 +152,9 @@ export default function MicrocyclePlanningPage() {
   // Get exercises allocated to current mesocycle from Step 6
   const allocatedExercises = useMemo(() => {
     if (!currentMesocycle) return [];
+
+    // Check if this mesocycle is split
+    const isSplit = !!splitStates[currentMesocycle.id];
 
     // Step 1: Separate microcycle-specific and mesocycle-level allocations
     const microcycleSpecific = new Map<string, {
@@ -209,61 +220,89 @@ export default function MicrocyclePlanningPage() {
       microcycleIds: string[];
     }>();
 
-    // Process each microcycle
-    currentMesocycle.microcycles.forEach(microcycle => {
-      // Check which methods/categories have exercises
-      const methodCategoryPairs = new Set<string>();
-      
-      // Collect from microcycle-specific allocations
-      microcycleSpecific.forEach((exercises, key) => {
-        if (key.endsWith(`-${microcycle.id}`)) {
-          const methodCategory = key.substring(0, key.lastIndexOf('-'));
-          methodCategoryPairs.add(methodCategory);
-          
-          exercises.forEach(exercise => {
-            const exerciseKey = `${exercise.exerciseId}-${exercise.methodId}-${exercise.categoryName}`;
-            
-            if (exerciseMap.has(exerciseKey)) {
-              const existing = exerciseMap.get(exerciseKey)!;
-              exerciseMap.set(exerciseKey, {
-                ...existing,
-                microcycleIds: [...existing.microcycleIds, microcycle.id]
-              });
-            } else {
-              exerciseMap.set(exerciseKey, {
-                ...exercise,
-                microcycleIds: [microcycle.id]
-              });
-            }
-          });
-        }
+    if (isSplit) {
+      // If mesocycle is split, ONLY use microcycle-specific allocations
+      // Completely ignore mesocycle-level allocations
+      currentMesocycle.microcycles.forEach(microcycle => {
+        microcycleSpecific.forEach((exercises, key) => {
+          if (key.endsWith(`-${microcycle.id}`)) {
+            exercises.forEach(exercise => {
+              const exerciseKey = `${exercise.exerciseId}-${exercise.methodId}-${exercise.categoryName}`;
+              
+              if (exerciseMap.has(exerciseKey)) {
+                const existing = exerciseMap.get(exerciseKey)!;
+                exerciseMap.set(exerciseKey, {
+                  ...existing,
+                  microcycleIds: [...existing.microcycleIds, microcycle.id]
+                });
+              } else {
+                exerciseMap.set(exerciseKey, {
+                  ...exercise,
+                  microcycleIds: [microcycle.id]
+                });
+              }
+            });
+          }
+        });
       });
+    } else {
+      // If mesocycle is NOT split, use existing logic
+      // Process each microcycle
+      currentMesocycle.microcycles.forEach(microcycle => {
+        // Check which methods/categories have exercises
+        const methodCategoryPairs = new Set<string>();
+        
+        // Collect from microcycle-specific allocations
+        microcycleSpecific.forEach((exercises, key) => {
+          if (key.endsWith(`-${microcycle.id}`)) {
+            const methodCategory = key.substring(0, key.lastIndexOf('-'));
+            methodCategoryPairs.add(methodCategory);
+            
+            exercises.forEach(exercise => {
+              const exerciseKey = `${exercise.exerciseId}-${exercise.methodId}-${exercise.categoryName}`;
+              
+              if (exerciseMap.has(exerciseKey)) {
+                const existing = exerciseMap.get(exerciseKey)!;
+                exerciseMap.set(exerciseKey, {
+                  ...existing,
+                  microcycleIds: [...existing.microcycleIds, microcycle.id]
+                });
+              } else {
+                exerciseMap.set(exerciseKey, {
+                  ...exercise,
+                  microcycleIds: [microcycle.id]
+                });
+              }
+            });
+          }
+        });
 
-      // Add mesocycle-level allocations ONLY if no microcycle-specific allocation exists
-      mesocycleLevel.forEach((exercises, methodCategoryKey) => {
-        if (!methodCategoryPairs.has(methodCategoryKey)) {
-          exercises.forEach(exercise => {
-            const exerciseKey = `${exercise.exerciseId}-${exercise.methodId}-${exercise.categoryName}`;
-            
-            if (exerciseMap.has(exerciseKey)) {
-              const existing = exerciseMap.get(exerciseKey)!;
-              exerciseMap.set(exerciseKey, {
-                ...existing,
-                microcycleIds: [...existing.microcycleIds, microcycle.id]
-              });
-            } else {
-              exerciseMap.set(exerciseKey, {
-                ...exercise,
-                microcycleIds: [microcycle.id]
-              });
-            }
-          });
-        }
+        // Add mesocycle-level allocations ONLY if no microcycle-specific allocation exists
+        mesocycleLevel.forEach((exercises, methodCategoryKey) => {
+          if (!methodCategoryPairs.has(methodCategoryKey)) {
+            exercises.forEach(exercise => {
+              const exerciseKey = `${exercise.exerciseId}-${exercise.methodId}-${exercise.categoryName}`;
+              
+              if (exerciseMap.has(exerciseKey)) {
+                const existing = exerciseMap.get(exerciseKey)!;
+                exerciseMap.set(exerciseKey, {
+                  ...existing,
+                  microcycleIds: [...existing.microcycleIds, microcycle.id]
+                });
+              } else {
+                exerciseMap.set(exerciseKey, {
+                  ...exercise,
+                  microcycleIds: [microcycle.id]
+                });
+              }
+            });
+          }
+        });
       });
-    });
+    }
 
     return Array.from(exerciseMap.values());
-  }, [currentMesocycle, exerciseSelectionData]);
+  }, [currentMesocycle, exerciseSelectionData, splitStates]);
 
   // Group exercises by method and category - hierarchical structure
   const exercisesByMethod = useMemo(() => {
