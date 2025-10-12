@@ -111,9 +111,6 @@ export function TrainingCalendarView({
         methods: [...new Set(exs.map(e => e.methodId))],
       }));
 
-      // Sort sessions by sessionIndex to ensure consistent order
-      sessions.sort((a, b) => a.sessionIndex - b.sessionIndex);
-
       return {
         date,
         dateString,

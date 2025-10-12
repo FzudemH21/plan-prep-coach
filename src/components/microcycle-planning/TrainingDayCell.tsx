@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { format, isToday } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -54,9 +54,6 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
   const isTodayDate = isToday(day.date);
   const isSpecialDay = isTestDay || isEventDay;
 
-  // Track if drag is happening to prevent click after drop
-  const isDraggingRef = useRef(false);
-
   // Get primary method name (first method from first session)
   const primaryMethod = day.sessions[0]?.methods[0]?.split(' - ')[0] || '';
 
@@ -66,20 +63,9 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
     day.trainingDay?.eventName ??
     (isTestDay ? 'Test' : isEventDay ? 'Event' : '');
 
-  const handleClick = () => {
-    // Only open dialog if we're not in the middle of a drag operation
-    if (!isDraggingRef.current && hasTraining) {
-      onClick();
-    }
-    // Reset the flag after a short delay
-    setTimeout(() => {
-      isDraggingRef.current = false;
-    }, 50);
-  };
-
   return (
     <div
-      onClick={handleClick}
+      onClick={hasTraining ? onClick : undefined}
       className={cn(
         "min-h-[140px] border rounded-lg p-3 transition-all",
         day.isCurrentMonth ? "bg-card" : "bg-muted/30",
@@ -146,12 +132,7 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
                   draggableId={`session-${day.dateString}-${session.sessionIndex}`}
                   index={idx}
                 >
-                  {(provided, snapshot) => {
-                    // Set flag when dragging starts
-                    if (snapshot.isDragging && !isDraggingRef.current) {
-                      isDraggingRef.current = true;
-                    }
-                    return (
+                  {(provided, snapshot) => (
                     <div
                       ref={provided.innerRef}
                       {...provided.draggableProps}
@@ -182,8 +163,7 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
                         {session.exercises.length} {session.exercises.length === 1 ? 'exercise' : 'exercises'}
                       </p>
                     </div>
-                    );
-                  }}
+                  )}
                 </Draggable>
               ))}
               {provided.placeholder}
