@@ -2,7 +2,8 @@ import React from 'react';
 import { format, isToday } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { Dumbbell, Trophy, Calendar } from 'lucide-react';
+import { Dumbbell, Trophy, Calendar, GripVertical } from 'lucide-react';
+import { Droppable, Draggable } from '@hello-pangea/dnd';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -114,46 +115,105 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
 
       {/* Training Content */}
       {hasTraining ? (
-        <div className="space-y-2">
-          {/* Session Indicators */}
-          {day.sessions.map((session, idx) => (
+        <Droppable droppableId={`day-${day.dateString}`} type="session">
+          {(provided, snapshot) => (
             <div
-              key={idx}
-              className="p-2 rounded-md bg-primary/10 border border-primary/20"
+              ref={provided.innerRef}
+              {...provided.droppableProps}
+              className={cn(
+                "space-y-2 min-h-[60px]",
+                snapshot.isDraggingOver && "bg-primary/5 rounded-md p-1"
+              )}
             >
-              <div className="flex items-center gap-1.5 mb-1">
-                <Dumbbell className="h-3 w-3 text-primary" />
-                <span className="text-xs font-medium text-primary">
-                  Session {session.sessionIndex + 1}
-                </span>
-              </div>
-              
-              {/* Primary Method Name */}
-              {session.methods[0] && (
-                <p className="text-xs font-medium truncate mb-0.5">
-                  {session.methods[0].split(' - ')[0]}
+              {/* Session Indicators */}
+              {day.sessions.map((session, idx) => (
+                <Draggable
+                  key={`session-${day.dateString}-${session.sessionIndex}`}
+                  draggableId={`session-${day.dateString}-${session.sessionIndex}`}
+                  index={idx}
+                >
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.draggableProps}
+                      className={cn(
+                        "p-2 rounded-md bg-primary/10 border border-primary/20 transition-all",
+                        snapshot.isDragging && "shadow-lg ring-2 ring-primary opacity-90"
+                      )}
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing">
+                          <GripVertical className="h-3 w-3 text-muted-foreground hover:text-primary" />
+                        </div>
+                        <Dumbbell className="h-3 w-3 text-primary" />
+                        <span className="text-xs font-medium text-primary">
+                          Session {session.sessionIndex + 1}
+                        </span>
+                      </div>
+                      
+                      {/* Primary Method Name */}
+                      {session.methods[0] && (
+                        <p className="text-xs font-medium truncate mb-0.5 ml-5">
+                          {session.methods[0].split(' - ')[0]}
+                        </p>
+                      )}
+
+                      {/* Exercise Count */}
+                      <p className="text-xs text-muted-foreground ml-5">
+                        {session.exercises.length} {session.exercises.length === 1 ? 'exercise' : 'exercises'}
+                      </p>
+                    </div>
+                  )}
+                </Draggable>
+              ))}
+              {provided.placeholder}
+
+              {/* Multiple Sessions Summary */}
+              {day.sessions.length > 1 && (
+                <p className="text-xs text-muted-foreground text-center pt-1 border-t">
+                  {day.sessions.length} sessions • {day.totalExercises} total exercises
                 </p>
               )}
-
-              {/* Exercise Count */}
-              <p className="text-xs text-muted-foreground">
-                {session.exercises.length} {session.exercises.length === 1 ? 'exercise' : 'exercises'}
-              </p>
             </div>
-          ))}
-
-          {/* Multiple Sessions Summary */}
-          {day.sessions.length > 1 && (
-            <p className="text-xs text-muted-foreground text-center pt-1 border-t">
-              {day.sessions.length} sessions • {day.totalExercises} total exercises
-            </p>
           )}
-        </div>
+        </Droppable>
       ) : isRestDay ? (
-        <div className="flex items-center justify-center h-12">
-          <span className="text-xs text-muted-foreground">Rest</span>
-        </div>
-      ) : null}
+        <Droppable droppableId={`day-${day.dateString}`} type="session">
+          {(provided, snapshot) => (
+            <div
+              ref={provided.innerRef}
+              {...provided.droppableProps}
+              className={cn(
+                "flex items-center justify-center h-12 min-h-[60px]",
+                snapshot.isDraggingOver && "bg-primary/5 rounded-md"
+              )}
+            >
+              <span className="text-xs text-muted-foreground">
+                {snapshot.isDraggingOver ? 'Drop here' : 'Rest'}
+              </span>
+              {provided.placeholder}
+            </div>
+          )}
+        </Droppable>
+      ) : (
+        <Droppable droppableId={`day-${day.dateString}`} type="session">
+          {(provided, snapshot) => (
+            <div
+              ref={provided.innerRef}
+              {...provided.droppableProps}
+              className={cn(
+                "min-h-[60px]",
+                snapshot.isDraggingOver && "bg-primary/5 rounded-md"
+              )}
+            >
+              {snapshot.isDraggingOver && (
+                <span className="text-xs text-muted-foreground">Drop here</span>
+              )}
+              {provided.placeholder}
+            </div>
+          )}
+        </Droppable>
+      )}
     </div>
   );
 }

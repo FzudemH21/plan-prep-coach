@@ -10,6 +10,7 @@ import { ExtendedMesocycle } from '@/features/planner/types';
 import { TrainingDayCell } from './TrainingDayCell';
 import { DayExercisesDialog } from './DayExercisesDialog';
 import { useToast } from '@/hooks/use-toast';
+import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -26,6 +27,7 @@ interface TrainingCalendarViewProps {
   trainingDays: TrainingDay[];
   currentMesocycle: ExtendedMesocycle;
   mesocycles: ExtendedMesocycle[];
+  onSessionDragEnd?: (result: DropResult) => void;
 }
 
 type ViewMode = '1week' | '2week' | '4week';
@@ -48,6 +50,7 @@ export function TrainingCalendarView({
   trainingDays,
   currentMesocycle,
   mesocycles,
+  onSessionDragEnd,
 }: TrainingCalendarViewProps) {
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>('4week');
@@ -250,36 +253,38 @@ export function TrainingCalendarView({
       {/* Calendar Grid */}
       <Card className="flex-1">
         <CardContent className="p-4">
-          <div className="space-y-2">
-            {/* Day Headers */}
-            <div className="grid grid-cols-7 gap-2 mb-2">
-              {dayHeaders.map(day => (
-                <div
-                  key={day}
-                  className="text-center text-sm font-semibold text-muted-foreground py-2"
-                >
-                  {day}
+          <DragDropContext onDragEnd={(result) => onSessionDragEnd?.(result)}>
+            <div className="space-y-2">
+              {/* Day Headers */}
+              <div className="grid grid-cols-7 gap-2 mb-2">
+                {dayHeaders.map(day => (
+                  <div
+                    key={day}
+                    className="text-center text-sm font-semibold text-muted-foreground py-2"
+                  >
+                    {day}
+                  </div>
+                ))}
+              </div>
+
+              {/* Calendar Weeks */}
+              {weeks.map((week, weekIdx) => (
+                <div key={weekIdx} className="grid grid-cols-7 gap-2">
+                  {week.map(day => (
+                    <TrainingDayCell
+                      key={day.dateString}
+                      day={day}
+                      onClick={() => {
+                        if (day.sessions.length > 0) {
+                          setSelectedDay(day);
+                        }
+                      }}
+                    />
+                  ))}
                 </div>
               ))}
             </div>
-
-            {/* Calendar Weeks */}
-            {weeks.map((week, weekIdx) => (
-              <div key={weekIdx} className="grid grid-cols-7 gap-2">
-                {week.map(day => (
-                  <TrainingDayCell
-                    key={day.dateString}
-                    day={day}
-                    onClick={() => {
-                      if (day.sessions.length > 0) {
-                        setSelectedDay(day);
-                      }
-                    }}
-                  />
-                ))}
-              </div>
-            ))}
-          </div>
+          </DragDropContext>
         </CardContent>
       </Card>
 

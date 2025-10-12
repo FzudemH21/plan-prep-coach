@@ -19,6 +19,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
 import { TrainingCalendarView } from '@/components/microcycle-planning';
+import { DropResult } from '@hello-pangea/dnd';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -895,6 +896,178 @@ export default function MicrocyclePlanningPage() {
     return colors[intensity] || 'bg-muted text-muted-foreground';
   };
 
+  // Handle session drag and drop
+  const handleSessionDragEnd = (result: DropResult) => {
+    const { source, destination, draggableId } = result;
+    
+    // If dropped outside a valid droppable or no movement, do nothing
+    if (!destination || 
+        (source.droppableId === destination.droppableId && source.index === destination.index)) {
+      return;
+    }
+    
+    // Extract source and destination dates
+    const sourceDateString = source.droppableId.replace('day-', '');
+    const destDateString = destination.droppableId.replace('day-', '');
+    
+    // Extract session index from draggableId
+    const sessionIndexMatch = draggableId.match(/session-.*-(\d+)/);
+    if (!sessionIndexMatch) return;
+    const draggedSessionIndex = parseInt(sessionIndexMatch[1]);
+    
+    // Case 1: Moving within the same day (reordering)
+    if (sourceDateString === destDateString) {
+      handleReorderSessionsInDay(sourceDateString, source.index, destination.index);
+    } 
+    // Case 2: Moving to a different day
+    else {
+      handleMoveSessionToDay(
+        sourceDateString, 
+        destDateString, 
+        draggedSessionIndex, 
+        destination.index
+      );
+    }
+  };
+
+  // Reorder sessions within the same day
+  const handleReorderSessionsInDay = (
+    dayDate: string, 
+    fromIndex: number, 
+    toIndex: number
+  ) => {
+    setExerciseDistribution(prev => {
+      // Get all exercises for this day
+      const dayExercises = prev.filter(ex => ex.dayDate === dayDate);
+      const otherExercises = prev.filter(ex => ex.dayDate !== dayDate);
+      
+      // Group by session index
+      const sessions = new Map<number, ExerciseDistribution[]>();
+      dayExercises.forEach(ex => {
+        if (!sessions.has(ex.sessionIndex)) {
+          sessions.set(ex.sessionIndex, []);
+        }
+        sessions.get(ex.sessionIndex)!.push(ex);
+      });
+      
+      // Get ordered session indices
+      const sessionIndices = Array.from(sessions.keys()).sort((a, b) => a - b);
+      
+      // Reorder session indices
+      const [movedSession] = sessionIndices.splice(fromIndex, 1);
+      sessionIndices.splice(toIndex, 0, movedSession);
+      
+      // Reassign session indices based on new order
+      const reorderedExercises: ExerciseDistribution[] = [];
+      sessionIndices.forEach((oldIndex, newIndex) => {
+        const exercises = sessions.get(oldIndex)!;
+        exercises.forEach(ex => {
+          reorderedExercises.push({ ...ex, sessionIndex: newIndex });
+        });
+      });
+      
+      return [...otherExercises, ...reorderedExercises];
+    });
+    
+    toast({
+      title: "Session reordered",
+      description: "Session order updated successfully",
+    });
+  };
+
+  // Move session to a different day
+  const handleMoveSessionToDay = (
+    sourceDate: string,
+    destDate: string,
+    sessionIndex: number,
+    destPosition: number
+  ) => {
+    setExerciseDistribution(prev => {
+      // Get exercises from the moved session
+      const movedExercises = prev.filter(
+        ex => ex.dayDate === sourceDate && ex.sessionIndex === sessionIndex
+      );
+      
+      if (movedExercises.length === 0) return prev;
+      
+      // Get remaining exercises from source day
+      const sourceRemaining = prev.filter(
+        ex => ex.dayDate === sourceDate && ex.sessionIndex !== sessionIndex
+      );
+      
+      // Renumber remaining sessions in source day
+      const renumberedSource = sourceRemaining.map(ex => {
+        if (ex.sessionIndex > sessionIndex) {
+          return { ...ex, sessionIndex: ex.sessionIndex - 1 };
+        }
+        return ex;
+      });
+      
+      // Get destination day exercises
+      const destExercises = prev.filter(ex => ex.dayDate === destDate);
+      
+      // Shift destination sessions to make room
+      const shiftedDest = destExercises.map(ex => {
+        if (ex.sessionIndex >= destPosition) {
+          return { ...ex, sessionIndex: ex.sessionIndex + 1 };
+        }
+        return ex;
+      });
+      
+      // Update moved exercises with new date and position
+      const updatedMovedExercises = movedExercises.map(ex => ({
+        ...ex,
+        dayDate: destDate,
+        sessionIndex: destPosition
+      }));
+      
+      // Get all other exercises (not from source or dest day)
+      const otherExercises = prev.filter(
+        ex => ex.dayDate !== sourceDate && ex.dayDate !== destDate
+      );
+      
+      return [
+        ...otherExercises,
+        ...renumberedSource,
+        ...shiftedDest,
+        ...updatedMovedExercises
+      ];
+    });
+    
+    // Update split states
+    setDaySplitStates(prev => {
+      const newState = { ...prev };
+      
+      // Check source day session count after move
+      const sourceSessions = exerciseDistribution.filter(ex => 
+        ex.dayDate === sourceDate && ex.sessionIndex !== sessionIndex
+      );
+      const uniqueSourceSessions = new Set(sourceSessions.map(ex => ex.sessionIndex)).size;
+      
+      if (uniqueSourceSessions <= 1) {
+        // Remove split state if source day now has 1 or fewer sessions
+        delete newState[sourceDate];
+      } else {
+        newState[sourceDate] = uniqueSourceSessions;
+      }
+      
+      // Check destination day session count after move
+      const destSessions = exerciseDistribution.filter(ex => ex.dayDate === destDate);
+      const uniqueDestSessions = new Set(destSessions.map(ex => ex.sessionIndex)).size + 1;
+      
+      if (uniqueDestSessions > 1) {
+        newState[destDate] = uniqueDestSessions;
+      }
+      
+      return newState;
+    });
+    
+    toast({
+      title: "Session moved",
+      description: `Moved session to ${format(new Date(destDate), 'MMM d')}`,
+    });
+  };
+
   const NavigationButtons = () => (
     <div className="flex flex-col md:flex-row md:justify-between items-stretch md:items-center gap-3 w-full">
       <Button 
@@ -1476,6 +1649,7 @@ export default function MicrocyclePlanningPage() {
             trainingDays={currentMesocycleDays}
             currentMesocycle={currentMesocycle}
             mesocycles={mesocycles}
+            onSessionDragEnd={handleSessionDragEnd}
           />
         </>
       )}
