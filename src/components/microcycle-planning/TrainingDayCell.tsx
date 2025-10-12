@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { format, isToday } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -54,6 +54,9 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
   const isTodayDate = isToday(day.date);
   const isSpecialDay = isTestDay || isEventDay;
 
+  // Track mouse position to distinguish between clicks and drags
+  const mouseDownPos = useRef<{ x: number; y: number } | null>(null);
+
   // Get primary method name (first method from first session)
   const primaryMethod = day.sessions[0]?.methods[0]?.split(' - ')[0] || '';
 
@@ -63,9 +66,30 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
     day.trainingDay?.eventName ??
     (isTestDay ? 'Test' : isEventDay ? 'Event' : '');
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+    mouseDownPos.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (!mouseDownPos.current) return;
+    
+    // Calculate distance moved
+    const dx = Math.abs(e.clientX - mouseDownPos.current.x);
+    const dy = Math.abs(e.clientY - mouseDownPos.current.y);
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Only trigger onClick if mouse didn't move much (< 5 pixels)
+    if (distance < 5) {
+      onClick();
+    }
+    
+    mouseDownPos.current = null;
+  };
+
   return (
     <div
-      onClick={hasTraining ? onClick : undefined}
+      onMouseDown={handleMouseDown}
+      onClick={hasTraining ? handleClick : undefined}
       className={cn(
         "min-h-[140px] border rounded-lg p-3 transition-all",
         day.isCurrentMonth ? "bg-card" : "bg-muted/30",
