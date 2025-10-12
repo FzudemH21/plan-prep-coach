@@ -1,9 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { format, isToday } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Dumbbell, Trophy, Calendar, GripVertical } from 'lucide-react';
+import { Dumbbell, Trophy, Calendar, GripVertical, MoreVertical, Copy, Trash2 } from 'lucide-react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -44,9 +51,22 @@ interface CalendarDay {
 interface TrainingDayCellProps {
   day: CalendarDay;
   onClick: () => void;
+  onDeleteSession?: (dayDate: string, sessionIndex: number) => void;
+  onCopySession?: (dayDate: string, sessionIndex: number) => void;
+  onPasteSession?: (dayDate: string) => void;
+  copiedSession?: { exercises: ExerciseDistribution[]; sourceDate: string; sessionIndex: number } | null;
 }
 
-export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
+export function TrainingDayCell({ 
+  day, 
+  onClick, 
+  onDeleteSession, 
+  onCopySession, 
+  onPasteSession, 
+  copiedSession 
+}: TrainingDayCellProps) {
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [isHovering, setIsHovering] = useState(false);
   const hasTraining = day.sessions.length > 0;
   const isTestDay = day.trainingDay?.isTestDay;
   const isEventDay = day.trainingDay?.isEventDay;
@@ -66,6 +86,8 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
   return (
     <div
       onClick={hasTraining ? onClick : undefined}
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
       className={cn(
         "min-h-[140px] border rounded-lg p-3 transition-all",
         day.isCurrentMonth ? "bg-card" : "bg-muted/30",
@@ -141,14 +163,51 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
                         snapshot.isDragging && "shadow-lg ring-2 ring-primary opacity-90"
                       )}
                     >
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing">
-                          <GripVertical className="h-3 w-3 text-muted-foreground hover:text-primary" />
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-1.5">
+                          <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing">
+                            <GripVertical className="h-3 w-3 text-muted-foreground hover:text-primary" />
+                          </div>
+                          <Dumbbell className="h-3 w-3 text-primary" />
+                          <span className="text-xs font-medium text-primary">
+                            Session {session.sessionIndex + 1}
+                          </span>
                         </div>
-                        <Dumbbell className="h-3 w-3 text-primary" />
-                        <span className="text-xs font-medium text-primary">
-                          Session {session.sessionIndex + 1}
-                        </span>
+
+                        {/* Three-dot menu */}
+                        <DropdownMenu 
+                          open={openDropdownId === `${day.dateString}-${session.sessionIndex}`}
+                          onOpenChange={(open) => {
+                            setOpenDropdownId(open ? `${day.dateString}-${session.sessionIndex}` : null);
+                          }}
+                        >
+                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <button className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/20 transition-colors">
+                              <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuItem onClick={(e) => {
+                              e.stopPropagation();
+                              onCopySession?.(day.dateString, session.sessionIndex);
+                              setOpenDropdownId(null);
+                            }}>
+                              <Copy className="mr-2 h-4 w-4" />
+                              Copy session
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDeleteSession?.(day.dateString, session.sessionIndex);
+                                setOpenDropdownId(null);
+                              }}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete session
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                       
                       {/* Primary Method Name */}
@@ -174,6 +233,22 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
                   {day.sessions.length} sessions • {day.totalExercises} total exercises
                 </p>
               )}
+
+              {/* Paste button - shown when hovering and session is copied */}
+              {isHovering && copiedSession && (
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPasteSession?.(day.dateString);
+                  }}
+                  className="w-full mt-2"
+                  variant="default"
+                  size="sm"
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Paste ({copiedSession.exercises.length} exercise{copiedSession.exercises.length !== 1 ? 's' : ''})
+                </Button>
+              )}
             </div>
           )}
         </Droppable>
@@ -188,9 +263,24 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
                 snapshot.isDraggingOver && "bg-primary/5 rounded-md"
               )}
             >
-              <span className="text-xs text-muted-foreground">
-                {snapshot.isDraggingOver ? 'Drop here' : 'Rest'}
-              </span>
+              {snapshot.isDraggingOver ? (
+                <span className="text-xs text-muted-foreground">Drop here</span>
+              ) : isHovering && copiedSession ? (
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPasteSession?.(day.dateString);
+                  }}
+                  className="w-full"
+                  variant="default"
+                  size="sm"
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Paste ({copiedSession.exercises.length} exercise{copiedSession.exercises.length !== 1 ? 's' : ''})
+                </Button>
+              ) : (
+                <span className="text-xs text-muted-foreground">Rest</span>
+              )}
               {provided.placeholder}
             </div>
           )}
@@ -202,13 +292,26 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
               ref={provided.innerRef}
               {...provided.droppableProps}
               className={cn(
-                "min-h-[60px]",
+                "min-h-[60px] flex items-center justify-center",
                 snapshot.isDraggingOver && "bg-primary/5 rounded-md"
               )}
             >
-              {snapshot.isDraggingOver && (
+              {snapshot.isDraggingOver ? (
                 <span className="text-xs text-muted-foreground">Drop here</span>
-              )}
+              ) : isHovering && copiedSession ? (
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPasteSession?.(day.dateString);
+                  }}
+                  className="w-full"
+                  variant="default"
+                  size="sm"
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Paste ({copiedSession.exercises.length} exercise{copiedSession.exercises.length !== 1 ? 's' : ''})
+                </Button>
+              ) : null}
               {provided.placeholder}
             </div>
           )}

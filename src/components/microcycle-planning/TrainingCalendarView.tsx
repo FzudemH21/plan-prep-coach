@@ -28,6 +28,10 @@ interface TrainingCalendarViewProps {
   currentMesocycle: ExtendedMesocycle;
   mesocycles: ExtendedMesocycle[];
   onSessionDragEnd?: (result: DropResult) => void;
+  onDeleteSession?: (dayDate: string, sessionIndex: number) => void;
+  onCopySession?: (dayDate: string, sessionIndex: number) => void;
+  onPasteSession?: (dayDate: string) => void;
+  copiedSession?: { exercises: ExerciseDistribution[]; sourceDate: string; sessionIndex: number } | null;
 }
 
 type ViewMode = '1week' | '2week' | '4week';
@@ -51,6 +55,10 @@ export function TrainingCalendarView({
   currentMesocycle,
   mesocycles,
   onSessionDragEnd,
+  onDeleteSession,
+  onCopySession,
+  onPasteSession,
+  copiedSession,
 }: TrainingCalendarViewProps) {
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>('4week');
@@ -279,6 +287,10 @@ export function TrainingCalendarView({
                           setSelectedDay(day);
                         }
                       }}
+                      onDeleteSession={onDeleteSession}
+                      onCopySession={onCopySession}
+                      onPasteSession={onPasteSession}
+                      copiedSession={copiedSession}
                     />
                   ))}
                 </div>

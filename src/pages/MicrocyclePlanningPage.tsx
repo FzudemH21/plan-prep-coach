@@ -75,6 +75,11 @@ export default function MicrocyclePlanningPage() {
     microcycleId: '',
     microcycleName: ''
   });
+  const [copiedSession, setCopiedSession] = useState<{
+    exercises: ExerciseDistribution[];
+    sourceDate: string;
+    sessionIndex: number;
+  } | null>(null);
 
   const totalSteps = 2; // Step 1: Exercise Distribution, Step 2: Training Calendar
 
@@ -897,6 +902,92 @@ export default function MicrocyclePlanningPage() {
   };
 
   // Handle session drag and drop
+  // Handle delete session
+  const handleDeleteSession = (dayDate: string, sessionIndex: number) => {
+    setExerciseDistribution(prev => {
+      // Remove exercises from the target session
+      const remaining = prev.filter(
+        ex => !(ex.dayDate === dayDate && ex.sessionIndex === sessionIndex)
+      );
+      
+      // Get remaining exercises for this day
+      const dayExercises = remaining.filter(ex => ex.dayDate === dayDate);
+      const otherExercises = remaining.filter(ex => ex.dayDate !== dayDate);
+      
+      // Renumber sessions sequentially (0, 1, 2, ...)
+      const renumbered = dayExercises.map(ex => {
+        if (ex.sessionIndex > sessionIndex) {
+          return { ...ex, sessionIndex: ex.sessionIndex - 1 };
+        }
+        return ex;
+      });
+      
+      return [...otherExercises, ...renumbered];
+    });
+    
+    toast({
+      title: "Session deleted",
+      description: "The session has been removed successfully",
+    });
+  };
+
+  // Handle copy session
+  const handleCopySession = (dayDate: string, sessionIndex: number) => {
+    const sessionExercises = exerciseDistribution.filter(
+      ex => ex.dayDate === dayDate && ex.sessionIndex === sessionIndex
+    );
+    
+    if (sessionExercises.length === 0) {
+      toast({
+        title: "Cannot copy",
+        description: "This session has no exercises",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setCopiedSession({
+      exercises: sessionExercises,
+      sourceDate: dayDate,
+      sessionIndex: sessionIndex
+    });
+    
+    toast({
+      title: "Session copied",
+      description: `${sessionExercises.length} exercise(s) copied to clipboard`,
+    });
+  };
+
+  // Handle paste session
+  const handlePasteSession = (targetDate: string) => {
+    if (!copiedSession) return;
+    
+    setExerciseDistribution(prev => {
+      // Get exercises for target day
+      const targetDayExercises = prev.filter(ex => ex.dayDate === targetDate);
+      
+      // Determine the next session index for this day
+      const maxSessionIndex = targetDayExercises.length > 0
+        ? Math.max(...targetDayExercises.map(ex => ex.sessionIndex))
+        : -1;
+      const newSessionIndex = maxSessionIndex + 1;
+      
+      // Create new exercises with updated date and session index
+      const pastedExercises = copiedSession.exercises.map(ex => ({
+        ...ex,
+        dayDate: targetDate,
+        sessionIndex: newSessionIndex
+      }));
+      
+      return [...prev, ...pastedExercises];
+    });
+    
+    toast({
+      title: "Session pasted",
+      description: `${copiedSession.exercises.length} exercise(s) pasted successfully`,
+    });
+  };
+
   const handleSessionDragEnd = (result: DropResult) => {
     const { source, destination, draggableId } = result;
     
@@ -1644,13 +1735,17 @@ export default function MicrocyclePlanningPage() {
       {currentStep === 2 && currentMesocycle && (
         <>
           {console.log('[Step 2] Rendering calendar with', exerciseDistribution.length, 'exercises')}
-          <TrainingCalendarView
-            exerciseDistribution={exerciseDistribution}
-            trainingDays={currentMesocycleDays}
-            currentMesocycle={currentMesocycle}
-            mesocycles={mesocycles}
-            onSessionDragEnd={handleSessionDragEnd}
-          />
+            <TrainingCalendarView
+              exerciseDistribution={exerciseDistribution}
+              trainingDays={currentMesocycleDays}
+              currentMesocycle={currentMesocycle}
+              mesocycles={mesocycles}
+              onSessionDragEnd={handleSessionDragEnd}
+              onDeleteSession={handleDeleteSession}
+              onCopySession={handleCopySession}
+              onPasteSession={handlePasteSession}
+              copiedSession={copiedSession}
+            />
         </>
       )}
 
