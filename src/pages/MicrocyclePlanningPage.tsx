@@ -898,7 +898,7 @@ export default function MicrocyclePlanningPage() {
 
   // Handle session drag and drop
   const handleSessionDragEnd = (result: DropResult) => {
-    const { source, destination, draggableId } = result;
+    const { source, destination } = result;
     
     // If dropped outside a valid droppable or no movement, do nothing
     if (!destination || 
@@ -910,10 +910,14 @@ export default function MicrocyclePlanningPage() {
     const sourceDateString = source.droppableId.replace('day-', '');
     const destDateString = destination.droppableId.replace('day-', '');
     
-    // Extract session index from draggableId
-    const sessionIndexMatch = draggableId.match(/session-.*-(\d+)/);
-    if (!sessionIndexMatch) return;
-    const draggedSessionIndex = parseInt(sessionIndexMatch[1]);
+    // Build sorted array of session indices for the source date
+    const sourceExercises = exerciseDistribution.filter(ex => ex.dayDate === sourceDateString);
+    const sessionIndicesSet = new Set(sourceExercises.map(ex => ex.sessionIndex));
+    const sessionIndices = Array.from(sessionIndicesSet).sort((a, b) => a - b);
+    
+    // Get the actual session index being moved (based on its visual position)
+    const movedOriginalSessionIndex = sessionIndices[source.index];
+    if (movedOriginalSessionIndex === undefined) return;
     
     // Case 1: Moving within the same day (reordering)
     if (sourceDateString === destDateString) {
@@ -924,7 +928,7 @@ export default function MicrocyclePlanningPage() {
       handleMoveSessionToDay(
         sourceDateString, 
         destDateString, 
-        draggedSessionIndex, 
+        movedOriginalSessionIndex, 
         destination.index
       );
     }
