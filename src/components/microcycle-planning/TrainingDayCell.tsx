@@ -54,8 +54,8 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
   const isTodayDate = isToday(day.date);
   const isSpecialDay = isTestDay || isEventDay;
 
-  // Track mouse position to distinguish between clicks and drags
-  const mouseDownPos = useRef<{ x: number; y: number } | null>(null);
+  // Track if drag is happening to prevent click after drop
+  const isDraggingRef = useRef(false);
 
   // Get primary method name (first method from first session)
   const primaryMethod = day.sessions[0]?.methods[0]?.split(' - ')[0] || '';
@@ -66,30 +66,20 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
     day.trainingDay?.eventName ??
     (isTestDay ? 'Test' : isEventDay ? 'Event' : '');
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    mouseDownPos.current = { x: e.clientX, y: e.clientY };
-  };
-
-  const handleClick = (e: React.MouseEvent) => {
-    if (!mouseDownPos.current) return;
-    
-    // Calculate distance moved
-    const dx = Math.abs(e.clientX - mouseDownPos.current.x);
-    const dy = Math.abs(e.clientY - mouseDownPos.current.y);
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    
-    // Only trigger onClick if mouse didn't move much (< 5 pixels)
-    if (distance < 5) {
+  const handleClick = () => {
+    // Only open dialog if we're not in the middle of a drag operation
+    if (!isDraggingRef.current && hasTraining) {
       onClick();
     }
-    
-    mouseDownPos.current = null;
+    // Reset the flag after a short delay
+    setTimeout(() => {
+      isDraggingRef.current = false;
+    }, 50);
   };
 
   return (
     <div
-      onMouseDown={handleMouseDown}
-      onClick={hasTraining ? handleClick : undefined}
+      onClick={handleClick}
       className={cn(
         "min-h-[140px] border rounded-lg p-3 transition-all",
         day.isCurrentMonth ? "bg-card" : "bg-muted/30",
@@ -156,7 +146,12 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
                   draggableId={`session-${day.dateString}-${session.sessionIndex}`}
                   index={idx}
                 >
-                  {(provided, snapshot) => (
+                  {(provided, snapshot) => {
+                    // Set flag when dragging starts
+                    if (snapshot.isDragging && !isDraggingRef.current) {
+                      isDraggingRef.current = true;
+                    }
+                    return (
                     <div
                       ref={provided.innerRef}
                       {...provided.draggableProps}
@@ -187,7 +182,8 @@ export function TrainingDayCell({ day, onClick }: TrainingDayCellProps) {
                         {session.exercises.length} {session.exercises.length === 1 ? 'exercise' : 'exercises'}
                       </p>
                     </div>
-                  )}
+                    );
+                  }}
                 </Draggable>
               ))}
               {provided.placeholder}
