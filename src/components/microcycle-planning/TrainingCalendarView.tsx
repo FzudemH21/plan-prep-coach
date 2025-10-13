@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { TrainingDay } from '@/types/daily-intensity';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { TrainingDayCell } from './TrainingDayCell';
+import { WeekRow } from './WeekRow';
 import { DayExercisesDialog } from './DayExercisesDialog';
 import { useToast } from '@/hooks/use-toast';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
@@ -32,11 +33,13 @@ interface TrainingCalendarViewProps {
   onCopySession?: (dayDate: string, sessionIndex: number) => void;
   onPasteSession?: (dayDate: string) => void;
   copiedSession?: { exercises: ExerciseDistribution[]; sourceDate: string; sessionIndex: number } | null;
+  onCopyWeek?: (weekStartDate: string) => void;
+  onClearWeek?: (weekStartDate: string) => void;
+  onPasteWeek?: (weekStartDate: string) => void;
+  copiedWeek?: { exercises: ExerciseDistribution[]; weekStartDate: string } | null;
 }
 
-type ViewMode = '1week' | '2week' | '4week';
-
-interface CalendarDay {
+export interface CalendarDay {
   date: Date;
   dateString: string;
   isCurrentMonth: boolean;
@@ -49,6 +52,8 @@ interface CalendarDay {
   totalExercises: number;
 }
 
+type ViewMode = '1week' | '2week' | '4week';
+
 export function TrainingCalendarView({
   exerciseDistribution,
   trainingDays,
@@ -59,6 +64,10 @@ export function TrainingCalendarView({
   onCopySession,
   onPasteSession,
   copiedSession,
+  onCopyWeek,
+  onClearWeek,
+  onPasteWeek,
+  copiedWeek,
 }: TrainingCalendarViewProps) {
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>('4week');
@@ -277,23 +286,24 @@ export function TrainingCalendarView({
 
               {/* Calendar Weeks */}
               {weeks.map((week, weekIdx) => (
-                <div key={weekIdx} className="grid grid-cols-7 gap-2">
-                  {week.map(day => (
-                    <TrainingDayCell
-                      key={day.dateString}
-                      day={day}
-                      onClick={() => {
-                        if (day.sessions.length > 0) {
-                          setSelectedDay(day);
-                        }
-                      }}
-                      onDeleteSession={onDeleteSession}
-                      onCopySession={onCopySession}
-                      onPasteSession={onPasteSession}
-                      copiedSession={copiedSession}
-                    />
-                  ))}
-                </div>
+                <WeekRow
+                  key={weekIdx}
+                  week={week}
+                  weekIdx={weekIdx}
+                  copiedWeek={copiedWeek}
+                  copiedSession={copiedSession}
+                  onCopyWeek={onCopyWeek}
+                  onClearWeek={onClearWeek}
+                  onPasteWeek={onPasteWeek}
+                  onDayClick={(day) => {
+                    if (day.sessions.length > 0) {
+                      setSelectedDay(day);
+                    }
+                  }}
+                  onDeleteSession={onDeleteSession}
+                  onCopySession={onCopySession}
+                  onPasteSession={onPasteSession}
+                />
               ))}
             </div>
           </DragDropContext>

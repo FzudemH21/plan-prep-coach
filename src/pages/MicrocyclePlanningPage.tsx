@@ -15,7 +15,7 @@ import { ExtendedMesocycle, Microcycle } from '@/features/planner/types';
 import { TrainingDay } from '@/types/daily-intensity';
 import { CellData, ExerciseSelection } from '@/types/microcycle-planning';
 import { useAthleticismData } from '@/hooks/useAthleticismData';
-import { format } from 'date-fns';
+import { format, addDays, differenceInDays, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
 import { TrainingCalendarView } from '@/components/microcycle-planning';
@@ -79,6 +79,10 @@ export default function MicrocyclePlanningPage() {
     exercises: ExerciseDistribution[];
     sourceDate: string;
     sessionIndex: number;
+  } | null>(null);
+  const [copiedWeek, setCopiedWeek] = useState<{
+    exercises: ExerciseDistribution[];
+    weekStartDate: string;
   } | null>(null);
 
   const totalSteps = 2; // Step 1: Exercise Distribution, Step 2: Training Calendar
@@ -991,6 +995,107 @@ export default function MicrocyclePlanningPage() {
     setCopiedSession(null);
   };
 
+  // Handle copy week
+  const handleCopyWeek = (weekStartDate: string) => {
+    const weekStart = parseISO(weekStartDate);
+    const weekEnd = addDays(weekStart, 6);
+    
+    // Get all exercises in this week
+    const weekExercises = exerciseDistribution.filter(ex => {
+      const exDate = parseISO(ex.dayDate);
+      return exDate >= weekStart && exDate <= weekEnd;
+    });
+    
+    if (weekExercises.length === 0) {
+      toast({
+        title: "Cannot copy",
+        description: "This week has no sessions",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setCopiedWeek({
+      exercises: weekExercises,
+      weekStartDate: weekStartDate
+    });
+    
+    // Count unique sessions
+    const uniqueSessions = new Set(weekExercises.map(ex => `${ex.dayDate}-${ex.sessionIndex}`)).size;
+    
+    toast({
+      title: "Week copied",
+      description: `${uniqueSessions} session(s) with ${weekExercises.length} exercise(s) copied`,
+    });
+  };
+
+  // Handle clear week
+  const handleClearWeek = (weekStartDate: string) => {
+    const weekStart = parseISO(weekStartDate);
+    const weekEnd = addDays(weekStart, 6);
+    
+    // Count sessions before clearing
+    const weekExercises = exerciseDistribution.filter(ex => {
+      const exDate = parseISO(ex.dayDate);
+      return exDate >= weekStart && exDate <= weekEnd;
+    });
+    
+    if (weekExercises.length === 0) {
+      toast({
+        title: "Nothing to clear",
+        description: "This week has no sessions",
+      });
+      return;
+    }
+    
+    const uniqueSessions = new Set(weekExercises.map(ex => `${ex.dayDate}-${ex.sessionIndex}`)).size;
+    
+    // Remove all exercises from this week
+    setExerciseDistribution(prev =>
+      prev.filter(ex => {
+        const exDate = parseISO(ex.dayDate);
+        return !(exDate >= weekStart && exDate <= weekEnd);
+      })
+    );
+    
+    toast({
+      title: "Week cleared",
+      description: `${uniqueSessions} session(s) removed from this week`,
+    });
+  };
+
+  // Handle paste week
+  const handlePasteWeek = (targetWeekStartDate: string) => {
+    if (!copiedWeek) return;
+    
+    const sourceWeekStart = parseISO(copiedWeek.weekStartDate);
+    const targetWeekStart = parseISO(targetWeekStartDate);
+    
+    // Calculate day offset
+    const dayOffset = differenceInDays(targetWeekStart, sourceWeekStart);
+    
+    // Create new exercises with adjusted dates
+    const pastedExercises = copiedWeek.exercises.map(ex => {
+      const originalDate = parseISO(ex.dayDate);
+      const newDate = addDays(originalDate, dayOffset);
+      return {
+        ...ex,
+        dayDate: format(newDate, 'yyyy-MM-dd')
+      };
+    });
+    
+    setExerciseDistribution(prev => [...prev, ...pastedExercises]);
+    
+    const uniqueSessions = new Set(pastedExercises.map(ex => `${ex.dayDate}-${ex.sessionIndex}`)).size;
+    
+    toast({
+      title: "Week pasted",
+      description: `${uniqueSessions} session(s) pasted to new week`,
+    });
+    
+    setCopiedWeek(null);
+  };
+
   const handleSessionDragEnd = (result: DropResult) => {
     const { source, destination, draggableId } = result;
     
@@ -1748,6 +1853,10 @@ export default function MicrocyclePlanningPage() {
               onCopySession={handleCopySession}
               onPasteSession={handlePasteSession}
               copiedSession={copiedSession}
+              onCopyWeek={handleCopyWeek}
+              onClearWeek={handleClearWeek}
+              onPasteWeek={handlePasteWeek}
+              copiedWeek={copiedWeek}
             />
         </>
       )}
