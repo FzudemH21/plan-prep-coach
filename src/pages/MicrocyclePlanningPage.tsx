@@ -986,6 +986,9 @@ export default function MicrocyclePlanningPage() {
       title: "Session pasted",
       description: `${copiedSession.exercises.length} exercise(s) pasted successfully`,
     });
+    
+    // Clear the copied session so paste button disappears
+    setCopiedSession(null);
   };
 
   const handleSessionDragEnd = (result: DropResult) => {
