@@ -147,23 +147,11 @@ export function TrainingCalendarView({
   }, [calendarDays]);
 
   const handlePrevious = () => {
-    if (viewMode === '4week') {
-      setCurrentDate(prev => subWeeks(prev, 4));
-    } else if (viewMode === '2week') {
-      setCurrentDate(prev => subWeeks(prev, 2));
-    } else {
-      setCurrentDate(prev => subWeeks(prev, 1));
-    }
+    setCurrentDate(prev => subWeeks(prev, 1));
   };
 
   const handleNext = () => {
-    if (viewMode === '4week') {
-      setCurrentDate(prev => addWeeks(prev, 4));
-    } else if (viewMode === '2week') {
-      setCurrentDate(prev => addWeeks(prev, 2));
-    } else {
-      setCurrentDate(prev => addWeeks(prev, 1));
-    }
+    setCurrentDate(prev => addWeeks(prev, 1));
   };
 
   const handleToday = () => {
