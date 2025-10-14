@@ -100,9 +100,7 @@ export function TrainingCalendarView({
         break;
       case '4week':
       default:
-        const monthStart = startOfMonth(currentDate);
-        const monthEnd = endOfMonth(currentDate);
-        end = endOfWeek(monthEnd, { weekStartsOn: 1 });
+        end = endOfWeek(addWeeks(currentDate, 3), { weekStartsOn: 1 });
         break;
     }
 
