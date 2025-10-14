@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { format } from 'date-fns';
 import { Copy, MoreVertical, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { IntensityLevel } from '@/types/training';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,6 +46,10 @@ interface WeekRowProps {
   onDeleteSession?: (dayDate: string, sessionIndex: number) => void;
   onCopySession?: (dayDate: string, sessionIndex: number) => void;
   onPasteSession?: (dayDate: string) => void;
+  dailyIntensityData?: any[];
+  onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
+  getIntensityColor?: (intensity: IntensityLevel) => string;
+  intensityLevels?: IntensityLevel[];
 }
 
 export function WeekRow({
@@ -59,6 +64,10 @@ export function WeekRow({
   onDeleteSession,
   onCopySession,
   onPasteSession,
+  dailyIntensityData,
+  onIntensityChange,
+  getIntensityColor,
+  intensityLevels,
 }: WeekRowProps) {
   const [isWeekHovering, setIsWeekHovering] = useState(false);
   const weekStartDate = week[0]?.dateString;
@@ -126,6 +135,10 @@ export function WeekRow({
             onCopySession={onCopySession}
             onPasteSession={onPasteSession}
             copiedSession={copiedSession}
+            dailyIntensityData={dailyIntensityData}
+            onIntensityChange={onIntensityChange}
+            getIntensityColor={getIntensityColor}
+            intensityLevels={intensityLevels}
           />
         ))}
       </div>

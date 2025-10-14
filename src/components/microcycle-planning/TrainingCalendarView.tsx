@@ -7,6 +7,7 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, startOfWeek, endOf
 import { cn } from '@/lib/utils';
 import { TrainingDay } from '@/types/daily-intensity';
 import { ExtendedMesocycle } from '@/features/planner/types';
+import { IntensityLevel } from '@/types/training';
 import { TrainingDayCell } from './TrainingDayCell';
 import { WeekRow } from './WeekRow';
 import { DayExercisesDialog } from './DayExercisesDialog';
@@ -37,6 +38,10 @@ interface TrainingCalendarViewProps {
   onClearWeek?: (weekStartDate: string) => void;
   onPasteWeek?: (weekStartDate: string) => void;
   copiedWeek?: { exercises: ExerciseDistribution[]; weekStartDate: string } | null;
+  dailyIntensityData?: any[];
+  onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
+  getIntensityColor?: (intensity: IntensityLevel) => string;
+  intensityLevels?: IntensityLevel[];
 }
 
 export interface CalendarDay {
@@ -68,6 +73,10 @@ export function TrainingCalendarView({
   onClearWeek,
   onPasteWeek,
   copiedWeek,
+  dailyIntensityData,
+  onIntensityChange,
+  getIntensityColor,
+  intensityLevels,
 }: TrainingCalendarViewProps) {
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>('4week');
@@ -289,6 +298,10 @@ export function TrainingCalendarView({
                   onDeleteSession={onDeleteSession}
                   onCopySession={onCopySession}
                   onPasteSession={onPasteSession}
+                  dailyIntensityData={dailyIntensityData}
+                  onIntensityChange={onIntensityChange}
+                  getIntensityColor={getIntensityColor}
+                  intensityLevels={intensityLevels}
                 />
               ))}
             </div>

@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ExtendedMesocycle, Microcycle } from '@/features/planner/types';
 import { TrainingDay } from '@/types/daily-intensity';
 import { CellData, ExerciseSelection } from '@/types/microcycle-planning';
+import { IntensityLevel } from '@/types/training';
 import { useAthleticismData } from '@/hooks/useAthleticismData';
 import { format, addDays, differenceInDays, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -86,6 +87,23 @@ export default function MicrocyclePlanningPage() {
   } | null>(null);
 
   const totalSteps = 2; // Step 1: Exercise Distribution, Step 2: Training Calendar
+
+  // Define intensity levels and color function
+  const intensityLevels: IntensityLevel[] = ["off", "deload", "easy", "easy-moderate", "moderate", "moderate-hard", "hard", "extremely-hard"];
+
+  const getIntensityColor = (intensity: IntensityLevel) => {
+    const colors = {
+      "off": "bg-[hsl(var(--intensity-off))] text-black border-2",
+      "deload": "bg-[hsl(var(--intensity-deload))] text-white",
+      "easy": "bg-[hsl(var(--intensity-easy))] text-white", 
+      "easy-moderate": "bg-[hsl(var(--intensity-easy-moderate))] text-white",
+      "moderate": "bg-[hsl(var(--intensity-moderate))] text-black",
+      "moderate-hard": "bg-[hsl(var(--intensity-moderate-hard))] text-white",
+      "hard": "bg-[hsl(var(--intensity-hard))] text-white",
+      "extremely-hard": "bg-[hsl(var(--intensity-extremely-hard))] text-white"
+    };
+    return colors[intensity] || "bg-muted text-muted-foreground";
+  };
 
   // Load data from localStorage
   useEffect(() => {
@@ -890,21 +908,6 @@ export default function MicrocyclePlanningPage() {
     );
   };
 
-  // Get intensity color
-  const getIntensityColor = (intensity: string) => {
-    const colors: Record<string, string> = {
-      'off': 'bg-intensity-off text-foreground',
-      'deload': 'bg-intensity-deload text-foreground',
-      'easy': 'bg-intensity-easy text-foreground',
-      'easy-moderate': 'bg-intensity-easy-moderate text-foreground',
-      'moderate': 'bg-intensity-moderate text-foreground',
-      'moderate-hard': 'bg-intensity-moderate-hard text-foreground',
-      'hard': 'bg-intensity-hard text-foreground',
-      'extremely-hard': 'bg-intensity-extremely-hard text-foreground',
-    };
-    return colors[intensity] || 'bg-muted text-muted-foreground';
-  };
-
   // Handle session drag and drop
   // Handle delete session
   const handleDeleteSession = (dayDate: string, sessionIndex: number) => {
@@ -1094,6 +1097,41 @@ export default function MicrocyclePlanningPage() {
     });
     
     setCopiedWeek(null);
+  };
+
+  // Handle intensity change from calendar view
+  const handleIntensityChange = (date: string, intensity: IntensityLevel) => {
+    setDailyIntensityData(prev => {
+      const updated = [...prev];
+      const index = updated.findIndex(di => di.date === date);
+      
+      if (index >= 0) {
+        updated[index] = { ...updated[index], intensity };
+      } else {
+        // Create new entry if doesn't exist
+        const day = trainingDays.find(td => td.date === date);
+        if (day) {
+          updated.push({
+            date,
+            mesocycleId: day.mesocycleId,
+            microcycleId: day.microcycleId,
+            dayOfWeek: day.dayOfWeek,
+            intensity,
+            isTestDay: day.isTestDay,
+            isEventDay: day.isEventDay,
+          });
+        }
+      }
+      
+      // Save to localStorage immediately
+      localStorage.setItem('dailyIntensityData', JSON.stringify(updated));
+      return updated;
+    });
+    
+    toast({
+      title: "Intensity updated",
+      description: `Set to ${intensity.replace('-', ' ')}`,
+    });
   };
 
   const handleSessionDragEnd = (result: DropResult) => {
@@ -1857,6 +1895,10 @@ export default function MicrocyclePlanningPage() {
               onClearWeek={handleClearWeek}
               onPasteWeek={handlePasteWeek}
               copiedWeek={copiedWeek}
+              dailyIntensityData={dailyIntensityData}
+              onIntensityChange={handleIntensityChange}
+              getIntensityColor={getIntensityColor}
+              intensityLevels={intensityLevels}
             />
         </>
       )}

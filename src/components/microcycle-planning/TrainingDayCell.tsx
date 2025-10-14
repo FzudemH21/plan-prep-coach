@@ -3,7 +3,9 @@ import { format, isToday } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Dumbbell, Trophy, Calendar, GripVertical, MoreVertical, Copy, Trash2 } from 'lucide-react';
+import { Dumbbell, Trophy, Calendar, GripVertical, MoreVertical, Copy, Trash2, ChevronDown } from 'lucide-react';
+import { IntensityLevel } from '@/types/training';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import {
   DropdownMenu,
@@ -55,6 +57,10 @@ interface TrainingDayCellProps {
   onCopySession?: (dayDate: string, sessionIndex: number) => void;
   onPasteSession?: (dayDate: string) => void;
   copiedSession?: { exercises: ExerciseDistribution[]; sourceDate: string; sessionIndex: number } | null;
+  dailyIntensityData?: any[];
+  onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
+  getIntensityColor?: (intensity: IntensityLevel) => string;
+  intensityLevels?: IntensityLevel[];
 }
 
 export function TrainingDayCell({ 
@@ -63,16 +69,24 @@ export function TrainingDayCell({
   onDeleteSession, 
   onCopySession, 
   onPasteSession, 
-  copiedSession 
+  copiedSession,
+  dailyIntensityData,
+  onIntensityChange,
+  getIntensityColor,
+  intensityLevels
 }: TrainingDayCellProps) {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [isHovering, setIsHovering] = useState(false);
+  const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
   const hasTraining = day.sessions.length > 0;
   const isTestDay = day.trainingDay?.isTestDay;
   const isEventDay = day.trainingDay?.isEventDay;
   const isRestDay = !hasTraining && day.trainingDay?.isTrainingDay === false;
   const isTodayDate = isToday(day.date);
   const isSpecialDay = isTestDay || isEventDay;
+
+  // Get current intensity for this day
+  const currentIntensity: IntensityLevel = dailyIntensityData?.find(di => di.date === day.dateString)?.intensity || 'moderate';
 
   // Get primary method name (first method from first session)
   const primaryMethod = day.sessions[0]?.methods[0]?.split(' - ')[0] || '';
@@ -120,8 +134,8 @@ export function TrainingDayCell({
           )}
         </div>
 
-        {/* Status Icons */}
-        <div className="flex gap-1">
+        {/* Status Icons and Intensity Indicator */}
+        <div className="flex gap-1 items-start">
           {isTestDay && (
             <Badge variant="secondary" className="h-5 px-1.5 text-xs">
               <Trophy className="h-3 w-3" />
@@ -131,6 +145,54 @@ export function TrainingDayCell({
             <Badge variant="secondary" className="h-5 px-1.5 text-xs">
               <Calendar className="h-3 w-3" />
             </Badge>
+          )}
+          
+          {/* Intensity Indicator */}
+          {getIntensityColor && intensityLevels && onIntensityChange && (
+            <Popover open={intensityPopoverOpen} onOpenChange={setIntensityPopoverOpen}>
+              <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                <button 
+                  className={cn(
+                    "w-4 h-4 rounded-sm border transition-all hover:scale-110 cursor-pointer shrink-0",
+                    getIntensityColor(currentIntensity)
+                  )}
+                  title={`Intensity: ${currentIntensity.replace('-', ' ')}`}
+                />
+              </PopoverTrigger>
+              <PopoverContent 
+                className="w-48 p-2 z-[100] bg-popover" 
+                align="end"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="space-y-1">
+                  <p className="text-xs font-medium mb-2 text-muted-foreground">Select Intensity</p>
+                  {intensityLevels.map((level) => (
+                    <button
+                      key={level}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onIntensityChange(day.dateString, level);
+                        setIntensityPopoverOpen(false);
+                      }}
+                      className={cn(
+                        "w-full flex items-center gap-2 p-2 rounded hover:bg-accent transition-colors text-left",
+                        level === currentIntensity && "bg-accent"
+                      )}
+                    >
+                      <div 
+                        className={cn(
+                          "w-3 h-3 rounded-sm border shrink-0",
+                          getIntensityColor(level)
+                        )}
+                      />
+                      <span className="text-xs capitalize">
+                        {level.replace('-', ' ')}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
           )}
         </div>
       </div>
