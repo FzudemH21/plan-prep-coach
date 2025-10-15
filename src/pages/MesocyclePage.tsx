@@ -77,6 +77,7 @@ export default function MesocyclePage() {
   // Daily intensity planning state
   const [dailyIntensityData, setDailyIntensityData] = useState<DailyIntensity[]>([]);
   const [trainingDays, setTrainingDays] = useState<TrainingDay[]>([]);
+  const [isIntensityDataLoaded, setIsIntensityDataLoaded] = useState(false);
   
   // Cross-mesocycle copy dialog state
   const [crossCopyDialogOpen, setCrossCopyDialogOpen] = useState(false);
@@ -295,10 +296,14 @@ export default function MesocyclePage() {
       try {
         const parsed = JSON.parse(savedDailyIntensity);
         setDailyIntensityData(parsed);
+        setIsIntensityDataLoaded(true);
         console.log('DEBUG: Loaded daily intensity data:', parsed);
       } catch (e) {
         console.error('Failed to load daily intensity data:', e);
+        setIsIntensityDataLoaded(true);
       }
+    } else {
+      setIsIntensityDataLoaded(true);
     }
   }, []);
 
@@ -2536,15 +2541,36 @@ export default function MesocyclePage() {
 
   // Update training days when mesocycles change
   useEffect(() => {
+    // Only run after intensity data has been attempted to load
+    if (!isIntensityDataLoaded) return;
+    
     const days = calculateTrainingDays();
     setTrainingDays(days);
     
-    // Initialize daily intensity data if not exists
+    // Create a map of existing intensities from state
     const existingIntensities = dailyIntensityData.reduce((acc, di) => {
       acc[di.date] = di;
       return acc;
     }, {} as Record<string, DailyIntensity>);
     
+    // Check if we need to regenerate (new days were added or removed)
+    const existingDates = new Set(dailyIntensityData.map(di => di.date));
+    const newDates = new Set(days.map(d => d.date));
+    
+    // Only regenerate if structure changed
+    const hasStructureChange = 
+      existingDates.size !== newDates.size ||
+      days.some(day => !existingDates.has(day.date));
+    
+    // If no structure change, don't regenerate (preserve existing intensities)
+    if (!hasStructureChange && dailyIntensityData.length > 0) {
+      console.log('DEBUG: Skipping intensity regeneration - no structure change');
+      return;
+    }
+    
+    console.log('DEBUG: Regenerating intensity data - structure changed');
+    
+    // Generate new intensities, preserving existing ones
     const newIntensities = days.map(day => 
       existingIntensities[day.date] || {
         date: day.date,
@@ -2558,7 +2584,7 @@ export default function MesocyclePage() {
     );
     
     setDailyIntensityData(newIntensities);
-  }, [mesocycles, macrocycleData, planStartDate]);
+  }, [mesocycles, macrocycleData, planStartDate, isIntensityDataLoaded]);
 
   // Handle intensity selection
   const handleIntensityClick = (date: string, intensity: IntensityLevel) => {
