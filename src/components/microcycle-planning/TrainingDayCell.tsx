@@ -199,121 +199,124 @@ export function TrainingDayCell({
 
       {/* Training Content */}
       {hasTraining ? (
-        <Droppable droppableId={`day-${day.dateString}`} type="session">
-          {(provided, snapshot) => (
-            <div
-              ref={provided.innerRef}
-              {...provided.droppableProps}
-              className={cn(
-                "space-y-2 min-h-[60px]",
-                snapshot.isDraggingOver && "bg-primary/5 rounded-md p-1"
-              )}
-            >
-              {/* Session Indicators */}
-              {day.sessions.map((session, idx) => (
-                <Draggable
-                  key={`session-${day.dateString}-${session.sessionIndex}`}
-                  draggableId={`session-${day.dateString}-${session.sessionIndex}`}
-                  index={idx}
-                >
-                  {(provided, snapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.draggableProps}
-                      className={cn(
-                        "p-2 rounded-md bg-primary/10 border border-primary/20 transition-all",
-                        snapshot.isDragging && "shadow-lg ring-2 ring-primary opacity-90"
-                      )}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-1.5">
-                          <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing">
-                            <GripVertical className="h-3 w-3 text-muted-foreground hover:text-primary" />
+        <>
+          <Droppable droppableId={`day-${day.dateString}`} type="session">
+            {(provided, snapshot) => (
+              <div
+                ref={provided.innerRef}
+                {...provided.droppableProps}
+                className={cn(
+                  "space-y-2 min-h-[60px]",
+                  snapshot.isDraggingOver && "bg-primary/5 rounded-md p-1"
+                )}
+              >
+                {/* Session Indicators */}
+                {day.sessions.map((session, idx) => (
+                  <Draggable
+                    key={`session-${day.dateString}-${session.sessionIndex}`}
+                    draggableId={`session-${day.dateString}-${session.sessionIndex}`}
+                    index={idx}
+                  >
+                    {(provided, snapshot) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        style={provided.draggableProps.style}
+                        className={cn(
+                          "p-2 rounded-md bg-primary/10 border border-primary/20 transition-all",
+                          snapshot.isDragging && "shadow-lg ring-2 ring-primary opacity-90"
+                        )}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-1.5">
+                            <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing">
+                              <GripVertical className="h-3 w-3 text-muted-foreground hover:text-primary" />
+                            </div>
+                            <Dumbbell className="h-3 w-3 text-primary" />
+                            <span className="text-xs font-medium text-primary">
+                              Session {session.sessionIndex + 1}
+                            </span>
                           </div>
-                          <Dumbbell className="h-3 w-3 text-primary" />
-                          <span className="text-xs font-medium text-primary">
-                            Session {session.sessionIndex + 1}
-                          </span>
-                        </div>
 
-                        {/* Three-dot menu */}
-                        <DropdownMenu 
-                          open={openDropdownId === `${day.dateString}-${session.sessionIndex}`}
-                          onOpenChange={(open) => {
-                            setOpenDropdownId(open ? `${day.dateString}-${session.sessionIndex}` : null);
-                          }}
-                        >
-                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                            <button className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/20 transition-colors">
-                              <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-40">
-                            <DropdownMenuItem onClick={(e) => {
-                              e.stopPropagation();
-                              onCopySession?.(day.dateString, session.sessionIndex);
-                              setOpenDropdownId(null);
-                            }}>
-                              <Copy className="mr-2 h-4 w-4" />
-                              Copy session
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={(e) => {
+                          {/* Three-dot menu */}
+                          <DropdownMenu 
+                            open={openDropdownId === `${day.dateString}-${session.sessionIndex}`}
+                            onOpenChange={(open) => {
+                              setOpenDropdownId(open ? `${day.dateString}-${session.sessionIndex}` : null);
+                            }}
+                          >
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <button className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/20 transition-colors">
+                                <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                              <DropdownMenuItem onClick={(e) => {
                                 e.stopPropagation();
-                                onDeleteSession?.(day.dateString, session.sessionIndex);
+                                onCopySession?.(day.dateString, session.sessionIndex);
                                 setOpenDropdownId(null);
-                              }}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete session
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                      
-                      {/* Primary Method Name */}
-                      {session.methods[0] && (
-                        <p className="text-xs font-medium truncate mb-0.5 ml-5">
-                          {session.methods[0].split(' - ')[0]}
+                              }}>
+                                <Copy className="mr-2 h-4 w-4" />
+                                Copy session
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDeleteSession?.(day.dateString, session.sessionIndex);
+                                  setOpenDropdownId(null);
+                                }}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete session
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                        
+                        {/* Primary Method Name */}
+                        {session.methods[0] && (
+                          <p className="text-xs font-medium truncate mb-0.5 ml-5">
+                            {session.methods[0].split(' - ')[0]}
+                          </p>
+                        )}
+
+                        {/* Exercise Count */}
+                        <p className="text-xs text-muted-foreground ml-5">
+                          {session.exercises.length} {session.exercises.length === 1 ? 'exercise' : 'exercises'}
                         </p>
-                      )}
+                      </div>
+                    )}
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
 
-                      {/* Exercise Count */}
-                      <p className="text-xs text-muted-foreground ml-5">
-                        {session.exercises.length} {session.exercises.length === 1 ? 'exercise' : 'exercises'}
-                      </p>
-                    </div>
-                  )}
-                </Draggable>
-              ))}
-              {provided.placeholder}
-
-              {/* Multiple Sessions Summary */}
-              {day.sessions.length > 1 && (
-                <p className="text-xs text-muted-foreground text-center pt-1 border-t">
-                  {day.sessions.length} sessions • {day.totalExercises} total exercises
-                </p>
-              )}
-
-              {/* Paste button - shown when hovering and session is copied */}
-              {isHovering && copiedSession && (
-                <Button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onPasteSession?.(day.dateString);
-                  }}
-                  className="w-full mt-2"
-                  variant="default"
-                  size="sm"
-                >
-                  <Copy className="mr-2 h-4 w-4" />
-                  Paste ({copiedSession.exercises.length} exercise{copiedSession.exercises.length !== 1 ? 's' : ''})
-                </Button>
-              )}
-            </div>
+          {/* Multiple Sessions Summary */}
+          {day.sessions.length > 1 && (
+            <p className="text-xs text-muted-foreground text-center pt-1 border-t">
+              {day.sessions.length} sessions • {day.totalExercises} total exercises
+            </p>
           )}
-        </Droppable>
+
+          {/* Paste button - shown when hovering and session is copied */}
+          {isHovering && copiedSession && (
+            <Button
+              onClick={(e) => {
+                e.stopPropagation();
+                onPasteSession?.(day.dateString);
+              }}
+              className="w-full mt-2"
+              variant="default"
+              size="sm"
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              Paste ({copiedSession.exercises.length} exercise{copiedSession.exercises.length !== 1 ? 's' : ''})
+            </Button>
+          )}
+        </>
       ) : isRestDay ? (
         <Droppable droppableId={`day-${day.dateString}`} type="session">
           {(provided, snapshot) => (

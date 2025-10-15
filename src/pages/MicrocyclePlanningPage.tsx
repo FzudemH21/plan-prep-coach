@@ -1136,6 +1136,7 @@ export default function MicrocyclePlanningPage() {
 
   const handleSessionDragEnd = (result: DropResult) => {
     const { source, destination, draggableId } = result;
+    console.log('[DnD] onDragEnd', { source, destination, draggableId });
     
     // If dropped outside a valid droppable or no movement, do nothing
     if (!destination || 
