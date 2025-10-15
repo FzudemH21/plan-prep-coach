@@ -1173,6 +1173,8 @@ export default function MicrocyclePlanningPage() {
     fromIndex: number, 
     toIndex: number
   ) => {
+    console.log(`Reordering sessions in ${dayDate}: moving from index ${fromIndex} to ${toIndex}`);
+    
     setExerciseDistribution(prev => {
       // Get all exercises for this day
       const dayExercises = prev.filter(ex => ex.dayDate === dayDate);
@@ -1187,12 +1189,16 @@ export default function MicrocyclePlanningPage() {
         sessions.get(ex.sessionIndex)!.push(ex);
       });
       
-      // Get ordered session indices
+      // Get ordered session indices (sorted)
       const sessionIndices = Array.from(sessions.keys()).sort((a, b) => a - b);
+      
+      console.log('Session indices before reorder:', sessionIndices);
       
       // Reorder session indices
       const [movedSession] = sessionIndices.splice(fromIndex, 1);
       sessionIndices.splice(toIndex, 0, movedSession);
+      
+      console.log('Session indices after reorder:', sessionIndices);
       
       // Reassign session indices based on new order
       const reorderedExercises: ExerciseDistribution[] = [];

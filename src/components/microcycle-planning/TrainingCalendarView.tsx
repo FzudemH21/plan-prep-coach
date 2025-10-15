@@ -129,11 +129,13 @@ export function TrainingCalendarView({
         sessionMap[ex.sessionIndex].push(ex);
       });
 
-      const sessions = Object.entries(sessionMap).map(([idx, exs]) => ({
-        sessionIndex: parseInt(idx),
-        exercises: exs,
-        methods: [...new Set(exs.map(e => e.methodId))],
-      }));
+      const sessions = Object.entries(sessionMap)
+        .map(([idx, exs]) => ({
+          sessionIndex: parseInt(idx),
+          exercises: exs,
+          methods: [...new Set(exs.map(e => e.methodId))],
+        }))
+        .sort((a, b) => a.sessionIndex - b.sessionIndex);
 
       return {
         date,
