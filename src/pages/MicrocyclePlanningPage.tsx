@@ -1147,25 +1147,40 @@ export default function MicrocyclePlanningPage() {
     // Extract source and destination dates
     const sourceDateString = source.droppableId.replace('day-', '');
     const destDateString = destination.droppableId.replace('day-', '');
-    
-    // Extract session index from draggableId
-    const sessionIndexMatch = draggableId.match(/session-.*-(\d+)/);
-    if (!sessionIndexMatch) return;
-    const draggedSessionIndex = parseInt(sessionIndexMatch[1]);
+
+    // Map display position -> actual sessionIndex for the source day
+    const getSessionIndexByPosition = (dayDate: string, position: number): number | null => {
+      const indices = Array.from(
+        new Set(
+          exerciseDistribution
+            .filter(ex => ex.dayDate === dayDate)
+            .map(ex => ex.sessionIndex)
+        )
+      ).sort((a, b) => a - b);
+      return typeof indices[position] === 'number' ? indices[position] : null;
+    };
     
     // Case 1: Moving within the same day (reordering)
     if (sourceDateString === destDateString) {
-      handleReorderSessionsInDay(sourceDateString, source.index, destination.index);
-    } 
-    // Case 2: Moving to a different day
-    else {
-      handleMoveSessionToDay(
-        sourceDateString, 
-        destDateString, 
-        draggedSessionIndex, 
-        destination.index
-      );
+      return handleReorderSessionsInDay(sourceDateString, source.index, destination.index);
     }
+    
+    // Case 2: Moving to a different day
+    const draggedSessionIndex = getSessionIndexByPosition(sourceDateString, source.index);
+    if (draggedSessionIndex == null) {
+      console.warn('[DnD] Could not resolve dragged sessionIndex from source position.', {
+        sourceDateString,
+        sourceIndex: source.index
+      });
+      return;
+    }
+
+    return handleMoveSessionToDay(
+      sourceDateString, 
+      destDateString, 
+      draggedSessionIndex, 
+      destination.index
+    );
   };
 
   // Reorder sessions within the same day
