@@ -43,6 +43,7 @@ interface CalendarDay {
   isCurrentMonth: boolean;
   trainingDay?: TrainingDay;
   sessions: {
+    id: string;
     sessionIndex: number;
     exercises: ExerciseDistribution[];
     methods: string[];
@@ -200,7 +201,7 @@ export function TrainingDayCell({
       {/* Training Content */}
       {hasTraining ? (
         <>
-          <Droppable droppableId={`day-${day.dateString}`} type="session">
+          <Droppable droppableId={`day-${day.dateString}`} type="session" direction="vertical">
             {(provided, snapshot) => (
               <div
                 ref={provided.innerRef}
@@ -213,8 +214,8 @@ export function TrainingDayCell({
                 {/* Session Indicators */}
                 {day.sessions.map((session, idx) => (
                   <Draggable
-                    key={`session-${day.dateString}-${session.sessionIndex}`}
-                    draggableId={`session-${day.dateString}-${session.sessionIndex}`}
+                    key={`session-${session.id}`}
+                    draggableId={`session-${session.id}`}
                     index={idx}
                   >
                     {(provided, snapshot) => (
@@ -234,7 +235,7 @@ export function TrainingDayCell({
                             </div>
                             <Dumbbell className="h-3 w-3 text-primary" />
                             <span className="text-xs font-medium text-primary">
-                              Session {session.sessionIndex + 1}
+                              Session {idx + 1}
                             </span>
                           </div>
 

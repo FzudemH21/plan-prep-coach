@@ -27,6 +27,7 @@ interface CalendarDay {
   isCurrentMonth: boolean;
   trainingDay?: any;
   sessions: {
+    id: string;
     sessionIndex: number;
     exercises: ExerciseDistribution[];
     methods: string[];

@@ -50,6 +50,7 @@ export interface CalendarDay {
   isCurrentMonth: boolean;
   trainingDay?: TrainingDay;
   sessions: {
+    id: string;
     sessionIndex: number;
     exercises: ExerciseDistribution[];
     methods: string[];
@@ -130,11 +131,21 @@ export function TrainingCalendarView({
       });
 
       const sessions = Object.entries(sessionMap)
-        .map(([idx, exs]) => ({
-          sessionIndex: parseInt(idx),
-          exercises: exs,
-          methods: [...new Set(exs.map(e => e.methodId))],
-        }))
+        .map(([idx, exs]) => {
+          // Generate stable ID from sorted exercise IDs
+          const ids = exs
+            .map(e => (e as any).id ?? `${e.exerciseId}-${e.methodId ?? ''}`)
+            .sort()
+            .join('|');
+          const sessionId = `${dateString}__${ids || `empty-${idx}`}`;
+          
+          return {
+            id: sessionId,
+            sessionIndex: parseInt(idx),
+            exercises: exs,
+            methods: [...new Set(exs.map(e => e.methodId))],
+          };
+        })
         .sort((a, b) => a.sessionIndex - b.sessionIndex);
 
       return {

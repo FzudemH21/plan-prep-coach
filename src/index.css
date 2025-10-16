@@ -200,3 +200,9 @@ All colors MUST be HSL.
   .bg-intensity-hard-light { background-color: hsl(var(--intensity-hard) / 0.12); }
   .bg-intensity-extremely-hard-light { background-color: hsl(var(--intensity-extremely-hard) / 0.12); }
 }
+
+/* Ensure DnD drag handles remain interactive */
+[data-rfd-drag-handle-context-id],
+[data-rbd-drag-handle-context-id] {
+  pointer-events: auto !important;
+}
