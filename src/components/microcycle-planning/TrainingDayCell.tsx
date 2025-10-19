@@ -139,90 +139,6 @@ export function TrainingDayCell({
         isSpecialDay && "border-red-500 border-2"
       )}
     >
-      {/* Day-level Menu (3-dot) */}
-      {day.isCurrentMonth && (
-        <div className="absolute top-1 right-1 z-10">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <button className="h-6 w-6 flex items-center justify-center rounded hover:bg-accent/80 transition-colors bg-background/80 border shadow-sm">
-                <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 z-[100]">
-              <DropdownMenuItem onClick={(e) => {
-                e.stopPropagation();
-                onCopyDay?.(day.dateString);
-              }}>
-                <Copy className="mr-2 h-4 w-4" />
-                Copy day
-              </DropdownMenuItem>
-              
-              {hasTraining && (
-                <DropdownMenuItem 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onClearDay?.(day.dateString);
-                  }}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Clear day
-                </DropdownMenuItem>
-              )}
-              
-              <DropdownMenuSeparator />
-              
-              {!isTestDay && (
-                <DropdownMenuItem onClick={(e) => {
-                  e.stopPropagation();
-                  setDialogType('test');
-                  setTestEventDialogOpen(true);
-                }}>
-                  <Trophy className="mr-2 h-4 w-4" />
-                  Add test
-                </DropdownMenuItem>
-              )}
-              
-              {isTestDay && (
-                <DropdownMenuItem 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteTestEvent?.(day.dateString, 'test');
-                  }}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete test
-                </DropdownMenuItem>
-              )}
-              
-              {!isEventDay && (
-                <DropdownMenuItem onClick={(e) => {
-                  e.stopPropagation();
-                  setDialogType('event');
-                  setTestEventDialogOpen(true);
-                }}>
-                  <Calendar className="mr-2 h-4 w-4" />
-                  Add event
-                </DropdownMenuItem>
-              )}
-              
-              {isEventDay && (
-                <DropdownMenuItem 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteTestEvent?.(day.dateString, 'event');
-                  }}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete event
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      )}
 
       {/* Day Number + Test/Event Name */}
       <div className="flex items-start justify-between mb-2">
@@ -288,25 +204,127 @@ export function TrainingDayCell({
             </Popover>
           )}
 
-          {/* Test/Event Name Display */}
-          {displayLabel && (
-            <div className="text-xs font-medium text-red-600 truncate max-w-[140px]">
-              {displayLabel}
-            </div>
-          )}
         </div>
 
-        {/* Status Icons */}
+        {/* Status Icons with Hover Tooltips */}
         <div className="flex gap-1 items-start">
           {isTestDay && (
-            <Badge variant="secondary" className="h-5 px-1.5 text-xs">
-              <Trophy className="h-3 w-3" />
-            </Badge>
+            <HoverCard openDelay={200} closeDelay={100}>
+              <HoverCardTrigger asChild>
+                <Badge variant="secondary" className="h-5 px-1.5 text-xs cursor-pointer">
+                  <Trophy className="h-3 w-3" />
+                </Badge>
+              </HoverCardTrigger>
+              <HoverCardContent className="w-auto p-2" side="top" align="center">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold">Test:</p>
+                  <p className="text-xs text-muted-foreground">
+                    {day.trainingDay?.testName || 'Test Day'}
+                  </p>
+                </div>
+              </HoverCardContent>
+            </HoverCard>
           )}
+          
           {isEventDay && (
-            <Badge variant="secondary" className="h-5 px-1.5 text-xs">
-              <Calendar className="h-3 w-3" />
-            </Badge>
+            <HoverCard openDelay={200} closeDelay={100}>
+              <HoverCardTrigger asChild>
+                <Badge variant="secondary" className="h-5 px-1.5 text-xs cursor-pointer">
+                  <Calendar className="h-3 w-3" />
+                </Badge>
+              </HoverCardTrigger>
+              <HoverCardContent className="w-auto p-2" side="top" align="center">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold">Event:</p>
+                  <p className="text-xs text-muted-foreground">
+                    {day.trainingDay?.eventName || 'Event Day'}
+                  </p>
+                </div>
+              </HoverCardContent>
+            </HoverCard>
+          )}
+          
+          {/* Day-level Menu (3-dot) - moved here from absolute position */}
+          {day.isCurrentMonth && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                <button className="h-5 w-5 flex items-center justify-center rounded hover:bg-accent transition-colors">
+                  <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 z-[100]">
+                <DropdownMenuItem onClick={(e) => {
+                  e.stopPropagation();
+                  onCopyDay?.(day.dateString);
+                }}>
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copy day
+                </DropdownMenuItem>
+                
+                {hasTraining && (
+                  <DropdownMenuItem 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onClearDay?.(day.dateString);
+                    }}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Clear day
+                  </DropdownMenuItem>
+                )}
+                
+                <DropdownMenuSeparator />
+                
+                {!isTestDay && (
+                  <DropdownMenuItem onClick={(e) => {
+                    e.stopPropagation();
+                    setDialogType('test');
+                    setTestEventDialogOpen(true);
+                  }}>
+                    <Trophy className="mr-2 h-4 w-4" />
+                    Add test
+                  </DropdownMenuItem>
+                )}
+                
+                {isTestDay && (
+                  <DropdownMenuItem 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteTestEvent?.(day.dateString, 'test');
+                    }}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete test
+                  </DropdownMenuItem>
+                )}
+                
+                {!isEventDay && (
+                  <DropdownMenuItem onClick={(e) => {
+                    e.stopPropagation();
+                    setDialogType('event');
+                    setTestEventDialogOpen(true);
+                  }}>
+                    <Calendar className="mr-2 h-4 w-4" />
+                    Add event
+                  </DropdownMenuItem>
+                )}
+                
+                {isEventDay && (
+                  <DropdownMenuItem 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteTestEvent?.(day.dateString, 'event');
+                    }}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete event
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>
