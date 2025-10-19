@@ -2,7 +2,6 @@ import React from 'react';
 import { IntensityLevel } from '@/types/training';
 import { TrainingDay } from '@/types/daily-intensity';
 import { format } from 'date-fns';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
 import { Badge } from '@/components/ui/badge';
 import { Trophy, Calendar } from 'lucide-react';
@@ -211,60 +210,6 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
       </div>
     </div>
   );
-
-  // Wrap with tooltip if there are tests or events
-  if (tooltipContent) {
-    return (
-      <div className={`flex flex-col w-20 shrink-0 box-border ${getBorderClasses()}`}>
-        {/* Day header with tooltip */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="cursor-default">
-              {dayHeader}
-            </div>
-          </TooltipTrigger>
-          <TooltipContent>
-            <div className="whitespace-pre-line">
-              {tooltipContent}
-            </div>
-          </TooltipContent>
-        </Tooltip>
-        
-        {/* Chart container without tooltip wrapper */}
-        <div 
-          className="relative cursor-pointer transition-all duration-200 hover:shadow-md w-full"
-          style={{ height: `${chartHeight}px` }}
-          onClick={handleColumnClick}
-        >
-          {/* Background column (full height, light gray) */}
-          <div 
-            className="absolute bottom-0 w-full bg-muted/30 border border-border rounded-t z-0"
-            style={{ height: `${chartHeight}px` }}
-          />
-          
-          {/* Grid lines */}
-          {generateGridLines()}
-          
-          {/* Intensity column */}
-          <div 
-            className={`absolute bottom-0 w-full rounded-t transition-all duration-300 border-2 z-20 ${getIntensityColor(intensity)} ${
-              day.isTestDay ? 'border-blue-400' :
-              day.isEventDay ? 'border-orange-400' : 'border-transparent'
-            }`}
-            style={{ height: `${actualHeight}px` }}
-          />
-          
-          {/* Hover overlay */}
-          <div className="absolute inset-0 bg-black/5 opacity-0 hover:opacity-100 transition-opacity duration-200 rounded-t z-30" />
-        </div>
-        
-        {/* Fixed Intensity label - prevent width changes */}
-        <div className="text-xs mt-2 text-center capitalize font-medium w-20 whitespace-nowrap overflow-hidden text-ellipsis">
-          {intensity.replace('-', ' ')}
-        </div>
-      </div>
-    );
-  }
 
   return columnElement;
 };
