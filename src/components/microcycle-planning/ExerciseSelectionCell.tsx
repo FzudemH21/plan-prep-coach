@@ -45,8 +45,8 @@ export function ExerciseSelectionCell({
         <TooltipProvider>
           <Tooltip delayDuration={200}>
             <TooltipTrigger asChild>
-              <div className="absolute top-1 right-1 z-10">
-                <Info className="h-4 w-4 text-muted-foreground hover:text-primary cursor-help transition-colors" />
+              <div className="absolute -top-0.5 right-0.5 z-10">
+                <Info className="h-3.5 w-3.5 text-muted-foreground hover:text-primary cursor-help transition-colors" />
               </div>
             </TooltipTrigger>
             <TooltipContent side="left" align="start" className="max-w-md">
