@@ -60,7 +60,7 @@ interface CalendarDay {
 
 interface TrainingDayCellProps {
   day: CalendarDay;
-  onClick: () => void;
+  onSessionClick?: (dayDate: string, sessionIndex: number, exercises: ExerciseDistribution[]) => void;
   onDeleteSession?: (dayDate: string, sessionIndex: number) => void;
   onCopySession?: (dayDate: string, sessionIndex: number) => void;
   onPasteSession?: (dayDate: string) => void;
@@ -85,8 +85,8 @@ interface TrainingDayCellProps {
 
 export function TrainingDayCell({ 
   day, 
-  onClick, 
-  onDeleteSession, 
+  onSessionClick, 
+  onDeleteSession,
   onCopySession, 
   onPasteSession, 
   copiedSession,
@@ -128,13 +128,11 @@ export function TrainingDayCell({
   return (
     <>
     <div
-      onClick={hasTraining ? onClick : undefined}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
       className={cn(
         "min-h-[140px] border rounded-lg p-3 transition-all relative",
         day.isCurrentMonth ? "bg-card" : "bg-muted/30",
-        hasTraining && "cursor-pointer hover:shadow-md hover:border-primary",
         !hasTraining && "cursor-default",
         isSpecialDay && "border-red-500 border-2"
       )}
@@ -336,8 +334,12 @@ export function TrainingDayCell({
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                         style={provided.draggableProps.style}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSessionClick?.(day.dateString, session.sessionIndex, session.exercises);
+                        }}
                         className={cn(
-                          "p-2 rounded-md bg-primary/10 border border-primary/20 transition-all",
+                          "p-2 rounded-md bg-primary/10 border border-primary/20 transition-all cursor-pointer hover:bg-primary/15",
                           snapshot.isDragging && "shadow-lg ring-2 ring-primary opacity-90"
                         )}
                       >

@@ -44,7 +44,7 @@ interface WeekRowProps {
   onCopyWeek?: (weekStartDate: string) => void;
   onClearWeek?: (weekStartDate: string) => void;
   onPasteWeek?: (weekStartDate: string) => void;
-  onDayClick: (day: CalendarDay) => void;
+  onSessionClick?: (dayDate: string, sessionIndex: number, exercises: ExerciseDistribution[]) => void;
   onDeleteSession?: (dayDate: string, sessionIndex: number) => void;
   onCopySession?: (dayDate: string, sessionIndex: number) => void;
   onPasteSession?: (dayDate: string) => void;
@@ -69,7 +69,7 @@ export function WeekRow({
   onCopyWeek,
   onClearWeek,
   onPasteWeek,
-  onDayClick,
+  onSessionClick,
   onDeleteSession,
   onCopySession,
   onPasteSession,
@@ -145,7 +145,7 @@ export function WeekRow({
           <TrainingDayCell
             key={day.dateString}
             day={day}
-            onClick={() => onDayClick(day)}
+            onSessionClick={onSessionClick}
             onDeleteSession={onDeleteSession}
             onCopySession={onCopySession}
             onPasteSession={onPasteSession}

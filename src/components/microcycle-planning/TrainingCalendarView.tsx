@@ -333,15 +333,12 @@ export function TrainingCalendarView({
                   onCopyWeek={onCopyWeek}
                   onClearWeek={onClearWeek}
                   onPasteWeek={onPasteWeek}
-                  onDayClick={(day) => {
-                    // Open session sheet for first session if day has sessions
-                    if (day.sessions.length > 0) {
-                      setSelectedSession({
-                        dayDate: day.dateString,
-                        sessionIndex: day.sessions[0].sessionIndex,
-                        exercises: day.sessions[0].exercises
-                      });
-                    }
+                  onSessionClick={(dayDate, sessionIndex, exercises) => {
+                    setSelectedSession({
+                      dayDate,
+                      sessionIndex,
+                      exercises
+                    });
                   }}
                   onDeleteSession={onDeleteSession}
                   onCopySession={onCopySession}
