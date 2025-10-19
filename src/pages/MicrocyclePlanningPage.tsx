@@ -1754,11 +1754,18 @@ export default function MicrocyclePlanningPage() {
                         hasMatchingDuration = currentDays.length === previousDays.length;
                       }
                       
+                      // Calculate total width including splits
+                      const days = daysByMicrocycle[microcycle.id] || [];
+                      const totalWidth = days.reduce((sum, day) => {
+                        const numberOfSessions = daySplitStates[day.date] || 1;
+                        return sum + (numberOfSessions * 140);
+                      }, 0);
+                      
                       return (
                         <div 
                           key={microcycle.id}
-                          className={cn("flex-1 border-r last:border-r-0", getIntensityColor(microcycle.intensity))}
-                          style={{ minWidth: `${dayCount * 120}px` }}
+                          className={cn("border-r last:border-r-0", getIntensityColor(microcycle.intensity))}
+                          style={{ width: `${totalWidth}px`, minWidth: `${totalWidth}px`, flexShrink: 0 }}
                         >
                           <div className="flex items-center justify-center p-2 relative gap-1">
                             <span className="font-semibold">{microcycle.name}</span>
@@ -1917,8 +1924,14 @@ export default function MicrocyclePlanningPage() {
                   </div>
                   {currentMesocycle.microcycles.map(microcycle => {
                       const days = daysByMicrocycle[microcycle.id] || [];
+                      // Calculate total width including splits
+                      const totalWidth = days.reduce((sum, day) => {
+                        const numberOfSessions = daySplitStates[day.date] || 1;
+                        return sum + (numberOfSessions * 140);
+                      }, 0);
+                      
                       return (
-                        <div key={microcycle.id} className="flex flex-1 border-r last:border-r-0">
+                        <div key={microcycle.id} className="flex border-r last:border-r-0" style={{ width: `${totalWidth}px`, minWidth: `${totalWidth}px`, flexShrink: 0 }}>
                           {days.map(day => {
                             const dailyIntensityRecord = dailyIntensityData.find(di => di.date === day.date);
                             const dailyIntensity = dailyIntensityRecord?.intensity || 'off';
@@ -1929,7 +1942,7 @@ export default function MicrocyclePlanningPage() {
                               <div 
                                 key={day.date}
                                 className="flex flex-col border-r last:border-r-0"
-                                style={{ width: isSplit ? `${numberOfSessions * 120}px` : '120px' }}
+                                style={{ width: isSplit ? `${numberOfSessions * 140}px` : '140px' }}
                               >
                                 {/* Day header */}
                                 <div className={cn("p-1 text-xs text-center border-b relative", getIntensityColor(dailyIntensity))}>
