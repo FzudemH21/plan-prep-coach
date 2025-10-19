@@ -42,7 +42,7 @@ interface TrainingCalendarViewProps {
   onClearDay?: (dayDate: string) => void;
   onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean) => void;
   onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event') => void;
-  copiedDay?: { exercises: ExerciseDistribution[]; sourceDate: string } | null;
+  copiedDay?: { exercises: ExerciseDistribution[]; sourceDate: string; intensity?: IntensityLevel; testNames?: string[]; eventNames?: string[]; splitState?: number } | null;
   availableTests?: any[];
   availableEvents?: any[];
   dailyIntensityData?: any[];

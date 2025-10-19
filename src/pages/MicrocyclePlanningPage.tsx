@@ -89,6 +89,10 @@ export default function MicrocyclePlanningPage() {
   const [copiedDay, setCopiedDay] = useState<{
     exercises: ExerciseDistribution[];
     sourceDate: string;
+    intensity?: IntensityLevel;
+    testNames?: string[];
+    eventNames?: string[];
+    splitState?: number;
   } | null>(null);
 
   const totalSteps = 2; // Step 1: Exercise Distribution, Step 2: Training Calendar
@@ -1154,27 +1158,40 @@ export default function MicrocyclePlanningPage() {
 
   // Handle copy day
   const handleCopyDay = (dayDate: string) => {
+    // Get exercises for this day
     const dayExercises = exerciseDistribution.filter(
       ex => ex.dayDate === dayDate
     );
     
-    if (dayExercises.length === 0) {
-      toast({
-        title: "Cannot copy",
-        description: "This day has no exercises",
-        variant: "destructive"
-      });
-      return;
-    }
+    // Get intensity for this day
+    const dayIntensity = dailyIntensityData.find(di => di.date === dayDate);
     
+    // Get tests/events for this day
+    const trainingDay = trainingDays.find(td => td.date === dayDate);
+    
+    // Get split state for this day
+    const splitState = daySplitStates[dayDate];
+    
+    // Always allow copying (every day has at least intensity)
     setCopiedDay({
       exercises: dayExercises,
-      sourceDate: dayDate
+      sourceDate: dayDate,
+      intensity: dayIntensity?.intensity,
+      testNames: trainingDay?.testNames,
+      eventNames: trainingDay?.eventNames,
+      splitState: splitState
     });
+    
+    // Build descriptive toast message
+    const parts = [];
+    if (dayExercises.length > 0) parts.push(`${dayExercises.length} exercise(s)`);
+    if (dayIntensity) parts.push(`intensity: ${dayIntensity.intensity}`);
+    if (trainingDay?.testNames?.length) parts.push(`${trainingDay.testNames.length} test(s)`);
+    if (trainingDay?.eventNames?.length) parts.push(`${trainingDay.eventNames.length} event(s)`);
     
     toast({
       title: "Day copied",
-      description: `${dayExercises.length} exercise(s) copied to clipboard`,
+      description: parts.length > 0 ? parts.join(', ') : "Day data copied to clipboard",
     });
   };
 
@@ -1182,40 +1199,103 @@ export default function MicrocyclePlanningPage() {
   const handlePasteDay = (targetDate: string) => {
     if (!copiedDay) return;
     
+    // 1. Paste exercises
     setExerciseDistribution(prev => {
       // Remove all existing exercises from target day
       const filteredPrev = prev.filter(ex => ex.dayDate !== targetDate);
       
-      // Get unique session indices from copied exercises
-      const sessionIndices = [...new Set(copiedDay.exercises.map(ex => ex.sessionIndex))].sort((a, b) => a - b);
+      // If there are exercises to copy
+      if (copiedDay.exercises.length > 0) {
+        // Get unique session indices from copied exercises
+        const sessionIndices = [...new Set(copiedDay.exercises.map(ex => ex.sessionIndex))].sort((a, b) => a - b);
+        
+        // Create mapping from old session indices to new sequential indices
+        const sessionMapping = new Map<number, number>();
+        sessionIndices.forEach((oldIndex, newIndex) => {
+          sessionMapping.set(oldIndex, newIndex);
+        });
+        
+        // Create new exercises with updated date and remapped session indices
+        const pastedExercises = copiedDay.exercises.map(ex => ({
+          ...ex,
+          dayDate: targetDate,
+          sessionIndex: sessionMapping.get(ex.sessionIndex) || 0
+        }));
+        
+        return [...filteredPrev, ...pastedExercises];
+      }
       
-      // Create mapping from old session indices to new sequential indices
-      const sessionMapping = new Map<number, number>();
-      sessionIndices.forEach((oldIndex, newIndex) => {
-        sessionMapping.set(oldIndex, newIndex);
-      });
-      
-      // Create new exercises with updated date and remapped session indices
-      const pastedExercises = copiedDay.exercises.map(ex => ({
-        ...ex,
-        dayDate: targetDate,
-        sessionIndex: sessionMapping.get(ex.sessionIndex) || 0
-      }));
-      
-      return [...filteredPrev, ...pastedExercises];
+      return filteredPrev;
     });
     
-    // Copy day split state if it exists
-    if (daySplitStates[copiedDay.sourceDate]) {
+    // 2. Paste intensity
+    if (copiedDay.intensity) {
+      setDailyIntensityData(prev => {
+        const updated = [...prev];
+        const index = updated.findIndex(di => di.date === targetDate);
+        
+        if (index >= 0) {
+          updated[index] = { ...updated[index], intensity: copiedDay.intensity! };
+        } else {
+          // Create new entry if doesn't exist
+          const day = trainingDays.find(td => td.date === targetDate);
+          if (day) {
+            updated.push({
+              date: targetDate,
+              mesocycleId: day.mesocycleId,
+              microcycleId: day.microcycleId,
+              dayOfWeek: day.dayOfWeek,
+              intensity: copiedDay.intensity!,
+              isTestDay: day.isTestDay,
+              isEventDay: day.isEventDay,
+            });
+          }
+        }
+        
+        localStorage.setItem('dailyIntensityData', JSON.stringify(updated));
+        return updated;
+      });
+    }
+    
+    // 3. Paste tests/events
+    if (copiedDay.testNames || copiedDay.eventNames) {
+      setTrainingDays(prev => {
+        const updated = prev.map(td => {
+          if (td.date === targetDate) {
+            return {
+              ...td,
+              isTestDay: copiedDay.testNames && copiedDay.testNames.length > 0,
+              isEventDay: copiedDay.eventNames && copiedDay.eventNames.length > 0,
+              testNames: copiedDay.testNames,
+              eventNames: copiedDay.eventNames
+            };
+          }
+          return td;
+        });
+        
+        localStorage.setItem('trainingDays', JSON.stringify(updated));
+        return updated;
+      });
+    }
+    
+    // 4. Copy day split state if it exists
+    if (copiedDay.splitState) {
       setDaySplitStates(prev => ({
         ...prev,
-        [targetDate]: daySplitStates[copiedDay.sourceDate]
+        [targetDate]: copiedDay.splitState!
       }));
     }
     
+    // Build descriptive toast message
+    const parts = [];
+    if (copiedDay.exercises.length > 0) parts.push(`${copiedDay.exercises.length} exercise(s)`);
+    if (copiedDay.intensity) parts.push(`intensity`);
+    if (copiedDay.testNames?.length) parts.push(`${copiedDay.testNames.length} test(s)`);
+    if (copiedDay.eventNames?.length) parts.push(`${copiedDay.eventNames.length} event(s)`);
+    
     toast({
       title: "Day pasted",
-      description: `${copiedDay.exercises.length} exercise(s) pasted successfully`,
+      description: parts.length > 0 ? `Pasted: ${parts.join(', ')}` : "Day data pasted successfully",
     });
     
     // Clear the copied day so paste button disappears
@@ -1225,30 +1305,57 @@ export default function MicrocyclePlanningPage() {
   // Handle clear day
   const handleClearDay = (dayDate: string) => {
     const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
+    const trainingDay = trainingDays.find(td => td.date === dayDate);
+    const hasTestsEvents = (trainingDay?.testNames?.length || 0) + (trainingDay?.eventNames?.length || 0) > 0;
     
-    if (dayExercises.length === 0) {
+    // Allow clearing if there are exercises OR tests/events
+    if (dayExercises.length === 0 && !hasTestsEvents) {
       toast({
         title: "Nothing to clear",
-        description: "This day has no exercises",
+        description: "This day has no exercises or events",
         variant: "destructive"
       });
       return;
     }
     
-    setExerciseDistribution(prev => 
-      prev.filter(ex => ex.dayDate !== dayDate)
-    );
+    // Clear exercises
+    setExerciseDistribution(prev => prev.filter(ex => ex.dayDate !== dayDate));
     
-    // Clear day split state
-    setDaySplitStates(prev => {
-      const updated = { ...prev };
-      delete updated[dayDate];
+    // Clear tests/events
+    setTrainingDays(prev => {
+      const updated = prev.map(td => {
+        if (td.date === dayDate) {
+          return {
+            ...td,
+            isTestDay: false,
+            isEventDay: false,
+            testNames: undefined,
+            eventNames: undefined
+          };
+        }
+        return td;
+      });
+      
+      localStorage.setItem('trainingDays', JSON.stringify(updated));
       return updated;
     });
     
+    // Clear split state
+    if (daySplitStates[dayDate]) {
+      setDaySplitStates(prev => {
+        const updated = { ...prev };
+        delete updated[dayDate];
+        return updated;
+      });
+    }
+    
+    const parts = [];
+    if (dayExercises.length > 0) parts.push(`${dayExercises.length} exercise(s)`);
+    if (hasTestsEvents) parts.push("tests/events");
+    
     toast({
       title: "Day cleared",
-      description: `Removed ${dayExercises.length} exercise(s)`,
+      description: `Cleared: ${parts.join(', ')}`,
     });
   };
 
