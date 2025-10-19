@@ -3048,6 +3048,61 @@ export default function MesocyclePage() {
     });
   };
 
+  // Copy daily intensity pattern from previous mesocycle
+  const copyMesocycleDailyIntensity = (targetMesocycleId: string) => {
+    const targetMesoIndex = mesocycles.findIndex(m => m.id === targetMesocycleId);
+    if (targetMesoIndex <= 0) return; // Can't copy if first mesocycle
+    
+    const sourceMesocycle = mesocycles[targetMesoIndex - 1];
+    const targetMesocycle = mesocycles[targetMesoIndex];
+    
+    // Get all training days for both mesocycles
+    const sourceDays = trainingDays.filter(day => 
+      sourceMesocycle.microcycles.some(micro => micro.id === day.microcycleId)
+    );
+    const targetDays = trainingDays.filter(day => 
+      targetMesocycle.microcycles.some(micro => micro.id === day.microcycleId)
+    );
+    
+    // Map intensities by relative day position within mesocycle
+    setDailyIntensityData(prev => {
+      const updated = [...prev];
+      
+      targetDays.forEach((targetDay, index) => {
+        if (index < sourceDays.length) {
+          const sourceDay = sourceDays[index];
+          const sourceIntensity = dailyIntensityData.find(di => di.date === sourceDay.date)?.intensity || "moderate";
+          
+          // Update or add the intensity for target day
+          const existingIndex = updated.findIndex(di => di.date === targetDay.date);
+          if (existingIndex >= 0) {
+            updated[existingIndex] = {
+              ...updated[existingIndex],
+              intensity: sourceIntensity
+            };
+          } else {
+            updated.push({
+              date: targetDay.date,
+              mesocycleId: targetMesocycle.id,
+              microcycleId: targetDay.microcycleId,
+              dayOfWeek: targetDay.dayOfWeek,
+              intensity: sourceIntensity,
+              isTestDay: targetDay.isTestDay,
+              isEventDay: targetDay.isEventDay
+            });
+          }
+        }
+      });
+      
+      return updated;
+    });
+    
+    toast({
+      title: "Intensity pattern copied",
+      description: `Copied daily intensity pattern from ${sourceMesocycle.name} to ${targetMesocycle.name}`
+    });
+  };
+
   const renderDailyIntensityPlanning = () => (
     <Card>
       <CardHeader>
@@ -3087,7 +3142,7 @@ export default function MesocyclePage() {
                     <div className="text-sm font-semibold text-center py-2">Daily Intensity</div>
                   </div>
                   <div className="flex flex-nowrap">
-                    {mesocycles.map((meso) => {
+                    {mesocycles.map((meso, mesoIndex) => {
                       const width = meso.microcycles.reduce((acc, micro) => acc + micro.duration * 80, 0);
                       return meso.microcycles.length > 0 ? (
                         <div 
@@ -3096,6 +3151,20 @@ export default function MesocyclePage() {
                           style={{ width: `${width}px` }}
                         >
                           {meso.name}
+                          {mesoIndex > 0 && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                copyMesocycleDailyIntensity(meso.id);
+                              }}
+                              className="absolute top-1 right-1 h-6 w-6 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"
+                              title="Copy daily intensity pattern from previous mesocycle"
+                            >
+                              <Copy className="h-3 w-3 text-gray-800" />
+                            </Button>
+                          )}
                         </div>
                       ) : null;
                     })}
@@ -3130,13 +3199,18 @@ export default function MesocyclePage() {
                               
                               {/* Copy icon - only show if can copy from previous microcycle */}
                               {canCopy && (
-                                <button
-                                  onClick={() => copyMicrocycleDailyIntensity(meso.id, micro.id)}
-                                  className="text-blue-600 hover:text-blue-700 transition-colors"
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    copyMicrocycleDailyIntensity(meso.id, micro.id);
+                                  }}
+                                  className="h-5 w-5 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"
                                   title={`Copy intensity pattern from ${meso.microcycles[microIndex - 1].name}`}
                                 >
-                                  <Copy className="h-3 w-3" />
-                                </button>
+                                  <Copy className="h-3 w-3 text-gray-800" />
+                                </Button>
                               )}
                             </div>
                           </div>
