@@ -11,9 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { AthleteInfo, SmartGoal, SubGoal, TrainableQuality, Event } from "@/types/training";
-import { User, Target, Calendar as CalendarIcon, Plus, Bot, X } from "lucide-react";
+import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2 } from "lucide-react";
 import { 
   getUniqueQualities, 
   getUniqueTrainingMethods
@@ -487,6 +488,39 @@ export default function MacrocyclePage() {
       }
       setEvents(updated);
     }
+  };
+
+  const clearAllScheduledItems = () => {
+    // Count total scheduled items
+    const totalTests = subGoals.reduce((sum, sg) => sum + (sg.testDates?.length || 0), 0);
+    const totalEvents = events.reduce((sum, e) => sum + (e.eventDates?.length || 0), 0);
+    const total = totalTests + totalEvents;
+    
+    if (total === 0) {
+      toast({
+        title: "Nothing to clear",
+        description: "No tests or events are currently scheduled",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Clear all test dates
+    setSubGoals(prev => prev.map(sg => ({
+      ...sg,
+      testDates: []
+    })));
+    
+    // Clear all event dates
+    setEvents(prev => prev.map(e => ({
+      ...e,
+      eventDates: []
+    })));
+    
+    toast({
+      title: "Calendar cleared",
+      description: `Removed ${totalTests} test schedule(s) and ${totalEvents} event schedule(s)`,
+    });
   };
 
   const totalSteps = 5;
@@ -1035,6 +1069,39 @@ export default function MacrocyclePage() {
                   Click on a date in the calendar below to schedule this item
                 </p>
               )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-center gap-2">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      subGoals.every(sg => !sg.testDates || sg.testDates.length === 0) &&
+                      events.every(e => !e.eventDates || e.eventDates.length === 0)
+                    }
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Clear All Scheduled Items
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Clear all scheduled tests and events?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will remove all test and event dates from the calendar. This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={clearAllScheduledItems}>
+                      Clear All
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
 
             {/* Training Calendar - Larger and Centered */}
