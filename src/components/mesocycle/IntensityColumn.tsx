@@ -92,9 +92,9 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
     let borderClasses = 'border-r border-border/60'; // Default day border
     
     if (isLastDayOfMesocycle) {
-      borderClasses = 'border-r-4 border-border/80';
+      borderClasses = 'border-r-4 border-r-slate-400';
     } else if (isLastDayOfMicrocycle) {
-      borderClasses = 'border-r-2 border-border/70';
+      borderClasses = 'border-r-2 border-r-slate-400';
     }
     
     return borderClasses;
