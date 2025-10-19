@@ -5,10 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info, Copy, ChevronDown, Columns, ChevronRight, X, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info, Copy, ChevronDown, Columns, ChevronRight, X, Trash2, Trophy, Calendar } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { ExtendedMesocycle, Microcycle } from '@/features/planner/types';
@@ -1931,7 +1932,58 @@ export default function MicrocyclePlanningPage() {
                                 style={{ width: isSplit ? `${numberOfSessions * 120}px` : '120px' }}
                               >
                                 {/* Day header */}
-                                <div className={cn("p-1 text-xs text-center border-b", getIntensityColor(dailyIntensity))}>
+                                <div className={cn("p-1 text-xs text-center border-b relative", getIntensityColor(dailyIntensity))}>
+                                  {/* Status Icons - Top Right */}
+                                  <div className="absolute top-1 right-1 flex gap-1">
+                                    {day.testNames && day.testNames.length > 0 && (
+                                      <HoverCard openDelay={100}>
+                                        <HoverCardTrigger asChild>
+                                          <div className="cursor-pointer">
+                                            <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                                              <Trophy className="h-2.5 w-2.5" />
+                                            </Badge>
+                                          </div>
+                                        </HoverCardTrigger>
+                                        <HoverCardContent className="w-auto max-w-xs p-2 z-[200]" side="top">
+                                          <div className="space-y-1">
+                                            <p className="text-xs font-semibold">
+                                              {day.testNames.length > 1 ? 'Tests:' : 'Test:'}
+                                            </p>
+                                            <div className="text-xs text-muted-foreground space-y-0.5">
+                                              {day.testNames.map((testName, idx) => (
+                                                <div key={idx}>• {testName}</div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        </HoverCardContent>
+                                      </HoverCard>
+                                    )}
+                                    
+                                    {day.eventNames && day.eventNames.length > 0 && (
+                                      <HoverCard openDelay={100}>
+                                        <HoverCardTrigger asChild>
+                                          <div className="cursor-pointer">
+                                            <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                                              <Calendar className="h-2.5 w-2.5" />
+                                            </Badge>
+                                          </div>
+                                        </HoverCardTrigger>
+                                        <HoverCardContent className="w-auto max-w-xs p-2 z-[200]" side="top">
+                                          <div className="space-y-1">
+                                            <p className="text-xs font-semibold">
+                                              {day.eventNames.length > 1 ? 'Events:' : 'Event:'}
+                                            </p>
+                                            <div className="text-xs text-muted-foreground space-y-0.5">
+                                              {day.eventNames.map((eventName, idx) => (
+                                                <div key={idx}>• {eventName}</div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        </HoverCardContent>
+                                      </HoverCard>
+                                    )}
+                                  </div>
+                                  
                                   <div className="font-semibold">{day.dayName}</div>
                                   <div>{format(new Date(day.date), 'MMM d')}</div>
                                   
