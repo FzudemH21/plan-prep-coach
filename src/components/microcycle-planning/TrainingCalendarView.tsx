@@ -40,9 +40,11 @@ interface TrainingCalendarViewProps {
   copiedWeek?: { exercises: ExerciseDistribution[]; weekStartDate: string } | null;
   onCopyDay?: (dayDate: string) => void;
   onClearDay?: (dayDate: string) => void;
-  onAddTestEvent?: (dayDate: string, type: 'test' | 'event') => void;
+  onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean) => void;
   onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event') => void;
   copiedDay?: { exercises: ExerciseDistribution[]; sourceDate: string } | null;
+  availableTests?: any[];
+  availableEvents?: any[];
   dailyIntensityData?: any[];
   onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
   getIntensityColor?: (intensity: IntensityLevel) => string;
@@ -84,6 +86,8 @@ export function TrainingCalendarView({
   onAddTestEvent,
   onDeleteTestEvent,
   copiedDay,
+  availableTests,
+  availableEvents,
   dailyIntensityData,
   onIntensityChange,
   getIntensityColor,
@@ -326,6 +330,8 @@ export function TrainingCalendarView({
                   onClearDay={onClearDay}
                   onAddTestEvent={onAddTestEvent}
                   onDeleteTestEvent={onDeleteTestEvent}
+                  availableTests={availableTests}
+                  availableEvents={availableEvents}
                   dailyIntensityData={dailyIntensityData}
                   onIntensityChange={onIntensityChange}
                   getIntensityColor={getIntensityColor}

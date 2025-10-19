@@ -1208,7 +1208,13 @@ export default function MicrocyclePlanningPage() {
   };
 
   // Handle add test/event with two-way sync
-  const handleAddTestEvent = (dayDate: string, type: 'test' | 'event') => {
+  const handleAddTestEvent = (
+    dayDate: string, 
+    type: 'test' | 'event', 
+    testEventId: string, 
+    testEventName: string, 
+    isNew: boolean
+  ) => {
     // Update trainingDays
     setTrainingDays(prev => {
       const updated = prev.map(td => {
@@ -1217,13 +1223,13 @@ export default function MicrocyclePlanningPage() {
             return {
               ...td,
               isTestDay: true,
-              testName: td.testName || 'Test'
+              testName: testEventName
             };
           } else {
             return {
               ...td,
               isEventDay: true,
-              eventName: td.eventName || 'Event'
+              eventName: testEventName
             };
           }
         }
@@ -1238,48 +1244,46 @@ export default function MicrocyclePlanningPage() {
       const updatedMacrocycle = { ...macrocycleData };
       
       if (type === 'test') {
-        // Find or create a sub-goal for "General Test"
-        let generalTestGoal = updatedMacrocycle.subGoals?.find(
-          (sg: any) => sg.testMethod === 'General Test' || sg.description === 'General Test'
-        );
+        let targetSubGoal;
         
-        if (!generalTestGoal) {
-          generalTestGoal = {
-            id: `subgoal-${Date.now()}`,
-            description: 'General Test',
-            testMethod: 'General Test',
+        if (isNew) {
+          // Create new sub-goal
+          targetSubGoal = {
+            id: testEventId,
+            description: testEventName,
+            testMethod: testEventName,
             preTestValue: 0,
             goalValue: 0,
             unit: '',
             percentChange: 0,
-            testDates: []
+            testDates: [dayDate]
           };
-          updatedMacrocycle.subGoals = [...(updatedMacrocycle.subGoals || []), generalTestGoal];
-        }
-        
-        // Add date to testDates if not already present
-        if (!generalTestGoal.testDates.includes(dayDate)) {
-          generalTestGoal.testDates = [...(generalTestGoal.testDates || []), dayDate];
+          updatedMacrocycle.subGoals = [...(updatedMacrocycle.subGoals || []), targetSubGoal];
+        } else {
+          // Find existing sub-goal and add date
+          targetSubGoal = updatedMacrocycle.subGoals?.find((sg: any) => sg.id === testEventId);
+          if (targetSubGoal && !targetSubGoal.testDates.includes(dayDate)) {
+            targetSubGoal.testDates = [...(targetSubGoal.testDates || []), dayDate];
+          }
         }
       } else {
-        // Find or create a general event
-        let generalEvent = updatedMacrocycle.events?.find(
-          (e: any) => e.name === 'General Event'
-        );
+        let targetEvent;
         
-        if (!generalEvent) {
-          generalEvent = {
-            id: `event-${Date.now()}`,
-            name: 'General Event',
+        if (isNew) {
+          // Create new event
+          targetEvent = {
+            id: testEventId,
+            name: testEventName,
             description: '',
-            eventDates: []
+            eventDates: [dayDate]
           };
-          updatedMacrocycle.events = [...(updatedMacrocycle.events || []), generalEvent];
-        }
-        
-        // Add date to eventDates if not already present
-        if (!generalEvent.eventDates.includes(dayDate)) {
-          generalEvent.eventDates = [...(generalEvent.eventDates || []), dayDate];
+          updatedMacrocycle.events = [...(updatedMacrocycle.events || []), targetEvent];
+        } else {
+          // Find existing event and add date
+          targetEvent = updatedMacrocycle.events?.find((e: any) => e.id === testEventId);
+          if (targetEvent && !targetEvent.eventDates.includes(dayDate)) {
+            targetEvent.eventDates = [...(targetEvent.eventDates || []), dayDate];
+          }
         }
       }
       
@@ -1289,7 +1293,7 @@ export default function MicrocyclePlanningPage() {
     
     toast({
       title: `${type === 'test' ? 'Test' : 'Event'} added`,
-      description: `Scheduled for ${format(parseISO(dayDate), 'PPP')}`,
+      description: `${testEventName} scheduled for ${format(parseISO(dayDate), 'PPP')}`,
     });
   };
 
@@ -2170,6 +2174,8 @@ export default function MicrocyclePlanningPage() {
               onAddTestEvent={handleAddTestEvent}
               onDeleteTestEvent={handleDeleteTestEvent}
               copiedDay={copiedDay}
+              availableTests={macrocycleData?.subGoals || []}
+              availableEvents={macrocycleData?.events || []}
               dailyIntensityData={dailyIntensityData}
               onIntensityChange={handleIntensityChange}
               getIntensityColor={getIntensityColor}

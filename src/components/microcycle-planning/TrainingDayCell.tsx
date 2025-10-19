@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Dumbbell, Trophy, Calendar, GripVertical, MoreVertical, Copy, Trash2, ChevronDown } from 'lucide-react';
-import { IntensityLevel } from '@/types/training';
+import { IntensityLevel, SubGoal, Event } from '@/types/training';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import {
@@ -14,6 +14,12 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import {
+  HoverCard,
+  HoverCardTrigger,
+  HoverCardContent,
+} from '@/components/ui/hover-card';
+import { TestEventSelectionDialog } from './TestEventSelectionDialog';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -63,9 +69,13 @@ interface TrainingDayCellProps {
   // Day-level operations
   onCopyDay?: (dayDate: string) => void;
   onClearDay?: (dayDate: string) => void;
-  onAddTestEvent?: (dayDate: string, type: 'test' | 'event') => void;
+  onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean) => void;
   onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event') => void;
   copiedDay?: { exercises: ExerciseDistribution[]; sourceDate: string } | null;
+  
+  // Test/Event selection from macrocycle
+  availableTests?: SubGoal[];
+  availableEvents?: Event[];
   
   dailyIntensityData?: any[];
   onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
@@ -85,6 +95,8 @@ export function TrainingDayCell({
   onAddTestEvent,
   onDeleteTestEvent,
   copiedDay,
+  availableTests,
+  availableEvents,
   dailyIntensityData,
   onIntensityChange,
   getIntensityColor,
@@ -93,6 +105,8 @@ export function TrainingDayCell({
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [isHovering, setIsHovering] = useState(false);
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
+  const [testEventDialogOpen, setTestEventDialogOpen] = useState(false);
+  const [dialogType, setDialogType] = useState<'test' | 'event'>('test');
   const hasTraining = day.sessions.length > 0;
   const isTestDay = day.trainingDay?.isTestDay;
   const isEventDay = day.trainingDay?.isEventDay;
@@ -161,7 +175,8 @@ export function TrainingDayCell({
               {!isTestDay && (
                 <DropdownMenuItem onClick={(e) => {
                   e.stopPropagation();
-                  onAddTestEvent?.(day.dateString, 'test');
+                  setDialogType('test');
+                  setTestEventDialogOpen(true);
                 }}>
                   <Trophy className="mr-2 h-4 w-4" />
                   Add test
@@ -184,7 +199,8 @@ export function TrainingDayCell({
               {!isEventDay && (
                 <DropdownMenuItem onClick={(e) => {
                   e.stopPropagation();
-                  onAddTestEvent?.(day.dateString, 'event');
+                  setDialogType('event');
+                  setTestEventDialogOpen(true);
                 }}>
                   <Calendar className="mr-2 h-4 w-4" />
                   Add event

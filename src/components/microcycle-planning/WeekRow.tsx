@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { format } from 'date-fns';
 import { Copy, MoreVertical, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { IntensityLevel } from '@/types/training';
+import { IntensityLevel, SubGoal, Event } from '@/types/training';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,8 +50,10 @@ interface WeekRowProps {
   onPasteSession?: (dayDate: string) => void;
   onCopyDay?: (dayDate: string) => void;
   onClearDay?: (dayDate: string) => void;
-  onAddTestEvent?: (dayDate: string, type: 'test' | 'event') => void;
+  onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean) => void;
   onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event') => void;
+  availableTests?: SubGoal[];
+  availableEvents?: Event[];
   dailyIntensityData?: any[];
   onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
   getIntensityColor?: (intensity: IntensityLevel) => string;
@@ -75,6 +77,8 @@ export function WeekRow({
   onClearDay,
   onAddTestEvent,
   onDeleteTestEvent,
+  availableTests,
+  availableEvents,
   dailyIntensityData,
   onIntensityChange,
   getIntensityColor,
@@ -151,6 +155,8 @@ export function WeekRow({
             onAddTestEvent={onAddTestEvent}
             onDeleteTestEvent={onDeleteTestEvent}
             copiedDay={copiedDay}
+            availableTests={availableTests}
+            availableEvents={availableEvents}
             dailyIntensityData={dailyIntensityData}
             onIntensityChange={onIntensityChange}
             getIntensityColor={getIntensityColor}
