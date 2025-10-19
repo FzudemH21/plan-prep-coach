@@ -209,15 +209,22 @@ export function TrainingDayCell({
         {/* Status Icons with Hover Tooltips */}
         <div className="flex gap-1 items-start">
           {isTestDay && (
-            <HoverCard openDelay={200} closeDelay={100}>
+            <HoverCard openDelay={100}>
               <HoverCardTrigger asChild>
-                <Badge variant="secondary" className="h-5 px-1.5 text-xs cursor-pointer">
-                  <Trophy className="h-3 w-3" />
-                </Badge>
+                <div className="cursor-pointer">
+                  <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                    <Trophy className="h-3 w-3" />
+                  </Badge>
+                </div>
               </HoverCardTrigger>
-              <HoverCardContent className="w-auto p-2" side="top" align="center">
+              <HoverCardContent 
+                className="w-auto max-w-xs p-3 z-[200]" 
+                side="top" 
+                align="center"
+                sideOffset={5}
+              >
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold">Test:</p>
+                  <p className="text-xs font-semibold text-foreground">Test:</p>
                   <p className="text-xs text-muted-foreground">
                     {day.trainingDay?.testName || 'Test Day'}
                   </p>
@@ -227,15 +234,22 @@ export function TrainingDayCell({
           )}
           
           {isEventDay && (
-            <HoverCard openDelay={200} closeDelay={100}>
+            <HoverCard openDelay={100}>
               <HoverCardTrigger asChild>
-                <Badge variant="secondary" className="h-5 px-1.5 text-xs cursor-pointer">
-                  <Calendar className="h-3 w-3" />
-                </Badge>
+                <div className="cursor-pointer">
+                  <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                    <Calendar className="h-3 w-3" />
+                  </Badge>
+                </div>
               </HoverCardTrigger>
-              <HoverCardContent className="w-auto p-2" side="top" align="center">
+              <HoverCardContent 
+                className="w-auto max-w-xs p-3 z-[200]" 
+                side="top" 
+                align="center"
+                sideOffset={5}
+              >
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold">Event:</p>
+                  <p className="text-xs font-semibold text-foreground">Event:</p>
                   <p className="text-xs text-muted-foreground">
                     {day.trainingDay?.eventName || 'Event Day'}
                   </p>
