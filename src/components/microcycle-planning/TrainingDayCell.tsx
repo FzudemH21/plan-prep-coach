@@ -224,34 +224,13 @@ export function TrainingDayCell({
             {format(day.date, 'd')}
           </div>
 
-          {/* Test/Event Name Display */}
-          {displayLabel && (
-            <div className="text-xs font-medium text-red-600 truncate max-w-[140px]">
-              {displayLabel}
-            </div>
-          )}
-        </div>
-
-        {/* Status Icons and Intensity Indicator */}
-        <div className="flex gap-1 items-start">
-          {isTestDay && (
-            <Badge variant="secondary" className="h-5 px-1.5 text-xs">
-              <Trophy className="h-3 w-3" />
-            </Badge>
-          )}
-          {isEventDay && (
-            <Badge variant="secondary" className="h-5 px-1.5 text-xs">
-              <Calendar className="h-3 w-3" />
-            </Badge>
-          )}
-          
-          {/* Intensity Indicator */}
+          {/* Intensity Indicator - Moved next to day number */}
           {getIntensityColor && intensityLevels && onIntensityChange && (
             <Popover open={intensityPopoverOpen} onOpenChange={setIntensityPopoverOpen}>
               <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
                 <button 
                   className={cn(
-                    "w-4 h-4 rounded-sm border transition-all hover:scale-110 cursor-pointer shrink-0",
+                    "w-5 h-5 rounded-sm border transition-all hover:scale-110 cursor-pointer shrink-0",
                     getIntensityColor(currentIntensity)
                   )}
                   title={`Intensity: ${currentIntensity.replace('-', ' ')}`}
@@ -291,6 +270,27 @@ export function TrainingDayCell({
                 </div>
               </PopoverContent>
             </Popover>
+          )}
+
+          {/* Test/Event Name Display */}
+          {displayLabel && (
+            <div className="text-xs font-medium text-red-600 truncate max-w-[140px]">
+              {displayLabel}
+            </div>
+          )}
+        </div>
+
+        {/* Status Icons */}
+        <div className="flex gap-1 items-start">
+          {isTestDay && (
+            <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+              <Trophy className="h-3 w-3" />
+            </Badge>
+          )}
+          {isEventDay && (
+            <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+              <Calendar className="h-3 w-3" />
+            </Badge>
           )}
         </div>
       </div>
@@ -398,38 +398,6 @@ export function TrainingDayCell({
               {day.sessions.length} sessions • {day.totalExercises} total exercises
             </p>
           )}
-
-          {/* Paste button - shown when hovering and session is copied */}
-          {isHovering && copiedSession && (
-            <Button
-              onClick={(e) => {
-                e.stopPropagation();
-                onPasteSession?.(day.dateString);
-              }}
-              className="w-full mt-2"
-              variant="default"
-              size="sm"
-            >
-              <Copy className="mr-2 h-4 w-4" />
-              Paste ({copiedSession.exercises.length} exercise{copiedSession.exercises.length !== 1 ? 's' : ''})
-            </Button>
-          )}
-
-          {/* Paste Day button - shown when hovering and day is copied */}
-          {isHovering && copiedDay && !copiedSession && (
-            <Button
-              onClick={(e) => {
-                e.stopPropagation();
-                onPasteSession?.(day.dateString);
-              }}
-              className="w-full mt-2"
-              variant="default"
-              size="sm"
-            >
-              <Copy className="mr-2 h-4 w-4" />
-              Paste Day ({copiedDay.exercises.length} exercise{copiedDay.exercises.length !== 1 ? 's' : ''})
-            </Button>
-          )}
         </>
       ) : isRestDay ? (
         <Droppable droppableId={`day-${day.dateString}`} type="session">
@@ -444,19 +412,6 @@ export function TrainingDayCell({
             >
               {snapshot.isDraggingOver ? (
                 <span className="text-xs text-muted-foreground">Drop here</span>
-              ) : isHovering && copiedSession ? (
-                <Button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onPasteSession?.(day.dateString);
-                  }}
-                  className="w-full"
-                  variant="default"
-                  size="sm"
-                >
-                  <Copy className="mr-2 h-4 w-4" />
-                  Paste ({copiedSession.exercises.length} exercise{copiedSession.exercises.length !== 1 ? 's' : ''})
-                </Button>
               ) : (
                 <span className="text-xs text-muted-foreground">Rest</span>
               )}
@@ -477,24 +432,46 @@ export function TrainingDayCell({
             >
               {snapshot.isDraggingOver ? (
                 <span className="text-xs text-muted-foreground">Drop here</span>
-              ) : isHovering && copiedSession ? (
-                <Button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onPasteSession?.(day.dateString);
-                  }}
-                  className="w-full"
-                  variant="default"
-                  size="sm"
-                >
-                  <Copy className="mr-2 h-4 w-4" />
-                  Paste ({copiedSession.exercises.length} exercise{copiedSession.exercises.length !== 1 ? 's' : ''})
-                </Button>
               ) : null}
               {provided.placeholder}
             </div>
           )}
         </Droppable>
+      )}
+
+      {/* Universal Paste Buttons - shown on hover for any day type */}
+      {isHovering && day.isCurrentMonth && (
+        <div className="mt-2 space-y-2">
+          {copiedSession && (
+            <Button
+              onClick={(e) => {
+                e.stopPropagation();
+                onPasteSession?.(day.dateString);
+              }}
+              className="w-full"
+              variant="default"
+              size="sm"
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              Paste Session ({copiedSession.exercises.length} exercise{copiedSession.exercises.length !== 1 ? 's' : ''})
+            </Button>
+          )}
+          
+          {copiedDay && !copiedSession && (
+            <Button
+              onClick={(e) => {
+                e.stopPropagation();
+                onPasteSession?.(day.dateString);
+              }}
+              className="w-full"
+              variant="default"
+              size="sm"
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              Paste Day ({copiedDay.exercises.length} exercise{copiedDay.exercises.length !== 1 ? 's' : ''})
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );
