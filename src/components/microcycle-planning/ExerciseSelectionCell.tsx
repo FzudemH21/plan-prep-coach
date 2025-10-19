@@ -49,9 +49,9 @@ export function ExerciseSelectionCell({
                 <Info className="h-4 w-4 text-muted-foreground hover:text-primary cursor-help transition-colors" />
               </div>
             </TooltipTrigger>
-            <TooltipContent side="left" align="start" className="max-w-sm">
-              <div className="text-xs whitespace-pre-line">
-                <p className="font-medium mb-1 text-primary">Method Parameters:</p>
+            <TooltipContent side="left" align="start" className="max-w-md">
+              <div className="text-xs whitespace-pre font-mono">
+                <p className="font-medium mb-2 text-primary font-sans">Method Parameters:</p>
                 {parameterInfo}
               </div>
             </TooltipContent>
@@ -60,7 +60,7 @@ export function ExerciseSelectionCell({
       )}
 
       {/* Action buttons - always at top for visibility */}
-      <div className="flex gap-1 shrink-0 mt-2">
+      <div className="flex gap-1 shrink-0 mt-8">
         {hasPreviousExercises && onCopy && (
           <Button
             size="sm"

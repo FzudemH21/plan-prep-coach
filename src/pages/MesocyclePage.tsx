@@ -1870,26 +1870,50 @@ export default function MesocyclePage() {
     // Format output based on whether we have multiple sessions
     if (hasMultipleSessions && microcycleId) {
       // Session-by-session display (only when mesocycle IS split)
-      const sessionLines: string[] = [];
       
+      // Collect all unique parameter names across sessions
+      const allParamNames = new Set<string>();
+      Object.values(sessionParameterMap).forEach(sessionParams => {
+        Object.keys(sessionParams).forEach(paramName => allParamNames.add(paramName));
+      });
+      
+      if (allParamNames.size === 0) return '';
+      
+      // Build header row with session columns
+      const headerParts = ['Parameter'.padEnd(20)]; // Left column for parameter names
       for (let sessionIdx = 0; sessionIdx < maxSessionCount; sessionIdx++) {
-        const sessionParams = sessionParameterMap[sessionIdx];
-        if (sessionParams && Object.keys(sessionParams).length > 0) {
-          const paramStr = Object.entries(sessionParams)
-            .map(([paramName, value]) => {
-              // Get unit if available from methodParametersMap
-              const methodParamDefs = methodParametersMap[fullMethodName] || [];
-              const paramDef = methodParamDefs.find(p => p.name === paramName);
-              const unit = paramDef?.isQuantitative && paramDef?.options?.[0] ? ` ${paramDef.options[0]}` : '';
-              return `${paramName}: ${value}${unit}`;
-            })
-            .join(', ');
-          
-          sessionLines.push(`Session ${sessionIdx + 1}: ${paramStr}`);
-        }
+        headerParts.push(`Session ${sessionIdx + 1}`.padEnd(15));
       }
+      const headerRow = headerParts.join('');
       
-      return sessionLines.join('\n');
+      // Build separator row
+      const separatorRow = '-'.repeat(headerRow.length);
+      
+      // Build data rows for each parameter
+      const dataRows: string[] = [];
+      Array.from(allParamNames).forEach(paramName => {
+        const rowParts = [paramName.padEnd(20)]; // Parameter name in first column
+        
+        for (let sessionIdx = 0; sessionIdx < maxSessionCount; sessionIdx++) {
+          const sessionParams = sessionParameterMap[sessionIdx] || {};
+          const value = sessionParams[paramName];
+          
+          if (value !== undefined && value !== null && value !== '') {
+            // Get unit if available
+            const methodParamDefs = methodParametersMap[fullMethodName] || [];
+            const paramDef = methodParamDefs.find(p => p.name === paramName);
+            const unit = paramDef?.isQuantitative && paramDef?.options?.[0] ? ` ${paramDef.options[0]}` : '';
+            rowParts.push(`${value}${unit}`.padEnd(15));
+          } else {
+            rowParts.push('-'.padEnd(15)); // Empty cell indicator
+          }
+        }
+        
+        dataRows.push(rowParts.join(''));
+      });
+      
+      // Combine header, separator, and data rows
+      return [headerRow, separatorRow, ...dataRows].join('\n');
     } else {
       // Range display (when mesocycle is NOT split OR no frequency split)
       const formattedParams = Object.entries(parameterMap)
@@ -1924,7 +1948,7 @@ export default function MesocyclePage() {
           }
         })
         .filter(Boolean)
-        .join(', ');
+        .join('\n');
       
       return formattedParams;
     }
