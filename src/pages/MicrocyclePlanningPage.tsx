@@ -2178,7 +2178,7 @@ export default function MicrocyclePlanningPage() {
                                     {Array.from({ length: numberOfSessions }, (_, sessionIdx) => (
                                       <div 
                                         key={sessionIdx}
-                                        className="w-[120px] p-1 text-[10px] text-center border-r last:border-r-0 bg-muted/50"
+                                        className="w-[140px] p-1 text-[10px] text-center border-r last:border-r-0 bg-muted/50"
                                       >
                                         Session {sessionIdx + 1}
                                       </div>
@@ -2317,17 +2317,30 @@ export default function MicrocyclePlanningPage() {
                                         <div className="flex flex-1">
                                           {currentMesocycle.microcycles.map(microcycle => {
                                             const days = daysByMicrocycle[microcycle.id] || [];
+                                            const totalWidth = days.reduce((sum, day) => {
+                                              const numberOfSessions = daySplitStates[day.date] || 1;
+                                              return sum + (numberOfSessions * 140);
+                                            }, 0);
                                             return (
-                                              <div key={microcycle.id} className="flex flex-1 border-r last:border-r-0">
+                                              <div 
+                                                key={microcycle.id} 
+                                                className="flex border-r last:border-r-0"
+                                                style={{ width: `${totalWidth}px`, minWidth: `${totalWidth}px`, flexShrink: 0 }}
+                                              >
                                                 {days.map(day => {
                                                   const numberOfSessions = daySplitStates[day.date] || 1;
+                                                  const dayWidth = numberOfSessions * 140;
                                                   
                                                   return (
-                                                    <div key={day.date} className="flex border-r last:border-r-0">
+                                                    <div 
+                                                      key={day.date} 
+                                                      className="flex border-r last:border-r-0"
+                                                      style={{ width: `${dayWidth}px`, minWidth: `${dayWidth}px`, flexShrink: 0 }}
+                                                    >
                                                       {Array.from({ length: numberOfSessions }, (_, sessionIdx) => (
                                                         <div
                                                           key={sessionIdx}
-                                                          className="w-[120px] p-2 border-r last:border-r-0 min-h-[100px]"
+                                                          className="w-[140px] p-2 border-r last:border-r-0 min-h-[100px]"
                                                           onDrop={(e) => handleDrop(e, day.date, sessionIdx, fullMethodId, categoryKey)}
                                                           onDragOver={handleDragOver}
                                                         >
