@@ -2409,6 +2409,8 @@ export default function MicrocyclePlanningPage() {
 
       {renderTrainingPlanOverview()}
       
+      {currentStep === 1 && mesocycles.length > 1 && renderMesocycleNavigation()}
+      
       {currentStep === 1 && renderExerciseDistribution()}
       
       {currentStep === 2 && currentMesocycle && (
