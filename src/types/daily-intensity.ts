@@ -19,6 +19,6 @@ export interface TrainingDay {
   isTestDay: boolean;
   isEventDay: boolean;
   isTrainingDay: boolean;
-  testName?: string;
-  eventName?: string;
+  testNames?: string[]; // Array of test names for the day
+  eventNames?: string[]; // Array of event names for the day
 }

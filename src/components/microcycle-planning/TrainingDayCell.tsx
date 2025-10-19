@@ -40,8 +40,8 @@ interface TrainingDay {
   isTestDay: boolean;
   isEventDay: boolean;
   isTrainingDay: boolean;
-  testName?: string;
-  eventName?: string;
+  testNames?: string[];
+  eventNames?: string[];
 }
 
 interface CalendarDay {
@@ -122,8 +122,8 @@ export function TrainingDayCell({
 
   // Compute display label with fallback
   const displayLabel =
-    day.trainingDay?.testName ??
-    day.trainingDay?.eventName ??
+    day.trainingDay?.testNames?.[0] ??
+    day.trainingDay?.eventNames?.[0] ??
     (isTestDay ? 'Test' : isEventDay ? 'Event' : '');
 
   return (
@@ -208,7 +208,7 @@ export function TrainingDayCell({
 
         {/* Status Icons with Hover Tooltips */}
         <div className="flex gap-1 items-start">
-          {isTestDay && (
+          {day.trainingDay?.testNames && day.trainingDay.testNames.length > 0 && (
             <HoverCard openDelay={100}>
               <HoverCardTrigger asChild>
                 <div className="cursor-pointer">
@@ -224,16 +224,20 @@ export function TrainingDayCell({
                 sideOffset={5}
               >
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold text-foreground">Test:</p>
-                  <p className="text-xs text-muted-foreground">
-                    {day.trainingDay?.testName || 'Test Day'}
+                  <p className="text-xs font-semibold text-foreground">
+                    {day.trainingDay.testNames.length > 1 ? 'Tests:' : 'Test:'}
                   </p>
+                  <div className="text-xs text-muted-foreground space-y-0.5">
+                    {day.trainingDay.testNames.map((testName, idx) => (
+                      <div key={idx}>• {testName}</div>
+                    ))}
+                  </div>
                 </div>
               </HoverCardContent>
             </HoverCard>
           )}
           
-          {isEventDay && (
+          {day.trainingDay?.eventNames && day.trainingDay.eventNames.length > 0 && (
             <HoverCard openDelay={100}>
               <HoverCardTrigger asChild>
                 <div className="cursor-pointer">
@@ -249,10 +253,14 @@ export function TrainingDayCell({
                 sideOffset={5}
               >
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold text-foreground">Event:</p>
-                  <p className="text-xs text-muted-foreground">
-                    {day.trainingDay?.eventName || 'Event Day'}
+                  <p className="text-xs font-semibold text-foreground">
+                    {day.trainingDay.eventNames.length > 1 ? 'Events:' : 'Event:'}
                   </p>
+                  <div className="text-xs text-muted-foreground space-y-0.5">
+                    {day.trainingDay.eventNames.map((eventName, idx) => (
+                      <div key={idx}>• {eventName}</div>
+                    ))}
+                  </div>
                 </div>
               </HoverCardContent>
             </HoverCard>
@@ -290,16 +298,14 @@ export function TrainingDayCell({
                 
                 <DropdownMenuSeparator />
                 
-                {!isTestDay && (
-                  <DropdownMenuItem onClick={(e) => {
-                    e.stopPropagation();
-                    setDialogType('test');
-                    setTestEventDialogOpen(true);
-                  }}>
-                    <Trophy className="mr-2 h-4 w-4" />
-                    Add test
-                  </DropdownMenuItem>
-                )}
+            <DropdownMenuItem onClick={(e) => {
+              e.stopPropagation();
+              setDialogType('test');
+              setTestEventDialogOpen(true);
+            }}>
+              <Trophy className="mr-2 h-4 w-4" />
+              Add test
+            </DropdownMenuItem>
                 
                 {isTestDay && (
                   <DropdownMenuItem 
@@ -314,16 +320,14 @@ export function TrainingDayCell({
                   </DropdownMenuItem>
                 )}
                 
-                {!isEventDay && (
-                  <DropdownMenuItem onClick={(e) => {
-                    e.stopPropagation();
-                    setDialogType('event');
-                    setTestEventDialogOpen(true);
-                  }}>
-                    <Calendar className="mr-2 h-4 w-4" />
-                    Add event
-                  </DropdownMenuItem>
-                )}
+            <DropdownMenuItem onClick={(e) => {
+              e.stopPropagation();
+              setDialogType('event');
+              setTestEventDialogOpen(true);
+            }}>
+              <Calendar className="mr-2 h-4 w-4" />
+              Add event
+            </DropdownMenuItem>
                 
                 {isEventDay && (
                   <DropdownMenuItem 

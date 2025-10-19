@@ -2693,8 +2693,8 @@ export default function MesocyclePage() {
             isTestDay,
             isEventDay,
             isTrainingDay: true,
-            testName,
-            eventName
+            testNames: testName ? [testName] : undefined,
+            eventNames: eventName ? [eventName] : undefined
           });
         }
         

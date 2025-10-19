@@ -131,7 +131,28 @@ export default function MicrocyclePlanningPage() {
     }
 
     if (savedTrainingDays) {
-      setTrainingDays(JSON.parse(savedTrainingDays));
+      const loadedDays = JSON.parse(savedTrainingDays);
+      
+      // Migrate old data format to new format (testName -> testNames, eventName -> eventNames)
+      const migratedDays = loadedDays.map((td: any) => {
+        const migrated = { ...td };
+        
+        // Migrate testName to testNames
+        if ('testName' in td && td.testName) {
+          migrated.testNames = [td.testName];
+          delete migrated.testName;
+        }
+        
+        // Migrate eventName to eventNames
+        if ('eventName' in td && td.eventName) {
+          migrated.eventNames = [td.eventName];
+          delete migrated.eventName;
+        }
+        
+        return migrated;
+      });
+      
+      setTrainingDays(migratedDays);
     }
 
     if (savedMicrocycleStep) {
@@ -261,23 +282,40 @@ export default function MicrocyclePlanningPage() {
     });
 
     const updated = trainingDays.map(td => {
-      const tn = td.testName ?? testMap.get(td.date);
-      const en = td.eventName ?? eventMap.get(td.date);
+      const existingTests = td.testNames || [];
+      const existingEvents = td.eventNames || [];
+      const testFromMap = testMap.get(td.date);
+      const eventFromMap = eventMap.get(td.date);
+      
+      // Add tests/events from map if not already in arrays
+      const updatedTests = testFromMap && !existingTests.includes(testFromMap) 
+        ? [...existingTests, testFromMap] 
+        : existingTests;
+      const updatedEvents = eventFromMap && !existingEvents.includes(eventFromMap)
+        ? [...existingEvents, eventFromMap]
+        : existingEvents;
+      
       return {
         ...td,
-        testName: tn,
-        eventName: en,
-        isTestDay: !!(td.isTestDay || tn),
-        isEventDay: !!(td.isEventDay || en),
+        testNames: updatedTests.length > 0 ? updatedTests : undefined,
+        eventNames: updatedEvents.length > 0 ? updatedEvents : undefined,
+        isTestDay: updatedTests.length > 0,
+        isEventDay: updatedEvents.length > 0,
       };
     });
 
-    const changed = updated.some((u, i) =>
-      u.testName !== trainingDays[i].testName ||
-      u.eventName !== trainingDays[i].eventName ||
-      u.isTestDay !== trainingDays[i].isTestDay ||
-      u.isEventDay !== trainingDays[i].isEventDay
-    );
+    const changed = updated.some((u, i) => {
+      const oldTests = trainingDays[i].testNames || [];
+      const newTests = u.testNames || [];
+      const oldEvents = trainingDays[i].eventNames || [];
+      const newEvents = u.eventNames || [];
+      return (
+        JSON.stringify(oldTests) !== JSON.stringify(newTests) ||
+        JSON.stringify(oldEvents) !== JSON.stringify(newEvents) ||
+        u.isTestDay !== trainingDays[i].isTestDay ||
+        u.isEventDay !== trainingDays[i].isEventDay
+      );
+    });
 
     if (changed) {
       console.log('[Microcycle] Enriched trainingDays with test/event names.');
@@ -1220,16 +1258,18 @@ export default function MicrocyclePlanningPage() {
       const updated = prev.map(td => {
         if (td.date === dayDate) {
           if (type === 'test') {
+            const existingTests = td.testNames || [];
             return {
               ...td,
               isTestDay: true,
-              testName: testEventName
+              testNames: [...existingTests, testEventName]
             };
           } else {
+            const existingEvents = td.eventNames || [];
             return {
               ...td,
               isEventDay: true,
-              eventName: testEventName
+              eventNames: [...existingEvents, testEventName]
             };
           }
         }
@@ -1307,13 +1347,13 @@ export default function MicrocyclePlanningPage() {
             return {
               ...td,
               isTestDay: false,
-              testName: undefined
+              testNames: undefined
             };
           } else {
             return {
               ...td,
               isEventDay: false,
-              eventName: undefined
+              eventNames: undefined
             };
           }
         }
@@ -1346,8 +1386,8 @@ export default function MicrocyclePlanningPage() {
     }
     
     toast({
-      title: `${type === 'test' ? 'Test' : 'Event'} deleted`,
-      description: `Removed from ${format(parseISO(dayDate), 'PPP')}`,
+      title: `${type === 'test' ? 'Tests' : 'Events'} deleted`,
+      description: `All ${type === 'test' ? 'tests' : 'events'} removed from ${format(parseISO(dayDate), 'PPP')}`,
     });
   };
 
