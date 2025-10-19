@@ -119,7 +119,7 @@ export const QuantitativeParameterInput = React.memo(function QuantitativeParame
         onCompositionEnd={handleCompositionEnd}
         placeholder={placeholder}
         className={cn(
-          hasMeaningfulUnits ? "flex-1 min-w-0 h-8 text-xs" : "w-full h-8 text-xs",
+          hasMeaningfulUnits ? "flex-1 min-w-[80px] h-8 text-xs" : "w-full h-8 text-xs",
           isDragSource && "ring-1 ring-primary",
           isInDragSelection && "bg-primary/10"
         )}
@@ -251,7 +251,7 @@ export const QualitativeParameterInput = React.memo(function QualitativeParamete
           placeholder={placeholder}
           allowCustomInput={true}
           className={cn(
-            "w-full h-8 text-xs",
+            "w-full min-w-[140px] h-8 text-xs",
             isDragSource && "ring-1 ring-primary",
             isInDragSelection && "bg-primary/10"
           )}
@@ -267,7 +267,7 @@ export const QualitativeParameterInput = React.memo(function QualitativeParamete
           onCompositionEnd={handleCompositionEnd}
           placeholder={placeholder}
           className={cn(
-            "w-full h-8 text-xs",
+            "w-full min-w-[140px] h-8 text-xs",
             isDragSource && "ring-1 ring-primary",
             isInDragSelection && "bg-primary/10"
           )}

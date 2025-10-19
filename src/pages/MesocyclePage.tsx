@@ -2325,10 +2325,10 @@ export default function MesocyclePage() {
                                                              const isInSelection = dragState.selectedCells.has(cellId);
                                                              
                                                              return (
-                                                               <div 
-                                                                 key={sessionIndex}
-                                                                 className={`p-1 border-l flex-1 ${!isAllocated ? 'bg-gray-100/50 opacity-50' : ''}`}
-                                                                 style={{ minWidth: '120px' }}
+                                                                <div 
+                                                                  key={sessionIndex}
+                                                                  className={`p-1 border-l ${!isAllocated ? 'bg-gray-100/50 opacity-50' : ''}`}
+                                                                  style={{ minWidth: '200px', width: '200px' }}
                                                                  data-drag-cell={cellId}
                                                                  data-allocated={isAllocated ? 'true' : 'false'}
                                                                >
