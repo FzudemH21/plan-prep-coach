@@ -2673,7 +2673,7 @@ export default function MesocyclePage() {
           dayDate.setDate(currentDate.getDate() + dayInMicro);
           
           const dayOfWeek = dayDate.getDay();
-          const dateStr = dayDate.toISOString().split('T')[0];
+          const dateStr = format(dayDate, 'yyyy-MM-dd');
           
           const testName = testDateMap.get(dateStr);
           const eventName = eventDateMap.get(dateStr);
