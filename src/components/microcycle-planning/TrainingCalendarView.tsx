@@ -10,7 +10,7 @@ import { ExtendedMesocycle } from '@/features/planner/types';
 import { IntensityLevel } from '@/types/training';
 import { TrainingDayCell } from './TrainingDayCell';
 import { WeekRow } from './WeekRow';
-import { DayExercisesDialog } from './DayExercisesDialog';
+import { WorkoutSessionSheet } from './WorkoutSessionSheet';
 import { useToast } from '@/hooks/use-toast';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 
@@ -49,6 +49,15 @@ interface TrainingCalendarViewProps {
   onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
   getIntensityColor?: (intensity: IntensityLevel) => string;
   intensityLevels?: IntensityLevel[];
+  parameterValues?: Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>;
+  onSaveParameters?: (
+    mesocycleId: string,
+    microcycleIndex: number,
+    methodId: string,
+    sessionIndex: number,
+    exerciseId: string,
+    parameters: Record<string, string | number>
+  ) => void;
 }
 
 export interface CalendarDay {
@@ -92,11 +101,17 @@ export function TrainingCalendarView({
   onIntensityChange,
   getIntensityColor,
   intensityLevels,
+  parameterValues = {},
+  onSaveParameters,
 }: TrainingCalendarViewProps) {
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>('4week');
   const [currentDate, setCurrentDate] = useState<Date>(currentMesocycle.startDate);
-  const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
+  const [selectedSession, setSelectedSession] = useState<{
+    dayDate: string;
+    sessionIndex: number;
+    exercises: ExerciseDistribution[];
+  } | null>(null);
 
   // Group exercises by date
   const exercisesByDate = useMemo(() => {
@@ -319,8 +334,13 @@ export function TrainingCalendarView({
                   onClearWeek={onClearWeek}
                   onPasteWeek={onPasteWeek}
                   onDayClick={(day) => {
+                    // Open session sheet for first session if day has sessions
                     if (day.sessions.length > 0) {
-                      setSelectedDay(day);
+                      setSelectedSession({
+                        dayDate: day.dateString,
+                        sessionIndex: day.sessions[0].sessionIndex,
+                        exercises: day.sessions[0].exercises
+                      });
                     }
                   }}
                   onDeleteSession={onDeleteSession}
@@ -343,12 +363,18 @@ export function TrainingCalendarView({
         </CardContent>
       </Card>
 
-      {/* Exercise Details Dialog */}
-      {selectedDay && (
-        <DayExercisesDialog
-          day={selectedDay}
-          isOpen={!!selectedDay}
-          onClose={() => setSelectedDay(null)}
+      {/* Workout Session Sheet */}
+      {selectedSession && (
+        <WorkoutSessionSheet
+          isOpen={!!selectedSession}
+          onClose={() => setSelectedSession(null)}
+          dayDate={selectedSession.dayDate}
+          sessionIndex={selectedSession.sessionIndex}
+          exercises={selectedSession.exercises}
+          mesocycleId={currentMesocycle.id}
+          microcycleIndex={0} // TODO: Calculate actual microcycle index from date
+          parameterValues={parameterValues}
+          onSaveParameters={onSaveParameters || (() => {})}
         />
       )}
     </div>

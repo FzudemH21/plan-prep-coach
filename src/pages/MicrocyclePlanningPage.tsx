@@ -960,6 +960,33 @@ export default function MicrocyclePlanningPage() {
   };
 
   // Handle session drag and drop
+  // Handle save parameters from workout session
+  const handleSaveParameters = (
+    mesocycleId: string,
+    microcycleIndex: number,
+    methodId: string,
+    sessionIndex: number,
+    exerciseId: string,
+    parameters: Record<string, string | number>
+  ) => {
+    setParameterValues(prev => {
+      const updated = JSON.parse(JSON.stringify(prev));
+      if (!updated[mesocycleId]) updated[mesocycleId] = {};
+      if (!updated[mesocycleId][microcycleIndex]) updated[mesocycleId][microcycleIndex] = {};
+      if (!updated[mesocycleId][microcycleIndex][methodId]) updated[mesocycleId][microcycleIndex][methodId] = {};
+      if (!updated[mesocycleId][microcycleIndex][methodId][sessionIndex]) updated[mesocycleId][microcycleIndex][methodId][sessionIndex] = {};
+      
+      // Store each parameter as a separate key-value pair
+      Object.entries(parameters).forEach(([key, value]) => {
+        updated[mesocycleId][microcycleIndex][methodId][sessionIndex][`${exerciseId}_${key}`] = value;
+      });
+      
+      // Save to localStorage
+      localStorage.setItem('parameterValues', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   // Handle delete session
   const handleDeleteSession = (dayDate: string, sessionIndex: number) => {
     setExerciseDistribution(prev => {
@@ -2398,6 +2425,8 @@ export default function MicrocyclePlanningPage() {
               onIntensityChange={handleIntensityChange}
               getIntensityColor={getIntensityColor}
               intensityLevels={intensityLevels}
+              parameterValues={parameterValues}
+              onSaveParameters={handleSaveParameters}
             />
         </>
       )}

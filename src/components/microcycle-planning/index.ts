@@ -7,5 +7,6 @@ export { ExerciseCopyDialog } from './ExerciseCopyDialog';
 export { TrainingCalendarView } from './TrainingCalendarView';
 export { TrainingDayCell } from './TrainingDayCell';
 export { DayExercisesDialog } from './DayExercisesDialog';
+export { WorkoutSessionSheet } from './WorkoutSessionSheet';
 export { WeekRow } from './WeekRow';
 export { CombinedTestEventDialog } from './CombinedTestEventDialog';
