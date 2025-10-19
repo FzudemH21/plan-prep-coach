@@ -1787,6 +1787,149 @@ export default function MesocyclePage() {
     return map;
   }, [toolboxData.entries, getMethodsForAllocatedSubGoals]);
 
+  // Get parameter information for a specific cell in exercise selection table
+  const getParametersForCell = useCallback((
+    mesocycleId: string,
+    microcycleId: string | undefined,
+    methodId: string,
+    categoryName: string | undefined
+  ): string => {
+    // Get full method name with category if applicable
+    const fullMethodName = categoryName ? `${methodId}::${categoryName}` : methodId;
+    
+    // Find the mesocycle
+    const mesocycle = mesocycles.find(m => m.id === mesocycleId);
+    if (!mesocycle) return '';
+    
+    // Determine which microcycles to check
+    let microcyclesToCheck: Array<{index: number}>;
+    
+    if (microcycleId) {
+      // Split: only check specific microcycle
+      const microcycleIndex = mesocycle.microcycles.findIndex(m => m.id === microcycleId);
+      if (microcycleIndex === -1) return '';
+      microcyclesToCheck = [{index: microcycleIndex}];
+    } else {
+      // Not split: check all microcycles in this mesocycle
+      microcyclesToCheck = mesocycle.microcycles.map((_, i) => ({index: i}));
+    }
+    
+    // Collect all parameter values across relevant microcycles and sessions
+    const parameterMap: Record<string, Set<string | number>> = {};
+    const sessionParameterMap: Record<number, Record<string, string | number>> = {}; // For session-by-session display
+    let hasMultipleSessions = false;
+    let maxSessionCount = 0;
+    
+    microcyclesToCheck.forEach(({index: microIndex}) => {
+      // Check frequency split for this microcycle
+      const splitKey = `${mesocycleId}-${microIndex}`;
+      const isSplit = globalMicrocycleSplitStates[splitKey] || false;
+      
+      // Get method parameters for this microcycle
+      const methodParams = parameterValues[mesocycleId]?.[microIndex]?.[fullMethodName];
+      if (!methodParams) return;
+      
+      const sessionCount = Object.keys(methodParams).length;
+      maxSessionCount = Math.max(maxSessionCount, sessionCount);
+      
+      if (sessionCount > 1) {
+        hasMultipleSessions = true;
+        
+        // Store session-specific parameters
+        Object.entries(methodParams).forEach(([sessionIdx, params]) => {
+          const sessionIndex = parseInt(sessionIdx);
+          if (!sessionParameterMap[sessionIndex]) {
+            sessionParameterMap[sessionIndex] = {};
+          }
+          
+          Object.entries(params).forEach(([paramName, value]) => {
+            // For session-specific display, store directly
+            sessionParameterMap[sessionIndex][paramName] = value;
+          });
+        });
+      }
+      
+      // Also collect for range calculation
+      Object.entries(methodParams).forEach(([sessionIdx, params]) => {
+        Object.entries(params).forEach(([paramName, value]) => {
+          if (value !== undefined && value !== null && value !== '') {
+            if (!parameterMap[paramName]) {
+              parameterMap[paramName] = new Set();
+            }
+            parameterMap[paramName].add(value);
+          }
+        });
+      });
+    });
+    
+    // If no parameters found
+    if (Object.keys(parameterMap).length === 0) {
+      return '';
+    }
+    
+    // Format output based on whether we have multiple sessions
+    if (hasMultipleSessions && microcycleId) {
+      // Session-by-session display (only when mesocycle IS split)
+      const sessionLines: string[] = [];
+      
+      for (let sessionIdx = 0; sessionIdx < maxSessionCount; sessionIdx++) {
+        const sessionParams = sessionParameterMap[sessionIdx];
+        if (sessionParams && Object.keys(sessionParams).length > 0) {
+          const paramStr = Object.entries(sessionParams)
+            .map(([paramName, value]) => {
+              // Get unit if available from methodParametersMap
+              const methodParamDefs = methodParametersMap[fullMethodName] || [];
+              const paramDef = methodParamDefs.find(p => p.name === paramName);
+              const unit = paramDef?.isQuantitative && paramDef?.options?.[0] ? ` ${paramDef.options[0]}` : '';
+              return `${paramName}: ${value}${unit}`;
+            })
+            .join(', ');
+          
+          sessionLines.push(`Session ${sessionIdx + 1}: ${paramStr}`);
+        }
+      }
+      
+      return sessionLines.join('\n');
+    } else {
+      // Range display (when mesocycle is NOT split OR no frequency split)
+      const formattedParams = Object.entries(parameterMap)
+        .map(([paramName, values]) => {
+          const uniqueValues = Array.from(values);
+          
+          if (uniqueValues.length === 0) return null;
+          
+          // Get unit if available
+          const methodParamDefs = methodParametersMap[fullMethodName] || [];
+          const paramDef = methodParamDefs.find(p => p.name === paramName);
+          const unit = paramDef?.isQuantitative && paramDef?.options?.[0] ? ` ${paramDef.options[0]}` : '';
+          
+          if (uniqueValues.length === 1) {
+            return `${paramName}: ${uniqueValues[0]}${unit}`;
+          }
+          
+          // Try to parse as numbers for range formatting
+          const numericValues = uniqueValues.map(v => {
+            const parsed = parseFloat(v.toString());
+            return isNaN(parsed) ? null : parsed;
+          }).filter(v => v !== null) as number[];
+          
+          if (numericValues.length === uniqueValues.length && numericValues.length > 1) {
+            // All numeric: show range
+            const min = Math.min(...numericValues);
+            const max = Math.max(...numericValues);
+            return `${paramName}: ${min}-${max}${unit}`;
+          } else {
+            // Mixed or non-numeric: show list
+            return `${paramName}: ${uniqueValues.join(', ')}${unit}`;
+          }
+        })
+        .filter(Boolean)
+        .join(', ');
+      
+      return formattedParams;
+    }
+  }, [mesocycles, parameterValues, globalMicrocycleSplitStates, methodParametersMap]);
+
   const renderMethodPeriodization = () => {
     const allMethods = getMethodsForAllocatedSubGoals;
     const groupedMethods = groupMethodsByToolboxCategory;
@@ -2415,6 +2558,7 @@ export default function MesocyclePage() {
             onExerciseSelectionChange={(cellData) => {
               localStorage.setItem('exerciseSelectionData', JSON.stringify(cellData));
             }}
+            getParametersForCell={getParametersForCell}
           />
         </CardContent>
       </Card>

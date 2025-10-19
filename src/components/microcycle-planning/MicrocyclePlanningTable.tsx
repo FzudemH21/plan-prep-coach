@@ -33,9 +33,10 @@ interface MicrocyclePlanningTableProps {
     isQualitative: boolean;
   }>>;
   onExerciseSelectionChange?: (cellData: Record<string, CellData>) => void;
+  getParametersForCell?: (mesocycleId: string, microcycleId: string | undefined, methodId: string, categoryName: string | undefined) => string;
 }
 
-export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], parameterValues = {}, methodParametersMap = {}, onExerciseSelectionChange }: MicrocyclePlanningTableProps) {
+export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], parameterValues = {}, methodParametersMap = {}, onExerciseSelectionChange, getParametersForCell }: MicrocyclePlanningTableProps) {
   const { data: toolboxData } = useToolboxData();
   const { data: athleticismData } = useAthleticismData();
   const { toast } = useToast();
@@ -1554,6 +1555,12 @@ const updateCellData = (
                                    }
                                    onCopy={() => copyExercisesWithinMethod(method.id, undefined, column.id)}
                                    hasPreviousExercises={hasPreviousExercisesInMethod(method.id, undefined, columnStructure.findIndex(col => col.id === column.id))}
+                                   parameterInfo={getParametersForCell?.(
+                                     column.mesocycleId,
+                                     column.type === 'microcycle' ? column.microcycleId : undefined,
+                                     method.id,
+                                     undefined
+                                   )}
                                  />
                               </TableCell>
                             );
@@ -1633,6 +1640,12 @@ const updateCellData = (
                                       }
                                       onCopy={() => copyExercisesWithinMethod(method.id, categoryName, column.id)}
                                       hasPreviousExercises={hasPreviousExercisesInMethod(method.id, categoryName, columnStructure.findIndex(col => col.id === column.id))}
+                                      parameterInfo={getParametersForCell?.(
+                                        column.mesocycleId,
+                                        column.type === 'microcycle' ? column.microcycleId : undefined,
+                                        method.id,
+                                        categoryName
+                                      )}
                                     />
                                   </TableCell>
                                 );
