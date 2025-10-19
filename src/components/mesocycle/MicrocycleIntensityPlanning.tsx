@@ -4,6 +4,8 @@ import { IntensityLevel } from '@/types/training';
 import IntensityScale from './IntensityScale';
 import MicrocycleIntensityColumn from './MicrocycleIntensityColumn';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { Button } from '@/components/ui/button';
+import { Copy } from 'lucide-react';
 
 
 interface MicrocycleIntensityPlanningProps {
@@ -33,7 +35,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                 <div className="text-sm font-semibold text-center py-2">Microcycle Intensity</div>
               </div>
               <div className="flex flex-nowrap">
-                {mesocycles.map((meso) => {
+                {mesocycles.map((meso, mesoIndex) => {
                   const width = meso.microcycles.length * 80; // 80px per microcycle
                   return meso.microcycles.length > 0 ? (
                     <div 
@@ -42,17 +44,19 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                       style={{ width: `${width}px` }}
                     >
                       {meso.name}
-                      {onCopyMesocycle && (
-                        <button
+                      {mesoIndex > 0 && onCopyMesocycle && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
                           onClick={(e) => {
                             e.stopPropagation();
                             onCopyMesocycle(meso.id);
                           }}
-                          className="absolute top-1 right-1 text-xs opacity-60 hover:opacity-100 transition-opacity"
-                          title="Copy from previous mesocycle"
+                          className="absolute top-1 right-1 h-6 w-6 p-0 bg-white hover:bg-white/90 shadow-sm border border-border"
+                          title="Copy intensity pattern from previous mesocycle"
                         >
-                          📋
-                        </button>
+                          <Copy className="h-3 w-3 text-foreground" />
+                        </Button>
                       )}
                     </div>
                   ) : null;
