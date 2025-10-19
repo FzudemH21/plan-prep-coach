@@ -85,6 +85,10 @@ export default function MicrocyclePlanningPage() {
     exercises: ExerciseDistribution[];
     weekStartDate: string;
   } | null>(null);
+  const [copiedDay, setCopiedDay] = useState<{
+    exercises: ExerciseDistribution[];
+    sourceDate: string;
+  } | null>(null);
 
   const totalSteps = 2; // Step 1: Exercise Distribution, Step 2: Training Calendar
 
@@ -963,8 +967,14 @@ export default function MicrocyclePlanningPage() {
     });
   };
 
-  // Handle paste session
+  // Handle paste session (also handles day pasting)
   const handlePasteSession = (targetDate: string) => {
+    // Prioritize day paste over session paste
+    if (copiedDay) {
+      handlePasteDay(targetDate);
+      return;
+    }
+    
     if (!copiedSession) return;
     
     setExerciseDistribution(prev => {
@@ -1095,6 +1105,246 @@ export default function MicrocyclePlanningPage() {
     });
     
     setCopiedWeek(null);
+  };
+
+  // Handle copy day
+  const handleCopyDay = (dayDate: string) => {
+    const dayExercises = exerciseDistribution.filter(
+      ex => ex.dayDate === dayDate
+    );
+    
+    if (dayExercises.length === 0) {
+      toast({
+        title: "Cannot copy",
+        description: "This day has no exercises",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setCopiedDay({
+      exercises: dayExercises,
+      sourceDate: dayDate
+    });
+    
+    toast({
+      title: "Day copied",
+      description: `${dayExercises.length} exercise(s) copied to clipboard`,
+    });
+  };
+
+  // Handle paste day
+  const handlePasteDay = (targetDate: string) => {
+    if (!copiedDay) return;
+    
+    setExerciseDistribution(prev => {
+      // Remove all existing exercises from target day
+      const filteredPrev = prev.filter(ex => ex.dayDate !== targetDate);
+      
+      // Get unique session indices from copied exercises
+      const sessionIndices = [...new Set(copiedDay.exercises.map(ex => ex.sessionIndex))].sort((a, b) => a - b);
+      
+      // Create mapping from old session indices to new sequential indices
+      const sessionMapping = new Map<number, number>();
+      sessionIndices.forEach((oldIndex, newIndex) => {
+        sessionMapping.set(oldIndex, newIndex);
+      });
+      
+      // Create new exercises with updated date and remapped session indices
+      const pastedExercises = copiedDay.exercises.map(ex => ({
+        ...ex,
+        dayDate: targetDate,
+        sessionIndex: sessionMapping.get(ex.sessionIndex) || 0
+      }));
+      
+      return [...filteredPrev, ...pastedExercises];
+    });
+    
+    // Copy day split state if it exists
+    if (daySplitStates[copiedDay.sourceDate]) {
+      setDaySplitStates(prev => ({
+        ...prev,
+        [targetDate]: daySplitStates[copiedDay.sourceDate]
+      }));
+    }
+    
+    toast({
+      title: "Day pasted",
+      description: `${copiedDay.exercises.length} exercise(s) pasted successfully`,
+    });
+    
+    // Clear the copied day so paste button disappears
+    setCopiedDay(null);
+  };
+
+  // Handle clear day
+  const handleClearDay = (dayDate: string) => {
+    const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
+    
+    if (dayExercises.length === 0) {
+      toast({
+        title: "Nothing to clear",
+        description: "This day has no exercises",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setExerciseDistribution(prev => 
+      prev.filter(ex => ex.dayDate !== dayDate)
+    );
+    
+    // Clear day split state
+    setDaySplitStates(prev => {
+      const updated = { ...prev };
+      delete updated[dayDate];
+      return updated;
+    });
+    
+    toast({
+      title: "Day cleared",
+      description: `Removed ${dayExercises.length} exercise(s)`,
+    });
+  };
+
+  // Handle add test/event with two-way sync
+  const handleAddTestEvent = (dayDate: string, type: 'test' | 'event') => {
+    // Update trainingDays
+    setTrainingDays(prev => {
+      const updated = prev.map(td => {
+        if (td.date === dayDate) {
+          if (type === 'test') {
+            return {
+              ...td,
+              isTestDay: true,
+              testName: td.testName || 'Test'
+            };
+          } else {
+            return {
+              ...td,
+              isEventDay: true,
+              eventName: td.eventName || 'Event'
+            };
+          }
+        }
+        return td;
+      });
+      localStorage.setItem('trainingDays', JSON.stringify(updated));
+      return updated;
+    });
+    
+    // Sync to macrocycleData
+    if (macrocycleData) {
+      const updatedMacrocycle = { ...macrocycleData };
+      
+      if (type === 'test') {
+        // Find or create a sub-goal for "General Test"
+        let generalTestGoal = updatedMacrocycle.subGoals?.find(
+          (sg: any) => sg.testMethod === 'General Test' || sg.description === 'General Test'
+        );
+        
+        if (!generalTestGoal) {
+          generalTestGoal = {
+            id: `subgoal-${Date.now()}`,
+            description: 'General Test',
+            testMethod: 'General Test',
+            preTestValue: 0,
+            goalValue: 0,
+            unit: '',
+            percentChange: 0,
+            testDates: []
+          };
+          updatedMacrocycle.subGoals = [...(updatedMacrocycle.subGoals || []), generalTestGoal];
+        }
+        
+        // Add date to testDates if not already present
+        if (!generalTestGoal.testDates.includes(dayDate)) {
+          generalTestGoal.testDates = [...(generalTestGoal.testDates || []), dayDate];
+        }
+      } else {
+        // Find or create a general event
+        let generalEvent = updatedMacrocycle.events?.find(
+          (e: any) => e.name === 'General Event'
+        );
+        
+        if (!generalEvent) {
+          generalEvent = {
+            id: `event-${Date.now()}`,
+            name: 'General Event',
+            description: '',
+            eventDates: []
+          };
+          updatedMacrocycle.events = [...(updatedMacrocycle.events || []), generalEvent];
+        }
+        
+        // Add date to eventDates if not already present
+        if (!generalEvent.eventDates.includes(dayDate)) {
+          generalEvent.eventDates = [...(generalEvent.eventDates || []), dayDate];
+        }
+      }
+      
+      setMacrocycleData(updatedMacrocycle);
+      localStorage.setItem('macrocycleData', JSON.stringify(updatedMacrocycle));
+    }
+    
+    toast({
+      title: `${type === 'test' ? 'Test' : 'Event'} added`,
+      description: `Scheduled for ${format(parseISO(dayDate), 'PPP')}`,
+    });
+  };
+
+  // Handle delete test/event with two-way sync
+  const handleDeleteTestEvent = (dayDate: string, type: 'test' | 'event') => {
+    // Update trainingDays
+    setTrainingDays(prev => {
+      const updated = prev.map(td => {
+        if (td.date === dayDate) {
+          if (type === 'test') {
+            return {
+              ...td,
+              isTestDay: false,
+              testName: undefined
+            };
+          } else {
+            return {
+              ...td,
+              isEventDay: false,
+              eventName: undefined
+            };
+          }
+        }
+        return td;
+      });
+      localStorage.setItem('trainingDays', JSON.stringify(updated));
+      return updated;
+    });
+    
+    // Sync to macrocycleData
+    if (macrocycleData) {
+      const updatedMacrocycle = { ...macrocycleData };
+      
+      if (type === 'test') {
+        // Remove date from all sub-goals
+        updatedMacrocycle.subGoals = (updatedMacrocycle.subGoals || []).map((sg: any) => ({
+          ...sg,
+          testDates: (sg.testDates || []).filter((date: string) => date !== dayDate)
+        }));
+      } else {
+        // Remove date from all events
+        updatedMacrocycle.events = (updatedMacrocycle.events || []).map((e: any) => ({
+          ...e,
+          eventDates: (e.eventDates || []).filter((date: string) => date !== dayDate)
+        }));
+      }
+      
+      setMacrocycleData(updatedMacrocycle);
+      localStorage.setItem('macrocycleData', JSON.stringify(updatedMacrocycle));
+    }
+    
+    toast({
+      title: `${type === 'test' ? 'Test' : 'Event'} deleted`,
+      description: `Removed from ${format(parseISO(dayDate), 'PPP')}`,
+    });
   };
 
   // Handle intensity change from calendar view
@@ -1915,6 +2165,11 @@ export default function MicrocyclePlanningPage() {
               onClearWeek={handleClearWeek}
               onPasteWeek={handlePasteWeek}
               copiedWeek={copiedWeek}
+              onCopyDay={handleCopyDay}
+              onClearDay={handleClearDay}
+              onAddTestEvent={handleAddTestEvent}
+              onDeleteTestEvent={handleDeleteTestEvent}
+              copiedDay={copiedDay}
               dailyIntensityData={dailyIntensityData}
               onIntensityChange={handleIntensityChange}
               getIntensityColor={getIntensityColor}

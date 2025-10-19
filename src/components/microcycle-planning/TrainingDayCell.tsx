@@ -12,6 +12,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
 interface ExerciseDistribution {
@@ -58,6 +59,14 @@ interface TrainingDayCellProps {
   onCopySession?: (dayDate: string, sessionIndex: number) => void;
   onPasteSession?: (dayDate: string) => void;
   copiedSession?: { exercises: ExerciseDistribution[]; sourceDate: string; sessionIndex: number } | null;
+  
+  // Day-level operations
+  onCopyDay?: (dayDate: string) => void;
+  onClearDay?: (dayDate: string) => void;
+  onAddTestEvent?: (dayDate: string, type: 'test' | 'event') => void;
+  onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event') => void;
+  copiedDay?: { exercises: ExerciseDistribution[]; sourceDate: string } | null;
+  
   dailyIntensityData?: any[];
   onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
   getIntensityColor?: (intensity: IntensityLevel) => string;
@@ -71,6 +80,11 @@ export function TrainingDayCell({
   onCopySession, 
   onPasteSession, 
   copiedSession,
+  onCopyDay,
+  onClearDay,
+  onAddTestEvent,
+  onDeleteTestEvent,
+  copiedDay,
   dailyIntensityData,
   onIntensityChange,
   getIntensityColor,
@@ -104,13 +118,96 @@ export function TrainingDayCell({
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
       className={cn(
-        "min-h-[140px] border rounded-lg p-3 transition-all",
+        "min-h-[140px] border rounded-lg p-3 transition-all relative",
         day.isCurrentMonth ? "bg-card" : "bg-muted/30",
         hasTraining && "cursor-pointer hover:shadow-md hover:border-primary",
         !hasTraining && "cursor-default",
         isSpecialDay && "border-red-500 border-2"
       )}
     >
+      {/* Day-level Menu (3-dot) */}
+      {day.isCurrentMonth && (
+        <div className="absolute top-1 right-1 z-10">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+              <button className="h-6 w-6 flex items-center justify-center rounded hover:bg-accent/80 transition-colors bg-background/80 border shadow-sm">
+                <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 z-[100]">
+              <DropdownMenuItem onClick={(e) => {
+                e.stopPropagation();
+                onCopyDay?.(day.dateString);
+              }}>
+                <Copy className="mr-2 h-4 w-4" />
+                Copy day
+              </DropdownMenuItem>
+              
+              {hasTraining && (
+                <DropdownMenuItem 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClearDay?.(day.dateString);
+                  }}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Clear day
+                </DropdownMenuItem>
+              )}
+              
+              <DropdownMenuSeparator />
+              
+              {!isTestDay && (
+                <DropdownMenuItem onClick={(e) => {
+                  e.stopPropagation();
+                  onAddTestEvent?.(day.dateString, 'test');
+                }}>
+                  <Trophy className="mr-2 h-4 w-4" />
+                  Add test
+                </DropdownMenuItem>
+              )}
+              
+              {isTestDay && (
+                <DropdownMenuItem 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteTestEvent?.(day.dateString, 'test');
+                  }}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete test
+                </DropdownMenuItem>
+              )}
+              
+              {!isEventDay && (
+                <DropdownMenuItem onClick={(e) => {
+                  e.stopPropagation();
+                  onAddTestEvent?.(day.dateString, 'event');
+                }}>
+                  <Calendar className="mr-2 h-4 w-4" />
+                  Add event
+                </DropdownMenuItem>
+              )}
+              
+              {isEventDay && (
+                <DropdownMenuItem 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteTestEvent?.(day.dateString, 'event');
+                  }}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete event
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
+
       {/* Day Number + Test/Event Name */}
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
@@ -315,6 +412,22 @@ export function TrainingDayCell({
             >
               <Copy className="mr-2 h-4 w-4" />
               Paste ({copiedSession.exercises.length} exercise{copiedSession.exercises.length !== 1 ? 's' : ''})
+            </Button>
+          )}
+
+          {/* Paste Day button - shown when hovering and day is copied */}
+          {isHovering && copiedDay && !copiedSession && (
+            <Button
+              onClick={(e) => {
+                e.stopPropagation();
+                onPasteSession?.(day.dateString);
+              }}
+              className="w-full mt-2"
+              variant="default"
+              size="sm"
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              Paste Day ({copiedDay.exercises.length} exercise{copiedDay.exercises.length !== 1 ? 's' : ''})
             </Button>
           )}
         </>

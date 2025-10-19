@@ -40,6 +40,7 @@ interface WeekRowProps {
   weekIdx: number;
   copiedWeek?: { exercises: ExerciseDistribution[]; weekStartDate: string } | null;
   copiedSession?: any;
+  copiedDay?: { exercises: ExerciseDistribution[]; sourceDate: string } | null;
   onCopyWeek?: (weekStartDate: string) => void;
   onClearWeek?: (weekStartDate: string) => void;
   onPasteWeek?: (weekStartDate: string) => void;
@@ -47,6 +48,10 @@ interface WeekRowProps {
   onDeleteSession?: (dayDate: string, sessionIndex: number) => void;
   onCopySession?: (dayDate: string, sessionIndex: number) => void;
   onPasteSession?: (dayDate: string) => void;
+  onCopyDay?: (dayDate: string) => void;
+  onClearDay?: (dayDate: string) => void;
+  onAddTestEvent?: (dayDate: string, type: 'test' | 'event') => void;
+  onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event') => void;
   dailyIntensityData?: any[];
   onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
   getIntensityColor?: (intensity: IntensityLevel) => string;
@@ -58,6 +63,7 @@ export function WeekRow({
   weekIdx,
   copiedWeek,
   copiedSession,
+  copiedDay,
   onCopyWeek,
   onClearWeek,
   onPasteWeek,
@@ -65,6 +71,10 @@ export function WeekRow({
   onDeleteSession,
   onCopySession,
   onPasteSession,
+  onCopyDay,
+  onClearDay,
+  onAddTestEvent,
+  onDeleteTestEvent,
   dailyIntensityData,
   onIntensityChange,
   getIntensityColor,
@@ -136,6 +146,11 @@ export function WeekRow({
             onCopySession={onCopySession}
             onPasteSession={onPasteSession}
             copiedSession={copiedSession}
+            onCopyDay={onCopyDay}
+            onClearDay={onClearDay}
+            onAddTestEvent={onAddTestEvent}
+            onDeleteTestEvent={onDeleteTestEvent}
+            copiedDay={copiedDay}
             dailyIntensityData={dailyIntensityData}
             onIntensityChange={onIntensityChange}
             getIntensityColor={getIntensityColor}

@@ -38,6 +38,11 @@ interface TrainingCalendarViewProps {
   onClearWeek?: (weekStartDate: string) => void;
   onPasteWeek?: (weekStartDate: string) => void;
   copiedWeek?: { exercises: ExerciseDistribution[]; weekStartDate: string } | null;
+  onCopyDay?: (dayDate: string) => void;
+  onClearDay?: (dayDate: string) => void;
+  onAddTestEvent?: (dayDate: string, type: 'test' | 'event') => void;
+  onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event') => void;
+  copiedDay?: { exercises: ExerciseDistribution[]; sourceDate: string } | null;
   dailyIntensityData?: any[];
   onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
   getIntensityColor?: (intensity: IntensityLevel) => string;
@@ -74,6 +79,11 @@ export function TrainingCalendarView({
   onClearWeek,
   onPasteWeek,
   copiedWeek,
+  onCopyDay,
+  onClearDay,
+  onAddTestEvent,
+  onDeleteTestEvent,
+  copiedDay,
   dailyIntensityData,
   onIntensityChange,
   getIntensityColor,
@@ -300,6 +310,7 @@ export function TrainingCalendarView({
                   weekIdx={weekIdx}
                   copiedWeek={copiedWeek}
                   copiedSession={copiedSession}
+                  copiedDay={copiedDay}
                   onCopyWeek={onCopyWeek}
                   onClearWeek={onClearWeek}
                   onPasteWeek={onPasteWeek}
@@ -311,6 +322,10 @@ export function TrainingCalendarView({
                   onDeleteSession={onDeleteSession}
                   onCopySession={onCopySession}
                   onPasteSession={onPasteSession}
+                  onCopyDay={onCopyDay}
+                  onClearDay={onClearDay}
+                  onAddTestEvent={onAddTestEvent}
+                  onDeleteTestEvent={onDeleteTestEvent}
                   dailyIntensityData={dailyIntensityData}
                   onIntensityChange={onIntensityChange}
                   getIntensityColor={getIntensityColor}
