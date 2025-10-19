@@ -3132,14 +3132,39 @@ export default function MesocyclePage() {
       mesocycle.microcycles.some(micro => micro.id === day.microcycleId)
     );
     
-    // Remove all daily intensity entries for these days
-    setDailyIntensityData(prev => 
-      prev.filter(di => !mesocycleDays.some(day => day.date === di.date))
-    );
+    // Set all daily intensity entries to "off" for these days
+    setDailyIntensityData(prev => {
+      const updated = [...prev];
+      
+      mesocycleDays.forEach(day => {
+        const existingIndex = updated.findIndex(di => di.date === day.date);
+        
+        if (existingIndex >= 0) {
+          // Update existing entry to "off"
+          updated[existingIndex] = {
+            ...updated[existingIndex],
+            intensity: "off"
+          };
+        } else {
+          // Create new entry with "off"
+          updated.push({
+            date: day.date,
+            mesocycleId: mesocycleId,
+            microcycleId: day.microcycleId,
+            dayOfWeek: day.dayOfWeek,
+            intensity: "off",
+            isTestDay: day.isTestDay,
+            isEventDay: day.isEventDay
+          });
+        }
+      });
+      
+      return updated;
+    });
     
     toast({
       title: "Intensities cleared",
-      description: `Cleared all daily intensities for ${mesocycle.name}`
+      description: `Set all daily intensities to "off" for ${mesocycle.name}`
     });
   };
 
@@ -3154,14 +3179,39 @@ export default function MesocyclePage() {
     // Get all training days for this microcycle
     const microcycleDays = trainingDays.filter(day => day.microcycleId === microcycleId);
     
-    // Remove all daily intensity entries for these days
-    setDailyIntensityData(prev => 
-      prev.filter(di => !microcycleDays.some(day => day.date === di.date))
-    );
+    // Set all daily intensity entries to "off" for these days
+    setDailyIntensityData(prev => {
+      const updated = [...prev];
+      
+      microcycleDays.forEach(day => {
+        const existingIndex = updated.findIndex(di => di.date === day.date);
+        
+        if (existingIndex >= 0) {
+          // Update existing entry to "off"
+          updated[existingIndex] = {
+            ...updated[existingIndex],
+            intensity: "off"
+          };
+        } else {
+          // Create new entry with "off"
+          updated.push({
+            date: day.date,
+            mesocycleId: mesocycleId,
+            microcycleId: microcycleId,
+            dayOfWeek: day.dayOfWeek,
+            intensity: "off",
+            isTestDay: day.isTestDay,
+            isEventDay: day.isEventDay
+          });
+        }
+      });
+      
+      return updated;
+    });
     
     toast({
       title: "Intensities cleared",
-      description: `Cleared all daily intensities for ${microcycle.name}`
+      description: `Set all daily intensities to "off" for ${microcycle.name}`
     });
   };
 
