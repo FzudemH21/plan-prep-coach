@@ -303,47 +303,8 @@ export function TrainingDayCell({
                   setCombinedDialogOpen(true);
                 }}>
                   <Trophy className="mr-2 h-4 w-4" />
-                  Add test/event
+                  Manage tests/events
                 </DropdownMenuItem>
-                
-                {isTestDay && (
-                  <DropdownMenuItem 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteTestEvent?.(day.dateString, 'test');
-                    }}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete test
-                  </DropdownMenuItem>
-                )}
-                
-                {isEventDay && (
-                  <DropdownMenuItem 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteTestEvent?.(day.dateString, 'event');
-                    }}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete event
-                  </DropdownMenuItem>
-                )}
-                
-                {isEventDay && (
-                  <DropdownMenuItem 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteTestEvent?.(day.dateString, 'event');
-                    }}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete event
-                  </DropdownMenuItem>
-                )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -531,21 +492,26 @@ export function TrainingDayCell({
     </div>
 
     {/* Combined Test/Event Dialog */}
-    <CombinedTestEventDialog
-      open={combinedDialogOpen}
-      onOpenChange={setCombinedDialogOpen}
-      existingTests={availableTests || []}
-      existingEvents={availableEvents || []}
-      onSelect={(selected) => {
-        onAddTestEvent?.(
-          day.dateString, 
-          selected.type, 
-          selected.id, 
-          selected.name, 
-          selected.isNew
-        );
-      }}
-    />
+      <CombinedTestEventDialog
+        open={combinedDialogOpen}
+        onOpenChange={setCombinedDialogOpen}
+        existingTests={availableTests || []}
+        existingEvents={availableEvents || []}
+        scheduledTestNames={day.trainingDay?.testNames}
+        scheduledEventNames={day.trainingDay?.eventNames}
+        onSelect={(selected) => {
+          onAddTestEvent?.(
+            day.dateString, 
+            selected.type, 
+            selected.id, 
+            selected.name, 
+            selected.isNew
+          );
+        }}
+        onDelete={(type, name) => {
+          onDeleteTestEvent?.(day.dateString, type);
+        }}
+      />
     </>
   );
 }

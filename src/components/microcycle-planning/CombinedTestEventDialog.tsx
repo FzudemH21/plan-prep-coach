@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Trophy, Calendar } from 'lucide-react';
+import { Plus, Trophy, Calendar, X } from 'lucide-react';
 import { SubGoal, Event } from '@/types/training';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
@@ -21,12 +21,15 @@ interface CombinedTestEventDialogProps {
   onOpenChange: (open: boolean) => void;
   existingTests: SubGoal[];
   existingEvents: Event[];
+  scheduledTestNames?: string[];
+  scheduledEventNames?: string[];
   onSelect: (selected: { 
     type: 'test' | 'event';
     id: string; 
     name: string; 
     isNew: boolean 
   }) => void;
+  onDelete: (type: 'test' | 'event', name: string) => void;
 }
 
 export function CombinedTestEventDialog({
@@ -34,7 +37,10 @@ export function CombinedTestEventDialog({
   onOpenChange,
   existingTests = [],
   existingEvents = [],
+  scheduledTestNames = [],
+  scheduledEventNames = [],
   onSelect,
+  onDelete,
 }: CombinedTestEventDialogProps) {
   const [type, setType] = useState<'test' | 'event'>('test');
   const [mode, setMode] = useState<'select' | 'create'>('select');
@@ -78,13 +84,69 @@ export function CombinedTestEventDialog({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[500px]" onClick={(e) => e.stopPropagation()}>
         <DialogHeader>
-          <DialogTitle>Add Test/Event</DialogTitle>
+          <DialogTitle>Manage Tests/Events</DialogTitle>
           <DialogDescription>
-            Select the type, then choose from existing items or create a new one
+            View currently scheduled items and add new tests or events
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {/* Currently Scheduled Section */}
+          {(scheduledTestNames.length > 0 || scheduledEventNames.length > 0) && (
+            <div className="space-y-2 pb-4 border-b">
+              <Label className="text-sm font-semibold">Currently Scheduled</Label>
+              <div className="space-y-2">
+                {scheduledTestNames.map((testName, idx) => (
+                  <div 
+                    key={`test-${idx}`} 
+                    className="flex items-center justify-between p-2 rounded-md border bg-muted/50"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Trophy className="h-4 w-4 text-amber-600" />
+                      <span className="text-sm font-medium">{testName}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete('test', testName);
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                
+                {scheduledEventNames.map((eventName, idx) => (
+                  <div 
+                    key={`event-${idx}`}
+                    className="flex items-center justify-between p-2 rounded-md border bg-muted/50"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm font-medium">{eventName}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete('event', eventName);
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Type selector */}
           <div className="space-y-2">
             <Label>Type</Label>
