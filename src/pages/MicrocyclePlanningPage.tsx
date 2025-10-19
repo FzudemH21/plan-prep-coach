@@ -243,18 +243,16 @@ export default function MicrocyclePlanningPage() {
     const testMap = new Map<string, string>();
     (macrocycleData.subGoals || []).forEach((sg: any) => {
       const name = sg.testMethod || sg.name || sg.testName || sg.method || sg.description || 'Test';
-      (sg.testDates || []).forEach((d: any) => {
-        const dateKey = new Date(d).toISOString().split('T')[0];
-        testMap.set(dateKey, name);
+      (sg.testDates || []).forEach((dateStr: string) => {
+        testMap.set(dateStr, name);
       });
     });
 
     const eventMap = new Map<string, string>();
     (macrocycleData.events || []).forEach((e: any) => {
       const name = e.name || e.eventName || e.title || e.description || 'Event';
-      (e.eventDates || []).forEach((d: any) => {
-        const dateKey = new Date(d).toISOString().split('T')[0];
-        eventMap.set(dateKey, name);
+      (e.eventDates || []).forEach((dateStr: string) => {
+        eventMap.set(dateStr, name);
       });
     });
 

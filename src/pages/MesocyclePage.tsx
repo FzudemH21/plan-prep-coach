@@ -2633,9 +2633,8 @@ export default function MesocyclePage() {
       if (sg.testDates) {
         console.log(`DEBUG: SubGoal ${idx} testDates:`, sg.testDates);
         sg.testDates?.forEach((dateStr: string) => {
-          const dateKey = new Date(dateStr).toISOString().split('T')[0];
-          testDateMap.set(dateKey, testName);
-          console.log(`DEBUG: Added test "${testName}" for date ${dateKey}`);
+          testDateMap.set(dateStr, testName);
+          console.log(`DEBUG: Added test "${testName}" for date ${dateStr}`);
         });
       }
     });
@@ -2654,10 +2653,9 @@ export default function MesocyclePage() {
       
       if (e.eventDates) {
         console.log(`DEBUG: Event ${idx} eventDates:`, e.eventDates);
-        e.eventDates?.forEach((date: any) => {
-          const dateKey = new Date(date).toISOString().split('T')[0];
-          eventDateMap.set(dateKey, eventName);
-          console.log(`DEBUG: Added event "${eventName}" for date ${dateKey}`);
+        e.eventDates?.forEach((dateStr: string) => {
+          eventDateMap.set(dateStr, eventName);
+          console.log(`DEBUG: Added event "${eventName}" for date ${dateStr}`);
         });
       }
     });

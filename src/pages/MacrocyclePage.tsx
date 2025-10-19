@@ -21,6 +21,7 @@ import {
 import { useDisplayMode } from "@/contexts/DisplayModeContext";
 import { useAthleticismData } from "@/hooks/useAthleticismData";
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
+import { format, parseISO } from "date-fns";
 
 export default function MacrocyclePage() {
   const { displayMode } = useDisplayMode();
@@ -57,15 +58,9 @@ export default function MacrocyclePage() {
           parsedSmartGoal.endDate = new Date(parsedSmartGoal.endDate);
         }
         setSmartGoal(parsedSmartGoal);
-        const parsedSubGoals = (data.subGoals || []).map((sg: SubGoal) => ({
-          ...sg,
-          testDates: (sg.testDates || []).map((d: any) => new Date(d))
-        }));
+        const parsedSubGoals = data.subGoals || [];
         setSubGoals(parsedSubGoals);
-        const parsedEvents = (data.events || []).map((event: Event) => ({
-          ...event,
-          eventDates: (event.eventDates || []).map((d: any) => new Date(d))
-        }));
+        const parsedEvents = data.events || [];
         setEvents(parsedEvents);
         setQualities(data.qualities || []);
         setQualitiesBySubGoal(data.qualitiesBySubGoal || {});
@@ -476,22 +471,21 @@ export default function MacrocyclePage() {
     const updated = [...events];
     const eventIndex = updated.findIndex(e => e.id === eventId);
     if (eventIndex !== -1) {
+      const dateStr = format(date, 'yyyy-MM-dd');
       const currentDates = updated[eventIndex].eventDates || [];
       const isAlreadyScheduled = currentDates.some(eventDate => 
-        eventDate.toDateString() === date.toDateString()
+        eventDate === dateStr
       );
       if (isAlreadyScheduled) {
         updated[eventIndex].eventDates = currentDates.filter(eventDate => 
-          eventDate.toDateString() !== date.toDateString()
+          eventDate !== dateStr
         );
-        toast({ title: 'Event Unscheduled', description: `Removed "${updated[eventIndex].name}" from ${date.toLocaleDateString()}` });
+        toast({ title: 'Event Unscheduled', description: `Removed "${updated[eventIndex].name}" from ${format(date, 'PPP')}` });
       } else {
-        updated[eventIndex].eventDates = [...currentDates, date];
-        console.log(`DEBUG: Scheduled event "${updated[eventIndex].name}" for ${date.toISOString()}`);
-        toast({ title: 'Event Scheduled', description: `Added "${updated[eventIndex].name}" to ${date.toLocaleDateString()}` });
+        updated[eventIndex].eventDates = [...currentDates, dateStr];
+        toast({ title: 'Event Scheduled', description: `Added "${updated[eventIndex].name}" to ${format(date, 'PPP')}` });
       }
       setEvents(updated);
-      console.log('DEBUG: Updated events array:', updated);
     }
   };
 
@@ -1056,10 +1050,10 @@ export default function MacrocyclePage() {
                     return date < smartGoal.startDate || date > smartGoal.endDate;
                   }}
                   modifiers={{
-                    scheduled: [
-                      ...subGoals.flatMap(sg => sg.testDates || []),
-                      ...events.flatMap(e => e.eventDates || [])
-                    ]
+                    scheduled: subGoals
+                      .flatMap(sg => sg.testDates || [])
+                      .concat(events.flatMap(e => e.eventDates || []))
+                      .map(dateStr => parseISO(dateStr))
                   }}
                   modifiersStyles={{
                     scheduled: { 
@@ -1070,15 +1064,12 @@ export default function MacrocyclePage() {
                   }}
                   components={{
                     Day: ({ date, ...dayProps }: any) => {
+                      const dateStr = format(date, 'yyyy-MM-dd');
                       const scheduledTests = subGoals.filter(sg => 
-                        sg.testDates?.some(testDate => 
-                          testDate.toDateString() === date.toDateString()
-                        )
+                        sg.testDates?.some(testDate => testDate === dateStr)
                       );
                       const scheduledEvents = events.filter(e => 
-                        e.eventDates?.some(eventDate => 
-                          eventDate.toDateString() === date.toDateString()
-                        )
+                        e.eventDates?.some(eventDate => eventDate === dateStr)
                       );
 
                       const handleClick = (e: any) => {
@@ -1092,16 +1083,16 @@ export default function MacrocyclePage() {
                           if (subGoalIndex !== -1) {
                             const currentDates = updated[subGoalIndex].testDates || [];
                             const isAlreadyScheduled = currentDates.some(testDate => 
-                              testDate.toDateString() === date.toDateString()
+                              testDate === dateStr
                             );
                             if (isAlreadyScheduled) {
                               updated[subGoalIndex].testDates = currentDates.filter(testDate => 
-                                testDate.toDateString() !== date.toDateString()
+                                testDate !== dateStr
                               );
-                              toast({ title: 'Test Unscheduled', description: `Removed "${updated[subGoalIndex].testMethod}" from ${date.toLocaleDateString()}` });
+                              toast({ title: 'Test Unscheduled', description: `Removed "${updated[subGoalIndex].testMethod}" from ${format(date, 'PPP')}` });
                             } else {
-                              updated[subGoalIndex].testDates = [...currentDates, date];
-                              toast({ title: 'Test Scheduled', description: `Added "${updated[subGoalIndex].testMethod}" to ${date.toLocaleDateString()}` });
+                              updated[subGoalIndex].testDates = [...currentDates, dateStr];
+                              toast({ title: 'Test Scheduled', description: `Added "${updated[subGoalIndex].testMethod}" to ${format(date, 'PPP')}` });
                             }
                             setSubGoals(updated);
                           }

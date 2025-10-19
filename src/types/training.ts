@@ -44,14 +44,14 @@ export interface SubGoal {
   goalValue: number;
   unit: string;
   percentChange: number;
-  testDates: Date[];
+  testDates: string[];
 }
 
 export interface Event {
   id: string;
   name: string;
   description?: string;
-  eventDates: Date[];
+  eventDates: string[];
 }
 
 export interface TrainableQuality {
