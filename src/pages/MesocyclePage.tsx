@@ -3250,7 +3250,7 @@ export default function MesocyclePage() {
               <div className="w-max p-4">
                 {/* Mesocycle Headers */}
                 <div className="flex mb-4 flex-nowrap">
-                  <div className="sticky left-0 bg-background z-20 min-w-[140px] mr-4 shrink-0">
+                  <div className="sticky left-0 bg-background z-20 w-[150px] shrink-0">
                     <div className="text-sm font-semibold text-center py-2">Daily Intensity</div>
                   </div>
                   <div className="flex flex-nowrap">
@@ -3304,7 +3304,7 @@ export default function MesocyclePage() {
 
                 {/* Microcycle Names Row */}
                 <div className="flex mb-2 flex-nowrap">
-                  <div className="sticky left-0 bg-background z-20 min-w-[140px] mr-4 shrink-0">
+                  <div className="sticky left-0 bg-background z-20 w-[150px] shrink-0">
                     {/* Empty space to align with intensity scale */}
                   </div>
                   <div className="flex flex-nowrap">
