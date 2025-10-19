@@ -19,7 +19,7 @@ import {
   HoverCardTrigger,
   HoverCardContent,
 } from '@/components/ui/hover-card';
-import { TestEventSelectionDialog } from './TestEventSelectionDialog';
+import { CombinedTestEventDialog } from './CombinedTestEventDialog';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -105,8 +105,7 @@ export function TrainingDayCell({
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [isHovering, setIsHovering] = useState(false);
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
-  const [testEventDialogOpen, setTestEventDialogOpen] = useState(false);
-  const [dialogType, setDialogType] = useState<'test' | 'event'>('test');
+  const [combinedDialogOpen, setCombinedDialogOpen] = useState(false);
   const hasTraining = day.sessions.length > 0;
   const isTestDay = day.trainingDay?.isTestDay;
   const isEventDay = day.trainingDay?.isEventDay;
@@ -127,6 +126,7 @@ export function TrainingDayCell({
     (isTestDay ? 'Test' : isEventDay ? 'Event' : '');
 
   return (
+    <>
     <div
       onClick={hasTraining ? onClick : undefined}
       onMouseEnter={() => setIsHovering(true)}
@@ -298,14 +298,13 @@ export function TrainingDayCell({
                 
                 <DropdownMenuSeparator />
                 
-            <DropdownMenuItem onClick={(e) => {
-              e.stopPropagation();
-              setDialogType('test');
-              setTestEventDialogOpen(true);
-            }}>
-              <Trophy className="mr-2 h-4 w-4" />
-              Add test
-            </DropdownMenuItem>
+                <DropdownMenuItem onClick={(e) => {
+                  e.stopPropagation();
+                  setCombinedDialogOpen(true);
+                }}>
+                  <Trophy className="mr-2 h-4 w-4" />
+                  Add test/event
+                </DropdownMenuItem>
                 
                 {isTestDay && (
                   <DropdownMenuItem 
@@ -320,14 +319,18 @@ export function TrainingDayCell({
                   </DropdownMenuItem>
                 )}
                 
-            <DropdownMenuItem onClick={(e) => {
-              e.stopPropagation();
-              setDialogType('event');
-              setTestEventDialogOpen(true);
-            }}>
-              <Calendar className="mr-2 h-4 w-4" />
-              Add event
-            </DropdownMenuItem>
+                {isEventDay && (
+                  <DropdownMenuItem 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteTestEvent?.(day.dateString, 'event');
+                    }}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete event
+                  </DropdownMenuItem>
+                )}
                 
                 {isEventDay && (
                   <DropdownMenuItem 
@@ -526,5 +529,23 @@ export function TrainingDayCell({
         </div>
       )}
     </div>
+
+    {/* Combined Test/Event Dialog */}
+    <CombinedTestEventDialog
+      open={combinedDialogOpen}
+      onOpenChange={setCombinedDialogOpen}
+      existingTests={availableTests || []}
+      existingEvents={availableEvents || []}
+      onSelect={(selected) => {
+        onAddTestEvent?.(
+          day.dateString, 
+          selected.type, 
+          selected.id, 
+          selected.name, 
+          selected.isNew
+        );
+      }}
+    />
+    </>
   );
 }

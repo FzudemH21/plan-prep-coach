@@ -8,3 +8,4 @@ export { TrainingCalendarView } from './TrainingCalendarView';
 export { TrainingDayCell } from './TrainingDayCell';
 export { DayExercisesDialog } from './DayExercisesDialog';
 export { WeekRow } from './WeekRow';
+export { CombinedTestEventDialog } from './CombinedTestEventDialog';
