@@ -949,13 +949,14 @@ export default function MicrocyclePlanningPage() {
     });
   };
 
-  // Get exercises for a specific day/session/method
-  const getExercisesForCell = (dayDate: string, sessionIndex: number, methodId: string) => {
+  // Get exercises for a specific day/session/method/category
+  const getExercisesForCell = (dayDate: string, sessionIndex: number, methodId: string, categoryName: string = '') => {
     return exerciseDistribution.filter(
       ex => 
         ex.dayDate === dayDate && 
         ex.sessionIndex === sessionIndex &&
-        ex.methodId === methodId
+        ex.methodId === methodId &&
+        ex.categoryName === categoryName
     );
   };
 
@@ -2331,7 +2332,7 @@ export default function MicrocyclePlanningPage() {
                                                           onDragOver={handleDragOver}
                                                         >
                                                           <div className="space-y-1">
-                                                            {getExercisesForCell(day.date, sessionIdx, fullMethodId).map((ex, idx) => (
+                                                            {getExercisesForCell(day.date, sessionIdx, fullMethodId, categoryKey).map((ex, idx) => (
                                                               <div
                                                                 key={idx}
                                                                 className="text-[10px] p-1 bg-primary/10 border border-primary/20 rounded group relative"
