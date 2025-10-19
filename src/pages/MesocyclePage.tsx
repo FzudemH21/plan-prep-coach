@@ -2975,14 +2975,33 @@ export default function MesocyclePage() {
 
   // Copy daily intensity pattern from previous microcycle
   const copyMicrocycleDailyIntensity = (mesocycleId: string, targetMicrocycleId: string) => {
-    const mesocycle = mesocycles.find(m => m.id === mesocycleId);
+    const mesocycleIndex = mesocycles.findIndex(m => m.id === mesocycleId);
+    const mesocycle = mesocycles[mesocycleIndex];
     if (!mesocycle) return;
     
     const targetMicrocycleIndex = mesocycle.microcycles.findIndex(m => m.id === targetMicrocycleId);
-    if (targetMicrocycleIndex <= 0) return; // Can't copy if it's the first microcycle
+    if (targetMicrocycleIndex < 0) return;
     
     const targetMicrocycle = mesocycle.microcycles[targetMicrocycleIndex];
-    const previousMicrocycle = mesocycle.microcycles[targetMicrocycleIndex - 1];
+    
+    // Determine source microcycle
+    let previousMicrocycle = null;
+    let sourceMesocycleName = mesocycle.name;
+    
+    if (targetMicrocycleIndex > 0) {
+      // Copy from previous microcycle in same mesocycle
+      previousMicrocycle = mesocycle.microcycles[targetMicrocycleIndex - 1];
+    } else if (mesocycleIndex > 0) {
+      // Copy from last microcycle of previous mesocycle
+      const previousMesocycle = mesocycles[mesocycleIndex - 1];
+      previousMicrocycle = previousMesocycle.microcycles[previousMesocycle.microcycles.length - 1];
+      sourceMesocycleName = previousMesocycle.name;
+    } else {
+      // This is the first microcycle of the first mesocycle - nothing to copy from
+      return;
+    }
+    
+    if (!previousMicrocycle) return;
     
     // Check if durations match
     if (targetMicrocycle.duration !== previousMicrocycle.duration) {
@@ -3103,6 +3122,49 @@ export default function MesocyclePage() {
     });
   };
 
+  // Clear daily intensity for entire mesocycle
+  const clearMesocycleDailyIntensity = (mesocycleId: string) => {
+    const mesocycle = mesocycles.find(m => m.id === mesocycleId);
+    if (!mesocycle) return;
+    
+    // Get all training days for this mesocycle
+    const mesocycleDays = trainingDays.filter(day => 
+      mesocycle.microcycles.some(micro => micro.id === day.microcycleId)
+    );
+    
+    // Remove all daily intensity entries for these days
+    setDailyIntensityData(prev => 
+      prev.filter(di => !mesocycleDays.some(day => day.date === di.date))
+    );
+    
+    toast({
+      title: "Intensities cleared",
+      description: `Cleared all daily intensities for ${mesocycle.name}`
+    });
+  };
+
+  // Clear daily intensity for specific microcycle
+  const clearMicrocycleDailyIntensity = (mesocycleId: string, microcycleId: string) => {
+    const mesocycle = mesocycles.find(m => m.id === mesocycleId);
+    if (!mesocycle) return;
+    
+    const microcycle = mesocycle.microcycles.find(m => m.id === microcycleId);
+    if (!microcycle) return;
+    
+    // Get all training days for this microcycle
+    const microcycleDays = trainingDays.filter(day => day.microcycleId === microcycleId);
+    
+    // Remove all daily intensity entries for these days
+    setDailyIntensityData(prev => 
+      prev.filter(di => !microcycleDays.some(day => day.date === di.date))
+    );
+    
+    toast({
+      title: "Intensities cleared",
+      description: `Cleared all daily intensities for ${microcycle.name}`
+    });
+  };
+
   const renderDailyIntensityPlanning = () => (
     <Card>
       <CardHeader>
@@ -3151,20 +3213,39 @@ export default function MesocyclePage() {
                           style={{ width: `${width}px` }}
                         >
                           {meso.name}
-                          {mesoIndex > 0 && (
+                          
+                          {/* Button container */}
+                          <div className="absolute top-1 right-1 flex gap-1">
+                            {/* Copy button - only for mesocycles after the first */}
+                            {mesoIndex > 0 && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyMesocycleDailyIntensity(meso.id);
+                                }}
+                                className="h-6 w-6 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"
+                                title="Copy daily intensity pattern from previous mesocycle"
+                              >
+                                <Copy className="h-3 w-3 text-gray-800" />
+                              </Button>
+                            )}
+                            
+                            {/* Clear button - for all mesocycles */}
                             <Button
                               size="sm"
                               variant="secondary"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                copyMesocycleDailyIntensity(meso.id);
+                                clearMesocycleDailyIntensity(meso.id);
                               }}
-                              className="absolute top-1 right-1 h-6 w-6 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"
-                              title="Copy daily intensity pattern from previous mesocycle"
+                              className="h-6 w-6 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"
+                              title={`Clear all daily intensities for ${meso.name}`}
                             >
-                              <Copy className="h-3 w-3 text-gray-800" />
+                              <Trash2 className="h-3 w-3 text-gray-800" />
                             </Button>
-                          )}
+                          </div>
                         </div>
                       ) : null;
                     })}
@@ -3177,14 +3258,31 @@ export default function MesocyclePage() {
                     {/* Empty space to align with intensity scale */}
                   </div>
                   <div className="flex flex-nowrap">
-                    {mesocycles.map((meso) => 
+                    {mesocycles.map((meso, mesoIndex) => 
                       meso.microcycles.map((micro, microIndex) => {
                         const width = micro.duration * 80; // 80px per day
                         const isLastMicro = microIndex === meso.microcycles.length - 1;
                         
-                        // Check if we can show copy icon (has previous microcycle with matching duration)
-                        const canCopy = microIndex > 0 && 
-                          meso.microcycles[microIndex - 1].duration === micro.duration;
+                        // Check if we can copy - fixed logic to check across mesocycles
+                        let canCopy = false;
+                        let copySourceName = '';
+                        
+                        if (microIndex > 0) {
+                          // Has previous microcycle in same mesocycle
+                          const prevMicro = meso.microcycles[microIndex - 1];
+                          if (prevMicro.duration === micro.duration) {
+                            canCopy = true;
+                            copySourceName = prevMicro.name;
+                          }
+                        } else if (mesoIndex > 0) {
+                          // First microcycle of this mesocycle, but not first mesocycle overall
+                          const prevMeso = mesocycles[mesoIndex - 1];
+                          const lastMicroOfPrevMeso = prevMeso.microcycles[prevMeso.microcycles.length - 1];
+                          if (lastMicroOfPrevMeso && lastMicroOfPrevMeso.duration === micro.duration) {
+                            canCopy = true;
+                            copySourceName = `${prevMeso.name} - ${lastMicroOfPrevMeso.name}`;
+                          }
+                        }
                         
                         return (
                           <div 
@@ -3197,7 +3295,7 @@ export default function MesocyclePage() {
                             <div className="flex items-center justify-center gap-1">
                               <span>{micro.name}</span>
                               
-                              {/* Copy icon - only show if can copy from previous microcycle */}
+                              {/* Copy button */}
                               {canCopy && (
                                 <Button
                                   size="sm"
@@ -3207,11 +3305,25 @@ export default function MesocyclePage() {
                                     copyMicrocycleDailyIntensity(meso.id, micro.id);
                                   }}
                                   className="h-5 w-5 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"
-                                  title={`Copy intensity pattern from ${meso.microcycles[microIndex - 1].name}`}
+                                  title={`Copy intensity pattern from ${copySourceName}`}
                                 >
                                   <Copy className="h-3 w-3 text-gray-800" />
                                 </Button>
                               )}
+                              
+                              {/* Clear button */}
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  clearMicrocycleDailyIntensity(meso.id, micro.id);
+                                }}
+                                className="h-5 w-5 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"
+                                title={`Clear all daily intensities for ${micro.name}`}
+                              >
+                                <Trash2 className="h-3 w-3 text-gray-800" />
+                              </Button>
                             </div>
                           </div>
                         );
