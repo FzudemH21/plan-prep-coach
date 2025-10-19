@@ -265,35 +265,41 @@ export default function MicrocyclePlanningPage() {
   useEffect(() => {
     if (!macrocycleData || trainingDays.length === 0) return;
 
-    const testMap = new Map<string, string>();
+    const testMap = new Map<string, string[]>();
     (macrocycleData.subGoals || []).forEach((sg: any) => {
       const name = sg.testMethod || sg.name || sg.testName || sg.method || sg.description || 'Test';
       (sg.testDates || []).forEach((dateStr: string) => {
-        testMap.set(dateStr, name);
+        const existing = testMap.get(dateStr) || [];
+        testMap.set(dateStr, [...existing, name]);
       });
     });
 
-    const eventMap = new Map<string, string>();
+    const eventMap = new Map<string, string[]>();
     (macrocycleData.events || []).forEach((e: any) => {
       const name = e.name || e.eventName || e.title || e.description || 'Event';
       (e.eventDates || []).forEach((dateStr: string) => {
-        eventMap.set(dateStr, name);
+        const existing = eventMap.get(dateStr) || [];
+        eventMap.set(dateStr, [...existing, name]);
       });
     });
 
     const updated = trainingDays.map(td => {
       const existingTests = td.testNames || [];
       const existingEvents = td.eventNames || [];
-      const testFromMap = testMap.get(td.date);
-      const eventFromMap = eventMap.get(td.date);
+      const testsFromMap = testMap.get(td.date) || [];
+      const eventsFromMap = eventMap.get(td.date) || [];
       
-      // Add tests/events from map if not already in arrays
-      const updatedTests = testFromMap && !existingTests.includes(testFromMap) 
-        ? [...existingTests, testFromMap] 
-        : existingTests;
-      const updatedEvents = eventFromMap && !existingEvents.includes(eventFromMap)
-        ? [...existingEvents, eventFromMap]
-        : existingEvents;
+      // Merge tests from map with existing, avoiding duplicates
+      const updatedTests = [
+        ...existingTests,
+        ...testsFromMap.filter(t => !existingTests.includes(t))
+      ];
+      
+      // Merge events from map with existing, avoiding duplicates
+      const updatedEvents = [
+        ...existingEvents,
+        ...eventsFromMap.filter(e => !existingEvents.includes(e))
+      ];
       
       return {
         ...td,
