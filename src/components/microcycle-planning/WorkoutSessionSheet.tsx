@@ -96,14 +96,38 @@ export function WorkoutSessionSheet({
         exerciseParams = storedParams as Record<string, string | number>;
       }
       
-      // Merge with defaults, supporting legacy keys that were saved as `${ex.exerciseId}_${paramName}`
+      // Merge with defaults and prefill per-set values from method-level params
+      const setParamName = methodParams.find(p => p.isSetParameter)?.name || 
+                          methodParams.find(p => /^sets?$/i.test(p.name))?.name;
+      const setCount = setParamName ? Number(exerciseParams[setParamName] || 0) : 0;
+      
       const parameters: Record<string, string | number> = {};
       methodParams.forEach(param => {
-        const legacyKey = `${ex.exerciseId}_${param.name}`;
-        const valueFromStore = (exerciseParams[param.name] ?? (exerciseParams as any)[legacyKey]);
-        parameters[param.name] = valueFromStore ?? param.defaultValue ?? '';
         if (param.unit) {
           parameters[`${param.name}_unit`] = param.unit;
+        }
+        
+        if (param.name === setParamName) {
+          // Store the set count
+          parameters[param.name] = Number(exerciseParams[param.name] ?? param.defaultValue ?? 0);
+        } else if (setCount > 0) {
+          // Prefill per-set values from method-level parameters
+          for (let i = 1; i <= setCount; i++) {
+            const perSetKey = `${param.name}_set${i}`;
+            const legacyKey = `${ex.exerciseId}_${param.name}`;
+            parameters[perSetKey] = 
+              (exerciseParams as any)[perSetKey] ??  // Already per-set
+              exerciseParams[param.name] ??          // Method-level value (fan out)
+              (exerciseParams as any)[legacyKey] ??  // Legacy format
+              param.defaultValue ?? '';
+          }
+        } else {
+          // No sets, use single value
+          const legacyKey = `${ex.exerciseId}_${param.name}`;
+          parameters[param.name] = 
+            exerciseParams[param.name] ?? 
+            (exerciseParams as any)[legacyKey] ?? 
+            param.defaultValue ?? '';
         }
       });
       

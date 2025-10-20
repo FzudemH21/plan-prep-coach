@@ -32,7 +32,28 @@ export function WorkoutExerciseCard({
   onDelete,
   dragHandleProps
 }: WorkoutExerciseCardProps) {
-  const methodParams = getParametersForMethod(exercise.methodId);
+  // Get parameters with fallback: derive from exercise.parameters if dictionary is empty
+  const methodParams = (() => {
+    const defs = getParametersForMethod(exercise.methodId);
+    if (defs && defs.length > 0) return defs;
+    
+    // Fallback: derive parameters from exercise.parameters
+    const keys = Object.keys(exercise.parameters || {});
+    const baseKeys = keys.filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k));
+    return baseKeys.map(name => {
+      const raw = exercise.parameters[name];
+      const isNumeric = typeof raw === 'number' || (!isNaN(Number(raw)) && raw !== '');
+      return {
+        name,
+        type: isNumeric ? 'number' : 'text',
+        unit: typeof exercise.parameters[`${name}_unit`] === 'string' 
+          ? String(exercise.parameters[`${name}_unit`]) 
+          : undefined,
+        isSetParameter: /^sets?$/i.test(name),
+        defaultValue: undefined
+      } as const;
+    });
+  })();
 
   // Find the set parameter
   const setParam = methodParams.find(p => p.isSetParameter);
