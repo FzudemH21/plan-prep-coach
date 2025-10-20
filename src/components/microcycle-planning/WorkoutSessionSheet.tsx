@@ -121,6 +121,8 @@ export function WorkoutSessionSheet({
               (exerciseParams as any)[legacyKey] ??  // Legacy format
               param.defaultValue ?? '';
           }
+          // ALSO store the base parameter name so fallback logic can detect it
+          parameters[param.name] = exerciseParams[param.name] ?? param.defaultValue ?? '';
         } else {
           // No sets, use single value
           const legacyKey = `${ex.exerciseId}_${param.name}`;
