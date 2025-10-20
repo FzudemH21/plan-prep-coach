@@ -61,8 +61,33 @@ export function WorkoutExerciseCard({
     ? Number(exercise.parameters[setParam.name] || 3) // Default to 3 sets
     : 0;
 
-  // Separate set parameter from other parameters
-  const otherParams = methodParams.filter(p => !p.isSetParameter);
+  // Separate set parameter from other parameters (exclude Frequency)
+  const otherParams = methodParams.filter(p => !p.isSetParameter && p.name !== 'Frequency');
+
+  // Handle deleting a set
+  const handleDeleteSet = (setNumber: number) => {
+    if (setCount <= 1) return; // Don't delete if only one set remains
+    
+    // Decrease set count
+    onParameterChange(setParam!.name, setCount - 1);
+    
+    // Reindex all sets after the deleted one
+    otherParams.forEach(param => {
+      // Shift values up from deleted set onwards
+      for (let i = setNumber; i < setCount; i++) {
+        const currentKey = `${param.name}_set${i}`;
+        const nextKey = `${param.name}_set${i + 1}`;
+        const nextValue = exercise.parameters[nextKey];
+        
+        if (nextValue !== undefined) {
+          onParameterChange(currentKey, nextValue);
+        }
+      }
+      
+      // Clear the last set's value (since we shifted everything up)
+      onParameterChange(`${param.name}_set${setCount}`, '');
+    });
+  };
 
   return (
     <Card className={`p-4 ${isInSuperset ? 'border-l-4 border-l-primary' : ''}`}>
@@ -123,6 +148,7 @@ export function WorkoutExerciseCard({
                     {otherParams.map(param => (
                       <TableHead key={param.name}>{param.name}</TableHead>
                     ))}
+                    <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -140,6 +166,16 @@ export function WorkoutExerciseCard({
                           />
                         </TableCell>
                       ))}
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => handleDeleteSet(setIndex + 1)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
