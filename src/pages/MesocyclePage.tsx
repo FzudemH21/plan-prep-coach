@@ -1274,6 +1274,11 @@ export default function MesocyclePage() {
     // Handle both base method name and category-suffixed names
     const baseMethodName = getBaseMethodName(methodName);
     
+    // Check if this is a manually added method - if so, it's allocated to ALL mesocycles
+    if (manuallyAddedMethods.includes(baseMethodName)) {
+      return true;
+    }
+    
     const mesocycle = mesocycles.find(m => m.id === mesocycleId);
     if (!mesocycle || !mesocycle.allocatedSubGoals || !macrocycleData) return false;
     
@@ -1299,7 +1304,7 @@ export default function MesocyclePage() {
         return methodNames.includes(baseMethodName);
       });
     });
-  }, [mesocycles, macrocycleData]);
+  }, [mesocycles, macrocycleData, manuallyAddedMethods]);
 
   // Helper function to get cell-specific frequency from user input
   const getCellFrequency = (mesocycleId: string, microcycleIndex: number, methodName: string) => {
