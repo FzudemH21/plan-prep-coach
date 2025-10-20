@@ -2293,7 +2293,7 @@ export default function MicrocyclePlanningPage() {
                                                 <div
                                                   key={`${exercise.exerciseId}-${idx}`}
                                                   draggable
-                                                  onDragStart={(e) => handleDragStart(e, exercise)}
+                                                  onDragStart={(e) => handleDragStart(e, { ...exercise, methodId: fullMethodId })}
                                                   className="px-2 py-0.5 bg-background border rounded cursor-move hover:border-primary transition-colors group"
                                                 >
                                                   <div className="flex items-start justify-between gap-1">
