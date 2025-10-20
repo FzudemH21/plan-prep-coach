@@ -40,13 +40,14 @@ import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 import { IntensityLevel } from "@/types/training";
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
 
-// Helper function for string normalization
+// Helper function for string normalization - robust canonicalization
 const normalizeForComparison = (str: string): string => {
   return str
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .trim();
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]/g, '');
 };
 
 export default function MesocyclePage() {
@@ -861,14 +862,6 @@ export default function MesocyclePage() {
     </Card>
   );
 
-  // Helper function for string normalization
-  const normalizeForComparison = (str: string): string => {
-    return str
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .trim();
-  };
 
   // Helper functions for sub-goal and method management
   const getSubGoalsFromAthleticismDB = useMemo(() => {
@@ -1538,13 +1531,48 @@ export default function MesocyclePage() {
   const hasValidFrequencyParameter = useCallback((methodName: string): boolean => {
     if (!toolboxData.entries) return false;
     
-    // Find all toolbox entries that match this method
-    const matchingEntries = toolboxData.entries.filter(entry => {
-      const entryKey = `${entry.category}${entry.subCategory ? ` - ${entry.subCategory}` : ''}`;
-      return normalizeForComparison(entryKey) === normalizeForComparison(methodName);
+    const normalizedMethodName = normalizeForComparison(methodName);
+    
+    // Strategy 1: Try exact match using full entry key
+    let matchingEntries = toolboxData.entries.filter(entry => {
+      const entryKey = `${entry.category}${entry.subCategory ? ' - ' + entry.subCategory : ''}`;
+      return normalizeForComparison(entryKey) === normalizedMethodName;
     });
     
-    // Check if any parameter is marked as frequency parameter
+    // Strategy 2: If no exact match, split methodName and match category + subCategory separately
+    if (matchingEntries.length === 0) {
+      const parts = methodName.split(' - ').map(p => p.trim());
+      const category = parts[0];
+      const subCategory = parts[1] || '';
+      
+      matchingEntries = toolboxData.entries.filter(entry => {
+        const categoryMatch = normalizeForComparison(entry.category) === normalizeForComparison(category);
+        const subCategoryMatch = normalizeForComparison(entry.subCategory || '') === normalizeForComparison(subCategory);
+        return categoryMatch && subCategoryMatch;
+      });
+    }
+    
+    // Strategy 3: Category-only fallback if still no matches
+    if (matchingEntries.length === 0) {
+      const parts = methodName.split(' - ').map(p => p.trim());
+      const category = parts[0];
+      
+      matchingEntries = toolboxData.entries.filter(entry => {
+        return normalizeForComparison(entry.category) === normalizeForComparison(category);
+      });
+      
+      if (matchingEntries.length > 0 && matchingEntries.some(entry => entry.isFrequencyParameter === true)) {
+        console.debug(`[hasValidFrequencyParameter] Category-only fallback succeeded for method "${methodName}" using category "${category}"`);
+      }
+    }
+    
+    // If still no matches found, log for debugging
+    if (matchingEntries.length === 0) {
+      console.debug(`[hasValidFrequencyParameter] No matches found for method "${methodName}"`);
+      return false;
+    }
+    
+    // Check if any matching entry is marked as frequency parameter
     return matchingEntries.some(entry => entry.isFrequencyParameter === true);
   }, [toolboxData.entries]);
 
