@@ -1036,9 +1036,9 @@ export default function MicrocyclePlanningPage() {
       if (!updated[mesocycleId][microcycleIndex][methodId]) updated[mesocycleId][microcycleIndex][methodId] = {};
       if (!updated[mesocycleId][microcycleIndex][methodId][sessionIndex]) updated[mesocycleId][microcycleIndex][methodId][sessionIndex] = {};
       
-      // Store each parameter as a separate key-value pair
+      // Store each parameter as a separate key-value pair at method/session level (no exercise-specific prefix)
       Object.entries(parameters).forEach(([key, value]) => {
-        updated[mesocycleId][microcycleIndex][methodId][sessionIndex][`${exerciseId}_${key}`] = value;
+        updated[mesocycleId][microcycleIndex][methodId][sessionIndex][key] = value;
       });
       
       // Save to localStorage

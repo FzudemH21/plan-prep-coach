@@ -63,9 +63,21 @@ export function WorkoutSessionSheet({
         sectionsMap.set(sectionName, []);
       }
       
-      // Get parameters for this exercise
-      const methodParams = getParametersForMethod(ex.methodId);
-      const storedParams = parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex] || {};
+      // Get stored parameters from Method Periodization (prefer category-scoped key)
+      const fullMethodKey = ex.categoryName ? `${ex.methodId}::${ex.categoryName}` : ex.methodId;
+      const storedParams = parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex]
+        || parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex]
+        || {};
+      // Derive parameter definitions: prefer predefined list; fallback to keys present in stored params
+      let methodParams = getParametersForMethod(ex.methodId);
+      if (!methodParams || methodParams.length === 0) {
+        methodParams = Object.keys(storedParams)
+          .filter(k => !k.endsWith('_unit'))
+          .map((name) => ({
+            name,
+            type: typeof (storedParams as any)[name] === 'number' ? 'number' : 'text'
+          }));
+      }
       
       console.log(`[WorkoutSessionSheet] Fetching params for:`, {
         mesocycleId,
@@ -84,10 +96,12 @@ export function WorkoutSessionSheet({
         exerciseParams = storedParams as Record<string, string | number>;
       }
       
-      // Merge with defaults
+      // Merge with defaults, supporting legacy keys that were saved as `${ex.exerciseId}_${paramName}`
       const parameters: Record<string, string | number> = {};
       methodParams.forEach(param => {
-        parameters[param.name] = exerciseParams[param.name] ?? param.defaultValue ?? '';
+        const legacyKey = `${ex.exerciseId}_${param.name}`;
+        const valueFromStore = (exerciseParams[param.name] ?? (exerciseParams as any)[legacyKey]);
+        parameters[param.name] = valueFromStore ?? param.defaultValue ?? '';
         if (param.unit) {
           parameters[`${param.name}_unit`] = param.unit;
         }
