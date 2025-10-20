@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, Search, Download, Upload, Trash2, Edit, Copy, ChevronUp, ChevronDown } from "lucide-react";
+import { ArrowLeft, Plus, Search, Download, Upload, Trash2, Edit, Copy, ChevronUp, ChevronDown, AlertCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useToolboxData } from "@/hooks/useToolboxData";
 import { ToolboxEntry } from "@/types/toolbox";
 import { useToast } from "@/hooks/use-toast";
@@ -175,6 +176,18 @@ export default function ToolboxDatabase() {
 
     return result;
   }, [data.entries, searchTerm, columnSorts, filterState]);
+
+  // Check if a method (sub-category) has a frequency parameter marked
+  const hasFrequencyParameter = useMemo(() => {
+    const frequencyMap = new Map<string, boolean>();
+    
+    subCategoryData.forEach(item => {
+      const hasFreqParam = item.parameters.some(param => param.isFrequencyParameter === true);
+      frequencyMap.set(item.key, hasFreqParam);
+    });
+    
+    return frequencyMap;
+  }, [subCategoryData]);
 
   // Handle add entry (creates a new sub-category)
   const handleAddEntry = () => {
@@ -536,7 +549,8 @@ export default function ToolboxDatabase() {
       {/* Sub-Categories Table */}
       <Card>
         <CardContent className="p-0">
-          <Table containerClassName="border rounded-lg max-h-[70vh]">
+          <TooltipProvider>
+            <Table containerClassName="border rounded-lg max-h-[70vh]">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-1/4 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">
@@ -599,6 +613,21 @@ export default function ToolboxDatabase() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center space-x-1">
+                      {!hasFrequencyParameter.get(item.key) && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center">
+                              <AlertCircle className="h-4 w-4 text-destructive" />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs">
+                            <p className="font-semibold mb-1">Missing Frequency Parameter</p>
+                            <p className="text-xs">
+                              This method doesn't have a frequency parameter marked. Click Edit to open parameter management and mark one quantitative parameter as "Training Frequency Parameter".
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
@@ -629,6 +658,7 @@ export default function ToolboxDatabase() {
               ))}
             </TableBody>
           </Table>
+          </TooltipProvider>
         </CardContent>
       </Card>
 
