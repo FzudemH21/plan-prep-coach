@@ -17,6 +17,7 @@ import { TrainingDay } from '@/types/daily-intensity';
 import { CellData, ExerciseSelection } from '@/types/microcycle-planning';
 import { IntensityLevel } from '@/types/training';
 import { useAthleticismData } from '@/hooks/useAthleticismData';
+import { useToolboxData } from '@/hooks/useToolboxData';
 import { format, addDays, differenceInDays, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
@@ -67,6 +68,7 @@ export default function MicrocyclePlanningPage() {
   const [daySplitStates, setDaySplitStates] = useState<Record<string, number>>({});
   const [splitStates, setSplitStates] = useState<Record<string, boolean>>({});
   const { data: athleticismData } = useAthleticismData();
+  const { data: toolboxData } = useToolboxData();
   const [clearMesocycleDialogOpen, setClearMesocycleDialogOpen] = useState(false);
   const [clearMicrocycleDialog, setClearMicrocycleDialog] = useState<{
     isOpen: boolean;
@@ -537,7 +539,18 @@ export default function MicrocyclePlanningPage() {
     
     if (!cellData) return 1;
     
-    const frequencyKey = Object.keys(cellData).find(key => key.toLowerCase().includes('frequency'));
+    // Get the method's toolbox entries
+    const methodEntries = toolboxData.entries.filter(
+      entry => `${entry.category} → ${entry.subCategory}` === methodId
+    );
+    
+    // Find the parameter marked as frequency parameter
+    const frequencyParam = methodEntries.find(entry => entry.isFrequencyParameter);
+    
+    // Fallback to old string-based detection if no flag is set
+    const frequencyKey = frequencyParam 
+      ? frequencyParam.parameter 
+      : Object.keys(cellData).find(key => key.toLowerCase().includes('frequency'));
     
     if (!frequencyKey) return 1;
     

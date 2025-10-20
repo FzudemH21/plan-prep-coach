@@ -9,6 +9,8 @@ export interface ToolboxEntry {
   options?: string[];
   // Exercise selection categories
   exerciseCategories?: string[];
+  // Training frequency indicator
+  isFrequencyParameter?: boolean;
 }
 
 export interface ToolboxDatabase {

@@ -1312,9 +1312,20 @@ export default function MesocyclePage() {
     // Handle both base method name and category-suffixed names
     const baseMethodName = getBaseMethodName(methodName);
     
-    // Look for frequency parameter case-insensitively
     const cellData = parameterValues[mesocycleId]?.[microcycleIndex]?.[methodName]?.[0] || {};
-    const frequencyKey = Object.keys(cellData).find(key => key.toLowerCase().includes('frequency'));
+    
+    // Get the method's toolbox entries
+    const methodEntries = toolboxData.entries.filter(
+      entry => `${entry.category} → ${entry.subCategory}` === baseMethodName
+    );
+    
+    // Find the parameter marked as frequency parameter
+    const frequencyParam = methodEntries.find(entry => entry.isFrequencyParameter);
+    
+    // Fallback to old string-based detection if no flag is set
+    const frequencyKey = frequencyParam 
+      ? frequencyParam.parameter 
+      : Object.keys(cellData).find(key => key.toLowerCase().includes('frequency'));
     
     if (!frequencyKey) return 1;
     
@@ -1523,8 +1534,19 @@ export default function MesocyclePage() {
   };
 
   // Helper function to check if parameter is frequency-related
-  const isFrequencyParameter = (paramName: string) => {
-    return paramName.toLowerCase().includes('frequency');
+  const isFrequencyParameter = (paramName: string, methodName: string) => {
+    // Get the method's toolbox entries
+    const baseMethodName = getBaseMethodName(methodName);
+    const methodEntries = toolboxData.entries.filter(
+      entry => `${entry.category} → ${entry.subCategory}` === baseMethodName
+    );
+    
+    // Find the parameter that's marked as frequency parameter
+    const frequencyParam = methodEntries.find(entry => entry.isFrequencyParameter);
+    
+    // Check if the provided paramName matches the frequency parameter
+    // Fallback to string matching for backward compatibility
+    return frequencyParam ? paramName === frequencyParam.parameter : paramName.toLowerCase().includes('frequency');
   };
 
   // Drag fill handlers (hooks must be at component level)
@@ -2308,12 +2330,12 @@ export default function MesocyclePage() {
                                                      disabled={!mesocycles.some(meso => isMethodAllocatedToMesocycle(fullMethodName, meso.id))}
                                                    />
                                                  </div>
-                                                 {mesocycles.map((meso) =>
-                                                   (meso.microcycles || []).map((microcycle, microcycleIndex) => {
-                                                      const isAllocated = isMethodAllocatedToMesocycle(fullMethodName, meso.id);
-                                                       const isSplit = isMicrocycleSplit(meso.id, microcycleIndex);
-                                                       const sessionsCount = getCellSessions(meso.id, microcycleIndex, fullMethodName);
-                                                      const isFrequency = isFrequencyParameter(param.name);
+                                                  {mesocycles.map((meso) =>
+                                                    (meso.microcycles || []).map((microcycle, microcycleIndex) => {
+                                                       const isAllocated = isMethodAllocatedToMesocycle(fullMethodName, meso.id);
+                                                        const isSplit = isMicrocycleSplit(meso.id, microcycleIndex);
+                                                        const sessionsCount = getCellSessions(meso.id, microcycleIndex, fullMethodName);
+                                                       const isFrequency = isFrequencyParameter(param.name, fullMethodName);
                                                       
                                                       if (isSplit && !isFrequency) {
                                                        return (
