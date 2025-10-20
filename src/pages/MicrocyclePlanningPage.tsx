@@ -734,38 +734,77 @@ export default function MicrocyclePlanningPage() {
       return; // Don't allow dropping in wrong method
     }
 
-    // Add exercise to distribution
-    setExerciseDistribution(prev => {
-      // Check if already exists
-      const exists = prev.some(
-        ex => 
+    // Handle reassignment of already-assigned exercise
+    if (exercise.isAlreadyAssigned) {
+      // Remove from source location and add to target location
+      setExerciseDistribution(prev => {
+        // Remove from source
+        const filtered = prev.filter(ex => !(
+          ex.exerciseId === exercise.exerciseId && 
+          ex.dayDate === exercise.sourceDayDate && 
+          ex.sessionIndex === exercise.sourceSessionIndex &&
+          ex.methodId === exercise.sourceMethodId
+        ));
+        
+        // Check if already exists in target
+        const existsInTarget = filtered.some(ex => 
           ex.exerciseId === exercise.exerciseId && 
           ex.dayDate === dayDate && 
           ex.sessionIndex === sessionIndex &&
           ex.methodId === methodId
-      );
+        );
+        
+        // If already exists in target, just return filtered (effectively removing from source)
+        if (existsInTarget) return filtered;
+        
+        // Add to target
+        return [
+          ...filtered,
+          {
+            exerciseId: exercise.exerciseId,
+            exerciseName: exercise.exerciseName,
+            methodId: exercise.methodId,
+            categoryName: exercise.categoryName,
+            subCategory: exercise.subCategory,
+            dayDate,
+            sessionIndex
+          }
+        ];
+      });
+    } else {
+      // Original behavior: Copy from portfolio
+      setExerciseDistribution(prev => {
+        // Check if already exists
+        const exists = prev.some(
+          ex => 
+            ex.exerciseId === exercise.exerciseId && 
+            ex.dayDate === dayDate && 
+            ex.sessionIndex === sessionIndex &&
+            ex.methodId === methodId
+        );
 
-      if (exists) return prev;
+        if (exists) return prev;
 
-      return [
-        ...prev,
-        {
-          exerciseId: exercise.exerciseId,
-          exerciseName: exercise.exerciseName,
-          methodId: exercise.methodId,
-          categoryName: exercise.categoryName,
-          subCategory: exercise.subCategory,
-          dayDate,
-          sessionIndex
-        }
-      ];
-    });
+        return [
+          ...prev,
+          {
+            exerciseId: exercise.exerciseId,
+            exerciseName: exercise.exerciseName,
+            methodId: exercise.methodId,
+            categoryName: exercise.categoryName,
+            subCategory: exercise.subCategory,
+            dayDate,
+            sessionIndex
+          }
+        ];
+      });
+    }
   };
 
   // Handle drag over
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
+    e.dataTransfer.dropEffect = 'move';
   };
 
   // Remove exercise from distribution
@@ -2348,7 +2387,20 @@ export default function MicrocyclePlanningPage() {
                                                             {getExercisesForCell(day.date, sessionIdx, fullMethodId, categoryKey).map((ex, idx) => (
                                                               <div
                                                                 key={idx}
-                                                                className="text-[10px] p-1 bg-primary/10 border border-primary/20 rounded group relative"
+                                                                draggable={true}
+                                                                onDragStart={(e) => {
+                                                                  const dragData = {
+                                                                    ...ex,
+                                                                    isAlreadyAssigned: true,
+                                                                    sourceDayDate: day.date,
+                                                                    sourceSessionIndex: sessionIdx,
+                                                                    sourceMethodId: fullMethodId,
+                                                                    sourceCategoryName: categoryKey
+                                                                  };
+                                                                  e.dataTransfer.setData('application/json', JSON.stringify(dragData));
+                                                                  e.dataTransfer.effectAllowed = 'move';
+                                                                }}
+                                                                className="text-[10px] p-1 bg-primary/10 border border-primary/20 rounded group relative cursor-move hover:bg-primary/20 transition-colors"
                                                               >
                                                                 <div className="pr-4">{ex.exerciseName}</div>
                                                                 <button
