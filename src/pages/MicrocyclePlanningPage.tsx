@@ -718,7 +718,7 @@ export default function MicrocyclePlanningPage() {
   // Handle drag start
   const handleDragStart = (e: React.DragEvent, exercise: typeof allocatedExercises[0]) => {
     e.dataTransfer.setData('application/json', JSON.stringify(exercise));
-    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.effectAllowed = 'copyMove';
   };
 
   // Handle drop
@@ -804,7 +804,14 @@ export default function MicrocyclePlanningPage() {
   // Handle drag over
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    const allowed = e.dataTransfer.effectAllowed || 'all';
+    if (allowed === 'all' || allowed === 'uninitialized' || allowed.includes('copy')) {
+      e.dataTransfer.dropEffect = 'copy';
+    } else if (allowed.includes('move')) {
+      e.dataTransfer.dropEffect = 'move';
+    } else {
+      e.dataTransfer.dropEffect = 'none';
+    }
   };
 
   // Remove exercise from distribution
@@ -2398,7 +2405,7 @@ export default function MicrocyclePlanningPage() {
                                                                     sourceCategoryName: categoryKey
                                                                   };
                                                                   e.dataTransfer.setData('application/json', JSON.stringify(dragData));
-                                                                  e.dataTransfer.effectAllowed = 'move';
+                                                                  e.dataTransfer.effectAllowed = 'copyMove';
                                                                 }}
                                                                 className="text-[10px] p-1 bg-primary/10 border border-primary/20 rounded group relative cursor-move hover:bg-primary/20 transition-colors"
                                                               >
