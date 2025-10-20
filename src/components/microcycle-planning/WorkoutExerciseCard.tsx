@@ -3,7 +3,8 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
-import { GripVertical, MoreVertical, Link2, Copy, Trash2 } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { GripVertical, MoreVertical, Link2, Copy, Trash2, Plus } from 'lucide-react';
 import { WorkoutExercise } from '@/types/workout';
 import { ParameterInputField } from './ParameterInputField';
 import { getParametersForMethod } from '@/data/methodParameters';
@@ -32,6 +33,15 @@ export function WorkoutExerciseCard({
   dragHandleProps
 }: WorkoutExerciseCardProps) {
   const methodParams = getParametersForMethod(exercise.methodId);
+
+  // Find the set parameter
+  const setParam = methodParams.find(p => p.isSetParameter);
+  const setCount = setParam 
+    ? Number(exercise.parameters[setParam.name] || 3) // Default to 3 sets
+    : 0;
+
+  // Separate set parameter from other parameters
+  const otherParams = methodParams.filter(p => !p.isSetParameter);
 
   return (
     <Card className={`p-4 ${isInSuperset ? 'border-l-4 border-l-primary' : ''}`}>
@@ -81,19 +91,65 @@ export function WorkoutExerciseCard({
             </div>
           </div>
 
-          {/* Parameters Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {methodParams.map((param) => (
-              <ParameterInputField
-                key={param.name}
-                parameter={param}
-                value={exercise.parameters[param.name] ?? param.defaultValue ?? ''}
-                unit={exercise.parameters[`${param.name}_unit`] as string}
-                onValueChange={(value) => onParameterChange(param.name, value)}
-                onUnitChange={(unit) => onUnitChange(param.name, unit)}
-              />
-            ))}
-          </div>
+          {/* Parameters Display */}
+          {setParam && setCount > 0 ? (
+            // TABLE LAYOUT (when set parameter exists)
+            <div className="w-full space-y-2">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-16">Set</TableHead>
+                    {otherParams.map(param => (
+                      <TableHead key={param.name}>{param.name}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Array.from({ length: setCount }, (_, setIndex) => (
+                    <TableRow key={setIndex}>
+                      <TableCell className="font-medium">{setIndex + 1}</TableCell>
+                      {otherParams.map(param => (
+                        <TableCell key={param.name}>
+                          <ParameterInputField
+                            parameter={param}
+                            value={exercise.parameters[`${param.name}_set${setIndex + 1}`] ?? param.defaultValue ?? ''}
+                            unit={exercise.parameters[`${param.name}_unit`] as string}
+                            onValueChange={(value) => onParameterChange(`${param.name}_set${setIndex + 1}`, value)}
+                            onUnitChange={(unit) => onUnitChange(param.name, unit)}
+                          />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              
+              {/* Add Set Button */}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full"
+                onClick={() => onParameterChange(setParam.name, setCount + 1)}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add Set
+              </Button>
+            </div>
+          ) : (
+            // FALLBACK: Original grid layout if no set parameter is defined
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {methodParams.map((param) => (
+                <ParameterInputField
+                  key={param.name}
+                  parameter={param}
+                  value={exercise.parameters[param.name] ?? param.defaultValue ?? ''}
+                  unit={exercise.parameters[`${param.name}_unit`] as string}
+                  onValueChange={(value) => onParameterChange(param.name, value)}
+                  onUnitChange={(unit) => onUnitChange(param.name, unit)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </Card>

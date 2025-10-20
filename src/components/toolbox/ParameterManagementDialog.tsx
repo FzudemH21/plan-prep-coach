@@ -43,6 +43,7 @@ export function ParameterManagementDialog({
     parameterType: 'qualitative' as 'qualitative' | 'quantitative',
     options: [] as string[],
     isFrequencyParameter: false,
+    isSetParameter: false,
   });
   const [newExerciseCategory, setNewExerciseCategory] = useState('');
 
@@ -70,6 +71,15 @@ export function ParameterManagementDialog({
       );
     }
 
+    // If this parameter is marked as set parameter, unmark all others
+    if (editingParameter.isSetParameter) {
+      updatedParameters = updatedParameters.map(p => 
+        p.id === editingParameter.id 
+          ? p 
+          : { ...p, isSetParameter: false }
+      );
+    }
+
     onUpdateParameters(updatedParameters);
     setEditingParameter(null);
   };
@@ -84,6 +94,7 @@ export function ParameterManagementDialog({
       parameterType: newParameter.parameterType,
       options: newParameter.options,
       isFrequencyParameter: newParameter.isFrequencyParameter,
+      isSetParameter: newParameter.isSetParameter,
     };
 
     let updatedParameters = [...parameters, parameter];
@@ -97,6 +108,15 @@ export function ParameterManagementDialog({
       );
     }
 
+    // If this new parameter is marked as set parameter, unmark all others
+    if (newParameter.isSetParameter) {
+      updatedParameters = updatedParameters.map(p => 
+        p.id === parameter.id 
+          ? p 
+          : { ...p, isSetParameter: false }
+      );
+    }
+
     onUpdateParameters(updatedParameters);
     setNewParameter({
       parameter: '',
@@ -104,6 +124,7 @@ export function ParameterManagementDialog({
       parameterType: 'qualitative',
       options: [],
       isFrequencyParameter: false,
+      isSetParameter: false,
     });
     setShowAddDialog(false);
   };
@@ -213,6 +234,16 @@ export function ParameterManagementDialog({
               </div>
             )}
 
+            {/* Warning if no set parameter is marked */}
+            {!parameters.some(p => p.isSetParameter) && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  ℹ️ <strong>Info:</strong> No parameter is marked as the Set parameter. 
+                  Without this, the exercise detail view will display a flat grid instead of a set-based table.
+                </p>
+              </div>
+            )}
+
             {/* Parameters Section */}
             <div className="space-y-4">
               <div className="flex justify-between items-center">
@@ -296,8 +327,9 @@ export function ParameterManagementDialog({
                   onValueChange={(value) => setEditingParameter({
                     ...editingParameter,
                     parameterType: value as 'qualitative' | 'quantitative',
-                    // Auto-uncheck frequency flag if changing to qualitative
-                    isFrequencyParameter: value === 'quantitative' ? editingParameter.isFrequencyParameter : false
+                    // Auto-uncheck frequency and set flags if changing to qualitative
+                    isFrequencyParameter: value === 'quantitative' ? editingParameter.isFrequencyParameter : false,
+                    isSetParameter: value === 'quantitative' ? editingParameter.isSetParameter : false
                   })}
                 >
                   <SelectTrigger>
@@ -336,6 +368,35 @@ export function ParameterManagementDialog({
                   {editingParameter.parameterType === 'quantitative' 
                     ? 'Mark this parameter as the training frequency indicator (sessions per microcycle/week)'
                     : 'Only quantitative parameters can be used as frequency indicators'}
+                </p>
+              </div>
+
+              <div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="isSetParameter"
+                    checked={editingParameter.isSetParameter || false}
+                    disabled={editingParameter.parameterType !== 'quantitative'}
+                    onChange={(e) => {
+                      setEditingParameter({
+                        ...editingParameter,
+                        isSetParameter: e.target.checked
+                      });
+                    }}
+                    className="h-4 w-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <Label 
+                    htmlFor="isSetParameter" 
+                    className={`text-sm font-medium ${editingParameter.parameterType !== 'quantitative' ? 'text-muted-foreground' : ''}`}
+                  >
+                    Set Parameter
+                  </Label>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {editingParameter.parameterType === 'quantitative' 
+                    ? 'Mark this parameter as the set parameter (determines number of rows in exercise detail view)'
+                    : 'Only quantitative parameters can be used as set parameters'}
                 </p>
               </div>
 
@@ -433,8 +494,9 @@ export function ParameterManagementDialog({
                 onValueChange={(value) => setNewParameter({
                   ...newParameter,
                   parameterType: value as 'qualitative' | 'quantitative',
-                  // Auto-uncheck frequency flag if changing to qualitative
-                  isFrequencyParameter: value === 'quantitative' ? newParameter.isFrequencyParameter : false
+                  // Auto-uncheck frequency and set flags if changing to qualitative
+                  isFrequencyParameter: value === 'quantitative' ? newParameter.isFrequencyParameter : false,
+                  isSetParameter: value === 'quantitative' ? newParameter.isSetParameter : false
                 })}
               >
                 <SelectTrigger>
@@ -473,6 +535,35 @@ export function ParameterManagementDialog({
                 {newParameter.parameterType === 'quantitative' 
                   ? 'Mark this parameter as the training frequency indicator (sessions per microcycle/week)'
                   : 'Only quantitative parameters can be used as frequency indicators'}
+              </p>
+            </div>
+
+            <div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="newIsSetParameter"
+                  checked={newParameter.isSetParameter || false}
+                  disabled={newParameter.parameterType !== 'quantitative'}
+                  onChange={(e) => {
+                    setNewParameter({
+                      ...newParameter,
+                      isSetParameter: e.target.checked
+                    });
+                  }}
+                  className="h-4 w-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                <Label 
+                  htmlFor="newIsSetParameter" 
+                  className={`text-sm font-medium ${newParameter.parameterType !== 'quantitative' ? 'text-muted-foreground' : ''}`}
+                >
+                  Set Parameter
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {newParameter.parameterType === 'quantitative' 
+                  ? 'Mark this parameter as the set parameter (determines number of rows in exercise detail view)'
+                  : 'Only quantitative parameters can be used as set parameters'}
               </p>
             </div>
 

@@ -7,6 +7,7 @@ export interface MethodParameter {
   min?: number;
   max?: number;
   defaultValue?: string | number;
+  isSetParameter?: boolean;
 }
 
 export const methodParameters: Record<string, MethodParameter[]> = {

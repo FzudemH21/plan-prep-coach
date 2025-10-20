@@ -605,6 +605,26 @@ export default function ToolboxDatabase() {
                   </div>
                 </TableHead>
                 <TableHead className="w-1/6 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">Parameters</TableHead>
+                <TableHead className="w-[60px] sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b text-center">
+                  <Tooltip>
+                    <TooltipTrigger>
+                      Freq
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Training Frequency Parameter</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TableHead>
+                <TableHead className="w-[60px] sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b text-center">
+                  <Tooltip>
+                    <TooltipTrigger>
+                      Set
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Set Parameter (for exercise detail view)</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TableHead>
                 <TableHead className="w-1/6 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">Exercise Categories</TableHead>
                 <TableHead className="w-1/6 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">Actions</TableHead>
               </TableRow>
@@ -616,6 +636,12 @@ export default function ToolboxDatabase() {
                   <TableCell className="font-medium">{item.subCategory || "-"}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {item.parameters.length} parameter{item.parameters.length !== 1 ? 's' : ''}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {item.parameters.some(p => p.isFrequencyParameter) ? '✓' : '✗'}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {item.parameters.some(p => p.isSetParameter) ? '✓' : '✗'}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {(item.parameters[0]?.exerciseCategories || []).length} categor{(item.parameters[0]?.exerciseCategories || []).length !== 1 ? 'ies' : 'y'}

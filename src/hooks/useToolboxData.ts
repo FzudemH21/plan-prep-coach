@@ -75,6 +75,36 @@ function migrateFrequencyParameter(entries: ToolboxEntry[]): ToolboxEntry[] {
   });
 }
 
+// Migration function to mark set parameters
+function migrateSetParameter(entries: ToolboxEntry[]): ToolboxEntry[] {
+  // Group entries by method (category + subCategory)
+  const byMethod = new Map<string, ToolboxEntry[]>();
+  
+  entries.forEach(entry => {
+    const key = `${entry.category}::${entry.subCategory}`;
+    if (!byMethod.has(key)) byMethod.set(key, []);
+    byMethod.get(key)!.push(entry);
+  });
+  
+  // For each method, mark set parameter if not already marked
+  return entries.map(entry => {
+    const methodKey = `${entry.category}::${entry.subCategory}`;
+    const methodEntries = byMethod.get(methodKey) || [];
+    
+    // Check if this method already has a marked set parameter
+    const hasMarkedSetParam = methodEntries.some(e => e.isSetParameter);
+    
+    // If not, and this entry's name contains "set" or "sets" AND is quantitative, mark it
+    if (!hasMarkedSetParam 
+        && (entry.parameter.toLowerCase().includes('set') || entry.parameterName?.toLowerCase().includes('set'))
+        && entry.parameterType === 'quantitative') {
+      return { ...entry, isSetParameter: true };
+    }
+    
+    return entry;
+  });
+}
+
 export function useToolboxData() {
   const [data, setData] = useState<ToolboxDatabase>(defaultToolboxData);
   const [isLoading, setIsLoading] = useState(true);
@@ -85,9 +115,10 @@ export function useToolboxData() {
       const savedData = localStorage.getItem('toolbox-data');
       if (savedData) {
         const parsedData = JSON.parse(savedData);
-        // Migrate legacy entries and frequency parameters
+        // Migrate legacy entries and frequency/set parameters
         let migratedEntries = parsedData.entries.map(migrateLegacyEntry);
         migratedEntries = migrateFrequencyParameter(migratedEntries);
+        migratedEntries = migrateSetParameter(migratedEntries);
         const migratedData = { ...parsedData, entries: migratedEntries };
         setData(migratedData);
         // Save migrated data back to localStorage
@@ -96,6 +127,7 @@ export function useToolboxData() {
         // Migrate default data on first load
         let migratedEntries = defaultToolboxData.entries.map(migrateLegacyEntry);
         migratedEntries = migrateFrequencyParameter(migratedEntries);
+        migratedEntries = migrateSetParameter(migratedEntries);
         const migratedDefault = {
           ...defaultToolboxData,
           entries: migratedEntries

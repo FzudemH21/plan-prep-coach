@@ -11,6 +11,8 @@ export interface ToolboxEntry {
   exerciseCategories?: string[];
   // Training frequency indicator
   isFrequencyParameter?: boolean;
+  // Set parameter indicator (determines number of rows in exercise detail view)
+  isSetParameter?: boolean;
 }
 
 export interface ToolboxDatabase {
