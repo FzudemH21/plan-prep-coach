@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -176,6 +177,12 @@ export default function ToolboxDatabase() {
 
     return result;
   }, [data.entries, searchTerm, columnSorts, filterState]);
+
+  // Generate unique categories list for dropdown
+  const existingCategories = useMemo(() => {
+    const categories = new Set(data.entries.map(e => e.category));
+    return Array.from(categories).sort();
+  }, [data.entries]);
 
   // Check if a method (sub-category) has a frequency parameter marked
   const hasFrequencyParameter = useMemo(() => {
@@ -415,21 +422,23 @@ export default function ToolboxDatabase() {
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
-                Add Sub-Category
+                Add Training Method
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Add New Sub-Category</DialogTitle>
+                <DialogTitle>Add New Training Method</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="category">Category *</Label>
-                  <Input
-                    id="category"
+                  <SearchableDropdown
                     value={newEntry.category}
-                    onChange={(e) => setNewEntry(prev => ({ ...prev, category: e.target.value }))}
-                    placeholder="e.g., Sprinting, Lower Body Resistance Training"
+                    onValueChange={(value) => setNewEntry(prev => ({ ...prev, category: value as string }))}
+                    options={existingCategories}
+                    placeholder="Select existing or type new category"
+                    allowCustomInput={true}
+                    className="w-full"
                   />
                 </div>
                 <div>
@@ -537,7 +546,7 @@ export default function ToolboxDatabase() {
                     onClick={handleAddEntry}
                     disabled={!newEntry.category.trim() || !newEntry.subCategory.trim() || !newEntry.parameterName.trim()}
                   >
-                    Create Sub-Category
+                    Create Training Method
                   </Button>
                 </div>
               </div>
