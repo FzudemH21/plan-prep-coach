@@ -67,6 +67,17 @@ export function WorkoutSessionSheet({
       const methodParams = getParametersForMethod(ex.methodId);
       const storedParams = parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex] || {};
       
+      console.log(`[WorkoutSessionSheet] Fetching params for:`, {
+        mesocycleId,
+        microcycleIndex,
+        methodId: ex.methodId,
+        sessionIndex,
+        exerciseId: ex.exerciseId,
+        storedParams,
+        parameterValuesKeys: Object.keys(parameterValues),
+        microcycleData: parameterValues[mesocycleId]?.[microcycleIndex]
+      });
+      
       // Check if storedParams[ex.exerciseId] exists and is an object
       let exerciseParams: Record<string, string | number> = {};
       const rawParams = storedParams[ex.exerciseId];

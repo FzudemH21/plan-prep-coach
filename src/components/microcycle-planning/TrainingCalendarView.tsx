@@ -113,6 +113,30 @@ export function TrainingCalendarView({
     exercises: ExerciseDistribution[];
   } | null>(null);
 
+  // Helper function to get microcycle index from date
+  const getMicrocycleIndex = (dayDate: string): number => {
+    // Find the training day for this date
+    const trainingDay = trainingDays.find(td => td.date === dayDate);
+    
+    if (!trainingDay) {
+      console.warn(`[TrainingCalendar] No training day found for date ${dayDate}, defaulting to microcycle 0`);
+      return 0;
+    }
+    
+    // Find the index of this microcycle within the current mesocycle
+    const microcycleIndex = currentMesocycle.microcycles.findIndex(
+      mc => mc.id === trainingDay.microcycleId
+    );
+    
+    if (microcycleIndex === -1) {
+      console.warn(`[TrainingCalendar] Microcycle ${trainingDay.microcycleId} not found in mesocycle ${currentMesocycle.id}, defaulting to 0`);
+      return 0;
+    }
+    
+    console.log(`[TrainingCalendar] Date ${dayDate} -> Microcycle ID ${trainingDay.microcycleId} -> Index ${microcycleIndex}`);
+    return microcycleIndex;
+  };
+
   // Group exercises by date
   const exercisesByDate = useMemo(() => {
     const grouped: Record<string, ExerciseDistribution[]> = {};
@@ -369,7 +393,7 @@ export function TrainingCalendarView({
           sessionIndex={selectedSession.sessionIndex}
           exercises={selectedSession.exercises}
           mesocycleId={currentMesocycle.id}
-          microcycleIndex={0} // TODO: Calculate actual microcycle index from date
+          microcycleIndex={getMicrocycleIndex(selectedSession.dayDate)}
           parameterValues={parameterValues}
           onSaveParameters={onSaveParameters || (() => {})}
         />
