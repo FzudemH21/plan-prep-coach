@@ -33,7 +33,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { CrossMesocycleCopyDialog } from "@/components/ui/cross-mesocycle-copy-dialog";
 import { CrossMesocycleMicrocycleCopyDialog } from "@/components/ui/cross-mesocycle-microcycle-copy-dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy } from "lucide-react";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy, AlertCircle } from "lucide-react";
 import { format, addWeeks, differenceInWeeks } from "date-fns";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 import { IntensityLevel } from "@/types/training";
@@ -1533,6 +1534,20 @@ export default function MesocyclePage() {
     return widths.join(' ');
   };
 
+  // Helper function to check if a method has a valid frequency parameter
+  const hasValidFrequencyParameter = useCallback((methodName: string): boolean => {
+    if (!toolboxData.entries) return false;
+    
+    // Find all toolbox entries that match this method
+    const matchingEntries = toolboxData.entries.filter(entry => {
+      const entryKey = `${entry.category}${entry.subCategory ? ` - ${entry.subCategory}` : ''}`;
+      return normalizeForComparison(entryKey) === normalizeForComparison(methodName);
+    });
+    
+    // Check if any parameter is marked as frequency parameter
+    return matchingEntries.some(entry => entry.isFrequencyParameter === true);
+  }, [toolboxData.entries]);
+
   // Helper function to check if parameter is frequency-related
   const isFrequencyParameter = (paramName: string, methodName: string) => {
     // Get the method's toolbox entries
@@ -2067,7 +2082,31 @@ export default function MesocyclePage() {
               <p className="text-sm text-muted-foreground">Please allocate sub-goals to mesocycles in step 3 first.</p>
             </div>
           ) : (
-             <div className="space-y-3">
+            <>
+              {/* Validation warning banner */}
+              {(() => {
+                const methodsWithoutFrequency = allMethods.filter(method => !hasValidFrequencyParameter(method));
+                if (methodsWithoutFrequency.length > 0) {
+                  return (
+                    <Alert variant="destructive" className="mb-4">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle>Configuration Required</AlertTitle>
+                      <AlertDescription>
+                        The following methods don't have a frequency parameter marked: 
+                        <strong className="ml-1">{methodsWithoutFrequency.join(', ')}</strong>
+                        <br />
+                        <span className="text-xs mt-2 block">
+                          Go to <strong>Toolbox Database</strong> → Edit each method → Mark one quantitative parameter as "Training Frequency Parameter". 
+                          This is required for session planning and exercise allocation.
+                        </span>
+                      </AlertDescription>
+                    </Alert>
+                  );
+                }
+                return null;
+              })()}
+              
+              <div className="space-y-3">
                <h3 className="text-lg font-semibold">Method Periodization</h3>
                  <div className="w-full border rounded-lg overflow-auto" style={{height: 'calc(100vh - 280px)', scrollbarWidth: 'thin'}}>
                    <div className="min-w-max relative">
@@ -2228,19 +2267,38 @@ export default function MesocyclePage() {
                                     const isIndented = categoryName !== null;
                                     
                                     return (
-                                      <div key={fullMethodName} className={`border rounded-lg bg-card shadow-sm ${isIndented ? 'ml-4 border-l-4 border-primary/30' : ''}`}>
-                                          {/* Method/Category name header */}
-                                          <div className="grid gap-1 bg-muted/20" style={{ 
-                                             gridTemplateColumns: calculateGridTemplate(baseMethodName)
-                                           }}>
-                                             <div className="sticky left-0 z-40 p-3 font-medium text-sm border-r bg-background rounded-tl shadow-md">
-                                               <div className="flex items-center justify-between group pr-16 relative">
-                                                 <div className="flex items-center gap-2">
-                                                   {categoryName && <span className="text-xs text-muted-foreground">↳</span>}
-                                                   <div className="line-clamp-3" title={fullMethodName}>
-                                                     {categoryName ? `${baseMethodName} - ${categoryName}` : baseMethodName}
-                                                   </div>
-                                                 </div>
+                                       <div key={fullMethodName} className={`border rounded-lg bg-card shadow-sm ${isIndented ? 'ml-4 border-l-4 border-primary/30' : ''}`}>
+                                           {/* Method/Category name header */}
+                                           <div className="grid gap-1 bg-muted/20" style={{ 
+                                              gridTemplateColumns: calculateGridTemplate(baseMethodName)
+                                            }}>
+                                              <div className="sticky left-0 z-40 p-3 font-medium text-sm border-r bg-background rounded-tl shadow-md">
+                                                <div className="flex items-center justify-between group pr-16 relative">
+                                                  <div className="flex items-center gap-2">
+                                                    {categoryName && <span className="text-xs text-muted-foreground">↳</span>}
+                                                    <div className="line-clamp-3" title={fullMethodName}>
+                                                      {categoryName ? `${baseMethodName} - ${categoryName}` : baseMethodName}
+                                                    </div>
+                                                    {/* Warning badge if no frequency parameter */}
+                                                    {!hasValidFrequencyParameter(baseMethodName) && (
+                                                      <TooltipProvider>
+                                                        <Tooltip>
+                                                          <TooltipTrigger>
+                                                            <Badge variant="destructive" className="ml-2 text-[10px] px-1.5 py-0">
+                                                              ⚠
+                                                            </Badge>
+                                                          </TooltipTrigger>
+                                                          <TooltipContent className="max-w-xs">
+                                                            <p className="font-semibold mb-1">No Frequency Parameter</p>
+                                                            <p className="text-xs">
+                                                              This method doesn't have a frequency parameter marked in the Toolbox Database. 
+                                                              Go to Toolbox → Edit this method → Mark one quantitative parameter as "Training Frequency Parameter".
+                                                            </p>
+                                                          </TooltipContent>
+                                                        </Tooltip>
+                                                      </TooltipProvider>
+                                                    )}
+                                                  </div>
                                                  <div className="absolute right-0 top-1/2 -translate-y-1/2 flex gap-1">
                                                    {/* Split/Unsplit button - only show for base method or first category */}
                                                    {hasCategoriesAvailable && (!categoryName || categoryName === categories[0]) && (
@@ -2269,29 +2327,44 @@ export default function MesocyclePage() {
                                                  </div>
                                                </div>
                                              </div>
-                                          {mesocycles.map((meso) => 
-                                            (meso.microcycles || []).map((microcycle, microcycleIndex) => {
-                                              const isAllocated = isMethodAllocatedToMesocycle(fullMethodName, meso.id);
-                                              const frequency = getCellFrequency(meso.id, microcycleIndex, fullMethodName);
-                                              const isSplit = isMicrocycleSplit(meso.id, microcycleIndex);
-                                              const sessionsCount = getCellSessions(meso.id, microcycleIndex, fullMethodName);
-                                              
-                                              return (
-                                                <div 
-                                                  key={`${meso.id}-${microcycleIndex}`} 
-                                                  className={`p-2 text-xs text-center font-medium border-l ${intensityBg(microcycle.intensity)} ${!isAllocated ? 'opacity-50' : ''} flex flex-col items-center gap-1`}
-                                                >
-                                                  <div className="flex items-center gap-1">
-                                                     {frequency > 1 && (
-                                                        <button
-                                                          onClick={() => toggleMicrocycleSplit(meso.id, microcycleIndex)}
-                                                          className="px-1.5 py-0.5 text-[10px] text-current hover:bg-black/20 rounded transition-colors font-medium"
-                                                         title={`${isSplit ? 'Merge' : 'Split'} sessions (${frequency}×/wk)`}
-                                                       >
-                                                         {isSplit ? 'Merge' : 'Split'}
-                                                       </button>
-                                                     )}
-                                                  </div>
+                                           {mesocycles.map((meso) => 
+                                             (meso.microcycles || []).map((microcycle, microcycleIndex) => {
+                                               const isAllocated = isMethodAllocatedToMesocycle(fullMethodName, meso.id);
+                                               const frequency = getCellFrequency(meso.id, microcycleIndex, fullMethodName);
+                                               const isSplit = isMicrocycleSplit(meso.id, microcycleIndex);
+                                               const sessionsCount = getCellSessions(meso.id, microcycleIndex, fullMethodName);
+                                               const hasFrequencyParam = hasValidFrequencyParameter(baseMethodName);
+                                               
+                                               return (
+                                                 <div 
+                                                   key={`${meso.id}-${microcycleIndex}`} 
+                                                   className={`p-2 text-xs text-center font-medium border-l ${intensityBg(microcycle.intensity)} ${!isAllocated ? 'opacity-50' : ''} ${!hasFrequencyParam ? 'border-2 border-destructive/50' : ''} flex flex-col items-center gap-1`}
+                                                 >
+                                                   {/* Show warning icon if no frequency parameter */}
+                                                   {!hasFrequencyParam && (
+                                                     <TooltipProvider>
+                                                       <Tooltip>
+                                                         <TooltipTrigger>
+                                                           <span className="text-destructive text-xs">⚠</span>
+                                                         </TooltipTrigger>
+                                                         <TooltipContent>
+                                                           <p className="text-xs">Missing frequency parameter</p>
+                                                         </TooltipContent>
+                                                       </Tooltip>
+                                                     </TooltipProvider>
+                                                   )}
+                                                   
+                                                   <div className="flex items-center gap-1">
+                                                      {frequency > 1 && hasFrequencyParam && (
+                                                         <button
+                                                           onClick={() => toggleMicrocycleSplit(meso.id, microcycleIndex)}
+                                                           className="px-1.5 py-0.5 text-[10px] text-current hover:bg-black/20 rounded transition-colors font-medium"
+                                                          title={`${isSplit ? 'Merge' : 'Split'} sessions (${frequency}×/wk)`}
+                                                        >
+                                                          {isSplit ? 'Merge' : 'Split'}
+                                                        </button>
+                                                      )}
+                                                   </div>
                                                   {isSplit && (
                                                     <div className="flex gap-0.5 text-[10px]">
                                                       {Array.from({ length: sessionsCount }, (_, i) => (
@@ -2483,13 +2556,12 @@ export default function MesocyclePage() {
                             ))}
                           </div>
                         ))}
-                      </div>
-                   </div>
-                 </div>
-              </div>
-             )}
+                       </div>
+                    </div>
+                  </div>
+               </div>
 
-             {/* Add Method Section */}
+              {/* Add Method Section */}
              <div className="mt-4 pt-4 border-t">
                <div className="flex items-center justify-between">
                  <div className="space-y-1">
@@ -2533,7 +2605,9 @@ export default function MesocyclePage() {
                    </div>
                  </div>
                )}
-             </div>
+              </div>
+            </>
+          )}
 
            </CardContent>
        </Card>

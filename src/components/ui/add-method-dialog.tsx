@@ -28,6 +28,20 @@ export function AddMethodDialog({ open, onOpenChange, onAddMethod, excludedMetho
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
+  // Check if the selected method has a frequency parameter
+  const selectedMethodHasFrequency = useMemo(() => {
+    if (!selectedMethod || !toolboxData?.entries) return true; // Default to true if no method selected
+    
+    const matchingEntries = toolboxData.entries.filter(entry => {
+      const entryKey = entry.subCategory 
+        ? `${entry.category} - ${entry.subCategory}`
+        : entry.category;
+      return entryKey === selectedMethod;
+    });
+    
+    return matchingEntries.some(entry => entry.isFrequencyParameter === true);
+  }, [selectedMethod, toolboxData]);
+
   // Generate available methods from toolbox data
   const availableMethods = useMemo(() => {
     if (!toolboxData?.entries) return [];
@@ -203,6 +217,22 @@ export function AddMethodDialog({ open, onOpenChange, onAddMethod, excludedMetho
             </div>
           </div>
         </div>
+
+        {/* Warning if selected method doesn't have frequency parameter */}
+        {selectedMethod && !selectedMethodHasFrequency && (
+          <div className="p-3 border border-amber-500/50 bg-amber-50 dark:bg-amber-950/20 rounded-md">
+            <div className="flex gap-2">
+              <span className="text-amber-600 dark:text-amber-400">⚠</span>
+              <div className="flex-1 text-xs text-amber-800 dark:text-amber-300">
+                <p className="font-semibold mb-1">Missing Frequency Parameter</p>
+                <p>
+                  This method doesn't have a frequency parameter marked. You can still add it, but you'll need to configure it in the 
+                  <strong> Toolbox Database</strong> before using it for session planning.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={handleCancel}>
