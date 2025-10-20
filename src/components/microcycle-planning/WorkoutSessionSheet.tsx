@@ -78,11 +78,10 @@ export function WorkoutSessionSheet({
         microcycleData: parameterValues[mesocycleId]?.[microcycleIndex]
       });
       
-      // Check if storedParams[ex.exerciseId] exists and is an object
+      // Parameters are stored directly by parameter name at the method level, not nested under exerciseId
       let exerciseParams: Record<string, string | number> = {};
-      const rawParams = storedParams[ex.exerciseId];
-      if (rawParams && typeof rawParams === 'object' && !Array.isArray(rawParams)) {
-        exerciseParams = rawParams as Record<string, string | number>;
+      if (storedParams && typeof storedParams === 'object' && !Array.isArray(storedParams)) {
+        exerciseParams = storedParams as Record<string, string | number>;
       }
       
       // Merge with defaults
