@@ -196,6 +196,18 @@ export default function ToolboxDatabase() {
     return frequencyMap;
   }, [subCategoryData]);
 
+  // Check if a method (sub-category) has a set parameter marked
+  const hasSetParameter = useMemo(() => {
+    const setMap = new Map<string, boolean>();
+    
+    subCategoryData.forEach(item => {
+      const hasSetParam = item.parameters.some(param => param.isSetParameter === true);
+      setMap.set(item.key, hasSetParam);
+    });
+    
+    return setMap;
+  }, [subCategoryData]);
+
   // Handle add entry (creates a new sub-category)
   const handleAddEntry = () => {
     if (!newEntry.category.trim() || !newEntry.parameterName.trim()) {
@@ -605,26 +617,6 @@ export default function ToolboxDatabase() {
                   </div>
                 </TableHead>
                 <TableHead className="w-1/6 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">Parameters</TableHead>
-                <TableHead className="w-[60px] sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b text-center">
-                  <Tooltip>
-                    <TooltipTrigger>
-                      Freq
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Training Frequency Parameter</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TableHead>
-                <TableHead className="w-[60px] sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b text-center">
-                  <Tooltip>
-                    <TooltipTrigger>
-                      Set
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Set Parameter (for exercise detail view)</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TableHead>
                 <TableHead className="w-1/6 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">Exercise Categories</TableHead>
                 <TableHead className="w-1/6 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">Actions</TableHead>
               </TableRow>
@@ -637,18 +629,12 @@ export default function ToolboxDatabase() {
                   <TableCell className="text-muted-foreground">
                     {item.parameters.length} parameter{item.parameters.length !== 1 ? 's' : ''}
                   </TableCell>
-                  <TableCell className="text-center">
-                    {item.parameters.some(p => p.isFrequencyParameter) ? '✓' : '✗'}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {item.parameters.some(p => p.isSetParameter) ? '✓' : '✗'}
-                  </TableCell>
                   <TableCell className="text-muted-foreground">
                     {(item.parameters[0]?.exerciseCategories || []).length} categor{(item.parameters[0]?.exerciseCategories || []).length !== 1 ? 'ies' : 'y'}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center space-x-1">
-                      {!hasFrequencyParameter.get(item.key) && (
+                      {(!hasFrequencyParameter.get(item.key) || !hasSetParameter.get(item.key)) && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div className="flex items-center">
@@ -656,10 +642,18 @@ export default function ToolboxDatabase() {
                             </div>
                           </TooltipTrigger>
                           <TooltipContent className="max-w-xs">
-                            <p className="font-semibold mb-1">Missing Frequency Parameter</p>
-                            <p className="text-xs">
-                              This method doesn't have a frequency parameter marked. Click Edit to open parameter management and mark one quantitative parameter as "Training Frequency Parameter".
-                            </p>
+                            <p className="font-semibold mb-1">Missing Parameter Configuration</p>
+                            <div className="text-xs space-y-1">
+                              {!hasFrequencyParameter.get(item.key) && (
+                                <p>• No frequency parameter marked for method periodization table</p>
+                              )}
+                              {!hasSetParameter.get(item.key) && (
+                                <p>• No set parameter marked for exercise detail view</p>
+                              )}
+                              <p className="mt-2 text-muted-foreground">
+                                Click Edit to open parameter management and configure these parameters.
+                              </p>
+                            </div>
                           </TooltipContent>
                         </Tooltip>
                       )}
