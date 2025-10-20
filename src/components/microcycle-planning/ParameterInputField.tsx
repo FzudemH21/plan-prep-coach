@@ -17,6 +17,7 @@ interface ParameterInputFieldProps {
   unit?: string;
   onValueChange: (value: string | number) => void;
   onUnitChange?: (unit: string) => void;
+  showLabel?: boolean;
 }
 
 export function ParameterInputField({
@@ -24,12 +25,13 @@ export function ParameterInputField({
   value,
   unit,
   onValueChange,
-  onUnitChange
+  onUnitChange,
+  showLabel = true
 }: ParameterInputFieldProps) {
   if (parameter.type === 'select' && parameter.options) {
     return (
       <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">{parameter.name}</Label>
+        {showLabel && <Label className="text-xs text-muted-foreground">{parameter.name}</Label>}
         <Select value={String(value)} onValueChange={onValueChange}>
           <SelectTrigger className="h-8">
             <SelectValue />
@@ -48,7 +50,7 @@ export function ParameterInputField({
 
   return (
     <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{parameter.name}</Label>
+      {showLabel && <Label className="text-xs text-muted-foreground">{parameter.name}</Label>}
       <div className="flex gap-2">
         <Input
           type={parameter.type === 'number' ? 'number' : 'text'}

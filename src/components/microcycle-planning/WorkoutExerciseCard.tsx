@@ -163,6 +163,7 @@ export function WorkoutExerciseCard({
                             unit={exercise.parameters[`${param.name}_unit`] as string}
                             onValueChange={(value) => onParameterChange(`${param.name}_set${setIndex + 1}`, value)}
                             onUnitChange={(unit) => onUnitChange(param.name, unit)}
+                            showLabel={false}
                           />
                         </TableCell>
                       ))}
@@ -203,6 +204,7 @@ export function WorkoutExerciseCard({
                   unit={exercise.parameters[`${param.name}_unit`] as string}
                   onValueChange={(value) => onParameterChange(param.name, value)}
                   onUnitChange={(unit) => onUnitChange(param.name, unit)}
+                  showLabel={false}
                 />
               ))}
             </div>
