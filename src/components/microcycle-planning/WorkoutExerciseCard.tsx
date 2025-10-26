@@ -143,7 +143,7 @@ export function WorkoutExerciseCard({
                     <MoreVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                <DropdownMenuContent align="end" className="z-50 bg-popover">
                   <DropdownMenuItem onClick={onLinkSuperset}>
                     <Link2 className="h-4 w-4 mr-2" />
                     Link to Superset

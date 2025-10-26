@@ -69,7 +69,7 @@ export function WorkoutSectionCard({
           {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </Button>
         
-        {/* Editable Section Name */}
+        {/* Editable Section Name with Pencil Icon */}
         {isEditing ? (
           <Input
             value={editedName}
@@ -83,14 +83,29 @@ export function WorkoutSectionCard({
             className="h-7 text-sm font-semibold flex-1"
           />
         ) : (
-          <h3 className="font-semibold text-sm flex-1">{section.name}</h3>
+          <div className="flex items-center gap-1 flex-1">
+            <h3 
+              className="font-semibold text-sm cursor-pointer hover:text-primary transition-colors"
+              onClick={() => setIsEditing(true)}
+            >
+              {section.name}
+            </h3>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-5 w-5 p-0 hover:bg-transparent"
+              onClick={() => setIsEditing(true)}
+            >
+              <Pencil className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+            </Button>
+          </div>
         )}
         
         <span className="text-xs text-muted-foreground">
           {section.exercises.length} {section.exercises.length === 1 ? 'exercise' : 'exercises'}
         </span>
         
-        {/* Section Menu */}
+        {/* Section Delete Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -101,11 +116,7 @@ export function WorkoutSectionCard({
               <MoreVertical className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setIsEditing(true)}>
-              <Pencil className="h-4 w-4 mr-2" />
-              Rename Section
-            </DropdownMenuItem>
+          <DropdownMenuContent align="end" className="z-50 bg-popover">
             <DropdownMenuItem 
               onClick={onDeleteSection}
               className="text-destructive focus:text-destructive"
