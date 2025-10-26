@@ -68,10 +68,18 @@ export function ExerciseLibraryPanel({
     return exerciseDistribution.filter(ex => ex.exerciseId === exerciseId).length;
   };
 
-  const getAllocationBadgeVariant = (count: number): "default" | "secondary" | "outline" => {
+  const getAllocationBadgeVariant = (count: number): "default" | "secondary" | "outline" | "destructive" => {
     if (count === 0) return "outline";
     if (count <= 2) return "default";
-    return "secondary";
+    if (count <= 5) return "secondary";
+    return "destructive";
+  };
+
+  const getAllocationDotColor = (count: number): string => {
+    if (count === 0) return "bg-gray-400";
+    if (count <= 2) return "bg-green-500";
+    if (count <= 5) return "bg-yellow-500";
+    return "bg-red-500";
   };
 
   const filteredExercises = useMemo(() => {
@@ -224,19 +232,24 @@ export function ExerciseLibraryPanel({
                                             ref={provided.innerRef}
                                             {...provided.draggableProps}
                                             {...provided.dragHandleProps}
-                                            className={cn(
-                                              "flex items-center gap-2 p-2 rounded-md border bg-card text-xs",
-                                              "hover:bg-accent hover:text-accent-foreground cursor-grab active:cursor-grabbing",
-                                              snapshot.isDragging && "opacity-50 shadow-lg"
-                                            )}
-                                          >
-                                            <GripVertical className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                                            <span className="flex-1 truncate">{exercise.exerciseName}</span>
-                                            {allocationCount > 0 && (
-                                              <Badge variant={getAllocationBadgeVariant(allocationCount)} className="text-xs px-1.5 font-medium">
-                                                {allocationCount}
-                                              </Badge>
-                                            )}
+                                             className={cn(
+                                               "flex items-center gap-2 p-2 rounded-md border bg-card text-xs",
+                                               "hover:bg-accent hover:text-accent-foreground cursor-grab active:cursor-grabbing",
+                                               snapshot.isDragging && "opacity-50 shadow-lg"
+                                             )}
+                                           >
+                                             <GripVertical className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                             <div className={cn(
+                                               "w-2 h-2 rounded-full flex-shrink-0",
+                                               getAllocationDotColor(allocationCount)
+                                             )} />
+                                             <span className="flex-1 truncate">{exercise.exerciseName}</span>
+                                             <Badge 
+                                               variant={getAllocationBadgeVariant(allocationCount)} 
+                                               className="text-xs px-2 py-0.5 font-semibold"
+                                             >
+                                               {allocationCount}
+                                             </Badge>
                                           </div>
                                         )}
                                       </Draggable>

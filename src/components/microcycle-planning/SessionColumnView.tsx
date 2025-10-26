@@ -155,18 +155,19 @@ export function SessionColumnView({
   const sessionName = day.sessionNames?.[sessionIndex] || `Session ${sessionIndex + 1}`;
   const intensityClass = intensityColors[day.intensity] || 'bg-gray-200';
 
-  const getMethodColor = (methodId: string): string => {
-    const methodColors: Record<string, string> = {
-      'Strength': 'border-l-red-500',
-      'Hypertrophy': 'border-l-blue-500',
-      'Power': 'border-l-purple-500',
-      'Endurance': 'border-l-green-500',
-      'Mobility': 'border-l-yellow-500',
-      'Olympic Lifting': 'border-l-orange-500',
-      'Speed': 'border-l-pink-500',
-      'Conditioning': 'border-l-teal-500',
-    };
-    return methodColors[methodId] || 'border-l-muted-foreground';
+  // Superset color scheme for better visual grouping
+  const getSupersetColor = (supersetId: string): string => {
+    const label = getSupersetLabel(supersetId);
+    const number = parseInt(label.replace('SS', ''));
+    const colors = [
+      'border-l-blue-400 bg-blue-50/50',
+      'border-l-green-400 bg-green-50/50',
+      'border-l-purple-400 bg-purple-50/50',
+      'border-l-orange-400 bg-orange-50/50',
+      'border-l-pink-400 bg-pink-50/50',
+      'border-l-cyan-400 bg-cyan-50/50',
+    ];
+    return colors[(number - 1) % colors.length] || colors[0];
   };
 
   const renderExerciseCard = (exercise: ExerciseDistribution, index: number, allExercises: ExerciseDistribution[]) => {
@@ -182,15 +183,12 @@ export function SessionColumnView({
             <div
               ref={provided.innerRef}
               {...provided.draggableProps}
-              className={cn(
-                "group relative",
-                supersetId && "border-l-4 border-primary pl-2 bg-primary/5"
-              )}
+              className="group relative"
             >
               <div
                 className={cn(
-                  "flex items-start gap-2 p-2 rounded-md border-l-4 bg-card text-xs",
-                  getMethodColor(exercise.methodId),
+                  "flex items-start gap-2 p-2 rounded-md border-l-4 border-muted bg-card text-xs",
+                  supersetId && getSupersetColor(supersetId),
                   snapshot.isDragging && "opacity-50 shadow-lg"
                 )}
               >
@@ -204,7 +202,7 @@ export function SessionColumnView({
                     {exercise.methodId}
                   </div>
                   {supersetId && (
-                    <Badge variant="secondary" className="text-[10px] mt-1 px-1">
+                    <Badge variant="default" className="text-[10px] mt-1 px-1.5 font-semibold">
                       {getSupersetLabel(supersetId)}
                     </Badge>
                   )}
