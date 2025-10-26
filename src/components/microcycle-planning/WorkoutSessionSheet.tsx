@@ -1,8 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Save, PanelRightClose, PanelRight } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Plus, Save, PanelRightClose, PanelRight, Pencil, MessageSquare } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import { WorkoutSection, WorkoutExercise, WorkoutSession, SupersetMapping } from '@/types/workout';
 import { WorkoutSectionCard } from './WorkoutSectionCard';
 import { WorkoutArrangementSidebar } from './WorkoutArrangementSidebar';
@@ -53,6 +57,7 @@ export function WorkoutSessionSheet({
   parameterValues,
   onSaveParameters
 }: WorkoutSessionSheetProps) {
+  const { toast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [sidebarCollapsedSections, setSidebarCollapsedSections] = useState<Record<string, boolean>>({});
@@ -60,6 +65,9 @@ export function WorkoutSessionSheet({
   const [currentSectionId, setCurrentSectionId] = useState<string | null>(null);
   const [isMethodSelectionOpen, setIsMethodSelectionOpen] = useState(false);
   const [selectedExercisesForMethod, setSelectedExercisesForMethod] = useState<ExerciseSelection[]>([]);
+  const [sessionName, setSessionName] = useState<string>('');
+  const [sessionComments, setSessionComments] = useState<string>('');
+  const [isEditingName, setIsEditingName] = useState(false);
   const [workoutSections, setWorkoutSections] = useState<WorkoutSection[]>(() => {
     // Initialize sections from exercises
     const sectionsMap = new Map<string, WorkoutExercise[]>();
@@ -160,6 +168,27 @@ export function WorkoutSessionSheet({
   });
   
   const [supersets, setSupersets] = useState<SupersetMapping>({});
+
+  // Load session metadata from localStorage
+  useEffect(() => {
+    if (isOpen) {
+      const key = `workoutSessions_${mesocycleId}_${dayDate}_${sessionIndex}`;
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        try {
+          const { sessionName: name, comments } = JSON.parse(stored);
+          setSessionName(name || `Session ${sessionIndex + 1}`);
+          setSessionComments(comments || '');
+        } catch {
+          setSessionName(`Session ${sessionIndex + 1}`);
+          setSessionComments('');
+        }
+      } else {
+        setSessionName(`Session ${sessionIndex + 1}`);
+        setSessionComments('');
+      }
+    }
+  }, [isOpen, mesocycleId, dayDate, sessionIndex]);
 
   // Filter available methods for the current session
   const availableMethods = useMemo(() => {
@@ -278,6 +307,13 @@ export function WorkoutSessionSheet({
   };
 
   const handleSave = () => {
+    // Save session metadata (name and comments)
+    const metadataKey = `workoutSessions_${mesocycleId}_${dayDate}_${sessionIndex}`;
+    localStorage.setItem(metadataKey, JSON.stringify({
+      sessionName: sessionName || `Session ${sessionIndex + 1}`,
+      comments: sessionComments
+    }));
+
     // Save all parameter changes
     workoutSections.forEach(section => {
       section.exercises.forEach(exercise => {
@@ -291,6 +327,12 @@ export function WorkoutSessionSheet({
         );
       });
     });
+
+    toast({
+      title: "Changes saved",
+      description: "Workout session updated successfully",
+    });
+    
     onClose();
   };
 
@@ -445,10 +487,46 @@ export function WorkoutSessionSheet({
       <DialogContent className="max-w-[95vw] max-h-[95vh] w-full h-full flex flex-col p-0">
         <DialogHeader className="p-6 pb-4 border-b">
           <div className="flex items-center justify-between">
-            <div>
-              <DialogTitle>Workout Session</DialogTitle>
+            <div className="flex-1 min-w-0 pr-4">
+              {/* Editable Session Name */}
+              {isEditingName ? (
+                <Input
+                  value={sessionName}
+                  onChange={(e) => setSessionName(e.target.value)}
+                  onBlur={() => setIsEditingName(false)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') setIsEditingName(false);
+                    if (e.key === 'Escape') {
+                      const key = `workoutSessions_${mesocycleId}_${dayDate}_${sessionIndex}`;
+                      const stored = localStorage.getItem(key);
+                      const name = stored ? JSON.parse(stored).sessionName : `Session ${sessionIndex + 1}`;
+                      setSessionName(name || `Session ${sessionIndex + 1}`);
+                      setIsEditingName(false);
+                    }
+                  }}
+                  autoFocus
+                  className="text-lg font-semibold h-8"
+                />
+              ) : (
+                <div className="flex items-center gap-2">
+                  <DialogTitle 
+                    className="cursor-pointer hover:text-primary transition-colors" 
+                    onClick={() => setIsEditingName(true)}
+                  >
+                    {sessionName || `Session ${sessionIndex + 1}`}
+                  </DialogTitle>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 w-6 p-0"
+                    onClick={() => setIsEditingName(true)}
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
               <DialogDescription>
-                {format(new Date(dayDate), 'EEEE, MMMM d, yyyy')} • Session {sessionIndex + 1}
+                {format(new Date(dayDate), 'EEEE, MMMM d, yyyy')}
               </DialogDescription>
             </div>
             <div className="flex items-center gap-2 pr-10">
@@ -462,6 +540,23 @@ export function WorkoutSessionSheet({
             </div>
           </div>
         </DialogHeader>
+
+        {/* Session Comments Section */}
+        <div className="px-6 pt-4 pb-2 border-b bg-muted/30">
+          <div className="space-y-2">
+            <Label htmlFor="session-comments" className="text-sm font-medium flex items-center gap-2">
+              <MessageSquare className="h-4 w-4" />
+              Session Notes
+            </Label>
+            <Textarea
+              id="session-comments"
+              placeholder="Add notes, goals, or observations for this session..."
+              value={sessionComments}
+              onChange={(e) => setSessionComments(e.target.value)}
+              className="min-h-[80px] resize-none"
+            />
+          </div>
+        </div>
 
         <div className="flex-1 flex overflow-hidden">
           {/* Main Content */}

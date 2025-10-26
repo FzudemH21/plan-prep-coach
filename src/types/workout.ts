@@ -19,6 +19,8 @@ export interface WorkoutExercise {
 export interface WorkoutSession {
   dayDate: string;
   sessionIndex: number;
+  sessionName?: string;
+  comments?: string;
   sections: WorkoutSection[];
 }
 

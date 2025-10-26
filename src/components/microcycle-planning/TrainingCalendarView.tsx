@@ -68,6 +68,7 @@ export interface CalendarDay {
   sessions: {
     id: string;
     sessionIndex: number;
+    sessionName: string;
     exercises: ExerciseDistribution[];
     methods: string[];
   }[];
@@ -192,9 +193,23 @@ export function TrainingCalendarView({
             .join('|');
           const sessionId = `${dateString}__${ids || `empty-${idx}`}`;
           
+          // Get custom session name from localStorage
+          const sessionKey = `workoutSessions_${currentMesocycle.id}_${dateString}_${idx}`;
+          const storedMetadata = localStorage.getItem(sessionKey);
+          let sessionName = `Session ${parseInt(idx) + 1}`;
+          if (storedMetadata) {
+            try {
+              const metadata = JSON.parse(storedMetadata);
+              sessionName = metadata.sessionName || sessionName;
+            } catch {
+              // Use default name on parse error
+            }
+          }
+          
           return {
             id: sessionId,
             sessionIndex: parseInt(idx),
+            sessionName,
             exercises: exs,
             methods: [...new Set(exs.map(e => e.methodId))],
           };
