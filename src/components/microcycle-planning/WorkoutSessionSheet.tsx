@@ -361,6 +361,55 @@ export function WorkoutSessionSheet({
     }
   };
 
+  const handleSidebarDragEnd = (result: DropResult) => {
+    if (!result.destination) return;
+    const { type, source, destination } = result;
+
+    if (type === 'SIDEBAR_SECTION') {
+      const newSections = Array.from(workoutSections);
+      const [removed] = newSections.splice(source.index, 1);
+      newSections.splice(destination.index, 0, removed);
+      setWorkoutSections(newSections.map((s, idx) => ({ ...s, order: idx })));
+      return;
+    }
+
+    if (type === 'SIDEBAR_EXERCISE') {
+      const srcSectionId = source.droppableId.replace('sidebar-exercises-', '');
+      const dstSectionId = destination.droppableId.replace('sidebar-exercises-', '');
+
+      const sourceSection = workoutSections.find(s => s.id === srcSectionId);
+      const destSection = workoutSections.find(s => s.id === dstSectionId);
+      if (!sourceSection || !destSection) return;
+
+      if (srcSectionId === dstSectionId) {
+        const newExercises = Array.from(sourceSection.exercises);
+        const [removed] = newExercises.splice(source.index, 1);
+        newExercises.splice(destination.index, 0, removed);
+
+        setWorkoutSections(workoutSections.map(s =>
+          s.id === srcSectionId
+            ? { ...s, exercises: newExercises.map((ex, idx) => ({ ...ex, order: idx })) }
+            : s
+        ));
+      } else {
+        const sourceExercises = Array.from(sourceSection.exercises);
+        const destExercises = Array.from(destSection.exercises);
+        const [removed] = sourceExercises.splice(source.index, 1);
+        destExercises.splice(destination.index, 0, removed);
+
+        setWorkoutSections(workoutSections.map(s => {
+          if (s.id === srcSectionId) {
+            return { ...s, exercises: sourceExercises.map((ex, idx) => ({ ...ex, order: idx })) };
+          }
+          if (s.id === dstSectionId) {
+            return { ...s, exercises: destExercises.map((ex, idx) => ({ ...ex, order: idx })) };
+          }
+          return s;
+        }));
+      }
+    }
+  };
+
   const handleParameterChange = (exerciseId: string, paramName: string, value: string | number) => {
     setWorkoutSections(sections =>
       sections.map(section => ({
@@ -1006,14 +1055,7 @@ export function WorkoutSessionSheet({
                               <div 
                                 ref={provided.innerRef} 
                                 {...provided.draggableProps}
-                                style={{
-                                  ...provided.draggableProps.style,
-                                  ...(snapshot.isDragging && {
-                                    position: 'fixed',
-                                    top: 'auto',
-                                    left: 'auto',
-                                  })
-                                }}
+                                style={provided.draggableProps.style}
                               >
                                  <WorkoutSectionCard
                                    section={section}
@@ -1072,6 +1114,7 @@ export function WorkoutSessionSheet({
                   }
                   onScrollToExercise={handleScrollToExercise}
                   getSupersetLabel={getSupersetLabel}
+                  onDragEnd={handleSidebarDragEnd}
                 />
               </div>
             )}
