@@ -438,19 +438,19 @@ export function WorkoutSessionSheet({
             </div>
           )}
         </div>
-
-        {/* Exercise Library Popup */}
-        <ExerciseLibraryPopup
-          isOpen={isLibraryOpen}
-          onClose={() => {
-            setIsLibraryOpen(false);
-            setCurrentSectionId(null);
-          }}
-          onSelectExercises={handleExercisesSelected}
-          selectedExerciseIds={[]}
-          onExerciseCreated={handleExerciseCreated}
-        />
       </DialogContent>
+
+      {/* Exercise Library Popup - Rendered outside DialogContent for proper overlay layering */}
+      <ExerciseLibraryPopup
+        isOpen={isLibraryOpen}
+        onClose={() => {
+          setIsLibraryOpen(false);
+          setCurrentSectionId(null);
+        }}
+        onSelectExercises={handleExercisesSelected}
+        selectedExerciseIds={[]}
+        onExerciseCreated={handleExerciseCreated}
+      />
     </Dialog>
   );
 }
