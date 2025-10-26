@@ -393,9 +393,9 @@ export function ExerciseLibraryPopup({
                     <div className="overflow-auto max-h-[50vh]" style={{scrollbarWidth: 'thin'}}>
                       <table className="w-full min-w-[1400px] border-collapse">
                         {/* Sticky Header */}
-                        <thead className="bg-muted/50 sticky top-0 z-10">
+                        <thead className="bg-muted sticky top-0 z-10">
                           <tr>
-                            <th className="px-3 py-2 text-left font-medium text-muted-foreground border-b border-border w-12 bg-background sticky left-0 z-20">
+                            <th className="px-3 py-2 text-left font-medium text-muted-foreground border-b border-border w-12 bg-muted sticky left-0 z-20">
                               <div className="flex items-center">
                                 <span className="text-xs">Select</span>
                               </div>
@@ -403,7 +403,7 @@ export function ExerciseLibraryPopup({
                             {currentColumns.map((column) => (
                               <th
                                 key={column.key}
-                                className="px-3 py-2 text-left font-medium text-muted-foreground border-b border-border text-xs min-w-[120px]"
+                                className="px-3 py-2 text-left font-medium text-muted-foreground border-b border-border text-xs min-w-[120px] bg-muted"
                               >
                                 <div className="flex items-center justify-between gap-1">
                                   <div 
