@@ -1896,7 +1896,13 @@ export default function MesocyclePage() {
       const isSplit = globalMicrocycleSplitStates[splitKey] || false;
       
       // Get method parameters for this microcycle
-      const methodParams = parameterValues[mesocycleId]?.[microIndex]?.[fullMethodName];
+      let methodParams = parameterValues[mesocycleId]?.[microIndex]?.[fullMethodName];
+      
+      // FALLBACK: If no parameters found and we have a category, try the parent method
+      if (!methodParams && categoryName) {
+        methodParams = parameterValues[mesocycleId]?.[microIndex]?.[methodId];
+      }
+      
       if (!methodParams) return;
       
       const sessionCount = Object.keys(methodParams).length;
@@ -1969,8 +1975,12 @@ export default function MesocyclePage() {
           const value = sessionParams[paramName];
           
           if (value !== undefined && value !== null && value !== '') {
-            // Get unit if available
-            const methodParamDefs = methodParametersMap[fullMethodName] || [];
+            // Get unit if available - try category first, fall back to parent
+            let methodParamDefs = methodParametersMap[fullMethodName];
+            if (!methodParamDefs && categoryName) {
+              methodParamDefs = methodParametersMap[methodId];
+            }
+            methodParamDefs = methodParamDefs || [];
             const paramDef = methodParamDefs.find(p => p.name === paramName);
             const unit = paramDef?.isQuantitative && paramDef?.options?.[0] ? ` ${paramDef.options[0]}` : '';
             rowParts.push(`${value}${unit}`.padEnd(15));
@@ -1992,8 +2002,12 @@ export default function MesocyclePage() {
           
           if (uniqueValues.length === 0) return null;
           
-          // Get unit if available
-          const methodParamDefs = methodParametersMap[fullMethodName] || [];
+          // Get unit if available - try category first, fall back to parent
+          let methodParamDefs = methodParametersMap[fullMethodName];
+          if (!methodParamDefs && categoryName) {
+            methodParamDefs = methodParametersMap[methodId];
+          }
+          methodParamDefs = methodParamDefs || [];
           const paramDef = methodParamDefs.find(p => p.name === paramName);
           const unit = paramDef?.isQuantitative && paramDef?.options?.[0] ? ` ${paramDef.options[0]}` : '';
           
