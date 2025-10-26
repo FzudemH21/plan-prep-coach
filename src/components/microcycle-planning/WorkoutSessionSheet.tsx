@@ -779,14 +779,40 @@ export function WorkoutSessionSheet({
     }
     
     if (superset1 && superset1 === superset2) {
-      // UNLINK: remove both from the same superset
-      const updated = daySuperset[superset1].filter(id => id !== exerciseId1 && id !== exerciseId2);
-      if (updated.length === 0) {
-        delete daySuperset[superset1];
+      // UNLINK: split the superset at this connection point
+      const currentIds = daySuperset[superset1];
+      const index1 = currentIds.indexOf(exerciseId1);
+      const index2 = currentIds.indexOf(exerciseId2);
+      
+      // Only unlink if they are adjacent in the array
+      if (Math.abs(index1 - index2) === 1) {
+        const splitPoint = Math.min(index1, index2) + 1;
+        const firstGroup = currentIds.slice(0, splitPoint);
+        const secondGroup = currentIds.slice(splitPoint);
+        
+        // Keep first group in original superset (if 2+ exercises)
+        if (firstGroup.length >= 2) {
+          daySuperset[superset1] = firstGroup;
+        } else {
+          delete daySuperset[superset1];
+        }
+        
+        // Create new superset for second group (if 2+ exercises)
+        if (secondGroup.length >= 2) {
+          const existingSupersetIds = Object.keys(daySuperset).map(id => {
+            const match = id.match(/superset-(\d+)/);
+            return match ? parseInt(match[1]) : 0;
+          });
+          const nextId = existingSupersetIds.length > 0 ? Math.max(...existingSupersetIds) + 1 : 1;
+          const newSupersetId = `superset-${nextId}`;
+          daySuperset[newSupersetId] = secondGroup;
+        }
+        
+        toast({ title: "Exercises unlinked", description: "Connection removed" });
       } else {
-        daySuperset[superset1] = updated;
+        // Not adjacent - shouldn't happen with current UI, but handle gracefully
+        toast({ title: "Cannot unlink", description: "Exercises must be adjacent" });
       }
-      toast({ title: "Exercises unlinked", description: "Superset updated" });
     } else if (superset1 && superset2 && superset1 !== superset2) {
       // MERGE two different supersets
       const merged = Array.from(new Set([...(daySuperset[superset1] || []), ...(daySuperset[superset2] || [])]));
