@@ -2004,6 +2004,7 @@ export default function MicrocyclePlanningPage() {
           onDistributionChange={setExerciseDistribution}
           onSectionsChange={setSessionSections}
           onSupersetsChange={setSupersets}
+          getIntensityColor={getIntensityColor}
         />
       </div>
     );

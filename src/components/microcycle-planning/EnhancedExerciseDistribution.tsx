@@ -4,13 +4,15 @@ import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { TrainingDay } from '@/types/daily-intensity';
 import { CellData } from '@/types/microcycle-planning';
+import { IntensityLevel } from '@/types/training';
 import { ExerciseLibraryPanel } from './ExerciseLibraryPanel';
 import { SessionColumnView } from './SessionColumnView';
 import { useToast } from '@/hooks/use-toast';
-import { format, differenceInDays, parseISO } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Copy } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface ExerciseDistribution {
   id: string;
@@ -52,6 +54,7 @@ interface EnhancedExerciseDistributionProps {
   onDistributionChange: (distribution: ExerciseDistribution[]) => void;
   onSectionsChange: (sections: SessionSection[]) => void;
   onSupersetsChange: (supersets: SupersetMapping) => void;
+  getIntensityColor: (intensity: IntensityLevel) => string;
 }
 
 export function EnhancedExerciseDistribution({
@@ -64,6 +67,7 @@ export function EnhancedExerciseDistribution({
   onDistributionChange,
   onSectionsChange,
   onSupersetsChange,
+  getIntensityColor,
 }: EnhancedExerciseDistributionProps) {
   const { toast } = useToast();
   const [selectedMicrocycleId, setSelectedMicrocycleId] = useState<string | null>(null);
@@ -82,36 +86,35 @@ export function EnhancedExerciseDistribution({
     });
   }, [trainingDays, mesocycle]);
 
-  // Group days by microcycle
+  // Group days by microcycle - using the microcycleId already stored in TrainingDay
   const daysByMicrocycle = useMemo(() => {
-    const mesocycleStartDate = typeof mesocycle.startDate === 'string' 
-      ? (mesocycle.startDate as string).split('T')[0] 
-      : format(mesocycle.startDate as Date, 'yyyy-MM-dd');
-    
-    const startDate = parseISO(mesocycleStartDate);
     const grouped = new Map<string, { microcycle: any; days: TrainingDay[] }>();
     
-    // Calculate cumulative day boundaries for each microcycle
-    let cumulativeDays = 0;
-    mesocycle.microcycles.forEach(micro => {
-      const microStartDay = cumulativeDays;
-      const microEndDay = cumulativeDays + micro.duration - 1;
-      
-      // Filter days that belong to this microcycle
-      const microDays = currentMesocycleDays.filter(day => {
-        const dayDate = parseISO(day.date);
-        const daysSinceStart = differenceInDays(dayDate, startDate);
-        return daysSinceStart >= microStartDay && daysSinceStart <= microEndDay;
-      });
-      
-      if (microDays.length > 0) {
-        grouped.set(micro.id, { microcycle: micro, days: microDays });
+    // Group days by their microcycleId
+    currentMesocycleDays.forEach(day => {
+      if (!grouped.has(day.microcycleId)) {
+        // Find the corresponding microcycle from mesocycle.microcycles
+        const micro = mesocycle.microcycles.find(m => m.id === day.microcycleId);
+        if (micro) {
+          grouped.set(day.microcycleId, { microcycle: micro, days: [] });
+        }
       }
       
-      cumulativeDays += micro.duration;
+      const entry = grouped.get(day.microcycleId);
+      if (entry) {
+        entry.days.push(day);
+      }
     });
     
-    return grouped;
+    // Sort the map by microcycle order in mesocycle.microcycles
+    const sortedGrouped = new Map<string, { microcycle: any; days: TrainingDay[] }>();
+    mesocycle.microcycles.forEach(micro => {
+      if (grouped.has(micro.id)) {
+        sortedGrouped.set(micro.id, grouped.get(micro.id)!);
+      }
+    });
+    
+    return sortedGrouped;
   }, [currentMesocycleDays, mesocycle]);
 
   // Group exercises by method and category
@@ -574,11 +577,11 @@ export function EnhancedExerciseDistribution({
             <div className="w-max min-w-full">
               
               {/* Mesocycle Header */}
-              <div className="mb-4 border-b pb-3">
+              <div className={cn("mb-4 border-b pb-3", getIntensityColor(mesocycle.intensity))}>
                 <h2 className="text-xl font-bold text-center">
                   {mesocycle.name}
                 </h2>
-                <p className="text-sm text-muted-foreground text-center mt-1">
+                <p className="text-sm text-center mt-1">
                   {(() => {
                     const mesocycleStartDate = typeof mesocycle.startDate === 'string' 
                       ? (mesocycle.startDate as string).split('T')[0] 
@@ -606,26 +609,29 @@ export function EnhancedExerciseDistribution({
                   }, 0);
                   
                   return (
-                    <div 
-                      key={microId}
-                      className="text-center font-semibold py-2 border-r-2 border-border"
-                      style={{ width: `${totalWidth}px` }}
-                    >
-                      <div className="flex items-center justify-center gap-2">
-                        <span>{microcycle.name}</span>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 w-6 p-0"
-                          title="Copy exercises from another microcycle"
-                          onClick={() => {
-                            toast({ title: 'Coming soon', description: 'Microcycle copy feature' });
-                          }}
-                        >
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
+            <div 
+              key={microId}
+              className={cn(
+                "text-center font-semibold py-2 border-r-2 border-border",
+                getIntensityColor(microcycle.intensity)
+              )}
+              style={{ width: `${totalWidth}px` }}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <span>{microcycle.name}</span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0"
+                  title="Copy exercises from another microcycle"
+                  onClick={() => {
+                    toast({ title: 'Coming soon', description: 'Microcycle copy feature' });
+                  }}
+                >
+                  <Copy className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
                   );
                 })}
               </div>
