@@ -6,9 +6,11 @@ import { Plus, Save, PanelRightClose, PanelRight } from 'lucide-react';
 import { WorkoutSection, WorkoutExercise, WorkoutSession, SupersetMapping } from '@/types/workout';
 import { WorkoutSectionCard } from './WorkoutSectionCard';
 import { WorkoutArrangementSidebar } from './WorkoutArrangementSidebar';
+import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { format } from 'date-fns';
 import { getParametersForMethod } from '@/data/methodParameters';
+import { ExerciseSelection } from '@/types/microcycle-planning';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -53,6 +55,8 @@ export function WorkoutSessionSheet({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [sidebarCollapsedSections, setSidebarCollapsedSections] = useState<Record<string, boolean>>({});
+  const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+  const [currentSectionId, setCurrentSectionId] = useState<string | null>(null);
   const [workoutSections, setWorkoutSections] = useState<WorkoutSection[]>(() => {
     // Initialize sections from exercises
     const sectionsMap = new Map<string, WorkoutExercise[]>();
@@ -265,8 +269,45 @@ export function WorkoutSessionSheet({
   };
 
   const handleAddExercise = (sectionId: string) => {
-    // TODO: Open exercise library dialog
-    console.log('Add exercise to section:', sectionId);
+    setCurrentSectionId(sectionId);
+    setIsLibraryOpen(true);
+  };
+
+  const handleExercisesSelected = (exercises: ExerciseSelection[]) => {
+    if (!currentSectionId) return;
+    
+    setWorkoutSections(sections =>
+      sections.map(section => {
+        if (section.id === currentSectionId) {
+          // Create new WorkoutExercise objects from selected exercises
+          const newExercises = exercises.map((ex, index) => {
+            return {
+              id: `${ex.exerciseId}-${Date.now()}-${index}`,
+              exerciseId: ex.exerciseId,
+              exerciseName: ex.exerciseName,
+              methodId: '', // Will be empty initially
+              categoryName: section.name, // Use section name as category
+              order: section.exercises.length + index,
+              parameters: {} // Empty initially, user will fill in
+            } as WorkoutExercise;
+          });
+          
+          return {
+            ...section,
+            exercises: [...section.exercises, ...newExercises]
+          };
+        }
+        return section;
+      })
+    );
+    
+    setIsLibraryOpen(false);
+    setCurrentSectionId(null);
+  };
+
+  const handleExerciseCreated = (exercise: ExerciseSelection) => {
+    // When a new exercise is created, automatically add it
+    handleExercisesSelected([exercise]);
   };
 
   const handleDuplicateExercise = (exerciseId: string) => {
@@ -397,6 +438,18 @@ export function WorkoutSessionSheet({
             </div>
           )}
         </div>
+
+        {/* Exercise Library Popup */}
+        <ExerciseLibraryPopup
+          isOpen={isLibraryOpen}
+          onClose={() => {
+            setIsLibraryOpen(false);
+            setCurrentSectionId(null);
+          }}
+          onSelectExercises={handleExercisesSelected}
+          selectedExerciseIds={[]}
+          onExerciseCreated={handleExerciseCreated}
+        />
       </DialogContent>
     </Dialog>
   );
