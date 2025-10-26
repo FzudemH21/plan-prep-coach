@@ -7,6 +7,7 @@ import { WorkoutSection, WorkoutExercise, WorkoutSession, SupersetMapping } from
 import { WorkoutSectionCard } from './WorkoutSectionCard';
 import { WorkoutArrangementSidebar } from './WorkoutArrangementSidebar';
 import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
+import { MethodSelectionDialog } from './MethodSelectionDialog';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { format } from 'date-fns';
 import { getParametersForMethod } from '@/data/methodParameters';
@@ -57,6 +58,8 @@ export function WorkoutSessionSheet({
   const [sidebarCollapsedSections, setSidebarCollapsedSections] = useState<Record<string, boolean>>({});
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [currentSectionId, setCurrentSectionId] = useState<string | null>(null);
+  const [isMethodSelectionOpen, setIsMethodSelectionOpen] = useState(false);
+  const [selectedExercisesForMethod, setSelectedExercisesForMethod] = useState<ExerciseSelection[]>([]);
   const [workoutSections, setWorkoutSections] = useState<WorkoutSection[]>(() => {
     // Initialize sections from exercises
     const sectionsMap = new Map<string, WorkoutExercise[]>();
@@ -157,6 +160,29 @@ export function WorkoutSessionSheet({
   });
   
   const [supersets, setSupersets] = useState<SupersetMapping>({});
+
+  // Filter available methods for the current session
+  const availableMethods = useMemo(() => {
+    const methodsForSession = parameterValues[mesocycleId]?.[microcycleIndex];
+    if (!methodsForSession) return [];
+    
+    return Object.keys(methodsForSession).flatMap(methodKey => {
+      const sessionData = methodsForSession[methodKey];
+      
+      // Check if this method has data for the current session
+      if (!sessionData[sessionIndex] || Object.keys(sessionData[sessionIndex]).length === 0) {
+        return [];
+      }
+      
+      // Handle both "methodId" and "methodId::categoryName" formats
+      const [methodId, categoryName] = methodKey.split('::');
+      return [{
+        id: methodKey, // Use full key for lookup
+        methodId,
+        categoryName: categoryName || undefined
+      }];
+    });
+  }, [mesocycleId, microcycleIndex, sessionIndex, parameterValues]);
 
   const getSupersetLabel = (exerciseId: string): string | undefined => {
     const daySuperset = supersets[dayDate]?.[sessionIndex];
@@ -276,32 +302,93 @@ export function WorkoutSessionSheet({
   const handleExercisesSelected = (exercises: ExerciseSelection[]) => {
     if (!currentSectionId) return;
     
+    // Store exercises and open method selection dialog
+    setSelectedExercisesForMethod(exercises);
+    setIsLibraryOpen(false);
+    setIsMethodSelectionOpen(true);
+  };
+
+  const handleMethodSelected = (methodId: string, categoryName?: string) => {
+    if (!currentSectionId) return;
+    
+    const section = workoutSections.find(s => s.id === currentSectionId);
+    if (!section) return;
+
+    // Fetch parameters from Method Periodization
+    const fullMethodKey = categoryName ? `${methodId}::${categoryName}` : methodId;
+    const storedParams = parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex]
+      || parameterValues[mesocycleId]?.[microcycleIndex]?.[methodId]?.[sessionIndex]
+      || {};
+
+    // Get parameter definitions
+    let methodParams = getParametersForMethod(methodId);
+    if (!methodParams || methodParams.length === 0) {
+      // Fallback: infer from stored params
+      methodParams = Object.keys(storedParams)
+        .filter(k => !k.endsWith('_unit'))
+        .map((name) => ({
+          name,
+          type: typeof (storedParams as any)[name] === 'number' ? 'number' : 'text'
+        }));
+    }
+
+    // Apply parameters to exercises
+    const newExercises = selectedExercisesForMethod.map((ex, index) => {
+      // Determine set count
+      const setParamName = methodParams.find(p => p.isSetParameter)?.name || 
+                          methodParams.find(p => /^sets?$/i.test(p.name))?.name;
+      const setCount = setParamName ? Number(storedParams[setParamName] || 0) : 0;
+
+      const parameters: Record<string, string | number> = {};
+      methodParams.forEach(param => {
+        if (param.unit) {
+          parameters[`${param.name}_unit`] = param.unit;
+        }
+        
+        if (param.name === setParamName) {
+          // Store the set count
+          parameters[param.name] = Number(storedParams[param.name] ?? param.defaultValue ?? 0);
+        } else if (setCount > 0) {
+          // Fan out method-level value to all sets
+          for (let i = 1; i <= setCount; i++) {
+            const perSetKey = `${param.name}_set${i}`;
+            parameters[perSetKey] = storedParams[param.name] ?? param.defaultValue ?? '';
+          }
+          // Store base parameter too
+          parameters[param.name] = storedParams[param.name] ?? param.defaultValue ?? '';
+        } else {
+          // No sets, use single value
+          parameters[param.name] = storedParams[param.name] ?? param.defaultValue ?? '';
+        }
+      });
+
+      return {
+        id: `${ex.exerciseId}-${Date.now()}-${index}`,
+        exerciseId: ex.exerciseId,
+        exerciseName: ex.exerciseName,
+        methodId,
+        categoryName: categoryName || section.name,
+        order: section.exercises.length + index,
+        parameters
+      } as WorkoutExercise;
+    });
+
+    // Add exercises to section
     setWorkoutSections(sections =>
-      sections.map(section => {
-        if (section.id === currentSectionId) {
-          // Create new WorkoutExercise objects from selected exercises
-          const newExercises = exercises.map((ex, index) => {
-            return {
-              id: `${ex.exerciseId}-${Date.now()}-${index}`,
-              exerciseId: ex.exerciseId,
-              exerciseName: ex.exerciseName,
-              methodId: '', // Will be empty initially
-              categoryName: section.name, // Use section name as category
-              order: section.exercises.length + index,
-              parameters: {} // Empty initially, user will fill in
-            } as WorkoutExercise;
-          });
-          
+      sections.map(s => {
+        if (s.id === currentSectionId) {
           return {
-            ...section,
-            exercises: [...section.exercises, ...newExercises]
+            ...s,
+            exercises: [...s.exercises, ...newExercises]
           };
         }
-        return section;
+        return s;
       })
     );
-    
-    setIsLibraryOpen(false);
+
+    // Clean up
+    setIsMethodSelectionOpen(false);
+    setSelectedExercisesForMethod([]);
     setCurrentSectionId(null);
   };
 
@@ -450,6 +537,21 @@ export function WorkoutSessionSheet({
         onSelectExercises={handleExercisesSelected}
         selectedExerciseIds={[]}
         onExerciseCreated={handleExerciseCreated}
+      />
+
+      {/* Method Selection Dialog */}
+      <MethodSelectionDialog
+        isOpen={isMethodSelectionOpen}
+        onClose={() => {
+          setIsMethodSelectionOpen(false);
+          setSelectedExercisesForMethod([]);
+          setCurrentSectionId(null);
+        }}
+        onMethodSelected={handleMethodSelected}
+        availableMethods={availableMethods}
+        mesocycleId={mesocycleId}
+        microcycleIndex={microcycleIndex}
+        sessionIndex={sessionIndex}
       />
     </Dialog>
   );
