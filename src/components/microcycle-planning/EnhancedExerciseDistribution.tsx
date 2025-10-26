@@ -68,8 +68,13 @@ export function EnhancedExerciseDistribution({
   // Filter training days for current mesocycle
   const currentMesocycleDays = useMemo(() => {
     return trainingDays.filter(day => {
-      const mesocycleStartDate = mesocycle.startDate.toISOString().split('T')[0];
-      const mesocycleEndDate = mesocycle.endDate.toISOString().split('T')[0];
+      // Handle both Date objects and string dates
+      const mesocycleStartDate = typeof mesocycle.startDate === 'string' 
+        ? (mesocycle.startDate as string).split('T')[0] 
+        : format(mesocycle.startDate as Date, 'yyyy-MM-dd');
+      const mesocycleEndDate = typeof mesocycle.endDate === 'string'
+        ? (mesocycle.endDate as string).split('T')[0]
+        : format(mesocycle.endDate as Date, 'yyyy-MM-dd');
       return day.date >= mesocycleStartDate && day.date <= mesocycleEndDate;
     });
   }, [trainingDays, mesocycle]);
