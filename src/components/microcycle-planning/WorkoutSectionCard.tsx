@@ -161,53 +161,131 @@ export function WorkoutSectionCard({
                       No exercises yet. Add one to get started.
                     </div>
                   )}
-                  {section.exercises.map((exercise, index) => (
-                    <React.Fragment key={exercise.id}>
-                      <Draggable draggableId={exercise.id} index={index}>
-                        {(provided, snapshot) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            style={provided.draggableProps.style}
-                            className={snapshot.isDragging ? 'opacity-50' : ''}
-                          >
-                            <WorkoutExerciseCard
-                              exercise={exercise}
-                              isInSuperset={!!exercise.supersetId}
-                              supersetLabel={getSupersetLabel(exercise.id)}
-                              onParameterChange={(paramName, value) => onParameterChange(exercise.id, paramName, value)}
-                              onUnitChange={(paramName, unit) => onUnitChange(exercise.id, paramName, unit)}
-                              onDuplicate={() => onDuplicateExercise(exercise.id)}
-                              onDelete={() => onDeleteExercise(exercise.id)}
-                              dragHandleProps={provided.dragHandleProps}
-                            />
-                          </div>
-                        )}
-                      </Draggable>
+                  {(() => {
+                    // Group exercises by superset
+                    const exerciseGroups: Array<{ exercises: typeof section.exercises; supersetLabel?: string }> = [];
+                    const processed = new Set<string>();
+                    
+                    section.exercises.forEach((exercise) => {
+                      if (processed.has(exercise.id)) return;
                       
-                      {/* Chain icon between exercises */}
-                      {index < section.exercises.length - 1 && (
-                        <div className="flex justify-center -my-2 relative z-10">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className={cn(
-                              "h-7 w-7 rounded-full transition-all",
-                              areExercisesLinked(exercise.id, section.exercises[index + 1].id)
-                                ? "bg-primary/10 text-primary hover:bg-primary/20" 
-                                : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                      const supersetLabel = getSupersetLabel(exercise.id);
+                      if (supersetLabel) {
+                        // Find all exercises with the same superset label
+                        const supersetExercises = section.exercises.filter(ex => 
+                          getSupersetLabel(ex.id) === supersetLabel
+                        );
+                        exerciseGroups.push({
+                          exercises: supersetExercises,
+                          supersetLabel
+                        });
+                        supersetExercises.forEach(ex => processed.add(ex.id));
+                      } else {
+                        exerciseGroups.push({
+                          exercises: [exercise]
+                        });
+                        processed.add(exercise.id);
+                      }
+                    });
+                    
+                    return exerciseGroups.map((group, groupIndex) => {
+                      if (group.supersetLabel) {
+                        // Superset group - render with visual pairing
+                        return (
+                          <div key={`group-${groupIndex}`} className="border-l-4 border-primary/40 pl-3 pr-1 py-2 rounded-md bg-primary/5 space-y-2">
+                            {group.exercises.map((exercise, exIndex) => {
+                              const exerciseIndex = section.exercises.indexOf(exercise);
+                              return (
+                                <React.Fragment key={exercise.id}>
+                                  <Draggable draggableId={exercise.id} index={exerciseIndex}>
+                                    {(provided, snapshot) => (
+                                      <div
+                                        ref={provided.innerRef}
+                                        {...provided.draggableProps}
+                                        style={provided.draggableProps.style}
+                                        className={snapshot.isDragging ? 'opacity-50' : ''}
+                                      >
+                                        <WorkoutExerciseCard
+                                          exercise={exercise}
+                                          isInSuperset={!!exercise.supersetId}
+                                          supersetLabel={getSupersetLabel(exercise.id)}
+                                          onParameterChange={(paramName, value) => onParameterChange(exercise.id, paramName, value)}
+                                          onUnitChange={(paramName, unit) => onUnitChange(exercise.id, paramName, unit)}
+                                          onDuplicate={() => onDuplicateExercise(exercise.id)}
+                                          onDelete={() => onDeleteExercise(exercise.id)}
+                                          dragHandleProps={provided.dragHandleProps}
+                                        />
+                                      </div>
+                                    )}
+                                  </Draggable>
+                                  
+                                  {/* Chain icon between superset exercises */}
+                                  {exIndex < group.exercises.length - 1 && (
+                                    <div className="flex justify-center -my-1 relative z-10">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 rounded-full bg-primary/20 text-primary hover:bg-primary/30"
+                                        onClick={() => onToggleSuperset(exercise.id, group.exercises[exIndex + 1].id)}
+                                      >
+                                        <Link2 className="h-3 w-3 fill-current" />
+                                      </Button>
+                                    </div>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
+                          </div>
+                        );
+                      } else {
+                        // Single exercise
+                        const exercise = group.exercises[0];
+                        const exerciseIndex = section.exercises.indexOf(exercise);
+                        const nextExercise = section.exercises[exerciseIndex + 1];
+                        const isNextInDifferentGroup = nextExercise && !getSupersetLabel(nextExercise.id);
+                        
+                        return (
+                          <React.Fragment key={exercise.id}>
+                            <Draggable draggableId={exercise.id} index={exerciseIndex}>
+                              {(provided, snapshot) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  style={provided.draggableProps.style}
+                                  className={snapshot.isDragging ? 'opacity-50' : ''}
+                                >
+                                  <WorkoutExerciseCard
+                                    exercise={exercise}
+                                    isInSuperset={!!exercise.supersetId}
+                                    supersetLabel={getSupersetLabel(exercise.id)}
+                                    onParameterChange={(paramName, value) => onParameterChange(exercise.id, paramName, value)}
+                                    onUnitChange={(paramName, unit) => onUnitChange(exercise.id, paramName, unit)}
+                                    onDuplicate={() => onDuplicateExercise(exercise.id)}
+                                    onDelete={() => onDeleteExercise(exercise.id)}
+                                    dragHandleProps={provided.dragHandleProps}
+                                  />
+                                </div>
+                              )}
+                            </Draggable>
+                            
+                            {/* Chain icon between non-superset exercises */}
+                            {nextExercise && isNextInDifferentGroup && (
+                              <div className="flex justify-center -my-2 relative z-10">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent"
+                                  onClick={() => onToggleSuperset(exercise.id, nextExercise.id)}
+                                >
+                                  <Link2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             )}
-                            onClick={() => onToggleSuperset(exercise.id, section.exercises[index + 1].id)}
-                          >
-                            <Link2 className={cn(
-                              "h-4 w-4",
-                              areExercisesLinked(exercise.id, section.exercises[index + 1].id) && "fill-current"
-                            )} />
-                          </Button>
-                        </div>
-                      )}
-                    </React.Fragment>
-                  ))}
+                          </React.Fragment>
+                        );
+                      }
+                    });
+                  })()}
                 </>
               )}
               {provided.placeholder}

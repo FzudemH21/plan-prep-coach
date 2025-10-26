@@ -324,6 +324,19 @@ export function WorkoutSessionSheet({
     return undefined;
   };
 
+  const getSupersetPartners = (exerciseId: string): string[] => {
+    const daySuperset = supersets[dayDate]?.[sessionIndex];
+    if (!daySuperset) return [];
+    
+    for (const [supersetId, exerciseIds] of Object.entries(daySuperset)) {
+      if (exerciseIds.includes(exerciseId)) {
+        // Return all OTHER exercises in the same superset
+        return exerciseIds.filter(id => id !== exerciseId);
+      }
+    }
+    return [];
+  };
+
   const handleDragEnd = (result: DropResult) => {
     console.log('🎯 Drag end:', result);
     const { source, destination, type } = result;
@@ -352,27 +365,93 @@ export function WorkoutSessionSheet({
         console.error('❌ Could not find sections (main):', { srcId, dstId });
         return;
       }
-      if (srcId === dstId) {
-        console.info('🔄 Reorder exercise within section:', sourceSection.name);
-        const newExercises = Array.from(sourceSection.exercises);
-        const [removed] = newExercises.splice(source.index, 1);
-        newExercises.splice(destination.index, 0, removed);
-        setWorkoutSections(workoutSections.map(s =>
-          s.id === srcId ? { ...s, exercises: newExercises.map((ex, i) => ({ ...ex, order: i })) } : s
-        ));
-        console.info('✓ Exercise reordered within section');
+
+      // Check if dragged exercise is part of a superset
+      const draggedExerciseId = result.draggableId;
+      const supersetPartners = getSupersetPartners(draggedExerciseId);
+      
+      if (supersetPartners.length > 0) {
+        // SUPERSET GROUP MOVEMENT
+        const allMovingIds = [draggedExerciseId, ...supersetPartners];
+        
+        if (srcId === dstId) {
+          // Reorder within same section
+          console.info('🔄 Reorder superset group within section:', sourceSection.name);
+          const newExercises = Array.from(sourceSection.exercises);
+          
+          // Remove all superset exercises
+          const movingExercises = newExercises.filter(ex => allMovingIds.includes(ex.id));
+          const remainingExercises = newExercises.filter(ex => !allMovingIds.includes(ex.id));
+          
+          // Insert at destination index (keeping superset order)
+          remainingExercises.splice(destination.index, 0, ...movingExercises);
+          
+          setWorkoutSections(workoutSections.map(s =>
+            s.id === srcId 
+              ? { ...s, exercises: remainingExercises.map((ex, i) => ({ ...ex, order: i })) } 
+              : s
+          ));
+          
+          toast({
+            title: "Superset moved",
+            description: `Moved ${allMovingIds.length} linked exercises together`,
+          });
+          console.info('✓ Superset reordered within section');
+        } else {
+          // Move between sections
+          console.info('↔️ Move superset group between sections:', sourceSection.name, '→', destSection.name);
+          const sourceExercises = Array.from(sourceSection.exercises);
+          const destExercises = Array.from(destSection.exercises);
+          
+          // Remove all superset exercises from source
+          const movingExercises = sourceExercises.filter(ex => allMovingIds.includes(ex.id));
+          const remainingSource = sourceExercises.filter(ex => !allMovingIds.includes(ex.id));
+          
+          // Insert into destination
+          destExercises.splice(destination.index, 0, ...movingExercises);
+          
+          setWorkoutSections(workoutSections.map(s => {
+            if (s.id === srcId) return { 
+              ...s, 
+              exercises: remainingSource.map((ex, i) => ({ ...ex, order: i })) 
+            };
+            if (s.id === dstId) return { 
+              ...s, 
+              exercises: destExercises.map((ex, i) => ({ ...ex, order: i })) 
+            };
+            return s;
+          }));
+          
+          toast({
+            title: "Superset moved",
+            description: `Moved ${allMovingIds.length} linked exercises to ${destSection.name}`,
+          });
+          console.info('✓ Superset moved between sections');
+        }
       } else {
-        console.info('↔️ Move exercise between sections:', sourceSection.name, '→', destSection.name);
-        const sourceExercises = Array.from(sourceSection.exercises);
-        const destExercises = Array.from(destSection.exercises);
-        const [removed] = sourceExercises.splice(source.index, 1);
-        destExercises.splice(destination.index, 0, removed);
-        setWorkoutSections(workoutSections.map(s => {
-          if (s.id === srcId) return { ...s, exercises: sourceExercises.map((ex, i) => ({ ...ex, order: i })) };
-          if (s.id === dstId) return { ...s, exercises: destExercises.map((ex, i) => ({ ...ex, order: i })) };
-          return s;
-        }));
-        console.info('✓ Exercise moved between sections');
+        // SINGLE EXERCISE MOVEMENT
+        if (srcId === dstId) {
+          console.info('🔄 Reorder exercise within section:', sourceSection.name);
+          const newExercises = Array.from(sourceSection.exercises);
+          const [removed] = newExercises.splice(source.index, 1);
+          newExercises.splice(destination.index, 0, removed);
+          setWorkoutSections(workoutSections.map(s =>
+            s.id === srcId ? { ...s, exercises: newExercises.map((ex, i) => ({ ...ex, order: i })) } : s
+          ));
+          console.info('✓ Exercise reordered within section');
+        } else {
+          console.info('↔️ Move exercise between sections:', sourceSection.name, '→', destSection.name);
+          const sourceExercises = Array.from(sourceSection.exercises);
+          const destExercises = Array.from(destSection.exercises);
+          const [removed] = sourceExercises.splice(source.index, 1);
+          destExercises.splice(destination.index, 0, removed);
+          setWorkoutSections(workoutSections.map(s => {
+            if (s.id === srcId) return { ...s, exercises: sourceExercises.map((ex, i) => ({ ...ex, order: i })) };
+            if (s.id === dstId) return { ...s, exercises: destExercises.map((ex, i) => ({ ...ex, order: i })) };
+            return s;
+          }));
+          console.info('✓ Exercise moved between sections');
+        }
       }
       return;
     }
@@ -386,27 +465,93 @@ export function WorkoutSessionSheet({
         console.error('❌ Could not find sections (sidebar):', { srcId, dstId });
         return;
       }
-      if (srcId === dstId) {
-        console.info('🔄 Reorder exercise within sidebar section:', sourceSection.name);
-        const newExercises = Array.from(sourceSection.exercises);
-        const [removed] = newExercises.splice(source.index, 1);
-        newExercises.splice(destination.index, 0, removed);
-        setWorkoutSections(workoutSections.map(s =>
-          s.id === srcId ? { ...s, exercises: newExercises.map((ex, i) => ({ ...ex, order: i })) } : s
-        ));
-        console.info('✓ Sidebar exercise reordered within section');
+
+      // Check if dragged exercise is part of a superset
+      const draggedExerciseId = result.draggableId.replace('sidebar-ex-', '');
+      const supersetPartners = getSupersetPartners(draggedExerciseId);
+      
+      if (supersetPartners.length > 0) {
+        // SUPERSET GROUP MOVEMENT
+        const allMovingIds = [draggedExerciseId, ...supersetPartners];
+        
+        if (srcId === dstId) {
+          // Reorder within same section
+          console.info('🔄 Reorder superset group within sidebar section:', sourceSection.name);
+          const newExercises = Array.from(sourceSection.exercises);
+          
+          // Remove all superset exercises
+          const movingExercises = newExercises.filter(ex => allMovingIds.includes(ex.id));
+          const remainingExercises = newExercises.filter(ex => !allMovingIds.includes(ex.id));
+          
+          // Insert at destination index
+          remainingExercises.splice(destination.index, 0, ...movingExercises);
+          
+          setWorkoutSections(workoutSections.map(s =>
+            s.id === srcId 
+              ? { ...s, exercises: remainingExercises.map((ex, i) => ({ ...ex, order: i })) } 
+              : s
+          ));
+          
+          toast({
+            title: "Superset moved",
+            description: `Moved ${allMovingIds.length} linked exercises together`,
+          });
+          console.info('✓ Superset reordered within sidebar section');
+        } else {
+          // Move between sections
+          console.info('↔️ Move superset group between sidebar sections:', sourceSection.name, '→', destSection.name);
+          const sourceExercises = Array.from(sourceSection.exercises);
+          const destExercises = Array.from(destSection.exercises);
+          
+          // Remove all superset exercises from source
+          const movingExercises = sourceExercises.filter(ex => allMovingIds.includes(ex.id));
+          const remainingSource = sourceExercises.filter(ex => !allMovingIds.includes(ex.id));
+          
+          // Insert into destination
+          destExercises.splice(destination.index, 0, ...movingExercises);
+          
+          setWorkoutSections(workoutSections.map(s => {
+            if (s.id === srcId) return { 
+              ...s, 
+              exercises: remainingSource.map((ex, i) => ({ ...ex, order: i })) 
+            };
+            if (s.id === dstId) return { 
+              ...s, 
+              exercises: destExercises.map((ex, i) => ({ ...ex, order: i })) 
+            };
+            return s;
+          }));
+          
+          toast({
+            title: "Superset moved",
+            description: `Moved ${allMovingIds.length} linked exercises to ${destSection.name}`,
+          });
+          console.info('✓ Superset moved between sidebar sections');
+        }
       } else {
-        console.info('↔️ Move exercise between sidebar sections:', sourceSection.name, '→', destSection.name);
-        const sourceExercises = Array.from(sourceSection.exercises);
-        const destExercises = Array.from(destSection.exercises);
-        const [removed] = sourceExercises.splice(source.index, 1);
-        destExercises.splice(destination.index, 0, removed);
-        setWorkoutSections(workoutSections.map(s => {
-          if (s.id === srcId) return { ...s, exercises: sourceExercises.map((ex, i) => ({ ...ex, order: i })) };
-          if (s.id === dstId) return { ...s, exercises: destExercises.map((ex, i) => ({ ...ex, order: i })) };
-          return s;
-        }));
-        console.info('✓ Sidebar exercise moved between sections');
+        // SINGLE EXERCISE MOVEMENT
+        if (srcId === dstId) {
+          console.info('🔄 Reorder exercise within sidebar section:', sourceSection.name);
+          const newExercises = Array.from(sourceSection.exercises);
+          const [removed] = newExercises.splice(source.index, 1);
+          newExercises.splice(destination.index, 0, removed);
+          setWorkoutSections(workoutSections.map(s =>
+            s.id === srcId ? { ...s, exercises: newExercises.map((ex, i) => ({ ...ex, order: i })) } : s
+          ));
+          console.info('✓ Sidebar exercise reordered within section');
+        } else {
+          console.info('↔️ Move exercise between sidebar sections:', sourceSection.name, '→', destSection.name);
+          const sourceExercises = Array.from(sourceSection.exercises);
+          const destExercises = Array.from(destSection.exercises);
+          const [removed] = sourceExercises.splice(source.index, 1);
+          destExercises.splice(destination.index, 0, removed);
+          setWorkoutSections(workoutSections.map(s => {
+            if (s.id === srcId) return { ...s, exercises: sourceExercises.map((ex, i) => ({ ...ex, order: i })) };
+            if (s.id === dstId) return { ...s, exercises: destExercises.map((ex, i) => ({ ...ex, order: i })) };
+            return s;
+          }));
+          console.info('✓ Sidebar exercise moved between sections');
+        }
       }
       return;
     }

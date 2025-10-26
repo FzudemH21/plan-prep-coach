@@ -69,50 +69,125 @@ export function WorkoutArrangementSidebar({
                                   {...provided.droppableProps}
                                   className={`pl-4 space-y-1 ${snapshot.isDraggingOver ? 'bg-accent/30 rounded-md' : ''}`}
                                 >
-                                  {section.exercises.map((exercise, exerciseIndex) => {
-                                    const supersetLabel = getSupersetLabel(exercise.id);
-                                    return (
-                                      <Draggable
-                                        key={exercise.id}
-                                        draggableId={`sidebar-ex-${exercise.id}`}
-                                        index={exerciseIndex}
-                                      >
-                                        {(provided, snapshot) => (
-                                          <div
-                                            ref={provided.innerRef}
-                                            {...provided.draggableProps}
-                                            className={`flex items-center w-full h-7 px-2 rounded-md hover:bg-accent ${
-                                              snapshot.isDragging ? 'opacity-50 shadow-lg' : ''
-                                            }`}
-                                          >
-                                            {/* Drag Handle - separate from clickable area */}
-                                            <div 
-                                              {...provided.dragHandleProps} 
-                                              className="cursor-grab active:cursor-grabbing flex items-center mr-1"
-                                            >
-                                              <GripVertical className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                                            </div>
-                                            
-                                            {/* Clickable Exercise Name - uses button styling but not Button component */}
-                                            <button
-                                              onClick={() => onScrollToExercise(exercise.id)}
-                                              className="flex-1 flex items-center justify-start gap-1 text-xs text-left truncate hover:text-primary transition-colors"
-                                            >
-                                              <span className="truncate">
-                                                {exercise.exerciseName}
-                                              </span>
-                                              {supersetLabel && (
-                                                <Badge variant="outline" className="ml-1 h-4 px-1 text-xs shrink-0">
-                                                  <Link2 className="h-2 w-2 mr-0.5" />
-                                                  {supersetLabel}
-                                                </Badge>
-                                              )}
-                                            </button>
+                                  {(() => {
+                                    // Group exercises by superset
+                                    const exerciseGroups: Array<{
+                                      exercises: typeof section.exercises;
+                                      supersetLabel?: string;
+                                    }> = [];
+                                    const processed = new Set<string>();
+                                    
+                                    section.exercises.forEach(exercise => {
+                                      if (processed.has(exercise.id)) return;
+                                      
+                                      const supersetLabel = getSupersetLabel(exercise.id);
+                                      if (supersetLabel) {
+                                        // Find all exercises in this superset
+                                        const supersetExercises = section.exercises.filter(ex => 
+                                          getSupersetLabel(ex.id) === supersetLabel
+                                        );
+                                        exerciseGroups.push({
+                                          exercises: supersetExercises,
+                                          supersetLabel
+                                        });
+                                        supersetExercises.forEach(ex => processed.add(ex.id));
+                                      } else {
+                                        exerciseGroups.push({
+                                          exercises: [exercise]
+                                        });
+                                        processed.add(exercise.id);
+                                      }
+                                    });
+                                    
+                                    return exerciseGroups.map((group, groupIndex) => {
+                                      if (group.supersetLabel) {
+                                        // Superset group with visual connection
+                                        return (
+                                          <div key={`superset-${groupIndex}`} className="border-l-2 border-primary/50 pl-2 space-y-1 mb-2">
+                                            {group.exercises.map((exercise, exIndex) => {
+                                              const exerciseIndex = section.exercises.indexOf(exercise);
+                                              return (
+                                                <Draggable
+                                                  key={exercise.id}
+                                                  draggableId={`sidebar-ex-${exercise.id}`}
+                                                  index={exerciseIndex}
+                                                >
+                                                  {(provided, snapshot) => (
+                                                    <div
+                                                      ref={provided.innerRef}
+                                                      {...provided.draggableProps}
+                                                      className={`flex items-center w-full h-7 px-2 rounded-md bg-primary/5 hover:bg-primary/10 ${
+                                                        snapshot.isDragging ? 'opacity-50 shadow-lg' : ''
+                                                      }`}
+                                                    >
+                                                      <div 
+                                                        {...provided.dragHandleProps} 
+                                                        className="cursor-grab active:cursor-grabbing flex items-center mr-1"
+                                                      >
+                                                        <GripVertical className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                                                      </div>
+                                                      
+                                                      <button
+                                                        onClick={() => onScrollToExercise(exercise.id)}
+                                                        className="flex-1 flex items-center justify-start gap-1 text-xs text-left truncate hover:text-primary transition-colors"
+                                                      >
+                                                        <span className="truncate">
+                                                          {exercise.exerciseName}
+                                                        </span>
+                                                        {exIndex === 0 && (
+                                                          <Badge variant="outline" className="ml-1 h-4 px-1 text-xs shrink-0">
+                                                            <Link2 className="h-2 w-2 mr-0.5 fill-current" />
+                                                            {group.supersetLabel}
+                                                          </Badge>
+                                                        )}
+                                                      </button>
+                                                    </div>
+                                                  )}
+                                                </Draggable>
+                                              );
+                                            })}
                                           </div>
-                                        )}
-                                      </Draggable>
-                                    );
-                                  })}
+                                        );
+                                      } else {
+                                        // Single exercise
+                                        const exercise = group.exercises[0];
+                                        const exerciseIndex = section.exercises.indexOf(exercise);
+                                        return (
+                                          <Draggable
+                                            key={exercise.id}
+                                            draggableId={`sidebar-ex-${exercise.id}`}
+                                            index={exerciseIndex}
+                                          >
+                                            {(provided, snapshot) => (
+                                              <div
+                                                ref={provided.innerRef}
+                                                {...provided.draggableProps}
+                                                className={`flex items-center w-full h-7 px-2 rounded-md hover:bg-accent ${
+                                                  snapshot.isDragging ? 'opacity-50 shadow-lg' : ''
+                                                }`}
+                                              >
+                                                <div 
+                                                  {...provided.dragHandleProps} 
+                                                  className="cursor-grab active:cursor-grabbing flex items-center mr-1"
+                                                >
+                                                  <GripVertical className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                                                </div>
+                                                
+                                                <button
+                                                  onClick={() => onScrollToExercise(exercise.id)}
+                                                  className="flex-1 flex items-center justify-start gap-1 text-xs text-left truncate hover:text-primary transition-colors"
+                                                >
+                                                  <span className="truncate">
+                                                    {exercise.exerciseName}
+                                                  </span>
+                                                </button>
+                                              </div>
+                                            )}
+                                          </Draggable>
+                                        );
+                                      }
+                                    });
+                                  })()}
                                   {provided.placeholder}
                                 </div>
                               )}
