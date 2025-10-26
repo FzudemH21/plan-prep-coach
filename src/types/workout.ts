@@ -21,6 +21,7 @@ export interface WorkoutSession {
   sessionIndex: number;
   sessionName?: string;
   comments?: string;
+  sessionIntensity?: string; // IntensityLevel from training types
   sections: WorkoutSection[];
 }
 

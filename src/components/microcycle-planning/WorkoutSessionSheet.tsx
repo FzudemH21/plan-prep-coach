@@ -51,6 +51,7 @@ interface WorkoutSessionSheetProps {
   onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
   getIntensityColor?: (intensity: IntensityLevel) => string;
   intensityLevels?: IntensityLevel[];
+  totalSessionsOnDay?: number;
 }
 
 export function WorkoutSessionSheet({
@@ -66,7 +67,8 @@ export function WorkoutSessionSheet({
   dailyIntensityData,
   onIntensityChange,
   getIntensityColor,
-  intensityLevels
+  intensityLevels,
+  totalSessionsOnDay = 1
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -79,6 +81,9 @@ export function WorkoutSessionSheet({
   const [sessionName, setSessionName] = useState<string>('');
   const [sessionComments, setSessionComments] = useState<string>('');
   const [isEditingName, setIsEditingName] = useState(false);
+  const [sessionIntensity, setSessionIntensity] = useState<IntensityLevel>('moderate');
+  const [dayIntensityPopoverOpen, setDayIntensityPopoverOpen] = useState(false);
+  const [sessionIntensityPopoverOpen, setSessionIntensityPopoverOpen] = useState(false);
   const [workoutSections, setWorkoutSections] = useState<WorkoutSection[]>(() => {
     // Initialize sections from exercises
     const sectionsMap = new Map<string, WorkoutExercise[]>();
@@ -180,6 +185,11 @@ export function WorkoutSessionSheet({
   
   const [supersets, setSupersets] = useState<SupersetMapping>({});
 
+  // Determine if this is a single session day
+  const isSingleSessionDay = useMemo(() => {
+    return totalSessionsOnDay === 1;
+  }, [totalSessionsOnDay]);
+
   // Get current intensity for the day
   const currentIntensity = useMemo(() => {
     if (!dailyIntensityData) return 'moderate' as IntensityLevel;
@@ -187,9 +197,10 @@ export function WorkoutSessionSheet({
     return dayIntensity?.intensity || 'moderate' as IntensityLevel;
   }, [dailyIntensityData, dayDate]);
 
-  // Load session metadata from localStorage
+  // Load session metadata and intensity from localStorage
   useEffect(() => {
     if (isOpen) {
+      // Load session name and comments
       const key = `workoutSessions_${mesocycleId}_${dayDate}_${sessionIndex}`;
       const stored = localStorage.getItem(key);
       if (stored) {
@@ -205,8 +216,26 @@ export function WorkoutSessionSheet({
         setSessionName(`Session ${sessionIndex + 1}`);
         setSessionComments('');
       }
+
+      // Load session intensity - default to day intensity
+      const intensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`;
+      const storedIntensity = localStorage.getItem(intensityKey);
+      
+      if (storedIntensity) {
+        setSessionIntensity(storedIntensity as IntensityLevel);
+      } else {
+        // Always initialize from day intensity
+        setSessionIntensity(currentIntensity || 'moderate');
+      }
     }
-  }, [isOpen, mesocycleId, dayDate, sessionIndex]);
+  }, [isOpen, mesocycleId, dayDate, sessionIndex, currentIntensity]);
+
+  // Sync session intensity with day intensity for single session days
+  useEffect(() => {
+    if (isSingleSessionDay && currentIntensity && sessionIntensity !== currentIntensity) {
+      setSessionIntensity(currentIntensity);
+    }
+  }, [isSingleSessionDay, currentIntensity]);
 
   // Filter available methods for the current session
   const availableMethods = useMemo(() => {
@@ -331,6 +360,15 @@ export function WorkoutSessionSheet({
       sessionName: sessionName || `Session ${sessionIndex + 1}`,
       comments: sessionComments
     }));
+
+    // Save session intensity
+    const intensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`;
+    localStorage.setItem(intensityKey, sessionIntensity);
+
+    // If single session day, sync day intensity
+    if (isSingleSessionDay && onIntensityChange) {
+      onIntensityChange(dayDate, sessionIntensity);
+    }
 
     // Save all parameter changes
     workoutSections.forEach(section => {
@@ -547,21 +585,142 @@ export function WorkoutSessionSheet({
                 {format(new Date(dayDate), 'EEEE, MMMM d, yyyy')}
               </DialogDescription>
               
-              {/* Read-only Day Intensity Display */}
-              {getIntensityColor && (
+              {/* Editable Day Intensity */}
+              {getIntensityColor && intensityLevels && onIntensityChange && (
                 <div className="flex items-center gap-2 mt-2">
                   <span className="text-sm text-muted-foreground">
                     Day intensity:
                   </span>
-                  <div 
-                    className={cn(
-                      "w-5 h-5 rounded-sm border shrink-0",
-                      getIntensityColor(currentIntensity)
-                    )}
-                  />
-                  <span className="text-xs font-medium capitalize">
-                    {currentIntensity.replace('-', ' ')}
+                  <Popover open={dayIntensityPopoverOpen} onOpenChange={setDayIntensityPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        className="flex items-center gap-2 h-7 px-2 hover:bg-accent"
+                      >
+                        <div 
+                          className={cn(
+                            "w-5 h-5 rounded-sm border shrink-0",
+                            getIntensityColor(currentIntensity)
+                          )}
+                        />
+                        <span className="text-xs font-medium capitalize">
+                          {currentIntensity.replace('-', ' ')}
+                        </span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent 
+                      className="w-52 p-2 z-[120] bg-popover" 
+                      align="start"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium mb-2 text-muted-foreground">
+                          Change Day Intensity
+                        </p>
+                        {intensityLevels.map((level) => (
+                          <button
+                            key={level}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onIntensityChange(dayDate, level);
+                              // If single session, also update session intensity
+                              if (isSingleSessionDay) {
+                                setSessionIntensity(level);
+                              }
+                              setDayIntensityPopoverOpen(false);
+                            }}
+                            className={cn(
+                              "w-full flex items-center gap-2 p-2 rounded hover:bg-accent transition-colors text-left",
+                              level === currentIntensity && "bg-accent"
+                            )}
+                          >
+                            <div 
+                              className={cn(
+                                "w-4 h-4 rounded-sm border shrink-0",
+                                getIntensityColor(level)
+                              )}
+                            />
+                            <span className="text-xs capitalize">
+                              {level.replace('-', ' ')}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              )}
+
+              {/* Editable Session Intensity */}
+              {getIntensityColor && intensityLevels && (
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-sm text-muted-foreground">
+                    Session intensity:
                   </span>
+                  <Popover open={sessionIntensityPopoverOpen} onOpenChange={setSessionIntensityPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        className="flex items-center gap-2 h-7 px-2 hover:bg-accent"
+                      >
+                        <div 
+                          className={cn(
+                            "w-5 h-5 rounded-sm border shrink-0",
+                            getIntensityColor(sessionIntensity)
+                          )}
+                        />
+                        <span className="text-xs font-medium capitalize">
+                          {sessionIntensity.replace('-', ' ')}
+                        </span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent 
+                      className="w-52 p-2 z-[120] bg-popover" 
+                      align="start"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium mb-2 text-muted-foreground">
+                          Change Session Intensity
+                          {isSingleSessionDay && (
+                            <span className="block text-[10px] text-muted-foreground/70 mt-0.5">
+                              (Linked to day intensity)
+                            </span>
+                          )}
+                        </p>
+                        {intensityLevels.map((level) => (
+                          <button
+                            key={level}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSessionIntensity(level);
+                              // If single session, also update day intensity
+                              if (isSingleSessionDay && onIntensityChange) {
+                                onIntensityChange(dayDate, level);
+                              }
+                              setSessionIntensityPopoverOpen(false);
+                            }}
+                            className={cn(
+                              "w-full flex items-center gap-2 p-2 rounded hover:bg-accent transition-colors text-left",
+                              level === sessionIntensity && "bg-accent"
+                            )}
+                          >
+                            <div 
+                              className={cn(
+                                "w-4 h-4 rounded-sm border shrink-0",
+                                getIntensityColor(level)
+                              )}
+                            />
+                            <span className="text-xs capitalize">
+                              {level.replace('-', ' ')}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               )}
             </div>

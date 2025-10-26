@@ -112,6 +112,7 @@ export function TrainingCalendarView({
     dayDate: string;
     sessionIndex: number;
     exercises: ExerciseDistribution[];
+    totalSessions: number;
   } | null>(null);
 
   // Helper function to get microcycle index from date
@@ -373,10 +374,16 @@ export function TrainingCalendarView({
                   onClearWeek={onClearWeek}
                   onPasteWeek={onPasteWeek}
                   onSessionClick={(dayDate, sessionIndex, exercises) => {
+                    // Count total sessions for this day
+                    const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
+                    const uniqueSessionIndices = new Set(dayExercises.map(ex => ex.sessionIndex));
+                    const totalSessions = uniqueSessionIndices.size;
+                    
                     setSelectedSession({
                       dayDate,
                       sessionIndex,
-                      exercises
+                      exercises,
+                      totalSessions
                     });
                   }}
                   onDeleteSession={onDeleteSession}
@@ -415,6 +422,7 @@ export function TrainingCalendarView({
           onIntensityChange={onIntensityChange}
           getIntensityColor={getIntensityColor}
           intensityLevels={intensityLevels}
+          totalSessionsOnDay={selectedSession.totalSessions}
         />
       )}
     </div>
