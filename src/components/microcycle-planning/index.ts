@@ -12,3 +12,4 @@ export { WorkoutSectionCard } from './WorkoutSectionCard';
 export { MethodSelectionDialog } from './MethodSelectionDialog';
 export { WeekRow } from './WeekRow';
 export { CombinedTestEventDialog } from './CombinedTestEventDialog';
+export { EnhancedExerciseDistribution } from './EnhancedExerciseDistribution';

@@ -75,3 +75,34 @@ export interface LinkAreaColumn extends BaseColumn {
 }
 
 export type TableColumn = MesocycleColumn | MicrocycleColumn | MicrocycleGroupColumn | LinkAreaColumn;
+
+// Enhanced Exercise Distribution Types
+export interface ExerciseDistribution {
+  id: string;
+  exerciseId: string;
+  exerciseName: string;
+  methodId: string;
+  categoryName: string;
+  subCategory?: string;
+  dayDate: string;
+  sessionIndex: number;
+  order: number;
+  sectionId?: string;
+  supersetId?: string;
+}
+
+export interface SessionSection {
+  id: string;
+  dayDate: string;
+  sessionIndex: number;
+  name: string;
+  order: number;
+}
+
+export interface SupersetMapping {
+  [dayDate: string]: {
+    [sessionIndex: number]: {
+      [supersetId: string]: string[]; // array of exercise IDs
+    };
+  };
+}

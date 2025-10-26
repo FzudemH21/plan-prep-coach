@@ -14,25 +14,17 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useToast } from '@/hooks/use-toast';
 import { ExtendedMesocycle, Microcycle } from '@/features/planner/types';
 import { TrainingDay } from '@/types/daily-intensity';
-import { CellData, ExerciseSelection } from '@/types/microcycle-planning';
+import { CellData, ExerciseSelection, SessionSection, SupersetMapping, ExerciseDistribution } from '@/types/microcycle-planning';
 import { IntensityLevel } from '@/types/training';
 import { useAthleticismData } from '@/hooks/useAthleticismData';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { format, addDays, differenceInDays, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
-import { TrainingCalendarView } from '@/components/microcycle-planning';
+import { TrainingCalendarView, EnhancedExerciseDistribution } from '@/components/microcycle-planning';
 import { DropResult } from '@hello-pangea/dnd';
 
-interface ExerciseDistribution {
-  exerciseId: string;
-  exerciseName: string;
-  methodId: string;
-  categoryName: string;
-  subCategory?: string;
-  dayDate: string;
-  sessionIndex: number;
-}
+// Using ExerciseDistribution, SessionSection, and SupersetMapping from types file
 
 interface FrequencyWarning {
   methodId: string;
@@ -96,6 +88,10 @@ export default function MicrocyclePlanningPage() {
     eventNames?: string[];
     splitState?: number;
   } | null>(null);
+  
+  // New state for enhanced exercise distribution
+  const [sessionSections, setSessionSections] = useState<SessionSection[]>([]);
+  const [supersets, setSupersets] = useState<SupersetMapping>({});
 
   const totalSteps = 2; // Step 1: Exercise Distribution, Step 2: Training Calendar
 
@@ -770,17 +766,23 @@ export default function MicrocyclePlanningPage() {
         // If already exists in target, just return filtered (effectively removing from source)
         if (existsInTarget) return filtered;
         
-        // Add to target
+        // Add to target with new structure
+        const maxOrder = filtered
+          .filter(ex => ex.dayDate === dayDate && ex.sessionIndex === sessionIndex)
+          .reduce((max, ex) => Math.max(max, ex.order), -1);
+
         return [
           ...filtered,
           {
+            id: `ex-${Date.now()}-${Math.random()}`,
             exerciseId: exercise.exerciseId,
             exerciseName: exercise.exerciseName,
             methodId: exercise.methodId,
             categoryName: exercise.categoryName,
             subCategory: exercise.subCategory,
             dayDate,
-            sessionIndex
+            sessionIndex,
+            order: maxOrder + 1,
           }
         ];
       });
@@ -798,16 +800,23 @@ export default function MicrocyclePlanningPage() {
 
         if (exists) return prev;
 
+        // Calculate the next order for the session
+        const maxOrder = prev
+          .filter(ex => ex.dayDate === dayDate && ex.sessionIndex === sessionIndex)
+          .reduce((max, ex) => Math.max(max, ex.order), -1);
+
         return [
           ...prev,
           {
+            id: `ex-${Date.now()}-${Math.random()}`,
             exerciseId: exercise.exerciseId,
             exerciseName: exercise.exerciseName,
             methodId: exercise.methodId,
             categoryName: exercise.categoryName,
             subCategory: exercise.subCategory,
             dayDate,
-            sessionIndex
+            sessionIndex,
+            order: maxOrder + 1,
           }
         ];
       });
@@ -1984,17 +1993,19 @@ export default function MicrocyclePlanningPage() {
     }
 
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Target className="h-5 w-5" />
-            <span>Step 1: Exercise Distribution - {currentMesocycle.name}</span>
-          </CardTitle>
-          <CardDescription>
-            Drag and drop exercises to specific training days. Each exercise can be used multiple times.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <div className="h-[calc(100vh-200px)]">
+        <EnhancedExerciseDistribution
+          mesocycle={currentMesocycle}
+          trainingDays={currentMesocycleDays}
+          exerciseSelectionData={exerciseSelectionData}
+          exerciseDistribution={exerciseDistribution}
+          sessionSections={sessionSections}
+          supersets={supersets}
+          onDistributionChange={setExerciseDistribution}
+          onSectionsChange={setSessionSections}
+          onSupersetsChange={setSupersets}
+        />
+      </div>
           <div className="overflow-x-auto relative">
             <div className="min-w-max">
               {/* Three-level headers */}

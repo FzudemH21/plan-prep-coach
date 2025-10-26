@@ -2854,7 +2854,10 @@ export default function MesocyclePage() {
             isEventDay,
             isTrainingDay: true,
             testNames: testName ? [testName] : undefined,
-            eventNames: eventName ? [eventName] : undefined
+            eventNames: eventName ? [eventName] : undefined,
+            intensity: 'moderate', // Default intensity
+            sessions: 1, // Default to 1 session
+            sessionNames: ['Session 1']
           });
         }
         

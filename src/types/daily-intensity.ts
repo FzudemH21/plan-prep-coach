@@ -21,4 +21,7 @@ export interface TrainingDay {
   isTrainingDay: boolean;
   testNames?: string[]; // Array of test names for the day
   eventNames?: string[]; // Array of event names for the day
+  intensity: IntensityLevel; // Daily intensity level
+  sessions?: number; // Number of sessions in the day
+  sessionNames?: string[]; // Names of each session
 }
