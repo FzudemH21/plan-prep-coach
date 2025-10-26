@@ -5,9 +5,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Plus, Save, PanelRightClose, PanelRight, Pencil, MessageSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { WorkoutSection, WorkoutExercise, WorkoutSession, SupersetMapping } from '@/types/workout';
+import { IntensityLevel } from '@/types/training';
 import { WorkoutSectionCard } from './WorkoutSectionCard';
 import { WorkoutArrangementSidebar } from './WorkoutArrangementSidebar';
 import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
@@ -16,6 +18,7 @@ import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea
 import { format } from 'date-fns';
 import { getParametersForMethod } from '@/data/methodParameters';
 import { ExerciseSelection } from '@/types/microcycle-planning';
+import { cn } from '@/lib/utils';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -44,6 +47,10 @@ interface WorkoutSessionSheetProps {
     exerciseId: string,
     parameters: Record<string, string | number>
   ) => void;
+  dailyIntensityData?: any[];
+  onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
+  getIntensityColor?: (intensity: IntensityLevel) => string;
+  intensityLevels?: IntensityLevel[];
 }
 
 export function WorkoutSessionSheet({
@@ -55,7 +62,11 @@ export function WorkoutSessionSheet({
   mesocycleId,
   microcycleIndex,
   parameterValues,
-  onSaveParameters
+  onSaveParameters,
+  dailyIntensityData,
+  onIntensityChange,
+  getIntensityColor,
+  intensityLevels
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -68,6 +79,7 @@ export function WorkoutSessionSheet({
   const [sessionName, setSessionName] = useState<string>('');
   const [sessionComments, setSessionComments] = useState<string>('');
   const [isEditingName, setIsEditingName] = useState(false);
+  const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
   const [workoutSections, setWorkoutSections] = useState<WorkoutSection[]>(() => {
     // Initialize sections from exercises
     const sectionsMap = new Map<string, WorkoutExercise[]>();
@@ -168,6 +180,13 @@ export function WorkoutSessionSheet({
   });
   
   const [supersets, setSupersets] = useState<SupersetMapping>({});
+
+  // Get current intensity for the day
+  const currentIntensity = useMemo(() => {
+    if (!dailyIntensityData) return 'moderate' as IntensityLevel;
+    const dayIntensity = dailyIntensityData.find(di => di.date === dayDate);
+    return dayIntensity?.intensity || 'moderate' as IntensityLevel;
+  }, [dailyIntensityData, dayDate]);
 
   // Load session metadata from localStorage
   useEffect(() => {
@@ -530,6 +549,64 @@ export function WorkoutSessionSheet({
               </DialogDescription>
             </div>
             <div className="flex items-center gap-2 pr-10">
+              {/* Intensity Indicator */}
+              {getIntensityColor && intensityLevels && onIntensityChange && (
+                <Popover open={intensityPopoverOpen} onOpenChange={setIntensityPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="flex items-center gap-2 h-8"
+                    >
+                      <div 
+                        className={cn(
+                          "w-4 h-4 rounded-sm border shrink-0",
+                          getIntensityColor(currentIntensity)
+                        )}
+                      />
+                      <span className="text-xs font-medium capitalize">
+                        {currentIntensity.replace('-', ' ')}
+                      </span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent 
+                    className="w-52 p-2 z-[120] bg-popover" 
+                    align="end"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium mb-2 text-muted-foreground">
+                        Change Day Intensity
+                      </p>
+                      {intensityLevels.map((level) => (
+                        <button
+                          key={level}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onIntensityChange(dayDate, level);
+                            setIntensityPopoverOpen(false);
+                          }}
+                          className={cn(
+                            "w-full flex items-center gap-2 p-2 rounded hover:bg-accent transition-colors text-left",
+                            level === currentIntensity && "bg-accent"
+                          )}
+                        >
+                          <div 
+                            className={cn(
+                              "w-4 h-4 rounded-sm border shrink-0",
+                              getIntensityColor(level)
+                            )}
+                          />
+                          <span className="text-xs capitalize">
+                            {level.replace('-', ' ')}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+              
               <Button variant="outline" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
                 {sidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
               </Button>

@@ -411,6 +411,10 @@ export function TrainingCalendarView({
           microcycleIndex={getMicrocycleIndex(selectedSession.dayDate)}
           parameterValues={parameterValues}
           onSaveParameters={onSaveParameters || (() => {})}
+          dailyIntensityData={dailyIntensityData}
+          onIntensityChange={onIntensityChange}
+          getIntensityColor={getIntensityColor}
+          intensityLevels={intensityLevels}
         />
       )}
     </div>
