@@ -224,23 +224,25 @@ export function ParameterManagementDialog({
           </DialogHeader>
 
           <div className="space-y-6">
-            {/* Warning if no frequency parameter is marked */}
-            {!parameters.some(p => p.isFrequencyParameter) && (
-              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
-                <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                  ⚠️ <strong>Warning:</strong> No parameter is marked as the Training Frequency parameter. 
-                  The system needs this to determine how many sessions per microcycle this method requires.
-                </p>
-              </div>
-            )}
-
-            {/* Warning if no set parameter is marked */}
-            {!parameters.some(p => p.isSetParameter) && (
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
-                <p className="text-sm text-blue-800 dark:text-blue-200">
-                  ℹ️ <strong>Info:</strong> No parameter is marked as the Set parameter. 
-                  Without this, the exercise detail view will display a flat grid instead of a set-based table.
-                </p>
+            {/* Warning Box for Missing Parameters */}
+            {(!parameters.some(p => p.isFrequencyParameter) || !parameters.some(p => p.isSetParameter)) && (
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800 rounded-md p-4">
+                <div className="flex gap-3">
+                  <span className="text-amber-600 dark:text-amber-400 text-lg flex-shrink-0">⚠️</span>
+                  <div className="space-y-2 text-sm text-amber-800 dark:text-amber-200">
+                    <p className="font-semibold">Warning</p>
+                    {!parameters.some(p => p.isFrequencyParameter) && (
+                      <p>
+                        • No parameter is marked as the Training Frequency parameter. The system needs this to determine how many sessions per microcycle this method requires.
+                      </p>
+                    )}
+                    {!parameters.some(p => p.isSetParameter) && (
+                      <p>
+                        • No parameter is marked as the Set parameter. Without this, the exercise detail view will display a flat grid instead of a set-based table.
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 

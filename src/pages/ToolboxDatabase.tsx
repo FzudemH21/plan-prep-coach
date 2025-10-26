@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, Search, Download, Upload, Trash2, Edit, Copy, ChevronUp, ChevronDown, AlertCircle, Info } from "lucide-react";
+import { ArrowLeft, Plus, Search, Download, Upload, Trash2, Edit, Copy, ChevronUp, ChevronDown, AlertCircle } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToolboxData } from "@/hooks/useToolboxData";
@@ -427,27 +427,26 @@ export default function ToolboxDatabase() {
         if (!hasWarnings) return null;
         
         return (
-          <div className="space-y-2">
-            {methodsMissingFrequency.length > 0 && (
-              <Alert variant="destructive" className="bg-amber-50 dark:bg-amber-950 border-amber-300 dark:border-amber-800">
-                <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500" />
-                <AlertTitle className="text-amber-900 dark:text-amber-200">Warning:</AlertTitle>
-                <AlertDescription className="text-amber-800 dark:text-amber-300">
-                  {methodsMissingFrequency.length} {methodsMissingFrequency.length === 1 ? 'method has' : 'methods have'} no parameter marked as the Training Frequency parameter. The system needs this to determine how many sessions per microcycle this method requires.
-                </AlertDescription>
-              </Alert>
-            )}
-            
-            {methodsMissingSet.length > 0 && (
-              <Alert className="bg-blue-50 dark:bg-blue-950 border-blue-300 dark:border-blue-800">
-                <Info className="h-4 w-4 text-blue-600 dark:text-blue-500" />
-                <AlertTitle className="text-blue-900 dark:text-blue-200">Info:</AlertTitle>
-                <AlertDescription className="text-blue-800 dark:text-blue-300">
-                  {methodsMissingSet.length} {methodsMissingSet.length === 1 ? 'method has' : 'methods have'} no parameter marked as the Set parameter. Without this, the exercise detail view will display a flat grid instead of a set-based table.
-                </AlertDescription>
-              </Alert>
-            )}
-          </div>
+          <Alert className="bg-amber-50 dark:bg-amber-950 border-amber-300 dark:border-amber-800">
+            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500" />
+            <div>
+              <AlertTitle className="text-amber-900 dark:text-amber-200">Warning</AlertTitle>
+              <AlertDescription className="text-amber-800 dark:text-amber-300">
+                <div className="space-y-2">
+                  {methodsMissingFrequency.length > 0 && (
+                    <p>
+                      • {methodsMissingFrequency.length} {methodsMissingFrequency.length === 1 ? 'method has' : 'methods have'} no parameter marked as the Training Frequency parameter. The system needs this to determine how many sessions per microcycle this method requires.
+                    </p>
+                  )}
+                  {methodsMissingSet.length > 0 && (
+                    <p>
+                      • {methodsMissingSet.length} {methodsMissingSet.length === 1 ? 'method has' : 'methods have'} no parameter marked as the Set parameter. Without this, the exercise detail view will display a flat grid instead of a set-based table.
+                    </p>
+                  )}
+                </div>
+              </AlertDescription>
+            </div>
+          </Alert>
         );
       })()}
 
