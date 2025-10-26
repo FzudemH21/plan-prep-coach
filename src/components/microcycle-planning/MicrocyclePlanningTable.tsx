@@ -1076,7 +1076,7 @@ const updateCellData = (
               {/* First row - Mesocycle headers (only when there are split mesocycles) */}
               {hasSplitMesocycles && (
                 <TableRow>
-                  <TableHead className="w-64 sticky left-0 bg-card z-20 border-r-2 border-border">
+                  <TableHead className="w-64 sticky left-0 top-0 bg-card z-20 border-r-2 border-border">
                     Method
                   </TableHead>
                   {mesocycleHeaders.map((header) => {
@@ -1178,7 +1178,7 @@ const updateCellData = (
               
               {/* Second row - Individual columns */}
               <TableRow>
-                  <TableHead className="w-64 sticky left-0 bg-card z-20 border-r-2 border-border">
+                  <TableHead className="w-64 sticky left-0 top-0 bg-card z-20 border-r-2 border-border">
                     {!hasSplitMesocycles ? "Method" : null}
                   </TableHead>
                 {columnStructure.map((column, index) => {

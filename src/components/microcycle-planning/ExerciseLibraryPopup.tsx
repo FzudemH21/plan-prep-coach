@@ -394,7 +394,7 @@ export function ExerciseLibraryPopup({
                         {/* Sticky Header */}
                         <thead className="bg-muted sticky top-0 z-10">
                           <tr>
-                            <th className="px-3 py-2 text-left font-medium text-muted-foreground border-b border-border w-12 bg-muted sticky left-0 z-20">
+                            <th className="px-3 py-2 text-left font-medium text-muted-foreground border-b border-border w-12 bg-muted sticky left-0 top-0 z-20">
                               <div className="flex items-center">
                                 <span className="text-xs">Select</span>
                               </div>
