@@ -54,6 +54,7 @@ interface CalendarDay {
     sessionIndex: number;
     exercises: ExerciseDistribution[];
     methods: string[];
+    sessionIntensity?: IntensityLevel;
   }[];
   totalExercises: number;
 }
@@ -352,6 +353,17 @@ export function TrainingDayCell({
                             <span className="text-xs font-medium text-primary">
                               Session {idx + 1}
                             </span>
+                            
+                            {/* Session Intensity Indicator */}
+                            {session.sessionIntensity && getIntensityColor && (
+                              <div 
+                                className={cn(
+                                  "w-3.5 h-3.5 rounded-sm border shrink-0",
+                                  getIntensityColor(session.sessionIntensity)
+                                )}
+                                title={`Session intensity: ${session.sessionIntensity.replace('-', ' ')}`}
+                              />
+                            )}
                           </div>
 
                           {/* Three-dot menu */}

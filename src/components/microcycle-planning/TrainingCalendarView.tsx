@@ -71,6 +71,7 @@ export interface CalendarDay {
     sessionName: string;
     exercises: ExerciseDistribution[];
     methods: string[];
+    sessionIntensity?: IntensityLevel;
   }[];
   totalExercises: number;
 }
@@ -207,12 +208,19 @@ export function TrainingCalendarView({
             }
           }
           
+          // Load session intensity from localStorage
+          const intensityKey = `sessionIntensity_${currentMesocycle.id}_${dateString}_${idx}`;
+          const storedIntensity = localStorage.getItem(intensityKey);
+          const dayIntensity = trainingDay ? (dailyIntensityData?.find(di => di.date === dateString)?.intensity || 'moderate') : 'moderate';
+          const sessionIntensity = storedIntensity || dayIntensity;
+          
           return {
             id: sessionId,
             sessionIndex: parseInt(idx),
             sessionName,
             exercises: exs,
             methods: [...new Set(exs.map(e => e.methodId))],
+            sessionIntensity: sessionIntensity as IntensityLevel,
           };
         })
         .sort((a, b) => a.sessionIndex - b.sessionIndex);
