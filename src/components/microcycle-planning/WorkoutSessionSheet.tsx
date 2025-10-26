@@ -992,9 +992,9 @@ export function WorkoutSessionSheet({
         </Collapsible>
 
         <div className="flex-1 flex overflow-hidden">
-          {/* Main Content */}
-          <div className={`flex-1 overflow-hidden ${sidebarOpen ? 'w-0' : 'w-full'}`}>
-            <DragDropContext onDragEnd={handleDragEnd}>
+          <DragDropContext onDragEnd={handleDragEnd}>
+            {/* Main Content */}
+            <div className={`flex-1 overflow-hidden ${sidebarOpen ? 'w-0' : 'w-full'}`}>
               <ScrollArea className="h-full">
                 <div className="p-6 space-y-4">
                   <Droppable droppableId="sections" type="SECTION">
@@ -1043,28 +1043,28 @@ export function WorkoutSessionSheet({
                      <Plus className="h-4 w-4 mr-2" />
                      Add New Section
                    </Button>
-                 </div>
-               </ScrollArea>
-            </DragDropContext>
-          </div>
-
-          {/* Sidebar */}
-          {sidebarOpen && (
-            <div className="w-80 flex-shrink-0">
-              <WorkoutArrangementSidebar
-                sections={workoutSections}
-                collapsedSections={sidebarCollapsedSections}
-                onToggleSectionCollapse={(sectionId) =>
-                  setSidebarCollapsedSections(prev => ({
-                    ...prev,
-                    [sectionId]: !prev[sectionId]
-                  }))
-                }
-                onScrollToExercise={handleScrollToExercise}
-                getSupersetLabel={getSupersetLabel}
-              />
+                  </div>
+                </ScrollArea>
             </div>
-          )}
+
+            {/* Sidebar */}
+            {sidebarOpen && (
+              <div className="w-80 flex-shrink-0">
+                <WorkoutArrangementSidebar
+                  sections={workoutSections}
+                  collapsedSections={sidebarCollapsedSections}
+                  onToggleSectionCollapse={(sectionId) =>
+                    setSidebarCollapsedSections(prev => ({
+                      ...prev,
+                      [sectionId]: !prev[sectionId]
+                    }))
+                  }
+                  onScrollToExercise={handleScrollToExercise}
+                  getSupersetLabel={getSupersetLabel}
+                />
+              </div>
+            )}
+          </DragDropContext>
         </div>
       </DialogContent>
 
