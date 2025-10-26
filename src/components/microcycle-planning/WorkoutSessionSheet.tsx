@@ -318,7 +318,8 @@ export function WorkoutSessionSheet({
     
     for (const [supersetId, exerciseIds] of Object.entries(daySuperset)) {
       if (exerciseIds.includes(exerciseId)) {
-        return `SS${supersetId.slice(-1)}`;
+        const match = supersetId.match(/superset-(\d+)/);
+        return match ? `SS${match[1]}` : `SS?`;
       }
     }
     return undefined;
@@ -764,7 +765,9 @@ export function WorkoutSessionSheet({
   };
 
   const handleToggleSuperset = (exerciseId1: string, exerciseId2: string) => {
-    const daySuperset = supersets[dayDate]?.[sessionIndex] || {};
+    // Work on a shallow clone to avoid mutating state directly
+    const daySupersetOriginal = supersets[dayDate]?.[sessionIndex] || {};
+    const daySuperset: Record<string, string[]> = JSON.parse(JSON.stringify(daySupersetOriginal));
     
     // Find if exercises are in any superset
     let superset1: string | null = null;
@@ -775,46 +778,39 @@ export function WorkoutSessionSheet({
       if (exerciseIds.includes(exerciseId2)) superset2 = supersetId;
     }
     
-    // Case 1: Both in same superset → UNLINK
     if (superset1 && superset1 === superset2) {
-      const updatedExercises = daySuperset[superset1].filter(
-        id => id !== exerciseId1 && id !== exerciseId2
-      );
-      
-      if (updatedExercises.length === 0) {
-        delete daySuperset[superset1]; // Remove empty superset
+      // UNLINK: remove both from the same superset
+      const updated = daySuperset[superset1].filter(id => id !== exerciseId1 && id !== exerciseId2);
+      if (updated.length === 0) {
+        delete daySuperset[superset1];
       } else {
-        daySuperset[superset1] = updatedExercises;
+        daySuperset[superset1] = updated;
       }
-      
-      toast({
-        title: "Exercises unlinked",
-        description: "Superset removed",
+      toast({ title: "Exercises unlinked", description: "Superset updated" });
+    } else if (superset1 && superset2 && superset1 !== superset2) {
+      // MERGE two different supersets
+      const merged = Array.from(new Set([...(daySuperset[superset1] || []), ...(daySuperset[superset2] || [])]));
+      daySuperset[superset1] = merged;
+      delete daySuperset[superset2];
+      toast({ title: "Exercises linked", description: "Supersets merged" });
+    } else if (superset1 && !superset2) {
+      // Add exercise2 to superset1
+      daySuperset[superset1] = Array.from(new Set([...(daySuperset[superset1] || []), exerciseId2]));
+      toast({ title: "Exercises linked", description: "Added to superset" });
+    } else if (!superset1 && superset2) {
+      // Add exercise1 to superset2
+      daySuperset[superset2] = Array.from(new Set([...(daySuperset[superset2] || []), exerciseId1]));
+      toast({ title: "Exercises linked", description: "Added to superset" });
+    } else {
+      // Create new superset
+      const existingSupersetIds = Object.keys(daySuperset).map(id => {
+        const match = id.match(/superset-(\d+)/);
+        return match ? parseInt(match[1]) : 0;
       });
-    }
-    // Case 2: One or both not in superset → LINK
-    else {
-      if (superset1) {
-        // Add exercise2 to superset1
-        daySuperset[superset1] = [...daySuperset[superset1], exerciseId2];
-      } else if (superset2) {
-        // Add exercise1 to superset2
-        daySuperset[superset2] = [...daySuperset[superset2], exerciseId1];
-      } else {
-        // Create new superset
-        const existingSupersetIds = Object.keys(daySuperset).map(id => {
-          const match = id.match(/superset-(\d+)/);
-          return match ? parseInt(match[1]) : 0;
-        });
-        const nextId = existingSupersetIds.length > 0 ? Math.max(...existingSupersetIds) + 1 : 1;
-        const newSupersetId = `superset-${nextId}`;
-        daySuperset[newSupersetId] = [exerciseId1, exerciseId2];
-      }
-      
-      toast({
-        title: "Exercises linked",
-        description: "Superset created",
-      });
+      const nextId = existingSupersetIds.length > 0 ? Math.max(...existingSupersetIds) + 1 : 1;
+      const newSupersetId = `superset-${nextId}`;
+      daySuperset[newSupersetId] = [exerciseId1, exerciseId2];
+      toast({ title: "Exercises linked", description: "Superset created" });
     }
     
     // Update state
