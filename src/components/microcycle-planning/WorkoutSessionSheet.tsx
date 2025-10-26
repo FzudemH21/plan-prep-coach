@@ -1001,9 +1001,20 @@ export function WorkoutSessionSheet({
                     {(provided) => (
                       <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-4">
                         {workoutSections.map((section, index) => (
-                          <Draggable key={section.id} draggableId={section.id} index={index}>
-                            {(provided) => (
-                              <div ref={provided.innerRef} {...provided.draggableProps}>
+                       <Draggable key={section.id} draggableId={section.id} index={index}>
+                            {(provided, snapshot) => (
+                              <div 
+                                ref={provided.innerRef} 
+                                {...provided.draggableProps}
+                                style={{
+                                  ...provided.draggableProps.style,
+                                  ...(snapshot.isDragging && {
+                                    position: 'fixed',
+                                    top: 'auto',
+                                    left: 'auto',
+                                  })
+                                }}
+                              >
                                  <WorkoutSectionCard
                                    section={section}
                                    isCollapsed={collapsedSections[section.id] || false}

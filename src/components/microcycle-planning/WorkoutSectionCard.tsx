@@ -144,6 +144,14 @@ export function WorkoutSectionCard({
                       <div
                         ref={provided.innerRef}
                         {...provided.draggableProps}
+                        style={{
+                          ...provided.draggableProps.style,
+                          ...(snapshot.isDragging && {
+                            position: 'fixed',
+                            top: 'auto',
+                            left: 'auto',
+                          })
+                        }}
                         className={snapshot.isDragging ? 'opacity-50' : ''}
                       >
                         <WorkoutExerciseCard

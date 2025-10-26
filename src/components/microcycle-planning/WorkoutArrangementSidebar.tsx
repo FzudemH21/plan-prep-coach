@@ -31,14 +31,8 @@ export function WorkoutArrangementSidebar({
       </div>
       
       <ScrollArea className="flex-1 p-3">
-        <Droppable droppableId="sidebar-sections" type="SECTION">
-          {(provided, snapshot) => (
-            <div
-              ref={provided.innerRef}
-              {...provided.droppableProps}
-              className={`space-y-2 ${snapshot.isDraggingOver ? 'bg-accent/20 rounded-md' : ''}`}
-            >
-              {sections.map((section, index) => {
+        <div className="space-y-2">
+          {sections.map((section, index) => {
                 const isCollapsed = collapsedSections[section.id];
                 return (
                   <Draggable
@@ -112,22 +106,19 @@ export function WorkoutArrangementSidebar({
                                         </Button>
                                       )}
                                     </Draggable>
-                                  );
-                                })}
-                                {provided.placeholder}
-                              </div>
-                            )}
-                          </Droppable>
-                        )}
+                  );
+                })}
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
+        )}
                       </div>
                     )}
                   </Draggable>
                 );
               })}
-              {provided.placeholder}
-            </div>
-          )}
-        </Droppable>
+        </div>
       </ScrollArea>
     </div>
   );
