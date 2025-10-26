@@ -389,10 +389,10 @@ export function ExerciseLibraryPopup({
                 <TabsContent value={activeTab} className="mt-4 flex-1 flex flex-col overflow-hidden">
                   {/* Table with sticky headers and horizontal scroll */}
                   <div className="flex-1 border rounded-lg overflow-hidden">
-                    <div className="overflow-auto max-h-[50vh] relative" style={{scrollbarWidth: 'thin'}}>
-                      <table className="w-full min-w-[1400px] border-separate border-spacing-0">
+                    <div className="overflow-auto max-h-[50vh] relative isolate" style={{scrollbarWidth: 'thin'}}>
+                      <table className="w-full min-w-[1400px] table-fixed border-separate border-spacing-0">
                         {/* Sticky Header */}
-                        <thead className="bg-muted sticky top-0 z-30">
+                        <thead className="bg-muted">
                           <tr>
                             <th className="px-3 py-2 text-left font-medium text-muted-foreground border-b border-border w-12 bg-muted sticky left-0 top-0 z-50">
                               <div className="flex items-center">
