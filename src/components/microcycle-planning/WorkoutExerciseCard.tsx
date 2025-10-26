@@ -89,6 +89,27 @@ export function WorkoutExerciseCard({
     });
   };
 
+  // Handle adding a new set (copies values from the last set)
+  const handleAddSet = () => {
+    const newSetNumber = setCount + 1;
+    const lastSetNumber = setCount;
+    
+    // Copy all parameter values from the last set to the new set
+    otherParams.forEach(param => {
+      const lastSetKey = `${param.name}_set${lastSetNumber}`;
+      const newSetKey = `${param.name}_set${newSetNumber}`;
+      const lastSetValue = exercise.parameters[lastSetKey];
+      
+      // Copy the value if it exists
+      if (lastSetValue !== undefined) {
+        onParameterChange(newSetKey, lastSetValue);
+      }
+    });
+    
+    // Finally, increment the set count
+    onParameterChange(setParam!.name, newSetNumber);
+  };
+
   return (
     <Card className={`p-4 ${isInSuperset ? 'border-l-4 border-l-primary' : ''}`}>
       <div className="flex items-start gap-3">
@@ -187,7 +208,7 @@ export function WorkoutExerciseCard({
                 variant="outline" 
                 size="sm" 
                 className="w-full"
-                onClick={() => onParameterChange(setParam.name, setCount + 1)}
+                onClick={handleAddSet}
               >
                 <Plus className="h-4 w-4 mr-1" />
                 Add Set
