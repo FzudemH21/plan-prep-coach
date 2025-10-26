@@ -13,3 +13,4 @@ export { MethodSelectionDialog } from './MethodSelectionDialog';
 export { WeekRow } from './WeekRow';
 export { CombinedTestEventDialog } from './CombinedTestEventDialog';
 export { EnhancedExerciseDistribution } from './EnhancedExerciseDistribution';
+export { SessionColumnView } from './SessionColumnView';

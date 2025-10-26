@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil } from 'lucide-react';
+import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, X } from 'lucide-react';
 import { TrainingDay } from '@/types/daily-intensity';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -124,11 +124,123 @@ export function SessionColumnView({
     setExerciseToDelete(null);
   };
 
+  // Group exercises by section
+  const exercisesBySection = useMemo(() => {
+    const unsectioned: ExerciseDistribution[] = [];
+    const sectioned: Record<string, ExerciseDistribution[]> = {};
+    
+    // Initialize sectioned object with all sections
+    sections.forEach(section => {
+      sectioned[section.id] = [];
+    });
+    
+    // Distribute exercises
+    exercises.forEach(ex => {
+      if (ex.sectionId && sectioned[ex.sectionId]) {
+        sectioned[ex.sectionId].push(ex);
+      } else {
+        unsectioned.push(ex);
+      }
+    });
+    
+    // Sort sections by order
+    const sortedSections = [...sections].sort((a, b) => a.order - b.order);
+    
+    return { unsectioned, sectioned, sortedSections };
+  }, [exercises, sections]);
+
   const dateObj = parseISO(day.date);
   const dayName = format(dateObj, 'EEEE');
   const dateStr = format(dateObj, 'MMM d');
   const sessionName = day.sessionNames?.[sessionIndex] || `Session ${sessionIndex + 1}`;
   const intensityClass = intensityColors[day.intensity] || 'bg-gray-200';
+
+  const renderExerciseCard = (exercise: ExerciseDistribution, index: number, allExercises: ExerciseDistribution[]) => {
+    const supersetId = getSuperset(exercise.id);
+    const nextExercise = allExercises[index + 1];
+    const nextSupersetId = nextExercise ? getSuperset(nextExercise.id) : undefined;
+    const hasLinkToNext = supersetId && supersetId === nextSupersetId;
+
+    return (
+      <Draggable key={exercise.id} draggableId={exercise.id} index={index}>
+        {(provided, snapshot) => (
+          <div>
+            <div
+              ref={provided.innerRef}
+              {...provided.draggableProps}
+              className={cn(
+                "group relative",
+                supersetId && "border-l-4 border-primary pl-2 bg-primary/5"
+              )}
+            >
+              <div
+                className={cn(
+                  "flex items-start gap-2 p-2 rounded-md border bg-card text-xs",
+                  snapshot.isDragging && "opacity-50 shadow-lg"
+                )}
+              >
+                <div {...provided.dragHandleProps} className="pt-1">
+                  <GripVertical className="h-3 w-3 text-muted-foreground cursor-grab active:cursor-grabbing" />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate">{exercise.exerciseName}</div>
+                  <div className="text-muted-foreground truncate text-[10px]">
+                    {exercise.methodId}
+                  </div>
+                  {supersetId && (
+                    <Badge variant="secondary" className="text-[10px] mt-1 px-1">
+                      {getSupersetLabel(supersetId)}
+                    </Badge>
+                  )}
+                </div>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <MoreVertical className="h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() => handleDeleteExerciseClick(exercise.id)}
+                      className="text-destructive"
+                    >
+                      <Trash2 className="mr-2 h-3 w-3" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+
+            {/* Superset link button */}
+            {nextExercise && (
+              <div className="flex justify-center -my-1 relative z-10">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 rounded-full hover:bg-primary/10"
+                  onClick={() => onToggleSuperset(day.date, sessionIndex, exercise.id, nextExercise.id)}
+                >
+                  <Link2
+                    className={cn(
+                      "h-3 w-3",
+                      hasLinkToNext ? "text-primary fill-primary" : "text-muted-foreground"
+                    )}
+                  />
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </Draggable>
+    );
+  };
 
   return (
     <>
@@ -145,127 +257,160 @@ export function SessionColumnView({
         </CardHeader>
 
         <CardContent className="flex-1 overflow-hidden p-3 pt-0">
-          <Droppable droppableId={`session-${day.date}::${sessionIndex}`} type="EXERCISE">
-            {(provided, snapshot) => (
-              <div
-                ref={provided.innerRef}
-                {...provided.droppableProps}
-                className={cn(
-                  "h-full rounded-md border-2 border-dashed p-2 overflow-auto",
-                  snapshot.isDraggingOver ? "border-primary bg-primary/5" : "border-muted"
-                )}
-              >
-                <div className="space-y-2 min-h-full">
-                  {exercises.length === 0 && (
-                    <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
-                      Drag exercises here
+          <ScrollArea className="h-full">
+            <div className="space-y-3">
+              {/* Unsectioned exercises */}
+              {exercisesBySection.unsectioned.length > 0 && (
+                <Droppable droppableId={`session-${day.date}::${sessionIndex}`} type="EXERCISE">
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className={cn(
+                        "rounded-md border-2 border-dashed p-2",
+                        snapshot.isDraggingOver ? "border-primary bg-primary/5" : "border-muted"
+                      )}
+                    >
+                      <div className="space-y-2">
+                        {exercisesBySection.unsectioned.map((exercise, index) => 
+                          renderExerciseCard(exercise, index, exercisesBySection.unsectioned)
+                        )}
+                        {provided.placeholder}
+                      </div>
                     </div>
                   )}
+                </Droppable>
+              )}
 
-                  {exercises.map((exercise, index) => {
-                    const supersetId = getSuperset(exercise.id);
-                    const nextExercise = exercises[index + 1];
-                    const nextSupersetId = nextExercise ? getSuperset(nextExercise.id) : undefined;
-                    const hasLinkToNext = supersetId && supersetId === nextSupersetId;
+              {/* Empty state when no exercises at all */}
+              {exercises.length === 0 && (
+                <Droppable droppableId={`session-${day.date}::${sessionIndex}`} type="EXERCISE">
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className={cn(
+                        "rounded-md border-2 border-dashed p-8 min-h-[200px] flex items-center justify-center",
+                        snapshot.isDraggingOver ? "border-primary bg-primary/5" : "border-muted"
+                      )}
+                    >
+                      <div className="text-xs text-muted-foreground text-center">
+                        Drag exercises here
+                      </div>
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              )}
 
-                    return (
-                      <Draggable key={exercise.id} draggableId={exercise.id} index={index}>
-                        {(provided, snapshot) => (
-                          <div>
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              className={cn(
-                                "group relative",
-                                supersetId && "border-l-4 border-primary pl-2 bg-primary/5"
-                              )}
-                            >
-                              <div
-                                className={cn(
-                                  "flex items-start gap-2 p-2 rounded-md border bg-card text-xs",
-                                  snapshot.isDragging && "opacity-50 shadow-lg"
-                                )}
-                              >
-                                <div {...provided.dragHandleProps} className="pt-1">
-                                  <GripVertical className="h-3 w-3 text-muted-foreground cursor-grab active:cursor-grabbing" />
-                                </div>
+              {/* Sections with their exercises */}
+              {exercisesBySection.sortedSections.map(section => (
+                <div key={section.id} className="space-y-2">
+                  {/* Section Header */}
+                  <div className="flex items-center gap-2 pt-2">
+                    <div className="h-px flex-1 bg-border" />
+                    {editingSectionId === section.id ? (
+                      <div className="flex items-center gap-1">
+                        <Input
+                          value={editingSectionName}
+                          onChange={(e) => setEditingSectionName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveRenameSection();
+                            if (e.key === 'Escape') {
+                              setEditingSectionId(null);
+                              setEditingSectionName('');
+                            }
+                          }}
+                          className="h-6 text-xs px-2 w-32"
+                          autoFocus
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={handleSaveRenameSection}
+                        >
+                          <Check className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={() => {
+                            setEditingSectionId(null);
+                            setEditingSectionName('');
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          {section.name}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 w-5 p-0 opacity-0 hover:opacity-100 transition-opacity"
+                          onClick={() => handleStartRenameSection(section)}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 w-5 p-0 text-destructive opacity-0 hover:opacity-100 transition-opacity"
+                          onClick={() => onDeleteSection(section.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                    <div className="h-px flex-1 bg-border" />
+                  </div>
 
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-medium truncate">{exercise.exerciseName}</div>
-                                  <div className="text-muted-foreground truncate text-[10px]">
-                                    {exercise.methodId}
-                                  </div>
-                                  {supersetId && (
-                                    <Badge variant="secondary" className="text-[10px] mt-1 px-1">
-                                      {getSupersetLabel(supersetId)}
-                                    </Badge>
-                                  )}
-                                </div>
-
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    >
-                                      <MoreVertical className="h-3 w-3" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem
-                                      onClick={() => handleDeleteExerciseClick(exercise.id)}
-                                      className="text-destructive"
-                                    >
-                                      <Trash2 className="mr-2 h-3 w-3" />
-                                      Delete
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            </div>
-
-                            {/* Superset link button */}
-                            {nextExercise && (
-                              <div className="flex justify-center -my-1 relative z-10">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0 rounded-full hover:bg-primary/10"
-                                  onClick={() => onToggleSuperset(day.date, sessionIndex, exercise.id, nextExercise.id)}
-                                >
-                                  <Link2
-                                    className={cn(
-                                      "h-3 w-3",
-                                      hasLinkToNext ? "text-primary fill-primary" : "text-muted-foreground"
-                                    )}
-                                  />
-                                </Button>
-                              </div>
-                            )}
-                          </div>
+                  {/* Section exercises droppable area */}
+                  <Droppable droppableId={`section-${section.id}`} type="EXERCISE">
+                    {(provided, snapshot) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className={cn(
+                          "rounded-md border-2 border-dashed p-2 min-h-[60px]",
+                          snapshot.isDraggingOver ? "border-primary bg-primary/5" : "border-muted"
                         )}
-                      </Draggable>
-                    );
-                  })}
-
-                  {provided.placeholder}
+                      >
+                        <div className="space-y-2">
+                          {exercisesBySection.sectioned[section.id]?.length === 0 ? (
+                            <div className="text-xs text-muted-foreground text-center py-4">
+                              Drop exercises here
+                            </div>
+                          ) : (
+                            exercisesBySection.sectioned[section.id]?.map((exercise, index) => 
+                              renderExerciseCard(exercise, index, exercisesBySection.sectioned[section.id])
+                            )
+                          )}
+                          {provided.placeholder}
+                        </div>
+                      </div>
+                    )}
+                  </Droppable>
                 </div>
-              </div>
-            )}
-          </Droppable>
+              ))}
 
-          <div className="mt-2 space-y-1">
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full text-xs"
-              onClick={onAddSection}
-            >
-              <Plus className="mr-1 h-3 w-3" />
-              Add Section
-            </Button>
-          </div>
+              {/* Add Section Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full text-xs"
+                onClick={onAddSection}
+              >
+                <Plus className="mr-1 h-3 w-3" />
+                Add Section
+              </Button>
+            </div>
+          </ScrollArea>
         </CardContent>
       </Card>
 
