@@ -78,29 +78,37 @@ export function WorkoutArrangementSidebar({
                                         index={exerciseIndex}
                                       >
                                         {(provided, snapshot) => (
-                                          <Button
+                                          <div
                                             ref={provided.innerRef}
                                             {...provided.draggableProps}
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => onScrollToExercise(exercise.id)}
-                                            className={`w-full justify-start h-7 px-2 text-xs hover:bg-accent ${
+                                            className={`flex items-center w-full h-7 px-2 rounded-md hover:bg-accent ${
                                               snapshot.isDragging ? 'opacity-50 shadow-lg' : ''
                                             }`}
                                           >
-                                            <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing flex items-center">
-                                              <GripVertical className="h-3 w-3 mr-1 text-muted-foreground" />
+                                            {/* Drag Handle - separate from clickable area */}
+                                            <div 
+                                              {...provided.dragHandleProps} 
+                                              className="cursor-grab active:cursor-grabbing flex items-center mr-1"
+                                            >
+                                              <GripVertical className="h-3 w-3 text-muted-foreground hover:text-foreground" />
                                             </div>
-                                            <span className="truncate flex-1 text-left">
-                                              {exercise.exerciseName}
-                                            </span>
-                                            {supersetLabel && (
-                                              <Badge variant="outline" className="ml-1 h-4 px-1 text-xs">
-                                                <Link2 className="h-2 w-2 mr-0.5" />
-                                                {supersetLabel}
-                                              </Badge>
-                                            )}
-                                          </Button>
+                                            
+                                            {/* Clickable Exercise Name - uses button styling but not Button component */}
+                                            <button
+                                              onClick={() => onScrollToExercise(exercise.id)}
+                                              className="flex-1 flex items-center justify-start gap-1 text-xs text-left truncate hover:text-primary transition-colors"
+                                            >
+                                              <span className="truncate">
+                                                {exercise.exerciseName}
+                                              </span>
+                                              {supersetLabel && (
+                                                <Badge variant="outline" className="ml-1 h-4 px-1 text-xs shrink-0">
+                                                  <Link2 className="h-2 w-2 mr-0.5" />
+                                                  {supersetLabel}
+                                                </Badge>
+                                              )}
+                                            </button>
+                                          </div>
                                         )}
                                       </Draggable>
                                     );
