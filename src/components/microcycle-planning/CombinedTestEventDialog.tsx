@@ -6,6 +6,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogOverlay,
+  DialogPortal,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -82,7 +84,9 @@ export function CombinedTestEventDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[500px]" onClick={(e) => e.stopPropagation()}>
+      <DialogPortal>
+        <DialogOverlay className="z-[150] bg-black/80" />
+        <DialogContent className="sm:max-w-[500px] z-[160]" onClick={(e) => e.stopPropagation()}>
         <DialogHeader>
           <DialogTitle>Manage Tests/Events</DialogTitle>
           <DialogDescription>
@@ -271,6 +275,7 @@ export function CombinedTestEventDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+      </DialogPortal>
     </Dialog>
   );
 }
