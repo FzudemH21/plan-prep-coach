@@ -112,6 +112,9 @@ export function WorkoutSectionCard({
               variant="ghost"
               size="sm"
               className="h-6 w-6 p-0"
+              aria-label="Open section actions"
+              onPointerDown={(e) => { e.stopPropagation(); }}
+              onMouseDown={(e) => { e.stopPropagation(); }}
               onClick={(e) => {
                 e.stopPropagation();
               }}

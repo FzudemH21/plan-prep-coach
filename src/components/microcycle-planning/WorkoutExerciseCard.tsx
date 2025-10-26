@@ -143,9 +143,10 @@ export function WorkoutExerciseCard({
                     variant="ghost" 
                     size="sm" 
                     className="h-8 w-8 p-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                    }}
+                    aria-label="Open exercise actions"
+                    onPointerDown={(e) => { e.stopPropagation(); }}
+                    onMouseDown={(e) => { e.stopPropagation(); }}
+                    onClick={(e) => { e.stopPropagation(); }}
                   >
                     <MoreVertical className="h-4 w-4" />
                   </Button>

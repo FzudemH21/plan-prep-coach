@@ -206,3 +206,9 @@ All colors MUST be HSL.
 [data-rbd-drag-handle-context-id] {
   pointer-events: auto !important;
 }
+
+/* Ensure Radix dropdowns/menus/popovers layer above everything and remain clickable */
+[data-radix-popper-content-wrapper] {
+  z-index: 9999 !important;
+  pointer-events: auto !important;
+}
