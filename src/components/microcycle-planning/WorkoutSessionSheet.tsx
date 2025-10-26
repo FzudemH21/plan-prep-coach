@@ -451,7 +451,7 @@ export function WorkoutSessionSheet({
                 {format(new Date(dayDate), 'EEEE, MMMM d, yyyy')} • Session {sessionIndex + 1}
               </DialogDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 pr-10">
               <Button variant="outline" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
                 {sidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
               </Button>
