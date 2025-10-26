@@ -7,9 +7,10 @@ import { CellData } from '@/types/microcycle-planning';
 import { ExerciseLibraryPanel } from './ExerciseLibraryPanel';
 import { SessionColumnView } from './SessionColumnView';
 import { useToast } from '@/hooks/use-toast';
-import { format, differenceInWeeks, parseISO, startOfWeek } from 'date-fns';
+import { format, differenceInDays, parseISO } from 'date-fns';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
+import { Copy } from 'lucide-react';
 
 interface ExerciseDistribution {
   id: string;
@@ -81,26 +82,36 @@ export function EnhancedExerciseDistribution({
     });
   }, [trainingDays, mesocycle]);
 
-  // Group days by week
-  const daysByWeek = useMemo(() => {
+  // Group days by microcycle
+  const daysByMicrocycle = useMemo(() => {
     const mesocycleStartDate = typeof mesocycle.startDate === 'string' 
       ? (mesocycle.startDate as string).split('T')[0] 
       : format(mesocycle.startDate as Date, 'yyyy-MM-dd');
     
     const startDate = parseISO(mesocycleStartDate);
-    const grouped = new Map<number, TrainingDay[]>();
+    const grouped = new Map<string, { microcycle: any; days: TrainingDay[] }>();
     
-    currentMesocycleDays.forEach(day => {
-      const dayDate = parseISO(day.date);
-      const weekNumber = differenceInWeeks(dayDate, startDate, { roundingMethod: 'floor' }) + 1;
+    // Calculate cumulative day boundaries for each microcycle
+    let cumulativeDays = 0;
+    mesocycle.microcycles.forEach(micro => {
+      const microStartDay = cumulativeDays;
+      const microEndDay = cumulativeDays + micro.duration - 1;
       
-      if (!grouped.has(weekNumber)) {
-        grouped.set(weekNumber, []);
+      // Filter days that belong to this microcycle
+      const microDays = currentMesocycleDays.filter(day => {
+        const dayDate = parseISO(day.date);
+        const daysSinceStart = differenceInDays(dayDate, startDate);
+        return daysSinceStart >= microStartDay && daysSinceStart <= microEndDay;
+      });
+      
+      if (microDays.length > 0) {
+        grouped.set(micro.id, { microcycle: micro, days: microDays });
       }
-      grouped.get(weekNumber)!.push(day);
+      
+      cumulativeDays += micro.duration;
     });
     
-    return Array.from(grouped.entries()).sort((a, b) => a[0] - b[0]);
+    return grouped;
   }, [currentMesocycleDays, mesocycle]);
 
   // Group exercises by method and category
@@ -559,62 +570,113 @@ export function EnhancedExerciseDistribution({
         <ResizableHandle withHandle />
 
         <ResizablePanel defaultSize={70} minSize={60}>
-          <div className="h-full overflow-auto p-4">
-            <div className="space-y-6 pb-4">
-              {daysByWeek.map(([weekNumber, weekDays]) => (
-                <div key={weekNumber} className="space-y-3">
-                  {/* Week Header */}
-                  <div className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 pb-2">
-                    <div className="flex items-center gap-3">
-                      <Badge variant="default" className="text-sm font-semibold px-3 py-1">
-                        Week {weekNumber}
-                      </Badge>
-                      <Separator className="flex-1" />
-                      <span className="text-xs text-muted-foreground">
-                        {format(parseISO(weekDays[0].date), 'MMM d')} - {format(parseISO(weekDays[weekDays.length - 1].date), 'MMM d')}
-                      </span>
-                    </div>
-                  </div>
+          <div className="h-full overflow-x-auto p-4">
+            <div className="w-max min-w-full">
+              
+              {/* Mesocycle Header */}
+              <div className="mb-4 border-b pb-3">
+                <h2 className="text-xl font-bold text-center">
+                  {mesocycle.name}
+                </h2>
+                <p className="text-sm text-muted-foreground text-center mt-1">
+                  {(() => {
+                    const mesocycleStartDate = typeof mesocycle.startDate === 'string' 
+                      ? (mesocycle.startDate as string).split('T')[0] 
+                      : format(mesocycle.startDate as Date, 'yyyy-MM-dd');
+                    const mesocycleEndDate = typeof mesocycle.endDate === 'string'
+                      ? (mesocycle.endDate as string).split('T')[0]
+                      : format(mesocycle.endDate as Date, 'yyyy-MM-dd');
+                    return `${format(parseISO(mesocycleStartDate), 'MMM d, yyyy')} - ${format(parseISO(mesocycleEndDate), 'MMM d, yyyy')}`;
+                  })()}
+                </p>
+              </div>
+              
+              {/* Microcycle Headers Row */}
+              <div className="flex mb-2 border-b">
+                {Array.from(daysByMicrocycle.entries()).map(([microId, { microcycle, days }]) => {
+                  // Calculate total width for this microcycle
+                  // Each SessionColumnView is w-80 (320px)
+                  // gap-2 (8px) between sessions within a day
+                  // gap-4 (16px) between days
+                  const totalWidth = days.reduce((total, day, dayIndex) => {
+                    const sessionsCount = day.sessions || 1;
+                    const dayWidth = (sessionsCount * 320) + ((sessionsCount - 1) * 8);
+                    const gapAfterDay = dayIndex < days.length - 1 ? 16 : 0;
+                    return total + dayWidth + gapAfterDay;
+                  }, 0);
                   
-                  {/* Days in Week */}
-                  <div className="flex gap-4">
-                    {weekDays.map((day) => {
-                      const sessionsCount = day.sessions || 1;
-                      return (
-                        <div key={day.date} className="flex gap-2">
-                          {Array.from({ length: sessionsCount }).map((_, sessionIndex) => {
-                            const sessionExercises = exerciseDistribution
-                              .filter(ex => ex.dayDate === day.date && ex.sessionIndex === sessionIndex)
-                              .sort((a, b) => a.order - b.order);
+                  return (
+                    <div 
+                      key={microId}
+                      className="text-center font-semibold py-2 border-r-2 border-border"
+                      style={{ width: `${totalWidth}px` }}
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                        <span>{microcycle.name}</span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0"
+                          title="Copy exercises from another microcycle"
+                          onClick={() => {
+                            toast({ title: 'Coming soon', description: 'Microcycle copy feature' });
+                          }}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {/* Day Columns */}
+              <div className="flex gap-4">
+                {Array.from(daysByMicrocycle.entries()).map(([microId, { days }], index) => (
+                  <React.Fragment key={microId}>
+                    {index > 0 && (
+                      <div className="w-1 bg-border shrink-0" />
+                    )}
+                    <div className="flex gap-4">
+                      {days.map((day) => {
+                        const sessionsCount = day.sessions || 1;
+                        return (
+                          <div key={day.date} className="flex gap-2">
+                            {Array.from({ length: sessionsCount }).map((_, sessionIndex) => {
+                              const sessionExercises = exerciseDistribution
+                                .filter(ex => ex.dayDate === day.date && ex.sessionIndex === sessionIndex)
+                                .sort((a, b) => a.order - b.order);
 
-                            const daySections = sessionSections
-                              .filter(s => s.dayDate === day.date && s.sessionIndex === sessionIndex)
-                              .sort((a, b) => a.order - b.order);
+                              const daySections = sessionSections
+                                .filter(s => s.dayDate === day.date && s.sessionIndex === sessionIndex)
+                                .sort((a, b) => a.order - b.order);
 
-                            const daySupersets = supersets[day.date]?.[sessionIndex] || {};
+                              const daySupersets = supersets[day.date]?.[sessionIndex] || {};
 
-                            return (
-                              <SessionColumnView
-                                key={`${day.date}-${sessionIndex}`}
-                                day={day}
-                                sessionIndex={sessionIndex}
-                                exercises={sessionExercises}
-                                sections={daySections}
-                                supersets={daySupersets}
-                                onDeleteExercise={handleDeleteExercise}
-                                onAddSection={() => handleAddSection(day.date, sessionIndex)}
-                                onRenameSection={handleRenameSection}
-                                onDeleteSection={handleDeleteSection}
-                                onToggleSuperset={handleToggleSuperset}
-                              />
-                            );
-                          })}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+                              return (
+                                <SessionColumnView
+                                  key={`${day.date}-${sessionIndex}`}
+                                  day={day}
+                                  sessionIndex={sessionIndex}
+                                  exercises={sessionExercises}
+                                  sections={daySections}
+                                  supersets={daySupersets}
+                                  onDeleteExercise={handleDeleteExercise}
+                                  onAddSection={() => handleAddSection(day.date, sessionIndex)}
+                                  onRenameSection={handleRenameSection}
+                                  onDeleteSection={handleDeleteSection}
+                                  onToggleSuperset={handleToggleSuperset}
+                                />
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </React.Fragment>
+                ))}
+              </div>
+              
             </div>
           </div>
         </ResizablePanel>
