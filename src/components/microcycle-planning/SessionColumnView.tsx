@@ -352,7 +352,7 @@ export function SessionColumnView({
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-5 w-5 p-0 opacity-0 hover:opacity-100 transition-opacity"
+                          className="h-5 w-5 p-0 hover:bg-accent"
                           onClick={() => handleStartRenameSection(section)}
                         >
                           <Pencil className="h-3 w-3" />
@@ -360,7 +360,7 @@ export function SessionColumnView({
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-5 w-5 p-0 text-destructive opacity-0 hover:opacity-100 transition-opacity"
+                          className="h-5 w-5 p-0 text-destructive hover:bg-accent"
                           onClick={() => onDeleteSection(section.id)}
                         >
                           <Trash2 className="h-3 w-3" />
