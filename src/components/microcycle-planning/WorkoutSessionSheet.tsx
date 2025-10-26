@@ -79,7 +79,6 @@ export function WorkoutSessionSheet({
   const [sessionName, setSessionName] = useState<string>('');
   const [sessionComments, setSessionComments] = useState<string>('');
   const [isEditingName, setIsEditingName] = useState(false);
-  const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
   const [workoutSections, setWorkoutSections] = useState<WorkoutSection[]>(() => {
     // Initialize sections from exercises
     const sectionsMap = new Map<string, WorkoutExercise[]>();
@@ -544,69 +543,29 @@ export function WorkoutSessionSheet({
                   </Button>
                 </div>
               )}
-              <DialogDescription>
+              <DialogDescription className="mt-1">
                 {format(new Date(dayDate), 'EEEE, MMMM d, yyyy')}
               </DialogDescription>
+              
+              {/* Read-only Day Intensity Display */}
+              {getIntensityColor && (
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-xs text-muted-foreground font-medium">
+                    Day intensity:
+                  </span>
+                  <div 
+                    className={cn(
+                      "w-5 h-5 rounded-sm border shrink-0",
+                      getIntensityColor(currentIntensity)
+                    )}
+                  />
+                  <span className="text-xs font-medium capitalize">
+                    {currentIntensity.replace('-', ' ')}
+                  </span>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2 pr-10">
-              {/* Intensity Indicator */}
-              {getIntensityColor && intensityLevels && onIntensityChange && (
-                <Popover open={intensityPopoverOpen} onOpenChange={setIntensityPopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      className="flex items-center gap-2 h-8"
-                    >
-                      <div 
-                        className={cn(
-                          "w-4 h-4 rounded-sm border shrink-0",
-                          getIntensityColor(currentIntensity)
-                        )}
-                      />
-                      <span className="text-xs font-medium capitalize">
-                        {currentIntensity.replace('-', ' ')}
-                      </span>
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent 
-                    className="w-52 p-2 z-[120] bg-popover" 
-                    align="end"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium mb-2 text-muted-foreground">
-                        Change Day Intensity
-                      </p>
-                      {intensityLevels.map((level) => (
-                        <button
-                          key={level}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onIntensityChange(dayDate, level);
-                            setIntensityPopoverOpen(false);
-                          }}
-                          className={cn(
-                            "w-full flex items-center gap-2 p-2 rounded hover:bg-accent transition-colors text-left",
-                            level === currentIntensity && "bg-accent"
-                          )}
-                        >
-                          <div 
-                            className={cn(
-                              "w-4 h-4 rounded-sm border shrink-0",
-                              getIntensityColor(level)
-                            )}
-                          />
-                          <span className="text-xs capitalize">
-                            {level.replace('-', ' ')}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              )}
-              
               <Button variant="outline" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
                 {sidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
               </Button>
