@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronRight, Plus, GripVertical, MoreVertical, Pencil, Trash2, Link2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, GripVertical, MoreVertical, Pencil, Trash2, Link2, Copy } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { WorkoutSection, WorkoutExercise } from '@/types/workout';
@@ -20,6 +20,7 @@ interface WorkoutSectionCardProps {
   onAddExercise: () => void;
   onRenameSection: (newName: string) => void;
   onDeleteSection: () => void;
+  onDuplicateSection: () => void;
   getSupersetLabel: (exerciseId: string) => string | undefined;
   sectionDragHandleProps?: any;
 }
@@ -36,6 +37,7 @@ export function WorkoutSectionCard({
   onAddExercise,
   onRenameSection,
   onDeleteSection,
+  onDuplicateSection,
   getSupersetLabel,
   sectionDragHandleProps
 }: WorkoutSectionCardProps) {
@@ -130,6 +132,10 @@ export function WorkoutSectionCard({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="z-[60] bg-popover">
+            <DropdownMenuItem onClick={onDuplicateSection}>
+              <Copy className="h-4 w-4 mr-2" />
+              Duplicate Section
+            </DropdownMenuItem>
             <DropdownMenuItem 
               onClick={onDeleteSection}
               className="text-destructive focus:text-destructive"

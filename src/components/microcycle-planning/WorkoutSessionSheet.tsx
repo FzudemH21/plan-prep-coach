@@ -887,6 +887,85 @@ export function WorkoutSessionSheet({
     });
   };
 
+  const handleDuplicateSection = (sectionId: string) => {
+    const section = workoutSections.find(s => s.id === sectionId);
+    if (!section) return;
+    
+    // Generate new IDs for duplicated exercises
+    const timestamp = Date.now();
+    const duplicatedExercises: WorkoutExercise[] = section.exercises.map((ex, idx) => ({
+      ...ex,
+      id: `${ex.id}-section-copy-${timestamp}-${idx}`,
+      order: idx
+    }));
+    
+    // Create mapping of old exercise IDs to new exercise IDs
+    const exerciseIdMap = new Map<string, string>();
+    section.exercises.forEach((ex, idx) => {
+      exerciseIdMap.set(ex.id, duplicatedExercises[idx].id);
+    });
+    
+    // Duplicate superset relationships
+    const daySuperset = supersets[dayDate]?.[sessionIndex] || {};
+    const updatedSuperset = { ...daySuperset };
+    
+    // For each superset that contains exercises from this section
+    Object.entries(daySuperset).forEach(([supersetId, exerciseIds]) => {
+      const sectionExerciseIds = exerciseIds.filter(id => 
+        section.exercises.some(ex => ex.id === id)
+      );
+      
+      // If all exercises in the superset are from this section, duplicate the superset
+      if (sectionExerciseIds.length === exerciseIds.length) {
+        // Create new superset with duplicated exercise IDs
+        const existingSupersetIds = Object.keys(updatedSuperset).map(id => {
+          const match = id.match(/superset-(\d+)/);
+          return match ? parseInt(match[1]) : 0;
+        });
+        const nextId = existingSupersetIds.length > 0 ? Math.max(...existingSupersetIds) + 1 : 1;
+        const newSupersetId = `superset-${nextId}`;
+        
+        const newExerciseIds = exerciseIds.map(id => exerciseIdMap.get(id) || id);
+        updatedSuperset[newSupersetId] = newExerciseIds;
+      }
+    });
+    
+    // Update supersets state
+    setSupersets({
+      ...supersets,
+      [dayDate]: {
+        ...supersets[dayDate],
+        [sessionIndex]: updatedSuperset
+      }
+    });
+    
+    // Persist supersets to localStorage
+    const supersetsKey = `workoutSupersets_${mesocycleId}_${dayDate}_${sessionIndex}`;
+    localStorage.setItem(supersetsKey, JSON.stringify(updatedSuperset));
+    
+    // Create duplicated section
+    const sectionIndex = workoutSections.findIndex(s => s.id === sectionId);
+    const duplicatedSection: WorkoutSection = {
+      id: `section-${timestamp}`,
+      name: `${section.name} (Copy)`,
+      order: sectionIndex + 1,
+      exercises: duplicatedExercises
+    };
+    
+    // Insert duplicated section right after the original
+    const newSections = [...workoutSections];
+    newSections.splice(sectionIndex + 1, 0, duplicatedSection);
+    
+    // Reorder all sections
+    const reorderedSections = newSections.map((s, idx) => ({ ...s, order: idx }));
+    setWorkoutSections(reorderedSections);
+    
+    toast({
+      title: "Section duplicated",
+      description: `"${section.name}" copied with ${section.exercises.length} exercise(s)`,
+    });
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-[95vw] max-h-[95vh] w-full h-full flex flex-col p-0">
@@ -1285,6 +1364,7 @@ export function WorkoutSessionSheet({
                                    onAddExercise={() => handleAddExercise(section.id)}
                                    onRenameSection={(newName) => handleRenameSection(section.id, newName)}
                                    onDeleteSection={() => handleDeleteSection(section.id)}
+                                   onDuplicateSection={() => handleDuplicateSection(section.id)}
                                    getSupersetLabel={getSupersetLabel}
                                    sectionDragHandleProps={provided.dragHandleProps}
                                  />
