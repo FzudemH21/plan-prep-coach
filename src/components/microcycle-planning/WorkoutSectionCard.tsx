@@ -248,7 +248,6 @@ export function WorkoutSectionCard({
                         const exercise = group.exercises[0];
                         const exerciseIndex = section.exercises.indexOf(exercise);
                         const nextExercise = section.exercises[exerciseIndex + 1];
-                        const isNextInDifferentGroup = nextExercise && !getSupersetLabel(nextExercise.id);
                         
                         return (
                           <React.Fragment key={exercise.id}>
@@ -275,7 +274,7 @@ export function WorkoutSectionCard({
                             </Draggable>
                             
                             {/* Chain icon between non-superset exercises */}
-                            {nextExercise && isNextInDifferentGroup && (
+                            {nextExercise && (
                               <div className="flex justify-center -my-2 relative z-10">
                                 <Button
                                   variant="ghost"
