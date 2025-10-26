@@ -137,13 +137,20 @@ export function WorkoutExerciseCard({
                   {supersetLabel}
                 </Badge>
               )}
-              <DropdownMenu>
+              <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 w-8 p-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
+                  >
                     <MoreVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="z-50 bg-popover">
+                <DropdownMenuContent align="end" className="z-[60] bg-popover">
                   <DropdownMenuItem onClick={onLinkSuperset}>
                     <Link2 className="h-4 w-4 mr-2" />
                     Link to Superset

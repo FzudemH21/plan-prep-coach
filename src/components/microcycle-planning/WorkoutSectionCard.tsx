@@ -106,17 +106,20 @@ export function WorkoutSectionCard({
         </span>
         
         {/* Section Delete Menu */}
-        <DropdownMenu>
+        <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               size="sm"
               className="h-6 w-6 p-0"
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
             >
               <MoreVertical className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="z-50 bg-popover">
+          <DropdownMenuContent align="end" className="z-[60] bg-popover">
             <DropdownMenuItem 
               onClick={onDeleteSection}
               className="text-destructive focus:text-destructive"
