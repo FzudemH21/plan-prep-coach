@@ -390,7 +390,7 @@ export function ExerciseLibraryPopup({
                   {/* Table with sticky headers and horizontal scroll */}
                   <div className="flex-1 border rounded-lg overflow-hidden">
                     <div className="overflow-auto max-h-[50vh]" style={{scrollbarWidth: 'thin'}}>
-                      <table className="w-full min-w-[1400px] border-collapse">
+                      <table className="w-full min-w-[1400px] border-separate border-spacing-0">
                         {/* Sticky Header */}
                         <thead className="bg-muted sticky top-0 z-10">
                           <tr>
@@ -402,7 +402,7 @@ export function ExerciseLibraryPopup({
                             {currentColumns.map((column) => (
                               <th
                                 key={column.key}
-                                className="px-3 py-2 text-left font-medium text-muted-foreground border-b border-border text-xs min-w-[120px] bg-muted"
+                                className="px-3 py-2 text-left font-medium text-muted-foreground border-b border-border text-xs min-w-[120px] bg-muted sticky top-0 z-10"
                               >
                                 <div className="flex items-center justify-between gap-1">
                                   <div 
