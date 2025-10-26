@@ -114,8 +114,11 @@ export function WorkoutExerciseCard({
     <Card className={`p-4 ${isInSuperset ? 'border-l-4 border-l-primary' : ''}`}>
       <div className="flex items-start gap-3">
         {/* Drag Handle */}
-        <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing mt-1">
-          <GripVertical className="h-5 w-5 text-muted-foreground" />
+        <div 
+          {...dragHandleProps} 
+          className="cursor-grab active:cursor-grabbing mt-1 hover:text-primary transition-colors"
+        >
+          <GripVertical className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
         </div>
 
         {/* Exercise Content */}

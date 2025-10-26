@@ -307,31 +307,44 @@ export function WorkoutSessionSheet({
   };
 
   const handleDragEnd = (result: DropResult) => {
-    if (!result.destination) return;
+    console.log('🎯 Main view drag end:', result);
+    
+    if (!result.destination) {
+      console.log('❌ No destination - drag cancelled');
+      return;
+    }
 
     const { source, destination, type } = result;
+    console.log('✅ Processing drag:', { 
+      type, 
+      source: { droppableId: source.droppableId, index: source.index },
+      destination: { droppableId: destination.droppableId, index: destination.index }
+    });
 
     if (type === 'SECTION') {
-      // Reorder sections
+      console.log('📦 Reordering sections');
       const newSections = Array.from(workoutSections);
       const [removed] = newSections.splice(source.index, 1);
       newSections.splice(destination.index, 0, removed);
       setWorkoutSections(newSections.map((s, idx) => ({ ...s, order: idx })));
+      console.log('✓ Sections reordered');
       return;
     }
 
     if (type === 'EXERCISE') {
-      // Moving exercises within or between sections
       const sourceSectionId = source.droppableId;
       const destSectionId = destination.droppableId;
       
       const sourceSection = workoutSections.find(s => s.id === sourceSectionId);
       const destSection = workoutSections.find(s => s.id === destSectionId);
       
-      if (!sourceSection || !destSection) return;
+      if (!sourceSection || !destSection) {
+        console.error('❌ Could not find sections:', { sourceSectionId, destSectionId });
+        return;
+      }
 
       if (sourceSectionId === destSectionId) {
-        // Moving within same section
+        console.log('🔄 Moving exercise within same section:', sourceSection.name);
         const newExercises = Array.from(sourceSection.exercises);
         const [removed] = newExercises.splice(source.index, 1);
         newExercises.splice(destination.index, 0, removed);
@@ -341,8 +354,9 @@ export function WorkoutSessionSheet({
             ? { ...s, exercises: newExercises.map((ex, idx) => ({ ...ex, order: idx })) }
             : s
         ));
+        console.log('✓ Exercise reordered within section');
       } else {
-        // Moving between sections
+        console.log('↔️ Moving exercise between sections:', sourceSection.name, '→', destSection.name);
         const sourceExercises = Array.from(sourceSection.exercises);
         const destExercises = Array.from(destSection.exercises);
         const [removed] = sourceExercises.splice(source.index, 1);
@@ -357,6 +371,7 @@ export function WorkoutSessionSheet({
           }
           return s;
         }));
+        console.log('✓ Exercise moved between sections');
       }
     }
   };
