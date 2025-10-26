@@ -115,6 +115,7 @@ export function TrainingCalendarView({
     exercises: ExerciseDistribution[];
     totalSessions: number;
   } | null>(null);
+  const [sessionDataVersion, setSessionDataVersion] = useState(0);
 
   // Helper function to get microcycle index from date
   const getMicrocycleIndex = (dayDate: string): number => {
@@ -234,7 +235,7 @@ export function TrainingCalendarView({
         totalExercises: exercises.length,
       };
     });
-  }, [currentDate, viewMode, exercisesByDate, trainingDays]);
+  }, [currentDate, viewMode, exercisesByDate, trainingDays, sessionDataVersion]);
 
   // Group days into weeks
   const weeks = useMemo(() => {
@@ -418,7 +419,10 @@ export function TrainingCalendarView({
       {selectedSession && (
         <WorkoutSessionSheet
           isOpen={!!selectedSession}
-          onClose={() => setSelectedSession(null)}
+          onClose={() => {
+            setSelectedSession(null);
+            setSessionDataVersion(v => v + 1);
+          }}
           dayDate={selectedSession.dayDate}
           sessionIndex={selectedSession.sessionIndex}
           exercises={selectedSession.exercises}
