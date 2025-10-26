@@ -303,7 +303,7 @@ export function ExerciseLibraryPopup({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-[95vw] max-h-[95vh] w-full h-full flex flex-col">
+      <DialogContent className="max-w-[85vw] max-h-[85vh] w-[85vw] h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Select Exercises</DialogTitle>
         </DialogHeader>
