@@ -55,6 +55,7 @@ interface CalendarDay {
     exercises: ExerciseDistribution[];
     methods: string[];
     sessionIntensity?: IntensityLevel;
+    sessionName?: string;
   }[];
   totalExercises: number;
 }
@@ -350,8 +351,11 @@ export function TrainingDayCell({
                               <GripVertical className="h-3 w-3 text-muted-foreground hover:text-primary" />
                             </div>
                             <Dumbbell className="h-3 w-3 text-primary" />
-                            <span className="text-xs font-medium text-primary">
-                              Session {idx + 1}
+                            <span 
+                              className="text-xs font-medium text-primary truncate max-w-[120px]"
+                              title={session.sessionName || `Session ${idx + 1}`}
+                            >
+                              {session.sessionName || `Session ${idx + 1}`}
                             </span>
                             
                             {/* Session Intensity Indicator */}
