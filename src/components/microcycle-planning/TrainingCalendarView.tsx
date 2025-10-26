@@ -41,7 +41,7 @@ interface TrainingCalendarViewProps {
   onCopyDay?: (dayDate: string) => void;
   onClearDay?: (dayDate: string) => void;
   onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean) => void;
-  onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event') => void;
+  onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event', name: string) => void;
   copiedDay?: { exercises: ExerciseDistribution[]; sourceDate: string; intensity?: IntensityLevel; testNames?: string[]; eventNames?: string[]; splitState?: number } | null;
   availableTests?: any[];
   availableEvents?: any[];
@@ -435,6 +435,13 @@ export function TrainingCalendarView({
           getIntensityColor={getIntensityColor}
           intensityLevels={intensityLevels}
           totalSessionsOnDay={selectedSession.totalSessions}
+          trainingDay={
+            calendarDays.find(d => d.dateString === selectedSession.dayDate)?.trainingDay
+          }
+          availableTests={availableTests}
+          availableEvents={availableEvents}
+          onAddTestEvent={onAddTestEvent}
+          onDeleteTestEvent={onDeleteTestEvent}
         />
       )}
     </div>

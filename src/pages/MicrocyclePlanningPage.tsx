@@ -1539,22 +1539,24 @@ export default function MicrocyclePlanningPage() {
   };
 
   // Handle delete test/event with two-way sync
-  const handleDeleteTestEvent = (dayDate: string, type: 'test' | 'event') => {
+  const handleDeleteTestEvent = (dayDate: string, type: 'test' | 'event', name: string) => {
     // Update trainingDays
     setTrainingDays(prev => {
       const updated = prev.map(td => {
         if (td.date === dayDate) {
           if (type === 'test') {
+            const updatedTestNames = (td.testNames || []).filter(t => t !== name);
             return {
               ...td,
-              isTestDay: false,
-              testNames: undefined
+              testNames: updatedTestNames.length > 0 ? updatedTestNames : undefined,
+              isTestDay: updatedTestNames.length > 0
             };
           } else {
+            const updatedEventNames = (td.eventNames || []).filter(e => e !== name);
             return {
               ...td,
-              isEventDay: false,
-              eventNames: undefined
+              eventNames: updatedEventNames.length > 0 ? updatedEventNames : undefined,
+              isEventDay: updatedEventNames.length > 0
             };
           }
         }
@@ -1564,22 +1566,34 @@ export default function MicrocyclePlanningPage() {
       return updated;
     });
     
-    // Sync to macrocycleData
+    // Sync to macrocycleData - remove the date from the specific test/event
     if (macrocycleData) {
       const updatedMacrocycle = { ...macrocycleData };
       
       if (type === 'test') {
-        // Remove date from all sub-goals
-        updatedMacrocycle.subGoals = (updatedMacrocycle.subGoals || []).map((sg: any) => ({
-          ...sg,
-          testDates: (sg.testDates || []).filter((date: string) => date !== dayDate)
-        }));
+        // Find the specific test by name and remove this date
+        updatedMacrocycle.subGoals = (updatedMacrocycle.subGoals || []).map((sg: any) => {
+          const testName = sg.testMethod || sg.name || sg.testName || sg.method || sg.description || 'Test';
+          if (testName === name) {
+            return {
+              ...sg,
+              testDates: (sg.testDates || []).filter((date: string) => date !== dayDate)
+            };
+          }
+          return sg;
+        });
       } else {
-        // Remove date from all events
-        updatedMacrocycle.events = (updatedMacrocycle.events || []).map((e: any) => ({
-          ...e,
-          eventDates: (e.eventDates || []).filter((date: string) => date !== dayDate)
-        }));
+        // Find the specific event by name and remove this date
+        updatedMacrocycle.events = (updatedMacrocycle.events || []).map((e: any) => {
+          const eventName = e.name || e.eventName || e.title || e.description || 'Event';
+          if (eventName === name) {
+            return {
+              ...e,
+              eventDates: (e.eventDates || []).filter((date: string) => date !== dayDate)
+            };
+          }
+          return e;
+        });
       }
       
       setMacrocycleData(updatedMacrocycle);
@@ -1587,8 +1601,8 @@ export default function MicrocyclePlanningPage() {
     }
     
     toast({
-      title: `${type === 'test' ? 'Tests' : 'Events'} deleted`,
-      description: `All ${type === 'test' ? 'tests' : 'events'} removed from ${format(parseISO(dayDate), 'PPP')}`,
+      title: `${type === 'test' ? 'Test' : 'Event'} deleted`,
+      description: `${name} removed from ${format(parseISO(dayDate), 'PPP')}`,
     });
   };
 

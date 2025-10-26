@@ -51,7 +51,7 @@ interface WeekRowProps {
   onCopyDay?: (dayDate: string) => void;
   onClearDay?: (dayDate: string) => void;
   onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean) => void;
-  onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event') => void;
+  onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event', name: string) => void;
   availableTests?: SubGoal[];
   availableEvents?: Event[];
   dailyIntensityData?: any[];

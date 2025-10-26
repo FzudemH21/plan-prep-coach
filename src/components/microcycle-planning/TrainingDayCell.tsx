@@ -72,7 +72,7 @@ interface TrainingDayCellProps {
   onCopyDay?: (dayDate: string) => void;
   onClearDay?: (dayDate: string) => void;
   onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean) => void;
-  onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event') => void;
+  onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event', name: string) => void;
   copiedDay?: { exercises: ExerciseDistribution[]; sourceDate: string } | null;
   
   // Test/Event selection from macrocycle
@@ -527,7 +527,7 @@ export function TrainingDayCell({
           );
         }}
         onDelete={(type, name) => {
-          onDeleteTestEvent?.(day.dateString, type);
+          onDeleteTestEvent?.(day.dateString, type, name);
         }}
       />
     </>

@@ -6,14 +6,18 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Plus, Save, PanelRightClose, PanelRight, Pencil, MessageSquare } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Plus, Save, PanelRightClose, PanelRight, Pencil, MessageSquare, ChevronDown, X, Trophy, Calendar as CalendarIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { WorkoutSection, WorkoutExercise, WorkoutSession, SupersetMapping } from '@/types/workout';
 import { IntensityLevel } from '@/types/training';
+import { TrainingDay } from '@/types/daily-intensity';
 import { WorkoutSectionCard } from './WorkoutSectionCard';
 import { WorkoutArrangementSidebar } from './WorkoutArrangementSidebar';
 import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
 import { MethodSelectionDialog } from './MethodSelectionDialog';
+import { CombinedTestEventDialog } from './CombinedTestEventDialog';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { format } from 'date-fns';
 import { getParametersForMethod } from '@/data/methodParameters';
@@ -52,6 +56,11 @@ interface WorkoutSessionSheetProps {
   getIntensityColor?: (intensity: IntensityLevel) => string;
   intensityLevels?: IntensityLevel[];
   totalSessionsOnDay?: number;
+  trainingDay?: TrainingDay;
+  availableTests?: any[];
+  availableEvents?: any[];
+  onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean) => void;
+  onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event', name: string) => void;
 }
 
 export function WorkoutSessionSheet({
@@ -68,7 +77,12 @@ export function WorkoutSessionSheet({
   onIntensityChange,
   getIntensityColor,
   intensityLevels,
-  totalSessionsOnDay = 1
+  totalSessionsOnDay = 1,
+  trainingDay,
+  availableTests,
+  availableEvents,
+  onAddTestEvent,
+  onDeleteTestEvent
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -84,6 +98,8 @@ export function WorkoutSessionSheet({
   const [sessionIntensity, setSessionIntensity] = useState<IntensityLevel>('moderate');
   const [dayIntensityPopoverOpen, setDayIntensityPopoverOpen] = useState(false);
   const [sessionIntensityPopoverOpen, setSessionIntensityPopoverOpen] = useState(false);
+  const [isTestEventDialogOpen, setIsTestEventDialogOpen] = useState(false);
+  const [testsEventsExpanded, setTestsEventsExpanded] = useState(true);
   const [workoutSections, setWorkoutSections] = useState<WorkoutSection[]>(() => {
     // Initialize sections from exercises
     const sectionsMap = new Map<string, WorkoutExercise[]>();
@@ -753,6 +769,99 @@ export function WorkoutSessionSheet({
           </div>
         </div>
 
+        {/* Tests & Events Section */}
+        <Collapsible open={testsEventsExpanded} onOpenChange={setTestsEventsExpanded}>
+          <div className="px-6 py-3 bg-muted/30 border-b">
+            <div className="flex items-center justify-between">
+              <CollapsibleTrigger asChild>
+                <button className="flex items-center gap-2 hover:opacity-80">
+                  <ChevronDown className={cn(
+                    "h-4 w-4 transition-transform",
+                    testsEventsExpanded && "rotate-180"
+                  )} />
+                  <span className="font-semibold text-sm">
+                    Tests & Events for This Day
+                  </span>
+                  {((trainingDay?.testNames?.length || 0) + (trainingDay?.eventNames?.length || 0)) > 0 && (
+                    <Badge variant="secondary" className="ml-2">
+                      {(trainingDay?.testNames?.length || 0) + (trainingDay?.eventNames?.length || 0)}
+                    </Badge>
+                  )}
+                </button>
+              </CollapsibleTrigger>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsTestEventDialogOpen(true);
+                }}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add
+              </Button>
+            </div>
+          </div>
+          
+          <CollapsibleContent>
+            <div className="px-6 py-4 bg-muted/30 border-b">
+              {((trainingDay?.testNames?.length || 0) + (trainingDay?.eventNames?.length || 0)) === 0 ? (
+                <p className="text-sm text-muted-foreground italic">
+                  No tests or events scheduled for this day
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Tests and events apply to the entire training day
+                  </p>
+                  
+                  {/* Tests */}
+                  {trainingDay?.testNames?.map((testName, idx) => (
+                    <div
+                      key={`test-${idx}`}
+                      className="flex items-center justify-between p-2 rounded-md border bg-background"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Trophy className="h-4 w-4 text-amber-600 shrink-0" />
+                        <span className="text-sm font-medium">{testName}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => onDeleteTestEvent?.(dayDate, 'test', testName)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  
+                  {/* Events */}
+                  {trainingDay?.eventNames?.map((eventName, idx) => (
+                    <div
+                      key={`event-${idx}`}
+                      className="flex items-center justify-between p-2 rounded-md border bg-background"
+                    >
+                      <div className="flex items-center gap-2">
+                        <CalendarIcon className="h-4 w-4 text-blue-600 shrink-0" />
+                        <span className="text-sm font-medium">{eventName}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => onDeleteTestEvent?.(dayDate, 'event', eventName)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+
         <div className="flex-1 flex overflow-hidden">
           {/* Main Content */}
           <div className={`flex-1 overflow-hidden ${sidebarOpen ? 'w-0' : 'w-full'}`}>
@@ -842,6 +951,28 @@ export function WorkoutSessionSheet({
         mesocycleId={mesocycleId}
         microcycleIndex={microcycleIndex}
         sessionIndex={sessionIndex}
+      />
+
+      {/* Combined Test/Event Dialog */}
+      <CombinedTestEventDialog
+        open={isTestEventDialogOpen}
+        onOpenChange={setIsTestEventDialogOpen}
+        existingTests={availableTests || []}
+        existingEvents={availableEvents || []}
+        scheduledTestNames={trainingDay?.testNames || []}
+        scheduledEventNames={trainingDay?.eventNames || []}
+        onSelect={(selected) => {
+          onAddTestEvent?.(
+            dayDate,
+            selected.type,
+            selected.id,
+            selected.name,
+            selected.isNew
+          );
+        }}
+        onDelete={(type, name) => {
+          onDeleteTestEvent?.(dayDate, type, name);
+        }}
       />
     </Dialog>
   );
