@@ -50,8 +50,10 @@ interface WeekRowProps {
   onPasteSession?: (dayDate: string) => void;
   onCopyDay?: (dayDate: string) => void;
   onClearDay?: (dayDate: string) => void;
-  onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean) => void;
+  onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean, comments?: string) => void;
   onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event', name: string) => void;
+  onUpdateTestComment?: (testId: string, comments: string) => void;
+  onUpdateEventComment?: (eventId: string, comments: string) => void;
   availableTests?: SubGoal[];
   availableEvents?: Event[];
   dailyIntensityData?: any[];
@@ -77,6 +79,8 @@ export function WeekRow({
   onClearDay,
   onAddTestEvent,
   onDeleteTestEvent,
+  onUpdateTestComment,
+  onUpdateEventComment,
   availableTests,
   availableEvents,
   dailyIntensityData,
@@ -154,6 +158,8 @@ export function WeekRow({
             onClearDay={onClearDay}
             onAddTestEvent={onAddTestEvent}
             onDeleteTestEvent={onDeleteTestEvent}
+            onUpdateTestComment={onUpdateTestComment}
+            onUpdateEventComment={onUpdateEventComment}
             copiedDay={copiedDay}
             availableTests={availableTests}
             availableEvents={availableEvents}

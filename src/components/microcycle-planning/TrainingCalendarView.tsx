@@ -406,6 +406,8 @@ export function TrainingCalendarView({
                   onClearDay={onClearDay}
                   onAddTestEvent={onAddTestEvent}
                   onDeleteTestEvent={onDeleteTestEvent}
+                  onUpdateTestComment={onUpdateTestComment}
+                  onUpdateEventComment={onUpdateEventComment}
                   availableTests={availableTests}
                   availableEvents={availableEvents}
                   dailyIntensityData={dailyIntensityData}

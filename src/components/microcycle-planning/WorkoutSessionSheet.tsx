@@ -1027,11 +1027,20 @@ export function WorkoutSessionSheet({
             selected.type,
             selected.id,
             selected.name,
-            selected.isNew
+            selected.isNew,
+            selected.comments
           );
+          setIsTestEventDialogOpen(false);
         }}
         onDelete={(type, name) => {
           onDeleteTestEvent?.(dayDate, type, name);
+        }}
+        onUpdateComment={(type, id, comments) => {
+          if (type === 'test') {
+            onUpdateTestComment?.(id, comments);
+          } else {
+            onUpdateEventComment?.(id, comments);
+          }
         }}
       />
     </Dialog>

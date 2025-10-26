@@ -71,8 +71,10 @@ interface TrainingDayCellProps {
   // Day-level operations
   onCopyDay?: (dayDate: string) => void;
   onClearDay?: (dayDate: string) => void;
-  onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean) => void;
+  onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean, comments?: string) => void;
   onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event', name: string) => void;
+  onUpdateTestComment?: (testId: string, comments: string) => void;
+  onUpdateEventComment?: (eventId: string, comments: string) => void;
   copiedDay?: { exercises: ExerciseDistribution[]; sourceDate: string } | null;
   
   // Test/Event selection from macrocycle
@@ -96,6 +98,8 @@ export function TrainingDayCell({
   onClearDay,
   onAddTestEvent,
   onDeleteTestEvent,
+  onUpdateTestComment,
+  onUpdateEventComment,
   copiedDay,
   availableTests,
   availableEvents,
@@ -523,11 +527,19 @@ export function TrainingDayCell({
             selected.type, 
             selected.id, 
             selected.name, 
-            selected.isNew
+            selected.isNew,
+            selected.comments
           );
         }}
         onDelete={(type, name) => {
           onDeleteTestEvent?.(day.dateString, type, name);
+        }}
+        onUpdateComment={(type, id, comments) => {
+          if (type === 'test') {
+            onUpdateTestComment?.(id, comments);
+          } else {
+            onUpdateEventComment?.(id, comments);
+          }
         }}
       />
     </>
