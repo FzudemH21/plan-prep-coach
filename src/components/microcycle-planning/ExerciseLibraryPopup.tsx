@@ -1,11 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { Dialog, DialogPortal, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Search, Plus, ChevronUp, ChevronDown, X } from 'lucide-react';
+import { cn } from "@/lib/utils";
 import { ExerciseSelection, ExerciseLibraryType } from '@/types/microcycle-planning';
 import { FilterState } from '@/types/exercises';
 import { useCustomLibraries } from '@/hooks/useCustomLibraries';
@@ -303,237 +305,263 @@ export function ExerciseLibraryPopup({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-[85vw] max-h-[85vh] w-[85vw] h-[85vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Select Exercises</DialogTitle>
-        </DialogHeader>
+      <DialogPortal>
+        {/* Custom overlay with higher z-index to darken the WorkoutSessionSheet */}
+        <div
+          className={cn(
+            "fixed inset-0 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+            "z-[120]"
+          )}
+          data-state={isOpen ? "open" : "closed"}
+        />
+        <DialogPrimitive.Content
+          className={cn(
+            "fixed left-1/2 top-1/2 z-[130] grid translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200",
+            "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+            "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+            "data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%]",
+            "data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
+            "sm:rounded-lg",
+            "max-w-[85vw] max-h-[85vh] w-[85vw] h-[85vh] flex flex-col"
+          )}
+        >
+          <DialogHeader>
+            <DialogTitle>Select Exercises</DialogTitle>
+          </DialogHeader>
 
-        <div className="space-y-4 flex flex-col overflow-hidden">
-          {/* Search and Filter Controls */}
-          <div className="flex items-center justify-between gap-4 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search exercises..."
-                  value={filterState.search}
-                  onChange={(e) => handleSearchChange(e.target.value)}
-                  className="pl-8 w-64"
-                />
-                {/* Show create new exercise option when search doesn't match any exercise */}
-                {filterState.search.trim() && !searchExistsInAllLibraries && filterState.search.trim().length > 2 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-md p-2 shadow-md z-10">
-                    <Button
-                      variant="ghost" 
-                      size="sm"
-                      className="w-full justify-start text-left"
-                      onClick={handleCreateNewExercise}
-                    >
-                      <Plus className="h-3 w-3 mr-2" />
-                      Create "{filterState.search}" as new exercise
-                    </Button>
-                  </div>
+          <div className="space-y-4 flex flex-col overflow-hidden">
+            {/* Search and Filter Controls */}
+            <div className="flex items-center justify-between gap-4 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search exercises..."
+                    value={filterState.search}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    className="pl-8 w-64"
+                  />
+                  {/* Show create new exercise option when search doesn't match any exercise */}
+                  {filterState.search.trim() && !searchExistsInAllLibraries && filterState.search.trim().length > 2 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-md p-2 shadow-md z-10">
+                      <Button
+                        variant="ghost" 
+                        size="sm"
+                        className="w-full justify-start text-left"
+                        onClick={handleCreateNewExercise}
+                      >
+                        <Plus className="h-3 w-3 mr-2" />
+                        Create "{filterState.search}" as new exercise
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                
+                {hasActiveFilters && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearAllFilters}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3 w-3 mr-1" />
+                    Clear Filters
+                  </Button>
                 )}
               </div>
-              
-              {hasActiveFilters && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearAllFilters}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <X className="h-3 w-3 mr-1" />
-                  Clear Filters
-                </Button>
-              )}
+
+              <div className="text-sm text-muted-foreground">
+                {filteredAndSortedExercises.length} exercises
+              </div>
             </div>
 
-            <div className="text-sm text-muted-foreground">
-              {filteredAndSortedExercises.length} exercises
-            </div>
-          </div>
+            {/* Library Tabs */}
+            <div className="space-y-3 flex-1 flex flex-col overflow-hidden">
+              <h3 className="text-sm font-medium text-muted-foreground shrink-0">Exercise Libraries</h3>
+              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value)} className="flex-1 flex flex-col overflow-hidden">
+                <TabsList className="grid w-full shrink-0" style={{ gridTemplateColumns: `repeat(${Object.keys(allLibraries).length}, 1fr)` }}>
+                  {Object.entries(allLibraries).map(([key, library]) => (
+                    <TabsTrigger key={key} value={key}>
+                      {library.name} ({library.data.length})
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
 
-          {/* Library Tabs */}
-          <div className="space-y-3 flex-1 flex flex-col overflow-hidden">
-            <h3 className="text-sm font-medium text-muted-foreground shrink-0">Exercise Libraries</h3>
-            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value)} className="flex-1 flex flex-col overflow-hidden">
-              <TabsList className="grid w-full shrink-0" style={{ gridTemplateColumns: `repeat(${Object.keys(allLibraries).length}, 1fr)` }}>
-                {Object.entries(allLibraries).map(([key, library]) => (
-                  <TabsTrigger key={key} value={key}>
-                    {library.name} ({library.data.length})
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-
-              <TabsContent value={activeTab} className="mt-4 flex-1 flex flex-col overflow-hidden">
-                {/* Table with sticky headers and horizontal scroll */}
-                <div className="flex-1 border rounded-lg overflow-hidden">
-                  <div className="overflow-auto max-h-[50vh]" style={{scrollbarWidth: 'thin'}}>
-                    <table className="w-full min-w-[1400px] border-collapse">
-                      {/* Sticky Header */}
-                      <thead className="bg-muted/50 sticky top-0 z-10">
-                        <tr>
-                          <th className="px-3 py-2 text-left font-medium text-muted-foreground border-b border-border w-12 bg-background sticky left-0 z-20">
-                            <div className="flex items-center">
-                              <span className="text-xs">Select</span>
-                            </div>
-                          </th>
-                          {currentColumns.map((column) => (
-                            <th
-                              key={column.key}
-                              className="px-3 py-2 text-left font-medium text-muted-foreground border-b border-border text-xs min-w-[120px]"
-                            >
-                              <div className="flex items-center justify-between gap-1">
-                                <div 
-                                  className="flex items-center gap-1 cursor-pointer hover:text-foreground transition-colors"
-                                  onClick={() => handleSort(column.key)}
-                                >
-                                  <span className="truncate">{column.label}</span>
-                                  {filterState.sortColumn === column.key && (
-                                    filterState.sortDirection === 'asc' ? (
-                                      <ChevronUp className="h-3 w-3 shrink-0" />
-                                    ) : (
-                                      <ChevronDown className="h-3 w-3 shrink-0" />
-                                    )
-                                  )}
-                                </div>
-                                {activeTab === 'resistance-training' ? (
-                                  <ColumnFilter
-                                    column={column as any}
-                                    allData={libraryData[activeTab] || []}
-                                    selectedValues={filterState.columnFilters[column.key] || []}
-                                    onSelectionChange={(values) => handleColumnFilter(column.key, values)}
-                                    onSortChange={handleSort}
-                                    withinModal={true}
-                                  />
-                                ) : activeTab === 'plyometrics' ? (
-                                  <PlyometricsColumnFilter
-                                    column={column as any}
-                                    allData={libraryData[activeTab] || []}
-                                    selectedValues={filterState.columnFilters[column.key] || []}
-                                    onSelectionChange={(values) => handleColumnFilter(column.key, values)}
-                                    onSortChange={handleSort}
-                                    withinModal={true}
-                                  />
-                                ) : (
-                                  <ColumnFilter
-                                    column={column as any}
-                                    allData={libraryData[activeTab] || []}
-                                    selectedValues={filterState.columnFilters[column.key] || []}
-                                    onSelectionChange={(values) => handleColumnFilter(column.key, values)}
-                                    onSortChange={handleSort}
-                                    withinModal={true}
-                                  />
-                                )}
+                <TabsContent value={activeTab} className="mt-4 flex-1 flex flex-col overflow-hidden">
+                  {/* Table with sticky headers and horizontal scroll */}
+                  <div className="flex-1 border rounded-lg overflow-hidden">
+                    <div className="overflow-auto max-h-[50vh]" style={{scrollbarWidth: 'thin'}}>
+                      <table className="w-full min-w-[1400px] border-collapse">
+                        {/* Sticky Header */}
+                        <thead className="bg-muted/50 sticky top-0 z-10">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-medium text-muted-foreground border-b border-border w-12 bg-background sticky left-0 z-20">
+                              <div className="flex items-center">
+                                <span className="text-xs">Select</span>
                               </div>
                             </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredAndSortedExercises.map((exercise) => {
-                          const isAlreadySelected = selectedExerciseIds.includes(exercise.id);
-                          const isCurrentlySelected = selectedItems.has(exercise.id);
-                          
-                          return (
-                            <tr key={exercise.id} className={`border-b hover:bg-muted/25 transition-colors ${isAlreadySelected ? 'opacity-50' : ''}`}>
-                              <td className="px-3 py-2 border-r border-border bg-background sticky left-0 z-10">
-                                <Checkbox
-                                  checked={isCurrentlySelected}
-                                  disabled={isAlreadySelected}
-                                  onCheckedChange={(checked) => 
-                                    handleItemSelect(exercise.id, checked as boolean)
-                                  }
-                                />
-                              </td>
-                              {currentColumns.map(column => (
-                                <td key={column.key} className="px-3 py-2 border-r border-border text-xs min-w-[120px]">
-                                  <div className="max-w-[200px] truncate" title={exercise[column.key] || ''}>
-                                    {column.key === currentColumns[0].key && isAlreadySelected && (
-                                      <>
-                                        {exercise[column.key] || '-'}
-                                        <Badge variant="secondary" className="ml-2 text-xs">
-                                          Already selected
-                                        </Badge>
-                                      </>
-                                    )}
-                                    {(column.key !== currentColumns[0].key || !isAlreadySelected) && (
-                                      exercise[column.key] || '-'
+                            {currentColumns.map((column) => (
+                              <th
+                                key={column.key}
+                                className="px-3 py-2 text-left font-medium text-muted-foreground border-b border-border text-xs min-w-[120px]"
+                              >
+                                <div className="flex items-center justify-between gap-1">
+                                  <div 
+                                    className="flex items-center gap-1 cursor-pointer hover:text-foreground transition-colors"
+                                    onClick={() => handleSort(column.key)}
+                                  >
+                                    <span className="truncate">{column.label}</span>
+                                    {filterState.sortColumn === column.key && (
+                                      filterState.sortDirection === 'asc' ? (
+                                        <ChevronUp className="h-3 w-3 shrink-0" />
+                                      ) : (
+                                        <ChevronDown className="h-3 w-3 shrink-0" />
+                                      )
                                     )}
                                   </div>
+                                  {activeTab === 'resistance-training' ? (
+                                    <ColumnFilter
+                                      column={column as any}
+                                      allData={libraryData[activeTab] || []}
+                                      selectedValues={filterState.columnFilters[column.key] || []}
+                                      onSelectionChange={(values) => handleColumnFilter(column.key, values)}
+                                      onSortChange={handleSort}
+                                      withinModal={true}
+                                    />
+                                  ) : activeTab === 'plyometrics' ? (
+                                    <PlyometricsColumnFilter
+                                      column={column as any}
+                                      allData={libraryData[activeTab] || []}
+                                      selectedValues={filterState.columnFilters[column.key] || []}
+                                      onSelectionChange={(values) => handleColumnFilter(column.key, values)}
+                                      onSortChange={handleSort}
+                                      withinModal={true}
+                                    />
+                                  ) : (
+                                    <ColumnFilter
+                                      column={column as any}
+                                      allData={libraryData[activeTab] || []}
+                                      selectedValues={filterState.columnFilters[column.key] || []}
+                                      onSelectionChange={(values) => handleColumnFilter(column.key, values)}
+                                      onSortChange={handleSort}
+                                      withinModal={true}
+                                    />
+                                  )}
+                                </div>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredAndSortedExercises.map((exercise) => {
+                            const isAlreadySelected = selectedExerciseIds.includes(exercise.id);
+                            const isCurrentlySelected = selectedItems.has(exercise.id);
+                            
+                            return (
+                              <tr key={exercise.id} className={`border-b hover:bg-muted/25 transition-colors ${isAlreadySelected ? 'opacity-50' : ''}`}>
+                                <td className="px-3 py-2 border-r border-border bg-background sticky left-0 z-10">
+                                  <Checkbox
+                                    checked={isCurrentlySelected}
+                                    disabled={isAlreadySelected}
+                                    onCheckedChange={(checked) => 
+                                      handleItemSelect(exercise.id, checked as boolean)
+                                    }
+                                  />
                                 </td>
-                              ))}
+                                {currentColumns.map(column => (
+                                  <td key={column.key} className="px-3 py-2 border-r border-border text-xs min-w-[120px]">
+                                    <div className="max-w-[200px] truncate" title={exercise[column.key] || ''}>
+                                      {column.key === currentColumns[0].key && isAlreadySelected && (
+                                        <>
+                                          {exercise[column.key] || '-'}
+                                          <Badge variant="secondary" className="ml-2 text-xs">
+                                            Already selected
+                                          </Badge>
+                                        </>
+                                      )}
+                                      {(column.key !== currentColumns[0].key || !isAlreadySelected) && (
+                                        exercise[column.key] || '-'
+                                      )}
+                                    </div>
+                                  </td>
+                                ))}
+                              </tr>
+                            );
+                          })}
+                          {filteredAndSortedExercises.length === 0 && filterState.search.trim() && (
+                            <tr>
+                              <td colSpan={currentColumns.length + 1} className="text-center py-8">
+                                <div className="space-y-2">
+                                  <p className="text-muted-foreground">No exercises found matching "{filterState.search}"</p>
+                                  {filterState.search.trim().length > 2 && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={handleCreateNewExercise}
+                                    >
+                                      <Plus className="h-3 w-3 mr-1" />
+                                      Create "{filterState.search}" as new exercise
+                                    </Button>
+                                  )}
+                                </div>
+                              </td>
                             </tr>
-                          );
-                        })}
-                        {filteredAndSortedExercises.length === 0 && filterState.search.trim() && (
-                          <tr>
-                            <td colSpan={currentColumns.length + 1} className="text-center py-8">
-                              <div className="space-y-2">
-                                <p className="text-muted-foreground">No exercises found matching "{filterState.search}"</p>
-                                {filterState.search.trim().length > 2 && (
+                          )}
+                          {filteredAndSortedExercises.length === 0 && !filterState.search.trim() && hasActiveFilters && (
+                            <tr>
+                              <td colSpan={currentColumns.length + 1} className="text-center py-8">
+                                <div className="space-y-2">
+                                  <p className="text-muted-foreground">No exercises match the current filters</p>
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={handleCreateNewExercise}
+                                    onClick={clearAllFilters}
                                   >
-                                    <Plus className="h-3 w-3 mr-1" />
-                                    Create "{filterState.search}" as new exercise
+                                    Clear All Filters
                                   </Button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                        {filteredAndSortedExercises.length === 0 && !filterState.search.trim() && hasActiveFilters && (
-                          <tr>
-                            <td colSpan={currentColumns.length + 1} className="text-center py-8">
-                              <div className="space-y-2">
-                                <p className="text-muted-foreground">No exercises match the current filters</p>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={clearAllFilters}
-                                >
-                                  Clear All Filters
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              </TabsContent>
-            </Tabs>
+                </TabsContent>
+              </Tabs>
+            </div>
           </div>
-        </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleConfirm}
-            disabled={selectedItems.size === 0}
-          >
-            Add Selected ({selectedItems.size})
-          </Button>
-        </DialogFooter>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleClose}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleConfirm}
+              disabled={selectedItems.size === 0}
+            >
+              Add Selected ({selectedItems.size})
+            </Button>
+          </DialogFooter>
 
-        {/* New Exercise Dialog */}
-        <NewExerciseDialog
-          isOpen={isNewExerciseDialogOpen}
-          onClose={() => {
-            setIsNewExerciseDialogOpen(false);
-            setNewExerciseName('');
-          }}
-          exerciseName={newExerciseName}
-          onExerciseCreated={handleExerciseCreated}
-        />
-      </DialogContent>
+          {/* Close button */}
+          <DialogPrimitive.Close className="absolute right-4 top-4 z-10 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+
+          {/* New Exercise Dialog */}
+          <NewExerciseDialog
+            isOpen={isNewExerciseDialogOpen}
+            onClose={() => {
+              setIsNewExerciseDialogOpen(false);
+              setNewExerciseName('');
+            }}
+            exerciseName={newExerciseName}
+            onExerciseCreated={handleExerciseCreated}
+          />
+        </DialogPrimitive.Content>
+      </DialogPortal>
     </Dialog>
   );
 }
