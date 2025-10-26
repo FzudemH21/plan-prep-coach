@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Plus, Save, PanelRightClose, PanelRight } from 'lucide-react';
@@ -313,15 +313,15 @@ export function WorkoutSessionSheet({
   };
 
   return (
-    <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent side="right" className="w-full sm:max-w-full p-0 flex flex-col">
-        <SheetHeader className="p-6 pb-4 border-b">
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-[95vw] max-h-[95vh] w-full h-full flex flex-col p-0">
+        <DialogHeader className="p-6 pb-4 border-b">
           <div className="flex items-center justify-between">
             <div>
-              <SheetTitle>Workout Session</SheetTitle>
-              <SheetDescription>
+              <DialogTitle>Workout Session</DialogTitle>
+              <DialogDescription>
                 {format(new Date(dayDate), 'EEEE, MMMM d, yyyy')} • Session {sessionIndex + 1}
-              </SheetDescription>
+              </DialogDescription>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
@@ -333,7 +333,7 @@ export function WorkoutSessionSheet({
               </Button>
             </div>
           </div>
-        </SheetHeader>
+        </DialogHeader>
 
         <div className="flex-1 flex overflow-hidden">
           {/* Main Content */}
@@ -397,7 +397,7 @@ export function WorkoutSessionSheet({
             </div>
           )}
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
