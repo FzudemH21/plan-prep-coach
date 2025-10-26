@@ -307,123 +307,93 @@ export function WorkoutSessionSheet({
   };
 
   const handleDragEnd = (result: DropResult) => {
-    console.log('🎯 Main view drag end:', result);
-    
-    if (!result.destination) {
+    console.log('🎯 Drag end:', result);
+    const { source, destination, type } = result;
+
+    if (!destination) {
       console.log('❌ No destination - drag cancelled');
       return;
     }
 
-    const { source, destination, type } = result;
-    console.log('✅ Processing drag:', { 
-      type, 
-      source: { droppableId: source.droppableId, index: source.index },
-      destination: { droppableId: destination.droppableId, index: destination.index }
-    });
-
-    if (type === 'SECTION') {
-      console.log('📦 Reordering sections');
+    if (type === 'SECTION' || type === 'SIDEBAR_SECTION') {
+      console.info(`📦 Reordering sections via ${type}`);
       const newSections = Array.from(workoutSections);
       const [removed] = newSections.splice(source.index, 1);
       newSections.splice(destination.index, 0, removed);
       setWorkoutSections(newSections.map((s, idx) => ({ ...s, order: idx })));
-      console.log('✓ Sections reordered');
+      console.info('✓ Sections reordered');
       return;
     }
 
     if (type === 'EXERCISE') {
-      const sourceSectionId = source.droppableId;
-      const destSectionId = destination.droppableId;
-      
-      const sourceSection = workoutSections.find(s => s.id === sourceSectionId);
-      const destSection = workoutSections.find(s => s.id === destSectionId);
-      
+      const srcId = source.droppableId.replace('main-exercises-', '');
+      const dstId = destination.droppableId.replace('main-exercises-', '');
+      const sourceSection = workoutSections.find(s => s.id === srcId);
+      const destSection = workoutSections.find(s => s.id === dstId);
       if (!sourceSection || !destSection) {
-        console.error('❌ Could not find sections:', { sourceSectionId, destSectionId });
+        console.error('❌ Could not find sections (main):', { srcId, dstId });
         return;
       }
-
-      if (sourceSectionId === destSectionId) {
-        console.log('🔄 Moving exercise within same section:', sourceSection.name);
+      if (srcId === dstId) {
+        console.info('🔄 Reorder exercise within section:', sourceSection.name);
         const newExercises = Array.from(sourceSection.exercises);
         const [removed] = newExercises.splice(source.index, 1);
         newExercises.splice(destination.index, 0, removed);
-        
         setWorkoutSections(workoutSections.map(s =>
-          s.id === sourceSectionId
-            ? { ...s, exercises: newExercises.map((ex, idx) => ({ ...ex, order: idx })) }
-            : s
+          s.id === srcId ? { ...s, exercises: newExercises.map((ex, i) => ({ ...ex, order: i })) } : s
         ));
-        console.log('✓ Exercise reordered within section');
+        console.info('✓ Exercise reordered within section');
       } else {
-        console.log('↔️ Moving exercise between sections:', sourceSection.name, '→', destSection.name);
+        console.info('↔️ Move exercise between sections:', sourceSection.name, '→', destSection.name);
         const sourceExercises = Array.from(sourceSection.exercises);
         const destExercises = Array.from(destSection.exercises);
         const [removed] = sourceExercises.splice(source.index, 1);
         destExercises.splice(destination.index, 0, removed);
-        
         setWorkoutSections(workoutSections.map(s => {
-          if (s.id === sourceSectionId) {
-            return { ...s, exercises: sourceExercises.map((ex, idx) => ({ ...ex, order: idx })) };
-          }
-          if (s.id === destSectionId) {
-            return { ...s, exercises: destExercises.map((ex, idx) => ({ ...ex, order: idx })) };
-          }
+          if (s.id === srcId) return { ...s, exercises: sourceExercises.map((ex, i) => ({ ...ex, order: i })) };
+          if (s.id === dstId) return { ...s, exercises: destExercises.map((ex, i) => ({ ...ex, order: i })) };
           return s;
         }));
-        console.log('✓ Exercise moved between sections');
+        console.info('✓ Exercise moved between sections');
       }
-    }
-  };
-
-  const handleSidebarDragEnd = (result: DropResult) => {
-    if (!result.destination) return;
-    const { type, source, destination } = result;
-
-    if (type === 'SIDEBAR_SECTION') {
-      const newSections = Array.from(workoutSections);
-      const [removed] = newSections.splice(source.index, 1);
-      newSections.splice(destination.index, 0, removed);
-      setWorkoutSections(newSections.map((s, idx) => ({ ...s, order: idx })));
       return;
     }
 
     if (type === 'SIDEBAR_EXERCISE') {
-      const srcSectionId = source.droppableId.replace('sidebar-exercises-', '');
-      const dstSectionId = destination.droppableId.replace('sidebar-exercises-', '');
-
-      const sourceSection = workoutSections.find(s => s.id === srcSectionId);
-      const destSection = workoutSections.find(s => s.id === dstSectionId);
-      if (!sourceSection || !destSection) return;
-
-      if (srcSectionId === dstSectionId) {
+      const srcId = source.droppableId.replace('sidebar-exercises-', '');
+      const dstId = destination.droppableId.replace('sidebar-exercises-', '');
+      const sourceSection = workoutSections.find(s => s.id === srcId);
+      const destSection = workoutSections.find(s => s.id === dstId);
+      if (!sourceSection || !destSection) {
+        console.error('❌ Could not find sections (sidebar):', { srcId, dstId });
+        return;
+      }
+      if (srcId === dstId) {
+        console.info('🔄 Reorder exercise within sidebar section:', sourceSection.name);
         const newExercises = Array.from(sourceSection.exercises);
         const [removed] = newExercises.splice(source.index, 1);
         newExercises.splice(destination.index, 0, removed);
-
         setWorkoutSections(workoutSections.map(s =>
-          s.id === srcSectionId
-            ? { ...s, exercises: newExercises.map((ex, idx) => ({ ...ex, order: idx })) }
-            : s
+          s.id === srcId ? { ...s, exercises: newExercises.map((ex, i) => ({ ...ex, order: i })) } : s
         ));
+        console.info('✓ Sidebar exercise reordered within section');
       } else {
+        console.info('↔️ Move exercise between sidebar sections:', sourceSection.name, '→', destSection.name);
         const sourceExercises = Array.from(sourceSection.exercises);
         const destExercises = Array.from(destSection.exercises);
         const [removed] = sourceExercises.splice(source.index, 1);
         destExercises.splice(destination.index, 0, removed);
-
         setWorkoutSections(workoutSections.map(s => {
-          if (s.id === srcSectionId) {
-            return { ...s, exercises: sourceExercises.map((ex, idx) => ({ ...ex, order: idx })) };
-          }
-          if (s.id === dstSectionId) {
-            return { ...s, exercises: destExercises.map((ex, idx) => ({ ...ex, order: idx })) };
-          }
+          if (s.id === srcId) return { ...s, exercises: sourceExercises.map((ex, i) => ({ ...ex, order: i })) };
+          if (s.id === dstId) return { ...s, exercises: destExercises.map((ex, i) => ({ ...ex, order: i })) };
           return s;
         }));
+        console.info('✓ Sidebar exercise moved between sections');
       }
+      return;
     }
   };
+
 
   const handleParameterChange = (exerciseId: string, paramName: string, value: string | number) => {
     setWorkoutSections(sections =>
@@ -1129,7 +1099,6 @@ export function WorkoutSessionSheet({
                   }
                   onScrollToExercise={handleScrollToExercise}
                   getSupersetLabel={getSupersetLabel}
-                  onDragEnd={handleSidebarDragEnd}
                 />
               </div>
             )}

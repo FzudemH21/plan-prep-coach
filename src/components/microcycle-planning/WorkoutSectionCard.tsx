@@ -118,60 +118,58 @@ export function WorkoutSectionCard({
       </div>
 
       {/* Section Content */}
-      {!isCollapsed && (
-        <div className="p-3 space-y-3">
-          <Droppable droppableId={section.id} type="EXERCISE">
-            {(provided, snapshot) => (
-              <div
-                ref={provided.innerRef}
-                {...provided.droppableProps}
-                className={`space-y-3 min-h-[60px] rounded-md transition-colors ${
-                  snapshot.isDraggingOver ? 'bg-accent/50' : ''
-                }`}
-              >
-                {section.exercises.length === 0 && (
-                  <div className="text-center py-8 text-sm text-muted-foreground">
-                    No exercises yet. Add one to get started.
-                  </div>
-                )}
-                {section.exercises.map((exercise, index) => (
-                  <Draggable
-                    key={exercise.id}
-                    draggableId={exercise.id}
-                    index={index}
-                  >
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        style={provided.draggableProps.style}
-                        className={snapshot.isDragging ? 'opacity-50' : ''}
-                      >
-                        <WorkoutExerciseCard
-                          exercise={exercise}
-                          isInSuperset={!!exercise.supersetId}
-                          supersetLabel={getSupersetLabel(exercise.id)}
-                          onParameterChange={(paramName, value) =>
-                            onParameterChange(exercise.id, paramName, value)
-                          }
-                          onUnitChange={(paramName, unit) =>
-                            onUnitChange(exercise.id, paramName, unit)
-                          }
-                          onLinkSuperset={() => onLinkSuperset(exercise.id)}
-                          onDuplicate={() => onDuplicateExercise(exercise.id)}
-                          onDelete={() => onDeleteExercise(exercise.id)}
-                          dragHandleProps={provided.dragHandleProps}
-                        />
-                      </div>
-                    )}
-                  </Draggable>
-                ))}
-                {provided.placeholder}
-              </div>
-            )}
-          </Droppable>
+      <div className="p-3 space-y-3">
+        <Droppable droppableId={`main-exercises-${section.id}`} type="EXERCISE">
+          {(provided, snapshot) => (
+            <div
+              ref={provided.innerRef}
+              {...provided.droppableProps}
+              className={`space-y-3 rounded-md transition-colors ${
+                snapshot.isDraggingOver ? 'bg-accent/50' : ''
+              }`}
+            >
+              {isCollapsed ? (
+                <div className="h-2 rounded-md hover:bg-accent/40 transition-colors" />
+              ) : (
+                <>
+                  {section.exercises.length === 0 && (
+                    <div className="text-center py-8 text-sm text-muted-foreground">
+                      No exercises yet. Add one to get started.
+                    </div>
+                  )}
+                  {section.exercises.map((exercise, index) => (
+                    <Draggable key={exercise.id} draggableId={exercise.id} index={index}>
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          style={provided.draggableProps.style}
+                          className={snapshot.isDragging ? 'opacity-50' : ''}
+                        >
+                          <WorkoutExerciseCard
+                            exercise={exercise}
+                            isInSuperset={!!exercise.supersetId}
+                            supersetLabel={getSupersetLabel(exercise.id)}
+                            onParameterChange={(paramName, value) => onParameterChange(exercise.id, paramName, value)}
+                            onUnitChange={(paramName, unit) => onUnitChange(exercise.id, paramName, unit)}
+                            onLinkSuperset={() => onLinkSuperset(exercise.id)}
+                            onDuplicate={() => onDuplicateExercise(exercise.id)}
+                            onDelete={() => onDeleteExercise(exercise.id)}
+                            dragHandleProps={provided.dragHandleProps}
+                          />
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
+                </>
+              )}
+              {provided.placeholder}
+            </div>
+          )}
+        </Droppable>
 
-          {/* Add Exercise Button */}
+        {/* Add Exercise Button */}
+        {!isCollapsed && (
           <Button
             variant="outline"
             size="sm"
@@ -181,8 +179,8 @@ export function WorkoutSectionCard({
             <Plus className="h-4 w-4 mr-2" />
             Add Exercise
           </Button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

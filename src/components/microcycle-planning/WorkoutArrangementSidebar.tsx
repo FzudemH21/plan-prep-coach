@@ -4,7 +4,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { ChevronDown, ChevronRight, Link2, GripVertical } from 'lucide-react';
 import { WorkoutSection } from '@/types/workout';
-import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import { Droppable, Draggable } from '@hello-pangea/dnd';
 
 interface WorkoutArrangementSidebarProps {
   sections: WorkoutSection[];
@@ -12,7 +12,6 @@ interface WorkoutArrangementSidebarProps {
   onToggleSectionCollapse: (sectionId: string) => void;
   onScrollToExercise: (exerciseId: string) => void;
   getSupersetLabel: (exerciseId: string) => string | undefined;
-  onDragEnd: (result: DropResult) => void;
 }
 
 export function WorkoutArrangementSidebar({
@@ -20,8 +19,7 @@ export function WorkoutArrangementSidebar({
   collapsedSections,
   onToggleSectionCollapse,
   onScrollToExercise,
-  getSupersetLabel,
-  onDragEnd
+  getSupersetLabel
 }: WorkoutArrangementSidebarProps) {
   return (
     <div className="h-full flex flex-col bg-muted/30 border-l">
@@ -33,7 +31,7 @@ export function WorkoutArrangementSidebar({
       </div>
       
       <ScrollArea className="flex-1 p-3">
-        <DragDropContext onDragEnd={onDragEnd}>
+        
           <Droppable droppableId="sidebar-sections" type="SIDEBAR_SECTION">
             {(provided) => (
               <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
@@ -121,7 +119,7 @@ export function WorkoutArrangementSidebar({
               </div>
             )}
           </Droppable>
-        </DragDropContext>
+        
       </ScrollArea>
     </div>
   );
