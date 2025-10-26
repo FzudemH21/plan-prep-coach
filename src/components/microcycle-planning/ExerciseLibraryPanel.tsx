@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronDown, ChevronRight, GripVertical } from 'lucide-react';
+import { ChevronDown, ChevronRight, GripVertical, Search } from 'lucide-react';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { cn } from '@/lib/utils';
 
@@ -40,6 +41,8 @@ export function ExerciseLibraryPanel({
 }: ExerciseLibraryPanelProps) {
   const [expandedMethods, setExpandedMethods] = useState<Set<string>>(new Set());
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showAllocatedOnly, setShowAllocatedOnly] = useState(false);
 
   const toggleMethod = (methodId: string) => {
     const newExpanded = new Set(expandedMethods);
@@ -65,15 +68,85 @@ export function ExerciseLibraryPanel({
     return exerciseDistribution.filter(ex => ex.exerciseId === exerciseId).length;
   };
 
+  const getAllocationBadgeVariant = (count: number): "default" | "secondary" | "outline" => {
+    if (count === 0) return "outline";
+    if (count <= 2) return "default";
+    return "secondary";
+  };
+
+  const filteredExercises = useMemo(() => {
+    let filtered = { ...exercisesByMethod };
+    
+    // Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = Object.entries(filtered).reduce((acc, [methodId, categories]) => {
+        const filteredCategories = Object.entries(categories).reduce((catAcc, [catName, exercises]) => {
+          const filteredExs = exercises.filter(ex => 
+            ex.exerciseName.toLowerCase().includes(query) ||
+            methodId.toLowerCase().includes(query) ||
+            catName.toLowerCase().includes(query)
+          );
+          if (filteredExs.length > 0) {
+            catAcc[catName] = filteredExs;
+          }
+          return catAcc;
+        }, {} as Record<string, any[]>);
+        
+        if (Object.keys(filteredCategories).length > 0) {
+          acc[methodId] = filteredCategories;
+        }
+        return acc;
+      }, {} as typeof filtered);
+    }
+    
+    // Apply "allocated only" filter
+    if (showAllocatedOnly) {
+      filtered = Object.entries(filtered).reduce((acc, [methodId, categories]) => {
+        const filteredCategories = Object.entries(categories).reduce((catAcc, [catName, exercises]) => {
+          const filteredExs = exercises.filter(ex => getExerciseAllocationCount(ex.exerciseId) > 0);
+          if (filteredExs.length > 0) {
+            catAcc[catName] = filteredExs;
+          }
+          return catAcc;
+        }, {} as Record<string, any[]>);
+        
+        if (Object.keys(filteredCategories).length > 0) {
+          acc[methodId] = filteredCategories;
+        }
+        return acc;
+      }, {} as typeof filtered);
+    }
+    
+    return filtered;
+  }, [exercisesByMethod, searchQuery, showAllocatedOnly, exerciseDistribution]);
+
   return (
     <Card className="h-full flex flex-col">
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-3 space-y-3">
         <CardTitle className="text-lg">Methods & Exercises</CardTitle>
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search exercises..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-8 h-9"
+          />
+        </div>
+        <Button
+          variant={showAllocatedOnly ? "default" : "outline"}
+          size="sm"
+          onClick={() => setShowAllocatedOnly(!showAllocatedOnly)}
+          className="w-full"
+        >
+          {showAllocatedOnly ? 'Show All Exercises' : 'Show Allocated Only'}
+        </Button>
       </CardHeader>
       <CardContent className="flex-1 overflow-hidden p-0">
         <ScrollArea className="h-full px-4">
           <div className="space-y-2 pb-4">
-            {Object.entries(exercisesByMethod).map(([methodId, categories]) => {
+            {Object.entries(filteredExercises).map(([methodId, categories]) => {
               const isMethodExpanded = expandedMethods.has(methodId);
               
               return (
@@ -160,7 +233,7 @@ export function ExerciseLibraryPanel({
                                             <GripVertical className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                                             <span className="flex-1 truncate">{exercise.exerciseName}</span>
                                             {allocationCount > 0 && (
-                                              <Badge variant="outline" className="text-xs px-1">
+                                              <Badge variant={getAllocationBadgeVariant(allocationCount)} className="text-xs px-1.5 font-medium">
                                                 {allocationCount}
                                               </Badge>
                                             )}

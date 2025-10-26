@@ -155,6 +155,20 @@ export function SessionColumnView({
   const sessionName = day.sessionNames?.[sessionIndex] || `Session ${sessionIndex + 1}`;
   const intensityClass = intensityColors[day.intensity] || 'bg-gray-200';
 
+  const getMethodColor = (methodId: string): string => {
+    const methodColors: Record<string, string> = {
+      'Strength': 'border-l-red-500',
+      'Hypertrophy': 'border-l-blue-500',
+      'Power': 'border-l-purple-500',
+      'Endurance': 'border-l-green-500',
+      'Mobility': 'border-l-yellow-500',
+      'Olympic Lifting': 'border-l-orange-500',
+      'Speed': 'border-l-pink-500',
+      'Conditioning': 'border-l-teal-500',
+    };
+    return methodColors[methodId] || 'border-l-muted-foreground';
+  };
+
   const renderExerciseCard = (exercise: ExerciseDistribution, index: number, allExercises: ExerciseDistribution[]) => {
     const supersetId = getSuperset(exercise.id);
     const nextExercise = allExercises[index + 1];
@@ -175,7 +189,8 @@ export function SessionColumnView({
             >
               <div
                 className={cn(
-                  "flex items-start gap-2 p-2 rounded-md border bg-card text-xs",
+                  "flex items-start gap-2 p-2 rounded-md border-l-4 bg-card text-xs",
+                  getMethodColor(exercise.methodId),
                   snapshot.isDragging && "opacity-50 shadow-lg"
                 )}
               >
@@ -245,15 +260,35 @@ export function SessionColumnView({
   return (
     <>
       <Card className="w-80 flex-shrink-0 flex flex-col h-[600px]">
-        <CardHeader className="pb-3 space-y-1">
-          <div className="flex items-center justify-between">
-            <div className="text-sm font-semibold">{dayName}</div>
-            <Badge variant="outline" className={cn('text-xs', intensityClass)}>
-              {day.intensity}
-            </Badge>
+        <CardHeader className="pb-3 border-b">
+          <div className="space-y-2">
+            {/* Day and Date */}
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                  {dayName}
+                </div>
+                <div className="text-lg font-semibold">
+                  {format(dateObj, 'MMM d, yyyy')}
+                </div>
+              </div>
+              {sessionIndex > 0 && (
+                <Badge variant="outline" className="text-xs">
+                  Session {sessionIndex + 1}
+                </Badge>
+              )}
+            </div>
+            
+            {/* Intensity Badge - Larger and More Prominent */}
+            <div className="flex items-center gap-2">
+              <Badge className={cn("text-xs font-medium px-2 py-1", intensityClass)}>
+                {day.intensity.replace('-', ' ').toUpperCase()}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                {exercises.length} {exercises.length === 1 ? 'exercise' : 'exercises'}
+              </span>
+            </div>
           </div>
-          <div className="text-xs text-muted-foreground">{dateStr}</div>
-          <div className="text-xs font-medium">{sessionName}</div>
         </CardHeader>
 
         <CardContent className="flex-1 overflow-hidden p-3 pt-0">
@@ -306,96 +341,103 @@ export function SessionColumnView({
               {/* Sections with their exercises */}
               {exercisesBySection.sortedSections.map(section => (
                 <div key={section.id} className="space-y-2">
-                  {/* Section Header */}
-                  <div className="flex items-center gap-2 pt-2">
-                    <div className="h-px flex-1 bg-border" />
-                    {editingSectionId === section.id ? (
-                      <div className="flex items-center gap-1">
-                        <Input
-                          value={editingSectionName}
-                          onChange={(e) => setEditingSectionName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSaveRenameSection();
-                            if (e.key === 'Escape') {
+                  {/* Section Container with Background */}
+                  <div className="rounded-lg border-2 bg-muted/20 p-3 space-y-2">
+                    {/* Section Header */}
+                    <div className="flex items-center justify-between pb-2 border-b">
+                      {editingSectionId === section.id ? (
+                        <div className="flex items-center gap-1 flex-1">
+                          <Input
+                            value={editingSectionName}
+                            onChange={(e) => setEditingSectionName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveRenameSection();
+                              if (e.key === 'Escape') {
+                                setEditingSectionId(null);
+                                setEditingSectionName('');
+                              }
+                            }}
+                            className="h-6 text-xs px-2 flex-1"
+                            autoFocus
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={handleSaveRenameSection}
+                          >
+                            <Check className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => {
                               setEditingSectionId(null);
                               setEditingSectionName('');
-                            }
-                          }}
-                          className="h-6 text-xs px-2 w-32"
-                          autoFocus
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0"
-                          onClick={handleSaveRenameSection}
-                        >
-                          <Check className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0"
-                          onClick={() => {
-                            setEditingSectionId(null);
-                            setEditingSectionName('');
-                          }}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                          {section.name}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-5 w-5 p-0 hover:bg-accent"
-                          onClick={() => handleStartRenameSection(section)}
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-5 w-5 p-0 text-destructive hover:bg-accent"
-                          onClick={() => onDeleteSection(section.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
-                    <div className="h-px flex-1 bg-border" />
-                  </div>
-
-                  {/* Section exercises droppable area */}
-                  <Droppable droppableId={`section-${section.id}`} type="EXERCISE">
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.droppableProps}
-                        className={cn(
-                          "rounded-md border-2 border-dashed p-2 min-h-[60px]",
-                          snapshot.isDraggingOver ? "border-primary bg-primary/5" : "border-muted"
-                        )}
-                      >
-                        <div className="space-y-2">
-                          {exercisesBySection.sectioned[section.id]?.length === 0 ? (
-                            <div className="text-xs text-muted-foreground text-center py-4">
-                              Drop exercises here
-                            </div>
-                          ) : (
-                            exercisesBySection.sectioned[section.id]?.map((exercise, index) => 
-                              renderExerciseCard(exercise, index, exercisesBySection.sectioned[section.id])
-                            )
-                          )}
-                          {provided.placeholder}
+                            }}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
                         </div>
-                      </div>
-                    )}
-                  </Droppable>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <GripVertical className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-semibold">{section.name}</span>
+                            <Badge variant="secondary" className="text-xs">
+                              {exercisesBySection.sectioned[section.id]?.length || 0}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 hover:bg-accent"
+                              onClick={() => handleStartRenameSection(section)}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 text-destructive hover:bg-accent"
+                              onClick={() => onDeleteSection(section.id)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Section exercises droppable area */}
+                    <Droppable droppableId={`section-${section.id}`} type="EXERCISE">
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.droppableProps}
+                          className={cn(
+                            "rounded-md border-2 border-dashed p-2 min-h-[60px] transition-colors",
+                            snapshot.isDraggingOver ? "border-primary bg-primary/5" : "border-muted/50 bg-background"
+                          )}
+                        >
+                          <div className="space-y-2">
+                            {exercisesBySection.sectioned[section.id]?.length === 0 ? (
+                              <div className="text-xs text-muted-foreground text-center py-4">
+                                Drop exercises here
+                              </div>
+                            ) : (
+                              exercisesBySection.sectioned[section.id]?.map((exercise, index) => 
+                                renderExerciseCard(exercise, index, exercisesBySection.sectioned[section.id])
+                              )
+                            )}
+                            {provided.placeholder}
+                          </div>
+                        </div>
+                      )}
+                    </Droppable>
+                  </div>
                 </div>
               ))}
 
