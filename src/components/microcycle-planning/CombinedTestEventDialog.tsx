@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -29,7 +30,8 @@ interface CombinedTestEventDialogProps {
     type: 'test' | 'event';
     id: string; 
     name: string; 
-    isNew: boolean 
+    isNew: boolean;
+    comments?: string;
   }) => void;
   onDelete: (type: 'test' | 'event', name: string) => void;
 }
@@ -48,6 +50,7 @@ export function CombinedTestEventDialog({
   const [mode, setMode] = useState<'select' | 'create'>('select');
   const [selectedId, setSelectedId] = useState<string>('');
   const [newName, setNewName] = useState('');
+  const [newComments, setNewComments] = useState('');
   
   const items = type === 'test' ? existingTests : existingEvents;
   const hasItems = items.length > 0;
@@ -61,6 +64,7 @@ export function CombinedTestEventDialog({
           id: item.id,
           name: type === 'test' ? (item as SubGoal).testMethod : (item as Event).name,
           isNew: false,
+          comments: (item as any).comments
         });
       }
     } else if (mode === 'create' && newName.trim()) {
@@ -69,6 +73,7 @@ export function CombinedTestEventDialog({
         id: `${type}-${Date.now()}`,
         name: newName.trim(),
         isNew: true,
+        comments: newComments.trim() || undefined
       });
     }
     handleClose();
@@ -78,6 +83,7 @@ export function CombinedTestEventDialog({
     onOpenChange(false);
     setSelectedId('');
     setNewName('');
+    setNewComments('');
     setType('test');
     setMode('select');
   };
@@ -225,12 +231,17 @@ export function CombinedTestEventDialog({
                       return (
                         <div key={item.id} className="flex items-start space-x-2 py-2">
                           <RadioGroupItem value={item.id} id={item.id} />
-                          <Label htmlFor={item.id} className="flex-1 cursor-pointer">
-                            <div className="font-medium">{name}</div>
-                            {description && (
-                              <div className="text-xs text-muted-foreground">{description}</div>
-                            )}
-                          </Label>
+                <Label htmlFor={item.id} className="flex-1 cursor-pointer">
+                  <div className="font-medium">{name}</div>
+                  {description && (
+                    <div className="text-xs text-muted-foreground">{description}</div>
+                  )}
+                  {(item as any).comments && (
+                    <div className="text-xs text-muted-foreground italic mt-1">
+                      💬 {(item as any).comments}
+                    </div>
+                  )}
+                </Label>
                         </div>
                       );
                     })}
@@ -241,21 +252,39 @@ export function CombinedTestEventDialog({
           )}
 
           {(mode === 'create' || !hasItems) && (
-            <div className="space-y-2">
-              <Label htmlFor="name">
-                {type === 'test' ? 'Test Method' : 'Event Name'}
-              </Label>
-              <Input
-                id="name"
-                placeholder={type === 'test' ? 'e.g., 1RM Back Squat' : 'e.g., Regional Competition'}
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && newName.trim()) {
-                    handleConfirm();
-                  }
-                }}
-              />
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">
+                  {type === 'test' ? 'Test Method' : 'Event Name'}
+                </Label>
+                <Input
+                  id="name"
+                  placeholder={type === 'test' ? 'e.g., 1RM Back Squat' : 'e.g., Regional Competition'}
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newComments.trim() === '' && newName.trim()) {
+                      handleConfirm();
+                    }
+                  }}
+                />
+              </div>
+              
+              {/* Comments field */}
+              <div className="space-y-2">
+                <Label htmlFor="comments">
+                  Comments
+                  <span className="text-xs text-muted-foreground ml-2">(Optional)</span>
+                </Label>
+                <Textarea
+                  id="comments"
+                  placeholder="Add notes or context about this test/event..."
+                  value={newComments}
+                  onChange={(e) => setNewComments(e.target.value)}
+                  rows={2}
+                  className="text-sm"
+                />
+              </div>
             </div>
           )}
         </div>

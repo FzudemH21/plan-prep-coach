@@ -45,6 +45,7 @@ export interface SubGoal {
   unit: string;
   percentChange: number;
   testDates: string[];
+  comments?: string;
 }
 
 export interface Event {
@@ -52,6 +53,7 @@ export interface Event {
   name: string;
   description?: string;
   eventDates: string[];
+  comments?: string;
 }
 
 export interface TrainableQuality {

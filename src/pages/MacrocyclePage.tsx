@@ -451,7 +451,8 @@ export default function MacrocyclePage() {
       id: `event-${Date.now()}`,
       name: name.trim(),
       description: '',
-      eventDates: []
+      eventDates: [],
+      comments: ''
     };
     setEvents([...events, newEvent]);
     toast({ title: 'Event Added', description: `Created event "${name}"` });
@@ -931,6 +932,26 @@ export default function MacrocyclePage() {
                     </div>
                   </div>
 
+                  {/* Comments field */}
+                  <div className="space-y-2">
+                    <Label htmlFor={`subgoal-comments-${index}`}>
+                      Comments
+                      <span className="text-xs text-muted-foreground ml-2">(Optional)</span>
+                    </Label>
+                    <Textarea
+                      id={`subgoal-comments-${index}`}
+                      value={subGoal.comments || ""}
+                      onChange={(e) => {
+                        const updated = [...subGoals];
+                        updated[index].comments = e.target.value;
+                        setSubGoals(updated);
+                      }}
+                      placeholder="Add notes about this test (e.g., testing protocol, preparation requirements, etc.)"
+                      rows={2}
+                      className="text-sm"
+                    />
+                  </div>
+
                   <Button
                     variant="destructive"
                     size="sm"
@@ -954,7 +975,8 @@ export default function MacrocyclePage() {
                   goalValue: 0,
                   unit: "",
                   percentChange: 0,
-                  testDates: []
+                  testDates: [],
+                  comments: ""
                 };
                 setSubGoals([...subGoals, newSubGoal]);
               }}
@@ -982,6 +1004,29 @@ export default function MacrocyclePage() {
                     >
                       <X className="h-4 w-4" />
                     </Button>
+                  </div>
+                  
+                  {/* Comments field */}
+                  <div className="space-y-2">
+                    <Label htmlFor={`event-comments-${event.id}`}>
+                      Comments
+                      <span className="text-xs text-muted-foreground ml-2">(Optional)</span>
+                    </Label>
+                    <Textarea
+                      id={`event-comments-${event.id}`}
+                      value={event.comments || ""}
+                      onChange={(e) => {
+                        const updated = events.map(ev => 
+                          ev.id === event.id 
+                            ? { ...ev, comments: e.target.value }
+                            : ev
+                        );
+                        setEvents(updated);
+                      }}
+                      placeholder="Add notes about this event (e.g., logistics, preparation, travel details, etc.)"
+                      rows={2}
+                      className="text-sm"
+                    />
                   </div>
                 </div>
               ))}

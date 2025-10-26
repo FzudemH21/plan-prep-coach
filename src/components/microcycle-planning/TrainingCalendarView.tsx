@@ -40,7 +40,7 @@ interface TrainingCalendarViewProps {
   copiedWeek?: { exercises: ExerciseDistribution[]; weekStartDate: string } | null;
   onCopyDay?: (dayDate: string) => void;
   onClearDay?: (dayDate: string) => void;
-  onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean) => void;
+  onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean, comments?: string) => void;
   onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event', name: string) => void;
   copiedDay?: { exercises: ExerciseDistribution[]; sourceDate: string; intensity?: IntensityLevel; testNames?: string[]; eventNames?: string[]; splitState?: number } | null;
   availableTests?: any[];
@@ -58,6 +58,8 @@ interface TrainingCalendarViewProps {
     exerciseId: string,
     parameters: Record<string, string | number>
   ) => void;
+  onUpdateTestComment?: (testId: string, comments: string) => void;
+  onUpdateEventComment?: (eventId: string, comments: string) => void;
 }
 
 export interface CalendarDay {
@@ -105,6 +107,8 @@ export function TrainingCalendarView({
   intensityLevels,
   parameterValues = {},
   onSaveParameters,
+  onUpdateTestComment,
+  onUpdateEventComment,
 }: TrainingCalendarViewProps) {
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>('4week');
@@ -442,6 +446,8 @@ export function TrainingCalendarView({
           availableEvents={availableEvents}
           onAddTestEvent={onAddTestEvent}
           onDeleteTestEvent={onDeleteTestEvent}
+          onUpdateTestComment={onUpdateTestComment}
+          onUpdateEventComment={onUpdateEventComment}
         />
       )}
     </div>

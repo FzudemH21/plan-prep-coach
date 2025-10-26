@@ -1452,7 +1452,8 @@ export default function MicrocyclePlanningPage() {
     type: 'test' | 'event', 
     testEventId: string, 
     testEventName: string, 
-    isNew: boolean
+    isNew: boolean,
+    comments?: string
   ) => {
     // Update trainingDays
     setTrainingDays(prev => {
@@ -1497,7 +1498,8 @@ export default function MicrocyclePlanningPage() {
             goalValue: 0,
             unit: '',
             percentChange: 0,
-            testDates: [dayDate]
+            testDates: [dayDate],
+            comments: comments || ''
           };
           updatedMacrocycle.subGoals = [...(updatedMacrocycle.subGoals || []), targetSubGoal];
         } else {
@@ -1516,7 +1518,8 @@ export default function MicrocyclePlanningPage() {
             id: testEventId,
             name: testEventName,
             description: '',
-            eventDates: [dayDate]
+            eventDates: [dayDate],
+            comments: comments || ''
           };
           updatedMacrocycle.events = [...(updatedMacrocycle.events || []), targetEvent];
         } else {
@@ -1604,6 +1607,74 @@ export default function MicrocyclePlanningPage() {
       title: `${type === 'test' ? 'Test' : 'Event'} deleted`,
       description: `${name} removed from ${format(parseISO(dayDate), 'PPP')}`,
     });
+  };
+
+  // Handle update test comment
+  const handleUpdateTestComment = (testId: string, comments: string) => {
+    const savedData = localStorage.getItem('macrocycleData');
+    if (savedData) {
+      try {
+        const data = JSON.parse(savedData);
+        const updatedSubGoals = (data.subGoals || []).map((sg: any) =>
+          sg.id === testId ? { ...sg, comments } : sg
+        );
+        data.subGoals = updatedSubGoals;
+        localStorage.setItem('macrocycleData', JSON.stringify(data));
+        
+        // Update local state
+        setMacrocycleData(data);
+        
+        // Trigger re-fetch of data
+        const event = new Event('macrocycle-data-updated');
+        window.dispatchEvent(event);
+        
+        toast({
+          title: "Comment updated",
+          description: "Test comment has been saved",
+        });
+      } catch (error) {
+        console.error('Error updating test comment:', error);
+        toast({
+          title: "Error",
+          description: "Failed to update test comment",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  // Handle update event comment
+  const handleUpdateEventComment = (eventId: string, comments: string) => {
+    const savedData = localStorage.getItem('macrocycleData');
+    if (savedData) {
+      try {
+        const data = JSON.parse(savedData);
+        const updatedEvents = (data.events || []).map((ev: any) =>
+          ev.id === eventId ? { ...ev, comments } : ev
+        );
+        data.events = updatedEvents;
+        localStorage.setItem('macrocycleData', JSON.stringify(data));
+        
+        // Update local state
+        setMacrocycleData(data);
+        
+        // Trigger re-fetch of data
+        const event = new Event('macrocycle-data-updated');
+        window.dispatchEvent(event);
+        
+        toast({
+          title: "Comment updated",
+          description: "Event comment has been saved",
+        });
+      } catch (error) {
+        console.error('Error updating event comment:', error);
+        toast({
+          title: "Error",
+          description: "Failed to update event comment",
+          variant: "destructive",
+        });
+      }
+    }
   };
 
   // Handle intensity change from calendar view
@@ -2529,6 +2600,8 @@ export default function MicrocyclePlanningPage() {
               intensityLevels={intensityLevels}
               parameterValues={parameterValues}
               onSaveParameters={handleSaveParameters}
+              onUpdateTestComment={handleUpdateTestComment}
+              onUpdateEventComment={handleUpdateEventComment}
             />
         </>
       )}

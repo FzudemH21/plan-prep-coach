@@ -59,8 +59,10 @@ interface WorkoutSessionSheetProps {
   trainingDay?: TrainingDay;
   availableTests?: any[];
   availableEvents?: any[];
-  onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean) => void;
+  onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean, comments?: string) => void;
   onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event', name: string) => void;
+  onUpdateTestComment?: (testId: string, comments: string) => void;
+  onUpdateEventComment?: (eventId: string, comments: string) => void;
 }
 
 export function WorkoutSessionSheet({
@@ -82,7 +84,9 @@ export function WorkoutSessionSheet({
   availableTests,
   availableEvents,
   onAddTestEvent,
-  onDeleteTestEvent
+  onDeleteTestEvent,
+  onUpdateTestComment,
+  onUpdateEventComment
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -816,46 +820,102 @@ export function WorkoutSessionSheet({
                   </p>
                   
                   {/* Tests */}
-                  {trainingDay?.testNames?.map((testName, idx) => (
-                    <div
-                      key={`test-${idx}`}
-                      className="flex items-center justify-between p-2 rounded-md border bg-background"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Trophy className="h-4 w-4 text-amber-600 shrink-0" />
-                        <span className="text-sm font-medium">{testName}</span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => onDeleteTestEvent?.(dayDate, 'test', testName)}
+                  {trainingDay?.testNames?.map((testName, idx) => {
+                    // Find the full test data from availableTests
+                    const testData = availableTests?.find(test => test.testMethod === testName);
+                    
+                    return (
+                      <div
+                        key={`test-${idx}`}
+                        className="p-3 rounded-md border bg-background space-y-2"
                       >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Trophy className="h-4 w-4 text-amber-600 shrink-0" />
+                            <span className="text-sm font-medium">{testName}</span>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => onDeleteTestEvent?.(dayDate, 'test', testName)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        
+                        {/* Comments section */}
+                        {testData && (
+                          <div className="space-y-1">
+                            <Label htmlFor={`test-comment-${idx}`} className="text-xs text-muted-foreground">
+                              Comments:
+                            </Label>
+                            <Textarea
+                              id={`test-comment-${idx}`}
+                              value={testData.comments || ""}
+                              onChange={(e) => {
+                                if (testData.id && onUpdateTestComment) {
+                                  onUpdateTestComment(testData.id, e.target.value);
+                                }
+                              }}
+                              placeholder="Add notes about this test..."
+                              rows={2}
+                              className="text-xs"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                   
                   {/* Events */}
-                  {trainingDay?.eventNames?.map((eventName, idx) => (
-                    <div
-                      key={`event-${idx}`}
-                      className="flex items-center justify-between p-2 rounded-md border bg-background"
-                    >
-                      <div className="flex items-center gap-2">
-                        <CalendarIcon className="h-4 w-4 text-blue-600 shrink-0" />
-                        <span className="text-sm font-medium">{eventName}</span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => onDeleteTestEvent?.(dayDate, 'event', eventName)}
+                  {trainingDay?.eventNames?.map((eventName, idx) => {
+                    // Find the full event data from availableEvents
+                    const eventData = availableEvents?.find(event => event.name === eventName);
+                    
+                    return (
+                      <div
+                        key={`event-${idx}`}
+                        className="p-3 rounded-md border bg-background space-y-2"
                       >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <CalendarIcon className="h-4 w-4 text-blue-600 shrink-0" />
+                            <span className="text-sm font-medium">{eventName}</span>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => onDeleteTestEvent?.(dayDate, 'event', eventName)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        
+                        {/* Comments section */}
+                        {eventData && (
+                          <div className="space-y-1">
+                            <Label htmlFor={`event-comment-${idx}`} className="text-xs text-muted-foreground">
+                              Comments:
+                            </Label>
+                            <Textarea
+                              id={`event-comment-${idx}`}
+                              value={eventData.comments || ""}
+                              onChange={(e) => {
+                                if (eventData.id && onUpdateEventComment) {
+                                  onUpdateEventComment(eventData.id, e.target.value);
+                                }
+                              }}
+                              placeholder="Add notes about this event..."
+                              rows={2}
+                              className="text-xs"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
