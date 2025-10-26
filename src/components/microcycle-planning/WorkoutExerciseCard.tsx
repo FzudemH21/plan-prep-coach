@@ -15,7 +15,6 @@ interface WorkoutExerciseCardProps {
   supersetLabel?: string;
   onParameterChange: (paramName: string, value: string | number) => void;
   onUnitChange: (paramName: string, unit: string) => void;
-  onLinkSuperset: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
   dragHandleProps?: any;
@@ -27,7 +26,6 @@ export function WorkoutExerciseCard({
   supersetLabel,
   onParameterChange,
   onUnitChange,
-  onLinkSuperset,
   onDuplicate,
   onDelete,
   dragHandleProps
@@ -152,10 +150,6 @@ export function WorkoutExerciseCard({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="z-[60] bg-popover">
-                  <DropdownMenuItem onClick={onLinkSuperset}>
-                    <Link2 className="h-4 w-4 mr-2" />
-                    Link to Superset
-                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={onDuplicate}>
                     <Copy className="h-4 w-4 mr-2" />
                     Duplicate

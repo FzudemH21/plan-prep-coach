@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronRight, Plus, GripVertical, MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, GripVertical, MoreVertical, Pencil, Trash2, Link2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { WorkoutSection, WorkoutExercise } from '@/types/workout';
 import { WorkoutExerciseCard } from './WorkoutExerciseCard';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
+import { cn } from '@/lib/utils';
 
 interface WorkoutSectionCardProps {
   section: WorkoutSection;
@@ -13,7 +14,7 @@ interface WorkoutSectionCardProps {
   onToggleCollapse: () => void;
   onParameterChange: (exerciseId: string, paramName: string, value: string | number) => void;
   onUnitChange: (exerciseId: string, paramName: string, unit: string) => void;
-  onLinkSuperset: (exerciseId: string) => void;
+  onToggleSuperset: (exerciseId1: string, exerciseId2: string) => void;
   onDuplicateExercise: (exerciseId: string) => void;
   onDeleteExercise: (exerciseId: string) => void;
   onAddExercise: () => void;
@@ -29,7 +30,7 @@ export function WorkoutSectionCard({
   onToggleCollapse,
   onParameterChange,
   onUnitChange,
-  onLinkSuperset,
+  onToggleSuperset,
   onDuplicateExercise,
   onDeleteExercise,
   onAddExercise,
@@ -51,6 +52,12 @@ export function WorkoutSectionCard({
   const handleCancelRename = () => {
     setEditedName(section.name);
     setIsEditing(false);
+  };
+
+  const areExercisesLinked = (exerciseId1: string, exerciseId2: string): boolean => {
+    const label1 = getSupersetLabel(exerciseId1);
+    const label2 = getSupersetLabel(exerciseId2);
+    return !!(label1 && label2 && label1 === label2);
   };
 
   return (
@@ -155,28 +162,51 @@ export function WorkoutSectionCard({
                     </div>
                   )}
                   {section.exercises.map((exercise, index) => (
-                    <Draggable key={exercise.id} draggableId={exercise.id} index={index}>
-                      {(provided, snapshot) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          style={provided.draggableProps.style}
-                          className={snapshot.isDragging ? 'opacity-50' : ''}
-                        >
-                          <WorkoutExerciseCard
-                            exercise={exercise}
-                            isInSuperset={!!exercise.supersetId}
-                            supersetLabel={getSupersetLabel(exercise.id)}
-                            onParameterChange={(paramName, value) => onParameterChange(exercise.id, paramName, value)}
-                            onUnitChange={(paramName, unit) => onUnitChange(exercise.id, paramName, unit)}
-                            onLinkSuperset={() => onLinkSuperset(exercise.id)}
-                            onDuplicate={() => onDuplicateExercise(exercise.id)}
-                            onDelete={() => onDeleteExercise(exercise.id)}
-                            dragHandleProps={provided.dragHandleProps}
-                          />
+                    <React.Fragment key={exercise.id}>
+                      <Draggable draggableId={exercise.id} index={index}>
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            style={provided.draggableProps.style}
+                            className={snapshot.isDragging ? 'opacity-50' : ''}
+                          >
+                            <WorkoutExerciseCard
+                              exercise={exercise}
+                              isInSuperset={!!exercise.supersetId}
+                              supersetLabel={getSupersetLabel(exercise.id)}
+                              onParameterChange={(paramName, value) => onParameterChange(exercise.id, paramName, value)}
+                              onUnitChange={(paramName, unit) => onUnitChange(exercise.id, paramName, unit)}
+                              onDuplicate={() => onDuplicateExercise(exercise.id)}
+                              onDelete={() => onDeleteExercise(exercise.id)}
+                              dragHandleProps={provided.dragHandleProps}
+                            />
+                          </div>
+                        )}
+                      </Draggable>
+                      
+                      {/* Chain icon between exercises */}
+                      {index < section.exercises.length - 1 && (
+                        <div className="flex justify-center -my-2 relative z-10">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={cn(
+                              "h-7 w-7 rounded-full transition-all",
+                              areExercisesLinked(exercise.id, section.exercises[index + 1].id)
+                                ? "bg-primary/10 text-primary hover:bg-primary/20" 
+                                : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                            )}
+                            onClick={() => onToggleSuperset(exercise.id, section.exercises[index + 1].id)}
+                          >
+                            <Link2 className={cn(
+                              "h-4 w-4",
+                              areExercisesLinked(exercise.id, section.exercises[index + 1].id) && "fill-current"
+                            )} />
+                          </Button>
                         </div>
                       )}
-                    </Draggable>
+                    </React.Fragment>
                   ))}
                 </>
               )}

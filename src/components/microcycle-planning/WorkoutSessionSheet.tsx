@@ -231,7 +231,7 @@ export function WorkoutSessionSheet({
     return dayIntensity?.intensity || 'moderate' as IntensityLevel;
   }, [dailyIntensityData, dayDate]);
 
-  // Load session metadata and intensity from localStorage
+  // Load session metadata, intensity, and supersets from localStorage
   useEffect(() => {
     if (isOpen) {
       // Load session name and comments
@@ -260,6 +260,24 @@ export function WorkoutSessionSheet({
       } else {
         // Always initialize from day intensity
         setSessionIntensity(currentIntensity || 'moderate');
+      }
+
+      // Load supersets
+      const supersetsKey = `workoutSupersets_${mesocycleId}_${dayDate}_${sessionIndex}`;
+      const storedSupersets = localStorage.getItem(supersetsKey);
+      if (storedSupersets) {
+        try {
+          const parsed = JSON.parse(storedSupersets);
+          setSupersets({
+            ...supersets,
+            [dayDate]: {
+              ...supersets[dayDate],
+              [sessionIndex]: parsed
+            }
+          });
+        } catch (e) {
+          console.error('Failed to load supersets:', e);
+        }
       }
     }
   }, [isOpen, mesocycleId, dayDate, sessionIndex, currentIntensity]);
@@ -600,9 +618,72 @@ export function WorkoutSessionSheet({
     );
   };
 
-  const handleLinkSuperset = (exerciseId: string) => {
-    // TODO: Implement superset linking dialog
-    console.log('Link superset for exercise:', exerciseId);
+  const handleToggleSuperset = (exerciseId1: string, exerciseId2: string) => {
+    const daySuperset = supersets[dayDate]?.[sessionIndex] || {};
+    
+    // Find if exercises are in any superset
+    let superset1: string | null = null;
+    let superset2: string | null = null;
+    
+    for (const [supersetId, exerciseIds] of Object.entries(daySuperset)) {
+      if (exerciseIds.includes(exerciseId1)) superset1 = supersetId;
+      if (exerciseIds.includes(exerciseId2)) superset2 = supersetId;
+    }
+    
+    // Case 1: Both in same superset → UNLINK
+    if (superset1 && superset1 === superset2) {
+      const updatedExercises = daySuperset[superset1].filter(
+        id => id !== exerciseId1 && id !== exerciseId2
+      );
+      
+      if (updatedExercises.length === 0) {
+        delete daySuperset[superset1]; // Remove empty superset
+      } else {
+        daySuperset[superset1] = updatedExercises;
+      }
+      
+      toast({
+        title: "Exercises unlinked",
+        description: "Superset removed",
+      });
+    }
+    // Case 2: One or both not in superset → LINK
+    else {
+      if (superset1) {
+        // Add exercise2 to superset1
+        daySuperset[superset1] = [...daySuperset[superset1], exerciseId2];
+      } else if (superset2) {
+        // Add exercise1 to superset2
+        daySuperset[superset2] = [...daySuperset[superset2], exerciseId1];
+      } else {
+        // Create new superset
+        const existingSupersetIds = Object.keys(daySuperset).map(id => {
+          const match = id.match(/superset-(\d+)/);
+          return match ? parseInt(match[1]) : 0;
+        });
+        const nextId = existingSupersetIds.length > 0 ? Math.max(...existingSupersetIds) + 1 : 1;
+        const newSupersetId = `superset-${nextId}`;
+        daySuperset[newSupersetId] = [exerciseId1, exerciseId2];
+      }
+      
+      toast({
+        title: "Exercises linked",
+        description: "Superset created",
+      });
+    }
+    
+    // Update state
+    setSupersets({
+      ...supersets,
+      [dayDate]: {
+        ...supersets[dayDate],
+        [sessionIndex]: daySuperset
+      }
+    });
+    
+    // Persist to localStorage
+    const key = `workoutSupersets_${mesocycleId}_${dayDate}_${sessionIndex}`;
+    localStorage.setItem(key, JSON.stringify(daySuperset));
   };
 
   const handleScrollToExercise = (exerciseId: string) => {
@@ -1051,10 +1132,10 @@ export function WorkoutSessionSheet({
                                        [section.id]: !prev[section.id]
                                      }))
                                    }
-                                   onParameterChange={handleParameterChange}
-                                   onUnitChange={handleUnitChange}
-                                   onLinkSuperset={handleLinkSuperset}
-                                   onDuplicateExercise={handleDuplicateExercise}
+                    onParameterChange={handleParameterChange}
+                    onUnitChange={handleUnitChange}
+                    onToggleSuperset={handleToggleSuperset}
+                    onDuplicateExercise={handleDuplicateExercise}
                                    onDeleteExercise={handleDeleteExercise}
                                    onAddExercise={() => handleAddExercise(section.id)}
                                    onRenameSection={(newName) => handleRenameSection(section.id, newName)}
