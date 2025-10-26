@@ -120,21 +120,18 @@ export function EnhancedExerciseDistribution({
 
     if (!destination) return;
 
-    // Handle exercise dragging from library to session
-    if (type === 'EXERCISE' && source.droppableId.startsWith('library-')) {
+    // Handle dragging from library to unsectioned session area
+    if (type === 'EXERCISE' && source.droppableId.startsWith('library-') && destination.droppableId.startsWith('session-')) {
       const [methodId, categoryName] = source.droppableId.replace('library-', '').split('::');
       const [dayDate, sessionIndex] = destination.droppableId.replace('session-', '').split('::');
       
-      // Find the exercise being dragged
       const exercise = exercisesByMethod[methodId]?.[categoryName]?.[source.index];
       if (!exercise) return;
 
-      // Get current exercises in target session
       const sessionExercises = exerciseDistribution.filter(
-        ex => ex.dayDate === dayDate && ex.sessionIndex === parseInt(sessionIndex)
-      );
+        ex => ex.dayDate === dayDate && ex.sessionIndex === parseInt(sessionIndex) && !ex.sectionId
+      ).sort((a, b) => a.order - b.order);
 
-      // Create new exercise distribution entry
       const newExercise: ExerciseDistribution = {
         id: `ex-${Date.now()}-${Math.random()}`,
         exerciseId: exercise.exerciseId,
@@ -147,76 +144,233 @@ export function EnhancedExerciseDistribution({
         order: destination.index,
       };
 
-      // Insert at the drop position and update orders
-      const updatedExercises = [...sessionExercises];
-      updatedExercises.splice(destination.index, 0, newExercise);
-      
-      // Reorder
-      updatedExercises.forEach((ex, idx) => {
-        ex.order = idx;
-      });
-
-      // Merge with exercises from other sessions
-      const otherExercises = exerciseDistribution.filter(
-        ex => !(ex.dayDate === dayDate && ex.sessionIndex === parseInt(sessionIndex))
-      );
-
-      onDistributionChange([...otherExercises, ...updatedExercises]);
-      toast({ title: 'Exercise added', description: `${exercise.exerciseName} added to session` });
-    }
-
-    // Handle reordering within a session
-    if (type === 'EXERCISE' && source.droppableId === destination.droppableId && source.droppableId.startsWith('session-')) {
-      const [dayDate, sessionIndex] = source.droppableId.replace('session-', '').split('::');
-      const sessionExercises = exerciseDistribution
-        .filter(ex => ex.dayDate === dayDate && ex.sessionIndex === parseInt(sessionIndex))
-        .sort((a, b) => a.order - b.order);
-
-      const [movedExercise] = sessionExercises.splice(source.index, 1);
-      sessionExercises.splice(destination.index, 0, movedExercise);
-
-      // Update orders
-      sessionExercises.forEach((ex, idx) => {
-        ex.order = idx;
-      });
+      sessionExercises.splice(destination.index, 0, newExercise);
+      sessionExercises.forEach((ex, idx) => ex.order = idx);
 
       const otherExercises = exerciseDistribution.filter(
-        ex => !(ex.dayDate === dayDate && ex.sessionIndex === parseInt(sessionIndex))
+        ex => !(ex.dayDate === dayDate && ex.sessionIndex === parseInt(sessionIndex) && !ex.sectionId)
       );
 
       onDistributionChange([...otherExercises, ...sessionExercises]);
+      toast({ title: 'Exercise added', description: `${exercise.exerciseName} added to session` });
+      return;
     }
 
-    // Handle moving between sessions
+    // Handle dragging from library into a specific section
+    if (type === 'EXERCISE' && source.droppableId.startsWith('library-') && destination.droppableId.startsWith('section-')) {
+      const [methodId, categoryName] = source.droppableId.replace('library-', '').split('::');
+      const sectionId = destination.droppableId.replace('section-', '');
+      
+      const section = sessionSections.find(s => s.id === sectionId);
+      if (!section) return;
+      
+      const exercise = exercisesByMethod[methodId]?.[categoryName]?.[source.index];
+      if (!exercise) return;
+      
+      const sectionExercises = exerciseDistribution.filter(
+        ex => ex.sectionId === sectionId
+      ).sort((a, b) => a.order - b.order);
+      
+      const newExercise: ExerciseDistribution = {
+        id: `ex-${Date.now()}-${Math.random()}`,
+        exerciseId: exercise.exerciseId,
+        exerciseName: exercise.exerciseName,
+        methodId,
+        categoryName,
+        subCategory: exercise.subCategory,
+        dayDate: section.dayDate,
+        sessionIndex: section.sessionIndex,
+        order: destination.index,
+        sectionId: sectionId,
+      };
+      
+      sectionExercises.splice(destination.index, 0, newExercise);
+      sectionExercises.forEach((ex, idx) => ex.order = idx);
+      
+      const otherExercises = exerciseDistribution.filter(ex => ex.sectionId !== sectionId);
+      
+      onDistributionChange([...otherExercises, ...sectionExercises]);
+      toast({ title: 'Exercise added to section', description: `${exercise.exerciseName} added to ${section.name}` });
+      return;
+    }
+
+    // Handle reordering within the same droppable (section or unsectioned area)
+    if (type === 'EXERCISE' && source.droppableId === destination.droppableId) {
+      if (source.droppableId.startsWith('section-')) {
+        // Reordering within a section
+        const sectionId = source.droppableId.replace('section-', '');
+        const sectionExercises = exerciseDistribution
+          .filter(ex => ex.sectionId === sectionId)
+          .sort((a, b) => a.order - b.order);
+        
+        const [movedExercise] = sectionExercises.splice(source.index, 1);
+        sectionExercises.splice(destination.index, 0, movedExercise);
+        
+        sectionExercises.forEach((ex, idx) => ex.order = idx);
+        
+        const otherExercises = exerciseDistribution.filter(ex => ex.sectionId !== sectionId);
+        onDistributionChange([...otherExercises, ...sectionExercises]);
+        return;
+      }
+      
+      if (source.droppableId.startsWith('session-')) {
+        // Reordering within unsectioned area
+        const [dayDate, sessionIndex] = source.droppableId.replace('session-', '').split('::');
+        const sessionExercises = exerciseDistribution
+          .filter(ex => ex.dayDate === dayDate && ex.sessionIndex === parseInt(sessionIndex) && !ex.sectionId)
+          .sort((a, b) => a.order - b.order);
+
+        const [movedExercise] = sessionExercises.splice(source.index, 1);
+        sessionExercises.splice(destination.index, 0, movedExercise);
+
+        sessionExercises.forEach((ex, idx) => ex.order = idx);
+
+        const otherExercises = exerciseDistribution.filter(
+          ex => !(ex.dayDate === dayDate && ex.sessionIndex === parseInt(sessionIndex) && !ex.sectionId)
+        );
+
+        onDistributionChange([...otherExercises, ...sessionExercises]);
+        return;
+      }
+    }
+
+    // Handle moving FROM section TO unsectioned session area
+    if (type === 'EXERCISE' && source.droppableId.startsWith('section-') && destination.droppableId.startsWith('session-')) {
+      const sectionId = source.droppableId.replace('section-', '');
+      const [destDayDate, destSessionIndex] = destination.droppableId.replace('session-', '').split('::');
+      
+      const sourceExercises = exerciseDistribution
+        .filter(ex => ex.sectionId === sectionId)
+        .sort((a, b) => a.order - b.order);
+      
+      const destExercises = exerciseDistribution
+        .filter(ex => ex.dayDate === destDayDate && ex.sessionIndex === parseInt(destSessionIndex) && !ex.sectionId)
+        .sort((a, b) => a.order - b.order);
+      
+      const [movedExercise] = sourceExercises.splice(source.index, 1);
+      movedExercise.dayDate = destDayDate;
+      movedExercise.sessionIndex = parseInt(destSessionIndex);
+      movedExercise.sectionId = undefined;
+      movedExercise.supersetId = undefined;
+      
+      destExercises.splice(destination.index, 0, movedExercise);
+      
+      sourceExercises.forEach((ex, idx) => ex.order = idx);
+      destExercises.forEach((ex, idx) => ex.order = idx);
+      
+      const otherExercises = exerciseDistribution.filter(
+        ex => ex.sectionId !== sectionId && 
+             !(ex.dayDate === destDayDate && ex.sessionIndex === parseInt(destSessionIndex) && !ex.sectionId)
+      );
+      
+      onDistributionChange([...otherExercises, ...sourceExercises, ...destExercises]);
+      toast({ title: 'Exercise moved', description: 'Moved to main session area' });
+      return;
+    }
+
+    // Handle moving FROM unsectioned session area TO section
+    if (type === 'EXERCISE' && source.droppableId.startsWith('session-') && destination.droppableId.startsWith('section-')) {
+      const [sourceDayDate, sourceSessionIndex] = source.droppableId.replace('session-', '').split('::');
+      const destSectionId = destination.droppableId.replace('section-', '');
+      
+      const sourceExercises = exerciseDistribution
+        .filter(ex => ex.dayDate === sourceDayDate && ex.sessionIndex === parseInt(sourceSessionIndex) && !ex.sectionId)
+        .sort((a, b) => a.order - b.order);
+      
+      const destExercises = exerciseDistribution
+        .filter(ex => ex.sectionId === destSectionId)
+        .sort((a, b) => a.order - b.order);
+      
+      const destSection = sessionSections.find(s => s.id === destSectionId);
+      if (!destSection) return;
+      
+      const [movedExercise] = sourceExercises.splice(source.index, 1);
+      movedExercise.dayDate = destSection.dayDate;
+      movedExercise.sessionIndex = destSection.sessionIndex;
+      movedExercise.sectionId = destSectionId;
+      movedExercise.supersetId = undefined;
+      
+      destExercises.splice(destination.index, 0, movedExercise);
+      
+      sourceExercises.forEach((ex, idx) => ex.order = idx);
+      destExercises.forEach((ex, idx) => ex.order = idx);
+      
+      const otherExercises = exerciseDistribution.filter(
+        ex => !(ex.dayDate === sourceDayDate && ex.sessionIndex === parseInt(sourceSessionIndex) && !ex.sectionId) &&
+             ex.sectionId !== destSectionId
+      );
+      
+      onDistributionChange([...otherExercises, ...sourceExercises, ...destExercises]);
+      toast({ title: 'Exercise moved to section', description: `Added to ${destSection.name}` });
+      return;
+    }
+
+    // Handle moving BETWEEN sections
+    if (type === 'EXERCISE' && source.droppableId.startsWith('section-') && destination.droppableId.startsWith('section-') &&
+        source.droppableId !== destination.droppableId) {
+      const sourceSectionId = source.droppableId.replace('section-', '');
+      const destSectionId = destination.droppableId.replace('section-', '');
+      
+      const sourceExercises = exerciseDistribution
+        .filter(ex => ex.sectionId === sourceSectionId)
+        .sort((a, b) => a.order - b.order);
+      
+      const destExercises = exerciseDistribution
+        .filter(ex => ex.sectionId === destSectionId)
+        .sort((a, b) => a.order - b.order);
+      
+      const destSection = sessionSections.find(s => s.id === destSectionId);
+      if (!destSection) return;
+      
+      const [movedExercise] = sourceExercises.splice(source.index, 1);
+      movedExercise.sectionId = destSectionId;
+      movedExercise.dayDate = destSection.dayDate;
+      movedExercise.sessionIndex = destSection.sessionIndex;
+      movedExercise.supersetId = undefined;
+      
+      destExercises.splice(destination.index, 0, movedExercise);
+      
+      sourceExercises.forEach((ex, idx) => ex.order = idx);
+      destExercises.forEach((ex, idx) => ex.order = idx);
+      
+      const otherExercises = exerciseDistribution.filter(
+        ex => ex.sectionId !== sourceSectionId && ex.sectionId !== destSectionId
+      );
+      
+      onDistributionChange([...otherExercises, ...sourceExercises, ...destExercises]);
+      toast({ title: 'Exercise moved between sections', description: `Moved to ${destSection.name}` });
+      return;
+    }
+
+    // Handle moving between unsectioned session areas (different days/sessions)
     if (type === 'EXERCISE' && source.droppableId !== destination.droppableId && 
         source.droppableId.startsWith('session-') && destination.droppableId.startsWith('session-')) {
       const [sourceDayDate, sourceSessionIndex] = source.droppableId.replace('session-', '').split('::');
       const [destDayDate, destSessionIndex] = destination.droppableId.replace('session-', '').split('::');
 
       const sourceExercises = exerciseDistribution
-        .filter(ex => ex.dayDate === sourceDayDate && ex.sessionIndex === parseInt(sourceSessionIndex))
+        .filter(ex => ex.dayDate === sourceDayDate && ex.sessionIndex === parseInt(sourceSessionIndex) && !ex.sectionId)
         .sort((a, b) => a.order - b.order);
 
       const destExercises = exerciseDistribution
-        .filter(ex => ex.dayDate === destDayDate && ex.sessionIndex === parseInt(destSessionIndex))
+        .filter(ex => ex.dayDate === destDayDate && ex.sessionIndex === parseInt(destSessionIndex) && !ex.sectionId)
         .sort((a, b) => a.order - b.order);
 
       const [movedExercise] = sourceExercises.splice(source.index, 1);
       movedExercise.dayDate = destDayDate;
       movedExercise.sessionIndex = parseInt(destSessionIndex);
-      movedExercise.sectionId = undefined; // Clear section when moving
-      movedExercise.supersetId = undefined; // Clear superset when moving
+      movedExercise.sectionId = undefined;
+      movedExercise.supersetId = undefined;
 
       destExercises.splice(destination.index, 0, movedExercise);
 
-      // Update orders
       sourceExercises.forEach((ex, idx) => ex.order = idx);
       destExercises.forEach((ex, idx) => ex.order = idx);
 
       const otherExercises = exerciseDistribution.filter(
         ex => !(
-          (ex.dayDate === sourceDayDate && ex.sessionIndex === parseInt(sourceSessionIndex)) ||
-          (ex.dayDate === destDayDate && ex.sessionIndex === parseInt(destSessionIndex))
+          (ex.dayDate === sourceDayDate && ex.sessionIndex === parseInt(sourceSessionIndex) && !ex.sectionId) ||
+          (ex.dayDate === destDayDate && ex.sessionIndex === parseInt(destSessionIndex) && !ex.sectionId)
         )
       );
 
