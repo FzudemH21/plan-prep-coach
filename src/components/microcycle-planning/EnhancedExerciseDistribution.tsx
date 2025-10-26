@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { format, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Copy, Loader2 } from 'lucide-react';
+import { Copy, Loader2, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ExerciseDistribution {
@@ -56,8 +56,8 @@ interface EnhancedExerciseDistributionProps {
   onSectionsChange: (sections: SessionSection[]) => void;
   onSupersetsChange: (supersets: SupersetMapping) => void;
   getIntensityColor: (intensity: IntensityLevel) => string;
-  onSplitDay: (dayDate: string, numberOfSessions: number) => void;
-  onCollapseDay: (dayDate: string) => void;
+  onAddSession: (dayDate: string) => void;
+  onRemoveSession: (dayDate: string, sessionIndex: number) => void;
 }
 
 export function EnhancedExerciseDistribution({
@@ -72,8 +72,8 @@ export function EnhancedExerciseDistribution({
   onSectionsChange,
   onSupersetsChange,
   getIntensityColor,
-  onSplitDay,
-  onCollapseDay,
+  onAddSession,
+  onRemoveSession,
 }: EnhancedExerciseDistributionProps) {
   const { toast } = useToast();
   const [selectedMicrocycleId, setSelectedMicrocycleId] = useState<string | null>(null);
@@ -1067,7 +1067,7 @@ export function EnhancedExerciseDistribution({
                       {days.map((day) => {
                         const sessionsCount = day.sessions || 1;
                         return (
-                          <div key={day.date} className="flex gap-2">
+                          <div key={day.date} className="flex flex-col gap-2">
                             {Array.from({ length: sessionsCount }).map((_, sessionIndex) => {
                               const sessionExercises = exerciseDistribution
                                 .filter(ex => ex.dayDate === day.date && ex.sessionIndex === sessionIndex)
@@ -1093,11 +1093,20 @@ export function EnhancedExerciseDistribution({
                                   onRenameSection={handleRenameSection}
                                   onDeleteSection={handleDeleteSection}
                                   onToggleSuperset={handleToggleSuperset}
-                                  onSplitDay={onSplitDay}
-                                  onCollapseDay={onCollapseDay}
+                                  onRemoveSession={onRemoveSession}
                                 />
                               );
                             })}
+                            
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => onAddSession(day.date)}
+                            >
+                              <Plus className="h-4 w-4 mr-2" />
+                              Add Session
+                            </Button>
                           </div>
                         );
                       })}

@@ -851,24 +851,87 @@ export default function MicrocyclePlanningPage() {
     setExerciseDistribution(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Handle splitting a day into multiple sessions
-  const handleSplitDay = (dayDate: string, numberOfSessions: number) => {
-    setDaySplitStates(prev => ({ ...prev, [dayDate]: numberOfSessions }));
+  // Handle adding a session to a day
+  const handleAddSession = (dayDate: string) => {
+    setDaySplitStates(prev => {
+      const currentSessions = prev[dayDate] || 1;
+      return {
+        ...prev,
+        [dayDate]: currentSessions + 1
+      };
+    });
   };
 
-  // Handle collapsing a day back to single session
-  const handleCollapseDay = (dayDate: string) => {
-    // Consolidate all exercises from multiple sessions into session 0
-    setExerciseDistribution(prev => prev.map(ex => 
-      ex.dayDate === dayDate ? { ...ex, sessionIndex: 0 } : ex
-    ));
+  // Handle removing a session from a day
+  const handleRemoveSession = (dayDate: string, sessionIndex: number) => {
+    const currentSessions = daySplitStates[dayDate] || 1;
     
-    // Reset split state
-    setDaySplitStates(prev => {
-      const newState = { ...prev };
-      delete newState[dayDate];
-      return newState;
+    if (currentSessions <= 1) return; // Can't remove the last session
+    
+    // Move all exercises from sessions > sessionIndex down by one
+    setExerciseDistribution(prev => 
+      prev.map(ex => {
+        if (ex.dayDate === dayDate && ex.sessionIndex > sessionIndex) {
+          return { ...ex, sessionIndex: ex.sessionIndex - 1 };
+        }
+        if (ex.dayDate === dayDate && ex.sessionIndex === sessionIndex) {
+          // Move exercises from removed session to previous session
+          return { ...ex, sessionIndex: Math.max(0, sessionIndex - 1) };
+        }
+        return ex;
+      })
+    );
+    
+    // Move sections similarly
+    setSessionSections(prev =>
+      prev.map(section => {
+        if (section.dayDate === dayDate && section.sessionIndex > sessionIndex) {
+          return { ...section, sessionIndex: section.sessionIndex - 1 };
+        }
+        if (section.dayDate === dayDate && section.sessionIndex === sessionIndex) {
+          return { ...section, sessionIndex: Math.max(0, sessionIndex - 1) };
+        }
+        return section;
+      })
+    );
+    
+    // Update supersets
+    setSupersets(prev => {
+      const newSupersets = { ...prev };
+      if (newSupersets[dayDate]) {
+        const daySupersets = { ...newSupersets[dayDate] };
+        
+        // Move supersets from removed session to previous session
+        if (daySupersets[sessionIndex]) {
+          const targetSession = Math.max(0, sessionIndex - 1);
+          daySupersets[targetSession] = {
+            ...daySupersets[targetSession],
+            ...daySupersets[sessionIndex]
+          };
+          delete daySupersets[sessionIndex];
+        }
+        
+        // Shift down all supersets after the removed session
+        const updatedSupersets: Record<number, Record<string, string[]>> = {};
+        Object.entries(daySupersets).forEach(([idx, value]) => {
+          const numIdx = Number(idx);
+          if (numIdx > sessionIndex) {
+            updatedSupersets[numIdx - 1] = value;
+          } else {
+            updatedSupersets[numIdx] = value;
+          }
+        });
+        
+        newSupersets[dayDate] = updatedSupersets;
+      }
+      return newSupersets;
     });
+    
+    // Update split state
+    setDaySplitStates(prev => ({
+      ...prev,
+      [dayDate]: currentSessions - 1
+    }));
   };
 
   // Delete an exercise from all cells in exerciseSelectionData
@@ -2016,8 +2079,8 @@ export default function MicrocyclePlanningPage() {
           onSectionsChange={setSessionSections}
           onSupersetsChange={setSupersets}
           getIntensityColor={getIntensityColor}
-          onSplitDay={handleSplitDay}
-          onCollapseDay={handleCollapseDay}
+          onAddSession={handleAddSession}
+          onRemoveSession={handleRemoveSession}
         />
       </div>
     );

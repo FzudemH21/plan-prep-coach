@@ -60,8 +60,7 @@ interface SessionColumnViewProps {
   onRenameSection: (sectionId: string, newName: string) => void;
   onDeleteSection: (sectionId: string) => void;
   onToggleSuperset: (dayDate: string, sessionIndex: number, exerciseId1: string, exerciseId2: string) => void;
-  onSplitDay?: (dayDate: string, numberOfSessions: number) => void;
-  onCollapseDay?: (dayDate: string) => void;
+  onRemoveSession?: (dayDate: string, sessionIndex: number) => void;
 }
 
 const intensityColors: Record<string, string> = {
@@ -87,8 +86,7 @@ export function SessionColumnView({
   onRenameSection,
   onDeleteSection,
   onToggleSuperset,
-  onSplitDay,
-  onCollapseDay,
+  onRemoveSession,
 }: SessionColumnViewProps) {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionName, setEditingSectionName] = useState('');
@@ -277,45 +275,18 @@ export function SessionColumnView({
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {sessionIndex > 0 && (
-                  <Badge variant="outline" className="text-xs">
-                    Session {sessionIndex + 1}
-                  </Badge>
-                )}
-                {onSplitDay && onCollapseDay && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                        <MoreVertical className="h-3.5 w-3.5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {totalSessionsOnDay === 1 ? (
-                        <>
-                          <DropdownMenuItem onClick={() => onSplitDay(day.date, 2)}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Split into 2 sessions
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onSplitDay(day.date, 3)}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Split into 3 sessions
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onSplitDay(day.date, 4)}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Split into 4 sessions
-                          </DropdownMenuItem>
-                        </>
-                      ) : (
-                        <DropdownMenuItem 
-                          onClick={() => onCollapseDay(day.date)}
-                          className="text-orange-600"
-                        >
-                          <ChevronUp className="mr-2 h-4 w-4" />
-                          Collapse to 1 session
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                <Badge variant="outline" className="text-xs">
+                  Session {sessionIndex + 1}
+                </Badge>
+                {totalSessionsOnDay > 1 && onRemoveSession && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-destructive hover:text-destructive"
+                    onClick={() => onRemoveSession(day.date, sessionIndex)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 )}
               </div>
             </div>
