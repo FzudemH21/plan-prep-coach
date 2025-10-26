@@ -1864,6 +1864,13 @@ export default function MesocyclePage() {
     methodId: string,
     categoryName: string | undefined
   ): string => {
+    // Helper to check if a parameter is a base parameter (not auto-generated session variant)
+    const isBaseParameter = (paramName: string): boolean => {
+      // Auto-generated parameters have suffixes like _set1, _set2, _set1_set1, etc.
+      // Base parameters are the original user-defined ones
+      return !/_set\d+(?:_set\d+)?$/.test(paramName);
+    };
+    
     // Get full method name with category if applicable
     const fullMethodName = categoryName ? `${methodId}::${categoryName}` : methodId;
     
@@ -1919,6 +1926,9 @@ export default function MesocyclePage() {
           }
           
           Object.entries(params).forEach(([paramName, value]) => {
+            // Only include base parameters, skip auto-generated session variants
+            if (!isBaseParameter(paramName)) return;
+            
             // For session-specific display, store directly
             sessionParameterMap[sessionIndex][paramName] = value;
           });
@@ -1928,6 +1938,9 @@ export default function MesocyclePage() {
       // Also collect for range calculation
       Object.entries(methodParams).forEach(([sessionIdx, params]) => {
         Object.entries(params).forEach(([paramName, value]) => {
+          // Only include base parameters, skip auto-generated session variants
+          if (!isBaseParameter(paramName)) return;
+          
           if (value !== undefined && value !== null && value !== '') {
             if (!parameterMap[paramName]) {
               parameterMap[paramName] = new Set();
@@ -1950,7 +1963,11 @@ export default function MesocyclePage() {
       // Collect all unique parameter names across sessions
       const allParamNames = new Set<string>();
       Object.values(sessionParameterMap).forEach(sessionParams => {
-        Object.keys(sessionParams).forEach(paramName => allParamNames.add(paramName));
+        Object.keys(sessionParams).forEach(paramName => {
+          if (isBaseParameter(paramName)) {
+            allParamNames.add(paramName);
+          }
+        });
       });
       
       if (allParamNames.size === 0) return '';
