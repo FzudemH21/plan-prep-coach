@@ -166,9 +166,19 @@ export function WorkoutExerciseCard({
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-16">Set</TableHead>
-                    {otherParams.map(param => (
-                      <TableHead key={param.name}>{param.name}</TableHead>
-                    ))}
+                    {otherParams.map(param => {
+                      // Check if this parameter has a selected unit stored
+                      const selectedUnit = exercise.parameters[`${param.name}_unit`];
+                      
+                      // Format the header with unit if it exists
+                      const headerText = selectedUnit 
+                        ? `${param.name} [${selectedUnit}]`
+                        : param.name;
+                      
+                      return (
+                        <TableHead key={param.name}>{headerText}</TableHead>
+                      );
+                    })}
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
