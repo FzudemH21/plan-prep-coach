@@ -35,87 +35,72 @@ export function WorkoutArrangementSidebar({
           {sections.map((section, index) => {
                 const isCollapsed = collapsedSections[section.id];
                 return (
-                  <Draggable
-                    key={section.id}
-                    draggableId={section.id}
-                    index={index}
-                  >
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        className={`space-y-1 ${snapshot.isDragging ? 'opacity-50' : ''}`}
-                      >
-                        {/* Section Header */}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => onToggleSectionCollapse(section.id)}
-                          className="w-full justify-start h-8 px-2"
-                        >
-                          <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing flex items-center">
-                            <GripVertical className="h-3 w-3 mr-1" />
-                          </div>
-                          {isCollapsed ? <ChevronRight className="h-3 w-3 mr-1" /> : <ChevronDown className="h-3 w-3 mr-1" />}
-                          <span className="text-xs font-medium truncate">{section.name}</span>
-                          <Badge variant="secondary" className="ml-auto text-xs">
-                            {section.exercises.length}
-                          </Badge>
-                        </Button>
+                  <div key={section.id} className="space-y-1">
+                    {/* Section Header */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onToggleSectionCollapse(section.id)}
+                      className="w-full justify-start h-8 px-2"
+                    >
+                      {isCollapsed ? <ChevronRight className="h-3 w-3 mr-1" /> : <ChevronDown className="h-3 w-3 mr-1" />}
+                      <span className="text-xs font-medium truncate">{section.name}</span>
+                      <Badge variant="secondary" className="ml-auto text-xs">
+                        {section.exercises.length}
+                      </Badge>
+                    </Button>
 
-                        {/* Exercise List */}
-                        {!isCollapsed && (
-                          <Droppable droppableId={section.id} type="EXERCISE">
-                            {(provided, snapshot) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.droppableProps}
-                                className={`pl-4 space-y-1 ${snapshot.isDraggingOver ? 'bg-accent/30 rounded-md' : ''}`}
-                              >
-                                {section.exercises.map((exercise, exerciseIndex) => {
-                                  const supersetLabel = getSupersetLabel(exercise.id);
-                                  return (
-                                    <Draggable
-                                      key={exercise.id}
-                                      draggableId={exercise.id}
-                                      index={exerciseIndex}
+                    {/* Exercise List */}
+                    {!isCollapsed && (
+                      <Droppable droppableId={section.id} type="EXERCISE">
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.droppableProps}
+                            className={`pl-4 space-y-1 ${snapshot.isDraggingOver ? 'bg-accent/30 rounded-md' : ''}`}
+                          >
+                            {section.exercises.map((exercise, exerciseIndex) => {
+                              const supersetLabel = getSupersetLabel(exercise.id);
+                              return (
+                                <Draggable
+                                  key={exercise.id}
+                                  draggableId={exercise.id}
+                                  index={exerciseIndex}
+                                >
+                                  {(provided, snapshot) => (
+                                    <Button
+                                      ref={provided.innerRef}
+                                      {...provided.draggableProps}
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => onScrollToExercise(exercise.id)}
+                                      className={`w-full justify-start h-7 px-2 text-xs hover:bg-accent ${
+                                        snapshot.isDragging ? 'opacity-50 shadow-lg' : ''
+                                      }`}
                                     >
-                                      {(provided, snapshot) => (
-                                        <Button
-                                          ref={provided.innerRef}
-                                          {...provided.draggableProps}
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => onScrollToExercise(exercise.id)}
-                                          className={`w-full justify-start h-7 px-2 text-xs hover:bg-accent ${
-                                            snapshot.isDragging ? 'opacity-50 shadow-lg' : ''
-                                          }`}
-                                        >
-                                          <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing flex items-center">
-                                            <GripVertical className="h-3 w-3 mr-1 text-muted-foreground" />
-                                          </div>
-                                          <span className="truncate flex-1 text-left">
-                                            {exercise.exerciseName}
-                                          </span>
-                                          {supersetLabel && (
-                                            <Badge variant="outline" className="ml-1 h-4 px-1 text-xs">
-                                              <Link2 className="h-2 w-2 mr-0.5" />
-                                              {supersetLabel}
-                                            </Badge>
-                                          )}
-                                        </Button>
+                                      <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing flex items-center">
+                                        <GripVertical className="h-3 w-3 mr-1 text-muted-foreground" />
+                                      </div>
+                                      <span className="truncate flex-1 text-left">
+                                        {exercise.exerciseName}
+                                      </span>
+                                      {supersetLabel && (
+                                        <Badge variant="outline" className="ml-1 h-4 px-1 text-xs">
+                                          <Link2 className="h-2 w-2 mr-0.5" />
+                                          {supersetLabel}
+                                        </Badge>
                                       )}
-                                    </Draggable>
-                  );
-                })}
-                {provided.placeholder}
-              </div>
-            )}
-          </Droppable>
-        )}
-                      </div>
+                                    </Button>
+                                  )}
+                                </Draggable>
+                              );
+                            })}
+                            {provided.placeholder}
+                          </div>
+                        )}
+                      </Droppable>
                     )}
-                  </Draggable>
+                  </div>
                 );
               })}
         </div>
