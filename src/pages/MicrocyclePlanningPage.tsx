@@ -264,6 +264,16 @@ export default function MicrocyclePlanningPage() {
     localStorage.setItem('daySplitStates', JSON.stringify(daySplitStates));
   }, [daySplitStates]);
 
+  // Sync day split states to trainingDays
+  useEffect(() => {
+    setTrainingDays(prev => 
+      prev.map(day => ({
+        ...day,
+        sessions: daySplitStates[day.date] || 1
+      }))
+    );
+  }, [daySplitStates]);
+
   // Enrich trainingDays with test/event names from macrocycleData
   useEffect(() => {
     if (!macrocycleData || trainingDays.length === 0) return;
@@ -2006,6 +2016,8 @@ export default function MicrocyclePlanningPage() {
           onSectionsChange={setSessionSections}
           onSupersetsChange={setSupersets}
           getIntensityColor={getIntensityColor}
+          onSplitDay={handleSplitDay}
+          onCollapseDay={handleCollapseDay}
         />
       </div>
     );

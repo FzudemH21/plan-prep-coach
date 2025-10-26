@@ -21,7 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, X } from 'lucide-react';
+import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, X, ChevronUp } from 'lucide-react';
 import { TrainingDay } from '@/types/daily-intensity';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -54,11 +54,14 @@ interface SessionColumnViewProps {
   exercises: ExerciseDistribution[];
   sections: SessionSection[];
   supersets: Record<string, string[]>;
+  totalSessionsOnDay: number;
   onDeleteExercise: (exerciseId: string) => void;
   onAddSection: () => void;
   onRenameSection: (sectionId: string, newName: string) => void;
   onDeleteSection: (sectionId: string) => void;
   onToggleSuperset: (dayDate: string, sessionIndex: number, exerciseId1: string, exerciseId2: string) => void;
+  onSplitDay?: (dayDate: string, numberOfSessions: number) => void;
+  onCollapseDay?: (dayDate: string) => void;
 }
 
 const intensityColors: Record<string, string> = {
@@ -78,11 +81,14 @@ export function SessionColumnView({
   exercises,
   sections,
   supersets,
+  totalSessionsOnDay,
   onDeleteExercise,
   onAddSection,
   onRenameSection,
   onDeleteSection,
   onToggleSuperset,
+  onSplitDay,
+  onCollapseDay,
 }: SessionColumnViewProps) {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionName, setEditingSectionName] = useState('');
@@ -270,11 +276,48 @@ export function SessionColumnView({
                   {format(dateObj, 'MMM d, yyyy')}
                 </div>
               </div>
-              {sessionIndex > 0 && (
-                <Badge variant="outline" className="text-xs">
-                  Session {sessionIndex + 1}
-                </Badge>
-              )}
+              <div className="flex items-center gap-2">
+                {sessionIndex > 0 && (
+                  <Badge variant="outline" className="text-xs">
+                    Session {sessionIndex + 1}
+                  </Badge>
+                )}
+                {onSplitDay && onCollapseDay && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                        <MoreVertical className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {totalSessionsOnDay === 1 ? (
+                        <>
+                          <DropdownMenuItem onClick={() => onSplitDay(day.date, 2)}>
+                            <Plus className="mr-2 h-4 w-4" />
+                            Split into 2 sessions
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onSplitDay(day.date, 3)}>
+                            <Plus className="mr-2 h-4 w-4" />
+                            Split into 3 sessions
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onSplitDay(day.date, 4)}>
+                            <Plus className="mr-2 h-4 w-4" />
+                            Split into 4 sessions
+                          </DropdownMenuItem>
+                        </>
+                      ) : (
+                        <DropdownMenuItem 
+                          onClick={() => onCollapseDay(day.date)}
+                          className="text-orange-600"
+                        >
+                          <ChevronUp className="mr-2 h-4 w-4" />
+                          Collapse to 1 session
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
             </div>
             
             {/* Intensity Badge - Larger and More Prominent */}

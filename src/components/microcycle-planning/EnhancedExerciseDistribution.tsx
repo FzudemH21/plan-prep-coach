@@ -56,6 +56,8 @@ interface EnhancedExerciseDistributionProps {
   onSectionsChange: (sections: SessionSection[]) => void;
   onSupersetsChange: (supersets: SupersetMapping) => void;
   getIntensityColor: (intensity: IntensityLevel) => string;
+  onSplitDay: (dayDate: string, numberOfSessions: number) => void;
+  onCollapseDay: (dayDate: string) => void;
 }
 
 export function EnhancedExerciseDistribution({
@@ -70,6 +72,8 @@ export function EnhancedExerciseDistribution({
   onSectionsChange,
   onSupersetsChange,
   getIntensityColor,
+  onSplitDay,
+  onCollapseDay,
 }: EnhancedExerciseDistributionProps) {
   const { toast } = useToast();
   const [selectedMicrocycleId, setSelectedMicrocycleId] = useState<string | null>(null);
@@ -1083,11 +1087,14 @@ export function EnhancedExerciseDistribution({
                                   exercises={sessionExercises}
                                   sections={daySections}
                                   supersets={daySupersets}
+                                  totalSessionsOnDay={sessionsCount}
                                   onDeleteExercise={handleDeleteExercise}
                                   onAddSection={() => handleAddSection(day.date, sessionIndex)}
                                   onRenameSection={handleRenameSection}
                                   onDeleteSection={handleDeleteSection}
                                   onToggleSuperset={handleToggleSuperset}
+                                  onSplitDay={onSplitDay}
+                                  onCollapseDay={onCollapseDay}
                                 />
                               );
                             })}
