@@ -1996,7 +1996,8 @@ export default function MicrocyclePlanningPage() {
       <div className="h-[calc(100vh-200px)]">
         <EnhancedExerciseDistribution
           mesocycle={currentMesocycle}
-          trainingDays={currentMesocycleDays}
+          allMesocycles={mesocycles}
+          trainingDays={trainingDays}
           exerciseSelectionData={exerciseSelectionData}
           exerciseDistribution={exerciseDistribution}
           sessionSections={sessionSections}

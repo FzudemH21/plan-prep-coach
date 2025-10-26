@@ -46,6 +46,7 @@ interface SupersetMapping {
 
 interface EnhancedExerciseDistributionProps {
   mesocycle: ExtendedMesocycle;
+  allMesocycles: ExtendedMesocycle[];
   trainingDays: TrainingDay[];
   exerciseSelectionData: Record<string, CellData>;
   exerciseDistribution: ExerciseDistribution[];
@@ -59,6 +60,7 @@ interface EnhancedExerciseDistributionProps {
 
 export function EnhancedExerciseDistribution({
   mesocycle,
+  allMesocycles,
   trainingDays,
   exerciseSelectionData,
   exerciseDistribution,
@@ -72,6 +74,7 @@ export function EnhancedExerciseDistribution({
   const { toast } = useToast();
   const [selectedMicrocycleId, setSelectedMicrocycleId] = useState<string | null>(null);
   const [copyingMicrocycleId, setCopyingMicrocycleId] = useState<string | null>(null);
+  const [copyingMesocycle, setCopyingMesocycle] = useState(false);
 
   // Filter training days for current mesocycle and group by week
   const currentMesocycleDays = useMemo(() => {
@@ -564,26 +567,67 @@ export function EnhancedExerciseDistribution({
     setCopyingMicrocycleId(targetMicrocycleId);
     
     try {
-      // Find target microcycle index
-      const targetIndex = mesocycle.microcycles.findIndex(m => m.id === targetMicrocycleId);
+      // Find the target mesocycle and microcycle across all mesocycles
+      let targetMesoIndex = -1;
+      let targetMicroIndex = -1;
+      let targetMesocycle: ExtendedMesocycle | null = null;
+      let targetMicrocycle: typeof mesocycle.microcycles[0] | null = null;
       
-      // First microcycle has no previous one
-      if (targetIndex <= 0) {
+      for (let i = 0; i < allMesocycles.length; i++) {
+        const microIndex = allMesocycles[i].microcycles.findIndex(m => m.id === targetMicrocycleId);
+        if (microIndex !== -1) {
+          targetMesoIndex = i;
+          targetMicroIndex = microIndex;
+          targetMesocycle = allMesocycles[i];
+          targetMicrocycle = allMesocycles[i].microcycles[microIndex];
+          break;
+        }
+      }
+      
+      if (!targetMesocycle || !targetMicrocycle) {
+        toast({ 
+          title: 'Error', 
+          description: 'Target microcycle not found', 
+          variant: 'destructive' 
+        });
+        return;
+      }
+      
+      // Find the source (previous) microcycle
+      let sourceMesocycle: ExtendedMesocycle | null = null;
+      let sourceMicrocycle: typeof mesocycle.microcycles[0] | null = null;
+      
+      if (targetMicroIndex > 0) {
+        // Previous microcycle in same mesocycle
+        sourceMesocycle = targetMesocycle;
+        sourceMicrocycle = targetMesocycle.microcycles[targetMicroIndex - 1];
+      } else if (targetMesoIndex > 0) {
+        // First microcycle of mesocycle - get last microcycle of previous mesocycle
+        sourceMesocycle = allMesocycles[targetMesoIndex - 1];
+        sourceMicrocycle = sourceMesocycle.microcycles[sourceMesocycle.microcycles.length - 1];
+      } else {
+        // Very first microcycle of entire plan
         toast({ 
           title: 'Cannot copy', 
-          description: 'This is the first microcycle',
+          description: 'This is the first microcycle of the plan',
           variant: 'destructive'
         });
         return;
       }
       
-      // Get source (previous) microcycle
-      const sourceMicrocycle = mesocycle.microcycles[targetIndex - 1];
-      const targetMicrocycle = mesocycle.microcycles[targetIndex];
+      // DURATION VALIDATION
+      if (sourceMicrocycle.duration !== targetMicrocycle.duration) {
+        toast({
+          title: 'Cannot copy',
+          description: `Microcycle durations don't match (source: ${sourceMicrocycle.duration} days, target: ${targetMicrocycle.duration} days)`,
+          variant: 'destructive'
+        });
+        return;
+      }
       
-      // Get days for both microcycles
-      const sourceDays = daysByMicrocycle.get(sourceMicrocycle.id)?.days || [];
-      const targetDays = daysByMicrocycle.get(targetMicrocycleId)?.days || [];
+      // Get training days for both microcycles (may be from different mesocycles)
+      const sourceDays = trainingDays.filter(day => day.microcycleId === sourceMicrocycle!.id);
+      const targetDays = trainingDays.filter(day => day.microcycleId === targetMicrocycle!.id);
       
       if (sourceDays.length === 0) {
         toast({ 
@@ -708,6 +752,182 @@ export function EnhancedExerciseDistribution({
     }
   };
 
+  const handleCopyFromPreviousMesocycle = () => {
+    setCopyingMesocycle(true);
+    
+    try {
+      // Find current mesocycle index
+      const currentMesoIndex = allMesocycles.findIndex(m => m.id === mesocycle.id);
+      
+      if (currentMesoIndex <= 0) {
+        toast({
+          title: 'Cannot copy',
+          description: 'This is the first mesocycle',
+          variant: 'destructive'
+        });
+        return;
+      }
+      
+      const sourceMesocycle = allMesocycles[currentMesoIndex - 1];
+      
+      // STRUCTURE VALIDATION: Check if microcycle counts match
+      if (sourceMesocycle.microcycles.length !== mesocycle.microcycles.length) {
+        toast({
+          title: 'Cannot copy',
+          description: `Microcycle count doesn't match (source: ${sourceMesocycle.microcycles.length}, target: ${mesocycle.microcycles.length})`,
+          variant: 'destructive'
+        });
+        return;
+      }
+      
+      // Check each microcycle duration
+      const durationMismatch = mesocycle.microcycles.some((targetMicro, index) => {
+        const sourceMicro = sourceMesocycle.microcycles[index];
+        return sourceMicro.duration !== targetMicro.duration;
+      });
+      
+      if (durationMismatch) {
+        const sourceStructure = sourceMesocycle.microcycles.map(m => m.duration).join(', ');
+        const targetStructure = mesocycle.microcycles.map(m => m.duration).join(', ');
+        toast({
+          title: 'Cannot copy',
+          description: `Microcycle structure doesn't match:\nSource: [${sourceStructure}] days\nTarget: [${targetStructure}] days`,
+          variant: 'destructive'
+        });
+        return;
+      }
+      
+      // All validations passed - proceed with copy
+      const newExercises: ExerciseDistribution[] = [];
+      const newSections: SessionSection[] = [];
+      const newSupersets: SupersetMapping = { ...supersets };
+      const oldToNewExerciseIds: Record<string, string> = {};
+      
+      // Loop through each microcycle pair
+      mesocycle.microcycles.forEach((targetMicro, microIndex) => {
+        const sourceMicro = sourceMesocycle.microcycles[microIndex];
+        
+        // Get days for both microcycles
+        const sourceDays = trainingDays.filter(d => d.microcycleId === sourceMicro.id);
+        const targetDays = trainingDays.filter(d => d.microcycleId === targetMicro.id);
+        
+        // Day mapping
+        const minDays = Math.min(sourceDays.length, targetDays.length);
+        const dayMapping: Record<string, string> = {};
+        
+        for (let i = 0; i < minDays; i++) {
+          dayMapping[sourceDays[i].date] = targetDays[i].date;
+        }
+        
+        // Copy exercises for this microcycle pair
+        sourceDays.forEach((sourceDay, dayIndex) => {
+          if (dayIndex >= minDays) return;
+          
+          const targetDate = dayMapping[sourceDay.date];
+          const sourceDateExercises = exerciseDistribution.filter(
+            ex => ex.dayDate === sourceDay.date
+          );
+          
+          sourceDateExercises.forEach(exercise => {
+            const newId = `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            oldToNewExerciseIds[exercise.id] = newId;
+            
+            newExercises.push({
+              ...exercise,
+              id: newId,
+              dayDate: targetDate,
+            });
+          });
+        });
+        
+        // Copy sections for this microcycle pair
+        sourceDays.forEach((sourceDay, dayIndex) => {
+          if (dayIndex >= minDays) return;
+          
+          const targetDate = dayMapping[sourceDay.date];
+          const sourceDateSections = sessionSections.filter(
+            s => s.dayDate === sourceDay.date
+          );
+          
+          sourceDateSections.forEach(section => {
+            newSections.push({
+              ...section,
+              id: `section-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              dayDate: targetDate,
+            });
+          });
+        });
+        
+        // Copy supersets for this microcycle pair
+        sourceDays.forEach((sourceDay, dayIndex) => {
+          if (dayIndex >= minDays) return;
+          
+          const targetDate = dayMapping[sourceDay.date];
+          const sourceDateSupersets = supersets[sourceDay.date];
+          
+          if (sourceDateSupersets) {
+            newSupersets[targetDate] = {};
+            
+            Object.entries(sourceDateSupersets).forEach(([sessionIndex, sessionSupersets]) => {
+              newSupersets[targetDate][Number(sessionIndex)] = {};
+              
+              Object.entries(sessionSupersets).forEach(([supersetId, exerciseIds]) => {
+                const newExerciseIds = exerciseIds
+                  .map(oldId => oldToNewExerciseIds[oldId])
+                  .filter(id => id !== undefined);
+                
+                if (newExerciseIds.length > 0) {
+                  newSupersets[targetDate][Number(sessionIndex)][supersetId] = newExerciseIds;
+                }
+              });
+            });
+          }
+        });
+      });
+      
+      // Clear target mesocycle's existing data
+      const currentMesocycleDays = trainingDays.filter(day => {
+        const mesocycleStartDate = typeof mesocycle.startDate === 'string' 
+          ? (mesocycle.startDate as string).split('T')[0] 
+          : format(mesocycle.startDate as Date, 'yyyy-MM-dd');
+        const mesocycleEndDate = typeof mesocycle.endDate === 'string'
+          ? (mesocycle.endDate as string).split('T')[0]
+          : format(mesocycle.endDate as Date, 'yyyy-MM-dd');
+        return day.date >= mesocycleStartDate && day.date <= mesocycleEndDate;
+      });
+      
+      const targetDates = currentMesocycleDays.map(d => d.date);
+      const filteredExercises = exerciseDistribution.filter(
+        ex => !targetDates.includes(ex.dayDate)
+      );
+      const filteredSections = sessionSections.filter(
+        s => !targetDates.includes(s.dayDate)
+      );
+      
+      targetDates.forEach(date => {
+        delete newSupersets[date];
+      });
+      
+      // Apply copied data
+      onDistributionChange([...filteredExercises, ...newExercises]);
+      onSectionsChange([...filteredSections, ...newSections]);
+      onSupersetsChange(newSupersets);
+      
+      toast({
+        title: 'Mesocycle copied successfully',
+        description: `Copied ${newExercises.length} exercises from ${sourceMesocycle.name} to ${mesocycle.name}`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Copy failed',
+        description: 'An error occurred while copying the mesocycle',
+        variant: 'destructive'
+      });
+    } finally {
+      setCopyingMesocycle(false);
+    }
+  };
+
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
       <ResizablePanelGroup direction="horizontal" className="h-full w-full">
@@ -727,9 +947,35 @@ export function EnhancedExerciseDistribution({
               
               {/* Mesocycle Header */}
               <div className={cn("mb-4 border-b pb-3", getIntensityColor(mesocycle.intensity))}>
-                <h2 className="text-xl font-bold text-center">
-                  {mesocycle.name}
-                </h2>
+                <div className="flex items-center justify-center gap-3">
+                  <h2 className="text-xl font-bold">
+                    {mesocycle.name}
+                  </h2>
+                  {(() => {
+                    const currentMesoIndex = allMesocycles.findIndex(m => m.id === mesocycle.id);
+                    const isFirstMesocycle = currentMesoIndex === 0;
+                    
+                    if (!isFirstMesocycle) {
+                      return (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0"
+                          disabled={copyingMesocycle}
+                          title={`Copy entire setup from ${allMesocycles[currentMesoIndex - 1].name}`}
+                          onClick={handleCopyFromPreviousMesocycle}
+                        >
+                          {copyingMesocycle ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Copy className="h-4 w-4" />
+                          )}
+                        </Button>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
                 <p className="text-sm text-center mt-1">
                   {(() => {
                     const mesocycleStartDate = typeof mesocycle.startDate === 'string' 
@@ -757,7 +1003,11 @@ export function EnhancedExerciseDistribution({
                     return total + dayWidth + gapAfterDay;
                   }, 0);
                   
-                  const isFirstMicrocycle = microIndex === 0;
+                  // Check if this is the very first microcycle across all mesocycles
+                  const isVeryFirstMicrocycle = (() => {
+                    const currentMesoIndex = allMesocycles.findIndex(m => m.id === mesocycle.id);
+                    return currentMesoIndex === 0 && microIndex === 0;
+                  })();
                   
                   return (
             <div 
@@ -770,13 +1020,23 @@ export function EnhancedExerciseDistribution({
             >
               <div className="flex items-center justify-center gap-2">
                 <span>{microcycle.name}</span>
-                {!isFirstMicrocycle && (
+                {!isVeryFirstMicrocycle && (
                   <Button
                     size="sm"
                     variant="ghost"
                     className="h-6 w-6 p-0"
                     disabled={copyingMicrocycleId === microId}
-                    title={`Copy setup from ${mesocycle.microcycles[microIndex - 1].name}`}
+                    title={(() => {
+                      const currentMesoIndex = allMesocycles.findIndex(m => m.id === mesocycle.id);
+                      if (microIndex > 0) {
+                        return `Copy setup from ${mesocycle.microcycles[microIndex - 1].name}`;
+                      } else if (currentMesoIndex > 0) {
+                        const prevMeso = allMesocycles[currentMesoIndex - 1];
+                        const prevMicro = prevMeso.microcycles[prevMeso.microcycles.length - 1];
+                        return `Copy setup from ${prevMicro.name} (${prevMeso.name})`;
+                      }
+                      return 'Copy setup from previous microcycle';
+                    })()}
                     onClick={() => handleCopyFromPreviousMicrocycle(microId)}
                   >
                     {copyingMicrocycleId === microId ? (
