@@ -550,7 +550,7 @@ export function WorkoutSessionSheet({
               {/* Read-only Day Intensity Display */}
               {getIntensityColor && (
                 <div className="flex items-center gap-2 mt-2">
-                  <span className="text-xs text-muted-foreground font-medium">
+                  <span className="text-sm text-muted-foreground">
                     Day intensity:
                   </span>
                   <div 
