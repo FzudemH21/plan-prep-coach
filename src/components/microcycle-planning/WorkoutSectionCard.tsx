@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronRight, Plus, GripVertical } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, GripVertical, MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
 import { WorkoutSection, WorkoutExercise } from '@/types/workout';
 import { WorkoutExerciseCard } from './WorkoutExerciseCard';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
@@ -15,6 +17,8 @@ interface WorkoutSectionCardProps {
   onDuplicateExercise: (exerciseId: string) => void;
   onDeleteExercise: (exerciseId: string) => void;
   onAddExercise: () => void;
+  onRenameSection: (newName: string) => void;
+  onDeleteSection: () => void;
   getSupersetLabel: (exerciseId: string) => string | undefined;
   sectionDragHandleProps?: any;
 }
@@ -29,9 +33,26 @@ export function WorkoutSectionCard({
   onDuplicateExercise,
   onDeleteExercise,
   onAddExercise,
+  onRenameSection,
+  onDeleteSection,
   getSupersetLabel,
   sectionDragHandleProps
 }: WorkoutSectionCardProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedName, setEditedName] = useState(section.name);
+
+  const handleSaveRename = () => {
+    if (editedName.trim() && editedName !== section.name) {
+      onRenameSection(editedName.trim());
+    }
+    setIsEditing(false);
+  };
+
+  const handleCancelRename = () => {
+    setEditedName(section.name);
+    setIsEditing(false);
+  };
+
   return (
     <div className="border rounded-lg bg-card">
       {/* Section Header */}
@@ -47,10 +68,53 @@ export function WorkoutSectionCard({
         >
           {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </Button>
-        <h3 className="font-semibold text-sm flex-1">{section.name}</h3>
+        
+        {/* Editable Section Name */}
+        {isEditing ? (
+          <Input
+            value={editedName}
+            onChange={(e) => setEditedName(e.target.value)}
+            onBlur={handleSaveRename}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSaveRename();
+              if (e.key === 'Escape') handleCancelRename();
+            }}
+            autoFocus
+            className="h-7 text-sm font-semibold flex-1"
+          />
+        ) : (
+          <h3 className="font-semibold text-sm flex-1">{section.name}</h3>
+        )}
+        
         <span className="text-xs text-muted-foreground">
           {section.exercises.length} {section.exercises.length === 1 ? 'exercise' : 'exercises'}
         </span>
+        
+        {/* Section Menu */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setIsEditing(true)}>
+              <Pencil className="h-4 w-4 mr-2" />
+              Rename Section
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={onDeleteSection}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Section
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Section Content */}

@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -104,7 +105,20 @@ export function WorkoutSessionSheet({
   const [sessionIntensityPopoverOpen, setSessionIntensityPopoverOpen] = useState(false);
   const [isTestEventDialogOpen, setIsTestEventDialogOpen] = useState(false);
   const [testsEventsExpanded, setTestsEventsExpanded] = useState(true);
+  const [sectionToDelete, setSectionToDelete] = useState<string | null>(null);
   const [workoutSections, setWorkoutSections] = useState<WorkoutSection[]>(() => {
+    // Try to load from localStorage first
+    const sectionsKey = `workoutSections_${mesocycleId}_${dayDate}_${sessionIndex}`;
+    const storedSections = localStorage.getItem(sectionsKey);
+    
+    if (storedSections) {
+      try {
+        return JSON.parse(storedSections);
+      } catch {
+        // Fall through to default initialization
+      }
+    }
+    
     // Initialize sections from exercises
     const sectionsMap = new Map<string, WorkoutExercise[]>();
     
@@ -385,6 +399,10 @@ export function WorkoutSessionSheet({
     const intensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`;
     localStorage.setItem(intensityKey, sessionIntensity);
 
+    // Save workout sections structure
+    const sectionsKey = `workoutSections_${mesocycleId}_${dayDate}_${sessionIndex}`;
+    localStorage.setItem(sectionsKey, JSON.stringify(workoutSections));
+
     // If single session day, sync day intensity
     if (isSingleSessionDay && onIntensityChange) {
       onIntensityChange(dayDate, sessionIntensity);
@@ -556,6 +574,57 @@ export function WorkoutSessionSheet({
   const handleScrollToExercise = (exerciseId: string) => {
     const element = document.getElementById(`exercise-${exerciseId}`);
     element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  const handleAddSection = () => {
+    const newSectionNumber = workoutSections.length + 1;
+    const newSection: WorkoutSection = {
+      id: `section-${Date.now()}`,
+      name: `Section ${newSectionNumber}`,
+      order: workoutSections.length,
+      exercises: []
+    };
+    
+    setWorkoutSections([...workoutSections, newSection]);
+    
+    toast({
+      title: "Section added",
+      description: "New section created successfully",
+    });
+  };
+
+  const handleRenameSection = (sectionId: string, newName: string) => {
+    setWorkoutSections(sections =>
+      sections.map(s => s.id === sectionId ? { ...s, name: newName } : s)
+    );
+  };
+
+  const handleDeleteSection = (sectionId: string) => {
+    const section = workoutSections.find(s => s.id === sectionId);
+    if (!section) return;
+    
+    // If section has exercises, show confirmation
+    if (section.exercises.length > 0) {
+      setSectionToDelete(sectionId);
+    } else {
+      // Delete empty section immediately
+      confirmDeleteSection(sectionId);
+    }
+  };
+
+  const confirmDeleteSection = (sectionId: string) => {
+    setWorkoutSections(prev =>
+      prev
+        .filter(s => s.id !== sectionId)
+        .map((s, idx) => ({ ...s, order: idx }))
+    );
+    
+    setSectionToDelete(null);
+    
+    toast({
+      title: "Section deleted",
+      description: "Section removed successfully",
+    });
   };
 
   return (
@@ -935,34 +1004,47 @@ export function WorkoutSessionSheet({
                           <Draggable key={section.id} draggableId={section.id} index={index}>
                             {(provided) => (
                               <div ref={provided.innerRef} {...provided.draggableProps}>
-                                <WorkoutSectionCard
-                                  section={section}
-                                  isCollapsed={collapsedSections[section.id] || false}
-                                  onToggleCollapse={() =>
-                                    setCollapsedSections(prev => ({
-                                      ...prev,
-                                      [section.id]: !prev[section.id]
-                                    }))
-                                  }
-                                  onParameterChange={handleParameterChange}
-                                  onUnitChange={handleUnitChange}
-                                  onLinkSuperset={handleLinkSuperset}
-                                  onDuplicateExercise={handleDuplicateExercise}
-                                  onDeleteExercise={handleDeleteExercise}
-                                  onAddExercise={() => handleAddExercise(section.id)}
-                                  getSupersetLabel={getSupersetLabel}
-                                  sectionDragHandleProps={provided.dragHandleProps}
-                                />
+                                 <WorkoutSectionCard
+                                   section={section}
+                                   isCollapsed={collapsedSections[section.id] || false}
+                                   onToggleCollapse={() =>
+                                     setCollapsedSections(prev => ({
+                                       ...prev,
+                                       [section.id]: !prev[section.id]
+                                     }))
+                                   }
+                                   onParameterChange={handleParameterChange}
+                                   onUnitChange={handleUnitChange}
+                                   onLinkSuperset={handleLinkSuperset}
+                                   onDuplicateExercise={handleDuplicateExercise}
+                                   onDeleteExercise={handleDeleteExercise}
+                                   onAddExercise={() => handleAddExercise(section.id)}
+                                   onRenameSection={(newName) => handleRenameSection(section.id, newName)}
+                                   onDeleteSection={() => handleDeleteSection(section.id)}
+                                   getSupersetLabel={getSupersetLabel}
+                                   sectionDragHandleProps={provided.dragHandleProps}
+                                 />
                               </div>
                             )}
                           </Draggable>
-                        ))}
-                        {provided.placeholder}
-                      </div>
-                    )}
-                  </Droppable>
-                </div>
-              </ScrollArea>
+                         ))}
+                         {provided.placeholder}
+                       </div>
+                     )}
+                   </Droppable>
+                   
+                   {/* Add New Section Button */}
+                   <Button
+                     variant="outline"
+                     size="lg"
+                     onClick={handleAddSection}
+                     className="w-full"
+                   >
+                     <Plus className="h-4 w-4 mr-2" />
+                     Add New Section
+                   </Button>
+                 </div>
+               </ScrollArea>
             </DragDropContext>
           </div>
 
@@ -1043,6 +1125,29 @@ export function WorkoutSessionSheet({
           }
         }}
       />
+
+      {/* Delete Section Confirmation Dialog */}
+      <AlertDialog open={!!sectionToDelete} onOpenChange={() => setSectionToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Section?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This section contains{' '}
+              {workoutSections.find(s => s.id === sectionToDelete)?.exercises.length || 0}{' '}
+              exercise(s). Deleting this section will remove all exercises in it. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => sectionToDelete && confirmDeleteSection(sectionToDelete)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Section
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
