@@ -70,17 +70,6 @@ interface SessionColumnViewProps {
   mesocycleId?: string;
 }
 
-const intensityColors: Record<string, string> = {
-  'off': 'bg-gray-200 text-gray-800',
-  'deload': 'bg-green-200 text-green-800',
-  'easy': 'bg-blue-200 text-blue-800',
-  'easy-moderate': 'bg-cyan-200 text-cyan-800',
-  'moderate': 'bg-yellow-200 text-yellow-800',
-  'moderate-hard': 'bg-orange-200 text-orange-800',
-  'hard': 'bg-red-200 text-red-800',
-  'extremely-hard': 'bg-purple-200 text-purple-800',
-};
-
 export function SessionColumnView({
   day,
   sessionIndex,
@@ -195,7 +184,7 @@ export function SessionColumnView({
   const sessionIntensityKey = mesocycleId ? `sessionIntensity_${mesocycleId}_${day.date}_${sessionIndex}` : '';
   const storedSessionIntensity = sessionIntensityKey ? localStorage.getItem(sessionIntensityKey) : null;
   const displayIntensity = (storedSessionIntensity || day.intensity || 'moderate') as IntensityLevel;
-  const intensityClass = intensityColors[displayIntensity] || 'bg-gray-200';
+  const intensityClass = getIntensityColor ? getIntensityColor(displayIntensity) : 'bg-muted text-muted-foreground';
 
   // Superset color scheme for better visual grouping
   const getSupersetColor = (supersetId: string): string => {
@@ -408,7 +397,7 @@ export function SessionColumnView({
                           <span
                             className={cn(
                               "inline-block w-3 h-3 rounded-full mr-2",
-                              intensityColors[level]
+                              getIntensityColor(level)
                             )}
                           />
                           {level.replace('-', ' ')}
