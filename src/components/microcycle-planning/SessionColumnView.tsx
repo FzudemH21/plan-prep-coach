@@ -293,7 +293,7 @@ export function SessionColumnView({
           <div className="space-y-2">
             {/* Session Name and Actions */}
             <div className="flex items-center justify-between gap-2">
-              {/* Editable Session Name */}
+              {/* Left side: Editable Session Name */}
               <div className="flex items-center gap-1 flex-1">
                 {isEditingSessionName ? (
                   <>
@@ -329,27 +329,41 @@ export function SessionColumnView({
                     </Button>
                   </>
                 ) : (
-                  <button
-                    className="text-sm font-medium hover:text-foreground flex items-center gap-1"
+                  <h3 
+                    className="text-sm font-medium cursor-pointer hover:text-primary transition-colors"
                     onClick={handleStartEditingSessionName}
                   >
-                    <span>{sessionName}</span>
-                    <Pencil className="h-3 w-3" />
-                  </button>
+                    {sessionName}
+                  </h3>
                 )}
               </div>
               
-              {/* Remove Session Button */}
-              {onRemoveSession && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 text-destructive hover:bg-accent"
-                  onClick={() => onRemoveSession(day.date, sessionIndex)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              )}
+              {/* Right side: Action Buttons */}
+              <div className="flex items-center gap-1">
+                {/* Edit Button (Pencil) */}
+                {!isEditingSessionName && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 w-6 p-0 hover:bg-accent"
+                    onClick={handleStartEditingSessionName}
+                  >
+                    <Pencil className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                  </Button>
+                )}
+                
+                {/* Delete Session Button (Trash) */}
+                {onRemoveSession && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 text-destructive hover:bg-accent"
+                    onClick={() => onRemoveSession(day.date, sessionIndex)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
             </div>
             
             {/* Intensity Badge - Editable */}
