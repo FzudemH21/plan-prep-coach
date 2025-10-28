@@ -153,6 +153,12 @@ export function SessionColumnView({
     return { unsectioned, sectioned, sortedSections };
   }, [exercises, sections]);
 
+  // Safety check for undefined date
+  if (!day || !day.date) {
+    console.error('SessionColumnView: day or day.date is undefined', { day, sessionIndex });
+    return null;
+  }
+  
   const dateObj = parseISO(day.date);
   const dayName = format(dateObj, 'EEEE');
   const dateStr = format(dateObj, 'MMM d');

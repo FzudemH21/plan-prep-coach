@@ -83,6 +83,12 @@ export function EnhancedExerciseDistribution({
   // Filter training days for current mesocycle and group by week
   const currentMesocycleDays = useMemo(() => {
     return trainingDays.filter(day => {
+      // Safety check for invalid day
+      if (!day || !day.date) {
+        console.error('EnhancedExerciseDistribution: Invalid day in trainingDays', day);
+        return false;
+      }
+      
       // Handle both Date objects and string dates
       const mesocycleStartDate = typeof mesocycle.startDate === 'string' 
         ? (mesocycle.startDate as string).split('T')[0] 
@@ -1066,6 +1072,13 @@ export function EnhancedExerciseDistribution({
                     <div className="flex gap-4">
                       {days.map((day) => {
                         const sessionsCount = day.sessions || 1;
+                        
+                        // Safety check
+                        if (!day || !day.date) {
+                          console.error('EnhancedExerciseDistribution: Invalid day object', day);
+                          return null;
+                        }
+                        
                         return (
                           <div key={day.date} className="flex flex-col gap-2">
                             {Array.from({ length: sessionsCount }).map((_, sessionIndex) => {
