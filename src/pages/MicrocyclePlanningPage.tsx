@@ -321,7 +321,7 @@ export default function MicrocyclePlanningPage() {
     setTrainingDays(prev => 
       prev.map(day => ({
         ...day,
-        sessions: daySplitStates[day.date] || 1
+        sessions: daySplitStates[day.date] ?? 1
       }))
     );
   }, [daySplitStates]);
@@ -906,7 +906,7 @@ export default function MicrocyclePlanningPage() {
   // Handle adding a session to a day
   const handleAddSession = (dayDate: string) => {
     setDaySplitStates(prev => {
-      const currentSessions = prev[dayDate] || 1;
+      const currentSessions = prev[dayDate] ?? 1;
       return {
         ...prev,
         [dayDate]: currentSessions + 1
@@ -916,7 +916,7 @@ export default function MicrocyclePlanningPage() {
 
   // Handle removing a session from a day
   const handleRemoveSession = (dayDate: string, sessionIndex: number) => {
-    const currentSessions = daySplitStates[dayDate] || 1;
+    const currentSessions = daySplitStates[dayDate] ?? 1;
     
     // Check if this is the last session
     const isLastSession = currentSessions <= 1;

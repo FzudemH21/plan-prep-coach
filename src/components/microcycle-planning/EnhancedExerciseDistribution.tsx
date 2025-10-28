@@ -1016,8 +1016,9 @@ export function EnhancedExerciseDistribution({
                   // gap-2 (8px) between sessions within a day
                   // gap-4 (16px) between days
                   const totalWidth = days.reduce((total, day, dayIndex) => {
-                    const sessionsCount = day.sessions || 1;
-                    const dayWidth = (sessionsCount * 320) + ((sessionsCount - 1) * 8);
+                    const sessionsCount = day.sessions ?? 1;
+                    const gapCount = Math.max(0, sessionsCount - 1);
+                    const dayWidth = Math.max(320, sessionsCount * 320 + gapCount * 8);
                     const gapAfterDay = dayIndex < days.length - 1 ? 16 : 0;
                     return total + dayWidth + gapAfterDay;
                   }, 0);
@@ -1080,7 +1081,7 @@ export function EnhancedExerciseDistribution({
                     )}
                     <div className="flex gap-4">
                       {days.map((day) => {
-                        const sessionsCount = day.sessions || 1;
+                        const sessionsCount = day.sessions ?? 1;
                         
                         // Safety check
                         if (!day || !day.date) {
