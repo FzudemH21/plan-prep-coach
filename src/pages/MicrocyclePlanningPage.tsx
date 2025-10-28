@@ -1040,14 +1040,19 @@ export default function MicrocyclePlanningPage() {
     );
     
     // Update dailyIntensityData for Step 3 sync
-    setDailyIntensityData(prev =>
-      prev.map(di => {
+    setDailyIntensityData(prev => {
+      const updated = prev.map(di => {
         if (di.date === dayDate) {
           return { ...di, intensity };
         }
         return di;
-      })
-    );
+      });
+      
+      // Save to localStorage for persistence across pages
+      localStorage.setItem('dailyIntensityData', JSON.stringify(updated));
+      
+      return updated;
+    });
     
     // Count sessions for this day
     const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
