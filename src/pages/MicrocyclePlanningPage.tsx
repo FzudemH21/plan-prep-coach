@@ -210,6 +210,36 @@ export default function MicrocyclePlanningPage() {
     }
   }, []);
 
+  // Sync dailyIntensityData into trainingDays on load
+  useEffect(() => {
+    if (dailyIntensityData.length === 0 || trainingDays.length === 0) return;
+    
+    // Create a map of date -> intensity from dailyIntensityData
+    const intensityMap = new Map<string, IntensityLevel>();
+    dailyIntensityData.forEach(di => {
+      intensityMap.set(di.date, di.intensity);
+    });
+    
+    // Check if any trainingDays need intensity updates
+    const needsUpdate = trainingDays.some(td => {
+      const correctIntensity = intensityMap.get(td.date);
+      return correctIntensity && td.intensity !== correctIntensity;
+    });
+    
+    if (needsUpdate) {
+      console.log('[MicrocyclePlanningPage] Syncing intensity from dailyIntensityData to trainingDays');
+      setTrainingDays(prev => 
+        prev.map(day => {
+          const correctIntensity = intensityMap.get(day.date);
+          if (correctIntensity && day.intensity !== correctIntensity) {
+            return { ...day, intensity: correctIntensity };
+          }
+          return day;
+        })
+      );
+    }
+  }, [dailyIntensityData, trainingDays]);
+
   // Validate and clean up exercise selection data on load
   useEffect(() => {
     if (Object.keys(exerciseSelectionData).length === 0 || mesocycles.length === 0) {

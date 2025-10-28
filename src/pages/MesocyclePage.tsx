@@ -2917,9 +2917,17 @@ export default function MesocyclePage() {
 
   // Handle intensity selection
   const handleIntensityClick = (date: string, intensity: IntensityLevel) => {
+    // Update dailyIntensityData
     setDailyIntensityData(prev => 
       prev.map(di => 
         di.date === date ? { ...di, intensity } : di
+      )
+    );
+    
+    // Also update trainingDays for immediate consistency
+    setTrainingDays(prev => 
+      prev.map(td => 
+        td.date === date ? { ...td, intensity } : td
       )
     );
   };
