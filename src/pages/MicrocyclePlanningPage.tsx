@@ -179,6 +179,18 @@ export default function MicrocyclePlanningPage() {
       setDaySplitStates(JSON.parse(savedDaySplitStates));
     }
 
+    // Load saved session sections
+    const savedSessionSections = localStorage.getItem('sessionSections');
+    if (savedSessionSections) {
+      setSessionSections(JSON.parse(savedSessionSections));
+    }
+
+    // Load saved supersets
+    const savedSupersets = localStorage.getItem('supersets');
+    if (savedSupersets) {
+      setSupersets(JSON.parse(savedSupersets));
+    }
+
     // Load from Step 6 (Exercise Selection) - this is the source of truth
     const savedMicrocyclePlanningState = localStorage.getItem('microcyclePlanningState');
     if (savedMicrocyclePlanningState) {
@@ -263,6 +275,16 @@ export default function MicrocyclePlanningPage() {
   useEffect(() => {
     localStorage.setItem('daySplitStates', JSON.stringify(daySplitStates));
   }, [daySplitStates]);
+
+  // Save session sections to localStorage
+  useEffect(() => {
+    localStorage.setItem('sessionSections', JSON.stringify(sessionSections));
+  }, [sessionSections]);
+
+  // Save supersets to localStorage
+  useEffect(() => {
+    localStorage.setItem('supersets', JSON.stringify(supersets));
+  }, [supersets]);
 
   // Sync day split states to trainingDays
   useEffect(() => {
@@ -972,9 +994,10 @@ export default function MicrocyclePlanningPage() {
     // Count total sessions for this day
     const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
     const uniqueSessionIndices = new Set(dayExercises.map(ex => ex.sessionIndex));
-    const isSingleSession = uniqueSessionIndices.size === 1;
+    const sessionCount = uniqueSessionIndices.size || 1;
+    const isSingleSession = sessionCount === 1;
     
-    // If single session day, also update the day intensity in trainingDays
+    // If single session day, bidirectionally sync with day intensity
     if (isSingleSession) {
       setTrainingDays(prev => 
         prev.map(day => {
@@ -999,6 +1022,55 @@ export default function MicrocyclePlanningPage() {
     toast({
       title: "Session intensity updated",
       description: `Set to "${intensity.replace('-', ' ')}"${isSingleSession ? ' (day intensity also updated)' : ''}`,
+    });
+  };
+
+  // Handle changing day intensity (only for single-session days)
+  const handleDayIntensityChange = (dayDate: string, intensity: IntensityLevel) => {
+    const mesocycleId = currentMesocycle.id;
+    
+    // Count sessions for this day
+    const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
+    const uniqueSessionIndices = new Set(dayExercises.map(ex => ex.sessionIndex));
+    const sessionCount = uniqueSessionIndices.size || 1;
+    
+    // Only allow editing day intensity for single-session days
+    if (sessionCount > 1) {
+      toast({
+        title: "Cannot change day intensity",
+        description: "Days with multiple sessions have independent session intensities",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Update day intensity in trainingDays
+    setTrainingDays(prev => 
+      prev.map(day => {
+        if (day.date === dayDate) {
+          return { ...day, intensity };
+        }
+        return day;
+      })
+    );
+    
+    // Update dailyIntensityData for Step 3 sync
+    setDailyIntensityData(prev =>
+      prev.map(di => {
+        if (di.date === dayDate) {
+          return { ...di, intensity };
+        }
+        return di;
+      })
+    );
+    
+    // Also update session intensity in localStorage for consistency
+    const sessionIntensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_0`;
+    localStorage.setItem(sessionIntensityKey, intensity);
+    
+    toast({
+      title: "Day intensity updated",
+      description: `Set to "${intensity.replace('-', ' ')}"`,
     });
   };
 
@@ -2151,6 +2223,7 @@ export default function MicrocyclePlanningPage() {
           onRemoveSession={handleRemoveSession}
           onRenameSession={handleRenameSession}
           onSessionIntensityChange={handleSessionIntensityChange}
+          onDayIntensityChange={handleDayIntensityChange}
           intensityLevels={intensityLevels}
         />
       </div>

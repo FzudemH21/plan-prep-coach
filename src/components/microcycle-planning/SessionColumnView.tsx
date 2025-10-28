@@ -291,73 +291,64 @@ export function SessionColumnView({
       <Card className="w-80 flex-shrink-0 flex flex-col h-[600px]">
         <CardHeader className="pb-3 border-b">
           <div className="space-y-2">
-            {/* Day and Date */}
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <div className="text-xs text-muted-foreground uppercase tracking-wide">
-                  {dayName}
-                </div>
-                <div className="text-lg font-semibold">
-                  {format(dateObj, 'MMM d, yyyy')}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {totalSessionsOnDay > 1 && onRemoveSession && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-destructive hover:text-destructive"
-                    onClick={() => onRemoveSession(day.date, sessionIndex)}
+            {/* Session Name and Actions */}
+            <div className="flex items-center justify-between gap-2">
+              {/* Editable Session Name */}
+              <div className="flex items-center gap-1 flex-1">
+                {isEditingSessionName ? (
+                  <>
+                    <Input
+                      type="text"
+                      value={editingSessionNameValue}
+                      onChange={(e) => setEditingSessionNameValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleSaveSessionName();
+                        } else if (e.key === 'Escape') {
+                          setIsEditingSessionName(false);
+                        }
+                      }}
+                      className="h-7 text-sm"
+                      autoFocus
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={handleSaveSessionName}
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => setIsEditingSessionName(false)}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </>
+                ) : (
+                  <button
+                    className="text-sm font-medium hover:text-foreground flex items-center gap-1 group"
+                    onClick={handleStartEditingSessionName}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                    <span>{sessionName}</span>
+                    <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
                 )}
               </div>
-            </div>
-            
-            {/* Session Name - Editable */}
-            <div className="flex items-center gap-2">
-              {isEditingSessionName ? (
-                <div className="flex items-center gap-1 flex-1">
-                  <Input
-                    type="text"
-                    value={editingSessionNameValue}
-                    onChange={(e) => setEditingSessionNameValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        handleSaveSessionName();
-                      } else if (e.key === 'Escape') {
-                        setIsEditingSessionName(false);
-                      }
-                    }}
-                    className="h-7 text-sm"
-                    autoFocus
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    onClick={handleSaveSessionName}
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    onClick={() => setIsEditingSessionName(false)}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              ) : (
-                <button
-                  className="text-sm font-medium hover:text-foreground flex items-center gap-1 group"
-                  onClick={handleStartEditingSessionName}
+              
+              {/* Remove Session Button (only show if multiple sessions) */}
+              {totalSessionsOnDay > 1 && onRemoveSession && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-destructive hover:text-destructive"
+                  onClick={() => onRemoveSession(day.date, sessionIndex)}
                 >
-                  <span>{sessionName}</span>
-                  <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </button>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
               )}
             </div>
             

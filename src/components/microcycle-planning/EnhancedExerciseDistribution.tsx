@@ -7,6 +7,7 @@ import { CellData } from '@/types/microcycle-planning';
 import { IntensityLevel } from '@/types/training';
 import { ExerciseLibraryPanel } from './ExerciseLibraryPanel';
 import { SessionColumnView } from './SessionColumnView';
+import { DayHeader } from './DayHeader';
 import { useToast } from '@/hooks/use-toast';
 import { format, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -60,6 +61,7 @@ interface EnhancedExerciseDistributionProps {
   onRemoveSession: (dayDate: string, sessionIndex: number) => void;
   onRenameSession?: (dayDate: string, sessionIndex: number, newName: string) => void;
   onSessionIntensityChange?: (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => void;
+  onDayIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
   intensityLevels?: IntensityLevel[];
 }
 
@@ -79,6 +81,7 @@ export function EnhancedExerciseDistribution({
   onRemoveSession,
   onRenameSession,
   onSessionIntensityChange,
+  onDayIntensityChange,
   intensityLevels,
 }: EnhancedExerciseDistributionProps) {
   const { toast } = useToast();
@@ -1086,51 +1089,64 @@ export function EnhancedExerciseDistribution({
                         }
                         
                         return (
-                          <div key={day.date} className="flex flex-col gap-2">
-                            {Array.from({ length: sessionsCount }).map((_, sessionIndex) => {
-                              const sessionExercises = exerciseDistribution
-                                .filter(ex => ex.dayDate === day.date && ex.sessionIndex === sessionIndex)
-                                .sort((a, b) => a.order - b.order);
-
-                              const daySections = sessionSections
-                                .filter(s => s.dayDate === day.date && s.sessionIndex === sessionIndex)
-                                .sort((a, b) => a.order - b.order);
-
-                              const daySupersets = supersets[day.date]?.[sessionIndex] || {};
-
-                              return (
-                                <SessionColumnView
-                                  key={`${day.date}-${sessionIndex}`}
-                                  day={day}
-                                  sessionIndex={sessionIndex}
-                                  exercises={sessionExercises}
-                                  sections={daySections}
-                                  supersets={daySupersets}
-                                  totalSessionsOnDay={sessionsCount}
-                                  onDeleteExercise={handleDeleteExercise}
-                                  onAddSection={() => handleAddSection(day.date, sessionIndex)}
-                                  onRenameSection={handleRenameSection}
-                                  onDeleteSection={handleDeleteSection}
-                                  onToggleSuperset={handleToggleSuperset}
-                                  onRemoveSession={onRemoveSession}
-                                  onRenameSession={onRenameSession}
-                                  onSessionIntensityChange={onSessionIntensityChange}
-                                  intensityLevels={intensityLevels}
-                                  getIntensityColor={getIntensityColor}
-                                  mesocycleId={mesocycle.id}
-                                />
-                              );
-                            })}
+                          <div key={day.date} className="flex flex-col w-80">
+                            {/* Day Header - Shows once per day */}
+                            <DayHeader
+                              date={day.date}
+                              intensity={day.intensity || 'moderate'}
+                              intensityLevels={intensityLevels}
+                              getIntensityColor={getIntensityColor}
+                              onDayIntensityChange={onDayIntensityChange}
+                              sessionCount={sessionsCount}
+                            />
                             
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="w-full"
-                              onClick={() => onAddSession(day.date)}
-                            >
-                              <Plus className="h-4 w-4 mr-2" />
-                              Add Session
-                            </Button>
+                            {/* Sessions - Multiple can exist under one day */}
+                            <div className="flex flex-col gap-2">
+                              {Array.from({ length: sessionsCount }).map((_, sessionIndex) => {
+                                const sessionExercises = exerciseDistribution
+                                  .filter(ex => ex.dayDate === day.date && ex.sessionIndex === sessionIndex)
+                                  .sort((a, b) => a.order - b.order);
+
+                                const daySections = sessionSections
+                                  .filter(s => s.dayDate === day.date && s.sessionIndex === sessionIndex)
+                                  .sort((a, b) => a.order - b.order);
+
+                                const daySupersets = supersets[day.date]?.[sessionIndex] || {};
+
+                                return (
+                                  <SessionColumnView
+                                    key={`${day.date}-${sessionIndex}`}
+                                    day={day}
+                                    sessionIndex={sessionIndex}
+                                    exercises={sessionExercises}
+                                    sections={daySections}
+                                    supersets={daySupersets}
+                                    totalSessionsOnDay={sessionsCount}
+                                    onDeleteExercise={handleDeleteExercise}
+                                    onAddSection={() => handleAddSection(day.date, sessionIndex)}
+                                    onRenameSection={handleRenameSection}
+                                    onDeleteSection={handleDeleteSection}
+                                    onToggleSuperset={handleToggleSuperset}
+                                    onRemoveSession={onRemoveSession}
+                                    onRenameSession={onRenameSession}
+                                    onSessionIntensityChange={onSessionIntensityChange}
+                                    intensityLevels={intensityLevels}
+                                    getIntensityColor={getIntensityColor}
+                                    mesocycleId={mesocycle.id}
+                                  />
+                                );
+                              })}
+                              
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full"
+                                onClick={() => onAddSession(day.date)}
+                              >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Session
+                              </Button>
+                            </div>
                           </div>
                         );
                       })}
