@@ -330,21 +330,21 @@ export function SessionColumnView({
                   </>
                 ) : (
                   <button
-                    className="text-sm font-medium hover:text-foreground flex items-center gap-1 group"
+                    className="text-sm font-medium hover:text-foreground flex items-center gap-1"
                     onClick={handleStartEditingSessionName}
                   >
                     <span>{sessionName}</span>
-                    <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <Pencil className="h-3 w-3" />
                   </button>
                 )}
               </div>
               
-              {/* Remove Session Button (only show if multiple sessions) */}
-              {totalSessionsOnDay > 1 && onRemoveSession && (
+              {/* Remove Session Button */}
+              {onRemoveSession && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 px-2 text-destructive hover:text-destructive"
+                  className="h-7 w-7 p-0 text-destructive hover:bg-accent"
                   onClick={() => onRemoveSession(day.date, sessionIndex)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
