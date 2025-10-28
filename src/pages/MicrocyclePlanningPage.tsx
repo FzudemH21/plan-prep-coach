@@ -918,9 +918,70 @@ export default function MicrocyclePlanningPage() {
   const handleRemoveSession = (dayDate: string, sessionIndex: number) => {
     const currentSessions = daySplitStates[dayDate] || 1;
     
-    if (currentSessions <= 1) return; // Can't remove the last session
+    // Check if this is the last session
+    const isLastSession = currentSessions <= 1;
     
-    // Move all exercises from sessions > sessionIndex down by one
+    if (isLastSession) {
+      // Remove all exercises from this day
+      setExerciseDistribution(prev => prev.filter(ex => ex.dayDate !== dayDate));
+      
+      // Remove all sections from this day
+      setSessionSections(prev => prev.filter(section => section.dayDate !== dayDate));
+      
+      // Remove all supersets from this day
+      setSupersets(prev => {
+        const newSupersets = { ...prev };
+        delete newSupersets[dayDate];
+        return newSupersets;
+      });
+      
+      // Set day intensity to "off"
+      setDailyIntensityData(prev => {
+        const updated = prev.map(di => {
+          if (di.date === dayDate) {
+            return { ...di, intensity: 'off' as IntensityLevel };
+          }
+          return di;
+        });
+        localStorage.setItem('dailyIntensityData', JSON.stringify(updated));
+        return updated;
+      });
+      
+      // Update trainingDays
+      setTrainingDays(prev => 
+        prev.map(day => {
+          if (day.date === dayDate) {
+            return { 
+              ...day, 
+              intensity: 'off' as IntensityLevel,
+              sessions: 0,
+              sessionNames: []
+            };
+          }
+          return day;
+        })
+      );
+      
+      // Remove session intensity from localStorage
+      const mesocycleId = currentMesocycle.id;
+      const sessionIntensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`;
+      localStorage.removeItem(sessionIntensityKey);
+      
+      // Update split state to 0
+      setDaySplitStates(prev => ({
+        ...prev,
+        [dayDate]: 0
+      }));
+      
+      toast({
+        title: "Last session deleted",
+        description: "Day intensity set to 'off'. You can add a new session anytime.",
+      });
+      
+      return;
+    }
+    
+    // Not the last session - move exercises from removed session to previous session
     setExerciseDistribution(prev => 
       prev.map(ex => {
         if (ex.dayDate === dayDate && ex.sessionIndex > sessionIndex) {
@@ -984,6 +1045,16 @@ export default function MicrocyclePlanningPage() {
       ...prev,
       [dayDate]: currentSessions - 1
     }));
+    
+    // Clean up session intensity from localStorage
+    const mesocycleId = currentMesocycle.id;
+    const sessionIntensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`;
+    localStorage.removeItem(sessionIntensityKey);
+    
+    toast({
+      title: "Session deleted",
+      description: "The session has been removed successfully",
+    });
   };
 
   // Handle renaming a session
@@ -1297,72 +1368,6 @@ export default function MicrocyclePlanningPage() {
   };
 
   // Handle delete session
-  const handleDeleteSession = (dayDate: string, sessionIndex: number) => {
-    setExerciseDistribution(prev => {
-      // Remove exercises from the target session
-      const remaining = prev.filter(
-        ex => !(ex.dayDate === dayDate && ex.sessionIndex === sessionIndex)
-      );
-      
-      // Get remaining exercises for this day
-      const dayExercises = remaining.filter(ex => ex.dayDate === dayDate);
-      const otherExercises = remaining.filter(ex => ex.dayDate !== dayDate);
-      
-      // Check if this was the last session
-      const wasLastSession = dayExercises.length === 0;
-      
-      if (wasLastSession) {
-        // Set day intensity to "off"
-        setDailyIntensityData(prev => {
-          const updated = prev.map(di => {
-            if (di.date === dayDate) {
-              return { ...di, intensity: 'off' as IntensityLevel };
-            }
-            return di;
-          });
-          localStorage.setItem('dailyIntensityData', JSON.stringify(updated));
-          return updated;
-        });
-        
-        // Update trainingDays
-        setTrainingDays(prev => 
-          prev.map(day => {
-            if (day.date === dayDate) {
-              return { ...day, intensity: 'off' as IntensityLevel };
-            }
-            return day;
-          })
-        );
-        
-        // Remove session intensity from localStorage
-        const mesocycleId = currentMesocycle.id;
-        const sessionIntensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`;
-        localStorage.removeItem(sessionIntensityKey);
-        
-        toast({
-          title: "Last session deleted",
-          description: "Day intensity set to 'off'. You can add a new session anytime.",
-        });
-        
-        return otherExercises; // No day exercises left
-      }
-      
-      // Renumber sessions sequentially (0, 1, 2, ...)
-      const renumbered = dayExercises.map(ex => {
-        if (ex.sessionIndex > sessionIndex) {
-          return { ...ex, sessionIndex: ex.sessionIndex - 1 };
-        }
-        return ex;
-      });
-      
-      toast({
-        title: "Session deleted",
-        description: "The session has been removed successfully",
-      });
-      
-      return [...otherExercises, ...renumbered];
-    });
-  };
 
   // Handle copy session
   const handleCopySession = (dayDate: string, sessionIndex: number) => {
@@ -2320,7 +2325,7 @@ export default function MicrocyclePlanningPage() {
               currentMesocycle={currentMesocycle}
               mesocycles={mesocycles}
               onSessionDragEnd={handleSessionDragEnd}
-              onDeleteSession={handleDeleteSession}
+              onDeleteSession={handleRemoveSession}
               onCopySession={handleCopySession}
               onPasteSession={handlePasteSession}
               copiedSession={copiedSession}
