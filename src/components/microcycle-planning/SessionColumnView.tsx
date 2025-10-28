@@ -61,6 +61,7 @@ interface SessionColumnViewProps {
   onDeleteSection: (sectionId: string) => void;
   onToggleSuperset: (dayDate: string, sessionIndex: number, exerciseId1: string, exerciseId2: string) => void;
   onRemoveSession?: (dayDate: string, sessionIndex: number) => void;
+  onRenameSession?: (dayDate: string, sessionIndex: number, newName: string) => void;
 }
 
 const intensityColors: Record<string, string> = {
@@ -87,11 +88,14 @@ export function SessionColumnView({
   onDeleteSection,
   onToggleSuperset,
   onRemoveSession,
+  onRenameSession,
 }: SessionColumnViewProps) {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionName, setEditingSectionName] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [exerciseToDelete, setExerciseToDelete] = useState<string | null>(null);
+  const [isEditingSessionName, setIsEditingSessionName] = useState(false);
+  const [editingSessionNameValue, setEditingSessionNameValue] = useState('');
 
   const getSuperset = (exerciseId: string): string | undefined => {
     return Object.entries(supersets).find(([_, ids]) => ids.includes(exerciseId))?.[0];
@@ -113,6 +117,18 @@ export function SessionColumnView({
     }
     setEditingSectionId(null);
     setEditingSectionName('');
+  };
+
+  const handleStartEditingSessionName = () => {
+    setIsEditingSessionName(true);
+    setEditingSessionNameValue(sessionName);
+  };
+
+  const handleSaveSessionName = () => {
+    if (onRenameSession && editingSessionNameValue.trim()) {
+      onRenameSession(day.date, sessionIndex, editingSessionNameValue.trim());
+    }
+    setIsEditingSessionName(false);
   };
 
   const handleDeleteExerciseClick = (exerciseId: string) => {
@@ -272,7 +288,7 @@ export function SessionColumnView({
           <div className="space-y-2">
             {/* Day and Date */}
             <div className="flex items-center justify-between">
-              <div>
+              <div className="flex-1">
                 <div className="text-xs text-muted-foreground uppercase tracking-wide">
                   {dayName}
                 </div>
@@ -281,9 +297,6 @@ export function SessionColumnView({
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-xs">
-                  Session {sessionIndex + 1}
-                </Badge>
                 {totalSessionsOnDay > 1 && onRemoveSession && (
                   <Button
                     variant="ghost"
@@ -295,6 +308,52 @@ export function SessionColumnView({
                   </Button>
                 )}
               </div>
+            </div>
+            
+            {/* Session Name - Editable */}
+            <div className="flex items-center gap-2">
+              {isEditingSessionName ? (
+                <div className="flex items-center gap-1 flex-1">
+                  <Input
+                    type="text"
+                    value={editingSessionNameValue}
+                    onChange={(e) => setEditingSessionNameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleSaveSessionName();
+                      } else if (e.key === 'Escape') {
+                        setIsEditingSessionName(false);
+                      }
+                    }}
+                    className="h-7 text-sm"
+                    autoFocus
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={handleSaveSessionName}
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setIsEditingSessionName(false)}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ) : (
+                <button
+                  className="text-sm font-medium hover:text-foreground flex items-center gap-1 group"
+                  onClick={handleStartEditingSessionName}
+                >
+                  <span>{sessionName}</span>
+                  <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
+              )}
             </div>
             
             {/* Intensity Badge - Larger and More Prominent */}

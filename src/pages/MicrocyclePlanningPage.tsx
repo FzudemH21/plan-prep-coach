@@ -934,6 +934,33 @@ export default function MicrocyclePlanningPage() {
     }));
   };
 
+  // Handle renaming a session
+  const handleRenameSession = (dayDate: string, sessionIndex: number, newName: string) => {
+    setTrainingDays(prev => 
+      prev.map(day => {
+        if (day.date === dayDate) {
+          const sessionNames = [...(day.sessionNames || [])];
+          // Ensure array is large enough
+          while (sessionNames.length <= sessionIndex) {
+            sessionNames.push(`Session ${sessionNames.length + 1}`);
+          }
+          sessionNames[sessionIndex] = newName;
+          
+          return {
+            ...day,
+            sessionNames
+          };
+        }
+        return day;
+      })
+    );
+    
+    toast({
+      title: "Session renamed",
+      description: `Session renamed to "${newName}"`,
+    });
+  };
+
   // Delete an exercise from all cells in exerciseSelectionData
   const handleDeleteExercise = (exerciseId: string, library: string) => {
     let removedCount = 0;
@@ -2081,6 +2108,7 @@ export default function MicrocyclePlanningPage() {
           getIntensityColor={getIntensityColor}
           onAddSession={handleAddSession}
           onRemoveSession={handleRemoveSession}
+          onRenameSession={handleRenameSession}
         />
       </div>
     );
