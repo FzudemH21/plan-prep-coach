@@ -44,7 +44,7 @@ export function DayHeader({
           </span>
         </div>
         
-        {/* Day Intensity Badge - Editable only for single-session days */}
+        {/* Day Intensity Badge - Always editable, syncs with Step 3 */}
         {getIntensityColor && intensityLevels && onDayIntensityChange ? (
           <Popover open={intensityPopoverOpen} onOpenChange={setIntensityPopoverOpen}>
             <PopoverTrigger asChild>
@@ -55,7 +55,6 @@ export function DayHeader({
                   "text-xs font-medium px-2 py-1 h-auto hover:opacity-80",
                   intensityClass
                 )}
-                disabled={sessionCount > 1} // Only editable for single-session days
               >
                 {intensity.replace('-', ' ').toUpperCase()}
               </Button>

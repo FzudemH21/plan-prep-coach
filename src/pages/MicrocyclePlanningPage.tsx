@@ -1029,22 +1029,7 @@ export default function MicrocyclePlanningPage() {
   const handleDayIntensityChange = (dayDate: string, intensity: IntensityLevel) => {
     const mesocycleId = currentMesocycle.id;
     
-    // Count sessions for this day
-    const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
-    const uniqueSessionIndices = new Set(dayExercises.map(ex => ex.sessionIndex));
-    const sessionCount = uniqueSessionIndices.size || 1;
-    
-    // Only allow editing day intensity for single-session days
-    if (sessionCount > 1) {
-      toast({
-        title: "Cannot change day intensity",
-        description: "Days with multiple sessions have independent session intensities",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    // Update day intensity in trainingDays
+    // Update day intensity in trainingDays (syncs with calendar view)
     setTrainingDays(prev => 
       prev.map(day => {
         if (day.date === dayDate) {
@@ -1064,13 +1049,20 @@ export default function MicrocyclePlanningPage() {
       })
     );
     
-    // Also update session intensity in localStorage for consistency
-    const sessionIntensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_0`;
-    localStorage.setItem(sessionIntensityKey, intensity);
+    // Count sessions for this day
+    const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
+    const uniqueSessionIndices = new Set(dayExercises.map(ex => ex.sessionIndex));
+    const sessionCount = uniqueSessionIndices.size || 1;
+    
+    // For single-session days, also sync the session intensity
+    if (sessionCount === 1) {
+      const sessionIntensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_0`;
+      localStorage.setItem(sessionIntensityKey, intensity);
+    }
     
     toast({
       title: "Day intensity updated",
-      description: `Set to "${intensity.replace('-', ' ')}"`,
+      description: `Set to "${intensity.replace('-', ' ')}"${sessionCount === 1 ? ' (session intensity also updated)' : ''}`,
     });
   };
 
