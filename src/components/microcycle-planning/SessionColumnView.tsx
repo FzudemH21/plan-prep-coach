@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +24,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, X, ChevronUp } from 'lucide-react';
 import { TrainingDay } from '@/types/daily-intensity';
+import { IntensityLevel } from '@/types/training';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -62,6 +64,10 @@ interface SessionColumnViewProps {
   onToggleSuperset: (dayDate: string, sessionIndex: number, exerciseId1: string, exerciseId2: string) => void;
   onRemoveSession?: (dayDate: string, sessionIndex: number) => void;
   onRenameSession?: (dayDate: string, sessionIndex: number, newName: string) => void;
+  onSessionIntensityChange?: (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => void;
+  intensityLevels?: IntensityLevel[];
+  getIntensityColor?: (intensity: IntensityLevel) => string;
+  mesocycleId?: string;
 }
 
 const intensityColors: Record<string, string> = {
@@ -89,6 +95,10 @@ export function SessionColumnView({
   onToggleSuperset,
   onRemoveSession,
   onRenameSession,
+  onSessionIntensityChange,
+  intensityLevels,
+  getIntensityColor,
+  mesocycleId,
 }: SessionColumnViewProps) {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionName, setEditingSectionName] = useState('');
@@ -96,6 +106,7 @@ export function SessionColumnView({
   const [exerciseToDelete, setExerciseToDelete] = useState<string | null>(null);
   const [isEditingSessionName, setIsEditingSessionName] = useState(false);
   const [editingSessionNameValue, setEditingSessionNameValue] = useState('');
+  const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
 
   const getSuperset = (exerciseId: string): string | undefined => {
     return Object.entries(supersets).find(([_, ids]) => ids.includes(exerciseId))?.[0];
@@ -179,7 +190,12 @@ export function SessionColumnView({
   const dayName = format(dateObj, 'EEEE');
   const dateStr = format(dateObj, 'MMM d');
   const sessionName = day.sessionNames?.[sessionIndex] || `Session ${sessionIndex + 1}`;
-  const intensityClass = intensityColors[day.intensity] || 'bg-gray-200';
+  
+  // Get session-specific intensity or fall back to day intensity
+  const sessionIntensityKey = mesocycleId ? `sessionIntensity_${mesocycleId}_${day.date}_${sessionIndex}` : '';
+  const storedSessionIntensity = sessionIntensityKey ? localStorage.getItem(sessionIntensityKey) : null;
+  const displayIntensity = (storedSessionIntensity || day.intensity || 'moderate') as IntensityLevel;
+  const intensityClass = intensityColors[displayIntensity] || 'bg-gray-200';
 
   // Superset color scheme for better visual grouping
   const getSupersetColor = (supersetId: string): string => {
@@ -356,11 +372,56 @@ export function SessionColumnView({
               )}
             </div>
             
-            {/* Intensity Badge - Larger and More Prominent */}
+            {/* Intensity Badge - Editable */}
             <div className="flex items-center gap-2">
-              <Badge className={cn("text-xs font-medium px-2 py-1", intensityClass)}>
-                {day.intensity.replace('-', ' ').toUpperCase()}
-              </Badge>
+              {getIntensityColor && intensityLevels && onSessionIntensityChange ? (
+                <Popover open={intensityPopoverOpen} onOpenChange={setIntensityPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={cn(
+                        "text-xs font-medium px-2 py-1 h-auto hover:opacity-80",
+                        intensityClass
+                      )}
+                    >
+                      {displayIntensity.replace('-', ' ').toUpperCase()}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56 p-2" align="start">
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium">Change Session Intensity</div>
+                      {intensityLevels.map((level) => (
+                        <Button
+                          key={level}
+                          variant="ghost"
+                          size="sm"
+                          className={cn(
+                            "w-full justify-start text-xs",
+                            level === displayIntensity && "bg-accent"
+                          )}
+                          onClick={() => {
+                            onSessionIntensityChange(day.date, sessionIndex, level);
+                            setIntensityPopoverOpen(false);
+                          }}
+                        >
+                          <span
+                            className={cn(
+                              "inline-block w-3 h-3 rounded-full mr-2",
+                              intensityColors[level]
+                            )}
+                          />
+                          {level.replace('-', ' ')}
+                        </Button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                <Badge className={cn("text-xs font-medium px-2 py-1", intensityClass)}>
+                  {displayIntensity.replace('-', ' ').toUpperCase()}
+                </Badge>
+              )}
               <span className="text-xs text-muted-foreground">
                 {exercises.length} {exercises.length === 1 ? 'exercise' : 'exercises'}
               </span>

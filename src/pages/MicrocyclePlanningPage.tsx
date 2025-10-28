@@ -961,6 +961,47 @@ export default function MicrocyclePlanningPage() {
     });
   };
 
+  // Handle changing session intensity
+  const handleSessionIntensityChange = (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => {
+    const mesocycleId = currentMesocycle.id;
+    
+    // Store session-specific intensity in localStorage
+    const sessionIntensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`;
+    localStorage.setItem(sessionIntensityKey, intensity);
+    
+    // Count total sessions for this day
+    const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
+    const uniqueSessionIndices = new Set(dayExercises.map(ex => ex.sessionIndex));
+    const isSingleSession = uniqueSessionIndices.size === 1;
+    
+    // If single session day, also update the day intensity in trainingDays
+    if (isSingleSession) {
+      setTrainingDays(prev => 
+        prev.map(day => {
+          if (day.date === dayDate) {
+            return { ...day, intensity };
+          }
+          return day;
+        })
+      );
+      
+      // Also update dailyIntensityData for Step 3 sync
+      setDailyIntensityData(prev =>
+        prev.map(di => {
+          if (di.date === dayDate) {
+            return { ...di, intensity };
+          }
+          return di;
+        })
+      );
+    }
+    
+    toast({
+      title: "Session intensity updated",
+      description: `Set to "${intensity.replace('-', ' ')}"${isSingleSession ? ' (day intensity also updated)' : ''}`,
+    });
+  };
+
   // Delete an exercise from all cells in exerciseSelectionData
   const handleDeleteExercise = (exerciseId: string, library: string) => {
     let removedCount = 0;
@@ -2109,6 +2150,8 @@ export default function MicrocyclePlanningPage() {
           onAddSession={handleAddSession}
           onRemoveSession={handleRemoveSession}
           onRenameSession={handleRenameSession}
+          onSessionIntensityChange={handleSessionIntensityChange}
+          intensityLevels={intensityLevels}
         />
       </div>
     );

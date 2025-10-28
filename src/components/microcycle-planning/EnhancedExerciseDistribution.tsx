@@ -59,6 +59,8 @@ interface EnhancedExerciseDistributionProps {
   onAddSession: (dayDate: string) => void;
   onRemoveSession: (dayDate: string, sessionIndex: number) => void;
   onRenameSession?: (dayDate: string, sessionIndex: number, newName: string) => void;
+  onSessionIntensityChange?: (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => void;
+  intensityLevels?: IntensityLevel[];
 }
 
 export function EnhancedExerciseDistribution({
@@ -76,6 +78,8 @@ export function EnhancedExerciseDistribution({
   onAddSession,
   onRemoveSession,
   onRenameSession,
+  onSessionIntensityChange,
+  intensityLevels,
 }: EnhancedExerciseDistributionProps) {
   const { toast } = useToast();
   const [selectedMicrocycleId, setSelectedMicrocycleId] = useState<string | null>(null);
@@ -1110,6 +1114,10 @@ export function EnhancedExerciseDistribution({
                                   onToggleSuperset={handleToggleSuperset}
                                   onRemoveSession={onRemoveSession}
                                   onRenameSession={onRenameSession}
+                                  onSessionIntensityChange={onSessionIntensityChange}
+                                  intensityLevels={intensityLevels}
+                                  getIntensityColor={getIntensityColor}
+                                  mesocycleId={mesocycle.id}
                                 />
                               );
                             })}
