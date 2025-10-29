@@ -176,26 +176,40 @@ export function EnhancedExerciseDistribution({
     return grouped;
   }, [exerciseSelectionData, mesocycle.id]);
 
-  // Helper to get all exercises in a superset
+  // Helper to find superset in mapping
+  const findSessionSuperset = (
+    dayDate: string,
+    sessionIndex: number,
+    exerciseId: string
+  ): { supersetId: string; ids: string[] } | undefined => {
+    const sessionSupersets = supersets[dayDate]?.[sessionIndex];
+    if (!sessionSupersets) return undefined;
+    
+    for (const [ssId, ids] of Object.entries(sessionSupersets)) {
+      if (ids.includes(exerciseId)) {
+        return { supersetId: ssId, ids };
+      }
+    }
+    return undefined;
+  };
+
+  // Helper to get all exercises in a superset using the SupersetMapping
   const getSupersetExercises = (
     exerciseId: string,
     exercises: ExerciseDistribution[],
     dayDate: string,
-    sessionIndex: number,
-    sectionId?: string
+    sessionIndex: number
   ): ExerciseDistribution[] => {
-    const exercise = exercises.find(ex => ex.id === exerciseId);
-    if (!exercise || !exercise.supersetId) {
-      return exercises.filter(ex => ex.id === exerciseId);
+    const match = findSessionSuperset(dayDate, sessionIndex, exerciseId);
+    if (!match) {
+      const single = exercises.find(ex => ex.id === exerciseId);
+      return single ? [single] : [];
     }
-
-    // Find all exercises with the same superset ID in the same location
-    return exercises.filter(ex => 
-      ex.supersetId === exercise.supersetId &&
-      ex.dayDate === dayDate &&
-      ex.sessionIndex === sessionIndex &&
-      ex.sectionId === sectionId
-    ).sort((a, b) => a.order - b.order);
+    
+    const idSet = new Set(match.ids);
+    return exercises
+      .filter(ex => idSet.has(ex.id))
+      .sort((a, b) => a.order - b.order);
   };
 
   const handleDragEnd = (result: DropResult) => {
@@ -280,31 +294,19 @@ export function EnhancedExerciseDistribution({
     // Handle reordering within the same droppable (section or unsectioned area)
     if (type === 'EXERCISE' && source.droppableId === destination.droppableId) {
       if (source.droppableId.startsWith('section-')) {
-        // Reordering within a section
+        // Reordering within a section (single exercise only, supersets are session-level)
         const sectionId = source.droppableId.replace('section-', '');
         const sectionExercises = exerciseDistribution
           .filter(ex => ex.sectionId === sectionId)
           .sort((a, b) => a.order - b.order);
         
-        const draggedExerciseId = draggableId;
         const draggedExercise = sectionExercises[source.index];
         
-        // Get all exercises in the superset
-        const supersetExercises = getSupersetExercises(
-          draggedExerciseId,
-          sectionExercises,
-          draggedExercise.dayDate,
-          draggedExercise.sessionIndex,
-          sectionId
-        );
+        // Remove dragged exercise
+        const remainingExercises = sectionExercises.filter(ex => ex.id !== draggedExercise.id);
         
-        // Remove all superset exercises
-        const remainingExercises = sectionExercises.filter(
-          ex => !supersetExercises.find(se => se.id === ex.id)
-        );
-        
-        // Insert all superset exercises at destination
-        remainingExercises.splice(destination.index, 0, ...supersetExercises);
+        // Insert at destination
+        remainingExercises.splice(destination.index, 0, draggedExercise);
         
         remainingExercises.forEach((ex, idx) => ex.order = idx);
         
@@ -321,15 +323,13 @@ export function EnhancedExerciseDistribution({
           .sort((a, b) => a.order - b.order);
 
         const draggedExerciseId = draggableId;
-        const draggedExercise = sessionExercises[source.index];
         
-        // Get all exercises in the superset
+        // Get all exercises in the superset using mapping
         const supersetExercises = getSupersetExercises(
           draggedExerciseId,
           sessionExercises,
           dayDate,
-          parseInt(sessionIndex),
-          undefined
+          parseInt(sessionIndex)
         );
         
         // Remove all superset exercises
@@ -337,8 +337,12 @@ export function EnhancedExerciseDistribution({
           ex => !supersetExercises.find(se => se.id === ex.id)
         );
         
+        // Calculate correct insertion index accounting for removed exercises
+        const removedBefore = supersetExercises.filter(ex => ex.order < destination.index).length;
+        const insertIndex = Math.max(0, Math.min(destination.index - removedBefore, remainingExercises.length));
+        
         // Insert all superset exercises at destination
-        remainingExercises.splice(destination.index, 0, ...supersetExercises);
+        remainingExercises.splice(insertIndex, 0, ...supersetExercises);
 
         remainingExercises.forEach((ex, idx) => ex.order = idx);
 
@@ -366,30 +370,19 @@ export function EnhancedExerciseDistribution({
       
       const draggedExercise = sourceExercises[source.index];
       
-      // Get all exercises in the superset
-      const supersetExercises = getSupersetExercises(
-        draggableId,
-        sourceExercises,
-        draggedExercise.dayDate,
-        draggedExercise.sessionIndex,
-        sectionId
-      );
+      // For sections, just move single exercise (supersets are session-level only)
+      const movedExercise = draggedExercise;
       
-      // Remove all superset exercises from source
-      const remainingSourceExercises = sourceExercises.filter(
-        ex => !supersetExercises.find(se => se.id === ex.id)
-      );
+      // Remove from source
+      const remainingSourceExercises = sourceExercises.filter(ex => ex.id !== movedExercise.id);
       
-      // Update all superset exercises
-      supersetExercises.forEach(ex => {
-        ex.dayDate = destDayDate;
-        ex.sessionIndex = parseInt(destSessionIndex);
-        ex.sectionId = undefined;
-        ex.supersetId = undefined;
-      });
+      // Update exercise
+      movedExercise.dayDate = destDayDate;
+      movedExercise.sessionIndex = parseInt(destSessionIndex);
+      movedExercise.sectionId = undefined;
       
-      // Insert all superset exercises at destination
-      destExercises.splice(destination.index, 0, ...supersetExercises);
+      // Insert at destination
+      destExercises.splice(destination.index, 0, movedExercise);
       
       remainingSourceExercises.forEach((ex, idx) => ex.order = idx);
       destExercises.forEach((ex, idx) => ex.order = idx);
@@ -400,8 +393,7 @@ export function EnhancedExerciseDistribution({
       );
       
       onDistributionChange([...otherExercises, ...remainingSourceExercises, ...destExercises]);
-      const exerciseText = supersetExercises.length > 1 ? `${supersetExercises.length} exercises` : 'Exercise';
-      toast({ title: `${exerciseText} moved`, description: 'Moved to main session area' });
+      toast({ title: 'Exercise moved', description: 'Moved to main session area' });
       return;
     }
 
@@ -421,15 +413,12 @@ export function EnhancedExerciseDistribution({
       const destSection = sessionSections.find(s => s.id === destSectionId);
       if (!destSection) return;
       
-      const draggedExercise = sourceExercises[source.index];
-      
-      // Get all exercises in the superset
+      // Get all exercises in the superset using mapping
       const supersetExercises = getSupersetExercises(
         draggableId,
         sourceExercises,
         sourceDayDate,
-        parseInt(sourceSessionIndex),
-        undefined
+        parseInt(sourceSessionIndex)
       );
       
       // Remove all superset exercises from source
@@ -442,8 +431,35 @@ export function EnhancedExerciseDistribution({
         ex.dayDate = destSection.dayDate;
         ex.sessionIndex = destSection.sessionIndex;
         ex.sectionId = destSectionId;
-        ex.supersetId = undefined;
       });
+      
+      // Update SupersetMapping: remove moved exercises from source superset
+      const newSupersets = structuredClone(supersets);
+      const match = findSessionSuperset(sourceDayDate, parseInt(sourceSessionIndex), draggableId);
+      if (match) {
+        const sessionSupersets = newSupersets[sourceDayDate]?.[parseInt(sourceSessionIndex)];
+        if (sessionSupersets) {
+          const movedIds = new Set(supersetExercises.map(ex => ex.id));
+          sessionSupersets[match.supersetId] = sessionSupersets[match.supersetId].filter(id => !movedIds.has(id));
+          
+          // Clean up empty superset
+          if (sessionSupersets[match.supersetId].length < 2) {
+            delete sessionSupersets[match.supersetId];
+          }
+          
+          // Clean up empty session
+          if (Object.keys(sessionSupersets).length === 0) {
+            delete newSupersets[sourceDayDate][parseInt(sourceSessionIndex)];
+          }
+          
+          // Clean up empty day
+          if (Object.keys(newSupersets[sourceDayDate] || {}).length === 0) {
+            delete newSupersets[sourceDayDate];
+          }
+          
+          onSupersetsChange(newSupersets);
+        }
+      }
       
       // Insert all superset exercises at destination
       destExercises.splice(destination.index, 0, ...supersetExercises);
@@ -462,7 +478,7 @@ export function EnhancedExerciseDistribution({
       return;
     }
 
-    // Handle moving BETWEEN sections
+    // Handle moving BETWEEN sections (single exercise only, supersets are session-level)
     if (type === 'EXERCISE' && source.droppableId.startsWith('section-') && destination.droppableId.startsWith('section-') &&
         source.droppableId !== destination.droppableId) {
       const sourceSectionId = source.droppableId.replace('section-', '');
@@ -481,30 +497,16 @@ export function EnhancedExerciseDistribution({
       
       const draggedExercise = sourceExercises[source.index];
       
-      // Get all exercises in the superset
-      const supersetExercises = getSupersetExercises(
-        draggableId,
-        sourceExercises,
-        draggedExercise.dayDate,
-        draggedExercise.sessionIndex,
-        sourceSectionId
-      );
+      // For sections, just move single exercise
+      const remainingSourceExercises = sourceExercises.filter(ex => ex.id !== draggedExercise.id);
       
-      // Remove all superset exercises from source
-      const remainingSourceExercises = sourceExercises.filter(
-        ex => !supersetExercises.find(se => se.id === ex.id)
-      );
+      // Update exercise
+      draggedExercise.sectionId = destSectionId;
+      draggedExercise.dayDate = destSection.dayDate;
+      draggedExercise.sessionIndex = destSection.sessionIndex;
       
-      // Update all superset exercises
-      supersetExercises.forEach(ex => {
-        ex.sectionId = destSectionId;
-        ex.dayDate = destSection.dayDate;
-        ex.sessionIndex = destSection.sessionIndex;
-        ex.supersetId = undefined;
-      });
-      
-      // Insert all superset exercises at destination
-      destExercises.splice(destination.index, 0, ...supersetExercises);
+      // Insert at destination
+      destExercises.splice(destination.index, 0, draggedExercise);
       
       remainingSourceExercises.forEach((ex, idx) => ex.order = idx);
       destExercises.forEach((ex, idx) => ex.order = idx);
@@ -514,8 +516,7 @@ export function EnhancedExerciseDistribution({
       );
       
       onDistributionChange([...otherExercises, ...remainingSourceExercises, ...destExercises]);
-      const exerciseText = supersetExercises.length > 1 ? `${supersetExercises.length} exercises` : 'Exercise';
-      toast({ title: `${exerciseText} moved between sections`, description: `Moved to ${destSection.name}` });
+      toast({ title: 'Exercise moved between sections', description: `Moved to ${destSection.name}` });
       return;
     }
 
@@ -532,16 +533,13 @@ export function EnhancedExerciseDistribution({
       const destExercises = exerciseDistribution
         .filter(ex => ex.dayDate === destDayDate && ex.sessionIndex === parseInt(destSessionIndex) && !ex.sectionId)
         .sort((a, b) => a.order - b.order);
-
-      const draggedExercise = sourceExercises[source.index];
       
-      // Get all exercises in the superset
+      // Get all exercises in the superset using mapping
       const supersetExercises = getSupersetExercises(
         draggableId,
         sourceExercises,
         sourceDayDate,
-        parseInt(sourceSessionIndex),
-        undefined
+        parseInt(sourceSessionIndex)
       );
       
       // Remove all superset exercises from source
@@ -549,13 +547,62 @@ export function EnhancedExerciseDistribution({
         ex => !supersetExercises.find(se => se.id === ex.id)
       );
       
-      // Update all superset exercises and clear their superset ID
+      // Update all superset exercises
       supersetExercises.forEach(ex => {
         ex.dayDate = destDayDate;
         ex.sessionIndex = parseInt(destSessionIndex);
         ex.sectionId = undefined;
-        ex.supersetId = undefined;
       });
+
+      // Update SupersetMapping: transfer superset from source to destination
+      const newSupersets = structuredClone(supersets);
+      const match = findSessionSuperset(sourceDayDate, parseInt(sourceSessionIndex), draggableId);
+      
+      if (match) {
+        // Remove from source
+        const srcSessionSupersets = newSupersets[sourceDayDate]?.[parseInt(sourceSessionIndex)];
+        if (srcSessionSupersets) {
+          const movedIds = new Set(supersetExercises.map(ex => ex.id));
+          srcSessionSupersets[match.supersetId] = srcSessionSupersets[match.supersetId].filter(id => !movedIds.has(id));
+          
+          // Clean up empty superset
+          if (srcSessionSupersets[match.supersetId].length < 2) {
+            delete srcSessionSupersets[match.supersetId];
+          }
+          
+          // Clean up empty session
+          if (Object.keys(srcSessionSupersets).length === 0) {
+            delete newSupersets[sourceDayDate][parseInt(sourceSessionIndex)];
+          }
+          
+          // Clean up empty day
+          if (Object.keys(newSupersets[sourceDayDate] || {}).length === 0) {
+            delete newSupersets[sourceDayDate];
+          }
+        }
+        
+        // Add to destination
+        if (!newSupersets[destDayDate]) newSupersets[destDayDate] = {};
+        if (!newSupersets[destDayDate][parseInt(destSessionIndex)]) {
+          newSupersets[destDayDate][parseInt(destSessionIndex)] = {};
+        }
+        
+        const destSessionSupersets = newSupersets[destDayDate][parseInt(destSessionIndex)];
+        
+        // Find next available superset ID
+        const existingIds = Object.keys(destSessionSupersets)
+          .map(k => {
+            const match = k.match(/superset-(\d+)/);
+            return match ? parseInt(match[1]) : 0;
+          });
+        const nextId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
+        const newSupersetId = `superset-${nextId}`;
+        
+        // Create new superset with moved exercise IDs
+        destSessionSupersets[newSupersetId] = supersetExercises.map(ex => ex.id);
+        
+        onSupersetsChange(newSupersets);
+      }
 
       // Insert all superset exercises at destination
       destExercises.splice(destination.index, 0, ...supersetExercises);
