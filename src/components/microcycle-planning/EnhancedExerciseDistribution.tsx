@@ -338,8 +338,18 @@ export function EnhancedExerciseDistribution({
         );
         
         // Calculate correct insertion index accounting for removed exercises
-        const removedBefore = supersetExercises.filter(ex => ex.order < destination.index).length;
-        const insertIndex = Math.max(0, Math.min(destination.index - removedBefore, remainingExercises.length));
+        const isDraggingDown = destination.index > source.index;
+        const supersetSize = supersetExercises.length;
+
+        let insertIndex: number;
+        if (isDraggingDown) {
+          // When moving down, the destination index already accounts for the items being there
+          // After removal, we need to subtract the superset size to get the correct position
+          insertIndex = Math.min(destination.index - supersetSize, remainingExercises.length);
+        } else {
+          // When moving up, the destination index is where we want to be
+          insertIndex = destination.index;
+        }
         
         // Insert all superset exercises at destination
         remainingExercises.splice(insertIndex, 0, ...supersetExercises);
