@@ -212,6 +212,84 @@ export function EnhancedExerciseDistribution({
       .sort((a, b) => a.order - b.order);
   };
 
+  // Helper to get superset ID for an exercise
+  const getSupersetIdForExercise = (
+    dayDate: string,
+    sessionIndex: number,
+    exerciseId: string
+  ): string | undefined => {
+    return findSessionSuperset(dayDate, sessionIndex, exerciseId)?.supersetId;
+  };
+
+  // Block type for atomic superset handling
+  type Block = { items: ExerciseDistribution[]; supersetId?: string };
+
+  // Build blocks from exercises - treats contiguous superset exercises as a single block
+  const buildBlocks = (
+    list: ExerciseDistribution[],
+    dayDate: string,
+    sessionIndex: number
+  ): Block[] => {
+    const blocks: Block[] = [];
+    for (const ex of list) {
+      const ss = getSupersetIdForExercise(dayDate, sessionIndex, ex.id);
+      const last = blocks[blocks.length - 1];
+      if (last && last.supersetId === ss) {
+        last.items.push(ex);
+      } else {
+        blocks.push({ items: [ex], supersetId: ss });
+      }
+    }
+    return blocks;
+  };
+
+  // Map an item index to the nearest block boundary
+  const mapItemIndexToBlockIndex = (
+    blocks: Block[],
+    itemIndex: number,
+    preferAfter?: boolean
+  ): number => {
+    let prefix = 0;
+    for (let i = 0; i < blocks.length; i++) {
+      const size = blocks[i].items.length;
+      const start = prefix;
+      const end = prefix + size;
+      
+      if (itemIndex === start) return i;
+      if (itemIndex > start && itemIndex < end) {
+        // Inside block i - snap to nearest edge
+        if (preferAfter === true) return i + 1;
+        if (preferAfter === false) return i;
+        // Use distance to determine nearest edge
+        const distToStart = itemIndex - start;
+        const distToEnd = end - itemIndex;
+        return distToStart <= distToEnd ? i : i + 1;
+      }
+      if (itemIndex === end) return i + 1;
+      prefix = end;
+    }
+    return blocks.length;
+  };
+
+  // Compute safe insertion index when moving a block
+  const computeInsertIndexFromBlocks = (
+    blocks: Block[],
+    sourceBlockIndex: number,
+    destItemIndex: number,
+    preferAfter: boolean
+  ): number => {
+    const destBlockIndex = mapItemIndexToBlockIndex(blocks, destItemIndex, preferAfter);
+    const blocksAfterRemoval = blocks.slice(0, sourceBlockIndex).concat(blocks.slice(sourceBlockIndex + 1));
+    const adjustedDestBlockIndex = destBlockIndex > sourceBlockIndex ? destBlockIndex - 1 : destBlockIndex;
+    
+    // Sum sizes before adjustedDestBlockIndex
+    let insertIndex = 0;
+    for (let i = 0; i < adjustedDestBlockIndex; i++) {
+      insertIndex += blocksAfterRemoval[i].items.length;
+    }
+    return insertIndex;
+  };
+
   const handleDragEnd = (result: DropResult) => {
     const { source, destination, draggableId, type } = result;
 
@@ -229,6 +307,16 @@ export function EnhancedExerciseDistribution({
         ex => ex.dayDate === dayDate && ex.sessionIndex === parseInt(sessionIndex) && !ex.sectionId
       ).sort((a, b) => a.order - b.order);
 
+      // Use block-aware insertion to avoid splitting supersets
+      const blocks = buildBlocks(sessionExercises, dayDate, parseInt(sessionIndex));
+      const safeInsertIndex = mapItemIndexToBlockIndex(blocks, destination.index, false);
+      
+      // Calculate actual item index from block index
+      let insertIndex = 0;
+      for (let i = 0; i < safeInsertIndex; i++) {
+        insertIndex += blocks[i].items.length;
+      }
+
       const newExercise: ExerciseDistribution = {
         id: `ex-${Date.now()}-${Math.random()}`,
         exerciseId: exercise.exerciseId,
@@ -238,10 +326,10 @@ export function EnhancedExerciseDistribution({
         subCategory: exercise.subCategory,
         dayDate,
         sessionIndex: parseInt(sessionIndex),
-        order: destination.index,
+        order: insertIndex,
       };
 
-      sessionExercises.splice(destination.index, 0, newExercise);
+      sessionExercises.splice(insertIndex, 0, newExercise);
       sessionExercises.forEach((ex, idx) => ex.order = idx);
 
       const otherExercises = exerciseDistribution.filter(
@@ -316,44 +404,37 @@ export function EnhancedExerciseDistribution({
       }
       
       if (source.droppableId.startsWith('session-')) {
-        // Reordering within unsectioned area
+        // Reordering within unsectioned area - using block-aware logic
         const [dayDate, sessionIndex] = source.droppableId.replace('session-', '').split('::');
         const sessionExercises = exerciseDistribution
           .filter(ex => ex.dayDate === dayDate && ex.sessionIndex === parseInt(sessionIndex) && !ex.sectionId)
           .sort((a, b) => a.order - b.order);
 
-        const draggedExerciseId = draggableId;
+        // Build blocks to treat supersets atomically
+        const blocks = buildBlocks(sessionExercises, dayDate, parseInt(sessionIndex));
         
-        // Get all exercises in the superset using mapping
-        const supersetExercises = getSupersetExercises(
-          draggedExerciseId,
-          sessionExercises,
-          dayDate,
-          parseInt(sessionIndex)
-        );
+        // Find which block contains the dragged exercise
+        const sourceBlockIndex = blocks.findIndex(b => b.items.some(x => x.id === draggableId));
+        if (sourceBlockIndex === -1) return;
         
-        // Remove all superset exercises
+        const sourceBlock = blocks[sourceBlockIndex];
+        
+        // Determine drag direction based on the block's last item
+        const groupEndOrder = sourceBlock.items[sourceBlock.items.length - 1].order;
+        const preferAfter = destination.index > groupEndOrder;
+        
+        // Compute safe insertion index
+        const insertIndex = computeInsertIndexFromBlocks(blocks, sourceBlockIndex, destination.index, preferAfter);
+        
+        // Remove all exercises from source block
         const remainingExercises = sessionExercises.filter(
-          ex => !supersetExercises.find(se => se.id === ex.id)
+          ex => !sourceBlock.items.find(se => se.id === ex.id)
         );
         
-        // Calculate correct insertion index accounting for removed exercises
-        const isDraggingDown = destination.index > source.index;
-        const supersetSize = supersetExercises.length;
-
-        let insertIndex: number;
-        if (isDraggingDown) {
-          // When moving down, the destination index already accounts for the items being there
-          // After removal, we need to subtract the superset size to get the correct position
-          insertIndex = Math.min(destination.index - supersetSize, remainingExercises.length);
-        } else {
-          // When moving up, the destination index is where we want to be
-          insertIndex = destination.index;
-        }
+        // Insert all block exercises at safe index
+        remainingExercises.splice(insertIndex, 0, ...sourceBlock.items);
         
-        // Insert all superset exercises at destination
-        remainingExercises.splice(insertIndex, 0, ...supersetExercises);
-
+        // Re-index
         remainingExercises.forEach((ex, idx) => ex.order = idx);
 
         const otherExercises = exerciseDistribution.filter(
@@ -391,8 +472,18 @@ export function EnhancedExerciseDistribution({
       movedExercise.sessionIndex = parseInt(destSessionIndex);
       movedExercise.sectionId = undefined;
       
-      // Insert at destination
-      destExercises.splice(destination.index, 0, movedExercise);
+      // Use block-aware insertion to avoid splitting supersets
+      const blocks = buildBlocks(destExercises, destDayDate, parseInt(destSessionIndex));
+      const safeBlockIndex = mapItemIndexToBlockIndex(blocks, destination.index, false);
+      
+      // Calculate actual item index from block index
+      let insertIndex = 0;
+      for (let i = 0; i < safeBlockIndex; i++) {
+        insertIndex += blocks[i].items.length;
+      }
+      
+      // Insert at safe destination
+      destExercises.splice(insertIndex, 0, movedExercise);
       
       remainingSourceExercises.forEach((ex, idx) => ex.order = idx);
       destExercises.forEach((ex, idx) => ex.order = idx);
@@ -614,8 +705,18 @@ export function EnhancedExerciseDistribution({
         onSupersetsChange(newSupersets);
       }
 
-      // Insert all superset exercises at destination
-      destExercises.splice(destination.index, 0, ...supersetExercises);
+      // Use block-aware insertion to avoid splitting supersets
+      const destBlocks = buildBlocks(destExercises, destDayDate, parseInt(destSessionIndex));
+      const safeBlockIndex = mapItemIndexToBlockIndex(destBlocks, destination.index, false);
+      
+      // Calculate actual item index from block index
+      let insertIndex = 0;
+      for (let i = 0; i < safeBlockIndex; i++) {
+        insertIndex += destBlocks[i].items.length;
+      }
+
+      // Insert all superset exercises at safe destination
+      destExercises.splice(insertIndex, 0, ...supersetExercises);
 
       remainingSourceExercises.forEach((ex, idx) => ex.order = idx);
       destExercises.forEach((ex, idx) => ex.order = idx);
