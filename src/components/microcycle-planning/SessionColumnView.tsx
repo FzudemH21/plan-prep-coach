@@ -55,13 +55,13 @@ interface SessionColumnViewProps {
   sessionIndex: number;
   exercises: ExerciseDistribution[];
   sections: SessionSection[];
-  supersets: Record<string, string[]>;
+  supersets: Record<string, Record<string, string[]>>;  // Updated: sectionId -> supersetId -> exercise IDs
   totalSessionsOnDay: number;
   onDeleteExercise: (exerciseId: string) => void;
   onAddSection: () => void;
   onRenameSection: (sectionId: string, newName: string) => void;
   onDeleteSection: (sectionId: string) => void;
-  onToggleSuperset: (dayDate: string, sessionIndex: number, exerciseId1: string, exerciseId2: string) => void;
+  onToggleSuperset: (dayDate: string, sessionIndex: number, exerciseId1: string, exerciseId2: string, sectionId?: string) => void;
   onRemoveSession?: (dayDate: string, sessionIndex: number) => void;
   onRenameSession?: (dayDate: string, sessionIndex: number, newName: string) => void;
   onSessionIntensityChange?: (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => void;
@@ -97,8 +97,10 @@ export function SessionColumnView({
   const [editingSessionNameValue, setEditingSessionNameValue] = useState('');
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
 
-  const getSuperset = (exerciseId: string): string | undefined => {
-    return Object.entries(supersets).find(([_, ids]) => ids.includes(exerciseId))?.[0];
+  const getSuperset = (exerciseId: string, sectionId?: string): string | undefined => {
+    const sectionKey = sectionId || '__unsectioned__';
+    const sectionSupersets = supersets[sectionKey] || {};
+    return Object.entries(sectionSupersets).find(([_, ids]) => ids.includes(exerciseId))?.[0];
   };
 
   const getSupersetLabel = (supersetId: string): string => {
@@ -201,10 +203,10 @@ export function SessionColumnView({
     return colors[(number - 1) % colors.length] || colors[0];
   };
 
-  const renderExerciseCard = (exercise: ExerciseDistribution, index: number, allExercises: ExerciseDistribution[]) => {
-    const supersetId = getSuperset(exercise.id);
+  const renderExerciseCard = (exercise: ExerciseDistribution, index: number, allExercises: ExerciseDistribution[], sectionId?: string) => {
+    const supersetId = getSuperset(exercise.id, sectionId);
     const nextExercise = allExercises[index + 1];
-    const nextSupersetId = nextExercise ? getSuperset(nextExercise.id) : undefined;
+    const nextSupersetId = nextExercise ? getSuperset(nextExercise.id, sectionId) : undefined;
     const hasLinkToNext = supersetId && supersetId === nextSupersetId;
 
     return (
@@ -269,7 +271,7 @@ export function SessionColumnView({
                   variant="ghost"
                   size="sm"
                   className="h-6 w-6 p-0 rounded-full hover:bg-primary/10"
-                  onClick={() => onToggleSuperset(day.date, sessionIndex, exercise.id, nextExercise.id)}
+                  onClick={() => onToggleSuperset(day.date, sessionIndex, exercise.id, nextExercise.id, sectionId)}
                 >
                   <Link2
                     className={cn(
@@ -440,7 +442,7 @@ export function SessionColumnView({
                     >
                       <div className="space-y-2">
                         {exercisesBySection.unsectioned.map((exercise, index) => 
-                          renderExerciseCard(exercise, index, exercisesBySection.unsectioned)
+                          renderExerciseCard(exercise, index, exercisesBySection.unsectioned, undefined)
                         )}
                         {provided.placeholder}
                       </div>

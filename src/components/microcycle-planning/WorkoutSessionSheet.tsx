@@ -313,26 +313,32 @@ export function WorkoutSessionSheet({
   }, [mesocycleId, microcycleIndex, sessionIndex, parameterValues]);
 
   const getSupersetLabel = (exerciseId: string): string | undefined => {
-    const daySuperset = supersets[dayDate]?.[sessionIndex];
-    if (!daySuperset) return undefined;
+    const sessionSupersets = supersets[dayDate]?.[sessionIndex];
+    if (!sessionSupersets) return undefined;
     
-    for (const [supersetId, exerciseIds] of Object.entries(daySuperset)) {
-      if (exerciseIds.includes(exerciseId)) {
-        const match = supersetId.match(/superset-(\d+)/);
-        return match ? `SS${match[1]}` : `SS?`;
+    // Check all sections (including unsectioned)
+    for (const [sectionId, sectionSupersets] of Object.entries(sessionSupersets)) {
+      for (const [supersetId, exerciseIds] of Object.entries(sectionSupersets)) {
+        if (exerciseIds.includes(exerciseId)) {
+          const match = supersetId.match(/superset-(\d+)/);
+          return match ? `SS${match[1]}` : `SS?`;
+        }
       }
     }
     return undefined;
   };
 
   const getSupersetPartners = (exerciseId: string): string[] => {
-    const daySuperset = supersets[dayDate]?.[sessionIndex];
-    if (!daySuperset) return [];
+    const sessionSupersets = supersets[dayDate]?.[sessionIndex];
+    if (!sessionSupersets) return [];
     
-    for (const [supersetId, exerciseIds] of Object.entries(daySuperset)) {
-      if (exerciseIds.includes(exerciseId)) {
-        // Return all OTHER exercises in the same superset
-        return exerciseIds.filter(id => id !== exerciseId);
+    // Check all sections (including unsectioned)
+    for (const [sectionId, sectionSupersets] of Object.entries(sessionSupersets)) {
+      for (const [supersetId, exerciseIds] of Object.entries(sectionSupersets)) {
+        if (exerciseIds.includes(exerciseId)) {
+          // Return all OTHER exercises in the same superset
+          return exerciseIds.filter(id => id !== exerciseId);
+        }
       }
     }
     return [];
@@ -764,10 +770,13 @@ export function WorkoutSessionSheet({
     );
   };
 
-  const handleToggleSuperset = (exerciseId1: string, exerciseId2: string) => {
+  const handleToggleSuperset = (exerciseId1: string, exerciseId2: string, sectionId?: string) => {
+    const sectionKey = sectionId || '__unsectioned__';
+    
     // Work on a shallow clone to avoid mutating state directly
-    const daySupersetOriginal = supersets[dayDate]?.[sessionIndex] || {};
-    const daySuperset: Record<string, string[]> = JSON.parse(JSON.stringify(daySupersetOriginal));
+    const sessionSupersets = supersets[dayDate]?.[sessionIndex] || {};
+    const sectionSupersets = sessionSupersets[sectionKey] || {};
+    const daySuperset: Record<string, string[]> = JSON.parse(JSON.stringify(sectionSupersets));
     
     // Find if exercises are in any superset
     let superset1: string | null = null;
@@ -840,17 +849,16 @@ export function WorkoutSessionSheet({
     }
     
     // Update state
-    setSupersets({
-      ...supersets,
-      [dayDate]: {
-        ...supersets[dayDate],
-        [sessionIndex]: daySuperset
-      }
-    });
+    const newSupersets = { ...supersets };
+    if (!newSupersets[dayDate]) newSupersets[dayDate] = {};
+    if (!newSupersets[dayDate][sessionIndex]) newSupersets[dayDate][sessionIndex] = {};
+    newSupersets[dayDate][sessionIndex][sectionKey] = daySuperset;
+    
+    setSupersets(newSupersets);
     
     // Persist to localStorage
     const key = `workoutSupersets_${mesocycleId}_${dayDate}_${sessionIndex}`;
-    localStorage.setItem(key, JSON.stringify(daySuperset));
+    localStorage.setItem(key, JSON.stringify(newSupersets[dayDate][sessionIndex]));
   };
 
   const handleScrollToExercise = (exerciseId: string) => {
@@ -928,28 +936,35 @@ export function WorkoutSessionSheet({
     });
     
     // Duplicate superset relationships
-    const daySuperset = supersets[dayDate]?.[sessionIndex] || {};
-    const updatedSuperset = { ...daySuperset };
+    const sessionSupersets = supersets[dayDate]?.[sessionIndex] || {};
+    const updatedSessionSupersets = { ...sessionSupersets };
     
-    // For each superset that contains exercises from this section
-    Object.entries(daySuperset).forEach(([supersetId, exerciseIds]) => {
-      const sectionExerciseIds = exerciseIds.filter(id => 
-        section.exercises.some(ex => ex.id === id)
-      );
-      
-      // If all exercises in the superset are from this section, duplicate the superset
-      if (sectionExerciseIds.length === exerciseIds.length) {
-        // Create new superset with duplicated exercise IDs
-        const existingSupersetIds = Object.keys(updatedSuperset).map(id => {
-          const match = id.match(/superset-(\d+)/);
-          return match ? parseInt(match[1]) : 0;
-        });
-        const nextId = existingSupersetIds.length > 0 ? Math.max(...existingSupersetIds) + 1 : 1;
-        const newSupersetId = `superset-${nextId}`;
-        
-        const newExerciseIds = exerciseIds.map(id => exerciseIdMap.get(id) || id);
-        updatedSuperset[newSupersetId] = newExerciseIds;
+    // For each section in the session
+    Object.entries(sessionSupersets).forEach(([sectionId, sectionSupersets]) => {
+      if (!updatedSessionSupersets[sectionId]) {
+        updatedSessionSupersets[sectionId] = {};
       }
+      
+      // For each superset that contains exercises from this section
+      Object.entries(sectionSupersets).forEach(([supersetId, exerciseIds]) => {
+        const sectionExerciseIds = exerciseIds.filter(id => 
+          section.exercises.some(ex => ex.id === id)
+        );
+        
+        // If all exercises in the superset are from this section, duplicate the superset
+        if (sectionExerciseIds.length === exerciseIds.length) {
+          // Create new superset with duplicated exercise IDs
+          const existingSupersetIds = Object.keys(updatedSessionSupersets[sectionId]).map(id => {
+            const match = id.match(/superset-(\d+)/);
+            return match ? parseInt(match[1]) : 0;
+          });
+          const nextId = existingSupersetIds.length > 0 ? Math.max(...existingSupersetIds) + 1 : 1;
+          const newSupersetId = `superset-${nextId}`;
+          
+          const newExerciseIds = exerciseIds.map(id => exerciseIdMap.get(id) || id);
+          updatedSessionSupersets[sectionId][newSupersetId] = newExerciseIds;
+        }
+      });
     });
     
     // Update supersets state
@@ -957,13 +972,13 @@ export function WorkoutSessionSheet({
       ...supersets,
       [dayDate]: {
         ...supersets[dayDate],
-        [sessionIndex]: updatedSuperset
+        [sessionIndex]: updatedSessionSupersets
       }
     });
     
     // Persist supersets to localStorage
     const supersetsKey = `workoutSupersets_${mesocycleId}_${dayDate}_${sessionIndex}`;
-    localStorage.setItem(supersetsKey, JSON.stringify(updatedSuperset));
+    localStorage.setItem(supersetsKey, JSON.stringify(updatedSessionSupersets));
     
     // Create duplicated section
     const sectionIndex = workoutSections.findIndex(s => s.id === sectionId);

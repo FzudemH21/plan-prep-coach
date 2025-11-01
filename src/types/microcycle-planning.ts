@@ -102,7 +102,9 @@ export interface SessionSection {
 export interface SupersetMapping {
   [dayDate: string]: {
     [sessionIndex: number]: {
-      [supersetId: string]: string[]; // array of exercise IDs
+      [sectionId: string]: {  // section ID or "__unsectioned__" for session-level
+        [supersetId: string]: string[]; // array of exercise IDs
+      };
     };
   };
 }

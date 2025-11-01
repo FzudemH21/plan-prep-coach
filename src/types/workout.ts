@@ -28,7 +28,9 @@ export interface WorkoutSession {
 export interface SupersetMapping {
   [dayDate: string]: {
     [sessionIndex: number]: {
-      [supersetId: string]: string[]; // array of exerciseIds
+      [sectionId: string]: {  // section ID or "__unsectioned__" for session-level
+        [supersetId: string]: string[]; // array of exerciseIds
+      };
     };
   };
 }

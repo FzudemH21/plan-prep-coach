@@ -1025,7 +1025,7 @@ export default function MicrocyclePlanningPage() {
         }
         
         // Shift down all supersets after the removed session
-        const updatedSupersets: Record<number, Record<string, string[]>> = {};
+        const updatedSupersets: Record<number, Record<string, Record<string, string[]>>> = {};
         Object.entries(daySupersets).forEach(([idx, value]) => {
           const numIdx = Number(idx);
           if (numIdx > sessionIndex) {
