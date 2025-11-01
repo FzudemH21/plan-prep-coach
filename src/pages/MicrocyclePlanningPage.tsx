@@ -2488,6 +2488,7 @@ export default function MicrocyclePlanningPage() {
           onPasteSection={handlePasteSection}
           copiedSession={copiedSession}
           onCopySession={handleCopySession}
+          onPasteSession={handlePasteSession}
         />
       </div>
     );

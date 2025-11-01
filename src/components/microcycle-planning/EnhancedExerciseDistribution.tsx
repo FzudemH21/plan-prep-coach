@@ -83,6 +83,7 @@ interface EnhancedExerciseDistributionProps {
   onPasteSection?: (dayDate: string, sessionIndex: number) => void;
   copiedSession?: any;
   onCopySession?: (dayDate: string, sessionIndex: number) => void;
+  onPasteSession?: (dayDate: string) => void;
 }
 
 export function EnhancedExerciseDistribution({
@@ -110,6 +111,7 @@ export function EnhancedExerciseDistribution({
   onPasteSection,
   copiedSession,
   onCopySession,
+  onPasteSession,
 }: EnhancedExerciseDistributionProps) {
   const { toast } = useToast();
   const [selectedMicrocycleId, setSelectedMicrocycleId] = useState<string | null>(null);
@@ -1918,6 +1920,18 @@ export function EnhancedExerciseDistribution({
                                 <Plus className="h-4 w-4 mr-2" />
                                 Add Session
                               </Button>
+                              
+                              {copiedSession && (
+                                <Button
+                                  onClick={() => onPasteSession?.(day.date)}
+                                  className="w-full mt-2"
+                                  variant="default"
+                                  size="sm"
+                                >
+                                  <Copy className="mr-2 h-4 w-4" />
+                                  Paste Session ({copiedSession.exercises.length} exercise{copiedSession.exercises.length !== 1 ? 's' : ''})
+                                </Button>
+                              )}
                             </div>
                           </div>
                         );
