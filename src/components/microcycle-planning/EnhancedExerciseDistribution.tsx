@@ -77,6 +77,7 @@ interface EnhancedExerciseDistributionProps {
   onDayIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
   intensityLevels?: IntensityLevel[];
   onClearMicrocycle?: (microcycleId: string) => void;
+  onClearMesocycle?: (mesocycleId: string) => void;
 }
 
 export function EnhancedExerciseDistribution({
@@ -95,6 +96,7 @@ export function EnhancedExerciseDistribution({
   onRemoveSession,
   onRenameSession,
   onClearMicrocycle,
+  onClearMesocycle,
   onSessionIntensityChange,
   onDayIntensityChange,
   intensityLevels,
@@ -105,6 +107,7 @@ export function EnhancedExerciseDistribution({
   const [copyingMesocycle, setCopyingMesocycle] = useState(false);
   const [sessionCommentsMap, setSessionCommentsMap] = useState<Record<string, string>>({});
   const [clearingMicrocycleId, setClearingMicrocycleId] = useState<string | null>(null);
+  const [clearingMesocycleId, setClearingMesocycleId] = useState<string | null>(null);
 
   // Load session comments from localStorage on mount
   useEffect(() => {
@@ -1544,6 +1547,72 @@ export function EnhancedExerciseDistribution({
     });
   };
 
+  const handleClearMesocycle = (mesocycleId: string) => {
+    const meso = allMesocycles.find(m => m.id === mesocycleId);
+    if (!meso) return;
+    
+    // Get ALL days for ALL microcycles in this mesocycle
+    const mesocycleDays = trainingDays.filter(d => 
+      meso.microcycles.some(micro => micro.id === d.microcycleId)
+    );
+    const dayDates = mesocycleDays.map(d => d.date);
+    
+    // Remove exercises for these days
+    const filteredExercises = exerciseDistribution.filter(
+      ex => !dayDates.includes(ex.dayDate)
+    );
+    
+    // Remove sections for these days
+    const filteredSections = sessionSections.filter(
+      s => !dayDates.includes(s.dayDate)
+    );
+    
+    // Remove supersets for these days
+    const newSupersets = { ...supersets };
+    dayDates.forEach(date => {
+      delete newSupersets[date];
+    });
+    
+    // Clear session comments from localStorage
+    mesocycleDays.forEach(day => {
+      const sessionsCount = day.sessionNames?.length || 1;
+      for (let i = 0; i < sessionsCount; i++) {
+        const key = `sessionComments_${mesocycleId}_${day.date}_${i}`;
+        localStorage.removeItem(key);
+        
+        // Also remove from state
+        setSessionCommentsMap(prev => {
+          const newMap = { ...prev };
+          delete newMap[key];
+          return newMap;
+        });
+      }
+    });
+    
+    // Clear session intensities from localStorage
+    // NOTE: We do NOT clear day intensities (trainingDays[].intensity or dailyIntensityData)
+    mesocycleDays.forEach(day => {
+      const sessionsCount = day.sessionNames?.length || 1;
+      for (let i = 0; i < sessionsCount; i++) {
+        const key = `sessionIntensity_${mesocycleId}_${day.date}_${i}`;
+        localStorage.removeItem(key);
+      }
+    });
+    
+    // Call parent to reset session states (does NOT touch day intensities)
+    onClearMesocycle?.(mesocycleId);
+    
+    // Update state
+    onDistributionChange(filteredExercises);
+    onSectionsChange(filteredSections);
+    onSupersetsChange(newSupersets);
+    
+    toast({
+      title: 'Mesocycle cleared',
+      description: `All sessions and content removed from ${meso.name} (day intensities preserved)`,
+    });
+  };
+
   return (
     <>
       {/* Clear Microcycle Confirmation Dialog */}
@@ -1571,6 +1640,36 @@ export function EnhancedExerciseDistribution({
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Clear Microcycle
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Clear Mesocycle Confirmation Dialog */}
+      <AlertDialog open={!!clearingMesocycleId} onOpenChange={(open) => !open && setClearingMesocycleId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear Entire Mesocycle</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all exercises, sessions, sections, and comments from{' '}
+              <strong>
+                {clearingMesocycleId && allMesocycles.find(m => m.id === clearingMesocycleId)?.name}
+              </strong>
+              {' '}(all microcycles). Day intensities will be preserved. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (clearingMesocycleId) {
+                  handleClearMesocycle(clearingMesocycleId);
+                  setClearingMesocycleId(null);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Clear Mesocycle
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1622,6 +1721,17 @@ export function EnhancedExerciseDistribution({
                     }
                     return null;
                   })()}
+                  
+                  {/* Clear Mesocycle Button */}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 p-0 hover:bg-destructive/10 hover:text-destructive"
+                    title={`Clear all content from ${mesocycle.name} (preserves day intensities)`}
+                    onClick={() => setClearingMesocycleId(mesocycle.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
                 <p className="text-sm text-center mt-1">
                   {(() => {
