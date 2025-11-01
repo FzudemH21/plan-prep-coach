@@ -1766,10 +1766,8 @@ export function EnhancedExerciseDistribution({
                   // gap-2 (8px) between sessions within a day
                   // gap-4 (16px) between days
                   const totalWidth = days.reduce((total, day, dayIndex) => {
-                    const sessionsCount = day.sessions ?? 1;
-                    const gapCount = Math.max(0, sessionsCount - 1);
-                    const dayWidth = Math.max(320, sessionsCount * 320 + gapCount * 8);
-                    const gapAfterDay = dayIndex < days.length - 1 ? 16 : 0;
+                    const dayWidth = 320; // Fixed width per day column (w-80)
+                    const gapAfterDay = dayIndex < days.length - 1 ? 16 : 0; // gap-4 between days
                     return total + dayWidth + gapAfterDay;
                   }, 0);
                   
