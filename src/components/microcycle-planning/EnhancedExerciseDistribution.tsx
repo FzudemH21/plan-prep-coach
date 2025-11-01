@@ -234,7 +234,7 @@ export function EnhancedExerciseDistribution({
     for (const ex of list) {
       const ss = getSupersetIdForExercise(dayDate, sessionIndex, ex.id);
       const last = blocks[blocks.length - 1];
-      if (last && last.supersetId === ss) {
+      if (last && last.supersetId && last.supersetId === ss) {
         last.items.push(ex);
       } else {
         blocks.push({ items: [ex], supersetId: ss });
