@@ -5,7 +5,7 @@ import { IntensityLevel } from '@/types/training';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { cn } from '@/lib/utils';
 
 interface DayHeaderProps {
@@ -57,59 +57,54 @@ export function DayHeader({
             {(testNames && testNames.length > 0 || eventNames && eventNames.length > 0) && (
               <div className="flex gap-1">
                 {testNames && testNames.length > 0 && (
-                  <TooltipProvider>
-                    <Tooltip delayDuration={100}>
-                      <TooltipTrigger asChild>
-                        <Badge 
-                          variant="secondary" 
-                          className="h-5 px-1.5 text-xs cursor-help"
-                        >
-                          <Trophy className="h-3 w-3 mr-1" />
-                          {testNames.length > 1 ? `${testNames.length} Tests` : 'Test'}
-                        </Badge>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" align="start" className="max-w-xs">
-                        <div className="space-y-1">
-                          <p className="text-xs font-semibold">
-                            {testNames.length > 1 ? 'Tests:' : 'Test:'}
-                          </p>
-                          <div className="text-xs space-y-0.5">
-                            {testNames.map((testName, idx) => (
-                              <div key={idx}>• {testName}</div>
-                            ))}
-                          </div>
+                  <HoverCard openDelay={100}>
+                    <HoverCardTrigger asChild>
+                      <Badge 
+                        variant="secondary" 
+                        className="h-5 px-1.5 text-xs cursor-pointer"
+                      >
+                        <Trophy className="h-3 w-3 mr-1" />
+                        {testNames.length > 1 ? `${testNames.length} Tests` : 'Test'}
+                      </Badge>
+                    </HoverCardTrigger>
+                    <HoverCardContent side="top" align="start" className="w-auto max-w-xs p-3 z-[200]">
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold">
+                          {testNames.length > 1 ? 'Tests:' : 'Test:'}
+                        </p>
+                        <div className="text-xs space-y-0.5">
+                          {testNames.map((testName, idx) => (
+                            <div key={idx}>• {testName}</div>
+                          ))}
                         </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                      </div>
+                    </HoverCardContent>
+                  </HoverCard>
                 )}
-                
                 {eventNames && eventNames.length > 0 && (
-                  <TooltipProvider>
-                    <Tooltip delayDuration={100}>
-                      <TooltipTrigger asChild>
-                        <Badge 
-                          variant="secondary" 
-                          className="h-5 px-1.5 text-xs cursor-help"
-                        >
-                          <Calendar className="h-3 w-3 mr-1" />
-                          {eventNames.length > 1 ? `${eventNames.length} Events` : 'Event'}
-                        </Badge>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" align="start" className="max-w-xs">
-                        <div className="space-y-1">
-                          <p className="text-xs font-semibold">
-                            {eventNames.length > 1 ? 'Events:' : 'Event:'}
-                          </p>
-                          <div className="text-xs space-y-0.5">
-                            {eventNames.map((eventName, idx) => (
-                              <div key={idx}>• {eventName}</div>
-                            ))}
-                          </div>
+                  <HoverCard openDelay={100}>
+                    <HoverCardTrigger asChild>
+                      <Badge 
+                        variant="secondary" 
+                        className="h-5 px-1.5 text-xs cursor-pointer"
+                      >
+                        <Calendar className="h-3 w-3 mr-1" />
+                        {eventNames.length > 1 ? `${eventNames.length} Events` : 'Event'}
+                      </Badge>
+                    </HoverCardTrigger>
+                    <HoverCardContent side="top" align="start" className="w-auto max-w-xs p-3 z-[200]">
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold">
+                          {eventNames.length > 1 ? 'Events:' : 'Event:'}
+                        </p>
+                        <div className="text-xs space-y-0.5">
+                          {eventNames.map((eventName, idx) => (
+                            <div key={idx}>• {eventName}</div>
+                          ))}
                         </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                      </div>
+                    </HoverCardContent>
+                  </HoverCard>
                 )}
               </div>
             )}
