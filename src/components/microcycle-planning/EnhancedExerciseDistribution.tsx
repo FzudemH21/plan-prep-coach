@@ -419,9 +419,14 @@ export function EnhancedExerciseDistribution({
         
         const sourceBlock = blocks[sourceBlockIndex];
         
-        // Determine drag direction based on the block's last item
-        const groupEndOrder = sourceBlock.items[sourceBlock.items.length - 1].order;
-        const preferAfter = destination.index > groupEndOrder;
+            // Determine drag direction based on visual positions
+            // Find the visual end position of the source block
+            const sourceBlockEndIndex = sourceBlock.items.reduce((maxIdx, item) => {
+              const visualIdx = sessionExercises.findIndex(ex => ex.id === item.id);
+              return Math.max(maxIdx, visualIdx);
+            }, -1);
+
+            const preferAfter = destination.index > sourceBlockEndIndex;
         
         // Compute safe insertion index
         const insertIndex = computeInsertIndexFromBlocks(blocks, sourceBlockIndex, destination.index, preferAfter);
