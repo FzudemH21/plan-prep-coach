@@ -1780,53 +1780,57 @@ export function EnhancedExerciseDistribution({
                   })();
                   
                   return (
-            <div 
-              key={microId}
-              className={cn(
-                "text-center font-semibold py-2 border-r-2 border-border",
-                getIntensityColor(microcycle.intensity)
+            <React.Fragment key={microId}>
+              {microIndex > 0 && (
+                <div className="w-1 bg-border shrink-0" />
               )}
-              style={{ width: `${totalWidth}px` }}
-            >
-              <div className="flex items-center justify-center gap-2">
-                <span>{microcycle.name}</span>
-                {!isVeryFirstMicrocycle && (
+              <div 
+                className={cn(
+                  "text-center font-semibold py-2",
+                  getIntensityColor(microcycle.intensity)
+                )}
+                style={{ width: `${totalWidth}px` }}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <span>{microcycle.name}</span>
+                  {!isVeryFirstMicrocycle && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 w-6 p-0"
+                      disabled={copyingMicrocycleId === microId}
+                      title={(() => {
+                        const currentMesoIndex = allMesocycles.findIndex(m => m.id === mesocycle.id);
+                        if (microIndex > 0) {
+                          return `Copy setup from ${mesocycle.microcycles[microIndex - 1].name}`;
+                        } else if (currentMesoIndex > 0) {
+                          const prevMeso = allMesocycles[currentMesoIndex - 1];
+                          const prevMicro = prevMeso.microcycles[prevMeso.microcycles.length - 1];
+                          return `Copy setup from ${prevMicro.name} (${prevMeso.name})`;
+                        }
+                        return 'Copy setup from previous microcycle';
+                      })()}
+                      onClick={() => handleCopyFromPreviousMicrocycle(microId)}
+                    >
+                      {copyingMicrocycleId === microId ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Copy className="h-3 w-3" />
+                      )}
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-6 w-6 p-0"
-                    disabled={copyingMicrocycleId === microId}
-                    title={(() => {
-                      const currentMesoIndex = allMesocycles.findIndex(m => m.id === mesocycle.id);
-                      if (microIndex > 0) {
-                        return `Copy setup from ${mesocycle.microcycles[microIndex - 1].name}`;
-                      } else if (currentMesoIndex > 0) {
-                        const prevMeso = allMesocycles[currentMesoIndex - 1];
-                        const prevMicro = prevMeso.microcycles[prevMeso.microcycles.length - 1];
-                        return `Copy setup from ${prevMicro.name} (${prevMeso.name})`;
-                      }
-                      return 'Copy setup from previous microcycle';
-                    })()}
-                    onClick={() => handleCopyFromPreviousMicrocycle(microId)}
+                    className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
+                    title={`Clear all content from ${microcycle.name}`}
+                    onClick={() => setClearingMicrocycleId(microId)}
                   >
-                    {copyingMicrocycleId === microId ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <Copy className="h-3 w-3" />
-                    )}
+                    <Trash2 className="h-3 w-3" />
                   </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
-                  title={`Clear all content from ${microcycle.name}`}
-                  onClick={() => setClearingMicrocycleId(microId)}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
+                </div>
               </div>
-            </div>
+            </React.Fragment>
                   );
                 })}
               </div>
