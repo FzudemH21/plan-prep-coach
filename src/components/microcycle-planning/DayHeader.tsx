@@ -40,77 +40,84 @@ export function DayHeader({
     : 'bg-muted text-muted-foreground';
 
   return (
-    <TooltipProvider>
-      <div className="w-full border-b-2 border-border pb-2 mb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-xs font-semibold text-muted-foreground">
-              {dayOfWeek}
-            </span>
+    <div className="w-full border-b-2 border-border pb-2 mb-3">
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col">
+          <span className="text-xs font-semibold text-muted-foreground">
+            {dayOfWeek}
+          </span>
+          
+          {/* Date row with inline badges */}
+          <div className="flex items-center gap-2">
             <span className="text-sm font-medium">
               {monthDay}
             </span>
             
-            {/* Test/Event Badges with Tooltips */}
+            {/* Test/Event Badges - Now inline with date */}
             {(testNames && testNames.length > 0 || eventNames && eventNames.length > 0) && (
-              <div className="flex gap-1 mt-1">
+              <div className="flex gap-1">
                 {testNames && testNames.length > 0 && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Badge 
-                        variant="secondary" 
-                        className="h-5 px-1.5 text-xs cursor-help"
-                      >
-                        <Trophy className="h-3 w-3 mr-1" />
-                        {testNames.length > 1 ? `${testNames.length} Tests` : 'Test'}
-                      </Badge>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" align="start" className="max-w-xs">
-                      <div className="space-y-1">
-                        <p className="text-xs font-semibold">
-                          {testNames.length > 1 ? 'Tests:' : 'Test:'}
-                        </p>
-                        <div className="text-xs space-y-0.5">
-                          {testNames.map((testName, idx) => (
-                            <div key={idx}>• {testName}</div>
-                          ))}
+                  <TooltipProvider>
+                    <Tooltip delayDuration={100}>
+                      <TooltipTrigger asChild>
+                        <Badge 
+                          variant="secondary" 
+                          className="h-5 px-1.5 text-xs cursor-help"
+                        >
+                          <Trophy className="h-3 w-3 mr-1" />
+                          {testNames.length > 1 ? `${testNames.length} Tests` : 'Test'}
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" align="start" className="max-w-xs">
+                        <div className="space-y-1">
+                          <p className="text-xs font-semibold">
+                            {testNames.length > 1 ? 'Tests:' : 'Test:'}
+                          </p>
+                          <div className="text-xs space-y-0.5">
+                            {testNames.map((testName, idx) => (
+                              <div key={idx}>• {testName}</div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
                 
                 {eventNames && eventNames.length > 0 && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Badge 
-                        variant="secondary" 
-                        className="h-5 px-1.5 text-xs cursor-help"
-                      >
-                        <Calendar className="h-3 w-3 mr-1" />
-                        {eventNames.length > 1 ? `${eventNames.length} Events` : 'Event'}
-                      </Badge>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" align="start" className="max-w-xs">
-                      <div className="space-y-1">
-                        <p className="text-xs font-semibold">
-                          {eventNames.length > 1 ? 'Events:' : 'Event:'}
-                        </p>
-                        <div className="text-xs space-y-0.5">
-                          {eventNames.map((eventName, idx) => (
-                            <div key={idx}>• {eventName}</div>
-                          ))}
+                  <TooltipProvider>
+                    <Tooltip delayDuration={100}>
+                      <TooltipTrigger asChild>
+                        <Badge 
+                          variant="secondary" 
+                          className="h-5 px-1.5 text-xs cursor-help"
+                        >
+                          <Calendar className="h-3 w-3 mr-1" />
+                          {eventNames.length > 1 ? `${eventNames.length} Events` : 'Event'}
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" align="start" className="max-w-xs">
+                        <div className="space-y-1">
+                          <p className="text-xs font-semibold">
+                            {eventNames.length > 1 ? 'Events:' : 'Event:'}
+                          </p>
+                          <div className="text-xs space-y-0.5">
+                            {eventNames.map((eventName, idx) => (
+                              <div key={idx}>• {eventName}</div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
               </div>
             )}
           </div>
-          
-          {/* Day Intensity Badge - Always editable, syncs with Step 3 */}
-          {getIntensityColor && intensityLevels && onDayIntensityChange ? (
+        </div>
+        
+        {/* Day Intensity Badge - Always editable, syncs with Step 3 */}
+        {getIntensityColor && intensityLevels && onDayIntensityChange ? (
             <Popover open={intensityPopoverOpen} onOpenChange={setIntensityPopoverOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -157,9 +164,8 @@ export function DayHeader({
             <span className={cn("text-xs font-medium px-2 py-1 rounded", intensityClass)}>
               {intensity.replace('-', ' ').toUpperCase()}
             </span>
-          )}
-        </div>
+        )}
       </div>
-    </TooltipProvider>
+    </div>
   );
 }
