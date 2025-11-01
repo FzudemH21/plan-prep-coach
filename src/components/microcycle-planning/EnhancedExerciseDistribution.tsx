@@ -76,6 +76,7 @@ interface EnhancedExerciseDistributionProps {
   onSessionIntensityChange?: (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => void;
   onDayIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
   intensityLevels?: IntensityLevel[];
+  onClearMicrocycle?: (microcycleId: string) => void;
 }
 
 export function EnhancedExerciseDistribution({
@@ -93,6 +94,7 @@ export function EnhancedExerciseDistribution({
   onAddSession,
   onRemoveSession,
   onRenameSession,
+  onClearMicrocycle,
   onSessionIntensityChange,
   onDayIntensityChange,
   intensityLevels,
@@ -1528,6 +1530,9 @@ export function EnhancedExerciseDistribution({
       }
     });
     
+    // Call parent to reset session states
+    onClearMicrocycle?.(microcycleId);
+    
     // Update state
     onDistributionChange(filteredExercises);
     onSectionsChange(filteredSections);
@@ -1535,7 +1540,7 @@ export function EnhancedExerciseDistribution({
     
     toast({
       title: 'Microcycle cleared',
-      description: `All content removed from ${microcycle.name}`,
+      description: `All sessions and content removed from ${microcycle.name}`,
     });
   };
 

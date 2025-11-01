@@ -1084,6 +1084,39 @@ export default function MicrocyclePlanningPage() {
     });
   };
 
+  // Handle clearing all data for a microcycle
+  const handleClearMicrocycleData = (microcycleId: string) => {
+    const microcycle = mesocycles[currentMesocycleIndex].microcycles.find(m => m.id === microcycleId);
+    if (!microcycle) return;
+    
+    // Get all days for this microcycle
+    const microcycleDays = trainingDays.filter(d => d.microcycleId === microcycleId);
+    const dayDates = microcycleDays.map(d => d.date);
+    
+    // Reset daySplitStates for these days to 0
+    setDaySplitStates(prev => {
+      const newStates = { ...prev };
+      dayDates.forEach(date => {
+        newStates[date] = 0;
+      });
+      return newStates;
+    });
+    
+    // Clear sessionNames from TrainingDay objects
+    setTrainingDays(prev =>
+      prev.map(day => {
+        if (dayDates.includes(day.date)) {
+          return {
+            ...day,
+            sessions: 0,
+            sessionNames: []
+          };
+        }
+        return day;
+      })
+    );
+  };
+
   // Handle changing session intensity
   const handleSessionIntensityChange = (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => {
     const mesocycleId = currentMesocycle.id;
@@ -2296,6 +2329,7 @@ export default function MicrocyclePlanningPage() {
           onSessionIntensityChange={handleSessionIntensityChange}
           onDayIntensityChange={handleDayIntensityChange}
           intensityLevels={intensityLevels}
+          onClearMicrocycle={handleClearMicrocycleData}
         />
       </div>
     );
