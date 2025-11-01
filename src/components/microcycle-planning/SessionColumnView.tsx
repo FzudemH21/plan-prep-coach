@@ -563,7 +563,7 @@ export function SessionColumnView({
                               </div>
                             ) : (
                               exercisesBySection.sectioned[section.id]?.map((exercise, index) => 
-                                renderExerciseCard(exercise, index, exercisesBySection.sectioned[section.id])
+                                renderExerciseCard(exercise, index, exercisesBySection.sectioned[section.id], section.id)
                               )
                             )}
                             {provided.placeholder}
