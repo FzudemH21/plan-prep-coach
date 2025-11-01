@@ -64,6 +64,11 @@ interface WorkoutSessionSheetProps {
   onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event', name: string) => void;
   onUpdateTestComment?: (testId: string, comments: string) => void;
   onUpdateEventComment?: (eventId: string, comments: string) => void;
+  copiedSession?: { exercises: ExerciseDistribution[]; sections?: any[]; sourceDate: string; sessionIndex: number } | null;
+  copiedSection?: { exercises: ExerciseDistribution[]; sections: any[]; sourceSectionId: string; sourceDayDate: string; sourceSessionIndex: number } | null;
+  onCopySession?: (dayDate: string, sessionIndex: number) => void;
+  onCopySection?: (sectionId: string) => void;
+  onPasteSection?: (dayDate: string, sessionIndex: number) => void;
 }
 
 export function WorkoutSessionSheet({
@@ -87,7 +92,12 @@ export function WorkoutSessionSheet({
   onAddTestEvent,
   onDeleteTestEvent,
   onUpdateTestComment,
-  onUpdateEventComment
+  onUpdateEventComment,
+  copiedSession,
+  copiedSection,
+  onCopySession,
+  onCopySection,
+  onPasteSection
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(true);

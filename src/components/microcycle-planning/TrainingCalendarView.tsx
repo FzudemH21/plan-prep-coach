@@ -33,7 +33,7 @@ interface TrainingCalendarViewProps {
   onDeleteSession?: (dayDate: string, sessionIndex: number) => void;
   onCopySession?: (dayDate: string, sessionIndex: number) => void;
   onPasteSession?: (dayDate: string) => void;
-  copiedSession?: { exercises: ExerciseDistribution[]; sourceDate: string; sessionIndex: number } | null;
+  copiedSession?: { exercises: ExerciseDistribution[]; sections?: any[]; sourceDate: string; sessionIndex: number } | null;
   onCopyWeek?: (weekStartDate: string) => void;
   onClearWeek?: (weekStartDate: string) => void;
   onPasteWeek?: (weekStartDate: string) => void;
@@ -60,6 +60,9 @@ interface TrainingCalendarViewProps {
   ) => void;
   onUpdateTestComment?: (testId: string, comments: string) => void;
   onUpdateEventComment?: (eventId: string, comments: string) => void;
+  copiedSection?: { exercises: ExerciseDistribution[]; sections: any[]; sourceSectionId: string; sourceDayDate: string; sourceSessionIndex: number } | null;
+  onCopySection?: (sectionId: string) => void;
+  onPasteSection?: (dayDate: string, sessionIndex: number) => void;
 }
 
 export interface CalendarDay {
@@ -109,6 +112,9 @@ export function TrainingCalendarView({
   onSaveParameters,
   onUpdateTestComment,
   onUpdateEventComment,
+  copiedSection,
+  onCopySection,
+  onPasteSection,
 }: TrainingCalendarViewProps) {
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>('4week');
@@ -450,6 +456,11 @@ export function TrainingCalendarView({
           onDeleteTestEvent={onDeleteTestEvent}
           onUpdateTestComment={onUpdateTestComment}
           onUpdateEventComment={onUpdateEventComment}
+          copiedSession={copiedSession}
+          copiedSection={copiedSection}
+          onCopySession={onCopySession}
+          onCopySection={onCopySection}
+          onPasteSection={onPasteSection}
         />
       )}
     </div>

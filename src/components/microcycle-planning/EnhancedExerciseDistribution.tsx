@@ -78,6 +78,11 @@ interface EnhancedExerciseDistributionProps {
   intensityLevels?: IntensityLevel[];
   onClearMicrocycle?: (microcycleId: string) => void;
   onClearMesocycle?: (mesocycleId: string) => void;
+  copiedSection?: any;
+  onCopySection?: (sectionId: string) => void;
+  onPasteSection?: (dayDate: string, sessionIndex: number) => void;
+  copiedSession?: any;
+  onCopySession?: (dayDate: string, sessionIndex: number) => void;
 }
 
 export function EnhancedExerciseDistribution({
@@ -100,6 +105,11 @@ export function EnhancedExerciseDistribution({
   onSessionIntensityChange,
   onDayIntensityChange,
   intensityLevels,
+  copiedSection,
+  onCopySection,
+  onPasteSection,
+  copiedSession,
+  onCopySession,
 }: EnhancedExerciseDistributionProps) {
   const { toast } = useToast();
   const [selectedMicrocycleId, setSelectedMicrocycleId] = useState<string | null>(null);
@@ -1890,6 +1900,11 @@ export function EnhancedExerciseDistribution({
                                     sessionComments={sessionComments}
                                     onSessionCommentsChange={handleSessionCommentsChange}
                                     onSectionCommentsChange={handleSectionCommentsChange}
+                                    copiedSection={copiedSection}
+                                    onCopySection={onCopySection}
+                                    onPasteSection={onPasteSection}
+                                    copiedSession={copiedSession}
+                                    onCopySession={onCopySession}
                                   />
                                 );
                               })}

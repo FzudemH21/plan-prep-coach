@@ -88,6 +88,13 @@ export default function MicrocyclePlanningPage() {
     eventNames?: string[];
     splitState?: number;
   } | null>(null);
+  const [copiedSection, setCopiedSection] = useState<{
+    exercises: ExerciseDistribution[];
+    sections: SessionSection[];
+    sourceSectionId: string;
+    sourceDayDate: string;
+    sourceSessionIndex: number;
+  } | null>(null);
   
   // New state for enhanced exercise distribution
   const [sessionSections, setSessionSections] = useState<SessionSection[]>([]);
@@ -1445,6 +1452,10 @@ export default function MicrocyclePlanningPage() {
       ex => ex.dayDate === dayDate && ex.sessionIndex === sessionIndex
     );
     
+    const sessionSectionsForSession = sessionSections.filter(
+      s => s.dayDate === dayDate && s.sessionIndex === sessionIndex
+    );
+    
     if (sessionExercises.length === 0) {
       toast({
         title: "Cannot copy",
@@ -1456,13 +1467,15 @@ export default function MicrocyclePlanningPage() {
     
     setCopiedSession({
       exercises: sessionExercises,
+      sections: sessionSectionsForSession,
       sourceDate: dayDate,
       sessionIndex: sessionIndex
-    });
+    } as any);
     
+    const sectionCount = sessionSectionsForSession.length;
     toast({
       title: "Session copied",
-      description: `${sessionExercises.length} exercise(s) copied to clipboard`,
+      description: `${sessionExercises.length} exercise(s) ${sectionCount > 0 ? `in ${sectionCount} section(s)` : ''} copied to clipboard`,
     });
   };
 
@@ -1476,25 +1489,44 @@ export default function MicrocyclePlanningPage() {
     
     if (!copiedSession) return;
     
-    setExerciseDistribution(prev => {
-      // Get exercises for target day
-      const targetDayExercises = prev.filter(ex => ex.dayDate === targetDate);
-      
-      // Determine the next session index for this day
-      const maxSessionIndex = targetDayExercises.length > 0
-        ? Math.max(...targetDayExercises.map(ex => ex.sessionIndex))
-        : -1;
-      const newSessionIndex = maxSessionIndex + 1;
-      
-      // Create new exercises with updated date and session index
-      const pastedExercises = copiedSession.exercises.map(ex => ({
-        ...ex,
-        dayDate: targetDate,
-        sessionIndex: newSessionIndex
-      }));
-      
-      return [...prev, ...pastedExercises];
+    // Determine the next session index for this day
+    const targetDayExercises = exerciseDistribution.filter(ex => ex.dayDate === targetDate);
+    const maxSessionIndex = targetDayExercises.length > 0
+      ? Math.max(...targetDayExercises.map(ex => ex.sessionIndex))
+      : -1;
+    const newSessionIndex = maxSessionIndex + 1;
+    
+    // Create mapping from old section IDs to new section IDs
+    const sectionIdMapping = new Map<string, string>();
+    const copiedSections = (copiedSession as any).sections || [];
+    copiedSections.forEach((section: SessionSection) => {
+      const newSectionId = `section-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      sectionIdMapping.set(section.id, newSectionId);
     });
+    
+    // Create new sections with updated date and session index
+    const pastedSections = copiedSections.map((section: SessionSection) => ({
+      ...section,
+      id: sectionIdMapping.get(section.id)!,
+      dayDate: targetDate,
+      sessionIndex: newSessionIndex
+    }));
+    
+    // Create new exercises with updated date, session index, and remapped section IDs
+    const pastedExercises = copiedSession.exercises.map(ex => ({
+      ...ex,
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      dayDate: targetDate,
+      sessionIndex: newSessionIndex,
+      sectionId: ex.sectionId ? sectionIdMapping.get(ex.sectionId) : undefined
+    }));
+    
+    setExerciseDistribution(prev => [...prev, ...pastedExercises]);
+    setSessionSections(prev => [...prev, ...pastedSections]);
+    
+    // Save to localStorage
+    localStorage.setItem('exerciseDistribution', JSON.stringify([...exerciseDistribution, ...pastedExercises]));
+    localStorage.setItem('sessionSections', JSON.stringify([...sessionSections, ...pastedSections]));
     
     toast({
       title: "Session pasted",
@@ -1604,6 +1636,89 @@ export default function MicrocyclePlanningPage() {
     });
     
     setCopiedWeek(null);
+  };
+
+  // Handle copy section
+  const handleCopySection = (sectionId: string) => {
+    // Find the section
+    const section = sessionSections.find(s => s.id === sectionId);
+    if (!section) return;
+    
+    // Get exercises in this section
+    const sectionExercises = exerciseDistribution.filter(
+      ex => ex.sectionId === sectionId
+    );
+    
+    if (sectionExercises.length === 0) {
+      toast({
+        title: "Cannot copy",
+        description: "This section has no exercises",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setCopiedSection({
+      exercises: sectionExercises,
+      sections: [section],
+      sourceSectionId: sectionId,
+      sourceDayDate: section.dayDate,
+      sourceSessionIndex: section.sessionIndex
+    });
+    
+    toast({
+      title: "Section copied",
+      description: `Section "${section.name}" with ${sectionExercises.length} exercise(s) copied to clipboard`,
+    });
+  };
+
+  // Handle paste section
+  const handlePasteSection = (targetDayDate: string, targetSessionIndex: number) => {
+    if (!copiedSection) return;
+    
+    // Generate new section ID
+    const newSectionId = `section-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Determine the highest order for sections in target session
+    const targetSessionSections = sessionSections.filter(
+      s => s.dayDate === targetDayDate && s.sessionIndex === targetSessionIndex
+    );
+    const maxOrder = targetSessionSections.length > 0
+      ? Math.max(...targetSessionSections.map(s => s.order))
+      : -1;
+    const newOrder = maxOrder + 1;
+    
+    // Create new section
+    const pastedSection: SessionSection = {
+      ...copiedSection.sections[0],
+      id: newSectionId,
+      dayDate: targetDayDate,
+      sessionIndex: targetSessionIndex,
+      order: newOrder
+    };
+    
+    // Create new exercises with updated IDs, date, session index, and section ID
+    const pastedExercises = copiedSection.exercises.map(ex => ({
+      ...ex,
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      dayDate: targetDayDate,
+      sessionIndex: targetSessionIndex,
+      sectionId: newSectionId
+    }));
+    
+    setSessionSections(prev => [...prev, pastedSection]);
+    setExerciseDistribution(prev => [...prev, ...pastedExercises]);
+    
+    // Save to localStorage
+    localStorage.setItem('sessionSections', JSON.stringify([...sessionSections, pastedSection]));
+    localStorage.setItem('exerciseDistribution', JSON.stringify([...exerciseDistribution, ...pastedExercises]));
+    
+    toast({
+      title: "Section pasted",
+      description: `Section "${pastedSection.name}" with ${pastedExercises.length} exercise(s) pasted successfully`,
+    });
+    
+    setCopiedSection(null);
   };
 
   // Handle copy day
@@ -2368,6 +2483,11 @@ export default function MicrocyclePlanningPage() {
           intensityLevels={intensityLevels}
           onClearMicrocycle={handleClearMicrocycleData}
           onClearMesocycle={handleClearMesocycleData}
+          copiedSection={copiedSection}
+          onCopySection={handleCopySection}
+          onPasteSection={handlePasteSection}
+          copiedSession={copiedSession}
+          onCopySession={handleCopySession}
         />
       </div>
     );
@@ -2420,6 +2540,9 @@ export default function MicrocyclePlanningPage() {
               onSaveParameters={handleSaveParameters}
               onUpdateTestComment={handleUpdateTestComment}
               onUpdateEventComment={handleUpdateEventComment}
+              copiedSection={copiedSection}
+              onCopySection={handleCopySection}
+              onPasteSection={handlePasteSection}
             />
         </>
       )}

@@ -22,7 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, X, ChevronUp, MessageSquare } from 'lucide-react';
+import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, X, ChevronUp, MessageSquare, Copy } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { TrainingDay } from '@/types/daily-intensity';
 import { IntensityLevel } from '@/types/training';
@@ -73,6 +73,11 @@ interface SessionColumnViewProps {
   sessionComments?: string;
   onSessionCommentsChange?: (dayDate: string, sessionIndex: number, comments: string) => void;
   onSectionCommentsChange?: (sectionId: string, comments: string) => void;
+  copiedSection?: { exercises: ExerciseDistribution[]; sections: any[]; sourceSectionId: string; sourceDayDate: string; sourceSessionIndex: number } | null;
+  onCopySection?: (sectionId: string) => void;
+  onPasteSection?: (dayDate: string, sessionIndex: number) => void;
+  copiedSession?: { exercises: ExerciseDistribution[]; sections?: any[]; sourceDate: string; sessionIndex: number } | null;
+  onCopySession?: (dayDate: string, sessionIndex: number) => void;
 }
 
 export function SessionColumnView({
@@ -96,6 +101,11 @@ export function SessionColumnView({
   sessionComments,
   onSessionCommentsChange,
   onSectionCommentsChange,
+  copiedSection,
+  onCopySection,
+  onPasteSection,
+  copiedSession,
+  onCopySession,
 }: SessionColumnViewProps) {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionName, setEditingSectionName] = useState('');
@@ -362,6 +372,19 @@ export function SessionColumnView({
                   </Button>
                 )}
                 
+                {/* Copy Session Button */}
+                {onCopySession && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 hover:bg-accent"
+                    onClick={() => onCopySession(day.date, sessionIndex)}
+                    title="Copy session"
+                  >
+                    <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                  </Button>
+                )}
+                
                 {/* Delete Session Button (Trash) */}
                 {onRemoveSession && (
                   <Button
@@ -554,6 +577,18 @@ export function SessionColumnView({
                             </Badge>
                           </div>
                           <div className="flex items-center gap-1">
+                            {/* Copy Section Button */}
+                            {onCopySection && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 hover:bg-accent"
+                                onClick={() => onCopySection(section.id)}
+                                title="Copy section"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
@@ -637,6 +672,19 @@ export function SessionColumnView({
                 <Plus className="mr-1 h-3 w-3" />
                 Add Section
               </Button>
+
+              {/* Paste Section Button */}
+              {copiedSection && onPasteSection && (
+                <Button
+                  onClick={() => onPasteSection(day.date, sessionIndex)}
+                  className="w-full text-xs mt-2"
+                  variant="default"
+                  size="sm"
+                >
+                  <Copy className="mr-1 h-3 w-3" />
+                  Paste Section "{copiedSection.sections[0].name}" ({copiedSection.exercises.length} exercise{copiedSection.exercises.length !== 1 ? 's' : ''})
+                </Button>
+              )}
             </div>
           </ScrollArea>
         </CardContent>
