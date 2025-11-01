@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { ExtendedMesocycle } from '@/features/planner/types';
@@ -91,6 +91,40 @@ export function EnhancedExerciseDistribution({
   const [selectedMicrocycleId, setSelectedMicrocycleId] = useState<string | null>(null);
   const [copyingMicrocycleId, setCopyingMicrocycleId] = useState<string | null>(null);
   const [copyingMesocycle, setCopyingMesocycle] = useState(false);
+  const [sessionCommentsMap, setSessionCommentsMap] = useState<Record<string, string>>({});
+
+  // Load session comments from localStorage on mount
+  useEffect(() => {
+    if (!mesocycle?.id) return;
+    
+    const loadSessionComments = () => {
+      const commentsMap: Record<string, string> = {};
+      trainingDays.forEach(day => {
+        const sessionsCount = day.sessionNames?.length || 1;
+        for (let i = 0; i < sessionsCount; i++) {
+          const key = `sessionComments_${mesocycle.id}_${day.date}_${i}`;
+          const comments = localStorage.getItem(key);
+          if (comments) {
+            commentsMap[key] = comments;
+          }
+        }
+      });
+      setSessionCommentsMap(commentsMap);
+    };
+    
+    loadSessionComments();
+  }, [mesocycle?.id, trainingDays]);
+
+  // Debounced localStorage save function
+  const debouncedSaveToLocalStorage = useMemo(() => {
+    let timeoutId: NodeJS.Timeout;
+    return (key: string, value: string) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        localStorage.setItem(key, value);
+      }, 300);
+    };
+  }, []);
 
   // Filter training days for current mesocycle and group by week
   const currentMesocycleDays = useMemo(() => {
@@ -951,7 +985,12 @@ export function EnhancedExerciseDistribution({
   const handleSessionCommentsChange = (dayDate: string, sessionIndex: number, comments: string) => {
     if (!mesocycle?.id) return;
     const key = `sessionComments_${mesocycle.id}_${dayDate}_${sessionIndex}`;
-    localStorage.setItem(key, comments);
+    
+    // Update state immediately for instant UI response
+    setSessionCommentsMap(prev => ({ ...prev, [key]: comments }));
+    
+    // Debounce localStorage write
+    debouncedSaveToLocalStorage(key, comments);
   };
 
   const handleSectionCommentsChange = (sectionId: string, comments: string) => {
@@ -1598,9 +1637,9 @@ export function EnhancedExerciseDistribution({
 
                                 const daySupersets = supersets[day.date]?.[sessionIndex] || {};
 
-                                // Get session comments from localStorage
+                                // Get session comments from state
                                 const sessionCommentsKey = mesocycle.id ? `sessionComments_${mesocycle.id}_${day.date}_${sessionIndex}` : '';
-                                const sessionComments = sessionCommentsKey ? localStorage.getItem(sessionCommentsKey) || '' : '';
+                                const sessionComments = sessionCommentsKey ? (sessionCommentsMap[sessionCommentsKey] || '') : '';
 
                                 return (
                                   <SessionColumnView
