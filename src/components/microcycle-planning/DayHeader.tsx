@@ -59,15 +59,22 @@ export function DayHeader({
                 {testNames && testNames.length > 0 && (
                   <HoverCard openDelay={100}>
                     <HoverCardTrigger asChild>
-                      <Badge 
-                        variant="secondary" 
-                        className="h-5 px-1.5 text-xs cursor-pointer"
-                      >
-                        <Trophy className="h-3 w-3 mr-1" />
-                        {testNames.length > 1 ? `${testNames.length} Tests` : 'Test'}
-                      </Badge>
+                      <div className="cursor-pointer">
+                        <Badge 
+                          variant="secondary" 
+                          className="h-5 px-1.5 text-xs"
+                        >
+                          <Trophy className="h-3 w-3 mr-1" />
+                          {testNames.length > 1 ? `${testNames.length} Tests` : 'Test'}
+                        </Badge>
+                      </div>
                     </HoverCardTrigger>
-                    <HoverCardContent side="top" align="start" className="w-auto max-w-xs p-3 z-[200]">
+                    <HoverCardContent 
+                      side="top" 
+                      align="center" 
+                      sideOffset={5}
+                      className="w-auto max-w-xs p-3 z-[200]"
+                    >
                       <div className="space-y-1">
                         <p className="text-xs font-semibold">
                           {testNames.length > 1 ? 'Tests:' : 'Test:'}
@@ -84,15 +91,22 @@ export function DayHeader({
                 {eventNames && eventNames.length > 0 && (
                   <HoverCard openDelay={100}>
                     <HoverCardTrigger asChild>
-                      <Badge 
-                        variant="secondary" 
-                        className="h-5 px-1.5 text-xs cursor-pointer"
-                      >
-                        <Calendar className="h-3 w-3 mr-1" />
-                        {eventNames.length > 1 ? `${eventNames.length} Events` : 'Event'}
-                      </Badge>
+                      <div className="cursor-pointer">
+                        <Badge 
+                          variant="secondary" 
+                          className="h-5 px-1.5 text-xs"
+                        >
+                          <Calendar className="h-3 w-3 mr-1" />
+                          {eventNames.length > 1 ? `${eventNames.length} Events` : 'Event'}
+                        </Badge>
+                      </div>
                     </HoverCardTrigger>
-                    <HoverCardContent side="top" align="start" className="w-auto max-w-xs p-3 z-[200]">
+                    <HoverCardContent 
+                      side="top" 
+                      align="center" 
+                      sideOffset={5}
+                      className="w-auto max-w-xs p-3 z-[200]"
+                    >
                       <div className="space-y-1">
                         <p className="text-xs font-semibold">
                           {eventNames.length > 1 ? 'Events:' : 'Event:'}
