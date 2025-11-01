@@ -35,6 +35,7 @@ interface SessionSection {
   sessionIndex: number;
   name: string;
   order: number;
+  comments?: string;
 }
 
 interface SupersetMapping {
@@ -947,6 +948,19 @@ export function EnhancedExerciseDistribution({
     onSectionsChange(updated);
   };
 
+  const handleSessionCommentsChange = (dayDate: string, sessionIndex: number, comments: string) => {
+    if (!mesocycle?.id) return;
+    const key = `sessionComments_${mesocycle.id}_${dayDate}_${sessionIndex}`;
+    localStorage.setItem(key, comments);
+  };
+
+  const handleSectionCommentsChange = (sectionId: string, comments: string) => {
+    const updated = sessionSections.map(s => 
+      s.id === sectionId ? { ...s, comments } : s
+    );
+    onSectionsChange(updated);
+  };
+
   const handleDeleteSection = (sectionId: string) => {
     // Remove section
     const updated = sessionSections.filter(s => s.id !== sectionId);
@@ -1584,6 +1598,10 @@ export function EnhancedExerciseDistribution({
 
                                 const daySupersets = supersets[day.date]?.[sessionIndex] || {};
 
+                                // Get session comments from localStorage
+                                const sessionCommentsKey = mesocycle.id ? `sessionComments_${mesocycle.id}_${day.date}_${sessionIndex}` : '';
+                                const sessionComments = sessionCommentsKey ? localStorage.getItem(sessionCommentsKey) || '' : '';
+
                                 return (
                                   <SessionColumnView
                                     key={`${day.date}-${sessionIndex}`}
@@ -1604,6 +1622,9 @@ export function EnhancedExerciseDistribution({
                                     intensityLevels={intensityLevels}
                                     getIntensityColor={getIntensityColor}
                                     mesocycleId={mesocycle.id}
+                                    sessionComments={sessionComments}
+                                    onSessionCommentsChange={handleSessionCommentsChange}
+                                    onSectionCommentsChange={handleSectionCommentsChange}
                                   />
                                 );
                               })}

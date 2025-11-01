@@ -22,7 +22,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, X, ChevronUp } from 'lucide-react';
+import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, X, ChevronUp, MessageSquare } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 import { TrainingDay } from '@/types/daily-intensity';
 import { IntensityLevel } from '@/types/training';
 import { format, parseISO } from 'date-fns';
@@ -48,6 +49,7 @@ interface SessionSection {
   sessionIndex: number;
   name: string;
   order: number;
+  comments?: string;
 }
 
 interface SessionColumnViewProps {
@@ -68,6 +70,9 @@ interface SessionColumnViewProps {
   intensityLevels?: IntensityLevel[];
   getIntensityColor?: (intensity: IntensityLevel) => string;
   mesocycleId?: string;
+  sessionComments?: string;
+  onSessionCommentsChange?: (dayDate: string, sessionIndex: number, comments: string) => void;
+  onSectionCommentsChange?: (sectionId: string, comments: string) => void;
 }
 
 export function SessionColumnView({
@@ -88,6 +93,9 @@ export function SessionColumnView({
   intensityLevels,
   getIntensityColor,
   mesocycleId,
+  sessionComments,
+  onSessionCommentsChange,
+  onSectionCommentsChange,
 }: SessionColumnViewProps) {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionName, setEditingSectionName] = useState('');
@@ -425,6 +433,22 @@ export function SessionColumnView({
           </div>
         </CardHeader>
 
+        {/* Session Comments */}
+        {onSessionCommentsChange && (
+          <div className="px-3 pt-2 pb-2 border-b">
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+              <MessageSquare className="h-3 w-3" />
+              Session Notes
+            </label>
+            <Textarea
+              value={sessionComments || ''}
+              onChange={(e) => onSessionCommentsChange(day.date, sessionIndex, e.target.value)}
+              placeholder="Add notes or guidelines for this session..."
+              className="min-h-[60px] text-xs resize-none"
+            />
+          </div>
+        )}
+
         <CardContent className="flex-1 overflow-hidden p-3 pt-0">
           <ScrollArea className="h-full">
             <div className="space-y-3">
@@ -544,6 +568,22 @@ export function SessionColumnView({
                         </>
                       )}
                     </div>
+
+                    {/* Section Comments */}
+                    {!editingSectionId && onSectionCommentsChange && (
+                      <div className="px-2 pb-2">
+                        <label className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                          <MessageSquare className="h-3 w-3" />
+                          Section Notes
+                        </label>
+                        <Textarea
+                          value={section.comments || ''}
+                          onChange={(e) => onSectionCommentsChange(section.id, e.target.value)}
+                          placeholder="Add notes for this section..."
+                          className="min-h-[50px] text-xs resize-none"
+                        />
+                      </div>
+                    )}
 
                     {/* Section exercises droppable area */}
                     <Droppable droppableId={`section-${section.id}`} type="EXERCISE">

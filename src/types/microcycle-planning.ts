@@ -97,6 +97,7 @@ export interface SessionSection {
   sessionIndex: number;
   name: string;
   order: number;
+  comments?: string;
 }
 
 export interface SupersetMapping {
