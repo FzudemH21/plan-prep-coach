@@ -1496,6 +1496,13 @@ export default function MicrocyclePlanningPage() {
       : -1;
     const newSessionIndex = maxSessionIndex + 1;
     
+    // Update daySplitStates to ensure the new session is rendered
+    setDaySplitStates(prev => {
+      const current = prev[targetDate] ?? 1;
+      const needed = newSessionIndex + 1;
+      return { ...prev, [targetDate]: Math.max(current, needed) };
+    });
+    
     // Create mapping from old section IDs to new section IDs
     const sectionIdMapping = new Map<string, string>();
     const copiedSections = (copiedSession as any).sections || [];
@@ -1512,21 +1519,83 @@ export default function MicrocyclePlanningPage() {
       sessionIndex: newSessionIndex
     }));
     
-    // Create new exercises with updated date, session index, and remapped section IDs
-    const pastedExercises = copiedSession.exercises.map(ex => ({
-      ...ex,
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      dayDate: targetDate,
-      sessionIndex: newSessionIndex,
-      sectionId: ex.sectionId ? sectionIdMapping.get(ex.sectionId) : undefined
-    }));
+    // Create mapping from old exercise IDs to new exercise IDs (for superset mapping)
+    const oldToNewExerciseId: Record<string, string> = {};
     
-    setExerciseDistribution(prev => [...prev, ...pastedExercises]);
-    setSessionSections(prev => [...prev, ...pastedSections]);
+    // Create new exercises with updated date, session index, and remapped section IDs
+    const pastedExercises = copiedSession.exercises.map(ex => {
+      const newId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      oldToNewExerciseId[ex.id] = newId;
+      return {
+        ...ex,
+        id: newId,
+        dayDate: targetDate,
+        sessionIndex: newSessionIndex,
+        sectionId: ex.sectionId ? sectionIdMapping.get(ex.sectionId) : undefined
+      };
+    });
+    
+    // Copy supersets from the source session to the target session
+    const sourceSuperset = supersets[copiedSession.sourceDate]?.[copiedSession.sessionIndex];
+    if (sourceSuperset) {
+      const newSupersets = { ...supersets };
+      if (!newSupersets[targetDate]) {
+        newSupersets[targetDate] = {};
+      }
+      newSupersets[targetDate][newSessionIndex] = {};
+      
+      Object.entries(sourceSuperset).forEach(([sectionKey, supersetMap]) => {
+        // Remap section key
+        const destSectionKey = sectionKey === '__unsectioned__' 
+          ? '__unsectioned__' 
+          : (sectionIdMapping.get(sectionKey) || sectionKey);
+        
+        if (!newSupersets[targetDate][newSessionIndex][destSectionKey]) {
+          newSupersets[targetDate][newSessionIndex][destSectionKey] = {};
+        }
+        
+        // Remap exercise IDs in each superset
+        Object.entries(supersetMap).forEach(([supersetId, exerciseIds]) => {
+          const mappedIds = (exerciseIds as string[])
+            .map(id => oldToNewExerciseId[id])
+            .filter(Boolean) as string[];
+          
+          if (mappedIds.length > 0) {
+            newSupersets[targetDate][newSessionIndex][destSectionKey][supersetId] = mappedIds;
+          }
+        });
+      });
+      
+      setSupersets(newSupersets);
+      localStorage.setItem('supersets', JSON.stringify(newSupersets));
+    }
+    
+    // Update exercise distribution and session sections
+    const updatedExerciseDistribution = [...exerciseDistribution, ...pastedExercises];
+    const updatedSessionSections = [...sessionSections, ...pastedSections];
+    
+    setExerciseDistribution(updatedExerciseDistribution);
+    setSessionSections(updatedSessionSections);
     
     // Save to localStorage
-    localStorage.setItem('exerciseDistribution', JSON.stringify([...exerciseDistribution, ...pastedExercises]));
-    localStorage.setItem('sessionSections', JSON.stringify([...sessionSections, ...pastedSections]));
+    localStorage.setItem('exerciseDistribution', JSON.stringify(updatedExerciseDistribution));
+    localStorage.setItem('sessionSections', JSON.stringify(updatedSessionSections));
+    
+    // Update trainingDays to include the new session count
+    setTrainingDays(prev =>
+      prev.map(day => {
+        if (day.date !== targetDate) return day;
+        const sessionNames = [...(day.sessionNames || [])];
+        while (sessionNames.length <= newSessionIndex) {
+          sessionNames.push(`Session ${sessionNames.length + 1}`);
+        }
+        return {
+          ...day,
+          sessions: newSessionIndex + 1,
+          sessionNames
+        };
+      })
+    );
     
     toast({
       title: "Session pasted",
