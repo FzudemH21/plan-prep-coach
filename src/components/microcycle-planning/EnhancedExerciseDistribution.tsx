@@ -1560,14 +1560,16 @@ export function EnhancedExerciseDistribution({
                         return (
                           <div key={day.date} className="flex flex-col w-80">
                             {/* Day Header - Shows once per day */}
-                            <DayHeader
-                              date={day.date}
-                              intensity={day.intensity || 'moderate'}
-                              intensityLevels={intensityLevels}
-                              getIntensityColor={getIntensityColor}
-                              onDayIntensityChange={onDayIntensityChange}
-                              sessionCount={sessionsCount}
-                            />
+                <DayHeader
+                  date={day.date}
+                  intensity={day.intensity || 'moderate'}
+                  intensityLevels={intensityLevels}
+                  getIntensityColor={getIntensityColor}
+                  onDayIntensityChange={onDayIntensityChange}
+                  sessionCount={sessionsCount}
+                  testNames={day.testNames}
+                  eventNames={day.eventNames}
+                />
                             
                             {/* Sessions - Multiple can exist under one day */}
                             <div className="flex flex-col gap-2">
