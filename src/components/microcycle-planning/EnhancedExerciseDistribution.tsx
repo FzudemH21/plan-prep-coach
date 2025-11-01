@@ -1775,10 +1775,10 @@ export function EnhancedExerciseDistribution({
                 <div className="w-1 bg-border shrink-0" />
               )}
               <div 
-                className={cn(
-                  "relative shrink-0 text-center font-semibold py-2",
-                  getIntensityColor(microcycle.intensity)
-                )}
+                  className={cn(
+                    "relative shrink-0 text-center font-semibold py-3",
+                    getIntensityColor(microcycle.intensity)
+                  )}
               >
                 <div className="invisible pointer-events-none flex gap-4">
                   {days.map((_, i) => (
