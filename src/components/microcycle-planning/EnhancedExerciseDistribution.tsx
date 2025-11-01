@@ -12,7 +12,17 @@ import { useToast } from '@/hooks/use-toast';
 import { format, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Copy, Loader2, Plus } from 'lucide-react';
+import { Copy, Loader2, Plus, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 
 interface ExerciseDistribution {
@@ -92,6 +102,7 @@ export function EnhancedExerciseDistribution({
   const [copyingMicrocycleId, setCopyingMicrocycleId] = useState<string | null>(null);
   const [copyingMesocycle, setCopyingMesocycle] = useState(false);
   const [sessionCommentsMap, setSessionCommentsMap] = useState<Record<string, string>>({});
+  const [clearingMicrocycleId, setClearingMicrocycleId] = useState<string | null>(null);
 
   // Load session comments from localStorage on mount
   useEffect(() => {
@@ -1468,8 +1479,99 @@ export function EnhancedExerciseDistribution({
     }
   };
 
+  const handleClearMicrocycle = (microcycleId: string) => {
+    const microcycle = mesocycle.microcycles.find(m => m.id === microcycleId);
+    if (!microcycle) return;
+    
+    // Get all days for this microcycle
+    const microcycleDays = trainingDays.filter(d => d.microcycleId === microcycleId);
+    const dayDates = microcycleDays.map(d => d.date);
+    
+    // Remove exercises for these days
+    const filteredExercises = exerciseDistribution.filter(
+      ex => !dayDates.includes(ex.dayDate)
+    );
+    
+    // Remove sections for these days
+    const filteredSections = sessionSections.filter(
+      s => !dayDates.includes(s.dayDate)
+    );
+    
+    // Remove supersets for these days
+    const newSupersets = { ...supersets };
+    dayDates.forEach(date => {
+      delete newSupersets[date];
+    });
+    
+    // Clear session comments from localStorage
+    microcycleDays.forEach(day => {
+      const sessionsCount = day.sessionNames?.length || 1;
+      for (let i = 0; i < sessionsCount; i++) {
+        const key = `sessionComments_${mesocycle.id}_${day.date}_${i}`;
+        localStorage.removeItem(key);
+        
+        // Also remove from state
+        setSessionCommentsMap(prev => {
+          const newMap = { ...prev };
+          delete newMap[key];
+          return newMap;
+        });
+      }
+    });
+    
+    // Clear session intensities from localStorage
+    microcycleDays.forEach(day => {
+      const sessionsCount = day.sessionNames?.length || 1;
+      for (let i = 0; i < sessionsCount; i++) {
+        const key = `sessionIntensity_${mesocycle.id}_${day.date}_${i}`;
+        localStorage.removeItem(key);
+      }
+    });
+    
+    // Update state
+    onDistributionChange(filteredExercises);
+    onSectionsChange(filteredSections);
+    onSupersetsChange(newSupersets);
+    
+    toast({
+      title: 'Microcycle cleared',
+      description: `All content removed from ${microcycle.name}`,
+    });
+  };
+
   return (
-    <DragDropContext onDragEnd={handleDragEnd}>
+    <>
+      {/* Clear Microcycle Confirmation Dialog */}
+      <AlertDialog open={!!clearingMicrocycleId} onOpenChange={(open) => !open && setClearingMicrocycleId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear Microcycle</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all exercises, sessions, sections, and comments from{' '}
+              <strong>
+                {clearingMicrocycleId && mesocycle.microcycles.find(m => m.id === clearingMicrocycleId)?.name}
+              </strong>
+              . This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (clearingMicrocycleId) {
+                  handleClearMicrocycle(clearingMicrocycleId);
+                  setClearingMicrocycleId(null);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Clear Microcycle
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <DragDropContext onDragEnd={handleDragEnd}>
       <ResizablePanelGroup direction="horizontal" className="h-full w-full">
         <ResizablePanel defaultSize={30} minSize={20} maxSize={40}>
           <ExerciseLibraryPanel
@@ -1587,6 +1689,15 @@ export function EnhancedExerciseDistribution({
                     )}
                   </Button>
                 )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
+                  title={`Clear all content from ${microcycle.name}`}
+                  onClick={() => setClearingMicrocycleId(microId)}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
               </div>
             </div>
                   );
@@ -1691,5 +1802,6 @@ export function EnhancedExerciseDistribution({
         </ResizablePanel>
       </ResizablePanelGroup>
     </DragDropContext>
+    </>
   );
 }
