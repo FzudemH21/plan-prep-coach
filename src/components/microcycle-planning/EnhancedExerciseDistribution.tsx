@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
+
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { TrainingDay } from '@/types/daily-intensity';
@@ -1688,18 +1688,16 @@ export function EnhancedExerciseDistribution({
       </AlertDialog>
 
       <DragDropContext onDragEnd={handleDragEnd}>
-      <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-        <ResizablePanel defaultSize={30} minSize={20} maxSize={40}>
+      <div className="flex h-full w-full">
+        <div className="w-[30%] shrink-0 border-r">
           <ExerciseLibraryPanel
             exercisesByMethod={exercisesByMethod}
             exerciseDistribution={exerciseDistribution}
             mesocycle={mesocycle}
           />
-        </ResizablePanel>
+        </div>
 
-        <ResizableHandle withHandle />
-
-        <ResizablePanel defaultSize={70} minSize={60}>
+        <div className="flex-1 overflow-hidden">
           <div className="h-full overflow-x-auto p-4">
             <div className="w-max min-w-full">
               
@@ -1943,8 +1941,8 @@ export function EnhancedExerciseDistribution({
               
             </div>
           </div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
+        </div>
+      </div>
     </DragDropContext>
     </>
   );
