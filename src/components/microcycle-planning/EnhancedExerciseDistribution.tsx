@@ -84,6 +84,8 @@ interface EnhancedExerciseDistributionProps {
   copiedSession?: any;
   onCopySession?: (dayDate: string, sessionIndex: number) => void;
   onPasteSession?: (dayDate: string) => void;
+  onMoveSessionUp?: (dayDate: string, sessionIndex: number) => void;
+  onMoveSessionDown?: (dayDate: string, sessionIndex: number) => void;
 }
 
 export function EnhancedExerciseDistribution({
@@ -112,6 +114,8 @@ export function EnhancedExerciseDistribution({
   copiedSession,
   onCopySession,
   onPasteSession,
+  onMoveSessionUp,
+  onMoveSessionDown,
 }: EnhancedExerciseDistributionProps) {
   const { toast } = useToast();
   const [selectedMicrocycleId, setSelectedMicrocycleId] = useState<string | null>(null);
@@ -1905,6 +1909,8 @@ export function EnhancedExerciseDistribution({
                                     onPasteSection={onPasteSection}
                                     copiedSession={copiedSession}
                                     onCopySession={onCopySession}
+                                    onMoveSessionUp={onMoveSessionUp}
+                                    onMoveSessionDown={onMoveSessionDown}
                                   />
                                 );
                               })}

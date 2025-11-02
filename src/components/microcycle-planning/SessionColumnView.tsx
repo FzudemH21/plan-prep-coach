@@ -22,7 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, X, ChevronUp, MessageSquare, Copy } from 'lucide-react';
+import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, X, ChevronUp, MessageSquare, Copy, ArrowUp, ArrowDown } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { TrainingDay } from '@/types/daily-intensity';
 import { IntensityLevel } from '@/types/training';
@@ -78,6 +78,8 @@ interface SessionColumnViewProps {
   onPasteSection?: (dayDate: string, sessionIndex: number) => void;
   copiedSession?: { exercises: ExerciseDistribution[]; sections?: any[]; sourceDate: string; sessionIndex: number } | null;
   onCopySession?: (dayDate: string, sessionIndex: number) => void;
+  onMoveSessionUp?: (dayDate: string, sessionIndex: number) => void;
+  onMoveSessionDown?: (dayDate: string, sessionIndex: number) => void;
 }
 
 export function SessionColumnView({
@@ -106,6 +108,8 @@ export function SessionColumnView({
   onPasteSection,
   copiedSession,
   onCopySession,
+  onMoveSessionUp,
+  onMoveSessionDown,
 }: SessionColumnViewProps) {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionName, setEditingSectionName] = useState('');
@@ -383,6 +387,37 @@ export function SessionColumnView({
                   >
                     <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
                   </Button>
+                )}
+                
+                {/* Move Up/Down Arrows - only show when multiple sessions exist */}
+                {totalSessionsOnDay > 1 && (
+                  <>
+                    {/* Up arrow - hidden for first session */}
+                    {sessionIndex > 0 && onMoveSessionUp && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 hover:bg-accent"
+                        onClick={() => onMoveSessionUp(day.date, sessionIndex)}
+                        title="Move session up"
+                      >
+                        <ArrowUp className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                      </Button>
+                    )}
+                    
+                    {/* Down arrow - hidden for last session */}
+                    {sessionIndex < totalSessionsOnDay - 1 && onMoveSessionDown && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 hover:bg-accent"
+                        onClick={() => onMoveSessionDown(day.date, sessionIndex)}
+                        title="Move session down"
+                      >
+                        <ArrowDown className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                      </Button>
+                    )}
+                  </>
                 )}
                 
                 {/* Delete Session Button (Trash) */}

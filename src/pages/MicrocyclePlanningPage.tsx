@@ -2593,6 +2593,8 @@ export default function MicrocyclePlanningPage() {
           copiedSession={copiedSession}
           onCopySession={handleCopySession}
           onPasteSession={handlePasteSession}
+          onMoveSessionUp={handleMoveSessionUp}
+          onMoveSessionDown={handleMoveSessionDown}
         />
       </div>
     );
