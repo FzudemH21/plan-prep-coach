@@ -2359,6 +2359,41 @@ export default function MicrocyclePlanningPage() {
     });
   };
 
+  // Move session up within the same day
+  const handleMoveSessionUp = (dayDate: string, sessionIndex: number) => {
+    // Get all exercises for this day
+    const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
+    
+    // Get sorted session indices
+    const sessionIndices = Array.from(new Set(dayExercises.map(ex => ex.sessionIndex))).sort((a, b) => a - b);
+    
+    // Find current position in the sorted list
+    const currentPosition = sessionIndices.indexOf(sessionIndex);
+    
+    // Can only move up if not already at the top
+    if (currentPosition > 0) {
+      handleReorderSessionsInDay(dayDate, currentPosition, currentPosition - 1);
+    }
+  };
+
+  // Move session down within the same day
+  const handleMoveSessionDown = (dayDate: string, sessionIndex: number) => {
+    // Get all exercises for this day
+    const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
+    
+    // Get sorted session indices
+    const sessionIndices = Array.from(new Set(dayExercises.map(ex => ex.sessionIndex))).sort((a, b) => a - b);
+    
+    // Find current position in the sorted list
+    const currentPosition = sessionIndices.indexOf(sessionIndex);
+    const totalSessions = sessionIndices.length;
+    
+    // Can only move down if not already at the bottom
+    if (currentPosition < totalSessions - 1) {
+      handleReorderSessionsInDay(dayDate, currentPosition, currentPosition + 1);
+    }
+  };
+
   // Move session to a different day
   const handleMoveSessionToDay = (
     sourceDate: string,
@@ -2613,6 +2648,8 @@ export default function MicrocyclePlanningPage() {
               copiedSection={copiedSection}
               onCopySection={handleCopySection}
               onPasteSection={handlePasteSection}
+              onMoveSessionUp={handleMoveSessionUp}
+              onMoveSessionDown={handleMoveSessionDown}
             />
         </>
       )}

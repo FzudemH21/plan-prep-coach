@@ -60,6 +60,8 @@ interface WeekRowProps {
   onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
   getIntensityColor?: (intensity: IntensityLevel) => string;
   intensityLevels?: IntensityLevel[];
+  onMoveSessionUp?: (dayDate: string, sessionIndex: number) => void;
+  onMoveSessionDown?: (dayDate: string, sessionIndex: number) => void;
 }
 
 export function WeekRow({
@@ -87,6 +89,8 @@ export function WeekRow({
   onIntensityChange,
   getIntensityColor,
   intensityLevels,
+  onMoveSessionUp,
+  onMoveSessionDown,
 }: WeekRowProps) {
   const [isWeekHovering, setIsWeekHovering] = useState(false);
   const weekStartDate = week[0]?.dateString;
@@ -167,6 +171,8 @@ export function WeekRow({
             onIntensityChange={onIntensityChange}
             getIntensityColor={getIntensityColor}
             intensityLevels={intensityLevels}
+            onMoveSessionUp={onMoveSessionUp}
+            onMoveSessionDown={onMoveSessionDown}
           />
         ))}
       </div>

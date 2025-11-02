@@ -63,6 +63,8 @@ interface TrainingCalendarViewProps {
   copiedSection?: { exercises: ExerciseDistribution[]; sections: any[]; sourceSectionId: string; sourceDayDate: string; sourceSessionIndex: number } | null;
   onCopySection?: (sectionId: string) => void;
   onPasteSection?: (dayDate: string, sessionIndex: number) => void;
+  onMoveSessionUp?: (dayDate: string, sessionIndex: number) => void;
+  onMoveSessionDown?: (dayDate: string, sessionIndex: number) => void;
 }
 
 export interface CalendarDay {
@@ -115,6 +117,8 @@ export function TrainingCalendarView({
   copiedSection,
   onCopySection,
   onPasteSection,
+  onMoveSessionUp,
+  onMoveSessionDown,
 }: TrainingCalendarViewProps) {
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>('4week');
@@ -420,6 +424,8 @@ export function TrainingCalendarView({
                   onIntensityChange={onIntensityChange}
                   getIntensityColor={getIntensityColor}
                   intensityLevels={intensityLevels}
+                  onMoveSessionUp={onMoveSessionUp}
+                  onMoveSessionDown={onMoveSessionDown}
                 />
               ))}
             </div>

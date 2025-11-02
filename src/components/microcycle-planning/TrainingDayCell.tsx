@@ -3,7 +3,7 @@ import { format, isToday } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Dumbbell, Trophy, Calendar, GripVertical, MoreVertical, Copy, Trash2, ChevronDown } from 'lucide-react';
+import { Dumbbell, Trophy, Calendar, GripVertical, MoreVertical, Copy, Trash2, ChevronDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { IntensityLevel, SubGoal, Event } from '@/types/training';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
@@ -77,6 +77,10 @@ interface TrainingDayCellProps {
   onUpdateEventComment?: (eventId: string, comments: string) => void;
   copiedDay?: { exercises: ExerciseDistribution[]; sourceDate: string } | null;
   
+  // Session reordering
+  onMoveSessionUp?: (dayDate: string, sessionIndex: number) => void;
+  onMoveSessionDown?: (dayDate: string, sessionIndex: number) => void;
+  
   // Test/Event selection from macrocycle
   availableTests?: SubGoal[];
   availableEvents?: Event[];
@@ -101,6 +105,8 @@ export function TrainingDayCell({
   onUpdateTestComment,
   onUpdateEventComment,
   copiedDay,
+  onMoveSessionUp,
+  onMoveSessionDown,
   availableTests,
   availableEvents,
   dailyIntensityData,
@@ -374,13 +380,47 @@ export function TrainingDayCell({
                             )}
                           </div>
 
-                          {/* Three-dot menu */}
-                          <DropdownMenu 
-                            open={openDropdownId === `${day.dateString}-${session.sessionIndex}`}
-                            onOpenChange={(open) => {
-                              setOpenDropdownId(open ? `${day.dateString}-${session.sessionIndex}` : null);
-                            }}
-                          >
+                          <div className="flex items-center gap-0.5">
+                            {/* Up/Down arrows - only show if multiple sessions */}
+                            {day.sessions.length > 1 && (
+                              <>
+                                {/* Up arrow - hide for first session */}
+                                {idx > 0 && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onMoveSessionUp?.(day.dateString, session.sessionIndex);
+                                    }}
+                                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/20 transition-colors"
+                                    title="Move session up"
+                                  >
+                                    <ArrowUp className="h-3.5 w-3.5 text-muted-foreground" />
+                                  </button>
+                                )}
+                                
+                                {/* Down arrow - hide for last session */}
+                                {idx < day.sessions.length - 1 && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onMoveSessionDown?.(day.dateString, session.sessionIndex);
+                                    }}
+                                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/20 transition-colors"
+                                    title="Move session down"
+                                  >
+                                    <ArrowDown className="h-3.5 w-3.5 text-muted-foreground" />
+                                  </button>
+                                )}
+                              </>
+                            )}
+
+                            {/* Three-dot menu */}
+                            <DropdownMenu
+                              open={openDropdownId === `${day.dateString}-${session.sessionIndex}`}
+                              onOpenChange={(open) => {
+                                setOpenDropdownId(open ? `${day.dateString}-${session.sessionIndex}` : null);
+                              }}
+                            >
                             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                               <button className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/20 transition-colors">
                                 <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
@@ -407,7 +447,8 @@ export function TrainingDayCell({
                                 Delete session
                               </DropdownMenuItem>
                             </DropdownMenuContent>
-                          </DropdownMenu>
+                            </DropdownMenu>
+                          </div>
                         </div>
                         
                         {/* Primary Method Name */}
