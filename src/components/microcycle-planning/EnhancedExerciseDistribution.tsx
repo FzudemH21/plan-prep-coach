@@ -1689,7 +1689,7 @@ export function EnhancedExerciseDistribution({
 
       <DragDropContext onDragEnd={handleDragEnd}>
       <div className="flex h-full w-full">
-        <div className="w-[30%] shrink-0 border-r">
+        <div className="w-[15%] shrink-0 border-r">
           <ExerciseLibraryPanel
             exercisesByMethod={exercisesByMethod}
             exerciseDistribution={exerciseDistribution}
