@@ -1169,10 +1169,9 @@ export default function MicrocyclePlanningPage() {
     const sessionIntensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`;
     localStorage.setItem(sessionIntensityKey, intensity);
     
-    // Count total sessions for this day
-    const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
-    const uniqueSessionIndices = new Set(dayExercises.map(ex => ex.sessionIndex));
-    const sessionCount = uniqueSessionIndices.size || 1;
+    // Count total sessions for this day from trainingDays (source of truth)
+    const day = trainingDays.find(d => d.date === dayDate);
+    const sessionCount = day?.sessions ?? 1;
     const isSingleSession = sessionCount === 1;
     
     // If single session day, bidirectionally sync with day intensity
@@ -1232,10 +1231,9 @@ export default function MicrocyclePlanningPage() {
       return updated;
     });
     
-    // Count sessions for this day
-    const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
-    const uniqueSessionIndices = new Set(dayExercises.map(ex => ex.sessionIndex));
-    const sessionCount = uniqueSessionIndices.size || 1;
+    // Count sessions for this day from trainingDays (source of truth)
+    const day = trainingDays.find(d => d.date === dayDate);
+    const sessionCount = day?.sessions ?? 1;
     
     // For single-session days, also sync the session intensity
     if (sessionCount === 1) {
