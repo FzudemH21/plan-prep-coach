@@ -125,6 +125,41 @@ export function EnhancedExerciseDistribution({
   const [clearingMicrocycleId, setClearingMicrocycleId] = useState<string | null>(null);
   const [clearingMesocycleId, setClearingMesocycleId] = useState<string | null>(null);
 
+  // Helper to swap session comments in local state immediately
+  const swapSessionComments = (dayDate: string, indexA: number, indexB: number) => {
+    if (!mesocycle?.id) return;
+    
+    const keyA = `sessionComments_${mesocycle.id}_${dayDate}_${indexA}`;
+    const keyB = `sessionComments_${mesocycle.id}_${dayDate}_${indexB}`;
+    
+    setSessionCommentsMap(prev => {
+      const copy = { ...prev };
+      const temp = copy[keyA];
+      copy[keyA] = copy[keyB];
+      copy[keyB] = temp;
+      return copy;
+    });
+  };
+
+  // Wrapper for move up that also swaps comments locally
+  const handleMoveSessionUpLocal = (dayDate: string, sessionIndex: number) => {
+    if (sessionIndex > 0) {
+      swapSessionComments(dayDate, sessionIndex, sessionIndex - 1);
+    }
+    onMoveSessionUp?.(dayDate, sessionIndex);
+  };
+
+  // Wrapper for move down that also swaps comments locally
+  const handleMoveSessionDownLocal = (dayDate: string, sessionIndex: number) => {
+    const day = trainingDays.find(d => d.date === dayDate);
+    const sessionsCount = day?.sessions ?? 1;
+    
+    if (sessionIndex < sessionsCount - 1) {
+      swapSessionComments(dayDate, sessionIndex, sessionIndex + 1);
+    }
+    onMoveSessionDown?.(dayDate, sessionIndex);
+  };
+
   // Load session comments from localStorage on mount
   useEffect(() => {
     if (!mesocycle?.id) return;
@@ -1909,8 +1944,8 @@ export function EnhancedExerciseDistribution({
                                     onPasteSection={onPasteSection}
                                     copiedSession={copiedSession}
                                     onCopySession={onCopySession}
-                                    onMoveSessionUp={onMoveSessionUp}
-                                    onMoveSessionDown={onMoveSessionDown}
+                                    onMoveSessionUp={handleMoveSessionUpLocal}
+                                    onMoveSessionDown={handleMoveSessionDownLocal}
                                   />
                                 );
                               })}

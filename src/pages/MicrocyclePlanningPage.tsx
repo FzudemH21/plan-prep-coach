@@ -2308,50 +2308,127 @@ export default function MicrocyclePlanningPage() {
     );
   };
 
-  // Reorder sessions within the same day
+  // Reorder sessions within the same day - comprehensive update
   const handleReorderSessionsInDay = (
     dayDate: string, 
     fromIndex: number, 
     toIndex: number
   ) => {
-    console.log(`Reordering sessions in ${dayDate}: moving from index ${fromIndex} to ${toIndex}`);
+    // Get session count from trainingDays, not exerciseDistribution
+    const day = trainingDays.find(d => d.date === dayDate);
+    const sessionsCount = day?.sessions ?? 1;
     
-    setExerciseDistribution(prev => {
-      // Get all exercises for this day
-      const dayExercises = prev.filter(ex => ex.dayDate === dayDate);
-      const otherExercises = prev.filter(ex => ex.dayDate !== dayDate);
-      
-      // Group by session index
-      const sessions = new Map<number, ExerciseDistribution[]>();
-      dayExercises.forEach(ex => {
-        if (!sessions.has(ex.sessionIndex)) {
-          sessions.set(ex.sessionIndex, []);
-        }
-        sessions.get(ex.sessionIndex)!.push(ex);
-      });
-      
-      // Get ordered session indices (sorted)
-      const sessionIndices = Array.from(sessions.keys()).sort((a, b) => a - b);
-      
-      console.log('Session indices before reorder:', sessionIndices);
-      
-      // Reorder session indices
-      const [movedSession] = sessionIndices.splice(fromIndex, 1);
-      sessionIndices.splice(toIndex, 0, movedSession);
-      
-      console.log('Session indices after reorder:', sessionIndices);
-      
-      // Reassign session indices based on new order
-      const reorderedExercises: ExerciseDistribution[] = [];
-      sessionIndices.forEach((oldIndex, newIndex) => {
-        const exercises = sessions.get(oldIndex)!;
-        exercises.forEach(ex => {
-          reorderedExercises.push({ ...ex, sessionIndex: newIndex });
-        });
-      });
-      
-      return [...otherExercises, ...reorderedExercises];
+    // Guard: clamp indices and early return if no-op
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || 
+        fromIndex >= sessionsCount || toIndex >= sessionsCount) {
+      return;
+    }
+    
+    console.log(`Reordering sessions in ${dayDate}: moving from ${fromIndex} to ${toIndex} (total: ${sessionsCount})`);
+    
+    // Build positions array and reorder to create index mapping
+    const positions = Array.from({ length: sessionsCount }, (_, i) => i);
+    const [moved] = positions.splice(fromIndex, 1);
+    positions.splice(toIndex, 0, moved);
+    
+    // Create oldIndex -> newIndex map
+    const indexMap = new Map<number, number>();
+    positions.forEach((oldIdx, newIdx) => {
+      indexMap.set(oldIdx, newIdx);
     });
+    
+    console.log('Index mapping:', Array.from(indexMap.entries()));
+    
+    // 1. Update exerciseDistribution
+    setExerciseDistribution(prev => 
+      prev.map(ex => 
+        ex.dayDate === dayDate && indexMap.has(ex.sessionIndex)
+          ? { ...ex, sessionIndex: indexMap.get(ex.sessionIndex)! }
+          : ex
+      )
+    );
+    
+    // 2. Update sessionSections
+    setSessionSections(prev => 
+      prev.map(s => 
+        s.dayDate === dayDate && indexMap.has(s.sessionIndex)
+          ? { ...s, sessionIndex: indexMap.get(s.sessionIndex)! }
+          : s
+      )
+    );
+    
+    // 3. Update supersets
+    setSupersets(prev => {
+      const copy = { ...prev };
+      const dayMap = prev[dayDate];
+      if (!dayMap) return copy;
+      
+      const remapped: Record<number, Record<string, Record<string, string[]>>> = {};
+      Object.entries(dayMap).forEach(([sessionIdxStr, sectionMap]) => {
+        const oldIdx = Number(sessionIdxStr);
+        const newIdx = indexMap.get(oldIdx);
+        if (newIdx !== undefined) {
+          remapped[newIdx] = sectionMap as Record<string, Record<string, string[]>>;
+        }
+      });
+      copy[dayDate] = remapped as any;
+      return copy;
+    });
+    
+    // 4. Update trainingDays.sessionNames
+    setTrainingDays(prev => 
+      prev.map(day => {
+        if (day.date !== dayDate) return day;
+        
+        // Ensure sessionNames array exists and has correct length
+        const names = [...(day.sessionNames ?? Array.from({ length: sessionsCount }, (_, i) => `Session ${i + 1}`))];
+        while (names.length < sessionsCount) {
+          names.push(`Session ${names.length + 1}`);
+        }
+        
+        // Reorder based on positions mapping
+        const reorderedNames = positions.map(oldIdx => names[oldIdx] ?? `Session ${positions.indexOf(oldIdx) + 1}`);
+        
+        return { ...day, sessionNames: reorderedNames };
+      })
+    );
+    
+    // 5. Remap localStorage keys for intensity and comments
+    if (currentMesocycle?.id) {
+      const mesoId = currentMesocycle.id;
+      
+      // Read all old values
+      const oldIntensities: Record<number, string> = {};
+      const oldComments: Record<number, string> = {};
+      
+      for (let i = 0; i < sessionsCount; i++) {
+        const iKey = `sessionIntensity_${mesoId}_${dayDate}_${i}`;
+        const cKey = `sessionComments_${mesoId}_${dayDate}_${i}`;
+        
+        const iVal = localStorage.getItem(iKey);
+        if (iVal !== null) oldIntensities[i] = iVal;
+        
+        const cVal = localStorage.getItem(cKey);
+        if (cVal !== null) oldComments[i] = cVal;
+        
+        // Remove old keys to prevent collisions
+        localStorage.removeItem(iKey);
+        localStorage.removeItem(cKey);
+      }
+      
+      // Write new keys based on index mapping
+      positions.forEach((oldIdx, newIdx) => {
+        const iVal = oldIntensities[oldIdx];
+        if (iVal !== undefined) {
+          localStorage.setItem(`sessionIntensity_${mesoId}_${dayDate}_${newIdx}`, iVal);
+        }
+        
+        const cVal = oldComments[oldIdx];
+        if (cVal !== undefined) {
+          localStorage.setItem(`sessionComments_${mesoId}_${dayDate}_${newIdx}`, cVal);
+        }
+      });
+    }
     
     toast({
       title: "Session reordered",
@@ -2361,36 +2438,25 @@ export default function MicrocyclePlanningPage() {
 
   // Move session up within the same day
   const handleMoveSessionUp = (dayDate: string, sessionIndex: number) => {
-    // Get all exercises for this day
-    const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
-    
-    // Get sorted session indices
-    const sessionIndices = Array.from(new Set(dayExercises.map(ex => ex.sessionIndex))).sort((a, b) => a - b);
-    
-    // Find current position in the sorted list
-    const currentPosition = sessionIndices.indexOf(sessionIndex);
+    // Use trainingDays to get actual session count
+    const day = trainingDays.find(d => d.date === dayDate);
+    const sessionsCount = day?.sessions ?? 1;
     
     // Can only move up if not already at the top
-    if (currentPosition > 0) {
-      handleReorderSessionsInDay(dayDate, currentPosition, currentPosition - 1);
+    if (sessionIndex > 0) {
+      handleReorderSessionsInDay(dayDate, sessionIndex, sessionIndex - 1);
     }
   };
 
   // Move session down within the same day
   const handleMoveSessionDown = (dayDate: string, sessionIndex: number) => {
-    // Get all exercises for this day
-    const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
-    
-    // Get sorted session indices
-    const sessionIndices = Array.from(new Set(dayExercises.map(ex => ex.sessionIndex))).sort((a, b) => a - b);
-    
-    // Find current position in the sorted list
-    const currentPosition = sessionIndices.indexOf(sessionIndex);
-    const totalSessions = sessionIndices.length;
+    // Use trainingDays to get actual session count
+    const day = trainingDays.find(d => d.date === dayDate);
+    const sessionsCount = day?.sessions ?? 1;
     
     // Can only move down if not already at the bottom
-    if (currentPosition < totalSessions - 1) {
-      handleReorderSessionsInDay(dayDate, currentPosition, currentPosition + 1);
+    if (sessionIndex < sessionsCount - 1) {
+      handleReorderSessionsInDay(dayDate, sessionIndex, sessionIndex + 1);
     }
   };
 
