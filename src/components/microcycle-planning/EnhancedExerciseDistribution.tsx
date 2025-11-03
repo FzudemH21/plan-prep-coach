@@ -125,6 +125,21 @@ export function EnhancedExerciseDistribution({
   const [clearingMicrocycleId, setClearingMicrocycleId] = useState<string | null>(null);
   const [clearingMesocycleId, setClearingMesocycleId] = useState<string | null>(null);
 
+  // Helper function to format intensity labels
+  const formatIntensityLabel = (intensity: IntensityLevel): string => {
+    const labels: Record<IntensityLevel, string> = {
+      'off': 'OFF',
+      'deload': 'DELOAD',
+      'easy': 'EASY',
+      'easy-moderate': 'EASY-MODERATE',
+      'moderate': 'MODERATE',
+      'moderate-hard': 'MODERATE-HARD',
+      'hard': 'HARD',
+      'extremely-hard': 'EXTREMELY HARD'
+    };
+    return labels[intensity] || intensity.toUpperCase();
+  };
+
   // Helper to swap session comments in local state immediately
   const swapSessionComments = (dayDate: string, indexA: number, indexB: number) => {
     if (!mesocycle?.id) return;
@@ -1746,6 +1761,9 @@ export function EnhancedExerciseDistribution({
                   <h2 className="text-xl font-bold">
                     {mesocycle.name}
                   </h2>
+                  <Badge variant="secondary" className="font-semibold">
+                    {formatIntensityLabel(mesocycle.intensity)}
+                  </Badge>
                   {(() => {
                     const currentMesoIndex = allMesocycles.findIndex(m => m.id === mesocycle.id);
                     const isFirstMesocycle = currentMesoIndex === 0;
@@ -1825,6 +1843,9 @@ export function EnhancedExerciseDistribution({
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="flex items-center justify-center gap-2">
                     <span>{microcycle.name}</span>
+                    <Badge variant="outline" className="font-medium text-xs">
+                      {formatIntensityLabel(microcycle.intensity)}
+                    </Badge>
                     {!isVeryFirstMicrocycle && (
                       <Button
                         size="sm"
