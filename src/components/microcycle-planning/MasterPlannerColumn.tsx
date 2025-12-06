@@ -200,7 +200,7 @@ export function MasterPlannerColumn({
                   <TableCell className="py-0.5 px-1 font-medium">{idx + 1}</TableCell>
                   {displayParams.slice(0, 4).map(p => (
                     <TableCell key={p.name} className="py-0.5 px-1 text-muted-foreground">
-                      {storedParams[`${p.name}_set${idx + 1}`] || '-'}
+                      {storedParams[p.name] !== undefined ? storedParams[p.name] : '-'}
                     </TableCell>
                   ))}
                 </TableRow>
