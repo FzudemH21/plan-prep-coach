@@ -26,6 +26,7 @@ import { ExerciseSelection } from '@/types/microcycle-planning';
 import { cn } from '@/lib/utils';
 
 interface ExerciseDistribution {
+  id?: string;
   exerciseId: string;
   exerciseName: string;
   methodId: string;
@@ -33,6 +34,10 @@ interface ExerciseDistribution {
   subCategory?: string;
   dayDate: string;
   sessionIndex: number;
+  order?: number;
+  sectionId?: string;
+  supersetId?: string;
+  notes?: string;
 }
 
 interface SessionSectionProp {
@@ -240,7 +245,8 @@ export function WorkoutSessionSheet({
                   categoryName: ex.categoryName || '',
                   order: (ex as any).order ?? idx,
                   supersetId: (ex as any).supersetId,
-                  parameters
+                  parameters,
+                  notes: ex.notes
                 };
               })
               .sort((a, b) => a.order - b.order);
@@ -914,6 +920,17 @@ export function WorkoutSessionSheet({
     );
   };
 
+  const handleExerciseNotesChange = (exerciseId: string, notes: string) => {
+    setWorkoutSections(sections =>
+      sections.map(section => ({
+        ...section,
+        exercises: section.exercises.map(ex => 
+          ex.id === exerciseId ? { ...ex, notes } : ex
+        )
+      }))
+    );
+  };
+
   const handleToggleSuperset = (exerciseId1: string, exerciseId2: string, sectionId?: string) => {
     const sectionKey = sectionId || '__unsectioned__';
     
@@ -1565,6 +1582,7 @@ export function WorkoutSessionSheet({
                                 onDuplicateSection={() => handleDuplicateSection(section.id)}
                                 getSupersetLabel={getSupersetLabel}
                                 sectionDragHandleProps={provided.dragHandleProps}
+                                onExerciseNotesChange={handleExerciseNotesChange}
                               />
                             </div>
                           )}

@@ -89,6 +89,7 @@ export interface ExerciseDistribution {
   order: number;
   sectionId?: string;
   supersetId?: string;
+  notes?: string;
 }
 
 export interface SessionSection {

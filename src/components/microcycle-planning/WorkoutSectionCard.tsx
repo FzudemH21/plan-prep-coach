@@ -23,6 +23,7 @@ interface WorkoutSectionCardProps {
   onDuplicateSection: () => void;
   getSupersetLabel: (exerciseId: string) => string | undefined;
   sectionDragHandleProps?: any;
+  onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
 }
 
 export function WorkoutSectionCard({
@@ -39,7 +40,8 @@ export function WorkoutSectionCard({
   onDeleteSection,
   onDuplicateSection,
   getSupersetLabel,
-  sectionDragHandleProps
+  sectionDragHandleProps,
+  onExerciseNotesChange
 }: WorkoutSectionCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(section.name);
@@ -221,6 +223,8 @@ export function WorkoutSectionCard({
                                             onDuplicate={() => onDuplicateExercise(exercise.id)}
                                             onDelete={() => onDeleteExercise(exercise.id)}
                                             dragHandleProps={provided.dragHandleProps}
+                                            notes={exercise.notes}
+                                            onNotesChange={(notes) => onExerciseNotesChange?.(exercise.id, notes)}
                                           />
                                         </div>
                                       )}
@@ -287,6 +291,8 @@ export function WorkoutSectionCard({
                                     onDuplicate={() => onDuplicateExercise(exercise.id)}
                                     onDelete={() => onDeleteExercise(exercise.id)}
                                     dragHandleProps={provided.dragHandleProps}
+                                    notes={exercise.notes}
+                                    onNotesChange={(notes) => onExerciseNotesChange?.(exercise.id, notes)}
                                   />
                                 </div>
                               )}

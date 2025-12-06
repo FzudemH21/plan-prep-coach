@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { GripVertical, MoreVertical, Link2, Copy, Trash2, Plus } from 'lucide-react';
+import { GripVertical, MoreVertical, Link2, Copy, Trash2, Plus, StickyNote } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 import { WorkoutExercise } from '@/types/workout';
 import { ParameterInputField } from './ParameterInputField';
 import { getParametersForMethod } from '@/data/methodParameters';
@@ -18,6 +19,8 @@ interface WorkoutExerciseCardProps {
   onDuplicate: () => void;
   onDelete: () => void;
   dragHandleProps?: any;
+  notes?: string;
+  onNotesChange?: (notes: string) => void;
 }
 
 export function WorkoutExerciseCard({
@@ -28,7 +31,9 @@ export function WorkoutExerciseCard({
   onUnitChange,
   onDuplicate,
   onDelete,
-  dragHandleProps
+  dragHandleProps,
+  notes,
+  onNotesChange
 }: WorkoutExerciseCardProps) {
   // Get parameters with fallback: derive from exercise.parameters if dictionary is empty
   const methodParams = (() => {
@@ -245,6 +250,20 @@ export function WorkoutExerciseCard({
               ))}
             </div>
           )}
+
+          {/* Always visible notes section */}
+          <div className="mt-3 pt-3 border-t">
+            <div className="flex items-center gap-1 mb-1">
+              <StickyNote className="h-3.5 w-3.5 text-muted-foreground" />
+              <label className="text-xs text-muted-foreground">Notes</label>
+            </div>
+            <Textarea
+              value={notes || exercise.notes || ''}
+              onChange={(e) => onNotesChange?.(e.target.value)}
+              placeholder="Add exercise notes..."
+              className="text-xs min-h-[60px] resize-none"
+            />
+          </div>
         </div>
       </div>
     </Card>
