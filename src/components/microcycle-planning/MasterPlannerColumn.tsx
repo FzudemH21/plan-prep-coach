@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Dumbbell, Plus, Trophy, Calendar, AlertTriangle } from 'lucide-react';
 import { IntensityLevel } from '@/types/training';
 import { ExtendedMesocycle } from '@/features/planner/types';
@@ -73,6 +74,14 @@ interface MasterPlannerColumnProps {
   parameterValues?: Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>;
   currentMesocycle?: ExtendedMesocycle;
   trainingDays?: TrainingDay[];
+  onParameterChange?: (
+    dayDate: string,
+    sessionIndex: number,
+    methodId: string,
+    categoryName: string,
+    parameterName: string,
+    value: string | number
+  ) => void;
 }
 
 // Helper to format parameter names nicely
@@ -102,6 +111,7 @@ export function MasterPlannerColumn({
   parameterValues,
   currentMesocycle,
   trainingDays,
+  onParameterChange,
 }: MasterPlannerColumnProps) {
   const hasTraining = day.sessions.length > 0;
   const currentIntensity: IntensityLevel = dailyIntensityData?.find(di => di.date === day.dateString)?.intensity || 'moderate';
@@ -147,6 +157,46 @@ export function MasterPlannerColumn({
     return { storedParams, methodParams };
   };
 
+  // Editable input component with local state for debouncing
+  const EditableParamInput = ({ 
+    exercise, 
+    paramName, 
+    paramType, 
+    currentValue 
+  }: { 
+    exercise: ExerciseDistribution; 
+    paramName: string; 
+    paramType: 'number' | 'text'; 
+    currentValue: string | number | undefined;
+  }) => {
+    const [localValue, setLocalValue] = useState(currentValue ?? '');
+    
+    const handleBlur = useCallback(() => {
+      const finalValue = paramType === 'number' && localValue !== '' 
+        ? Number(localValue) 
+        : localValue;
+      onParameterChange?.(
+        day.dateString,
+        exercise.sessionIndex,
+        exercise.methodId,
+        exercise.categoryName,
+        paramName,
+        finalValue
+      );
+    }, [exercise, paramName, paramType, localValue]);
+
+    return (
+      <Input
+        type={paramType === 'number' ? 'number' : 'text'}
+        value={localValue}
+        onChange={(e) => setLocalValue(e.target.value)}
+        onBlur={handleBlur}
+        onClick={(e) => e.stopPropagation()}
+        className="h-5 w-12 text-[10px] px-1 py-0 text-center border-muted bg-background/50 focus:bg-background"
+      />
+    );
+  };
+
   // Render parameter values for an exercise
   const renderExerciseParams = (exercise: ExerciseDistribution) => {
     const { storedParams, methodParams } = getExerciseParams(exercise);
@@ -179,7 +229,7 @@ export function MasterPlannerColumn({
       );
     }
 
-    // If we have sets and display parameters, render a compact table
+    // If we have sets and display parameters, render a compact table with editable inputs
     if (setCount > 0 && displayParams.length > 0) {
       return (
         <div className="mt-2">
@@ -196,11 +246,16 @@ export function MasterPlannerColumn({
             </TableHeader>
             <TableBody>
               {Array.from({ length: setCount }, (_, idx) => (
-                <TableRow key={idx} className="h-5 border-0">
+                <TableRow key={idx} className="h-6 border-0">
                   <TableCell className="py-0.5 px-1 font-medium">{idx + 1}</TableCell>
                   {displayParams.slice(0, 4).map(p => (
-                    <TableCell key={p.name} className="py-0.5 px-1 text-muted-foreground">
-                      {storedParams[p.name] !== undefined ? storedParams[p.name] : '-'}
+                    <TableCell key={p.name} className="py-0 px-0.5">
+                      <EditableParamInput
+                        exercise={exercise}
+                        paramName={p.name}
+                        paramType={p.type === 'number' ? 'number' : 'text'}
+                        currentValue={storedParams[p.name]}
+                      />
                     </TableCell>
                   ))}
                 </TableRow>
@@ -211,20 +266,22 @@ export function MasterPlannerColumn({
       );
     }
 
-    // Fallback: if setCount is 0 but setParam exists, show just the parameters as badges
+    // Fallback: if setCount is 0 but setParam exists, show editable inputs in a flex layout
     return (
-      <div className="mt-1.5 flex flex-wrap gap-1">
+      <div className="mt-1.5 flex flex-wrap gap-1.5 items-center">
         {displayParams
-          .filter(p => storedParams[p.name] !== undefined && storedParams[p.name] !== '')
+          .filter(p => storedParams[p.name] !== undefined || onParameterChange)
           .slice(0, 4)
           .map(param => (
-            <Badge 
-              key={param.name} 
-              variant="outline" 
-              className="text-[9px] px-1.5 py-0 h-4 font-normal bg-muted/50"
-            >
-              {formatParamName(param.name)}: {storedParams[param.name]}
-            </Badge>
+            <div key={param.name} className="flex items-center gap-1">
+              <span className="text-[9px] text-muted-foreground">{formatParamName(param.name)}:</span>
+              <EditableParamInput
+                exercise={exercise}
+                paramName={param.name}
+                paramType={param.type === 'number' ? 'number' : 'text'}
+                currentValue={storedParams[param.name]}
+              />
+            </div>
           ))}
       </div>
     );
