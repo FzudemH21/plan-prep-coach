@@ -1247,6 +1247,24 @@ export default function MicrocyclePlanningPage() {
     });
   };
 
+  // Handle updating training day structure (sessions, sessionNames)
+  const handleUpdateTrainingDay = (dayDate: string, updates: Partial<TrainingDay>) => {
+    setTrainingDays(prev =>
+      prev.map(day => {
+        if (day.date !== dayDate) return day;
+        return { ...day, ...updates };
+      })
+    );
+    
+    // Also update daySplitStates if sessions is being updated
+    if (updates.sessions !== undefined) {
+      setDaySplitStates(prev => ({
+        ...prev,
+        [dayDate]: updates.sessions!
+      }));
+    }
+  };
+
   // Delete an exercise from all cells in exerciseSelectionData
   const handleDeleteExercise = (exerciseId: string, library: string) => {
     let removedCount = 0;
@@ -2659,6 +2677,7 @@ export default function MicrocyclePlanningPage() {
           onPasteSession={handlePasteSession}
           onMoveSessionUp={handleMoveSessionUp}
           onMoveSessionDown={handleMoveSessionDown}
+          onUpdateTrainingDay={handleUpdateTrainingDay}
         />
       </div>
     );
