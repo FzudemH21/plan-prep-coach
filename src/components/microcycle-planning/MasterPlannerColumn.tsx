@@ -1,10 +1,12 @@
 import React from 'react';
-import { format, getWeek } from 'date-fns';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dumbbell, Plus, Trophy, Calendar } from 'lucide-react';
 import { IntensityLevel } from '@/types/training';
+import { ExtendedMesocycle } from '@/features/planner/types';
+import { getParametersForMethod, MethodParameter } from '@/data/methodParameters';
 import {
   HoverCard,
   HoverCardTrigger,
@@ -60,7 +62,27 @@ interface MasterPlannerColumnProps {
   onAddSession?: (dayDate: string) => void;
   getIntensityColor?: (intensity: IntensityLevel) => string;
   dailyIntensityData?: any[];
+  parameterValues?: Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>;
+  currentMesocycle?: ExtendedMesocycle;
+  trainingDays?: TrainingDay[];
 }
+
+// Helper to format parameter names nicely
+const formatParamName = (name: string): string => {
+  return name
+    .replace(/_/g, ' ')
+    .replace(/per week/gi, '/wk')
+    .replace(/between/gi, 'b/w')
+    .replace(/percent/gi, '%')
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+    .replace(/1rm/gi, '1RM')
+    .replace(/ S$/, 's')
+    .replace(/ M$/, 'm')
+    .replace(/ Min$/, ' min')
+    .replace(/ Ms$/, ' ms');
+};
 
 export function MasterPlannerColumn({
   day,
@@ -69,9 +91,89 @@ export function MasterPlannerColumn({
   onAddSession,
   getIntensityColor,
   dailyIntensityData,
+  parameterValues,
+  currentMesocycle,
+  trainingDays,
 }: MasterPlannerColumnProps) {
   const hasTraining = day.sessions.length > 0;
   const currentIntensity: IntensityLevel = dailyIntensityData?.find(di => di.date === day.dateString)?.intensity || 'moderate';
+
+  // Get parameters for an exercise
+  const getExerciseParams = (exercise: ExerciseDistribution) => {
+    if (!currentMesocycle || !parameterValues) {
+      return { storedParams: {}, methodParams: [] };
+    }
+
+    // Find microcycle index for this day
+    const trainingDay = trainingDays?.find(td => td.date === day.dateString);
+    const microcycleId = trainingDay?.microcycleId;
+    const microcycleIndex = currentMesocycle.microcycles?.findIndex(m => m.id === microcycleId) ?? 0;
+
+    // Build method key (with or without category)
+    const fullMethodKey = exercise.categoryName 
+      ? `${exercise.methodId}::${exercise.categoryName}` 
+      : exercise.methodId;
+
+    // Get stored parameter values - try full key first, then just methodId
+    const mesocycleParams = parameterValues[currentMesocycle.id];
+    const microcycleParams = mesocycleParams?.[microcycleIndex];
+    
+    let storedParams = microcycleParams?.[fullMethodKey]?.[exercise.sessionIndex] 
+      || microcycleParams?.[exercise.methodId]?.[exercise.sessionIndex]
+      || {};
+
+    // Get parameter definitions from method
+    const methodParams = getParametersForMethod(exercise.methodId);
+
+    return { storedParams, methodParams };
+  };
+
+  // Render parameter values for an exercise
+  const renderExerciseParams = (exercise: ExerciseDistribution) => {
+    const { storedParams, methodParams } = getExerciseParams(exercise);
+    
+    if (methodParams.length === 0 || Object.keys(storedParams).length === 0) {
+      return null;
+    }
+
+    // Filter out frequency parameter for display
+    const displayParams = methodParams.filter(p => 
+      p.name !== 'frequency_per_week' && 
+      storedParams[p.name] !== undefined && 
+      storedParams[p.name] !== ''
+    );
+
+    if (displayParams.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="mt-1.5 flex flex-wrap gap-1">
+        {displayParams.slice(0, 4).map(param => {
+          const value = storedParams[param.name];
+          const displayValue = param.unit ? `${value}${param.unit}` : value;
+          
+          return (
+            <Badge 
+              key={param.name} 
+              variant="outline" 
+              className="text-[9px] px-1.5 py-0 h-4 font-normal bg-muted/50"
+            >
+              {formatParamName(param.name)}: {displayValue}
+            </Badge>
+          );
+        })}
+        {displayParams.length > 4 && (
+          <Badge 
+            variant="outline" 
+            className="text-[9px] px-1.5 py-0 h-4 font-normal bg-muted/50"
+          >
+            +{displayParams.length - 4} more
+          </Badge>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="flex-shrink-0 w-72 border-r last:border-r-0 flex flex-col bg-card">
@@ -169,20 +271,24 @@ export function MasterPlannerColumn({
                   )}
                 </div>
 
-                {/* Exercise List */}
-                <div className="space-y-1.5">
+                {/* Exercise List with Parameters */}
+                <div className="space-y-2">
                   {session.exercises.map((exercise, exIdx) => (
                     <div
                       key={`${exercise.exerciseId}-${exIdx}`}
-                      className="flex items-start gap-2 text-xs"
+                      className="text-xs"
                     >
-                      <span className="text-muted-foreground w-4 shrink-0">{exIdx + 1}.</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{exercise.exerciseName}</p>
-                        <p className="text-muted-foreground truncate text-[10px]">
-                          {exercise.categoryName}
-                          {exercise.subCategory && ` • ${exercise.subCategory}`}
-                        </p>
+                      <div className="flex items-start gap-2">
+                        <span className="text-muted-foreground w-4 shrink-0">{exIdx + 1}.</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{exercise.exerciseName}</p>
+                          <p className="text-muted-foreground truncate text-[10px]">
+                            {exercise.categoryName}
+                            {exercise.subCategory && ` • ${exercise.subCategory}`}
+                          </p>
+                          {/* Method-specific parameters */}
+                          {renderExerciseParams(exercise)}
+                        </div>
                       </div>
                     </div>
                   ))}

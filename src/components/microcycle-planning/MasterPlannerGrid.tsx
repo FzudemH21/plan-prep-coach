@@ -3,6 +3,7 @@ import { getDay } from 'date-fns';
 import { MasterPlannerColumn } from './MasterPlannerColumn';
 import { IntensityLevel } from '@/types/training';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { ExtendedMesocycle } from '@/features/planner/types';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -53,6 +54,9 @@ interface MasterPlannerGridProps {
   onAddSession?: (dayDate: string) => void;
   getIntensityColor?: (intensity: IntensityLevel) => string;
   dailyIntensityData?: any[];
+  parameterValues?: Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>;
+  currentMesocycle?: ExtendedMesocycle;
+  trainingDays?: TrainingDay[];
 }
 
 export function MasterPlannerGrid({
@@ -62,6 +66,9 @@ export function MasterPlannerGrid({
   onAddSession,
   getIntensityColor,
   dailyIntensityData,
+  parameterValues,
+  currentMesocycle,
+  trainingDays,
 }: MasterPlannerGridProps) {
   // Filter days that match the selected day of week
   // getDay returns 0=Sunday, 1=Monday, etc.
@@ -93,6 +100,9 @@ export function MasterPlannerGrid({
             onAddSession={onAddSession}
             getIntensityColor={getIntensityColor}
             dailyIntensityData={dailyIntensityData}
+            parameterValues={parameterValues}
+            currentMesocycle={currentMesocycle}
+            trainingDays={trainingDays}
           />
         ))}
       </div>
