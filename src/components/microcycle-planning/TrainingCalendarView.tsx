@@ -2,8 +2,10 @@ import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, LayoutGrid, Columns } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, startOfWeek, endOfWeek, addWeeks, subWeeks, isSameMonth, parseISO, isSameDay } from 'date-fns';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { MasterPlannerGrid } from './MasterPlannerGrid';
 import { cn } from '@/lib/utils';
 import { TrainingDay } from '@/types/daily-intensity';
 import { ExtendedMesocycle } from '@/features/planner/types';
@@ -109,7 +111,7 @@ export interface CalendarDay {
   totalExercises: number;
 }
 
-type ViewMode = '1week' | '2week' | '4week';
+type ViewMode = '1week' | '2week' | '4week' | 'master';
 
 export function TrainingCalendarView({
   exerciseDistribution,
@@ -154,6 +156,7 @@ export function TrainingCalendarView({
 }: TrainingCalendarViewProps) {
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>('4week');
+  const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number>(1); // 1=Monday
   const [currentDate, setCurrentDate] = useState<Date>(currentMesocycle.startDate);
   const [selectedSession, setSelectedSession] = useState<{
     dayDate: string;
@@ -162,6 +165,8 @@ export function TrainingCalendarView({
     totalSessions: number;
   } | null>(null);
   const [sessionDataVersion, setSessionDataVersion] = useState(0);
+
+  const dayOfWeekNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   // Helper function to get microcycle index from date
   const getMicrocycleIndex = (dayDate: string): number => {
@@ -282,6 +287,65 @@ export function TrainingCalendarView({
     return result;
   }, [calendarDays]);
 
+  // Calculate all days in the current mesocycle for Master Planner view
+  const allMesocycleDays = useMemo((): CalendarDay[] => {
+    if (viewMode !== 'master') return [];
+
+    const start = currentMesocycle.startDate;
+    const end = currentMesocycle.endDate;
+    const days = eachDayOfInterval({ start, end });
+
+    return days.map(date => {
+      const dateString = format(date, 'yyyy-MM-dd');
+      const exercises = exercisesByDate[dateString] || [];
+      const trainingDay = trainingDays.find(td => td.date === dateString);
+
+      // Group exercises by session
+      const sessionMap: Record<number, ExerciseDistribution[]> = {};
+      exercises.forEach(ex => {
+        if (!sessionMap[ex.sessionIndex]) {
+          sessionMap[ex.sessionIndex] = [];
+        }
+        sessionMap[ex.sessionIndex].push(ex);
+      });
+
+      const sessions = Object.entries(sessionMap)
+        .map(([idx, exs]) => {
+          const ids = exs
+            .map(e => (e as any).id ?? `${e.exerciseId}-${e.methodId ?? ''}`)
+            .sort()
+            .join('|');
+          const sessionId = `${dateString}__${ids || `empty-${idx}`}`;
+          
+          let sessionName = trainingDay?.sessionNames?.[parseInt(idx)] || `Session ${parseInt(idx) + 1}`;
+          
+          const intensityKey = `sessionIntensity_${currentMesocycle.id}_${dateString}_${idx}`;
+          const storedIntensity = localStorage.getItem(intensityKey);
+          const dayIntensity = trainingDay ? (dailyIntensityData?.find(di => di.date === dateString)?.intensity || 'moderate') : 'moderate';
+          const sessionIntensity = storedIntensity || dayIntensity;
+          
+          return {
+            id: sessionId,
+            sessionIndex: parseInt(idx),
+            sessionName,
+            exercises: exs,
+            methods: [...new Set(exs.map(e => e.methodId))],
+            sessionIntensity: sessionIntensity as IntensityLevel,
+          };
+        })
+        .sort((a, b) => a.sessionIndex - b.sessionIndex);
+
+      return {
+        date,
+        dateString,
+        isCurrentMonth: true,
+        trainingDay,
+        sessions,
+        totalExercises: exercises.length,
+      };
+    });
+  }, [viewMode, currentMesocycle, exercisesByDate, trainingDays, dailyIntensityData]);
+
   const handlePrevious = () => {
     setCurrentDate(prev => subWeeks(prev, 1));
   };
@@ -329,129 +393,197 @@ export function TrainingCalendarView({
           </div>
             
             <div className="flex flex-wrap items-center gap-2">
-              {/* View Mode Toggle */}
+              {/* Main View Toggle: Calendar vs Master Planner */}
               <div className="flex gap-1 border rounded-md p-1">
                 <Button
-                  variant={viewMode === '1week' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('1week')}
-                  className="h-8 px-3"
-                >
-                  1 Week
-                </Button>
-                <Button
-                  variant={viewMode === '2week' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('2week')}
-                  className="h-8 px-3"
-                >
-                  2 Weeks
-                </Button>
-                <Button
-                  variant={viewMode === '4week' ? 'default' : 'ghost'}
+                  variant={viewMode !== 'master' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setViewMode('4week')}
-                  className="h-8 px-3"
+                  className="h-8 px-3 gap-1.5"
                 >
-                  4 Weeks
+                  <LayoutGrid className="h-4 w-4" />
+                  Calendar
+                </Button>
+                <Button
+                  variant={viewMode === 'master' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('master')}
+                  className="h-8 px-3 gap-1.5"
+                >
+                  <Columns className="h-4 w-4" />
+                  Master Planner
                 </Button>
               </div>
 
-              {/* Navigation */}
-              <div className="flex gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handlePrevious}
-                  className="h-8 w-8 p-0"
+              {/* Week view toggle - only show in Calendar mode */}
+              {viewMode !== 'master' && (
+                <div className="flex gap-1 border rounded-md p-1">
+                  <Button
+                    variant={viewMode === '1week' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('1week')}
+                    className="h-8 px-3"
+                  >
+                    1W
+                  </Button>
+                  <Button
+                    variant={viewMode === '2week' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('2week')}
+                    className="h-8 px-3"
+                  >
+                    2W
+                  </Button>
+                  <Button
+                    variant={viewMode === '4week' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('4week')}
+                    className="h-8 px-3"
+                  >
+                    4W
+                  </Button>
+                </div>
+              )}
+
+              {/* Day selector - only show in Master Planner mode */}
+              {viewMode === 'master' && (
+                <Select
+                  value={selectedDayOfWeek.toString()}
+                  onValueChange={(v) => setSelectedDayOfWeek(parseInt(v))}
                 >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleToday}
-                  className="h-8 px-3"
-                >
-                  Today
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleNext}
-                  className="h-8 w-8 p-0"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
+                  <SelectTrigger className="w-32 h-8">
+                    <SelectValue placeholder="Select Day" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {dayOfWeekNames.map((day, idx) => (
+                      <SelectItem key={idx} value={(idx + 1).toString()}>
+                        {day}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {/* Navigation - only show in Calendar mode */}
+              {viewMode !== 'master' && (
+                <div className="flex gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePrevious}
+                    className="h-8 w-8 p-0"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleToday}
+                    className="h-8 px-3"
+                  >
+                    Today
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleNext}
+                    className="h-8 w-8 p-0"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </CardHeader>
       </Card>
 
-      {/* Calendar Grid */}
+      {/* Calendar Grid or Master Planner */}
       <Card className="flex-1">
         <CardContent className="p-4">
-          <DragDropContext onDragEnd={(result) => onSessionDragEnd?.(result)}>
-            <div className="space-y-2">
-              {/* Day Headers */}
-              <div className="grid grid-cols-7 gap-2 mb-2">
-                {dayHeaders.map(day => (
-                  <div
-                    key={day}
-                    className="text-center text-sm font-semibold text-muted-foreground py-2"
-                  >
-                    {day}
-                  </div>
+          {viewMode === 'master' ? (
+            /* Master Planner View */
+            <MasterPlannerGrid
+              calendarDays={allMesocycleDays}
+              selectedDayOfWeek={selectedDayOfWeek}
+              onSessionClick={(dayDate, sessionIndex, exercises) => {
+                const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
+                const uniqueSessionIndices = new Set(dayExercises.map(ex => ex.sessionIndex));
+                const totalSessions = uniqueSessionIndices.size;
+                
+                setSelectedSession({
+                  dayDate,
+                  sessionIndex,
+                  exercises,
+                  totalSessions
+                });
+              }}
+              getIntensityColor={getIntensityColor}
+              dailyIntensityData={dailyIntensityData}
+            />
+          ) : (
+            /* Calendar View */
+            <DragDropContext onDragEnd={(result) => onSessionDragEnd?.(result)}>
+              <div className="space-y-2">
+                {/* Day Headers */}
+                <div className="grid grid-cols-7 gap-2 mb-2">
+                  {dayHeaders.map(day => (
+                    <div
+                      key={day}
+                      className="text-center text-sm font-semibold text-muted-foreground py-2"
+                    >
+                      {day}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Calendar Weeks */}
+                {weeks.map((week, weekIdx) => (
+                  <WeekRow
+                    key={weekIdx}
+                    week={week}
+                    weekIdx={weekIdx}
+                    copiedWeek={copiedWeek}
+                    copiedSession={copiedSession}
+                    copiedDay={copiedDay}
+                    onCopyWeek={onCopyWeek}
+                    onClearWeek={onClearWeek}
+                    onPasteWeek={onPasteWeek}
+                    onSessionClick={(dayDate, sessionIndex, exercises) => {
+                      // Count total sessions for this day
+                      const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
+                      const uniqueSessionIndices = new Set(dayExercises.map(ex => ex.sessionIndex));
+                      const totalSessions = uniqueSessionIndices.size;
+                      
+                      setSelectedSession({
+                        dayDate,
+                        sessionIndex,
+                        exercises,
+                        totalSessions
+                      });
+                    }}
+                    onDeleteSession={onDeleteSession}
+                    onCopySession={onCopySession}
+                    onPasteSession={onPasteSession}
+                    onCopyDay={onCopyDay}
+                    onClearDay={onClearDay}
+                    onAddTestEvent={onAddTestEvent}
+                    onDeleteTestEvent={onDeleteTestEvent}
+                    onUpdateTestComment={onUpdateTestComment}
+                    onUpdateEventComment={onUpdateEventComment}
+                    availableTests={availableTests}
+                    availableEvents={availableEvents}
+                    dailyIntensityData={dailyIntensityData}
+                    onIntensityChange={onIntensityChange}
+                    getIntensityColor={getIntensityColor}
+                    intensityLevels={intensityLevels}
+                    onMoveSessionUp={onMoveSessionUp}
+                    onMoveSessionDown={onMoveSessionDown}
+                  />
                 ))}
               </div>
-
-              {/* Calendar Weeks */}
-              {weeks.map((week, weekIdx) => (
-                <WeekRow
-                  key={weekIdx}
-                  week={week}
-                  weekIdx={weekIdx}
-                  copiedWeek={copiedWeek}
-                  copiedSession={copiedSession}
-                  copiedDay={copiedDay}
-                  onCopyWeek={onCopyWeek}
-                  onClearWeek={onClearWeek}
-                  onPasteWeek={onPasteWeek}
-                  onSessionClick={(dayDate, sessionIndex, exercises) => {
-                    // Count total sessions for this day
-                    const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
-                    const uniqueSessionIndices = new Set(dayExercises.map(ex => ex.sessionIndex));
-                    const totalSessions = uniqueSessionIndices.size;
-                    
-                    setSelectedSession({
-                      dayDate,
-                      sessionIndex,
-                      exercises,
-                      totalSessions
-                    });
-                  }}
-                  onDeleteSession={onDeleteSession}
-                  onCopySession={onCopySession}
-                  onPasteSession={onPasteSession}
-                  onCopyDay={onCopyDay}
-                  onClearDay={onClearDay}
-                  onAddTestEvent={onAddTestEvent}
-                  onDeleteTestEvent={onDeleteTestEvent}
-                  onUpdateTestComment={onUpdateTestComment}
-                  onUpdateEventComment={onUpdateEventComment}
-                  availableTests={availableTests}
-                  availableEvents={availableEvents}
-                  dailyIntensityData={dailyIntensityData}
-                  onIntensityChange={onIntensityChange}
-                  getIntensityColor={getIntensityColor}
-                  intensityLevels={intensityLevels}
-                  onMoveSessionUp={onMoveSessionUp}
-                  onMoveSessionDown={onMoveSessionDown}
-                />
-              ))}
-            </div>
-          </DragDropContext>
+            </DragDropContext>
+          )}
         </CardContent>
       </Card>
 
