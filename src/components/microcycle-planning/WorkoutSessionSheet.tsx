@@ -1224,251 +1224,250 @@ export function WorkoutSessionSheet({
           </div>
         </DialogHeader>
 
-        {/* Session Comments Section */}
-        <div className="px-6 pt-4 pb-2 border-b bg-muted/30">
-          <div className="space-y-2">
-            <Label htmlFor="session-comments" className="text-sm font-medium flex items-center gap-2">
-              <MessageSquare className="h-4 w-4" />
-              Session Notes
-            </Label>
-            <Textarea
-              id="session-comments"
-              placeholder="Add notes, goals, or observations for this session..."
-              value={sessionComments}
-              onChange={(e) => setSessionComments(e.target.value)}
-              className="min-h-[80px] resize-none"
-            />
-          </div>
-        </div>
-
-        {/* Tests & Events Section */}
-        <Collapsible open={testsEventsExpanded} onOpenChange={setTestsEventsExpanded}>
-          <div className="px-6 py-3 bg-muted/30 border-b">
-            <div className="flex items-center justify-between">
-              <CollapsibleTrigger asChild>
-                <button className="flex items-center gap-2 hover:opacity-80">
-                  <ChevronDown className={cn(
-                    "h-4 w-4 transition-transform",
-                    testsEventsExpanded && "rotate-180"
-                  )} />
-                  <span className="font-semibold text-sm">
-                    Tests & Events for This Day
-                  </span>
-                  {((trainingDay?.testNames?.length || 0) + (trainingDay?.eventNames?.length || 0)) > 0 && (
-                    <Badge variant="secondary" className="ml-2">
-                      {(trainingDay?.testNames?.length || 0) + (trainingDay?.eventNames?.length || 0)}
-                    </Badge>
-                  )}
-                </button>
-              </CollapsibleTrigger>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsTestEventDialogOpen(true);
-                }}
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Add
-              </Button>
-            </div>
-          </div>
-          
-          <CollapsibleContent>
-            <div className="px-6 py-4 bg-muted/30 border-b">
-              {((trainingDay?.testNames?.length || 0) + (trainingDay?.eventNames?.length || 0)) === 0 ? (
-                <p className="text-sm text-muted-foreground italic">
-                  No tests or events scheduled for this day
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Tests and events apply to the entire training day
-                  </p>
-                  
-                  {/* Tests */}
-                  {trainingDay?.testNames?.map((testName, idx) => {
-                    // Find the full test data from availableTests
-                    const testData = availableTests?.find(test => test.testMethod === testName);
-                    
-                    return (
-                      <div
-                        key={`test-${idx}`}
-                        className="p-3 rounded-md border bg-background space-y-2"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Trophy className="h-4 w-4 text-amber-600 shrink-0" />
-                            <span className="text-sm font-medium">{testName}</span>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
-                            onClick={() => onDeleteTestEvent?.(dayDate, 'test', testName)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        
-                        {/* Comments section */}
-                        {testData && (
-                          <div className="space-y-1">
-                            <Label htmlFor={`test-comment-${idx}`} className="text-xs text-muted-foreground">
-                              Comments:
-                            </Label>
-                            <Textarea
-                              id={`test-comment-${idx}`}
-                              value={testData.comments || ""}
-                              onChange={(e) => {
-                                if (testData.id && onUpdateTestComment) {
-                                  onUpdateTestComment(testData.id, e.target.value);
-                                }
-                              }}
-                              placeholder="Add notes about this test..."
-                              rows={2}
-                              className="text-xs"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  
-                  {/* Events */}
-                  {trainingDay?.eventNames?.map((eventName, idx) => {
-                    // Find the full event data from availableEvents
-                    const eventData = availableEvents?.find(event => event.name === eventName);
-                    
-                    return (
-                      <div
-                        key={`event-${idx}`}
-                        className="p-3 rounded-md border bg-background space-y-2"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <CalendarIcon className="h-4 w-4 text-blue-600 shrink-0" />
-                            <span className="text-sm font-medium">{eventName}</span>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
-                            onClick={() => onDeleteTestEvent?.(dayDate, 'event', eventName)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        
-                        {/* Comments section */}
-                        {eventData && (
-                          <div className="space-y-1">
-                            <Label htmlFor={`event-comment-${idx}`} className="text-xs text-muted-foreground">
-                              Comments:
-                            </Label>
-                            <Textarea
-                              id={`event-comment-${idx}`}
-                              value={eventData.comments || ""}
-                              onChange={(e) => {
-                                if (eventData.id && onUpdateEventComment) {
-                                  onUpdateEventComment(eventData.id, e.target.value);
-                                }
-                              }}
-                              placeholder="Add notes about this event..."
-                              rows={2}
-                              className="text-xs"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-
         <div className="flex-1 flex overflow-hidden">
-          <DragDropContext onDragEnd={handleDragEnd}>
-            {/* Main Content */}
-            <div className={`flex-1 overflow-hidden ${sidebarOpen ? 'w-0' : 'w-full'}`}>
-              <ScrollArea className="h-full">
-                <div className="p-6 space-y-4">
-                  <Droppable droppableId="sections" type="SECTION">
-                    {(provided) => (
-                      <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-4">
-                        {workoutSections.map((section, index) => (
-                       <Draggable key={section.id} draggableId={section.id} index={index}>
-                            {(provided, snapshot) => (
-                              <div 
-                                ref={provided.innerRef} 
-                                {...provided.draggableProps}
-                                style={provided.draggableProps.style}
-                              >
-                                 <WorkoutSectionCard
-                                   section={section}
-                                   isCollapsed={collapsedSections[section.id] || false}
-                                   onToggleCollapse={() =>
-                                     setCollapsedSections(prev => ({
-                                       ...prev,
-                                       [section.id]: !prev[section.id]
-                                     }))
-                                   }
-                    onParameterChange={handleParameterChange}
-                    onUnitChange={handleUnitChange}
-                    onToggleSuperset={handleToggleSuperset}
-                    onDuplicateExercise={handleDuplicateExercise}
-                                   onDeleteExercise={handleDeleteExercise}
-                                   onAddExercise={() => handleAddExercise(section.id)}
-                                   onRenameSection={(newName) => handleRenameSection(section.id, newName)}
-                                   onDeleteSection={() => handleDeleteSection(section.id)}
-                                   onDuplicateSection={() => handleDuplicateSection(section.id)}
-                                   getSupersetLabel={getSupersetLabel}
-                                   sectionDragHandleProps={provided.dragHandleProps}
-                                 />
-                              </div>
-                            )}
-                          </Draggable>
-                         ))}
-                         {provided.placeholder}
-                       </div>
-                     )}
-                   </Droppable>
-                   
-                   {/* Add New Section Button */}
-                   <Button
-                     variant="outline"
-                     size="lg"
-                     onClick={handleAddSection}
-                     className="w-full"
-                   >
-                     <Plus className="h-4 w-4 mr-2" />
-                     Add New Section
-                   </Button>
-                  </div>
-                </ScrollArea>
-            </div>
-
-            {/* Sidebar */}
-            {sidebarOpen && (
-              <div className="w-80 flex-shrink-0">
-                <WorkoutArrangementSidebar
-                  sections={workoutSections}
-                  collapsedSections={sidebarCollapsedSections}
-                  onToggleSectionCollapse={(sectionId) =>
-                    setSidebarCollapsedSections(prev => ({
-                      ...prev,
-                      [sectionId]: !prev[sectionId]
-                    }))
-                  }
-                  onScrollToExercise={handleScrollToExercise}
-                  getSupersetLabel={getSupersetLabel}
+          {/* Main scrollable content area */}
+          <ScrollArea className={`flex-1 ${sidebarOpen ? '' : 'w-full'}`}>
+            {/* Session Comments Section */}
+            <div className="px-6 pt-4 pb-2 border-b bg-muted/30">
+              <div className="space-y-2">
+                <Label htmlFor="session-comments" className="text-sm font-medium flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4" />
+                  Session Notes
+                </Label>
+                <Textarea
+                  id="session-comments"
+                  placeholder="Add notes, goals, or observations for this session..."
+                  value={sessionComments}
+                  onChange={(e) => setSessionComments(e.target.value)}
+                  className="min-h-[80px] resize-none"
                 />
               </div>
-            )}
-          </DragDropContext>
+            </div>
+
+            {/* Tests & Events Section */}
+            <Collapsible open={testsEventsExpanded} onOpenChange={setTestsEventsExpanded}>
+              <div className="px-6 py-3 bg-muted/30 border-b">
+                <div className="flex items-center justify-between">
+                  <CollapsibleTrigger asChild>
+                    <button className="flex items-center gap-2 hover:opacity-80">
+                      <ChevronDown className={cn(
+                        "h-4 w-4 transition-transform",
+                        testsEventsExpanded && "rotate-180"
+                      )} />
+                      <span className="font-semibold text-sm">
+                        Tests & Events for This Day
+                      </span>
+                      {((trainingDay?.testNames?.length || 0) + (trainingDay?.eventNames?.length || 0)) > 0 && (
+                        <Badge variant="secondary" className="ml-2">
+                          {(trainingDay?.testNames?.length || 0) + (trainingDay?.eventNames?.length || 0)}
+                        </Badge>
+                      )}
+                    </button>
+                  </CollapsibleTrigger>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsTestEventDialogOpen(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add
+                  </Button>
+                </div>
+              </div>
+              
+              <CollapsibleContent>
+                <div className="px-6 py-4 bg-muted/30 border-b">
+                  {((trainingDay?.testNames?.length || 0) + (trainingDay?.eventNames?.length || 0)) === 0 ? (
+                    <p className="text-sm text-muted-foreground italic">
+                      No tests or events scheduled for this day
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Tests and events apply to the entire training day
+                      </p>
+                      
+                      {/* Tests */}
+                      {trainingDay?.testNames?.map((testName, idx) => {
+                        // Find the full test data from availableTests
+                        const testData = availableTests?.find(test => test.testMethod === testName);
+                        
+                        return (
+                          <div
+                            key={`test-${idx}`}
+                            className="p-3 rounded-md border bg-background space-y-2"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Trophy className="h-4 w-4 text-amber-600 shrink-0" />
+                                <span className="text-sm font-medium">{testName}</span>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
+                                onClick={() => onDeleteTestEvent?.(dayDate, 'test', testName)}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            
+                            {/* Comments section */}
+                            {testData && (
+                              <div className="space-y-1">
+                                <Label htmlFor={`test-comment-${idx}`} className="text-xs text-muted-foreground">
+                                  Comments:
+                                </Label>
+                                <Textarea
+                                  id={`test-comment-${idx}`}
+                                  value={testData.comments || ""}
+                                  onChange={(e) => {
+                                    if (testData.id && onUpdateTestComment) {
+                                      onUpdateTestComment(testData.id, e.target.value);
+                                    }
+                                  }}
+                                  placeholder="Add notes about this test..."
+                                  rows={2}
+                                  className="text-xs"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      
+                      {/* Events */}
+                      {trainingDay?.eventNames?.map((eventName, idx) => {
+                        // Find the full event data from availableEvents
+                        const eventData = availableEvents?.find(event => event.name === eventName);
+                        
+                        return (
+                          <div
+                            key={`event-${idx}`}
+                            className="p-3 rounded-md border bg-background space-y-2"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <CalendarIcon className="h-4 w-4 text-blue-600 shrink-0" />
+                                <span className="text-sm font-medium">{eventName}</span>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
+                                onClick={() => onDeleteTestEvent?.(dayDate, 'event', eventName)}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            
+                            {/* Comments section */}
+                            {eventData && (
+                              <div className="space-y-1">
+                                <Label htmlFor={`event-comment-${idx}`} className="text-xs text-muted-foreground">
+                                  Comments:
+                                </Label>
+                                <Textarea
+                                  id={`event-comment-${idx}`}
+                                  value={eventData.comments || ""}
+                                  onChange={(e) => {
+                                    if (eventData.id && onUpdateEventComment) {
+                                      onUpdateEventComment(eventData.id, e.target.value);
+                                    }
+                                  }}
+                                  placeholder="Add notes about this event..."
+                                  rows={2}
+                                  className="text-xs"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* Exercises Content */}
+            <DragDropContext onDragEnd={handleDragEnd}>
+              <div className="p-6 space-y-4">
+                <Droppable droppableId="sections" type="SECTION">
+                  {(provided) => (
+                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-4">
+                      {workoutSections.map((section, index) => (
+                        <Draggable key={section.id} draggableId={section.id} index={index}>
+                          {(provided, snapshot) => (
+                            <div 
+                              ref={provided.innerRef} 
+                              {...provided.draggableProps}
+                              style={provided.draggableProps.style}
+                            >
+                              <WorkoutSectionCard
+                                section={section}
+                                isCollapsed={collapsedSections[section.id] || false}
+                                onToggleCollapse={() =>
+                                  setCollapsedSections(prev => ({
+                                    ...prev,
+                                    [section.id]: !prev[section.id]
+                                  }))
+                                }
+                                onParameterChange={handleParameterChange}
+                                onUnitChange={handleUnitChange}
+                                onToggleSuperset={handleToggleSuperset}
+                                onDuplicateExercise={handleDuplicateExercise}
+                                onDeleteExercise={handleDeleteExercise}
+                                onAddExercise={() => handleAddExercise(section.id)}
+                                onRenameSection={(newName) => handleRenameSection(section.id, newName)}
+                                onDeleteSection={() => handleDeleteSection(section.id)}
+                                onDuplicateSection={() => handleDuplicateSection(section.id)}
+                                getSupersetLabel={getSupersetLabel}
+                                sectionDragHandleProps={provided.dragHandleProps}
+                              />
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+                
+                {/* Add New Section Button */}
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={handleAddSection}
+                  className="w-full"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add New Section
+                </Button>
+              </div>
+            </DragDropContext>
+          </ScrollArea>
+
+          {/* Sidebar - stays fixed, not inside ScrollArea */}
+          {sidebarOpen && (
+            <div className="w-80 flex-shrink-0">
+              <WorkoutArrangementSidebar
+                sections={workoutSections}
+                collapsedSections={sidebarCollapsedSections}
+                onToggleSectionCollapse={(sectionId) =>
+                  setSidebarCollapsedSections(prev => ({
+                    ...prev,
+                    [sectionId]: !prev[sectionId]
+                  }))
+                }
+                onScrollToExercise={handleScrollToExercise}
+                getSupersetLabel={getSupersetLabel}
+              />
+            </div>
+          )}
         </div>
       </DialogContent>
 
