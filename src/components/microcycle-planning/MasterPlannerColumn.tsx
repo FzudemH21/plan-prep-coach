@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Dumbbell, Plus, Trophy, Calendar, AlertTriangle } from 'lucide-react';
 import { IntensityLevel } from '@/types/training';
 import { ExtendedMesocycle } from '@/features/planner/types';
-import { getParametersForMethod, MethodParameter } from '@/data/methodParameters';
+import { ToolboxDatabase } from '@/types/toolbox';
 import {
   Table,
   TableBody,
@@ -71,6 +71,15 @@ interface CalendarDay {
   totalExercises: number;
 }
 
+interface MethodParameter {
+  name: string;
+  displayName?: string;
+  type: 'number' | 'text' | 'select';
+  options?: string[];
+  isSetParameter?: boolean;
+  isFrequencyParameter?: boolean;
+}
+
 interface MasterPlannerColumnProps {
   day: CalendarDay;
   weekNumber: number;
@@ -81,6 +90,7 @@ interface MasterPlannerColumnProps {
   parameterValues?: Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>;
   currentMesocycle?: ExtendedMesocycle;
   trainingDays?: TrainingDay[];
+  toolboxData?: ToolboxDatabase;
   onParameterChange?: (
     dayDate: string,
     sessionIndex: number,
@@ -118,12 +128,13 @@ export function MasterPlannerColumn({
   parameterValues,
   currentMesocycle,
   trainingDays,
+  toolboxData,
   onParameterChange,
 }: MasterPlannerColumnProps) {
   const hasTraining = day.sessions.length > 0;
   const currentIntensity: IntensityLevel = dailyIntensityData?.find(di => di.date === day.dateString)?.intensity || 'moderate';
 
-  // Get parameters for an exercise
+  // Get parameters for an exercise from toolbox data
   const getExerciseParams = (exercise: ExerciseDistribution) => {
     if (!currentMesocycle || !parameterValues) {
       return { storedParams: {}, methodParams: [] as MethodParameter[] };
@@ -147,32 +158,41 @@ export function MasterPlannerColumn({
       || microcycleParams?.[exercise.methodId]?.[exercise.sessionIndex]
       || {};
 
-    // Helper to parse options from parameter names like "Contraction type [Dynamic, Eccentric-only, ...]"
-    const parseOptionsFromName = (paramName: string): string[] | undefined => {
-      const match = paramName.match(/\[(.*?)\]/);
-      if (match) {
-        return match[1].split(',').map(o => o.trim()).filter(Boolean);
-      }
-      return undefined;
-    };
+    // Look up parameters from toolbox data for this method
+    // Toolbox uses "category" for the method name and "subCategory" for the method category
+    const toolboxParams = toolboxData?.entries.filter(entry => {
+      // Match: entry.category = "Lower Body Resistance Training", entry.subCategory = "Strength"
+      // With: exercise.methodId = "Lower Body Resistance Training", exercise.categoryName = "Strength"
+      return entry.category === exercise.methodId && entry.subCategory === exercise.categoryName;
+    }) || [];
 
-    // Get parameter definitions from method
-    let methodParams = getParametersForMethod(exercise.methodId);
+    // Convert toolbox entries to MethodParameter format
+    const methodParams: MethodParameter[] = toolboxParams.map(entry => {
+      const paramName = entry.parameterName || entry.parameter;
+      const isQualitative = entry.parameterType === 'qualitative';
+      const hasOptions = entry.options && entry.options.length > 0;
+      
+      return {
+        name: paramName,
+        displayName: paramName.replace(/\s*\[.*?\]\s*$/, '').trim(), // Clean display name
+        type: (isQualitative && hasOptions) ? 'select' : 'number',
+        options: (isQualitative && hasOptions) ? entry.options : undefined,
+        isSetParameter: entry.isSetParameter || false,
+        isFrequencyParameter: entry.isFrequencyParameter || false,
+      };
+    });
 
-    // FALLBACK: If no predefined parameters, derive from storedParams keys
-    if (!methodParams || methodParams.length === 0) {
-      methodParams = Object.keys(storedParams)
-        .filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k)) // Exclude unit fields AND per-set keys
-        .map((name) => {
-          const options = parseOptionsFromName(name);
-          const cleanName = name.replace(/\s*\[.*?\]\s*$/, '').trim(); // Remove bracket options from display name
-          return {
-            name, // Keep original name for storage key
-            displayName: cleanName,
-            type: (options ? 'select' : (typeof storedParams[name] === 'number' ? 'number' : 'text')) as 'number' | 'text' | 'select',
-            options,
-            isSetParameter: /^sets?$/i.test(name), // Detect "Set" or "Sets" as set parameter
-          };
+    // Fallback: if no toolbox data found, derive from storedParams keys
+    if (methodParams.length === 0 && Object.keys(storedParams).length > 0) {
+      Object.keys(storedParams)
+        .filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k))
+        .forEach((name) => {
+          methodParams.push({
+            name,
+            displayName: name.replace(/\s*\[.*?\]\s*$/, '').trim(),
+            type: typeof storedParams[name] === 'number' ? 'number' : 'text',
+            isSetParameter: /^sets?$/i.test(name.replace(/\s*\[.*?\]\s*$/, '').trim()),
+          });
         });
     }
 
