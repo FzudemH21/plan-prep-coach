@@ -65,6 +65,7 @@ interface TrainingCalendarViewProps {
   onPasteSection?: (dayDate: string, sessionIndex: number) => void;
   onMoveSessionUp?: (dayDate: string, sessionIndex: number) => void;
   onMoveSessionDown?: (dayDate: string, sessionIndex: number) => void;
+  onRenameSession?: (dayDate: string, sessionIndex: number, newName: string) => void;
 }
 
 export interface CalendarDay {
@@ -119,6 +120,7 @@ export function TrainingCalendarView({
   onPasteSection,
   onMoveSessionUp,
   onMoveSessionDown,
+  onRenameSession,
 }: TrainingCalendarViewProps) {
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>('4week');
@@ -210,18 +212,8 @@ export function TrainingCalendarView({
             .join('|');
           const sessionId = `${dateString}__${ids || `empty-${idx}`}`;
           
-          // Get custom session name from localStorage
-          const sessionKey = `workoutSessions_${currentMesocycle.id}_${dateString}_${idx}`;
-          const storedMetadata = localStorage.getItem(sessionKey);
-          let sessionName = `Session ${parseInt(idx) + 1}`;
-          if (storedMetadata) {
-            try {
-              const metadata = JSON.parse(storedMetadata);
-              sessionName = metadata.sessionName || sessionName;
-            } catch {
-              // Use default name on parse error
-            }
-          }
+          // Get custom session name from trainingDay.sessionNames (synced with Step 1)
+          let sessionName = trainingDay?.sessionNames?.[parseInt(idx)] || `Session ${parseInt(idx) + 1}`;
           
           // Load session intensity from localStorage
           const intensityKey = `sessionIntensity_${currentMesocycle.id}_${dateString}_${idx}`;
@@ -467,6 +459,10 @@ export function TrainingCalendarView({
           onCopySession={onCopySession}
           onCopySection={onCopySection}
           onPasteSection={onPasteSection}
+          sessionNameFromState={
+            calendarDays.find(d => d.dateString === selectedSession.dayDate)?.trainingDay?.sessionNames?.[selectedSession.sessionIndex]
+          }
+          onRenameSession={onRenameSession}
         />
       )}
     </div>
