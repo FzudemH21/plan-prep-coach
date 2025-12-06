@@ -1360,10 +1360,10 @@ export function EnhancedExerciseDistribution({
           onDayIntensityChange(targetDate, sourceDay.intensity);
         }
         
-        // Copy session structure (sessions count and names)
-        if (onUpdateTrainingDay) {
+        // Copy session structure (sessions count and names) - only if source has sessions
+        if (onUpdateTrainingDay && sourceDay.sessions && sourceDay.sessions > 0) {
           onUpdateTrainingDay(targetDate, {
-            sessions: sourceDay.sessions || 1,
+            sessions: sourceDay.sessions,
             sessionNames: sourceDay.sessionNames ? [...sourceDay.sessionNames] : undefined,
           });
         }
