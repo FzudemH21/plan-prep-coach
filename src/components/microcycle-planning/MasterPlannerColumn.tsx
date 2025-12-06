@@ -21,6 +21,13 @@ import {
   HoverCardTrigger,
   HoverCardContent,
 } from '@/components/ui/hover-card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -140,6 +147,15 @@ export function MasterPlannerColumn({
       || microcycleParams?.[exercise.methodId]?.[exercise.sessionIndex]
       || {};
 
+    // Helper to parse options from parameter names like "Contraction type [Dynamic, Eccentric-only, ...]"
+    const parseOptionsFromName = (paramName: string): string[] | undefined => {
+      const match = paramName.match(/\[(.*?)\]/);
+      if (match) {
+        return match[1].split(',').map(o => o.trim()).filter(Boolean);
+      }
+      return undefined;
+    };
+
     // Get parameter definitions from method
     let methodParams = getParametersForMethod(exercise.methodId);
 
@@ -147,11 +163,17 @@ export function MasterPlannerColumn({
     if (!methodParams || methodParams.length === 0) {
       methodParams = Object.keys(storedParams)
         .filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k)) // Exclude unit fields AND per-set keys
-        .map((name) => ({
-          name,
-          type: (typeof storedParams[name] === 'number' ? 'number' : 'text') as 'number' | 'text',
-          isSetParameter: /^sets?$/i.test(name), // Detect "Set" or "Sets" as set parameter
-        }));
+        .map((name) => {
+          const options = parseOptionsFromName(name);
+          const cleanName = name.replace(/\s*\[.*?\]\s*$/, '').trim(); // Remove bracket options from display name
+          return {
+            name, // Keep original name for storage key
+            displayName: cleanName,
+            type: (options ? 'select' : (typeof storedParams[name] === 'number' ? 'number' : 'text')) as 'number' | 'text' | 'select',
+            options,
+            isSetParameter: /^sets?$/i.test(name), // Detect "Set" or "Sets" as set parameter
+          };
+        });
     }
 
     return { storedParams, methodParams };
@@ -162,12 +184,16 @@ export function MasterPlannerColumn({
     exercise, 
     paramName, 
     paramType, 
-    currentValue 
+    currentValue,
+    options,
+    displayName
   }: { 
     exercise: ExerciseDistribution; 
     paramName: string; 
-    paramType: 'number' | 'text'; 
+    paramType: 'number' | 'text' | 'select'; 
     currentValue: string | number | undefined;
+    options?: string[];
+    displayName?: string;
   }) => {
     const [localValue, setLocalValue] = useState(currentValue ?? '');
     
@@ -185,6 +211,41 @@ export function MasterPlannerColumn({
       );
     }, [exercise, paramName, paramType, localValue]);
 
+    const handleSelectChange = useCallback((value: string) => {
+      setLocalValue(value);
+      // Save immediately for select inputs
+      onParameterChange?.(
+        day.dateString,
+        exercise.sessionIndex,
+        exercise.methodId,
+        exercise.categoryName,
+        paramName,
+        value
+      );
+    }, [exercise, paramName]);
+
+    // Render Select dropdown for select type with options
+    if (paramType === 'select' && options && options.length > 0) {
+      return (
+        <Select value={String(localValue)} onValueChange={handleSelectChange}>
+          <SelectTrigger 
+            className="h-5 w-20 text-[10px] px-1 border-muted bg-background/50" 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <SelectValue placeholder="-" />
+          </SelectTrigger>
+          <SelectContent className="z-[300] bg-background border">
+            {options.map((opt) => (
+              <SelectItem key={opt} value={opt} className="text-[10px]">
+                {opt}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      );
+    }
+
+    // Render Input for number/text types
     return (
       <Input
         type={paramType === 'number' ? 'number' : 'text'}
@@ -192,7 +253,7 @@ export function MasterPlannerColumn({
         onChange={(e) => setLocalValue(e.target.value)}
         onBlur={handleBlur}
         onClick={(e) => e.stopPropagation()}
-        className="h-5 w-12 text-[10px] px-1 py-0 text-center border-muted bg-background/50 focus:bg-background"
+        className="h-5 w-14 text-[10px] px-1 py-0 text-center border-muted bg-background/50 focus:bg-background"
       />
     );
   };
@@ -239,7 +300,7 @@ export function MasterPlannerColumn({
                 <TableHead className="py-0.5 px-1 w-8 font-medium h-5">Set</TableHead>
                 {displayParams.slice(0, 4).map(p => (
                   <TableHead key={p.name} className="py-0.5 px-1 font-medium h-5">
-                    {formatParamName(p.name)}
+                    {formatParamName((p as any).displayName || p.name)}
                   </TableHead>
                 ))}
               </TableRow>
@@ -253,8 +314,10 @@ export function MasterPlannerColumn({
                       <EditableParamInput
                         exercise={exercise}
                         paramName={p.name}
-                        paramType={p.type === 'number' ? 'number' : 'text'}
+                        paramType={p.type as 'number' | 'text' | 'select'}
                         currentValue={storedParams[p.name]}
+                        options={p.options}
+                        displayName={(p as any).displayName}
                       />
                     </TableCell>
                   ))}
@@ -274,12 +337,14 @@ export function MasterPlannerColumn({
           .slice(0, 4)
           .map(param => (
             <div key={param.name} className="flex items-center gap-1">
-              <span className="text-[9px] text-muted-foreground">{formatParamName(param.name)}:</span>
+              <span className="text-[9px] text-muted-foreground">{formatParamName((param as any).displayName || param.name)}:</span>
               <EditableParamInput
                 exercise={exercise}
                 paramName={param.name}
-                paramType={param.type === 'number' ? 'number' : 'text'}
+                paramType={param.type as 'number' | 'text' | 'select'}
                 currentValue={storedParams[param.name]}
+                options={param.options}
+                displayName={(param as any).displayName}
               />
             </div>
           ))}
@@ -288,7 +353,7 @@ export function MasterPlannerColumn({
   };
 
   return (
-    <div className="flex-shrink-0 w-72 border-r last:border-r-0 flex flex-col bg-card">
+    <div className="flex-shrink-0 w-96 border-r last:border-r-0 flex flex-col bg-card">
       {/* Header with week number and date */}
       <div className="p-3 border-b bg-muted/30">
         <div className="flex items-center justify-between">
