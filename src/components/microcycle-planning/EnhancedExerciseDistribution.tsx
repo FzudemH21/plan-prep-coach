@@ -1843,7 +1843,7 @@ export function EnhancedExerciseDistribution({
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="flex items-center justify-center gap-2">
                     <span>{microcycle.name}</span>
-                    <Badge variant="outline" className="font-medium text-xs">
+                    <Badge variant="secondary" className="font-semibold">
                       {formatIntensityLabel(microcycle.intensity)}
                     </Badge>
                     {!isVeryFirstMicrocycle && (
