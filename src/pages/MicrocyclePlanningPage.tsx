@@ -2724,6 +2724,7 @@ export default function MicrocyclePlanningPage() {
               availableEvents={macrocycleData?.events || []}
               dailyIntensityData={dailyIntensityData}
               onIntensityChange={handleIntensityChange}
+              onSessionIntensityChange={handleSessionIntensityChange}
               getIntensityColor={getIntensityColor}
               intensityLevels={intensityLevels}
               parameterValues={parameterValues}

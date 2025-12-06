@@ -54,6 +54,7 @@ interface WorkoutSessionSheetProps {
   ) => void;
   dailyIntensityData?: any[];
   onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
+  onSessionIntensityChange?: (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => void;
   getIntensityColor?: (intensity: IntensityLevel) => string;
   intensityLevels?: IntensityLevel[];
   totalSessionsOnDay?: number;
@@ -85,6 +86,7 @@ export function WorkoutSessionSheet({
   onSaveParameters,
   dailyIntensityData,
   onIntensityChange,
+  onSessionIntensityChange,
   getIntensityColor,
   intensityLevels,
   totalSessionsOnDay = 1,
@@ -296,12 +298,9 @@ export function WorkoutSessionSheet({
     }
   }, [isOpen, mesocycleId, dayDate, sessionIndex, currentIntensity]);
 
-  // Sync session intensity with day intensity for single session days
-  useEffect(() => {
-    if (isSingleSessionDay && currentIntensity && sessionIntensity !== currentIntensity) {
-      setSessionIntensity(currentIntensity);
-    }
-  }, [isSingleSessionDay, currentIntensity]);
+  // NOTE: Removed the sync useEffect that was causing issues
+  // Session intensity is now synced on initial load only (in the above useEffect)
+  // and persisted immediately via onSessionIntensityChange callback
 
   // Filter available methods for the current session
   const availableMethods = useMemo(() => {
@@ -1112,9 +1111,12 @@ export function WorkoutSessionSheet({
                             onClick={(e) => {
                               e.stopPropagation();
                               onIntensityChange(dayDate, level);
-                              // If single session, also update session intensity
+                              // If single session, also update session intensity state AND persist
                               if (isSingleSessionDay) {
                                 setSessionIntensity(level);
+                                if (onSessionIntensityChange) {
+                                  onSessionIntensityChange(dayDate, sessionIndex, level);
+                                }
                               }
                               setDayIntensityPopoverOpen(false);
                             }}
@@ -1184,6 +1186,10 @@ export function WorkoutSessionSheet({
                             onClick={(e) => {
                               e.stopPropagation();
                               setSessionIntensity(level);
+                              // Immediately persist session intensity
+                              if (onSessionIntensityChange) {
+                                onSessionIntensityChange(dayDate, sessionIndex, level);
+                              }
                               // If single session, also update day intensity
                               if (isSingleSessionDay && onIntensityChange) {
                                 onIntensityChange(dayDate, level);

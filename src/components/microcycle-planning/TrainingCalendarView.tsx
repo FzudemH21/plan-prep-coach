@@ -47,6 +47,7 @@ interface TrainingCalendarViewProps {
   availableEvents?: any[];
   dailyIntensityData?: any[];
   onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
+  onSessionIntensityChange?: (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => void;
   getIntensityColor?: (intensity: IntensityLevel) => string;
   intensityLevels?: IntensityLevel[];
   parameterValues?: Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>;
@@ -109,6 +110,7 @@ export function TrainingCalendarView({
   availableEvents,
   dailyIntensityData,
   onIntensityChange,
+  onSessionIntensityChange,
   getIntensityColor,
   intensityLevels,
   parameterValues = {},
@@ -442,6 +444,7 @@ export function TrainingCalendarView({
           onSaveParameters={onSaveParameters || (() => {})}
           dailyIntensityData={dailyIntensityData}
           onIntensityChange={onIntensityChange}
+          onSessionIntensityChange={onSessionIntensityChange}
           getIntensityColor={getIntensityColor}
           intensityLevels={intensityLevels}
           totalSessionsOnDay={selectedSession.totalSessions}
