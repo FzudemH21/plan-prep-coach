@@ -101,7 +101,7 @@ export function MasterPlannerColumn({
   // Get parameters for an exercise
   const getExerciseParams = (exercise: ExerciseDistribution) => {
     if (!currentMesocycle || !parameterValues) {
-      return { storedParams: {}, methodParams: [] };
+      return { storedParams: {}, methodParams: [] as MethodParameter[] };
     }
 
     // Find microcycle index for this day
@@ -118,12 +118,22 @@ export function MasterPlannerColumn({
     const mesocycleParams = parameterValues[currentMesocycle.id];
     const microcycleParams = mesocycleParams?.[microcycleIndex];
     
-    let storedParams = microcycleParams?.[fullMethodKey]?.[exercise.sessionIndex] 
+    const storedParams = microcycleParams?.[fullMethodKey]?.[exercise.sessionIndex] 
       || microcycleParams?.[exercise.methodId]?.[exercise.sessionIndex]
       || {};
 
     // Get parameter definitions from method
-    const methodParams = getParametersForMethod(exercise.methodId);
+    let methodParams = getParametersForMethod(exercise.methodId);
+
+    // FALLBACK: If no predefined parameters, derive from storedParams keys
+    if (!methodParams || methodParams.length === 0) {
+      methodParams = Object.keys(storedParams)
+        .filter(k => !k.endsWith('_unit')) // Exclude unit fields
+        .map((name) => ({
+          name,
+          type: (typeof storedParams[name] === 'number' ? 'number' : 'text') as 'number' | 'text',
+        }));
+    }
 
     return { storedParams, methodParams };
   };
@@ -132,13 +142,15 @@ export function MasterPlannerColumn({
   const renderExerciseParams = (exercise: ExerciseDistribution) => {
     const { storedParams, methodParams } = getExerciseParams(exercise);
     
-    if (methodParams.length === 0 || Object.keys(storedParams).length === 0) {
+    // Only return null if there are truly no parameters stored
+    if (Object.keys(storedParams).length === 0) {
       return null;
     }
 
     // Filter out frequency parameter for display
     const displayParams = methodParams.filter(p => 
       p.name !== 'frequency_per_week' && 
+      p.name !== 'Frequency' &&
       storedParams[p.name] !== undefined && 
       storedParams[p.name] !== ''
     );
