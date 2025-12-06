@@ -4,6 +4,7 @@ import { MasterPlannerColumn } from './MasterPlannerColumn';
 import { IntensityLevel } from '@/types/training';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { ExtendedMesocycle } from '@/features/planner/types';
+import { ToolboxDatabase } from '@/types/toolbox';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -57,6 +58,7 @@ interface MasterPlannerGridProps {
   parameterValues?: Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>;
   currentMesocycle?: ExtendedMesocycle;
   trainingDays?: TrainingDay[];
+  toolboxData?: ToolboxDatabase;
   onParameterChange?: (
     dayDate: string,
     sessionIndex: number,
@@ -77,6 +79,7 @@ export function MasterPlannerGrid({
   parameterValues,
   currentMesocycle,
   trainingDays,
+  toolboxData,
   onParameterChange,
 }: MasterPlannerGridProps) {
   // Filter days that match the selected day of week
@@ -112,6 +115,7 @@ export function MasterPlannerGrid({
             parameterValues={parameterValues}
             currentMesocycle={currentMesocycle}
             trainingDays={trainingDays}
+            toolboxData={toolboxData}
             onParameterChange={onParameterChange}
           />
         ))}

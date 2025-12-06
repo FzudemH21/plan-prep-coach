@@ -15,6 +15,7 @@ import { WeekRow } from './WeekRow';
 import { WorkoutSessionSheet } from './WorkoutSessionSheet';
 import { useToast } from '@/hooks/use-toast';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
+import { useToolboxData } from '@/hooks/useToolboxData';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -155,6 +156,7 @@ export function TrainingCalendarView({
   onSupersetsChange,
 }: TrainingCalendarViewProps) {
   const { toast } = useToast();
+  const { data: toolboxData } = useToolboxData();
   const [viewMode, setViewMode] = useState<ViewMode>('4week');
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number>(1); // 1=Monday
   const [currentDate, setCurrentDate] = useState<Date>(currentMesocycle.startDate);
@@ -165,7 +167,6 @@ export function TrainingCalendarView({
     totalSessions: number;
   } | null>(null);
   const [sessionDataVersion, setSessionDataVersion] = useState(0);
-
   const dayOfWeekNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   // Helper function to get microcycle index from date
@@ -523,6 +524,7 @@ export function TrainingCalendarView({
               parameterValues={parameterValues}
               currentMesocycle={currentMesocycle}
               trainingDays={trainingDays}
+              toolboxData={toolboxData}
               onParameterChange={onSaveParameters ? (dayDate, sessionIndex, methodId, categoryName, paramName, value) => {
                 // Find microcycle index for this day
                 const trainingDay = trainingDays.find(td => td.date === dayDate);
