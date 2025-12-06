@@ -69,6 +69,8 @@ interface WorkoutSessionSheetProps {
   onCopySession?: (dayDate: string, sessionIndex: number) => void;
   onCopySection?: (sectionId: string) => void;
   onPasteSection?: (dayDate: string, sessionIndex: number) => void;
+  sessionNameFromState?: string;
+  onRenameSession?: (dayDate: string, sessionIndex: number, newName: string) => void;
 }
 
 export function WorkoutSessionSheet({
@@ -97,7 +99,9 @@ export function WorkoutSessionSheet({
   copiedSection,
   onCopySession,
   onCopySection,
-  onPasteSection
+  onPasteSection,
+  sessionNameFromState,
+  onRenameSession
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -244,20 +248,20 @@ export function WorkoutSessionSheet({
   // Load session metadata, intensity, and supersets from localStorage
   useEffect(() => {
     if (isOpen) {
-      // Load session name and comments
+      // Use session name from trainingDay.sessionNames (synced with Step 1)
+      setSessionName(sessionNameFromState || `Session ${sessionIndex + 1}`);
+      
+      // Load comments from localStorage (workoutSessions_* format)
       const key = `workoutSessions_${mesocycleId}_${dayDate}_${sessionIndex}`;
       const stored = localStorage.getItem(key);
       if (stored) {
         try {
-          const { sessionName: name, comments } = JSON.parse(stored);
-          setSessionName(name || `Session ${sessionIndex + 1}`);
+          const { comments } = JSON.parse(stored);
           setSessionComments(comments || '');
         } catch {
-          setSessionName(`Session ${sessionIndex + 1}`);
           setSessionComments('');
         }
       } else {
-        setSessionName(`Session ${sessionIndex + 1}`);
         setSessionComments('');
       }
 
@@ -602,10 +606,9 @@ export function WorkoutSessionSheet({
   };
 
   const handleSave = () => {
-    // Save session metadata (name and comments)
+    // Save session comments only (session name is now synced via onRenameSession to trainingDays.sessionNames)
     const metadataKey = `workoutSessions_${mesocycleId}_${dayDate}_${sessionIndex}`;
     localStorage.setItem(metadataKey, JSON.stringify({
-      sessionName: sessionName || `Session ${sessionIndex + 1}`,
       comments: sessionComments
     }));
 
@@ -1024,14 +1027,24 @@ export function WorkoutSessionSheet({
                 <Input
                   value={sessionName}
                   onChange={(e) => setSessionName(e.target.value)}
-                  onBlur={() => setIsEditingName(false)}
+                  onBlur={() => {
+                    // Save session name via onRenameSession callback
+                    if (onRenameSession && sessionName.trim()) {
+                      onRenameSession(dayDate, sessionIndex, sessionName.trim());
+                    }
+                    setIsEditingName(false);
+                  }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') setIsEditingName(false);
+                    if (e.key === 'Enter') {
+                      // Save session name via onRenameSession callback
+                      if (onRenameSession && sessionName.trim()) {
+                        onRenameSession(dayDate, sessionIndex, sessionName.trim());
+                      }
+                      setIsEditingName(false);
+                    }
                     if (e.key === 'Escape') {
-                      const key = `workoutSessions_${mesocycleId}_${dayDate}_${sessionIndex}`;
-                      const stored = localStorage.getItem(key);
-                      const name = stored ? JSON.parse(stored).sessionName : `Session ${sessionIndex + 1}`;
-                      setSessionName(name || `Session ${sessionIndex + 1}`);
+                      // Revert to original name from state
+                      setSessionName(sessionNameFromState || `Session ${sessionIndex + 1}`);
                       setIsEditingName(false);
                     }
                   }}

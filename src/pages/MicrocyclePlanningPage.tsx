@@ -2735,6 +2735,7 @@ export default function MicrocyclePlanningPage() {
               onPasteSection={handlePasteSection}
               onMoveSessionUp={handleMoveSessionUp}
               onMoveSessionDown={handleMoveSessionDown}
+              onRenameSession={handleRenameSession}
             />
         </>
       )}

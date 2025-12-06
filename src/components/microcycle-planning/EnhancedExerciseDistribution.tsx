@@ -177,19 +177,26 @@ export function EnhancedExerciseDistribution({
     onMoveSessionDown?.(dayDate, sessionIndex);
   };
 
-  // Load session comments from localStorage on mount
+  // Load session comments from localStorage on mount (using workoutSessions_* format for sync with Step 2)
   useEffect(() => {
     if (!mesocycle?.id) return;
     
     const loadSessionComments = () => {
       const commentsMap: Record<string, string> = {};
       trainingDays.forEach(day => {
-        const sessionsCount = day.sessionNames?.length || 1;
+        const sessionsCount = day.sessionNames?.length || day.sessions || 1;
         for (let i = 0; i < sessionsCount; i++) {
-          const key = `sessionComments_${mesocycle.id}_${day.date}_${i}`;
-          const comments = localStorage.getItem(key);
-          if (comments) {
-            commentsMap[key] = comments;
+          // Read from workoutSessions_* format (synced with Step 2)
+          const key = `workoutSessions_${mesocycle.id}_${day.date}_${i}`;
+          const stored = localStorage.getItem(key);
+          if (stored) {
+            try {
+              const { comments } = JSON.parse(stored);
+              if (comments) {
+                // Store with internal key format for local state
+                commentsMap[`sessionComments_${mesocycle.id}_${day.date}_${i}`] = comments;
+              }
+            } catch {}
           }
         }
       });
@@ -1068,13 +1075,24 @@ export function EnhancedExerciseDistribution({
 
   const handleSessionCommentsChange = (dayDate: string, sessionIndex: number, comments: string) => {
     if (!mesocycle?.id) return;
-    const key = `sessionComments_${mesocycle.id}_${dayDate}_${sessionIndex}`;
     
-    // Update state immediately for instant UI response
-    setSessionCommentsMap(prev => ({ ...prev, [key]: comments }));
+    // Use workoutSessions_* format for sync with Step 2
+    const storageKey = `workoutSessions_${mesocycle.id}_${dayDate}_${sessionIndex}`;
+    
+    // Read existing data (may contain other properties)
+    const existing = localStorage.getItem(storageKey);
+    let data: Record<string, any> = {};
+    if (existing) {
+      try { data = JSON.parse(existing); } catch {}
+    }
+    data.comments = comments;
+    
+    // Update state immediately for instant UI response (using internal key format)
+    const internalKey = `sessionComments_${mesocycle.id}_${dayDate}_${sessionIndex}`;
+    setSessionCommentsMap(prev => ({ ...prev, [internalKey]: comments }));
     
     // Debounce localStorage write
-    debouncedSaveToLocalStorage(key, comments);
+    debouncedSaveToLocalStorage(storageKey, JSON.stringify(data));
   };
 
   const handleSectionCommentsChange = (sectionId: string, comments: string) => {
