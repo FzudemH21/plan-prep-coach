@@ -520,6 +520,9 @@ export function TrainingCalendarView({
               }}
               getIntensityColor={getIntensityColor}
               dailyIntensityData={dailyIntensityData}
+              parameterValues={parameterValues}
+              currentMesocycle={currentMesocycle}
+              trainingDays={trainingDays}
             />
           ) : (
             /* Calendar View */
