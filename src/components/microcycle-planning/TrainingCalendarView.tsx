@@ -24,6 +24,25 @@ interface ExerciseDistribution {
   sessionIndex: number;
 }
 
+interface SessionSection {
+  id: string;
+  dayDate: string;
+  sessionIndex: number;
+  name: string;
+  order: number;
+  comments?: string;
+}
+
+interface SupersetMapping {
+  [dayDate: string]: {
+    [sessionIndex: number]: {
+      [sectionId: string]: {
+        [supersetId: string]: string[];
+      };
+    };
+  };
+}
+
 interface TrainingCalendarViewProps {
   exerciseDistribution: ExerciseDistribution[];
   trainingDays: TrainingDay[];
@@ -67,6 +86,11 @@ interface TrainingCalendarViewProps {
   onMoveSessionUp?: (dayDate: string, sessionIndex: number) => void;
   onMoveSessionDown?: (dayDate: string, sessionIndex: number) => void;
   onRenameSession?: (dayDate: string, sessionIndex: number, newName: string) => void;
+  // Props for sections and supersets from Step 1
+  sessionSections?: SessionSection[];
+  supersets?: SupersetMapping;
+  onSectionsChange?: (sections: SessionSection[]) => void;
+  onSupersetsChange?: (supersets: SupersetMapping) => void;
 }
 
 export interface CalendarDay {
@@ -123,6 +147,10 @@ export function TrainingCalendarView({
   onMoveSessionUp,
   onMoveSessionDown,
   onRenameSession,
+  sessionSections,
+  supersets,
+  onSectionsChange,
+  onSupersetsChange,
 }: TrainingCalendarViewProps) {
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>('4week');
@@ -462,6 +490,10 @@ export function TrainingCalendarView({
           onCopySession={onCopySession}
           onCopySection={onCopySection}
           onPasteSection={onPasteSection}
+          sessionSections={sessionSections}
+          supersets={supersets}
+          onSectionsChange={onSectionsChange}
+          onSupersetsChange={onSupersetsChange}
           sessionNameFromState={
             calendarDays.find(d => d.dateString === selectedSession.dayDate)?.trainingDay?.sessionNames?.[selectedSession.sessionIndex]
           }

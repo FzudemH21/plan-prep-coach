@@ -35,6 +35,25 @@ interface ExerciseDistribution {
   sessionIndex: number;
 }
 
+interface SessionSectionProp {
+  id: string;
+  dayDate: string;
+  sessionIndex: number;
+  name: string;
+  order: number;
+  comments?: string;
+}
+
+interface SupersetMappingProp {
+  [dayDate: string]: {
+    [sessionIndex: number]: {
+      [sectionId: string]: {
+        [supersetId: string]: string[];
+      };
+    };
+  };
+}
+
 interface WorkoutSessionSheetProps {
   isOpen: boolean;
   onClose: () => void;
@@ -72,6 +91,11 @@ interface WorkoutSessionSheetProps {
   onPasteSection?: (dayDate: string, sessionIndex: number) => void;
   sessionNameFromState?: string;
   onRenameSession?: (dayDate: string, sessionIndex: number, newName: string) => void;
+  // Props for sections and supersets from Step 1
+  sessionSections?: SessionSectionProp[];
+  supersets?: SupersetMappingProp;
+  onSectionsChange?: (sections: SessionSectionProp[]) => void;
+  onSupersetsChange?: (supersets: SupersetMappingProp) => void;
 }
 
 export function WorkoutSessionSheet({
@@ -103,7 +127,11 @@ export function WorkoutSessionSheet({
   onCopySection,
   onPasteSection,
   sessionNameFromState,
-  onRenameSession
+  onRenameSession,
+  sessionSections: sessionSectionsProp,
+  supersets: supersetsProp,
+  onSectionsChange,
+  onSupersetsChange
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -135,7 +163,99 @@ export function WorkoutSessionSheet({
       }
     }
     
-    // Initialize sections from exercises
+    // Use sessionSections prop if available (from Step 1)
+    if (sessionSectionsProp && sessionSectionsProp.length > 0) {
+      const sessionSpecificSections = sessionSectionsProp.filter(
+        s => s.dayDate === dayDate && s.sessionIndex === sessionIndex
+      );
+      
+      if (sessionSpecificSections.length > 0) {
+        console.log('[WorkoutSessionSheet] Using sections from Step 1 prop:', sessionSpecificSections);
+        
+        return sessionSpecificSections
+          .sort((a, b) => a.order - b.order)
+          .map(section => {
+            // Find exercises that belong to this section (by sectionId in exerciseDistribution)
+            const sectionExercises = exercises
+              .filter((ex: any) => ex.sectionId === section.id)
+              .map((ex, idx) => {
+                // Get stored parameters from Method Periodization
+                const fullMethodKey = ex.categoryName ? `${ex.methodId}::${ex.categoryName}` : ex.methodId;
+                const storedParams = parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex]
+                  || parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex]
+                  || {};
+                
+                let methodParams = getParametersForMethod(ex.methodId);
+                if (!methodParams || methodParams.length === 0) {
+                  methodParams = Object.keys(storedParams)
+                    .filter(k => !k.endsWith('_unit'))
+                    .map((name) => ({
+                      name,
+                      type: typeof (storedParams as any)[name] === 'number' ? 'number' : 'text'
+                    }));
+                }
+                
+                let exerciseParams: Record<string, string | number> = {};
+                if (storedParams && typeof storedParams === 'object' && !Array.isArray(storedParams)) {
+                  exerciseParams = storedParams as Record<string, string | number>;
+                }
+                
+                const setParamName = methodParams.find(p => p.isSetParameter)?.name || 
+                                    methodParams.find(p => /^sets?$/i.test(p.name))?.name;
+                const setCount = setParamName ? Number(exerciseParams[setParamName] || 0) : 0;
+                
+                const parameters: Record<string, string | number> = {};
+                methodParams.forEach(param => {
+                  if (param.unit) {
+                    parameters[`${param.name}_unit`] = param.unit;
+                  }
+                  
+                  if (param.name === setParamName) {
+                    parameters[param.name] = Number(exerciseParams[param.name] ?? param.defaultValue ?? 0);
+                  } else if (setCount > 0) {
+                    for (let i = 1; i <= setCount; i++) {
+                      const perSetKey = `${param.name}_set${i}`;
+                      const legacyKey = `${ex.exerciseId}_${param.name}`;
+                      parameters[perSetKey] = 
+                        (exerciseParams as any)[perSetKey] ?? 
+                        exerciseParams[param.name] ?? 
+                        (exerciseParams as any)[legacyKey] ?? 
+                        param.defaultValue ?? '';
+                    }
+                    parameters[param.name] = exerciseParams[param.name] ?? param.defaultValue ?? '';
+                  } else {
+                    const legacyKey = `${ex.exerciseId}_${param.name}`;
+                    parameters[param.name] = 
+                      exerciseParams[param.name] ?? 
+                      (exerciseParams as any)[legacyKey] ?? 
+                      param.defaultValue ?? '';
+                  }
+                });
+                
+                return {
+                  id: (ex as any).id || `${ex.exerciseId}-${idx}`,
+                  exerciseId: ex.exerciseId,
+                  exerciseName: ex.exerciseName,
+                  methodId: ex.methodId,
+                  categoryName: ex.categoryName || '',
+                  order: (ex as any).order ?? idx,
+                  supersetId: (ex as any).supersetId,
+                  parameters
+                };
+              })
+              .sort((a, b) => a.order - b.order);
+            
+            return {
+              id: section.id,
+              name: section.name,
+              order: section.order,
+              exercises: sectionExercises
+            };
+          });
+      }
+    }
+    
+    // Fallback: Initialize sections from exercises by grouping by categoryName
     const sectionsMap = new Map<string, WorkoutExercise[]>();
     
     exercises.forEach((ex, index) => {
@@ -233,7 +353,14 @@ export function WorkoutSessionSheet({
     }));
   });
   
-  const [supersets, setSupersets] = useState<SupersetMapping>({});
+  const [supersets, setSupersets] = useState<SupersetMapping>(() => {
+    // Initialize from prop if available
+    if (supersetsProp && supersetsProp[dayDate]?.[sessionIndex]) {
+      console.log('[WorkoutSessionSheet] Using supersets from Step 1 prop');
+      return supersetsProp;
+    }
+    return {};
+  });
 
   // Determine if this is a single session day
   const isSingleSessionDay = useMemo(() => {
@@ -278,21 +405,26 @@ export function WorkoutSessionSheet({
         setSessionIntensity(currentIntensity || 'moderate');
       }
 
-      // Load supersets
-      const supersetsKey = `workoutSupersets_${mesocycleId}_${dayDate}_${sessionIndex}`;
-      const storedSupersets = localStorage.getItem(supersetsKey);
-      if (storedSupersets) {
-        try {
-          const parsed = JSON.parse(storedSupersets);
-          setSupersets({
-            ...supersets,
-            [dayDate]: {
-              ...supersets[dayDate],
-              [sessionIndex]: parsed
-            }
-          });
-        } catch (e) {
-          console.error('Failed to load supersets:', e);
+      // Load supersets - prioritize prop, then localStorage
+      if (supersetsProp && supersetsProp[dayDate]?.[sessionIndex]) {
+        console.log('[WorkoutSessionSheet] Using supersets from Step 1 prop');
+        setSupersets(supersetsProp);
+      } else {
+        const supersetsKey = `workoutSupersets_${mesocycleId}_${dayDate}_${sessionIndex}`;
+        const storedSupersets = localStorage.getItem(supersetsKey);
+        if (storedSupersets) {
+          try {
+            const parsed = JSON.parse(storedSupersets);
+            setSupersets({
+              ...supersets,
+              [dayDate]: {
+                ...supersets[dayDate],
+                [sessionIndex]: parsed
+              }
+            });
+          } catch (e) {
+            console.error('Failed to load supersets:', e);
+          }
         }
       }
     }

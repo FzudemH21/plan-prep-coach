@@ -2737,6 +2737,10 @@ export default function MicrocyclePlanningPage() {
               onMoveSessionUp={handleMoveSessionUp}
               onMoveSessionDown={handleMoveSessionDown}
               onRenameSession={handleRenameSession}
+              sessionSections={sessionSections}
+              supersets={supersets}
+              onSectionsChange={setSessionSections}
+              onSupersetsChange={setSupersets}
             />
         </>
       )}
