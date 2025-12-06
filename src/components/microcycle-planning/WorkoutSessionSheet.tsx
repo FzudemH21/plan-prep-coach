@@ -1224,6 +1224,7 @@ export function WorkoutSessionSheet({
           </div>
         </DialogHeader>
 
+        <DragDropContext onDragEnd={handleDragEnd}>
         <div className="flex-1 flex overflow-hidden">
           {/* Main scrollable content area */}
           <ScrollArea className={`flex-1 ${sidebarOpen ? '' : 'w-full'}`}>
@@ -1394,7 +1395,6 @@ export function WorkoutSessionSheet({
             </Collapsible>
 
             {/* Exercises Content */}
-            <DragDropContext onDragEnd={handleDragEnd}>
               <div className="p-6 space-y-4">
                 <Droppable droppableId="sections" type="SECTION">
                   {(provided) => (
@@ -1448,7 +1448,6 @@ export function WorkoutSessionSheet({
                   Add New Section
                 </Button>
               </div>
-            </DragDropContext>
           </ScrollArea>
 
           {/* Sidebar - stays fixed, not inside ScrollArea */}
@@ -1469,6 +1468,7 @@ export function WorkoutSessionSheet({
             </div>
           )}
         </div>
+        </DragDropContext>
       </DialogContent>
 
       {/* Exercise Library Popup - Rendered outside DialogContent for proper overlay layering */}
