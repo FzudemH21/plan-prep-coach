@@ -57,6 +57,14 @@ interface MasterPlannerGridProps {
   parameterValues?: Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>;
   currentMesocycle?: ExtendedMesocycle;
   trainingDays?: TrainingDay[];
+  onParameterChange?: (
+    dayDate: string,
+    sessionIndex: number,
+    methodId: string,
+    categoryName: string,
+    parameterName: string,
+    value: string | number
+  ) => void;
 }
 
 export function MasterPlannerGrid({
@@ -69,6 +77,7 @@ export function MasterPlannerGrid({
   parameterValues,
   currentMesocycle,
   trainingDays,
+  onParameterChange,
 }: MasterPlannerGridProps) {
   // Filter days that match the selected day of week
   // getDay returns 0=Sunday, 1=Monday, etc.
@@ -103,6 +112,7 @@ export function MasterPlannerGrid({
             parameterValues={parameterValues}
             currentMesocycle={currentMesocycle}
             trainingDays={trainingDays}
+            onParameterChange={onParameterChange}
           />
         ))}
       </div>

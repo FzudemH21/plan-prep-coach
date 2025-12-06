@@ -523,6 +523,18 @@ export function TrainingCalendarView({
               parameterValues={parameterValues}
               currentMesocycle={currentMesocycle}
               trainingDays={trainingDays}
+              onParameterChange={onSaveParameters ? (dayDate, sessionIndex, methodId, categoryName, paramName, value) => {
+                // Find microcycle index for this day
+                const trainingDay = trainingDays.find(td => td.date === dayDate);
+                const microcycleId = trainingDay?.microcycleId;
+                const microcycleIndex = currentMesocycle.microcycles?.findIndex(m => m.id === microcycleId) ?? 0;
+                
+                // Build the full method key (with category if present)
+                const fullMethodKey = categoryName ? `${methodId}::${categoryName}` : methodId;
+                
+                // Call onSaveParameters with the single parameter update
+                onSaveParameters(currentMesocycle.id, microcycleIndex, fullMethodKey, sessionIndex, '', { [paramName]: value });
+              } : undefined}
             />
           ) : (
             /* Calendar View */
