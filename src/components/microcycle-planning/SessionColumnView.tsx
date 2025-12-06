@@ -22,7 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, X, ChevronUp, MessageSquare, Copy, ArrowUp, ArrowDown } from 'lucide-react';
+import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, X, ChevronUp, MessageSquare, Copy, ArrowUp, ArrowDown, StickyNote } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { TrainingDay } from '@/types/daily-intensity';
 import { IntensityLevel } from '@/types/training';
@@ -41,6 +41,7 @@ interface ExerciseDistribution {
   order: number;
   sectionId?: string;
   supersetId?: string;
+  notes?: string;
 }
 
 interface SessionSection {
@@ -80,6 +81,7 @@ interface SessionColumnViewProps {
   onCopySession?: (dayDate: string, sessionIndex: number) => void;
   onMoveSessionUp?: (dayDate: string, sessionIndex: number) => void;
   onMoveSessionDown?: (dayDate: string, sessionIndex: number) => void;
+  onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
 }
 
 export function SessionColumnView({
@@ -110,6 +112,7 @@ export function SessionColumnView({
   onCopySession,
   onMoveSessionUp,
   onMoveSessionDown,
+  onExerciseNotesChange,
 }: SessionColumnViewProps) {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionName, setEditingSectionName] = useState('');
@@ -118,6 +121,7 @@ export function SessionColumnView({
   const [isEditingSessionName, setIsEditingSessionName] = useState(false);
   const [editingSessionNameValue, setEditingSessionNameValue] = useState('');
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
+  const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
 
   const getSuperset = (exerciseId: string, sectionId?: string): string | undefined => {
     const sectionKey = sectionId || '__unsectioned__';
@@ -230,6 +234,7 @@ export function SessionColumnView({
     const nextExercise = allExercises[index + 1];
     const nextSupersetId = nextExercise ? getSuperset(nextExercise.id, sectionId) : undefined;
     const hasLinkToNext = supersetId && supersetId === nextSupersetId;
+    const isNoteExpanded = expandedNoteId === exercise.id;
 
     return (
       <Draggable key={exercise.id} draggableId={exercise.id} index={index}>
@@ -242,47 +247,78 @@ export function SessionColumnView({
             >
               <div
                 className={cn(
-                  "flex items-start gap-2 p-2 rounded-md border-l-4 border-muted bg-card text-xs",
+                  "p-2 rounded-md border-l-4 border-muted bg-card text-xs",
                   supersetId && getSupersetColor(supersetId),
                   snapshot.isDragging && "opacity-50 shadow-lg"
                 )}
               >
-                <div {...provided.dragHandleProps} className="pt-1">
-                  <GripVertical className="h-3 w-3 text-muted-foreground cursor-grab active:cursor-grabbing" />
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{exercise.exerciseName}</div>
-                  <div className="text-muted-foreground truncate text-[10px]">
-                    {exercise.methodId}
+                <div className="flex items-start gap-2">
+                  <div {...provided.dragHandleProps} className="pt-1">
+                    <GripVertical className="h-3 w-3 text-muted-foreground cursor-grab active:cursor-grabbing" />
                   </div>
-                  {supersetId && (
-                    <Badge variant="default" className="text-[10px] mt-1 px-1.5 font-semibold">
-                      {getSupersetLabel(supersetId)}
-                    </Badge>
-                  )}
+
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">{exercise.exerciseName}</div>
+                    <div className="text-muted-foreground truncate text-[10px]">
+                      {exercise.methodId}
+                    </div>
+                    {supersetId && (
+                      <Badge variant="default" className="text-[10px] mt-1 px-1.5 font-semibold">
+                        {getSupersetLabel(supersetId)}
+                      </Badge>
+                    )}
+                  </div>
+
+                  {/* Notes button */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    onClick={() => setExpandedNoteId(isNoteExpanded ? null : exercise.id)}
+                    title={exercise.notes ? "Edit notes" : "Add notes"}
+                  >
+                    <StickyNote className={cn("h-3 w-3", exercise.notes ? "text-primary" : "text-muted-foreground")} />
+                  </Button>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <MoreVertical className="h-3 w-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => handleDeleteExerciseClick(exercise.id)}
+                        className="text-destructive"
+                      >
+                        <Trash2 className="mr-2 h-3 w-3" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <MoreVertical className="h-3 w-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={() => handleDeleteExerciseClick(exercise.id)}
-                      className="text-destructive"
-                    >
-                      <Trash2 className="mr-2 h-3 w-3" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {/* Expandable notes textarea */}
+                {isNoteExpanded && (
+                  <div className="mt-2 pt-2 border-t">
+                    <Textarea
+                      value={exercise.notes || ''}
+                      onChange={(e) => onExerciseNotesChange?.(exercise.id, e.target.value)}
+                      placeholder="Add exercise notes..."
+                      className="text-xs min-h-[60px] resize-none"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          setExpandedNoteId(null);
+                        }
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             </div>
 

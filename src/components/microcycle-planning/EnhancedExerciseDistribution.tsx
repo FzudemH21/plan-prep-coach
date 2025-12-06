@@ -37,6 +37,7 @@ interface ExerciseDistribution {
   order: number;
   sectionId?: string;
   supersetId?: string;
+  notes?: string;
 }
 
 interface SessionSection {
@@ -1102,6 +1103,13 @@ export function EnhancedExerciseDistribution({
     onSectionsChange(updated);
   };
 
+  const handleExerciseNotesChange = (exerciseId: string, notes: string) => {
+    const updated = exerciseDistribution.map(ex =>
+      ex.id === exerciseId ? { ...ex, notes } : ex
+    );
+    onDistributionChange(updated);
+  };
+
   const handleDeleteSection = (sectionId: string) => {
     // Remove section
     const updated = sessionSections.filter(s => s.id !== sectionId);
@@ -2029,6 +2037,7 @@ export function EnhancedExerciseDistribution({
                                     onCopySession={onCopySession}
                                     onMoveSessionUp={handleMoveSessionUpLocal}
                                     onMoveSessionDown={handleMoveSessionDownLocal}
+                                    onExerciseNotesChange={handleExerciseNotesChange}
                                   />
                                 );
                               })}

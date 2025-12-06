@@ -14,6 +14,7 @@ export interface WorkoutExercise {
   order: number;
   supersetId?: string;
   parameters: Record<string, string | number>;
+  notes?: string;
 }
 
 export interface WorkoutSession {
