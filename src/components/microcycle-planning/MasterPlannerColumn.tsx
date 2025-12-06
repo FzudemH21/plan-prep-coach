@@ -3,10 +3,18 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dumbbell, Plus, Trophy, Calendar } from 'lucide-react';
+import { Dumbbell, Plus, Trophy, Calendar, AlertTriangle } from 'lucide-react';
 import { IntensityLevel } from '@/types/training';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { getParametersForMethod, MethodParameter } from '@/data/methodParameters';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import {
   HoverCard,
   HoverCardTrigger,
@@ -128,10 +136,11 @@ export function MasterPlannerColumn({
     // FALLBACK: If no predefined parameters, derive from storedParams keys
     if (!methodParams || methodParams.length === 0) {
       methodParams = Object.keys(storedParams)
-        .filter(k => !k.endsWith('_unit')) // Exclude unit fields
+        .filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k)) // Exclude unit fields AND per-set keys
         .map((name) => ({
           name,
           type: (typeof storedParams[name] === 'number' ? 'number' : 'text') as 'number' | 'text',
+          isSetParameter: /^sets?$/i.test(name), // Detect "Set" or "Sets" as set parameter
         }));
     }
 
@@ -147,42 +156,76 @@ export function MasterPlannerColumn({
       return null;
     }
 
-    // Filter out frequency parameter for display
+    // Find the set parameter
+    const setParam = methodParams.find(p => p.isSetParameter);
+    const setCount = setParam 
+      ? Number(storedParams[setParam.name] || 0) 
+      : 0;
+
+    // Filter parameters for display (exclude frequency and set param itself)
     const displayParams = methodParams.filter(p => 
+      !p.isSetParameter && 
       p.name !== 'frequency_per_week' && 
-      p.name !== 'Frequency' &&
-      storedParams[p.name] !== undefined && 
-      storedParams[p.name] !== ''
+      p.name !== 'Frequency'
     );
 
-    if (displayParams.length === 0) {
-      return null;
+    // If no set parameter exists, show warning
+    if (!setParam) {
+      return (
+        <div className="mt-1.5 flex items-center gap-1.5 text-amber-600">
+          <AlertTriangle className="h-3.5 w-3.5" />
+          <span className="text-[10px]">No Set parameter defined</span>
+        </div>
+      );
     }
 
+    // If we have sets and display parameters, render a compact table
+    if (setCount > 0 && displayParams.length > 0) {
+      return (
+        <div className="mt-2">
+          <Table className="text-[10px]">
+            <TableHeader>
+              <TableRow className="h-5 border-b">
+                <TableHead className="py-0.5 px-1 w-8 font-medium h-5">Set</TableHead>
+                {displayParams.slice(0, 4).map(p => (
+                  <TableHead key={p.name} className="py-0.5 px-1 font-medium h-5">
+                    {formatParamName(p.name)}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {Array.from({ length: setCount }, (_, idx) => (
+                <TableRow key={idx} className="h-5 border-0">
+                  <TableCell className="py-0.5 px-1 font-medium">{idx + 1}</TableCell>
+                  {displayParams.slice(0, 4).map(p => (
+                    <TableCell key={p.name} className="py-0.5 px-1 text-muted-foreground">
+                      {storedParams[`${p.name}_set${idx + 1}`] || '-'}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      );
+    }
+
+    // Fallback: if setCount is 0 but setParam exists, show just the parameters as badges
     return (
       <div className="mt-1.5 flex flex-wrap gap-1">
-        {displayParams.slice(0, 4).map(param => {
-          const value = storedParams[param.name];
-          const displayValue = param.unit ? `${value}${param.unit}` : value;
-          
-          return (
+        {displayParams
+          .filter(p => storedParams[p.name] !== undefined && storedParams[p.name] !== '')
+          .slice(0, 4)
+          .map(param => (
             <Badge 
               key={param.name} 
               variant="outline" 
               className="text-[9px] px-1.5 py-0 h-4 font-normal bg-muted/50"
             >
-              {formatParamName(param.name)}: {displayValue}
+              {formatParamName(param.name)}: {storedParams[param.name]}
             </Badge>
-          );
-        })}
-        {displayParams.length > 4 && (
-          <Badge 
-            variant="outline" 
-            className="text-[9px] px-1.5 py-0 h-4 font-normal bg-muted/50"
-          >
-            +{displayParams.length - 4} more
-          </Badge>
-        )}
+          ))}
       </div>
     );
   };
