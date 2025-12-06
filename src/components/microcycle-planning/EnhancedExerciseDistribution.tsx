@@ -86,6 +86,7 @@ interface EnhancedExerciseDistributionProps {
   onPasteSession?: (dayDate: string) => void;
   onMoveSessionUp?: (dayDate: string, sessionIndex: number) => void;
   onMoveSessionDown?: (dayDate: string, sessionIndex: number) => void;
+  onUpdateTrainingDay?: (dayDate: string, updates: Partial<TrainingDay>) => void;
 }
 
 export function EnhancedExerciseDistribution({
@@ -116,6 +117,7 @@ export function EnhancedExerciseDistribution({
   onPasteSession,
   onMoveSessionUp,
   onMoveSessionDown,
+  onUpdateTrainingDay,
 }: EnhancedExerciseDistributionProps) {
   const { toast } = useToast();
   const [selectedMicrocycleId, setSelectedMicrocycleId] = useState<string | null>(null);
@@ -1260,12 +1262,36 @@ export function EnhancedExerciseDistribution({
         dayMapping[i] = targetDays[i].date;
       }
       
-      // Copy exercises
-      const newExercises: ExerciseDistribution[] = [];
-      const oldToNewExerciseIds: Record<string, string> = {}; // For superset mapping
+      // Copy sections first to create oldToNewSectionIds mapping
+      const newSections: SessionSection[] = [];
+      const oldToNewSectionIds: Record<string, string> = {};
       
       sourceDays.forEach((sourceDay, dayIndex) => {
-        if (dayIndex >= minDays) return; // Skip if target has fewer days
+        if (dayIndex >= minDays) return;
+        
+        const targetDate = dayMapping[dayIndex];
+        const sourceDateSections = sessionSections.filter(
+          s => s.dayDate === sourceDay.date
+        );
+        
+        sourceDateSections.forEach(section => {
+          const newSectionId = `section-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          oldToNewSectionIds[section.id] = newSectionId;
+          
+          newSections.push({
+            ...section,
+            id: newSectionId,
+            dayDate: targetDate,
+          });
+        });
+      });
+      
+      // Copy exercises with updated sectionIds
+      const newExercises: ExerciseDistribution[] = [];
+      const oldToNewExerciseIds: Record<string, string> = {};
+      
+      sourceDays.forEach((sourceDay, dayIndex) => {
+        if (dayIndex >= minDays) return;
         
         const targetDate = dayMapping[dayIndex];
         const sourceDateExercises = exerciseDistribution.filter(
@@ -1280,31 +1306,13 @@ export function EnhancedExerciseDistribution({
             ...exercise,
             id: newId,
             dayDate: targetDate,
+            // Map sectionId to new section ID
+            sectionId: exercise.sectionId ? oldToNewSectionIds[exercise.sectionId] : undefined,
           });
         });
       });
       
-      // Copy sections
-      const newSections: SessionSection[] = [];
-      
-      sourceDays.forEach((sourceDay, dayIndex) => {
-        if (dayIndex >= minDays) return;
-        
-        const targetDate = dayMapping[dayIndex];
-        const sourceDateSections = sessionSections.filter(
-          s => s.dayDate === sourceDay.date
-        );
-        
-        sourceDateSections.forEach(section => {
-          newSections.push({
-            ...section,
-            id: `section-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            dayDate: targetDate,
-          });
-        });
-      });
-      
-      // Copy supersets with new exercise IDs
+      // Copy supersets with new exercise IDs and section IDs
       const newSupersets: SupersetMapping = { ...supersets };
       
       sourceDays.forEach((sourceDay, dayIndex) => {
@@ -1319,8 +1327,13 @@ export function EnhancedExerciseDistribution({
           Object.entries(sourceDateSupersets).forEach(([sessionIndex, sessionSupersets]) => {
             newSupersets[targetDate][Number(sessionIndex)] = {};
             
-            Object.entries(sessionSupersets).forEach(([sectionId, sectionSupersets]) => {
-              newSupersets[targetDate][Number(sessionIndex)][sectionId] = {};
+            Object.entries(sessionSupersets).forEach(([oldSectionId, sectionSupersets]) => {
+              // Map section ID (keep __unsectioned__ as is)
+              const newSectionId = oldSectionId === '__unsectioned__' 
+                ? '__unsectioned__' 
+                : (oldToNewSectionIds[oldSectionId] || oldSectionId);
+              
+              newSupersets[targetDate][Number(sessionIndex)][newSectionId] = {};
               
               Object.entries(sectionSupersets).forEach(([supersetId, exerciseIds]) => {
                 // Map old exercise IDs to new ones
@@ -1329,11 +1342,42 @@ export function EnhancedExerciseDistribution({
                   .filter(id => id !== undefined);
                 
                 if (newExerciseIds.length > 0) {
-                  newSupersets[targetDate][Number(sessionIndex)][sectionId][supersetId] = newExerciseIds;
+                  newSupersets[targetDate][Number(sessionIndex)][newSectionId][supersetId] = newExerciseIds;
                 }
               });
             });
           });
+        }
+      });
+      
+      // Copy day intensities and session structure
+      sourceDays.forEach((sourceDay, dayIndex) => {
+        if (dayIndex >= minDays) return;
+        const targetDate = dayMapping[dayIndex];
+        
+        // Copy day intensity
+        if (onDayIntensityChange && sourceDay.intensity) {
+          onDayIntensityChange(targetDate, sourceDay.intensity);
+        }
+        
+        // Copy session structure (sessions count and names)
+        if (onUpdateTrainingDay) {
+          onUpdateTrainingDay(targetDate, {
+            sessions: sourceDay.sessions || 1,
+            sessionNames: sourceDay.sessionNames ? [...sourceDay.sessionNames] : undefined,
+          });
+        }
+        
+        // Copy session intensities from localStorage
+        const sessionsCount = sourceDay.sessions || 1;
+        for (let i = 0; i < sessionsCount; i++) {
+          const sourceKey = `sessionIntensity_${sourceMesocycle!.id}_${sourceDay.date}_${i}`;
+          const sourceIntensity = localStorage.getItem(sourceKey);
+          
+          if (sourceIntensity) {
+            const targetKey = `sessionIntensity_${targetMesocycle!.id}_${targetDate}_${i}`;
+            localStorage.setItem(targetKey, sourceIntensity);
+          }
         }
       });
       
