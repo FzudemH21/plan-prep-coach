@@ -234,6 +234,12 @@ export function MasterPlannerColumn({
   const hasTraining = day.sessions.length > 0;
   const currentIntensity: IntensityLevel = dailyIntensityData?.find(di => di.date === day.dateString)?.intensity || 'moderate';
 
+  // Helper to normalize method keys for consistent lookup
+  const normalizeMethodKey = (key: string): string => {
+    // Normalize "Tier" spelling: "Reactive Tier" -> "Reactive-Tier"
+    return key.replace(/ Tier/g, '-Tier').replace(/ tier/g, '-tier');
+  };
+
   // Get parameters for an exercise from toolbox data
   const getExerciseParams = useCallback((exercise: ExerciseDistribution) => {
     if (!currentMesocycle || !parameterValues) {
@@ -252,32 +258,31 @@ export function MasterPlannerColumn({
       ? `${exercise.methodId}::${exercise.categoryName}` 
       : exercise.methodId;
 
+    // Normalize keys for lookup (handles spelling variations like "Reactive Tier" vs "Reactive-Tier")
+    const normalizedMethodId = normalizeMethodKey(exercise.methodId);
+    const normalizedFullMethodKey = normalizeMethodKey(fullMethodKey);
+
     // Get stored parameter values
     const mesocycleParams = parameterValues[currentMesocycle.id];
     const microcycleParams = mesocycleParams?.[microcycleIndex];
     
-    // Priority order for lookup:
+    // Priority order for lookup (try both original and normalized keys):
     // 1. Category-specific key with session 0 (most specific - category was split & specified)
     // 2. Category-specific key with exercise's session index
     // 3. Method key (without category) with session 0 (fallback - applies to all categories)
     // 4. Method key with exercise's session index
+    // Also try normalized versions for each
     const storedParams = 
       microcycleParams?.[fullMethodKey]?.[0] ||
+      microcycleParams?.[normalizedFullMethodKey]?.[0] ||
       microcycleParams?.[fullMethodKey]?.[exercise.sessionIndex] ||
+      microcycleParams?.[normalizedFullMethodKey]?.[exercise.sessionIndex] ||
       microcycleParams?.[exercise.methodId]?.[0] ||
+      microcycleParams?.[normalizedMethodId]?.[0] ||
       microcycleParams?.[exercise.methodId]?.[exercise.sessionIndex] ||
+      microcycleParams?.[normalizedMethodId]?.[exercise.sessionIndex] ||
       {};
     
-    // Debug log when no params found
-    if (Object.keys(storedParams).length === 0 && microcycleParams) {
-      console.log('[MasterPlanner] Empty storedParams for:', {
-        exercise: exercise.exerciseName,
-        methodId: exercise.methodId,
-        categoryName: exercise.categoryName,
-        fullMethodKey,
-        availableMethodKeys: Object.keys(microcycleParams),
-      });
-    }
 
     // Parse methodId to extract main method and sub-method
     // Format: "Lower Body Resistance Training - Strength" → ["Lower Body Resistance Training", "Strength"]
@@ -295,14 +300,6 @@ export function MasterPlannerColumn({
       return entry.category === methodMain && (!entry.subCategory || entry.subCategory === '');
     }) || [];
 
-    // Debug log to help identify matching issues
-    if (toolboxParams.length === 0 && toolboxData) {
-      console.log('[MasterPlanner] No toolbox match for:', { 
-        methodId: exercise.methodId, 
-        parsed: { methodMain, methodSubCategory },
-        availableCategories: [...new Set(toolboxData.entries.map(e => e.category))]
-      });
-    }
 
     // Convert toolbox entries to MethodParameter format
     const methodParams: MethodParameter[] = toolboxParams.map(entry => {

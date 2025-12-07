@@ -32,13 +32,13 @@ export const defaultAthleticismData: AthleticismDatabase = {
       overarchingGoal: 'Improving sprint ability',
       subGoal: 'Block start & reaction',
       quality: 'Initial RFD (0 100 ms)',
-      mappedMethods: ['Isometrics - Joint Angle', 'Lower Body Resistance Training - Power', 'Intensive Plyometrics - Gazelle Tier', 'Intensive Plyometrics - Tiger Tier', 'Intensive Plyometrics - Frog Tier'],
+      mappedMethods: ['Isometrics - Joint Angle', 'Lower Body Resistance Training - Power', 'Intensive Plyometrics - Gazelle-Tier', 'Intensive Plyometrics - Tiger-Tier', 'Intensive Plyometrics - Frog-Tier'],
       loadingRecommendations: {
         'Isometrics - Joint Angle': { 'Frequency': '2-3/wk', 'Modes': { 'Iso-push': { 'Intensity [%]': '80-100', 'Reps [#]': '2-5', 'Repetition Duration [s]': '1.5-5', 'Sets [#]': '2-4', 'Total Volume [s]': '10-40' }, 'Iso-hold': { 'Intensity [%]': '65-80', 'Reps [#]': '1-4', 'Repetition Duration [s]': '4-30', 'Sets [#]': '2-5', 'Total Volume [s]': '16-48' }, 'Iso-switch': { 'Intensity [%]': '35-60', 'Contacts [#]': 'up to 18', 'Sets [#]': '2-3' }, 'Iso-hybrid': { 'Intensity [%]': '30-40', 'Reps [#]': '2-3', 'Repetition Duration [s]': '8 (push) + 32 (hold)' }, 'Iso-catch': { 'Intensity [%]': '20-35', 'Reps [#]': '4-15', 'Sets [#]': '2-3' } } },
         'Lower Body Resistance Training - Power': { 'Frequency': '1-2/wk', 'Intensity': '30-60 %1RM', 'Load': 'Light-Moderate', 'Intensity [%1RM]': '30-60', 'Sets [#]': '3-6', 'Reps [#]': '3-6', 'Volume [lifts/exercise]': '12-30' },
-        'Intensive Plyometrics - Gazelle Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' },
-        'Intensive Plyometrics - Tiger Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' },
-        'Intensive Plyometrics - Frog Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' }
+        'Intensive Plyometrics - Gazelle-Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' },
+        'Intensive Plyometrics - Tiger-Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' },
+        'Intensive Plyometrics - Frog-Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' }
       }
     },
     {
@@ -69,11 +69,11 @@ export const defaultAthleticismData: AthleticismDatabase = {
       overarchingGoal: 'Improving sprint ability',
       subGoal: 'Block start & reaction',
       quality: 'Intermuscular coordination (hip knee ankle)',
-      mappedMethods: ['Sprinting - Technical Drills', 'Sprinting - Acceleration', 'Moderate Plyometrics - Frog-/Deep Tier'],
+      mappedMethods: ['Sprinting - Technical Drills', 'Sprinting - Acceleration', 'Moderate Plyometrics - Frog-/Deep-Tier'],
       loadingRecommendations: {
         'Sprinting - Technical Drills': {},
         'Sprinting - Acceleration': { 'Frequency': '2-3 /wk', 'Intensity [%]': '95-100', 'Rep Distance [m]': '10-30', 'Sets [#]': '3-6', 'Reps [#]': '2-6', 'Session Volume [m]': '150-400', 'Total Efforts [#]': '6-16', 'Inter-Rep Rest Duration [s]': '90-180', 'Inter-Set Rest Duration [s]': '180-300', 'Distance [m]': '10-50', 'Intensity [%Vmax]': '>98', 'Recoveries [min]': '2-7', 'Total Session Volume [m]': '100-300' },
-        'Moderate Plyometrics - Frog-/Deep Tier': { 'Frequency': '1-3 /wk', 'Total Ground contacts [#]': '60-120', 'Ground Contacts per session [#of jumps]': '30-60', 'Inter-Set Rest Duration [s]': '60-120', 'Inter-Rep Rest Duration [s]': '3-10' }
+        'Moderate Plyometrics - Frog-/Deep-Tier': { 'Frequency': '1-3 /wk', 'Total Ground contacts [#]': '60-120', 'Ground Contacts per session [#of jumps]': '30-60', 'Inter-Set Rest Duration [s]': '60-120', 'Inter-Rep Rest Duration [s]': '3-10' }
       }
     },
     {
@@ -150,11 +150,11 @@ export const defaultAthleticismData: AthleticismDatabase = {
       overarchingGoal: 'Improving sprint ability',
       subGoal: 'Acceleration 0-10 m',
       quality: 'Step length frequency balance',
-      mappedMethods: ['Sprinting - Technical Drills', 'Sprinting - Acceleration', 'Moderate Plyometrics - Gazelle-/Reactive Tier'],
+      mappedMethods: ['Sprinting - Technical Drills', 'Sprinting - Acceleration', 'Moderate Plyometrics - Gazelle-/Reactive-Tier'],
       loadingRecommendations: {
         'Sprinting - Technical Drills': {},
         'Sprinting - Acceleration': { 'Frequency': '2-3 /wk', 'Intensity [%]': '95-100', 'Rep Distance [m]': '10-30', 'Sets [#]': '3-6', 'Reps [#]': '2-6', 'Session Volume [m]': '150-400', 'Total Efforts [#]': '6-16', 'Inter-Rep Rest Duration [s]': '90-180', 'Inter-Set Rest Duration [s]': '180-300', 'Distance [m]': '10-50', 'Intensity [%Vmax]': '>98', 'Recoveries [min]': '2-7', 'Total Session Volume [m]': '100-300' },
-        'Moderate Plyometrics - Gazelle-/Reactive Tier': { 'Frequency': '1-3 /wk', 'Total Ground contacts [#]': '60-120', 'Ground Contacts per session [#of jumps]': '30-60', 'Inter-Set Rest Duration [s]': '60-120', 'Inter-Rep Rest Duration [s]': '3-10' }
+        'Moderate Plyometrics - Gazelle-/Reactive-Tier': { 'Frequency': '1-3 /wk', 'Total Ground contacts [#]': '60-120', 'Ground Contacts per session [#of jumps]': '30-60', 'Inter-Set Rest Duration [s]': '60-120', 'Inter-Rep Rest Duration [s]': '3-10' }
       }
     },
     {
@@ -162,13 +162,13 @@ export const defaultAthleticismData: AthleticismDatabase = {
       overarchingGoal: 'Improving sprint ability',
       subGoal: 'Acceleration 0-10 m',
       quality: 'Early-phase RFD',
-      mappedMethods: ['Isometrics - Joint Angle', 'Lower Body Resistance Training - Power', 'Intensive Plyometrics - Gazelle Tier', 'Intensive Plyometrics - Tiger Tier', 'Intensive Plyometrics - Frog Tier'],
+      mappedMethods: ['Isometrics - Joint Angle', 'Lower Body Resistance Training - Power', 'Intensive Plyometrics - Gazelle-Tier', 'Intensive Plyometrics - Tiger-Tier', 'Intensive Plyometrics - Frog-Tier'],
       loadingRecommendations: {
         'Isometrics - Joint Angle': { 'Frequency': '2-3/wk', 'Modes': { 'Iso-push': { 'Intensity [%]': '80-100', 'Reps [#]': '2-5', 'Repetition Duration [s]': '1.5-5', 'Sets [#]': '2-4', 'Total Volume [s]': '10-40' }, 'Iso-hold': { 'Intensity [%]': '65-80', 'Reps [#]': '1-4', 'Repetition Duration [s]': '4-30', 'Sets [#]': '2-5', 'Total Volume [s]': '16-48' }, 'Iso-switch': { 'Intensity [%]': '35-60', 'Contacts [#]': 'up to 18', 'Sets [#]': '2-3' }, 'Iso-hybrid': { 'Intensity [%]': '30-40', 'Reps [#]': '2-3', 'Repetition Duration [s]': '8 (push) + 32 (hold)' }, 'Iso-catch': { 'Intensity [%]': '20-35', 'Reps [#]': '4-15', 'Sets [#]': '2-3' } } },
         'Lower Body Resistance Training - Power': { 'Frequency': '1-2/wk', 'Intensity': '30-60 %1RM', 'Load': 'Light-Moderate', 'Intensity [%1RM]': '30-60', 'Sets [#]': '3-6', 'Reps [#]': '3-6', 'Volume [lifts/exercise]': '12-30' },
-        'Intensive Plyometrics - Gazelle Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' },
-        'Intensive Plyometrics - Tiger Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' },
-        'Intensive Plyometrics - Frog Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' }
+        'Intensive Plyometrics - Gazelle-Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' },
+        'Intensive Plyometrics - Tiger-Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' },
+        'Intensive Plyometrics - Frog-Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' }
       }
     },
     {
@@ -187,11 +187,11 @@ export const defaultAthleticismData: AthleticismDatabase = {
       overarchingGoal: 'Improving sprint ability',
       subGoal: 'Acceleration 0-10 m',
       quality: 'Ankle plantarflexor stiffness',
-      mappedMethods: ['Isometrics - Joint Angle', 'Extensive Plyometrics - Reactive Tier', 'Intensive Plyometrics - Gazelle Tier'],
+      mappedMethods: ['Isometrics - Joint Angle', 'Extensive Plyometrics - Reactive-Tier', 'Intensive Plyometrics - Gazelle-Tier'],
       loadingRecommendations: {
         'Isometrics - Joint Angle': { 'Frequency': '2-3/wk', 'Modes': { 'Iso-push': { 'Intensity [%]': '80-100', 'Reps [#]': '2-5', 'Repetition Duration [s]': '1.5-5', 'Sets [#]': '2-4', 'Total Volume [s]': '10-40' }, 'Iso-hold': { 'Intensity [%]': '65-80', 'Reps [#]': '1-4', 'Repetition Duration [s]': '4-30', 'Sets [#]': '2-5', 'Total Volume [s]': '16-48' }, 'Iso-switch': { 'Intensity [%]': '35-60', 'Contacts [#]': 'up to 18', 'Sets [#]': '2-3' }, 'Iso-hybrid': { 'Intensity [%]': '30-40', 'Reps [#]': '2-3', 'Repetition Duration [s]': '8 (push) + 32 (hold)' }, 'Iso-catch': { 'Intensity [%]': '20-35', 'Reps [#]': '4-15', 'Sets [#]': '2-3' } } },
-        'Extensive Plyometrics - Reactive Tier': { 'Frequency': '2-4 /wk', 'Total Ground contacts [#]': '100-200', 'Ground Contacts per session [#of jumps]': '50-100', 'Inter-Set Rest Duration [s]': '30-90' },
-        'Intensive Plyometrics - Gazelle Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' }
+        'Extensive Plyometrics - Reactive-Tier': { 'Frequency': '2-4 /wk', 'Total Ground contacts [#]': '100-200', 'Ground Contacts per session [#of jumps]': '50-100', 'Inter-Set Rest Duration [s]': '30-90' },
+        'Intensive Plyometrics - Gazelle-Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' }
       }
     },
     {
@@ -232,10 +232,10 @@ export const defaultAthleticismData: AthleticismDatabase = {
       overarchingGoal: 'Improving sprint ability',
       subGoal: 'Acceleration 0-10 m',
       quality: 'Tendon elasticity',
-      mappedMethods: ['Extensive Plyometrics - Elastic Tier', 'Intensive Plyometrics - Gazelle Tier'],
+      mappedMethods: ['Extensive Plyometrics - Elastic-Tier', 'Intensive Plyometrics - Gazelle-Tier'],
       loadingRecommendations: {
-        'Extensive Plyometrics - Elastic Tier': { 'Frequency': '2-4 /wk', 'Total Ground contacts [#]': '100-200', 'Ground Contacts per session [#of jumps]': '50-100', 'Inter-Set Rest Duration [s]': '30-90' },
-        'Intensive Plyometrics - Gazelle Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' }
+        'Extensive Plyometrics - Elastic-Tier': { 'Frequency': '2-4 /wk', 'Total Ground contacts [#]': '100-200', 'Ground Contacts per session [#of jumps]': '50-100', 'Inter-Set Rest Duration [s]': '30-90' },
+        'Intensive Plyometrics - Gazelle-Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' }
       }
     },
     {
@@ -299,10 +299,10 @@ export const defaultAthleticismData: AthleticismDatabase = {
       overarchingGoal: 'Improving sprint ability',
       subGoal: 'Acceleration 10-30 m',
       quality: 'Stretch shortening cycle utilization',
-      mappedMethods: ['Intensive Plyometrics - Tiger Tier', 'Intensive Plyometrics - Gazelle Tier'],
+      mappedMethods: ['Intensive Plyometrics - Tiger-Tier', 'Intensive Plyometrics - Gazelle-Tier'],
       loadingRecommendations: {
-        'Intensive Plyometrics - Tiger Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' },
-        'Intensive Plyometrics - Gazelle Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' }
+        'Intensive Plyometrics - Tiger-Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' },
+        'Intensive Plyometrics - Gazelle-Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' }
       }
     },
     {
@@ -330,10 +330,10 @@ export const defaultAthleticismData: AthleticismDatabase = {
       overarchingGoal: 'Improving sprint ability',
       subGoal: 'Max velocity development',
       quality: 'Very short ground contact time',
-      mappedMethods: ['Sprinting - Top Speed', 'Intensive Plyometrics - Gazelle Tier'],
+      mappedMethods: ['Sprinting - Top Speed', 'Intensive Plyometrics - Gazelle-Tier'],
       loadingRecommendations: {
         'Sprinting - Top Speed': { 'Frequency': '1-2 /wk', 'Intensity [%]': '98-100', 'Rep Distance [m]': '20-60', 'Sets [#]': '3-6', 'Reps [#]': '1-4', 'Session Volume [m]': '120-360', 'Total Efforts [#]': '4-10', 'Inter-Rep Rest Duration [s]': '180-300', 'Inter-Set Rest Duration [s]': '240-480', 'Distance [m]': '10-30', 'Intensity [%Vmax]': '>98', 'Recoveries [min]': '4-15', 'Total Session Volume [m]': '50-150' },
-        'Intensive Plyometrics - Gazelle Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' }
+        'Intensive Plyometrics - Gazelle-Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' }
       }
     },
     {
@@ -352,10 +352,10 @@ export const defaultAthleticismData: AthleticismDatabase = {
       overarchingGoal: 'Improving sprint ability',
       subGoal: 'Max velocity development',
       quality: 'Functional leg stiffness',
-      mappedMethods: ['Isometrics - Joint Angle', 'Intensive Plyometrics - Gazelle Tier'],
+      mappedMethods: ['Isometrics - Joint Angle', 'Intensive Plyometrics - Gazelle-Tier'],
       loadingRecommendations: {
         'Isometrics - Joint Angle': { 'Frequency': '2-3/wk', 'Modes': { 'Iso-push': { 'Intensity [%]': '80-100', 'Reps [#]': '2-5', 'Repetition Duration [s]': '1.5-5', 'Sets [#]': '2-4', 'Total Volume [s]': '10-40' }, 'Iso-hold': { 'Intensity [%]': '65-80', 'Reps [#]': '1-4', 'Repetition Duration [s]': '4-30', 'Sets [#]': '2-5', 'Total Volume [s]': '16-48' }, 'Iso-switch': { 'Intensity [%]': '35-60', 'Contacts [#]': 'up to 18', 'Sets [#]': '2-3' }, 'Iso-hybrid': { 'Intensity [%]': '30-40', 'Reps [#]': '2-3', 'Repetition Duration [s]': '8 (push) + 32 (hold)' }, 'Iso-catch': { 'Intensity [%]': '20-35', 'Reps [#]': '4-15', 'Sets [#]': '2-3' } } },
-        'Intensive Plyometrics - Gazelle Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' }
+        'Intensive Plyometrics - Gazelle-Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' }
       }
     },
     {
@@ -396,10 +396,10 @@ export const defaultAthleticismData: AthleticismDatabase = {
       overarchingGoal: 'Improving sprint ability',
       subGoal: 'Max velocity development',
       quality: 'Ankle stiffness',
-      mappedMethods: ['Isometrics - Joint Angle', 'Extensive Plyometrics - Reactive Tier'],
+      mappedMethods: ['Isometrics - Joint Angle', 'Extensive Plyometrics - Reactive-Tier'],
       loadingRecommendations: {
         'Isometrics - Joint Angle': { 'Frequency': '2-3/wk', 'Modes': { 'Iso-push': { 'Intensity [%]': '80-100', 'Reps [#]': '2-5', 'Repetition Duration [s]': '1.5-5', 'Sets [#]': '2-4', 'Total Volume [s]': '10-40' }, 'Iso-hold': { 'Intensity [%]': '65-80', 'Reps [#]': '1-4', 'Repetition Duration [s]': '4-30', 'Sets [#]': '2-5', 'Total Volume [s]': '16-48' }, 'Iso-switch': { 'Intensity [%]': '35-60', 'Contacts [#]': 'up to 18', 'Sets [#]': '2-3' }, 'Iso-hybrid': { 'Intensity [%]': '30-40', 'Reps [#]': '2-3', 'Repetition Duration [s]': '8 (push) + 32 (hold)' }, 'Iso-catch': { 'Intensity [%]': '20-35', 'Reps [#]': '4-15', 'Sets [#]': '2-3' } } },
-        'Extensive Plyometrics - Reactive Tier': { 'Frequency': '2-4 /wk', 'Total Ground contacts [#]': '100-200', 'Ground Contacts per session [#of jumps]': '50-100', 'Inter-Set Rest Duration [s]': '30-90' }
+        'Extensive Plyometrics - Reactive-Tier': { 'Frequency': '2-4 /wk', 'Total Ground contacts [#]': '100-200', 'Ground Contacts per session [#of jumps]': '50-100', 'Inter-Set Rest Duration [s]': '30-90' }
       }
     },
     {
@@ -407,10 +407,10 @@ export const defaultAthleticismData: AthleticismDatabase = {
       overarchingGoal: 'Improving sprint ability',
       subGoal: 'Max velocity development',
       quality: 'Elastic energy return',
-      mappedMethods: ['Extensive Plyometrics - Elastic Tier', 'Intensive Plyometrics - Gazelle Tier'],
+      mappedMethods: ['Extensive Plyometrics - Elastic-Tier', 'Intensive Plyometrics - Gazelle-Tier'],
       loadingRecommendations: {
-        'Extensive Plyometrics - Elastic Tier': { 'Frequency': '2-4 /wk', 'Total Ground contacts [#]': '100-200', 'Ground Contacts per session [#of jumps]': '50-100', 'Inter-Set Rest Duration [s]': '30-90' },
-        'Intensive Plyometrics - Gazelle Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' }
+        'Extensive Plyometrics - Elastic-Tier': { 'Frequency': '2-4 /wk', 'Total Ground contacts [#]': '100-200', 'Ground Contacts per session [#of jumps]': '50-100', 'Inter-Set Rest Duration [s]': '30-90' },
+        'Intensive Plyometrics - Gazelle-Tier': { 'Frequency': '1-2 /wk', 'Total Ground contacts [#]': '40-80', 'Ground Contacts per session [#of jumps]': '20-40', 'Inter-Set Rest Duration [s]': '90-180', 'Inter-Rep Rest Duration [s]': '5-20' }
       }
     },
     {
@@ -649,10 +649,10 @@ export const defaultAthleticismData: AthleticismDatabase = {
       overarchingGoal: 'Improving sprint ability',
       subGoal: 'Tissue robustness for sprinting',
       quality: 'Achilles tendon stiffness',
-      mappedMethods: ['Isometrics - Joint Angle', 'Extensive Plyometrics - Reactive Tier'],
+      mappedMethods: ['Isometrics - Joint Angle', 'Extensive Plyometrics - Reactive-Tier'],
       loadingRecommendations: {
         'Isometrics - Joint Angle': { 'Frequency': '2-3/wk', 'Modes': { 'Iso-push': { 'Intensity [%]': '80-100', 'Reps [#]': '2-5', 'Repetition Duration [s]': '1.5-5', 'Sets [#]': '2-4', 'Total Volume [s]': '10-40' }, 'Iso-hold': { 'Intensity [%]': '65-80', 'Reps [#]': '1-4', 'Repetition Duration [s]': '4-30', 'Sets [#]': '2-5', 'Total Volume [s]': '16-48' }, 'Iso-switch': { 'Intensity [%]': '35-60', 'Contacts [#]': 'up to 18', 'Sets [#]': '2-3' }, 'Iso-hybrid': { 'Intensity [%]': '30-40', 'Reps [#]': '2-3', 'Repetition Duration [s]': '8 (push) + 32 (hold)' }, 'Iso-catch': { 'Intensity [%]': '20-35', 'Reps [#]': '4-15', 'Sets [#]': '2-3' } } },
-        'Extensive Plyometrics - Reactive Tier': { 'Frequency': '2-4 /wk', 'Total Ground contacts [#]': '100-200', 'Ground Contacts per session [#of jumps]': '50-100', 'Inter-Set Rest Duration [s]': '30-90' }
+        'Extensive Plyometrics - Reactive-Tier': { 'Frequency': '2-4 /wk', 'Total Ground contacts [#]': '100-200', 'Ground Contacts per session [#of jumps]': '50-100', 'Inter-Set Rest Duration [s]': '30-90' }
       }
     },
     {
@@ -681,9 +681,9 @@ export const defaultAthleticismData: AthleticismDatabase = {
       overarchingGoal: 'Improving sprint ability',
       subGoal: 'Tissue robustness for sprinting',
       quality: 'Bone loading tolerance',
-      mappedMethods: ['Extensive Plyometrics - Deep Tier'],
+      mappedMethods: ['Extensive Plyometrics - Deep-Tier'],
       loadingRecommendations: {
-        'Extensive Plyometrics - Deep Tier': { 'Frequency': '2-4 /wk', 'Total Ground contacts [#]': '100-200', 'Ground Contacts per session [#of jumps]': '50-100', 'Inter-Set Rest Duration [s]': '30-90' }
+        'Extensive Plyometrics - Deep-Tier': { 'Frequency': '2-4 /wk', 'Total Ground contacts [#]': '100-200', 'Ground Contacts per session [#of jumps]': '50-100', 'Inter-Set Rest Duration [s]': '30-90' }
       }
     },
     {
