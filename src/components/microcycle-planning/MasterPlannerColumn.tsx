@@ -243,13 +243,20 @@ export function MasterPlannerColumn({
   // Get parameters for an exercise from toolbox data
   const getExerciseParams = useCallback((exercise: ExerciseDistribution) => {
     if (!currentMesocycle || !parameterValues) {
+      console.log('[MasterPlanner] No mesocycle or parameterValues');
       return { storedParams: {}, methodParams: [] as MethodParameter[] };
     }
 
     // Find microcycle index for this day
     const trainingDay = trainingDays?.find(td => td.date === day.dateString);
     const microcycleId = trainingDay?.microcycleId;
-    const microcycleIndex = currentMesocycle.microcycles?.findIndex(m => m.id === microcycleId) ?? 0;
+    
+    // Calculate microcycle index - with fallback based on week number
+    let microcycleIndex = currentMesocycle.microcycles?.findIndex(m => m.id === microcycleId) ?? -1;
+    if (microcycleIndex < 0) {
+      // Fallback: use week number - 1 (Week 1 = index 0)
+      microcycleIndex = Math.max(0, weekNumber - 1);
+    }
 
     // Build method key (with or without category)
     // Treat empty string or 'Uncategorized' as no real category
@@ -265,6 +272,22 @@ export function MasterPlannerColumn({
     // Get stored parameter values
     const mesocycleParams = parameterValues[currentMesocycle.id];
     const microcycleParams = mesocycleParams?.[microcycleIndex];
+    
+    // DEBUG: Log what we're looking for
+    console.log('[MasterPlanner] Parameter lookup:', {
+      exerciseName: exercise.exerciseName,
+      methodId: exercise.methodId,
+      categoryName: exercise.categoryName,
+      mesocycleId: currentMesocycle.id,
+      microcycleId,
+      microcycleIndex,
+      weekNumber,
+      fullMethodKey,
+      normalizedFullMethodKey,
+      availableMethodKeys: microcycleParams ? Object.keys(microcycleParams) : [],
+      hasMesocycleParams: !!mesocycleParams,
+      hasMicrocycleParams: !!microcycleParams
+    });
     
     // Priority order for lookup (try both original and normalized keys):
     // 1. Category-specific key with session 0 (most specific - category was split & specified)
@@ -283,6 +306,8 @@ export function MasterPlannerColumn({
       microcycleParams?.[normalizedMethodId]?.[exercise.sessionIndex] ||
       {};
     
+    console.log('[MasterPlanner] Found storedParams:', storedParams);
+    
 
     // Parse methodId to extract main method and sub-method
     // Format: "Lower Body Resistance Training - Strength" → ["Lower Body Resistance Training", "Strength"]
@@ -300,6 +325,19 @@ export function MasterPlannerColumn({
       return entry.category === methodMain && (!entry.subCategory || entry.subCategory === '');
     }) || [];
 
+
+    // DEBUG: Log toolbox params found
+    console.log('[MasterPlanner] Toolbox params for method:', {
+      methodMain,
+      methodSubCategory,
+      toolboxParamsCount: toolboxParams.length,
+      toolboxParams: toolboxParams.map(e => ({ 
+        param: e.parameter, 
+        paramName: e.parameterName,
+        isSetParameter: e.isSetParameter,
+        parameterType: e.parameterType
+      }))
+    });
 
     // Convert toolbox entries to MethodParameter format
     const methodParams: MethodParameter[] = toolboxParams.map(entry => {
@@ -332,7 +370,7 @@ export function MasterPlannerColumn({
     }
 
     return { storedParams, methodParams };
-  }, [currentMesocycle, parameterValues, trainingDays, day.dateString, toolboxData]);
+  }, [currentMesocycle, parameterValues, trainingDays, day.dateString, toolboxData, weekNumber]);
 
   // Render parameter values for an exercise
   const renderExerciseParams = (exercise: ExerciseDistribution) => {

@@ -102,15 +102,19 @@ function migrateSetParameter(entries: ToolboxEntry[]): ToolboxEntry[] {
     const paramNameLower = entry.parameterName?.toLowerCase() || '';
     
     // Check for set-like parameters:
-    // 1. Contains "set" or "sets"
+    // 1. Contains "set" or "sets" (but not "reset")
     // 2. Contains "ground contacts per session" (for plyometrics)
+    // 3. Contains "contacts per session" (for plyometrics - shorter match)
     const isSetLike = 
-      paramLower.includes('set') || 
-      paramNameLower.includes('set') ||
+      (paramLower.includes('set') && !paramLower.includes('reset')) || 
+      (paramNameLower.includes('set') && !paramNameLower.includes('reset')) ||
       paramLower.includes('ground contacts per session') ||
-      paramNameLower.includes('ground contacts per session');
+      paramNameLower.includes('ground contacts per session') ||
+      paramLower.includes('contacts per session') ||
+      paramNameLower.includes('contacts per session');
     
     if (isSetLike && entry.parameterType === 'quantitative') {
+      console.log('[useToolboxData] Marking as set parameter:', entry.parameter, entry.parameterName);
       return { ...entry, isSetParameter: true };
     }
     
