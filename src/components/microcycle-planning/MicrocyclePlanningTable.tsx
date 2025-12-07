@@ -736,14 +736,24 @@ const updateCellData = (
       let inferredColumnId = columnId;
 
       if (!inferredMethodId || !inferredColumnId) {
-        const lastDash = cellId.lastIndexOf("-");
-        inferredColumnId = cellId.slice(lastDash + 1);
-        const prefix = cellId.slice(0, lastDash);
-        const secondLastDash = prefix.lastIndexOf("-");
-        if (secondLastDash !== -1) {
-          inferredMethodId = prefix.slice(0, secondLastDash);
-          const cat = prefix.slice(secondLastDash + 1);
-          inferredCategoryName = cat === "main" ? undefined : cat;
+        // Try new :: delimiter first
+        const parts = cellId.split('::');
+        if (parts.length === 3) {
+          inferredMethodId = parts[0];
+          const cat = parts[1];
+          inferredCategoryName = cat === '' ? undefined : cat;
+          inferredColumnId = parts[2];
+        } else {
+          // Legacy fallback for old dash-based format
+          const lastDash = cellId.lastIndexOf("-");
+          inferredColumnId = cellId.slice(lastDash + 1);
+          const prefix = cellId.slice(0, lastDash);
+          const secondLastDash = prefix.lastIndexOf("-");
+          if (secondLastDash !== -1) {
+            inferredMethodId = prefix.slice(0, secondLastDash);
+            const cat = prefix.slice(secondLastDash + 1);
+            inferredCategoryName = cat === "main" ? undefined : cat;
+          }
         }
       }
 
@@ -781,14 +791,29 @@ const updateCellData = (
       cellData: {
         ...prev.cellData,
         [cellId]: (() => {
-          // Infer values when missing (migration safety)
-          const lastDash = cellId.lastIndexOf("-");
-          const inferredColumnId = (context?.columnId) ?? cellId.slice(lastDash + 1);
-          const prefix = cellId.slice(0, lastDash);
-          const secondLastDash = prefix.lastIndexOf("-");
-          const inferredMethodId = (context?.methodId) ?? (secondLastDash !== -1 ? prefix.slice(0, secondLastDash) : existingCell.methodId);
-          const catToken = secondLastDash !== -1 ? prefix.slice(secondLastDash + 1) : undefined;
-          const inferredCategoryName = context?.categoryName ?? (catToken === "main" ? undefined : catToken);
+          // Infer values when missing (migration safety) - use :: delimiter
+          let inferredColumnId = context?.columnId;
+          let inferredMethodId = context?.methodId;
+          let inferredCategoryName = context?.categoryName;
+          
+          if (!inferredMethodId || !inferredColumnId) {
+            const parts = cellId.split('::');
+            if (parts.length === 3) {
+              inferredMethodId = inferredMethodId || parts[0];
+              const cat = parts[1];
+              inferredCategoryName = inferredCategoryName ?? (cat === '' ? undefined : cat);
+              inferredColumnId = inferredColumnId || parts[2];
+            } else {
+              // Legacy fallback
+              const lastDash = cellId.lastIndexOf("-");
+              inferredColumnId = inferredColumnId || cellId.slice(lastDash + 1);
+              const prefix = cellId.slice(0, lastDash);
+              const secondLastDash = prefix.lastIndexOf("-");
+              inferredMethodId = inferredMethodId || (secondLastDash !== -1 ? prefix.slice(0, secondLastDash) : existingCell.methodId);
+              const catToken = secondLastDash !== -1 ? prefix.slice(secondLastDash + 1) : undefined;
+              inferredCategoryName = inferredCategoryName ?? (catToken === "main" ? undefined : catToken);
+            }
+          }
 
           let mesoId = existingCell.mesocycleId;
           let microId = existingCell.microcycleId;
@@ -818,7 +843,8 @@ const updateCellData = (
   });
 };
   const getCellId = (methodId: string, categoryName: string | undefined, columnId: string) => {
-    return `${methodId}-${categoryName || 'main'}-${columnId}`;
+    // Use :: as delimiter to avoid conflicts with methodIds that contain dashes
+    return `${methodId}::${categoryName || ''}::${columnId}`;
   };
 
   const getCellData = (methodId: string, categoryName: string | undefined, columnId: string): CellData => {

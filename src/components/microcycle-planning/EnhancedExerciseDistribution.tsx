@@ -277,12 +277,20 @@ export function EnhancedExerciseDistribution({
       subCategory?: string;
     }>>> = {};
 
+    // Helper to validate category names and filter out corrupted values
+    const isValidCategoryName = (name: string | undefined): boolean => {
+      if (!name) return false;
+      if (name.length <= 2) return false; // "1", "me" etc are not valid
+      if (/^(meso|micro|main|undefined|null)\d*$/i.test(name)) return false;
+      return true;
+    };
+
     Object.entries(exerciseSelectionData).forEach(([key, cellData]) => {
       if (cellData.mesocycleId !== mesocycle.id) return;
 
       const methodId = cellData.methodId;
-      // Use empty string instead of 'Uncategorized' for methods without categories
-      const categoryName = cellData.categoryName || '';
+      // Use empty string for invalid/corrupted category names
+      const categoryName = isValidCategoryName(cellData.categoryName) ? cellData.categoryName! : '';
 
       if (!grouped[methodId]) {
         grouped[methodId] = {};

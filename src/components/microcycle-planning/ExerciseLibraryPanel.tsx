@@ -180,8 +180,17 @@ export function ExerciseLibraryPanel({
                   <CollapsibleContent className="ml-4 space-y-1">
                     {(() => {
                       const categoryEntries = Object.entries(categories);
-                      // Check if this method has only one category and it's empty (no real categories)
-                      const hasNoRealCategories = categoryEntries.length === 1 && categoryEntries[0][0] === '';
+                      
+                      // Helper to detect invalid/corrupted category names
+                      const isInvalidCategory = (cat: string): boolean => {
+                        if (!cat || cat === '') return true;
+                        if (cat.length <= 2) return true; // Single chars like "1", "me"
+                        if (/^(meso|micro|main|undefined|null)\d*$/i.test(cat)) return true;
+                        return false;
+                      };
+                      
+                      // Check if this method has only one category and it's empty or invalid
+                      const hasNoRealCategories = categoryEntries.length === 1 && isInvalidCategory(categoryEntries[0][0]);
                       
                       if (hasNoRealCategories) {
                         // Skip category level - show exercises directly under method
