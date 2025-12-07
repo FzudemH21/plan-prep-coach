@@ -258,17 +258,29 @@ export function MasterPlannerColumn({
       || microcycleParams?.[exercise.methodId]?.[exercise.sessionIndex]
       || {};
 
+    // Parse methodId to extract main method and sub-method
+    // Format: "Lower Body Resistance Training - Strength" → ["Lower Body Resistance Training", "Strength"]
+    const methodParts = exercise.methodId.split(' - ');
+    const methodMain = methodParts[0] || exercise.methodId;
+    const methodSubCategory = methodParts[1] || '';
+
     // Look up parameters from toolbox data for this method
-    // Primary match: category = methodId AND subCategory = categoryName
+    // Match: toolbox.category = methodMain AND toolbox.subCategory = methodSubCategory
     let toolboxParams = toolboxData?.entries.filter(entry => {
-      return entry.category === exercise.methodId && entry.subCategory === exercise.categoryName;
+      if (methodSubCategory) {
+        return entry.category === methodMain && entry.subCategory === methodSubCategory;
+      }
+      // For methods without sub-category, match just category
+      return entry.category === methodMain && (!entry.subCategory || entry.subCategory === '');
     }) || [];
 
-    // Fallback match: just category = methodId if primary match returns nothing
-    if (toolboxParams.length === 0 && exercise.methodId) {
-      toolboxParams = toolboxData?.entries.filter(entry => {
-        return entry.category === exercise.methodId;
-      }) || [];
+    // Debug log to help identify matching issues
+    if (toolboxParams.length === 0 && toolboxData) {
+      console.log('[MasterPlanner] No toolbox match for:', { 
+        methodId: exercise.methodId, 
+        parsed: { methodMain, methodSubCategory },
+        availableCategories: [...new Set(toolboxData.entries.map(e => e.category))]
+      });
     }
 
     // Convert toolbox entries to MethodParameter format
