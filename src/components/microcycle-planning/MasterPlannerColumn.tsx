@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, memo } from 'react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -118,6 +118,106 @@ const formatParamName = (name: string): string => {
     .replace(/ Ms$/, ' ms');
 };
 
+// Props interface for EditableParamInput - defined OUTSIDE the component
+interface EditableParamInputProps {
+  dayDateString: string;
+  exercise: ExerciseDistribution;
+  paramName: string;
+  paramType: 'number' | 'text' | 'select';
+  currentValue: string | number | undefined;
+  options?: string[];
+  displayName?: string;
+  onParameterChange?: (
+    dayDate: string,
+    sessionIndex: number,
+    methodId: string,
+    categoryName: string,
+    parameterName: string,
+    value: string | number
+  ) => void;
+}
+
+// Editable input component - defined OUTSIDE the parent to maintain stable identity
+const EditableParamInput = memo(({ 
+  dayDateString,
+  exercise, 
+  paramName, 
+  paramType, 
+  currentValue,
+  options,
+  displayName,
+  onParameterChange
+}: EditableParamInputProps) => {
+  const [localValue, setLocalValue] = useState(currentValue ?? '');
+  
+  // Sync local value with prop changes
+  useEffect(() => {
+    setLocalValue(currentValue ?? '');
+  }, [currentValue]);
+  
+  const handleBlur = useCallback(() => {
+    const finalValue = paramType === 'number' && localValue !== '' 
+      ? Number(localValue) 
+      : localValue;
+    onParameterChange?.(
+      dayDateString,
+      exercise.sessionIndex,
+      exercise.methodId,
+      exercise.categoryName,
+      paramName,
+      finalValue
+    );
+  }, [dayDateString, exercise.sessionIndex, exercise.methodId, exercise.categoryName, paramName, paramType, localValue, onParameterChange]);
+
+  const handleSelectChange = useCallback((value: string) => {
+    setLocalValue(value);
+    // Save immediately for select inputs
+    onParameterChange?.(
+      dayDateString,
+      exercise.sessionIndex,
+      exercise.methodId,
+      exercise.categoryName,
+      paramName,
+      value
+    );
+  }, [dayDateString, exercise.sessionIndex, exercise.methodId, exercise.categoryName, paramName, onParameterChange]);
+
+  // Render Select dropdown for select type with options
+  if (paramType === 'select' && options && options.length > 0) {
+    return (
+      <Select value={String(localValue)} onValueChange={handleSelectChange}>
+        <SelectTrigger 
+          className="h-5 w-20 text-[10px] px-1 border-muted bg-background/50" 
+          onClick={(e) => e.stopPropagation()}
+        >
+          <SelectValue placeholder="-" />
+        </SelectTrigger>
+        <SelectContent className="z-[300] bg-background border">
+          {options.map((opt) => (
+            <SelectItem key={opt} value={opt} className="text-[10px]">
+              {opt}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  }
+
+  // Render Input for number/text types
+  return (
+    <Input
+      type={paramType === 'number' ? 'number' : 'text'}
+      value={localValue}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={handleBlur}
+      onClick={(e) => e.stopPropagation()}
+      className="h-5 w-14 text-[10px] px-1 py-0 text-center border-muted bg-background/50 focus:bg-background"
+    />
+  );
+});
+
+EditableParamInput.displayName = 'EditableParamInput';
+
 export function MasterPlannerColumn({
   day,
   weekNumber,
@@ -135,7 +235,7 @@ export function MasterPlannerColumn({
   const currentIntensity: IntensityLevel = dailyIntensityData?.find(di => di.date === day.dateString)?.intensity || 'moderate';
 
   // Get parameters for an exercise from toolbox data
-  const getExerciseParams = (exercise: ExerciseDistribution) => {
+  const getExerciseParams = useCallback((exercise: ExerciseDistribution) => {
     if (!currentMesocycle || !parameterValues) {
       return { storedParams: {}, methodParams: [] as MethodParameter[] };
     }
@@ -159,12 +259,17 @@ export function MasterPlannerColumn({
       || {};
 
     // Look up parameters from toolbox data for this method
-    // Toolbox uses "category" for the method name and "subCategory" for the method category
-    const toolboxParams = toolboxData?.entries.filter(entry => {
-      // Match: entry.category = "Lower Body Resistance Training", entry.subCategory = "Strength"
-      // With: exercise.methodId = "Lower Body Resistance Training", exercise.categoryName = "Strength"
+    // Primary match: category = methodId AND subCategory = categoryName
+    let toolboxParams = toolboxData?.entries.filter(entry => {
       return entry.category === exercise.methodId && entry.subCategory === exercise.categoryName;
     }) || [];
+
+    // Fallback match: just category = methodId if primary match returns nothing
+    if (toolboxParams.length === 0 && exercise.methodId) {
+      toolboxParams = toolboxData?.entries.filter(entry => {
+        return entry.category === exercise.methodId;
+      }) || [];
+    }
 
     // Convert toolbox entries to MethodParameter format
     const methodParams: MethodParameter[] = toolboxParams.map(entry => {
@@ -197,86 +302,7 @@ export function MasterPlannerColumn({
     }
 
     return { storedParams, methodParams };
-  };
-
-  // Editable input component with local state for debouncing
-  const EditableParamInput = ({ 
-    exercise, 
-    paramName, 
-    paramType, 
-    currentValue,
-    options,
-    displayName
-  }: { 
-    exercise: ExerciseDistribution; 
-    paramName: string; 
-    paramType: 'number' | 'text' | 'select'; 
-    currentValue: string | number | undefined;
-    options?: string[];
-    displayName?: string;
-  }) => {
-    const [localValue, setLocalValue] = useState(currentValue ?? '');
-    
-    const handleBlur = useCallback(() => {
-      const finalValue = paramType === 'number' && localValue !== '' 
-        ? Number(localValue) 
-        : localValue;
-      onParameterChange?.(
-        day.dateString,
-        exercise.sessionIndex,
-        exercise.methodId,
-        exercise.categoryName,
-        paramName,
-        finalValue
-      );
-    }, [exercise, paramName, paramType, localValue]);
-
-    const handleSelectChange = useCallback((value: string) => {
-      setLocalValue(value);
-      // Save immediately for select inputs
-      onParameterChange?.(
-        day.dateString,
-        exercise.sessionIndex,
-        exercise.methodId,
-        exercise.categoryName,
-        paramName,
-        value
-      );
-    }, [exercise, paramName]);
-
-    // Render Select dropdown for select type with options
-    if (paramType === 'select' && options && options.length > 0) {
-      return (
-        <Select value={String(localValue)} onValueChange={handleSelectChange}>
-          <SelectTrigger 
-            className="h-5 w-20 text-[10px] px-1 border-muted bg-background/50" 
-            onClick={(e) => e.stopPropagation()}
-          >
-            <SelectValue placeholder="-" />
-          </SelectTrigger>
-          <SelectContent className="z-[300] bg-background border">
-            {options.map((opt) => (
-              <SelectItem key={opt} value={opt} className="text-[10px]">
-                {opt}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      );
-    }
-
-    // Render Input for number/text types
-    return (
-      <Input
-        type={paramType === 'number' ? 'number' : 'text'}
-        value={localValue}
-        onChange={(e) => setLocalValue(e.target.value)}
-        onBlur={handleBlur}
-        onClick={(e) => e.stopPropagation()}
-        className="h-5 w-14 text-[10px] px-1 py-0 text-center border-muted bg-background/50 focus:bg-background"
-      />
-    );
-  };
+  }, [currentMesocycle, parameterValues, trainingDays, day.dateString, toolboxData]);
 
   // Render parameter values for an exercise
   const renderExerciseParams = (exercise: ExerciseDistribution) => {
@@ -320,7 +346,7 @@ export function MasterPlannerColumn({
                 <TableHead className="py-0.5 px-1 w-8 font-medium h-5">Set</TableHead>
                 {displayParams.slice(0, 4).map(p => (
                   <TableHead key={p.name} className="py-0.5 px-1 font-medium h-5">
-                    {formatParamName((p as any).displayName || p.name)}
+                    {formatParamName(p.displayName || p.name)}
                   </TableHead>
                 ))}
               </TableRow>
@@ -332,12 +358,14 @@ export function MasterPlannerColumn({
                   {displayParams.slice(0, 4).map(p => (
                     <TableCell key={p.name} className="py-0 px-0.5">
                       <EditableParamInput
+                        dayDateString={day.dateString}
                         exercise={exercise}
                         paramName={p.name}
                         paramType={p.type as 'number' | 'text' | 'select'}
                         currentValue={storedParams[p.name]}
                         options={p.options}
-                        displayName={(p as any).displayName}
+                        displayName={p.displayName}
+                        onParameterChange={onParameterChange}
                       />
                     </TableCell>
                   ))}
@@ -357,14 +385,16 @@ export function MasterPlannerColumn({
           .slice(0, 4)
           .map(param => (
             <div key={param.name} className="flex items-center gap-1">
-              <span className="text-[9px] text-muted-foreground">{formatParamName((param as any).displayName || param.name)}:</span>
+              <span className="text-[9px] text-muted-foreground">{formatParamName(param.displayName || param.name)}:</span>
               <EditableParamInput
+                dayDateString={day.dateString}
                 exercise={exercise}
                 paramName={param.name}
                 paramType={param.type as 'number' | 'text' | 'select'}
                 currentValue={storedParams[param.name]}
                 options={param.options}
-                displayName={(param as any).displayName}
+                displayName={param.displayName}
+                onParameterChange={onParameterChange}
               />
             </div>
           ))}
@@ -480,37 +510,26 @@ export function MasterPlannerColumn({
                         <div className="flex-1 min-w-0">
                           <p className="font-medium truncate">{exercise.exerciseName}</p>
                           <p className="text-muted-foreground truncate text-[10px]">
-                            {exercise.categoryName}
-                            {exercise.subCategory && ` • ${exercise.subCategory}`}
+                            {exercise.methodId}
+                            {exercise.categoryName && ` • ${exercise.categoryName}`}
                           </p>
-                          {/* Method-specific parameters */}
                           {renderExerciseParams(exercise)}
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
-
-                {/* Exercise Count Badge */}
-                <div className="mt-2 pt-2 border-t">
-                  <Badge variant="secondary" className="text-[10px]">
-                    {session.exercises.length} exercise{session.exercises.length !== 1 ? 's' : ''}
-                  </Badge>
-                </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="h-full flex flex-col items-center justify-center text-center py-8">
-            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
-              <Dumbbell className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <p className="text-sm text-muted-foreground mb-3">No workout</p>
+          <div className="flex flex-col items-center justify-center h-full text-center py-8">
+            <p className="text-sm text-muted-foreground mb-3">No training scheduled</p>
             <Button
               variant="outline"
               size="sm"
               onClick={() => onAddSession?.(day.dateString)}
-              className="gap-1"
+              className="gap-1.5"
             >
               <Plus className="h-3.5 w-3.5" />
               Add Workout
