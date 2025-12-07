@@ -94,10 +94,23 @@ function migrateSetParameter(entries: ToolboxEntry[]): ToolboxEntry[] {
     // Check if this method already has a marked set parameter
     const hasMarkedSetParam = methodEntries.some(e => e.isSetParameter);
     
-    // If not, and this entry's name contains "set" or "sets" AND is quantitative, mark it
-    if (!hasMarkedSetParam 
-        && (entry.parameter.toLowerCase().includes('set') || entry.parameterName?.toLowerCase().includes('set'))
-        && entry.parameterType === 'quantitative') {
+    if (hasMarkedSetParam) {
+      return entry;
+    }
+    
+    const paramLower = entry.parameter.toLowerCase();
+    const paramNameLower = entry.parameterName?.toLowerCase() || '';
+    
+    // Check for set-like parameters:
+    // 1. Contains "set" or "sets"
+    // 2. Contains "ground contacts per session" (for plyometrics)
+    const isSetLike = 
+      paramLower.includes('set') || 
+      paramNameLower.includes('set') ||
+      paramLower.includes('ground contacts per session') ||
+      paramNameLower.includes('ground contacts per session');
+    
+    if (isSetLike && entry.parameterType === 'quantitative') {
       return { ...entry, isSetParameter: true };
     }
     
