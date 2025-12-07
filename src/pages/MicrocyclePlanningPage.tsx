@@ -198,14 +198,43 @@ export default function MicrocyclePlanningPage() {
       setSupersets(JSON.parse(savedSupersets));
     }
 
+    // Helper to detect and clean corrupted category names
+    const isCorruptedCategoryName = (name: string | undefined): boolean => {
+      if (!name || name === '') return false; // Empty is valid (means no category)
+      if (name.length <= 2) return true; // "1", "me" etc are corrupted
+      if (/^(meso|micro|main|undefined|null)\d*$/i.test(name)) return true;
+      return false;
+    };
+
     // Load from Step 6 (Exercise Selection) - this is the source of truth
     const savedMicrocyclePlanningState = localStorage.getItem('microcyclePlanningState');
     if (savedMicrocyclePlanningState) {
       const planningState = JSON.parse(savedMicrocyclePlanningState);
       console.log('[MicrocyclePlanningPage] Loaded microcyclePlanningState:', planningState);
       
+      // Clean corrupted categoryName values from cellData
+      const cleanedCellData: Record<string, CellData> = {};
+      let hasCorruption = false;
+      
+      Object.entries(planningState.cellData || {}).forEach(([cellId, cellData]: [string, any]) => {
+        if (isCorruptedCategoryName(cellData.categoryName)) {
+          hasCorruption = true;
+          console.log('[MicrocyclePlanningPage] Cleaning corrupted categoryName:', cellData.categoryName, 'in cell:', cellId);
+          cleanedCellData[cellId] = { ...cellData, categoryName: undefined };
+        } else {
+          cleanedCellData[cellId] = cellData;
+        }
+      });
+      
+      // If we cleaned data, save it back to localStorage
+      if (hasCorruption) {
+        const updatedPlanningState = { ...planningState, cellData: cleanedCellData };
+        localStorage.setItem('microcyclePlanningState', JSON.stringify(updatedPlanningState));
+        console.log('[MicrocyclePlanningPage] Saved cleaned microcyclePlanningState');
+      }
+      
       // Use cellData from Step 6 as the source of truth
-      setExerciseSelectionData(planningState.cellData || {});
+      setExerciseSelectionData(cleanedCellData);
       setSplitStates(planningState.splitStates || {});
     } else {
       // Fallback to legacy key if microcyclePlanningState doesn't exist
