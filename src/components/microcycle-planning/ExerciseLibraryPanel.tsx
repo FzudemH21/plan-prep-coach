@@ -178,91 +178,157 @@ export function ExerciseLibraryPanel({
                   </CollapsibleTrigger>
                   
                   <CollapsibleContent className="ml-4 space-y-1">
-                    {Object.entries(categories).map(([categoryName, exercises]) => {
-                      const categoryKey = `${methodId}::${categoryName}`;
-                      const isCategoryExpanded = expandedCategories.has(categoryKey);
+                    {(() => {
+                      const categoryEntries = Object.entries(categories);
+                      // Check if this method has only one category and it's empty (no real categories)
+                      const hasNoRealCategories = categoryEntries.length === 1 && categoryEntries[0][0] === '';
                       
-                      return (
-                        <Collapsible
-                          key={categoryKey}
-                          open={isCategoryExpanded}
-                          onOpenChange={() => toggleCategory(categoryKey)}
-                        >
-                          <CollapsibleTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="w-full justify-start text-xs hover:bg-muted/50"
-                            >
-                              {isCategoryExpanded ? (
-                                <ChevronDown className="mr-2 h-3 w-3" />
-                              ) : (
-                                <ChevronRight className="mr-2 h-3 w-3" />
-                              )}
-                              <span className="truncate">{categoryName}</span>
-                              <Badge variant="secondary" className="ml-auto text-xs">
-                                {exercises.length}
-                              </Badge>
-                            </Button>
-                          </CollapsibleTrigger>
-                          
-                          <CollapsibleContent className="ml-4 mt-1">
-                            <Droppable
-                              droppableId={`library-${methodId}::${categoryName}`}
-                              type="EXERCISE"
-                              isDropDisabled={true}
-                            >
-                              {(provided, snapshot) => (
-                                <div
-                                  ref={provided.innerRef}
-                                  {...provided.droppableProps}
-                                  className="space-y-1"
-                                >
-                                  {exercises.map((exercise, index) => {
-                                    const allocationCount = getExerciseAllocationCount(exercise.exerciseId);
-                                    
-                                    return (
-                                      <Draggable
-                                        key={exercise.exerciseId}
-                                        draggableId={`lib-${exercise.exerciseId}`}
-                                        index={index}
-                                      >
-                                        {(provided, snapshot) => (
-                                          <div
-                                            ref={provided.innerRef}
-                                            {...provided.draggableProps}
-                                            {...provided.dragHandleProps}
-                                             className={cn(
-                                               "flex items-center gap-2 p-2 rounded-md border bg-card text-xs",
-                                               "hover:bg-accent hover:text-accent-foreground cursor-grab active:cursor-grabbing",
-                                               snapshot.isDragging && "opacity-50 shadow-lg"
-                                             )}
+                      if (hasNoRealCategories) {
+                        // Skip category level - show exercises directly under method
+                        const exercises = categoryEntries[0][1];
+                        return (
+                          <Droppable
+                            droppableId={`library-${methodId}::`}
+                            type="EXERCISE"
+                            isDropDisabled={true}
+                          >
+                            {(provided, snapshot) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.droppableProps}
+                                className="space-y-1"
+                              >
+                                {exercises.map((exercise, index) => {
+                                  const allocationCount = getExerciseAllocationCount(exercise.exerciseId);
+                                  
+                                  return (
+                                    <Draggable
+                                      key={exercise.exerciseId}
+                                      draggableId={`lib-${exercise.exerciseId}`}
+                                      index={index}
+                                    >
+                                      {(provided, snapshot) => (
+                                        <div
+                                          ref={provided.innerRef}
+                                          {...provided.draggableProps}
+                                          {...provided.dragHandleProps}
+                                           className={cn(
+                                             "flex items-center gap-2 p-2 rounded-md border bg-card text-xs",
+                                             "hover:bg-accent hover:text-accent-foreground cursor-grab active:cursor-grabbing",
+                                             snapshot.isDragging && "opacity-50 shadow-lg"
+                                           )}
+                                         >
+                                           <GripVertical className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                           <div className={cn(
+                                             "w-2 h-2 rounded-full flex-shrink-0",
+                                             getAllocationDotColor(allocationCount)
+                                           )} />
+                                           <span className="flex-1 truncate">{exercise.exerciseName}</span>
+                                           <Badge 
+                                             variant={getAllocationBadgeVariant(allocationCount)} 
+                                             className="text-xs px-2 py-0.5 font-semibold"
                                            >
-                                             <GripVertical className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                                             <div className={cn(
-                                               "w-2 h-2 rounded-full flex-shrink-0",
-                                               getAllocationDotColor(allocationCount)
-                                             )} />
-                                             <span className="flex-1 truncate">{exercise.exerciseName}</span>
-                                             <Badge 
-                                               variant={getAllocationBadgeVariant(allocationCount)} 
-                                               className="text-xs px-2 py-0.5 font-semibold"
+                                             {allocationCount}
+                                           </Badge>
+                                        </div>
+                                      )}
+                                    </Draggable>
+                                  );
+                                })}
+                                {provided.placeholder}
+                              </div>
+                            )}
+                          </Droppable>
+                        );
+                      }
+                      
+                      // Normal case - show category collapsibles
+                      return categoryEntries.map(([categoryName, exercises]) => {
+                        const categoryKey = `${methodId}::${categoryName}`;
+                        const isCategoryExpanded = expandedCategories.has(categoryKey);
+                        
+                        return (
+                          <Collapsible
+                            key={categoryKey}
+                            open={isCategoryExpanded}
+                            onOpenChange={() => toggleCategory(categoryKey)}
+                          >
+                            <CollapsibleTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="w-full justify-start text-xs hover:bg-muted/50"
+                              >
+                                {isCategoryExpanded ? (
+                                  <ChevronDown className="mr-2 h-3 w-3" />
+                                ) : (
+                                  <ChevronRight className="mr-2 h-3 w-3" />
+                                )}
+                                <span className="truncate">{categoryName}</span>
+                                <Badge variant="secondary" className="ml-auto text-xs">
+                                  {exercises.length}
+                                </Badge>
+                              </Button>
+                            </CollapsibleTrigger>
+                            
+                            <CollapsibleContent className="ml-4 mt-1">
+                              <Droppable
+                                droppableId={`library-${methodId}::${categoryName}`}
+                                type="EXERCISE"
+                                isDropDisabled={true}
+                              >
+                                {(provided, snapshot) => (
+                                  <div
+                                    ref={provided.innerRef}
+                                    {...provided.droppableProps}
+                                    className="space-y-1"
+                                  >
+                                    {exercises.map((exercise, index) => {
+                                      const allocationCount = getExerciseAllocationCount(exercise.exerciseId);
+                                      
+                                      return (
+                                        <Draggable
+                                          key={exercise.exerciseId}
+                                          draggableId={`lib-${exercise.exerciseId}`}
+                                          index={index}
+                                        >
+                                          {(provided, snapshot) => (
+                                            <div
+                                              ref={provided.innerRef}
+                                              {...provided.draggableProps}
+                                              {...provided.dragHandleProps}
+                                               className={cn(
+                                                 "flex items-center gap-2 p-2 rounded-md border bg-card text-xs",
+                                                 "hover:bg-accent hover:text-accent-foreground cursor-grab active:cursor-grabbing",
+                                                 snapshot.isDragging && "opacity-50 shadow-lg"
+                                               )}
                                              >
-                                               {allocationCount}
-                                             </Badge>
-                                          </div>
-                                        )}
-                                      </Draggable>
-                                    );
-                                  })}
-                                  {provided.placeholder}
-                                </div>
-                              )}
-                            </Droppable>
-                          </CollapsibleContent>
-                        </Collapsible>
-                      );
-                    })}
+                                               <GripVertical className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                               <div className={cn(
+                                                 "w-2 h-2 rounded-full flex-shrink-0",
+                                                 getAllocationDotColor(allocationCount)
+                                               )} />
+                                               <span className="flex-1 truncate">{exercise.exerciseName}</span>
+                                               <Badge 
+                                                 variant={getAllocationBadgeVariant(allocationCount)} 
+                                                 className="text-xs px-2 py-0.5 font-semibold"
+                                               >
+                                                 {allocationCount}
+                                               </Badge>
+                                            </div>
+                                          )}
+                                        </Draggable>
+                                      );
+                                    })}
+                                    {provided.placeholder}
+                                  </div>
+                                )}
+                              </Droppable>
+                            </CollapsibleContent>
+                          </Collapsible>
+                        );
+                      });
+                    })()}
                   </CollapsibleContent>
                 </Collapsible>
               );

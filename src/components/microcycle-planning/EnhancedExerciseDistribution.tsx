@@ -281,7 +281,8 @@ export function EnhancedExerciseDistribution({
       if (cellData.mesocycleId !== mesocycle.id) return;
 
       const methodId = cellData.methodId;
-      const categoryName = cellData.categoryName || 'Uncategorized';
+      // Use empty string instead of 'Uncategorized' for methods without categories
+      const categoryName = cellData.categoryName || '';
 
       if (!grouped[methodId]) {
         grouped[methodId] = {};

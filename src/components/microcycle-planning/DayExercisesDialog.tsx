@@ -90,7 +90,8 @@ export function DayExercisesDialog({ day, isOpen, onClose }: DayExercisesDialogP
               
               session.exercises.forEach(ex => {
                 const method = ex.methodId;
-                const category = ex.categoryName || 'Uncategorized';
+                // Use empty string for methods without categories
+                const category = ex.categoryName || '';
                 
                 if (!groupedExercises[method]) {
                   groupedExercises[method] = {};
@@ -125,7 +126,7 @@ export function DayExercisesDialog({ day, isOpen, onClose }: DayExercisesDialogP
                       {/* Categories and Exercises */}
                       {Object.entries(categories).map(([category, exercises]) => (
                         <div key={category} className="ml-4 space-y-2">
-                          {category !== 'Uncategorized' && (
+                          {category && category !== 'Uncategorized' && category !== '' && (
                             <p className="text-sm font-medium text-muted-foreground">
                               {category}
                             </p>

@@ -246,7 +246,9 @@ export function MasterPlannerColumn({
     const microcycleIndex = currentMesocycle.microcycles?.findIndex(m => m.id === microcycleId) ?? 0;
 
     // Build method key (with or without category)
-    const fullMethodKey = exercise.categoryName 
+    // Treat empty string or 'Uncategorized' as no real category
+    const hasValidCategory = exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '';
+    const fullMethodKey = hasValidCategory
       ? `${exercise.methodId}::${exercise.categoryName}` 
       : exercise.methodId;
 
@@ -551,7 +553,7 @@ export function MasterPlannerColumn({
                           <p className="font-medium truncate">{exercise.exerciseName}</p>
                           <p className="text-muted-foreground truncate text-[10px]">
                             {exercise.methodId}
-                            {exercise.categoryName && ` • ${exercise.categoryName}`}
+                            {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
                           </p>
                           {renderExerciseParams(exercise)}
                         </div>
