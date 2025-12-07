@@ -250,13 +250,32 @@ export function MasterPlannerColumn({
       ? `${exercise.methodId}::${exercise.categoryName}` 
       : exercise.methodId;
 
-    // Get stored parameter values - try full key first, then just methodId
+    // Get stored parameter values
     const mesocycleParams = parameterValues[currentMesocycle.id];
     const microcycleParams = mesocycleParams?.[microcycleIndex];
     
-    const storedParams = microcycleParams?.[fullMethodKey]?.[exercise.sessionIndex] 
-      || microcycleParams?.[exercise.methodId]?.[exercise.sessionIndex]
-      || {};
+    // Priority order for lookup:
+    // 1. Category-specific key with session 0 (most specific - category was split & specified)
+    // 2. Category-specific key with exercise's session index
+    // 3. Method key (without category) with session 0 (fallback - applies to all categories)
+    // 4. Method key with exercise's session index
+    const storedParams = 
+      microcycleParams?.[fullMethodKey]?.[0] ||
+      microcycleParams?.[fullMethodKey]?.[exercise.sessionIndex] ||
+      microcycleParams?.[exercise.methodId]?.[0] ||
+      microcycleParams?.[exercise.methodId]?.[exercise.sessionIndex] ||
+      {};
+    
+    // Debug log when no params found
+    if (Object.keys(storedParams).length === 0 && microcycleParams) {
+      console.log('[MasterPlanner] Empty storedParams for:', {
+        exercise: exercise.exerciseName,
+        methodId: exercise.methodId,
+        categoryName: exercise.categoryName,
+        fullMethodKey,
+        availableMethodKeys: Object.keys(microcycleParams),
+      });
+    }
 
     // Parse methodId to extract main method and sub-method
     // Format: "Lower Body Resistance Training - Strength" → ["Lower Body Resistance Training", "Strength"]
@@ -348,15 +367,22 @@ export function MasterPlannerColumn({
       );
     }
 
-    // If we have sets and display parameters, render a compact table with editable inputs
-    if (setCount > 0 && displayParams.length > 0) {
+    // Filter displayParams to only include those with actual stored values
+    const paramsWithValues = displayParams.filter(p => 
+      storedParams[p.name] !== undefined && 
+      storedParams[p.name] !== '' && 
+      storedParams[p.name] !== null
+    );
+
+    // If we have sets and display parameters with values, render a compact table with editable inputs
+    if (setCount > 0 && paramsWithValues.length > 0) {
       return (
         <div className="mt-2">
           <Table className="text-[10px]">
             <TableHeader>
               <TableRow className="h-5 border-b">
                 <TableHead className="py-0.5 px-1 w-8 font-medium h-5">Set</TableHead>
-                {displayParams.slice(0, 4).map(p => (
+                {paramsWithValues.slice(0, 4).map(p => (
                   <TableHead key={p.name} className="py-0.5 px-1 font-medium h-5">
                     {formatParamName(p.displayName || p.name)}
                   </TableHead>
@@ -367,7 +393,7 @@ export function MasterPlannerColumn({
               {Array.from({ length: setCount }, (_, idx) => (
                 <TableRow key={idx} className="h-6 border-0">
                   <TableCell className="py-0.5 px-1 font-medium">{idx + 1}</TableCell>
-                  {displayParams.slice(0, 4).map(p => (
+                  {paramsWithValues.slice(0, 4).map(p => (
                     <TableCell key={p.name} className="py-0 px-0.5">
                       <EditableParamInput
                         dayDateString={day.dateString}
@@ -389,13 +415,11 @@ export function MasterPlannerColumn({
       );
     }
 
-    // Fallback: if setCount is 0 but setParam exists, show editable inputs in a flex layout
-    return (
-      <div className="mt-1.5 flex flex-wrap gap-1.5 items-center">
-        {displayParams
-          .filter(p => storedParams[p.name] !== undefined || onParameterChange)
-          .slice(0, 4)
-          .map(param => (
+    // Fallback: if setCount is 0 but we have params with values, show editable inputs in a flex layout
+    if (paramsWithValues.length > 0) {
+      return (
+        <div className="mt-1.5 flex flex-wrap gap-1.5 items-center">
+          {paramsWithValues.slice(0, 4).map(param => (
             <div key={param.name} className="flex items-center gap-1">
               <span className="text-[9px] text-muted-foreground">{formatParamName(param.displayName || param.name)}:</span>
               <EditableParamInput
@@ -410,8 +434,12 @@ export function MasterPlannerColumn({
               />
             </div>
           ))}
-      </div>
-    );
+        </div>
+      );
+    }
+
+    // No parameters with values to display
+    return null;
   };
 
   return (
