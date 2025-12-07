@@ -341,8 +341,8 @@ export function MasterPlannerColumn({
   const renderExerciseParams = (exercise: ExerciseDistribution) => {
     const { storedParams, methodParams } = getExerciseParams(exercise);
     
-    // Only return null if there are truly no parameters stored
-    if (Object.keys(storedParams).length === 0) {
+    // If no method params from toolbox and no stored params, show nothing
+    if (methodParams.length === 0 && Object.keys(storedParams).length === 0) {
       return null;
     }
 
@@ -359,8 +359,8 @@ export function MasterPlannerColumn({
       p.name !== 'Frequency'
     );
 
-    // If no set parameter exists, show warning
-    if (!setParam) {
+    // If no set parameter exists and we have method params, show warning
+    if (!setParam && methodParams.length > 0) {
       return (
         <div className="mt-1.5 flex items-center gap-1.5 text-amber-600">
           <AlertTriangle className="h-3.5 w-3.5" />
@@ -369,12 +369,8 @@ export function MasterPlannerColumn({
       );
     }
 
-    // Filter displayParams to only include those with actual stored values
-    const paramsWithValues = displayParams.filter(p => 
-      storedParams[p.name] !== undefined && 
-      storedParams[p.name] !== '' && 
-      storedParams[p.name] !== null
-    );
+    // Use all display params (not just those with values) so users can edit empty fields
+    const paramsWithValues = displayParams;
 
     // If we have sets and display parameters with values, render a compact table with editable inputs
     if (setCount > 0 && paramsWithValues.length > 0) {
