@@ -155,19 +155,8 @@ export function WorkoutSessionSheet({
   const [isTestEventDialogOpen, setIsTestEventDialogOpen] = useState(false);
   const [testsEventsExpanded, setTestsEventsExpanded] = useState(true);
   const [sectionToDelete, setSectionToDelete] = useState<string | null>(null);
-  const [workoutSections, setWorkoutSections] = useState<WorkoutSection[]>(() => {
-    // Try to load from localStorage first
-    const sectionsKey = `workoutSections_${mesocycleId}_${dayDate}_${sessionIndex}`;
-    const storedSections = localStorage.getItem(sectionsKey);
-    
-    if (storedSections) {
-      try {
-        return JSON.parse(storedSections);
-      } catch {
-        // Fall through to default initialization
-      }
-    }
-    
+  // Helper function to build sections from exercises
+  const buildSectionsFromExercises = (exercisesList: ExerciseDistribution[]): WorkoutSection[] => {
     // Use sessionSections prop if available (from Step 1)
     if (sessionSectionsProp && sessionSectionsProp.length > 0) {
       const sessionSpecificSections = sessionSectionsProp.filter(
@@ -175,16 +164,12 @@ export function WorkoutSessionSheet({
       );
       
       if (sessionSpecificSections.length > 0) {
-        console.log('[WorkoutSessionSheet] Using sections from Step 1 prop:', sessionSpecificSections);
-        
         return sessionSpecificSections
           .sort((a, b) => a.order - b.order)
           .map(section => {
-            // Find exercises that belong to this section (by sectionId in exerciseDistribution)
-            const sectionExercises = exercises
+            const sectionExercises = exercisesList
               .filter((ex: any) => ex.sectionId === section.id)
               .map((ex, idx) => {
-                // Get stored parameters from Method Periodization
                 const fullMethodKey = ex.categoryName ? `${ex.methodId}::${ex.categoryName}` : ex.methodId;
                 const storedParams = parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex]
                   || parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex]
@@ -261,21 +246,20 @@ export function WorkoutSessionSheet({
       }
     }
     
-    // Fallback: Initialize sections from exercises by grouping by categoryName
+    // Fallback: Group exercises by categoryName
     const sectionsMap = new Map<string, WorkoutExercise[]>();
     
-    exercises.forEach((ex, index) => {
+    exercisesList.forEach((ex, index) => {
       const sectionName = ex.categoryName || 'Main Work';
       if (!sectionsMap.has(sectionName)) {
         sectionsMap.set(sectionName, []);
       }
       
-      // Get stored parameters from Method Periodization (prefer category-scoped key)
       const fullMethodKey = ex.categoryName ? `${ex.methodId}::${ex.categoryName}` : ex.methodId;
       const storedParams = parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex]
         || parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex]
         || {};
-      // Derive parameter definitions: prefer predefined list; fallback to keys present in stored params
+      
       let methodParams = getParametersForMethod(ex.methodId);
       if (!methodParams || methodParams.length === 0) {
         methodParams = Object.keys(storedParams)
@@ -286,24 +270,11 @@ export function WorkoutSessionSheet({
           }));
       }
       
-      console.log(`[WorkoutSessionSheet] Fetching params for:`, {
-        mesocycleId,
-        microcycleIndex,
-        methodId: ex.methodId,
-        sessionIndex,
-        exerciseId: ex.exerciseId,
-        storedParams,
-        parameterValuesKeys: Object.keys(parameterValues),
-        microcycleData: parameterValues[mesocycleId]?.[microcycleIndex]
-      });
-      
-      // Parameters are stored directly by parameter name at the method level, not nested under exerciseId
       let exerciseParams: Record<string, string | number> = {};
       if (storedParams && typeof storedParams === 'object' && !Array.isArray(storedParams)) {
         exerciseParams = storedParams as Record<string, string | number>;
       }
       
-      // Merge with defaults and prefill per-set values from method-level params
       const setParamName = methodParams.find(p => p.isSetParameter)?.name || 
                           methodParams.find(p => /^sets?$/i.test(p.name))?.name;
       const setCount = setParamName ? Number(exerciseParams[setParamName] || 0) : 0;
@@ -315,23 +286,19 @@ export function WorkoutSessionSheet({
         }
         
         if (param.name === setParamName) {
-          // Store the set count
           parameters[param.name] = Number(exerciseParams[param.name] ?? param.defaultValue ?? 0);
         } else if (setCount > 0) {
-          // Prefill per-set values from method-level parameters
           for (let i = 1; i <= setCount; i++) {
             const perSetKey = `${param.name}_set${i}`;
             const legacyKey = `${ex.exerciseId}_${param.name}`;
             parameters[perSetKey] = 
-              (exerciseParams as any)[perSetKey] ??  // Already per-set
-              exerciseParams[param.name] ??          // Method-level value (fan out)
-              (exerciseParams as any)[legacyKey] ??  // Legacy format
+              (exerciseParams as any)[perSetKey] ?? 
+              exerciseParams[param.name] ?? 
+              (exerciseParams as any)[legacyKey] ?? 
               param.defaultValue ?? '';
           }
-          // ALSO store the base parameter name so fallback logic can detect it
           parameters[param.name] = exerciseParams[param.name] ?? param.defaultValue ?? '';
         } else {
-          // No sets, use single value
           const legacyKey = `${ex.exerciseId}_${param.name}`;
           parameters[param.name] = 
             exerciseParams[param.name] ?? 
@@ -347,7 +314,8 @@ export function WorkoutSessionSheet({
         methodId: ex.methodId,
         categoryName: ex.categoryName || '',
         order: index,
-        parameters
+        parameters,
+        notes: ex.notes
       });
     });
     
@@ -357,7 +325,37 @@ export function WorkoutSessionSheet({
       order: idx,
       exercises: exs.sort((a, b) => a.order - b.order)
     }));
+  };
+
+  const [workoutSections, setWorkoutSections] = useState<WorkoutSection[]>(() => {
+    // PRIORITY: Fresh exercises prop takes precedence over stale localStorage
+    if (exercises.length > 0) {
+      return buildSectionsFromExercises(exercises);
+    }
+    
+    // Only use localStorage if exercises prop is empty (backward compatibility)
+    const sectionsKey = `workoutSections_${mesocycleId}_${dayDate}_${sessionIndex}`;
+    const storedSections = localStorage.getItem(sectionsKey);
+    
+    if (storedSections) {
+      try {
+        return JSON.parse(storedSections);
+      } catch {
+        // Fall through to default
+      }
+    }
+    
+    // Default empty state
+    return [{ id: 'section-0', name: 'Uncategorized', order: 0, exercises: [] }];
   });
+  
+  // Sync workoutSections when dialog opens with new exercises
+  useEffect(() => {
+    if (isOpen && exercises.length > 0) {
+      const newSections = buildSectionsFromExercises(exercises);
+      setWorkoutSections(newSections);
+    }
+  }, [isOpen, exercises.length, dayDate, sessionIndex]);
   
   const [supersets, setSupersets] = useState<SupersetMapping>(() => {
     // Initialize from prop if available
