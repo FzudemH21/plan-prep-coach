@@ -3,6 +3,7 @@ export interface WorkoutSection {
   name: string;
   order: number;
   exercises: WorkoutExercise[];
+  comments?: string;
 }
 
 export interface WorkoutExercise {

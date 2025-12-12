@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronRight, Plus, GripVertical, MoreVertical, Pencil, Trash2, Link2, Copy } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, GripVertical, MoreVertical, Pencil, Trash2, Link2, Copy, MessageSquare } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { WorkoutSection, WorkoutExercise } from '@/types/workout';
 import { WorkoutExerciseCard } from './WorkoutExerciseCard';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
@@ -24,6 +25,7 @@ interface WorkoutSectionCardProps {
   getSupersetLabel: (exerciseId: string) => string | undefined;
   sectionDragHandleProps?: any;
   onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
+  onSectionCommentsChange?: (sectionId: string, comments: string) => void;
 }
 
 export function WorkoutSectionCard({
@@ -41,7 +43,8 @@ export function WorkoutSectionCard({
   onDuplicateSection,
   getSupersetLabel,
   sectionDragHandleProps,
-  onExerciseNotesChange
+  onExerciseNotesChange,
+  onSectionCommentsChange
 }: WorkoutSectionCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(section.name);
@@ -151,6 +154,21 @@ export function WorkoutSectionCard({
 
       {/* Section Content */}
       <div className="p-3 space-y-3">
+        {/* Section Notes from Step 1 */}
+        {!isCollapsed && (section.comments || onSectionCommentsChange) && (
+          <div className="pb-2 border-b">
+            <label className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
+              <MessageSquare className="h-3 w-3" />
+              Section Notes
+            </label>
+            <Textarea
+              value={section.comments || ''}
+              onChange={(e) => onSectionCommentsChange?.(section.id, e.target.value)}
+              placeholder="Add notes for this section..."
+              className="min-h-[50px] text-xs resize-none"
+            />
+          </div>
+        )}
         <Droppable droppableId={`main-exercises-${section.id}`} type="EXERCISE">
           {(provided, snapshot) => (
             <div
