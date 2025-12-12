@@ -35,27 +35,31 @@ export function WorkoutExerciseCard({
   notes,
   onNotesChange
 }: WorkoutExerciseCardProps) {
-  // Get parameters with fallback: derive from exercise.parameters if dictionary is empty
+  // Get parameters: FIRST derive from exercise.parameters (from method periodization), THEN fallback to static dictionary
   const methodParams = (() => {
-    const defs = getParametersForMethod(exercise.methodId);
-    if (defs && defs.length > 0) return defs;
-    
-    // Fallback: derive parameters from exercise.parameters
+    // PRIMARY: Derive parameters from exercise.parameters (populated from method periodization grid)
     const keys = Object.keys(exercise.parameters || {});
     const baseKeys = keys.filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k));
-    return baseKeys.map(name => {
-      const raw = exercise.parameters[name];
-      const isNumeric = typeof raw === 'number' || (!isNaN(Number(raw)) && raw !== '');
-      return {
-        name,
-        type: isNumeric ? 'number' : 'text',
-        unit: typeof exercise.parameters[`${name}_unit`] === 'string' 
-          ? String(exercise.parameters[`${name}_unit`]) 
-          : undefined,
-        isSetParameter: /^sets?$/i.test(name),
-        defaultValue: undefined
-      } as const;
-    });
+    
+    if (baseKeys.length > 0) {
+      return baseKeys.map(name => {
+        const raw = exercise.parameters[name];
+        const isNumeric = typeof raw === 'number' || (!isNaN(Number(raw)) && raw !== '');
+        return {
+          name,
+          type: isNumeric ? 'number' : 'text',
+          unit: typeof exercise.parameters[`${name}_unit`] === 'string' 
+            ? String(exercise.parameters[`${name}_unit`]) 
+            : undefined,
+          isSetParameter: /^sets?$/i.test(name) || /ground contacts/i.test(name),
+          defaultValue: undefined
+        } as const;
+      });
+    }
+    
+    // FALLBACK: Only use static dictionary if no parameters in exercise.parameters
+    const defs = getParametersForMethod(exercise.methodId);
+    return defs || [];
   })();
 
   // Find the set parameter

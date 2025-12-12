@@ -175,14 +175,20 @@ export function WorkoutSessionSheet({
                   || parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex]
                   || {};
                 
-                let methodParams = getParametersForMethod(ex.methodId);
-                if (!methodParams || methodParams.length === 0) {
-                  methodParams = Object.keys(storedParams)
-                    .filter(k => !k.endsWith('_unit'))
-                    .map((name) => ({
-                      name,
-                      type: typeof (storedParams as any)[name] === 'number' ? 'number' : 'text'
-                    }));
+                // PRIMARY: Derive parameters from storedParams (method periodization grid)
+                let methodParams: { name: string; type: string; isSetParameter?: boolean; defaultValue?: any; unit?: string }[] = Object.keys(storedParams)
+                  .filter(k => !k.endsWith('_unit'))
+                  .map((name) => ({
+                    name,
+                    type: typeof (storedParams as any)[name] === 'number' ? 'number' : 'text',
+                    isSetParameter: /^sets?$/i.test(name) || /ground contacts/i.test(name),
+                    defaultValue: (storedParams as any)[name],
+                    unit: undefined
+                  }));
+                
+                // FALLBACK: Only use static dictionary if storedParams is empty
+                if (methodParams.length === 0) {
+                  methodParams = getParametersForMethod(ex.methodId) || [];
                 }
                 
                 let exerciseParams: Record<string, string | number> = {};
@@ -260,14 +266,20 @@ export function WorkoutSessionSheet({
         || parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex]
         || {};
       
-      let methodParams = getParametersForMethod(ex.methodId);
-      if (!methodParams || methodParams.length === 0) {
-        methodParams = Object.keys(storedParams)
-          .filter(k => !k.endsWith('_unit'))
-          .map((name) => ({
-            name,
-            type: typeof (storedParams as any)[name] === 'number' ? 'number' : 'text'
-          }));
+      // PRIMARY: Derive parameters from storedParams (method periodization grid)
+      let methodParams: { name: string; type: string; isSetParameter?: boolean; defaultValue?: any; unit?: string }[] = Object.keys(storedParams)
+        .filter(k => !k.endsWith('_unit'))
+        .map((name) => ({
+          name,
+          type: typeof (storedParams as any)[name] === 'number' ? 'number' : 'text',
+          isSetParameter: /^sets?$/i.test(name) || /ground contacts/i.test(name),
+          defaultValue: (storedParams as any)[name],
+          unit: undefined
+        }));
+      
+      // FALLBACK: Only use static dictionary if storedParams is empty
+      if (methodParams.length === 0) {
+        methodParams = getParametersForMethod(ex.methodId) || [];
       }
       
       let exerciseParams: Record<string, string | number> = {};
