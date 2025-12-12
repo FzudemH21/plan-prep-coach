@@ -408,13 +408,13 @@ export function WorkoutSessionSheet({
     return [{ id: 'section-0', name: 'Uncategorized', order: 0, exercises: [] }];
   });
   
-  // Sync workoutSections when dialog opens with new exercises
+  // Sync workoutSections when dialog opens with new exercises or parameterValues change
   useEffect(() => {
     if (isOpen && exercises.length > 0) {
       const newSections = buildSectionsFromExercises(exercises);
       setWorkoutSections(newSections);
     }
-  }, [isOpen, exercises.length, dayDate, sessionIndex]);
+  }, [isOpen, exercises.length, dayDate, sessionIndex, parameterValues]);
   
   const [supersets, setSupersets] = useState<SupersetMapping>(() => {
     // Initialize from prop if available
