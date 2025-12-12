@@ -1017,31 +1017,26 @@ export default function MicrocyclePlanningPage() {
       return;
     }
     
-    // Not the last session - move exercises from removed session to previous session
+    // Not the last session - DELETE exercises from the removed session, shift higher sessions down
     setExerciseDistribution(prev => 
-      prev.map(ex => {
-        if (ex.dayDate === dayDate && ex.sessionIndex > sessionIndex) {
-          return { ...ex, sessionIndex: ex.sessionIndex - 1 };
-        }
-        if (ex.dayDate === dayDate && ex.sessionIndex === sessionIndex) {
-          // Move exercises from removed session to previous session
-          return { ...ex, sessionIndex: Math.max(0, sessionIndex - 1) };
-        }
-        return ex;
-      })
+      prev.filter(ex => !(ex.dayDate === dayDate && ex.sessionIndex === sessionIndex))
+        .map(ex => {
+          if (ex.dayDate === dayDate && ex.sessionIndex > sessionIndex) {
+            return { ...ex, sessionIndex: ex.sessionIndex - 1 };
+          }
+          return ex;
+        })
     );
     
-    // Move sections similarly
+    // DELETE sections from removed session, shift higher sessions down
     setSessionSections(prev =>
-      prev.map(section => {
-        if (section.dayDate === dayDate && section.sessionIndex > sessionIndex) {
-          return { ...section, sessionIndex: section.sessionIndex - 1 };
-        }
-        if (section.dayDate === dayDate && section.sessionIndex === sessionIndex) {
-          return { ...section, sessionIndex: Math.max(0, sessionIndex - 1) };
-        }
-        return section;
-      })
+      prev.filter(section => !(section.dayDate === dayDate && section.sessionIndex === sessionIndex))
+        .map(section => {
+          if (section.dayDate === dayDate && section.sessionIndex > sessionIndex) {
+            return { ...section, sessionIndex: section.sessionIndex - 1 };
+          }
+          return section;
+        })
     );
     
     // Update supersets

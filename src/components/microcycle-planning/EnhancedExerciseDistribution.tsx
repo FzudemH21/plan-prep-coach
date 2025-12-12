@@ -446,29 +446,21 @@ export function EnhancedExerciseDistribution({
       // Use exerciseId from draggableId instead of source.index to avoid filter mismatch
       const exerciseId = draggableId.replace('lib-', '');
       
-      // Debug logging
-      console.log('[DragEnd] Library → Session', {
-        draggableId,
-        exerciseId,
-        methodId,
-        categoryName,
-        availableMethodKeys: Object.keys(exercisesByMethod),
-        availableCategoryKeys: exercisesByMethod[methodId] ? Object.keys(exercisesByMethod[methodId]) : 'method not found'
-      });
-      
       // Try the specific bucket first
       let exercises = exercisesByMethod[methodId]?.[categoryName] || [];
       let exercise = exercises.find(ex => ex.exerciseId === exerciseId);
+      let foundMethodId = methodId;
+      let foundCategoryName = categoryName;
       
       // Fallback: search ALL methods/categories for this exerciseId
       if (!exercise) {
-        console.log('[DragEnd] Exercise not found in expected bucket, searching all...');
         for (const [mId, categories] of Object.entries(exercisesByMethod)) {
           for (const [catName, exs] of Object.entries(categories)) {
             const found = exs.find(ex => ex.exerciseId === exerciseId);
             if (found) {
               exercise = found;
-              console.log('[DragEnd] Found exercise in different bucket:', { mId, catName, exercise: found });
+              foundMethodId = mId;
+              foundCategoryName = catName;
               break;
             }
           }
@@ -476,12 +468,7 @@ export function EnhancedExerciseDistribution({
         }
       }
       
-      if (!exercise) {
-        console.error('[DragEnd] Exercise not found anywhere!', { exerciseId });
-        return;
-      }
-      
-      console.log('[DragEnd] Using exercise:', { id: exercise.exerciseId, name: exercise.exerciseName });
+      if (!exercise) return;
 
       const sessionExercises = exerciseDistribution.filter(
         ex => ex.dayDate === dayDate && ex.sessionIndex === parseInt(sessionIndex) && !ex.sectionId
@@ -501,8 +488,8 @@ export function EnhancedExerciseDistribution({
         id: `ex-${Date.now()}-${Math.random()}`,
         exerciseId: exercise.exerciseId,
         exerciseName: exercise.exerciseName,
-        methodId,
-        categoryName,
+        methodId: foundMethodId,
+        categoryName: foundCategoryName,
         subCategory: exercise.subCategory,
         dayDate,
         sessionIndex: parseInt(sessionIndex),
@@ -532,28 +519,21 @@ export function EnhancedExerciseDistribution({
       // Use exerciseId from draggableId instead of source.index to avoid filter mismatch
       const exerciseId = draggableId.replace('lib-', '');
       
-      // Debug logging
-      console.log('[DragEnd] Library → Section', {
-        draggableId,
-        exerciseId,
-        methodId,
-        categoryName,
-        sectionId
-      });
-      
       // Try the specific bucket first
       let exercises = exercisesByMethod[methodId]?.[categoryName] || [];
       let exercise = exercises.find(ex => ex.exerciseId === exerciseId);
+      let foundMethodId = methodId;
+      let foundCategoryName = categoryName;
       
       // Fallback: search ALL methods/categories for this exerciseId
       if (!exercise) {
-        console.log('[DragEnd] Exercise not found in expected bucket, searching all...');
         for (const [mId, categories] of Object.entries(exercisesByMethod)) {
           for (const [catName, exs] of Object.entries(categories)) {
             const found = exs.find(ex => ex.exerciseId === exerciseId);
             if (found) {
               exercise = found;
-              console.log('[DragEnd] Found exercise in different bucket:', { mId, catName, exercise: found });
+              foundMethodId = mId;
+              foundCategoryName = catName;
               break;
             }
           }
@@ -561,10 +541,7 @@ export function EnhancedExerciseDistribution({
         }
       }
       
-      if (!exercise) {
-        console.error('[DragEnd] Exercise not found anywhere!', { exerciseId });
-        return;
-      }
+      if (!exercise) return;
       
       const sectionExercises = exerciseDistribution.filter(
         ex => ex.sectionId === sectionId
@@ -574,8 +551,8 @@ export function EnhancedExerciseDistribution({
         id: `ex-${Date.now()}-${Math.random()}`,
         exerciseId: exercise.exerciseId,
         exerciseName: exercise.exerciseName,
-        methodId,
-        categoryName,
+        methodId: foundMethodId,
+        categoryName: foundCategoryName,
         subCategory: exercise.subCategory,
         dayDate: section.dayDate,
         sessionIndex: section.sessionIndex,
