@@ -177,8 +177,11 @@ export function WorkoutSessionSheet({
                 const fullMethodKey = hasValidCategory 
                   ? `${ex.methodId}::${ex.categoryName}` 
                   : ex.methodId;
+                // Try sessionIndex=0 first (for non-split methods), then actual sessionIndex
                 const storedParams = 
+                  parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[0] ||
                   parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex] ||
+                  parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[0] ||
                   parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex] ||
                   {};
                 
@@ -275,8 +278,11 @@ export function WorkoutSessionSheet({
       const fullMethodKey = hasValidCategory 
         ? `${ex.methodId}::${ex.categoryName}` 
         : ex.methodId;
+      // Try sessionIndex=0 first (for non-split methods), then actual sessionIndex
       const storedParams = 
+        parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[0] ||
         parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex] ||
+        parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[0] ||
         parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex] ||
         {};
       
@@ -835,8 +841,11 @@ export function WorkoutSessionSheet({
     const fullMethodKey = hasValidCategory 
       ? `${methodId}::${categoryName}` 
       : methodId;
+    // Try sessionIndex=0 first (for non-split methods), then actual sessionIndex
     const storedParams = 
+      parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[0] ||
       parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex] ||
+      parameterValues[mesocycleId]?.[microcycleIndex]?.[methodId]?.[0] ||
       parameterValues[mesocycleId]?.[microcycleIndex]?.[methodId]?.[sessionIndex] ||
       {};
 
