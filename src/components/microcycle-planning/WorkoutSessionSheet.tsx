@@ -538,7 +538,8 @@ export function WorkoutSessionSheet({
   }, [mesocycleId, microcycleIndex, sessionIndex, parameterValues]);
 
   const getSupersetLabel = (exerciseId: string): string | undefined => {
-    const sessionSupersets = supersets[dayDate]?.[sessionIndex];
+    // Use supersetsProp (from Step 1) as primary source, fallback to local state
+    const sessionSupersets = (supersetsProp || supersets)?.[dayDate]?.[sessionIndex];
     if (!sessionSupersets) return undefined;
     
     // Check all sections (including unsectioned)
@@ -554,7 +555,8 @@ export function WorkoutSessionSheet({
   };
 
   const getSupersetPartners = (exerciseId: string): string[] => {
-    const sessionSupersets = supersets[dayDate]?.[sessionIndex];
+    // Use supersetsProp (from Step 1) as primary source, fallback to local state
+    const sessionSupersets = (supersetsProp || supersets)?.[dayDate]?.[sessionIndex];
     if (!sessionSupersets) return [];
     
     // Check all sections (including unsectioned)
