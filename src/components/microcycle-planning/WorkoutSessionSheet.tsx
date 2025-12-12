@@ -272,7 +272,8 @@ export function WorkoutSessionSheet({
               id: section.id,
               name: section.name,
               order: section.order,
-              exercises: sectionExercises
+              exercises: sectionExercises,
+              comments: section.comments
             };
           });
       }
@@ -1095,6 +1096,9 @@ export function WorkoutSessionSheet({
     // Persist to localStorage
     const key = `workoutSupersets_${mesocycleId}_${dayDate}_${sessionIndex}`;
     localStorage.setItem(key, JSON.stringify(newSupersets[dayDate][sessionIndex]));
+    
+    // Propagate to Step 1
+    onSupersetsChange?.(newSupersets);
   };
 
   const handleScrollToExercise = (exerciseId: string) => {
@@ -1123,6 +1127,21 @@ export function WorkoutSessionSheet({
     setWorkoutSections(sections =>
       sections.map(s => s.id === sectionId ? { ...s, name: newName } : s)
     );
+  };
+
+  const handleSectionCommentsChange = (sectionId: string, comments: string) => {
+    // Update local workoutSections state
+    setWorkoutSections(sections =>
+      sections.map(s => s.id === sectionId ? { ...s, comments } : s)
+    );
+    
+    // Propagate to Step 1 via onSectionsChange
+    if (sessionSectionsProp && onSectionsChange) {
+      const updatedSections = sessionSectionsProp.map(s =>
+        s.id === sectionId ? { ...s, comments } : s
+      );
+      onSectionsChange(updatedSections);
+    }
   };
 
   const handleDeleteSection = (sectionId: string) => {
@@ -1658,6 +1677,7 @@ export function WorkoutSessionSheet({
                                 getSupersetLabel={getSupersetLabel}
                                 sectionDragHandleProps={provided.dragHandleProps}
                                 onExerciseNotesChange={handleExerciseNotesChange}
+                                onSectionCommentsChange={handleSectionCommentsChange}
                               />
                             </div>
                           )}
