@@ -170,8 +170,17 @@ export function WorkoutSessionSheet({
             const sectionExercises = exercisesList
               .filter((ex: any) => ex.sectionId === section.id)
               .map((ex, idx) => {
-                // Use only methodId for parameter lookup - categoryName is for display grouping only
-                const storedParams = parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex] || {};
+                // Priority lookup: category-specific first (for split methods), then base method
+                const hasValidCategory = ex.categoryName && 
+                  ex.categoryName !== 'Uncategorized' && 
+                  ex.categoryName !== '';
+                const fullMethodKey = hasValidCategory 
+                  ? `${ex.methodId}::${ex.categoryName}` 
+                  : ex.methodId;
+                const storedParams = 
+                  parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex] ||
+                  parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex] ||
+                  {};
                 
                 // PRIMARY: Derive parameters from storedParams (method periodization grid)
                 let methodParams: { name: string; type: string; isSetParameter?: boolean; defaultValue?: any; unit?: string }[] = Object.keys(storedParams)
@@ -259,8 +268,17 @@ export function WorkoutSessionSheet({
         sectionsMap.set(sectionName, []);
       }
       
-      // Use only methodId for parameter lookup - categoryName is for display grouping only
-      const storedParams = parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex] || {};
+      // Priority lookup: category-specific first (for split methods), then base method
+      const hasValidCategory = ex.categoryName && 
+        ex.categoryName !== 'Uncategorized' && 
+        ex.categoryName !== '';
+      const fullMethodKey = hasValidCategory 
+        ? `${ex.methodId}::${ex.categoryName}` 
+        : ex.methodId;
+      const storedParams = 
+        parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex] ||
+        parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex] ||
+        {};
       
       // PRIMARY: Derive parameters from storedParams (method periodization grid)
       let methodParams: { name: string; type: string; isSetParameter?: boolean; defaultValue?: any; unit?: string }[] = Object.keys(storedParams)
@@ -810,8 +828,17 @@ export function WorkoutSessionSheet({
     const section = workoutSections.find(s => s.id === currentSectionId);
     if (!section) return;
 
-    // Use only methodId for parameter lookup - categoryName is for display grouping only
-    const storedParams = parameterValues[mesocycleId]?.[microcycleIndex]?.[methodId]?.[sessionIndex] || {};
+    // Priority lookup: category-specific first (for split methods), then base method
+    const hasValidCategory = categoryName && 
+      categoryName !== 'Uncategorized' && 
+      categoryName !== '';
+    const fullMethodKey = hasValidCategory 
+      ? `${methodId}::${categoryName}` 
+      : methodId;
+    const storedParams = 
+      parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex] ||
+      parameterValues[mesocycleId]?.[microcycleIndex]?.[methodId]?.[sessionIndex] ||
+      {};
 
     // Get parameter definitions
     let methodParams = getParametersForMethod(methodId);
