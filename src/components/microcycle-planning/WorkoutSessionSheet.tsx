@@ -1085,8 +1085,8 @@ export function WorkoutSessionSheet({
       toast({ title: "Exercises linked", description: "Superset created" });
     }
     
-    // Update state
-    const newSupersets = { ...supersets };
+    // Update state - use supersetsProp as base to sync with Step 1
+    const newSupersets = structuredClone(supersetsProp || {});
     if (!newSupersets[dayDate]) newSupersets[dayDate] = {};
     if (!newSupersets[dayDate][sessionIndex]) newSupersets[dayDate][sessionIndex] = {};
     newSupersets[dayDate][sessionIndex][sectionKey] = daySuperset;
