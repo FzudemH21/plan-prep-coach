@@ -443,7 +443,10 @@ export function EnhancedExerciseDistribution({
       const [methodId, categoryName] = source.droppableId.replace('library-', '').split('::');
       const [dayDate, sessionIndex] = destination.droppableId.replace('session-', '').split('::');
       
-      const exercise = exercisesByMethod[methodId]?.[categoryName]?.[source.index];
+      // Use exerciseId from draggableId instead of source.index to avoid filter mismatch
+      const exerciseId = draggableId.replace('lib-', '');
+      const exercises = exercisesByMethod[methodId]?.[categoryName] || [];
+      const exercise = exercises.find(ex => ex.exerciseId === exerciseId);
       if (!exercise) return;
 
       const sessionExercises = exerciseDistribution.filter(
@@ -492,7 +495,10 @@ export function EnhancedExerciseDistribution({
       const section = sessionSections.find(s => s.id === sectionId);
       if (!section) return;
       
-      const exercise = exercisesByMethod[methodId]?.[categoryName]?.[source.index];
+      // Use exerciseId from draggableId instead of source.index to avoid filter mismatch
+      const exerciseId = draggableId.replace('lib-', '');
+      const exercises = exercisesByMethod[methodId]?.[categoryName] || [];
+      const exercise = exercises.find(ex => ex.exerciseId === exerciseId);
       if (!exercise) return;
       
       const sectionExercises = exerciseDistribution.filter(
