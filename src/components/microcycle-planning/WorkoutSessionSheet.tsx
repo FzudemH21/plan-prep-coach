@@ -503,6 +503,13 @@ export function WorkoutSessionSheet({
     }
   }, [isOpen, mesocycleId, dayDate, sessionIndex, currentIntensity]);
 
+  // Sync local supersets state when supersetsProp changes from Step 1
+  useEffect(() => {
+    if (supersetsProp) {
+      setSupersets(supersetsProp);
+    }
+  }, [supersetsProp]);
+
   // NOTE: Removed the sync useEffect that was causing issues
   // Session intensity is now synced on initial load only (in the above useEffect)
   // and persisted immediately via onSessionIntensityChange callback
@@ -1010,8 +1017,8 @@ export function WorkoutSessionSheet({
   const handleToggleSuperset = (exerciseId1: string, exerciseId2: string, sectionId?: string) => {
     const sectionKey = sectionId || '__unsectioned__';
     
-    // Work on a shallow clone to avoid mutating state directly
-    const sessionSupersets = supersets[dayDate]?.[sessionIndex] || {};
+    // Read from supersetsProp (authoritative source from Step 1) instead of local state
+    const sessionSupersets = supersetsProp?.[dayDate]?.[sessionIndex] || {};
     const sectionSupersets = sessionSupersets[sectionKey] || {};
     const daySuperset: Record<string, string[]> = JSON.parse(JSON.stringify(sectionSupersets));
     
