@@ -168,8 +168,11 @@ export function WorkoutSessionSheet({
     parameterValuesForMicro: parameterValues[mesocycleId]?.[microcycleIndex] ? Object.keys(parameterValues[mesocycleId][microcycleIndex]) : 'NOT FOUND',
   });
 
-  // Helper function to build sections from exercises
-  const buildSectionsFromExercises = (exercisesList: ExerciseDistribution[]): WorkoutSection[] => {
+  // Helper function to build sections from exercises - accepts parameterValues explicitly to avoid stale closure
+  const buildSectionsFromExercises = (
+    exercisesList: ExerciseDistribution[],
+    currentParamValues: typeof parameterValues
+  ): WorkoutSection[] => {
     // Use sessionSections prop if available (from Step 1)
     if (sessionSectionsProp && sessionSectionsProp.length > 0) {
       const sessionSpecificSections = sessionSectionsProp.filter(
@@ -192,25 +195,11 @@ export function WorkoutSessionSheet({
                   : ex.methodId;
                 // Try sessionIndex=0 first (for non-split methods), then actual sessionIndex
                 const storedParams = 
-                  parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[0] ||
-                  parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex] ||
-                  parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[0] ||
-                  parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex] ||
+                  currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[0] ||
+                  currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex] ||
+                  currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[0] ||
+                  currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex] ||
                   {};
-                
-                // DEBUG: Log each exercise lookup
-                console.log('[WorkoutSessionSheet] Exercise lookup:', {
-                  exerciseName: ex.exerciseName,
-                  methodId: ex.methodId,
-                  categoryName: ex.categoryName,
-                  fullMethodKey,
-                  sessionIndex,
-                  storedParamsFound: Object.keys(storedParams).length > 0,
-                  storedParams,
-                  availableMethodKeysForMicro: parameterValues[mesocycleId]?.[microcycleIndex] 
-                    ? Object.keys(parameterValues[mesocycleId][microcycleIndex]) 
-                    : 'NO MICRO DATA',
-                });
                 
                 // PRIMARY: Derive parameters from storedParams (method periodization grid)
                 let methodParams: { name: string; type: string; isSetParameter?: boolean; defaultValue?: any; unit?: string }[] = Object.keys(storedParams)
@@ -307,10 +296,10 @@ export function WorkoutSessionSheet({
         : ex.methodId;
       // Try sessionIndex=0 first (for non-split methods), then actual sessionIndex
       const storedParams = 
-        parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[0] ||
-        parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex] ||
-        parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[0] ||
-        parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex] ||
+        currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[0] ||
+        currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex] ||
+        currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[0] ||
+        currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex] ||
         {};
       
       // PRIMARY: Derive parameters from storedParams (method periodization grid)
@@ -389,7 +378,7 @@ export function WorkoutSessionSheet({
   const [workoutSections, setWorkoutSections] = useState<WorkoutSection[]>(() => {
     // PRIORITY: Fresh exercises prop takes precedence over stale localStorage
     if (exercises.length > 0) {
-      return buildSectionsFromExercises(exercises);
+      return buildSectionsFromExercises(exercises, parameterValues);
     }
     
     // Only use localStorage if exercises prop is empty (backward compatibility)
@@ -418,8 +407,7 @@ export function WorkoutSessionSheet({
   // Sync workoutSections when dialog opens, exercises change, or parameterValues become available
   useEffect(() => {
     if (isOpen && exercises.length > 0) {
-      console.log('[WorkoutSessionSheet] Rebuilding sections, parameterValuesKey:', parameterValuesKey);
-      const newSections = buildSectionsFromExercises(exercises);
+      const newSections = buildSectionsFromExercises(exercises, parameterValues);
       setWorkoutSections(newSections);
     }
   }, [isOpen, exercises.length, dayDate, sessionIndex, parameterValuesKey]);
@@ -430,19 +418,17 @@ export function WorkoutSessionSheet({
       // Small delay to ensure parameterValues are loaded
       const timeoutId = setTimeout(() => {
         if (exercises.length > 0) {
-          console.log('[WorkoutSessionSheet] Delayed rebuild on dialog open');
-          const newSections = buildSectionsFromExercises(exercises);
+          const newSections = buildSectionsFromExercises(exercises, parameterValues);
           setWorkoutSections(newSections);
         }
       }, 100);
       return () => clearTimeout(timeoutId);
     }
-  }, [isOpen]);
+  }, [isOpen, parameterValues]);
   
   const [supersets, setSupersets] = useState<SupersetMapping>(() => {
     // Initialize from prop if available
     if (supersetsProp && supersetsProp[dayDate]?.[sessionIndex]) {
-      console.log('[WorkoutSessionSheet] Using supersets from Step 1 prop');
       return supersetsProp;
     }
     return {};
