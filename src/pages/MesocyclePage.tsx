@@ -120,6 +120,10 @@ export default function MesocyclePage() {
       <Button 
         onClick={() => {
           if (currentStep >= totalSteps) {
+            // CRITICAL: Synchronously save parameterValues before navigating
+            if (Object.keys(parameterValues).length > 0) {
+              localStorage.setItem('parameterValues', JSON.stringify(parameterValues));
+            }
             navigate('/microcycle');
           } else {
             setCurrentStep(Math.min(totalSteps, currentStep + 1));

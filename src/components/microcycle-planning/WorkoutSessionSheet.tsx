@@ -294,12 +294,12 @@ export function WorkoutSessionSheet({
       const fullMethodKey = hasValidCategory 
         ? `${ex.methodId}::${ex.categoryName}` 
         : ex.methodId;
-      // Try sessionIndex=0 first (for non-split methods), then actual sessionIndex
+      // Try base method first (matches how MesocyclePage saves), then category-specific
       const storedParams = 
-        currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[0] ||
-        currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex] ||
         currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[0] ||
         currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex] ||
+        currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[0] ||
+        currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex] ||
         {};
       
       // PRIMARY: Derive parameters from storedParams (method periodization grid)
