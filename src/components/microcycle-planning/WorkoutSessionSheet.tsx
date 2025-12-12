@@ -155,6 +155,19 @@ export function WorkoutSessionSheet({
   const [isTestEventDialogOpen, setIsTestEventDialogOpen] = useState(false);
   const [testsEventsExpanded, setTestsEventsExpanded] = useState(true);
   const [sectionToDelete, setSectionToDelete] = useState<string | null>(null);
+
+  // DEBUG: Log parameterValues structure
+  console.log('[WorkoutSessionSheet] Props received:', {
+    mesocycleId,
+    microcycleIndex,
+    dayDate,
+    sessionIndex,
+    exercisesCount: exercises.length,
+    parameterValuesTopLevelKeys: Object.keys(parameterValues),
+    parameterValuesForMeso: parameterValues[mesocycleId] ? Object.keys(parameterValues[mesocycleId]) : 'NOT FOUND',
+    parameterValuesForMicro: parameterValues[mesocycleId]?.[microcycleIndex] ? Object.keys(parameterValues[mesocycleId][microcycleIndex]) : 'NOT FOUND',
+  });
+
   // Helper function to build sections from exercises
   const buildSectionsFromExercises = (exercisesList: ExerciseDistribution[]): WorkoutSection[] => {
     // Use sessionSections prop if available (from Step 1)
@@ -184,6 +197,20 @@ export function WorkoutSessionSheet({
                   parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[0] ||
                   parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex] ||
                   {};
+                
+                // DEBUG: Log each exercise lookup
+                console.log('[WorkoutSessionSheet] Exercise lookup:', {
+                  exerciseName: ex.exerciseName,
+                  methodId: ex.methodId,
+                  categoryName: ex.categoryName,
+                  fullMethodKey,
+                  sessionIndex,
+                  storedParamsFound: Object.keys(storedParams).length > 0,
+                  storedParams,
+                  availableMethodKeysForMicro: parameterValues[mesocycleId]?.[microcycleIndex] 
+                    ? Object.keys(parameterValues[mesocycleId][microcycleIndex]) 
+                    : 'NO MICRO DATA',
+                });
                 
                 // PRIMARY: Derive parameters from storedParams (method periodization grid)
                 let methodParams: { name: string; type: string; isSetParameter?: boolean; defaultValue?: any; unit?: string }[] = Object.keys(storedParams)
