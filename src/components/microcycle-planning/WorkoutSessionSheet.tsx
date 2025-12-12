@@ -170,10 +170,8 @@ export function WorkoutSessionSheet({
             const sectionExercises = exercisesList
               .filter((ex: any) => ex.sectionId === section.id)
               .map((ex, idx) => {
-                const fullMethodKey = ex.categoryName ? `${ex.methodId}::${ex.categoryName}` : ex.methodId;
-                const storedParams = parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex]
-                  || parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex]
-                  || {};
+                // Use only methodId for parameter lookup - categoryName is for display grouping only
+                const storedParams = parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex] || {};
                 
                 // PRIMARY: Derive parameters from storedParams (method periodization grid)
                 let methodParams: { name: string; type: string; isSetParameter?: boolean; defaultValue?: any; unit?: string }[] = Object.keys(storedParams)
@@ -261,10 +259,8 @@ export function WorkoutSessionSheet({
         sectionsMap.set(sectionName, []);
       }
       
-      const fullMethodKey = ex.categoryName ? `${ex.methodId}::${ex.categoryName}` : ex.methodId;
-      const storedParams = parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex]
-        || parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex]
-        || {};
+      // Use only methodId for parameter lookup - categoryName is for display grouping only
+      const storedParams = parameterValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex] || {};
       
       // PRIMARY: Derive parameters from storedParams (method periodization grid)
       let methodParams: { name: string; type: string; isSetParameter?: boolean; defaultValue?: any; unit?: string }[] = Object.keys(storedParams)
@@ -814,11 +810,8 @@ export function WorkoutSessionSheet({
     const section = workoutSections.find(s => s.id === currentSectionId);
     if (!section) return;
 
-    // Fetch parameters from Method Periodization
-    const fullMethodKey = categoryName ? `${methodId}::${categoryName}` : methodId;
-    const storedParams = parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex]
-      || parameterValues[mesocycleId]?.[microcycleIndex]?.[methodId]?.[sessionIndex]
-      || {};
+    // Use only methodId for parameter lookup - categoryName is for display grouping only
+    const storedParams = parameterValues[mesocycleId]?.[microcycleIndex]?.[methodId]?.[sessionIndex] || {};
 
     // Get parameter definitions
     let methodParams = getParametersForMethod(methodId);
