@@ -1676,7 +1676,7 @@ export function WorkoutSessionSheet({
                                 }
                                 onParameterChange={handleParameterChange}
                                 onUnitChange={handleUnitChange}
-                                onToggleSuperset={handleToggleSuperset}
+                                onToggleSuperset={(ex1, ex2, sectionId) => handleToggleSuperset(ex1, ex2, sectionId)}
                                 onDuplicateExercise={handleDuplicateExercise}
                                 onDeleteExercise={handleDeleteExercise}
                                 onAddExercise={() => handleAddExercise(section.id)}

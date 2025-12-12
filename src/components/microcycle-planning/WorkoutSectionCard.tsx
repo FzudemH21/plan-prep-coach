@@ -15,7 +15,7 @@ interface WorkoutSectionCardProps {
   onToggleCollapse: () => void;
   onParameterChange: (exerciseId: string, paramName: string, value: string | number) => void;
   onUnitChange: (exerciseId: string, paramName: string, unit: string) => void;
-  onToggleSuperset: (exerciseId1: string, exerciseId2: string) => void;
+  onToggleSuperset: (exerciseId1: string, exerciseId2: string, sectionId: string) => void;
   onDuplicateExercise: (exerciseId: string) => void;
   onDeleteExercise: (exerciseId: string) => void;
   onAddExercise: () => void;
@@ -255,7 +255,7 @@ export function WorkoutSectionCard({
                                           variant="ghost"
                                           size="sm"
                                           className="h-6 w-6 rounded-full bg-primary/20 text-primary hover:bg-primary/30"
-                                          onClick={() => onToggleSuperset(exercise.id, group.exercises[exIndex + 1].id)}
+                                          onClick={() => onToggleSuperset(exercise.id, group.exercises[exIndex + 1].id, section.id)}
                                         >
                                           <Link2 className="h-3 w-3 fill-current" />
                                         </Button>
@@ -275,7 +275,7 @@ export function WorkoutSectionCard({
                                     variant="ghost"
                                     size="sm"
                                     className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent"
-                                    onClick={() => onToggleSuperset(lastInGroup.id, nextExercise.id)}
+                                    onClick={() => onToggleSuperset(lastInGroup.id, nextExercise.id, section.id)}
                                   >
                                     <Link2 className="h-4 w-4" />
                                   </Button>
@@ -323,7 +323,7 @@ export function WorkoutSectionCard({
                                   variant="ghost"
                                   size="sm"
                                   className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent"
-                                  onClick={() => onToggleSuperset(exercise.id, nextExercise.id)}
+                                  onClick={() => onToggleSuperset(exercise.id, nextExercise.id, section.id)}
                                 >
                                   <Link2 className="h-4 w-4" />
                                 </Button>
