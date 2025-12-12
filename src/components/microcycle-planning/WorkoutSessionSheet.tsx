@@ -408,13 +408,36 @@ export function WorkoutSessionSheet({
     return [{ id: 'section-0', name: 'Uncategorized', order: 0, exercises: [] }];
   });
   
-  // Sync workoutSections when dialog opens with new exercises or parameterValues change
+  // Create a stable key to detect when parameterValues actually has data for this microcycle
+  const parameterValuesKey = useMemo(() => {
+    const microData = parameterValues[mesocycleId]?.[microcycleIndex];
+    if (!microData) return 'empty';
+    return JSON.stringify(Object.keys(microData).sort());
+  }, [parameterValues, mesocycleId, microcycleIndex]);
+
+  // Sync workoutSections when dialog opens, exercises change, or parameterValues become available
   useEffect(() => {
     if (isOpen && exercises.length > 0) {
+      console.log('[WorkoutSessionSheet] Rebuilding sections, parameterValuesKey:', parameterValuesKey);
       const newSections = buildSectionsFromExercises(exercises);
       setWorkoutSections(newSections);
     }
-  }, [isOpen, exercises.length, dayDate, sessionIndex, parameterValues]);
+  }, [isOpen, exercises.length, dayDate, sessionIndex, parameterValuesKey]);
+  
+  // Force rebuild when dialog opens (separate effect to ensure fresh data)
+  useEffect(() => {
+    if (isOpen) {
+      // Small delay to ensure parameterValues are loaded
+      const timeoutId = setTimeout(() => {
+        if (exercises.length > 0) {
+          console.log('[WorkoutSessionSheet] Delayed rebuild on dialog open');
+          const newSections = buildSectionsFromExercises(exercises);
+          setWorkoutSections(newSections);
+        }
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isOpen]);
   
   const [supersets, setSupersets] = useState<SupersetMapping>(() => {
     // Initialize from prop if available
