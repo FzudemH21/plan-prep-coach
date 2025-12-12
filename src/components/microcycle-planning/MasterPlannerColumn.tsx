@@ -387,32 +387,24 @@ export function MasterPlannerColumn({
       ? Number(storedParams[setParam.name] || 0) 
       : 0;
 
-    // Filter parameters for display (exclude frequency and set param itself)
+    // Filter parameters for display (exclude frequency and set param - set param determines row count)
     const displayParams = methodParams.filter(p => 
       !p.isSetParameter && 
       p.name !== 'frequency_per_week' && 
       p.name !== 'Frequency'
     );
 
-    // Use all display params (not just those with values) so users can edit empty fields
-    const paramsWithValues = displayParams;
+    // The set count determines how many rows to display
+    const rowCount = Math.max(setCount, 1); // At least 1 row
 
-    // Always render a compact table with editable inputs if we have parameters
-    // Show at least 1 row even if setCount is 0, so users can input values
-    if (paramsWithValues.length > 0) {
-      const rowCount = Math.max(setCount, 1); // At least 1 row
-      
+    // Render table if we have display params
+    if (displayParams.length > 0) {
       return (
         <div className="mt-2">
           <Table className="text-[10px]">
             <TableHeader>
               <TableRow className="h-5 border-b">
-                {setParam && (
-                  <TableHead className="py-0.5 px-1 w-12 font-medium h-5">
-                    {formatParamName(setParam.displayName || setParam.name)}
-                  </TableHead>
-                )}
-                {paramsWithValues.slice(0, setParam ? 3 : 4).map(p => (
+                {displayParams.slice(0, 4).map(p => (
                   <TableHead key={p.name} className="py-0.5 px-1 font-medium h-5">
                     {formatParamName(p.displayName || p.name)}
                   </TableHead>
@@ -422,23 +414,7 @@ export function MasterPlannerColumn({
             <TableBody>
               {Array.from({ length: rowCount }, (_, idx) => (
                 <TableRow key={idx} className="h-6 border-0">
-                  {setParam && (
-                    <TableCell className="py-0 px-0.5">
-                      {idx === 0 ? (
-                        <EditableParamInput
-                          dayDateString={day.dateString}
-                          exercise={exercise}
-                          paramName={setParam.name}
-                          paramType="number"
-                          currentValue={storedParams[setParam.name]}
-                          onParameterChange={onParameterChange}
-                        />
-                      ) : (
-                        <span className="text-muted-foreground px-1">{idx + 1}</span>
-                      )}
-                    </TableCell>
-                  )}
-                  {paramsWithValues.slice(0, setParam ? 3 : 4).map(p => (
+                  {displayParams.slice(0, 4).map(p => (
                     <TableCell key={p.name} className="py-0 px-0.5">
                       <EditableParamInput
                         dayDateString={day.dateString}
