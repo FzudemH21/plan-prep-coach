@@ -60,7 +60,7 @@ export function WorkoutExerciseCard({
         const isNumeric = typeof raw === 'number' || (!isNaN(Number(raw)) && raw !== '');
         // Find toolbox entry for this param to get flags
         const toolboxEntry = toolboxParams?.find(tp => 
-          (tp.parameterName || tp.parameter) === name
+          tp.parameterName === name
         );
         return {
           name,

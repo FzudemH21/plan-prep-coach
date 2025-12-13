@@ -313,7 +313,7 @@ export function MasterPlannerColumn({
 
     // Convert toolbox entries to MethodParameter format
     const methodParams: MethodParameter[] = toolboxParams.map(entry => {
-      const paramName = entry.parameterName || entry.parameter;
+      const paramName = entry.parameterName;
       const isQualitative = entry.parameterType === 'qualitative';
       const hasOptions = entry.options && entry.options.length > 0;
       

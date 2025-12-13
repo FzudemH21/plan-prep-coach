@@ -251,18 +251,15 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], para
                 // For quantitative params with options, first option is likely the unit
                 unit = paramDef.options[0];
               } else if (toolboxData?.entries) {
-                // Fallback: try to extract unit from original toolbox data parameter name
+                // Fallback: try to extract unit from original toolbox data options
                 const toolboxEntry = toolboxData.entries.find(entry => {
                   const entryKey = `${entry.category}${entry.subCategory ? ` - ${entry.subCategory}` : ''}`;
                   return (normalizeForComparison(entryKey) === normalizeForComparison(methodName) ||
-                          normalizeForComparison(entry.parameter) === normalizeForComparison(methodName)) &&
-                         (entry.parameterName === paramName || entry.parameter.split('[')[0].trim() === paramName);
+                          normalizeForComparison(entry.parameterName) === normalizeForComparison(methodName)) &&
+                         entry.parameterName === paramName;
                 });
-                if (toolboxEntry?.parameter) {
-                  const unitMatch = toolboxEntry.parameter.match(/\[([^\]]+)\]/);
-                  if (unitMatch) {
-                    unit = unitMatch[1];
-                  }
+                if (toolboxEntry && toolboxEntry.parameterType === 'quantitative' && toolboxEntry.options.length > 0) {
+                  unit = toolboxEntry.options[0];
                 }
               }
             }

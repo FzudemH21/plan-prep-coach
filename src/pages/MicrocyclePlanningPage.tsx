@@ -643,7 +643,7 @@ export default function MicrocyclePlanningPage() {
     
     // Fallback to old string-based detection if no flag is set
     const frequencyKey = frequencyParam 
-      ? frequencyParam.parameter 
+      ? frequencyParam.parameterName 
       : Object.keys(cellData).find(key => key.toLowerCase().includes('frequency'));
     
     if (!frequencyKey) return 1;

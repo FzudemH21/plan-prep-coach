@@ -47,17 +47,15 @@ export function DraggableParameterList({ parameters, onReorder, onEditParameter 
                             <GripVertical className="h-4 w-4 text-muted-foreground" />
                           </div>
                           <div className="flex-1">
-                            <div className="font-medium">{parameter.parameter}</div>
-                            {parameter.parameterName && (
-                              <div className="text-sm text-muted-foreground">
-                                {parameter.parameterName} ({parameter.parameterType})
-                                {parameter.options && parameter.options.length > 0 && (
-                                  <span className="ml-2">
-                                    Options: {parameter.options.join(', ')}
-                                  </span>
-                                )}
-                              </div>
-                            )}
+                            <div className="font-medium">{parameter.parameterName}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {parameter.parameterType}
+                              {parameter.options && parameter.options.length > 0 && (
+                                <span className="ml-2">
+                                  Options: {parameter.options.join(', ')}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                         <Button

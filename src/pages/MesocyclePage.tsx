@@ -1079,17 +1079,15 @@ export default function MesocyclePage() {
       else if (method.toLowerCase().includes('extensive')) subCategory = 'Extensive Jumps';
     }
     
-    // Get parameters from toolbox data
+    // Get parameters from toolbox data (using migrated parameterName)
     const parameters = toolboxData.entries
       .filter(entry => entry.category === category && entry.subCategory === subCategory)
       .map(entry => ({
-        name: entry.parameter,
-        type: entry.parameter.toLowerCase().includes('intensity') && entry.parameter.includes('[%]') ? 'number' : 
-              entry.parameter.includes('[#]') || entry.parameter.includes('[m]') || entry.parameter.includes('[s]') ? 'number' :
-              entry.parameter.includes('[') ? 'select' : 'text',
-        unit: entry.parameter.match(/\[(.*?)\]/)?.[1] || '',
-        options: entry.parameter.includes('[') && !entry.parameter.includes('%') && !entry.parameter.includes('#') && !entry.parameter.includes('m') && !entry.parameter.includes('s') ?
-                entry.parameter.match(/\[(.*?)\]/)?.[1]?.split(', ') : undefined
+        name: entry.parameterName,
+        type: entry.parameterType === 'quantitative' ? 'number' : 
+              (entry.options.length > 0 ? 'select' : 'text'),
+        unit: entry.parameterType === 'quantitative' && entry.options.length > 0 ? entry.options[0] : '',
+        options: entry.parameterType === 'qualitative' && entry.options.length > 0 ? entry.options : undefined
       }));
     
     return parameters;
@@ -1327,7 +1325,7 @@ export default function MesocyclePage() {
     
     // Fallback to old string-based detection if no flag is set
     const frequencyKey = frequencyParam 
-      ? frequencyParam.parameter 
+      ? frequencyParam.parameterName 
       : Object.keys(cellData).find(key => key.toLowerCase().includes('frequency'));
     
     if (!frequencyKey) return 1;
@@ -1598,7 +1596,7 @@ export default function MesocyclePage() {
     
     // Check if the provided paramName matches the frequency parameter
     // Fallback to string matching for backward compatibility
-    return frequencyParam ? paramName === frequencyParam.parameter : paramName.toLowerCase().includes('frequency');
+    return frequencyParam ? paramName === frequencyParam.parameterName : paramName.toLowerCase().includes('frequency');
   };
 
   // Drag fill handlers (hooks must be at component level)
@@ -1845,14 +1843,14 @@ export default function MesocyclePage() {
       const matchingEntries = toolboxData.entries.filter(entry => {
         const entryKey = `${entry.category}${entry.subCategory ? ` - ${entry.subCategory}` : ''}`;
         return normalizeForComparison(entryKey) === normalizeForComparison(methodName) ||
-               normalizeForComparison(entry.parameter) === normalizeForComparison(methodName);
+               normalizeForComparison(entry.parameterName) === normalizeForComparison(methodName);
       });
       
       // Convert toolbox entries to parameter format
       map[methodName] = matchingEntries.map(entry => ({
-        name: entry.parameterName || entry.parameter.split('[')[0].trim(),
+        name: entry.parameterName,
         type: entry.parameterType === 'quantitative' ? 'number' : 'text',
-        options: entry.options || [],
+        options: entry.options,
         isQuantitative: entry.parameterType === 'quantitative',
         isQualitative: entry.parameterType === 'qualitative'
       }));

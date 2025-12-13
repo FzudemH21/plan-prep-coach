@@ -60,7 +60,6 @@ export default function ToolboxDatabase() {
   const [newEntry, setNewEntry] = useState({
     category: "",
     subCategory: "",
-    parameter: "",
     parameterName: "",
     parameterType: "qualitative" as "qualitative" | "quantitative",
     options: [] as string[]
@@ -131,7 +130,7 @@ export default function ToolboxDatabase() {
       result = result.filter(item =>
         item.category.toLowerCase().includes(term) ||
         item.subCategory.toLowerCase().includes(term) ||
-        item.parameters.some(p => p.parameter.toLowerCase().includes(term))
+        item.parameters.some(p => p.parameterName.toLowerCase().includes(term))
       );
     }
 
@@ -220,15 +219,9 @@ export default function ToolboxDatabase() {
       return;
     }
 
-    // Build the legacy parameter string for backward compatibility
-    const legacyParameter = newEntry.options.length > 0 
-      ? `${newEntry.parameterName} [${newEntry.options.join(', ')}]`
-      : newEntry.parameterName;
-
     addEntry({
       category: newEntry.category.trim(),
       subCategory: newEntry.subCategory.trim(),
-      parameter: legacyParameter,
       parameterName: newEntry.parameterName.trim(),
       parameterType: newEntry.parameterType,
       options: [...newEntry.options]
@@ -237,7 +230,6 @@ export default function ToolboxDatabase() {
     setNewEntry({
       category: "",
       subCategory: "",
-      parameter: "",
       parameterName: "",
       parameterType: "qualitative",
       options: []
