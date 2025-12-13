@@ -2,19 +2,42 @@ import { useState, useEffect } from 'react';
 import { ToolboxEntry, ToolboxDatabase } from '@/types/toolbox';
 import { defaultToolboxData } from '@/data/toolboxData';
 
-// Migration function to parse legacy bracket notation
-function migrateLegacyEntry(entry: ToolboxEntry): ToolboxEntry {
-  // If already migrated, return as-is
-  if (entry.parameterName && entry.parameterType && entry.options && 'exerciseCategories' in entry) {
-    // Still need to ensure showInGridByDefault is set
+// Legacy entry type for migration (supports old 'parameter' field)
+interface LegacyToolboxEntry {
+  id: string;
+  category: string;
+  subCategory: string;
+  parameter?: string; // Legacy field
+  parameterName?: string;
+  parameterType?: 'qualitative' | 'quantitative';
+  options?: string[];
+  exerciseCategories?: string[];
+  isFrequencyParameter?: boolean;
+  isSetParameter?: boolean;
+  showInGridByDefault?: boolean;
+}
+
+// Migration function to parse legacy bracket notation and consolidate to parameterName
+function migrateLegacyEntry(entry: LegacyToolboxEntry): ToolboxEntry {
+  // If already has required fields, just ensure defaults
+  if (entry.parameterName && entry.parameterType !== undefined && Array.isArray(entry.options)) {
     return {
-      ...entry,
+      id: entry.id,
+      category: entry.category,
+      subCategory: entry.subCategory,
+      parameterName: entry.parameterName,
+      parameterType: entry.parameterType,
+      options: entry.options,
+      exerciseCategories: entry.exerciseCategories || [],
+      isFrequencyParameter: entry.isFrequencyParameter,
+      isSetParameter: entry.isSetParameter,
       showInGridByDefault: entry.showInGridByDefault ?? true
     };
   }
 
-  const parameter = entry.parameter;
-  const bracketMatch = parameter.match(/^(.+?)\s*\[(.+?)\]$/);
+  // Get the source string - prefer parameterName, fall back to legacy parameter
+  const sourceParam = entry.parameterName || entry.parameter || '';
+  const bracketMatch = sourceParam.match(/^(.+?)\s*\[(.+?)\]$/);
   
   if (bracketMatch) {
     const parameterName = bracketMatch[1].trim();
@@ -31,21 +54,29 @@ function migrateLegacyEntry(entry: ToolboxEntry): ToolboxEntry {
     );
     
     return {
-      ...entry,
+      id: entry.id,
+      category: entry.category,
+      subCategory: entry.subCategory,
       parameterName,
       parameterType: hasUnits ? 'quantitative' : 'qualitative',
       options,
       exerciseCategories: entry.exerciseCategories || [],
+      isFrequencyParameter: entry.isFrequencyParameter,
+      isSetParameter: entry.isSetParameter,
       showInGridByDefault: entry.showInGridByDefault ?? true
     };
   } else {
     // No brackets - treat as qualitative with empty options
     return {
-      ...entry,
-      parameterName: parameter,
+      id: entry.id,
+      category: entry.category,
+      subCategory: entry.subCategory,
+      parameterName: sourceParam,
       parameterType: 'qualitative',
       options: [],
       exerciseCategories: entry.exerciseCategories || [],
+      isFrequencyParameter: entry.isFrequencyParameter,
+      isSetParameter: entry.isSetParameter,
       showInGridByDefault: entry.showInGridByDefault ?? true
     };
   }
@@ -72,7 +103,7 @@ function migrateFrequencyParameter(entries: ToolboxEntry[]): ToolboxEntry[] {
     
     // If not, and this entry's name contains "frequency" AND is quantitative, mark it
     if (!hasMarkedFrequency 
-        && entry.parameter.toLowerCase().includes('frequency')
+        && entry.parameterName.toLowerCase().includes('frequency')
         && entry.parameterType === 'quantitative') {
       return { ...entry, isFrequencyParameter: true };
     }
@@ -104,23 +135,19 @@ function migrateSetParameter(entries: ToolboxEntry[]): ToolboxEntry[] {
       return entry;
     }
     
-    const paramLower = entry.parameter.toLowerCase();
-    const paramNameLower = entry.parameterName?.toLowerCase() || '';
+    const paramNameLower = entry.parameterName.toLowerCase();
     
     // Check for set-like parameters:
     // 1. Contains "set" or "sets" (but not "reset")
     // 2. Contains "ground contacts per session" (for plyometrics)
     // 3. Contains "contacts per session" (for plyometrics - shorter match)
     const isSetLike = 
-      (paramLower.includes('set') && !paramLower.includes('reset')) || 
       (paramNameLower.includes('set') && !paramNameLower.includes('reset')) ||
-      paramLower.includes('ground contacts per session') ||
       paramNameLower.includes('ground contacts per session') ||
-      paramLower.includes('contacts per session') ||
       paramNameLower.includes('contacts per session');
     
     if (isSetLike && entry.parameterType === 'quantitative') {
-      console.log('[useToolboxData] Marking as set parameter:', entry.parameter, entry.parameterName);
+      console.log('[useToolboxData] Marking as set parameter:', entry.parameterName);
       return { ...entry, isSetParameter: true };
     }
     
@@ -129,7 +156,7 @@ function migrateSetParameter(entries: ToolboxEntry[]): ToolboxEntry[] {
 }
 
 export function useToolboxData() {
-  const [data, setData] = useState<ToolboxDatabase>(defaultToolboxData);
+  const [data, setData] = useState<ToolboxDatabase>({ entries: [], lastUpdated: new Date().toISOString() });
   const [isLoading, setIsLoading] = useState(true);
 
   // Load data from localStorage on mount with migration
@@ -279,41 +306,75 @@ export function useToolboxData() {
         const values = lines[i].split('\t');
         
         if (values.length >= 2) {
+          const rawParameter = values[parameterIndex]?.trim() || '';
+          // Parse bracket notation for imports
+          const bracketMatch = rawParameter.match(/^(.+?)\s*\[(.+?)\]$/);
+          
+          let parameterName: string;
+          let options: string[];
+          let parameterType: 'qualitative' | 'quantitative';
+          
+          if (bracketMatch) {
+            parameterName = bracketMatch[1].trim();
+            options = bracketMatch[2].split(',').map(opt => opt.trim());
+            const hasUnits = options.some(opt => 
+              /^(m|km|s|min|h|%|kg|lbs|reps?|sets?|#)$/i.test(opt)
+            );
+            parameterType = hasUnits ? 'quantitative' : 'qualitative';
+          } else {
+            parameterName = rawParameter;
+            options = [];
+            parameterType = 'qualitative';
+          }
+          
           const entry: ToolboxEntry = {
             id: Date.now().toString() + i,
             category: values[categoryIndex]?.trim() || '',
             subCategory: subCategoryIndex !== -1 ? (values[subCategoryIndex]?.trim() || '') : '',
-            parameter: values[parameterIndex]?.trim() || ''
+            parameterName,
+            parameterType,
+            options
           };
           
-          if (entry.category && entry.parameter) {
+          if (entry.category && entry.parameterName) {
             newEntries.push(entry);
           }
         }
       }
       
+      // Apply migrations to newly imported entries
+      let migratedEntries = migrateFrequencyParameter(newEntries);
+      migratedEntries = migrateSetParameter(migratedEntries);
+      
       const newData = {
         ...data,
-        entries: [...data.entries, ...newEntries],
+        entries: [...data.entries, ...migratedEntries],
         lastUpdated: new Date().toISOString()
       };
       
       saveData(newData);
-      return newEntries.length;
+      return migratedEntries.length;
     } catch (error) {
       console.error('Import failed:', error);
       throw error;
     }
   };
 
-  // Export data to TSV
+  // Export data to TSV (exports parameterName with options in bracket format for compatibility)
   const exportData = () => {
-    const headers = ['Category', 'Sub-Category', 'Parameter'];
-    const rows = data.entries.map(entry => [
-      entry.category,
-      entry.subCategory,
-      entry.parameter
-    ]);
+    const headers = ['Category', 'Sub-Category', 'Parameter', 'Type'];
+    const rows = data.entries.map(entry => {
+      // Reconstruct legacy format for backward compatibility in exports
+      const paramWithOptions = entry.options.length > 0 
+        ? `${entry.parameterName} [${entry.options.join(', ')}]`
+        : entry.parameterName;
+      return [
+        entry.category,
+        entry.subCategory,
+        paramWithOptions,
+        entry.parameterType
+      ];
+    });
     
     const tsvContent = [
       headers.join('\t'),

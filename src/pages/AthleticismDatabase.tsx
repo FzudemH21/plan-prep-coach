@@ -90,10 +90,10 @@ export default function AthleticismDatabase() {
         parameterMap.set(normalizedKey, []);
       }
       
-      if (entry.parameter && entry.parameter.trim() !== '') {
+      if (entry.parameterName && entry.parameterName.trim() !== '') {
         const currentParams = parameterMap.get(normalizedKey) || [];
-        if (!currentParams.includes(entry.parameter)) {
-          currentParams.push(entry.parameter);
+        if (!currentParams.includes(entry.parameterName)) {
+          currentParams.push(entry.parameterName);
           parameterMap.set(normalizedKey, currentParams);
         }
       }

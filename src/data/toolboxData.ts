@@ -1,6 +1,19 @@
-import { ToolboxDatabase } from '@/types/toolbox';
+// Legacy format for default toolbox data - will be migrated to new format at runtime
+// This allows the default data to use the compact 'parameter' field with bracket notation
+interface LegacyToolboxEntry {
+  id: string;
+  category: string;
+  subCategory: string;
+  parameter: string;
+  exerciseCategories?: string[];
+}
 
-export const defaultToolboxData: ToolboxDatabase = {
+interface LegacyToolboxDatabase {
+  entries: LegacyToolboxEntry[];
+  lastUpdated: string;
+}
+
+export const defaultToolboxData: LegacyToolboxDatabase = {
   entries: [
     // Sprinting - Acceleration
     { id: "1", category: "Sprinting", subCategory: "Acceleration", parameter: "Frequency" },

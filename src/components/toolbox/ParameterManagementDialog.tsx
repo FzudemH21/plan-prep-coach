@@ -38,7 +38,6 @@ export function ParameterManagementDialog({
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showAddCategoryDialog, setShowAddCategoryDialog] = useState(false);
   const [newParameter, setNewParameter] = useState({
-    parameter: '',
     parameterName: '',
     parameterType: 'qualitative' as 'qualitative' | 'quantitative',
     options: [] as string[],
@@ -90,8 +89,7 @@ export function ParameterManagementDialog({
       id: Date.now().toString(),
       category,
       subCategory,
-      parameter: newParameter.parameter,
-      parameterName: newParameter.parameterName || newParameter.parameter,
+      parameterName: newParameter.parameterName,
       parameterType: newParameter.parameterType,
       options: newParameter.options,
       isFrequencyParameter: newParameter.isFrequencyParameter,
@@ -121,7 +119,6 @@ export function ParameterManagementDialog({
 
     onUpdateParameters(updatedParameters);
     setNewParameter({
-      parameter: '',
       parameterName: '',
       parameterType: 'qualitative',
       options: [],
@@ -308,19 +305,10 @@ export function ParameterManagementDialog({
           {editingParameter && (
             <div className="space-y-4">
               <div>
-                <Label htmlFor="parameter">Parameter</Label>
-                <Input
-                  id="parameter"
-                  value={editingParameter.parameter}
-                  onChange={(e) => setEditingParameter({ ...editingParameter, parameter: e.target.value })}
-                />
-              </div>
-
-              <div>
                 <Label htmlFor="parameterName">Parameter Name</Label>
                 <Input
                   id="parameterName"
-                  value={editingParameter.parameterName || ''}
+                  value={editingParameter.parameterName}
                   onChange={(e) => setEditingParameter({ ...editingParameter, parameterName: e.target.value })}
                 />
               </div>
@@ -509,21 +497,11 @@ export function ParameterManagementDialog({
 
           <div className="space-y-4">
             <div>
-              <Label htmlFor="newParameter">Parameter</Label>
-              <Input
-                id="newParameter"
-                value={newParameter.parameter}
-                onChange={(e) => setNewParameter({ ...newParameter, parameter: e.target.value })}
-              />
-            </div>
-
-            <div>
               <Label htmlFor="newParameterName">Parameter Name</Label>
               <Input
                 id="newParameterName"
                 value={newParameter.parameterName}
                 onChange={(e) => setNewParameter({ ...newParameter, parameterName: e.target.value })}
-                placeholder="Leave empty to use parameter value"
               />
             </div>
 
@@ -684,7 +662,7 @@ export function ParameterManagementDialog({
               </Button>
               <Button 
                 onClick={handleAddParameter}
-                disabled={!newParameter.parameter.trim()}
+                disabled={!newParameter.parameterName.trim()}
               >
                 Add Parameter
               </Button>
