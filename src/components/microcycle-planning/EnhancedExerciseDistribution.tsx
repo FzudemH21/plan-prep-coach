@@ -438,10 +438,11 @@ export function EnhancedExerciseDistribution({
 
     if (!destination) return;
 
-    // Handle dragging from library to unsectioned session area
+    // Handle dragging from library to session area - auto-create section if needed
     if (type === 'EXERCISE' && source.droppableId.startsWith('library-') && destination.droppableId.startsWith('session-')) {
       const [methodId, categoryName] = source.droppableId.replace('library-', '').split('::');
       const [dayDate, sessionIndex] = destination.droppableId.replace('session-', '').split('::');
+      const parsedSessionIndex = parseInt(sessionIndex);
       
       // Use exerciseId from draggableId instead of source.index to avoid filter mismatch
       const exerciseId = draggableId.replace('lib-', '');
@@ -470,19 +471,51 @@ export function EnhancedExerciseDistribution({
       
       if (!exercise) return;
 
-      const sessionExercises = exerciseDistribution.filter(
-        ex => ex.dayDate === dayDate && ex.sessionIndex === parseInt(sessionIndex) && !ex.sectionId
-      ).sort((a, b) => a.order - b.order);
-
-      // Use block-aware insertion to avoid splitting supersets
-      const blocks = buildBlocks(sessionExercises, dayDate, parseInt(sessionIndex), undefined);
-      const safeInsertIndex = mapItemIndexToBlockIndex(blocks, destination.index, false);
+      // Check if there are existing sections for this session
+      const existingSections = sessionSections.filter(
+        s => s.dayDate === dayDate && s.sessionIndex === parsedSessionIndex
+      );
       
-      // Calculate actual item index from block index
-      let insertIndex = 0;
-      for (let i = 0; i < safeInsertIndex; i++) {
-        insertIndex += blocks[i].items.length;
+      // If no sections exist, auto-create a default "Main" section
+      let targetSectionId: string;
+      if (existingSections.length === 0) {
+        const newSection: SessionSection = {
+          id: `section-${Date.now()}-${Math.random()}`,
+          dayDate,
+          sessionIndex: parsedSessionIndex,
+          name: 'Main',
+          order: 0,
+        };
+        targetSectionId = newSection.id;
+        
+        // Add the new section
+        onSectionsChange([...sessionSections, newSection]);
+        
+        // Create the exercise with the new section
+        const newExercise: ExerciseDistribution = {
+          id: `ex-${Date.now()}-${Math.random()}`,
+          exerciseId: exercise.exerciseId,
+          exerciseName: exercise.exerciseName,
+          methodId: foundMethodId,
+          categoryName: foundCategoryName,
+          subCategory: exercise.subCategory,
+          dayDate,
+          sessionIndex: parsedSessionIndex,
+          order: 0,
+          sectionId: targetSectionId,
+        };
+        
+        onDistributionChange([...exerciseDistribution, newExercise]);
+        toast({ title: 'Exercise added', description: `${exercise.exerciseName} added to new "Main" section` });
+        return;
       }
+      
+      // If sections exist, add to the first section by default
+      targetSectionId = existingSections.sort((a, b) => a.order - b.order)[0].id;
+      
+      const sectionExercises = exerciseDistribution.filter(
+        ex => ex.sectionId === targetSectionId
+      ).sort((a, b) => a.order - b.order);
 
       const newExercise: ExerciseDistribution = {
         id: `ex-${Date.now()}-${Math.random()}`,
@@ -492,18 +525,12 @@ export function EnhancedExerciseDistribution({
         categoryName: foundCategoryName,
         subCategory: exercise.subCategory,
         dayDate,
-        sessionIndex: parseInt(sessionIndex),
-        order: insertIndex,
+        sessionIndex: parsedSessionIndex,
+        order: sectionExercises.length,
+        sectionId: targetSectionId,
       };
 
-      sessionExercises.splice(insertIndex, 0, newExercise);
-      sessionExercises.forEach((ex, idx) => ex.order = idx);
-
-      const otherExercises = exerciseDistribution.filter(
-        ex => !(ex.dayDate === dayDate && ex.sessionIndex === parseInt(sessionIndex) && !ex.sectionId)
-      );
-
-      onDistributionChange([...otherExercises, ...sessionExercises]);
+      onDistributionChange([...exerciseDistribution, newExercise]);
       toast({ title: 'Exercise added', description: `${exercise.exerciseName} added to session` });
       return;
     }
