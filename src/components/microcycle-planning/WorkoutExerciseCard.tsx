@@ -9,6 +9,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { WorkoutExercise } from '@/types/workout';
 import { ParameterInputField } from './ParameterInputField';
 import { getParametersForMethod } from '@/data/methodParameters';
+import { ParameterVisibilityOverrides, isParameterVisible } from './ParameterVisibilityPopover';
+import { ToolboxEntry } from '@/types/toolbox';
 
 interface WorkoutExerciseCardProps {
   exercise: WorkoutExercise;
@@ -21,6 +23,9 @@ interface WorkoutExerciseCardProps {
   dragHandleProps?: any;
   notes?: string;
   onNotesChange?: (notes: string) => void;
+  // Parameter visibility props
+  toolboxParams?: ToolboxEntry[];
+  visibilityOverrides?: ParameterVisibilityOverrides;
 }
 
 export function WorkoutExerciseCard({
@@ -33,7 +38,9 @@ export function WorkoutExerciseCard({
   onDelete,
   dragHandleProps,
   notes,
-  onNotesChange
+  onNotesChange,
+  toolboxParams,
+  visibilityOverrides = {},
 }: WorkoutExerciseCardProps) {
   // Get parameters: FIRST derive from exercise.parameters (from method periodization), THEN fallback to static dictionary
   const methodParams = (() => {
@@ -45,6 +52,10 @@ export function WorkoutExerciseCard({
       return baseKeys.map(name => {
         const raw = exercise.parameters[name];
         const isNumeric = typeof raw === 'number' || (!isNaN(Number(raw)) && raw !== '');
+        // Find toolbox entry for this param to get showInGridByDefault
+        const toolboxEntry = toolboxParams?.find(tp => 
+          (tp.parameterName || tp.parameter) === name
+        );
         return {
           name,
           type: isNumeric ? 'number' : 'text',
@@ -52,14 +63,18 @@ export function WorkoutExerciseCard({
             ? String(exercise.parameters[`${name}_unit`]) 
             : undefined,
           isSetParameter: /^sets?$/i.test(name) || /ground contacts/i.test(name),
-          defaultValue: undefined
+          defaultValue: undefined,
+          showInGridByDefault: toolboxEntry?.showInGridByDefault ?? true,
         } as const;
       });
     }
     
     // FALLBACK: Only use static dictionary if no parameters in exercise.parameters
     const defs = getParametersForMethod(exercise.methodId);
-    return defs || [];
+    return (defs || []).map(d => ({
+      ...d,
+      showInGridByDefault: true,
+    }));
   })();
 
   // Find the set parameter
@@ -69,7 +84,15 @@ export function WorkoutExerciseCard({
     : 0;
 
   // Separate set parameter from other parameters (exclude Frequency)
-  const otherParams = methodParams.filter(p => !p.isSetParameter && p.name !== 'Frequency');
+  const allOtherParams = methodParams.filter(p => !p.isSetParameter && p.name !== 'Frequency');
+  
+  // Split into visible and hidden params based on visibility
+  const visibleParams = allOtherParams.filter(p => 
+    isParameterVisible(p.name, p.showInGridByDefault, visibilityOverrides)
+  );
+  const hiddenParams = allOtherParams.filter(p => 
+    !isParameterVisible(p.name, p.showInGridByDefault, visibilityOverrides)
+  );
 
   // Handle deleting a set
   const handleDeleteSet = (setNumber: number) => {
@@ -79,7 +102,7 @@ export function WorkoutExerciseCard({
     onParameterChange(setParam!.name, setCount - 1);
     
     // Reindex all sets after the deleted one
-    otherParams.forEach(param => {
+    allOtherParams.forEach(param => {
       // Shift values up from deleted set onwards
       for (let i = setNumber; i < setCount; i++) {
         const currentKey = `${param.name}_set${i}`;
@@ -102,7 +125,7 @@ export function WorkoutExerciseCard({
     const lastSetNumber = setCount;
     
     // Copy all parameter values from the last set to the new set
-    otherParams.forEach(param => {
+    allOtherParams.forEach(param => {
       const lastSetKey = `${param.name}_set${lastSetNumber}`;
       const newSetKey = `${param.name}_set${newSetNumber}`;
       const lastSetValue = exercise.parameters[lastSetKey];
@@ -172,15 +195,34 @@ export function WorkoutExerciseCard({
             </div>
           </div>
 
+          {/* Hidden Parameters as Badges */}
+          {hiddenParams.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {hiddenParams.map(param => {
+                const value = exercise.parameters[param.name];
+                if (value === undefined || value === '') return null;
+                return (
+                  <Badge 
+                    key={param.name} 
+                    variant="secondary" 
+                    className="text-xs font-normal"
+                  >
+                    {param.name}: {String(value)}
+                  </Badge>
+                );
+              })}
+            </div>
+          )}
+
           {/* Parameters Display */}
-          {setParam && setCount > 0 ? (
-            // TABLE LAYOUT (when set parameter exists)
+          {setParam && setCount > 0 && visibleParams.length > 0 ? (
+            // TABLE LAYOUT (when set parameter exists and there are visible params)
             <div className="w-full space-y-2">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-16">Set</TableHead>
-                    {otherParams.map(param => {
+                    {visibleParams.map(param => {
                       // Check if this parameter has a selected unit stored
                       const selectedUnit = exercise.parameters[`${param.name}_unit`];
                       
@@ -200,7 +242,7 @@ export function WorkoutExerciseCard({
                   {Array.from({ length: setCount }, (_, setIndex) => (
                     <TableRow key={setIndex}>
                       <TableCell className="font-medium">{setIndex + 1}</TableCell>
-                      {otherParams.map(param => (
+                      {visibleParams.map(param => (
                         <TableCell key={param.name}>
                           <ParameterInputField
                             parameter={param}

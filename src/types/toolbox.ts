@@ -13,6 +13,8 @@ export interface ToolboxEntry {
   isFrequencyParameter?: boolean;
   // Set parameter indicator (determines number of rows in exercise detail view)
   isSetParameter?: boolean;
+  // Whether to show this parameter in the grid by default (defaults to true)
+  showInGridByDefault?: boolean;
 }
 
 export interface ToolboxDatabase {
