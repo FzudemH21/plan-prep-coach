@@ -52,7 +52,7 @@ export function WorkoutExerciseCard({
       return baseKeys.map(name => {
         const raw = exercise.parameters[name];
         const isNumeric = typeof raw === 'number' || (!isNaN(Number(raw)) && raw !== '');
-        // Find toolbox entry for this param to get showInGridByDefault
+        // Find toolbox entry for this param to get flags
         const toolboxEntry = toolboxParams?.find(tp => 
           (tp.parameterName || tp.parameter) === name
         );
@@ -62,7 +62,8 @@ export function WorkoutExerciseCard({
           unit: typeof exercise.parameters[`${name}_unit`] === 'string' 
             ? String(exercise.parameters[`${name}_unit`]) 
             : undefined,
-          isSetParameter: /^sets?$/i.test(name) || /ground contacts/i.test(name),
+          isSetParameter: toolboxEntry?.isSetParameter || /^sets?$/i.test(name) || /ground contacts/i.test(name),
+          isFrequencyParameter: toolboxEntry?.isFrequencyParameter || false,
           defaultValue: undefined,
           showInGridByDefault: toolboxEntry?.showInGridByDefault ?? true,
         } as const;
@@ -73,6 +74,7 @@ export function WorkoutExerciseCard({
     const defs = getParametersForMethod(exercise.methodId);
     return (defs || []).map(d => ({
       ...d,
+      isFrequencyParameter: false,
       showInGridByDefault: true,
     }));
   })();
@@ -83,14 +85,17 @@ export function WorkoutExerciseCard({
     ? Number(exercise.parameters[setParam.name] || 3) // Default to 3 sets
     : 0;
 
-  // Separate set parameter from other parameters (exclude Frequency)
-  const allOtherParams = methodParams.filter(p => !p.isSetParameter && p.name !== 'Frequency');
+  // Separate set parameter from other parameters
+  // EXCLUDE: set parameters, frequency parameters (structural - never shown in grid or as badges)
+  const displayableParams = methodParams.filter(p => 
+    !p.isSetParameter && !p.isFrequencyParameter
+  );
   
   // Split into visible and hidden params based on visibility
-  const visibleParams = allOtherParams.filter(p => 
+  const visibleParams = displayableParams.filter(p => 
     isParameterVisible(p.name, p.showInGridByDefault, visibilityOverrides)
   );
-  const hiddenParams = allOtherParams.filter(p => 
+  const hiddenParams = displayableParams.filter(p => 
     !isParameterVisible(p.name, p.showInGridByDefault, visibilityOverrides)
   );
 
@@ -102,7 +107,7 @@ export function WorkoutExerciseCard({
     onParameterChange(setParam!.name, setCount - 1);
     
     // Reindex all sets after the deleted one
-    allOtherParams.forEach(param => {
+    displayableParams.forEach(param => {
       // Shift values up from deleted set onwards
       for (let i = setNumber; i < setCount; i++) {
         const currentKey = `${param.name}_set${i}`;
@@ -125,7 +130,7 @@ export function WorkoutExerciseCard({
     const lastSetNumber = setCount;
     
     // Copy all parameter values from the last set to the new set
-    allOtherParams.forEach(param => {
+    displayableParams.forEach(param => {
       const lastSetKey = `${param.name}_set${lastSetNumber}`;
       const newSetKey = `${param.name}_set${newSetNumber}`;
       const lastSetValue = exercise.parameters[lastSetKey];

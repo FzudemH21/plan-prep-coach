@@ -647,6 +647,7 @@ export function TrainingCalendarView({
             calendarDays.find(d => d.dateString === selectedSession.dayDate)?.trainingDay?.sessionNames?.[selectedSession.sessionIndex]
           }
           onRenameSession={onRenameSession}
+          toolboxData={toolboxData}
         />
       )}
     </div>
