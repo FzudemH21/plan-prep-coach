@@ -483,7 +483,7 @@ export function EnhancedExerciseDistribution({
           id: `section-${Date.now()}-${Math.random()}`,
           dayDate,
           sessionIndex: parsedSessionIndex,
-          name: 'Main',
+          name: 'Section 1',
           order: 0,
         };
         targetSectionId = newSection.id;
@@ -506,7 +506,7 @@ export function EnhancedExerciseDistribution({
         };
         
         onDistributionChange([...exerciseDistribution, newExercise]);
-        toast({ title: 'Exercise added', description: `${exercise.exerciseName} added to new "Main" section` });
+        toast({ title: 'Exercise added', description: `${exercise.exerciseName} added to new "Section 1" section` });
         return;
       }
       
