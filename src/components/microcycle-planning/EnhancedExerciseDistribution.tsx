@@ -535,6 +535,71 @@ export function EnhancedExerciseDistribution({
       return;
     }
 
+    // Handle dragging from library to "create new section" drop zone
+    if (type === 'EXERCISE' && source.droppableId.startsWith('library-') && destination.droppableId.startsWith('new-section-')) {
+      // Parse destination: new-section-{dayDate}::{sessionIndex}
+      const destParts = destination.droppableId.replace('new-section-', '').split('::');
+      const dayDate = destParts[0];
+      const parsedSessionIndex = parseInt(destParts[1], 10);
+      
+      // Extract exercise from library
+      const exerciseId = draggableId.replace('lib-', '');
+      let exercise: any = null;
+      let foundMethodId = '';
+      let foundCategoryName = '';
+      
+      for (const [mId, categories] of Object.entries(exercisesByMethod)) {
+        for (const [catName, exs] of Object.entries(categories)) {
+          const found = exs.find(ex => ex.exerciseId === exerciseId);
+          if (found) {
+            exercise = found;
+            foundMethodId = mId;
+            foundCategoryName = catName;
+            break;
+          }
+        }
+        if (exercise) break;
+      }
+      
+      if (!exercise) return;
+
+      // Count existing sections for this session to determine new section name
+      const existingSections = sessionSections.filter(
+        s => s.dayDate === dayDate && s.sessionIndex === parsedSessionIndex
+      );
+      const newSectionNumber = existingSections.length + 1;
+      
+      // Create the new section
+      const newSection: SessionSection = {
+        id: `section-${Date.now()}-${Math.random()}`,
+        dayDate,
+        sessionIndex: parsedSessionIndex,
+        name: `Section ${newSectionNumber}`,
+        order: existingSections.length,
+      };
+      
+      // Add the new section
+      onSectionsChange([...sessionSections, newSection]);
+      
+      // Create the exercise with the new section
+      const newExercise: ExerciseDistribution = {
+        id: `ex-${Date.now()}-${Math.random()}`,
+        exerciseId: exercise.exerciseId,
+        exerciseName: exercise.exerciseName,
+        methodId: foundMethodId,
+        categoryName: foundCategoryName,
+        subCategory: exercise.subCategory,
+        dayDate,
+        sessionIndex: parsedSessionIndex,
+        order: 0,
+        sectionId: newSection.id,
+      };
+      
+      onDistributionChange([...exerciseDistribution, newExercise]);
+      toast({ title: 'Exercise added', description: `${exercise.exerciseName} added to new "Section ${newSectionNumber}" section` });
+      return;
+    }
+
     // Handle dragging from library into a specific section
     if (type === 'EXERCISE' && source.droppableId.startsWith('library-') && destination.droppableId.startsWith('section-')) {
       const [methodId, categoryName] = source.droppableId.replace('library-', '').split('::');

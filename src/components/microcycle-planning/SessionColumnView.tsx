@@ -733,6 +733,28 @@ export function SessionColumnView({
                 </div>
               ))}
 
+              {/* Persistent "Add to New Section" Drop Zone */}
+              <Droppable droppableId={`new-section-${day.date}::${sessionIndex}`} type="EXERCISE">
+                {(provided, snapshot) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className={cn(
+                      "rounded-md border-2 border-dashed p-3 transition-colors flex items-center justify-center gap-2",
+                      snapshot.isDraggingOver 
+                        ? "border-primary bg-primary/10" 
+                        : "border-muted-foreground/30 bg-muted/30 hover:border-muted-foreground/50"
+                    )}
+                  >
+                    <Plus className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">
+                      Drop to create new section
+                    </span>
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+
               {/* Add Section Button */}
               <Button
                 variant="outline"
