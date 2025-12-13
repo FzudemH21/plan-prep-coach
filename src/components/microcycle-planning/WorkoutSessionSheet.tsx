@@ -1490,61 +1490,6 @@ export function WorkoutSessionSheet({
               )}
             </div>
             <div className="flex items-center gap-2 pr-10">
-              {/* Parameter Visibility Control */}
-              {toolboxData && (() => {
-                // Collect all unique parameters from exercises for visibility control
-                const allParams: Array<{ name: string; showInGridByDefault: boolean }> = [];
-                const seenParams = new Set<string>();
-                
-                workoutSections.forEach(section => {
-                  section.exercises.forEach(ex => {
-                    const methodParts = ex.methodId.split(' - ');
-                    const methodMain = methodParts[0] || ex.methodId;
-                    const methodSub = methodParts[1] || '';
-                    
-                    const toolboxParams = toolboxData.entries.filter(entry => {
-                      if (methodSub) {
-                        return entry.category === methodMain && entry.subCategory === methodSub;
-                      }
-                      return entry.category === methodMain;
-                    });
-                    
-                    toolboxParams.forEach(tp => {
-                      const name = tp.parameterName || tp.parameter;
-                      if (!seenParams.has(name) && !tp.isSetParameter && !tp.isFrequencyParameter) {
-                        seenParams.add(name);
-                        allParams.push({
-                          name,
-                          showInGridByDefault: tp.showInGridByDefault ?? true
-                        });
-                      }
-                    });
-                  });
-                });
-                
-                if (allParams.length === 0) return null;
-                
-                return (
-                  <ParameterVisibilityPopover
-                    parameters={allParams}
-                    visibilityOverrides={parameterVisibilityOverrides}
-                    onVisibilityChange={(paramName, visible) => {
-                      setParameterVisibilityOverrides(prev => ({
-                        ...prev,
-                        [paramName]: visible
-                      }));
-                    }}
-                    onShowAll={() => {
-                      const allVisible: ParameterVisibilityOverrides = {};
-                      allParams.forEach(p => { allVisible[p.name] = true; });
-                      setParameterVisibilityOverrides(allVisible);
-                    }}
-                    onResetToDefaults={() => {
-                      setParameterVisibilityOverrides({});
-                    }}
-                  />
-                );
-              })()}
               <Button variant="outline" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
                 {sidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
               </Button>
@@ -1763,6 +1708,31 @@ export function WorkoutSessionSheet({
                                 onSectionCommentsChange={handleSectionCommentsChange}
                                 toolboxData={toolboxData}
                                 visibilityOverrides={parameterVisibilityOverrides}
+                                onVisibilityChange={(paramName, visible) => {
+                                  setParameterVisibilityOverrides(prev => ({
+                                    ...prev,
+                                    [paramName]: visible
+                                  }));
+                                }}
+                                onShowAllParams={() => {
+                                  // Get all unique displayable params across all exercises
+                                  const allParamNames = new Set<string>();
+                                  workoutSections.forEach(s => {
+                                    s.exercises.forEach(ex => {
+                                      Object.keys(ex.parameters || {}).forEach(key => {
+                                        if (!key.endsWith('_unit') && !/_set\d+$/i.test(key)) {
+                                          allParamNames.add(key);
+                                        }
+                                      });
+                                    });
+                                  });
+                                  const allVisible: ParameterVisibilityOverrides = {};
+                                  allParamNames.forEach(name => { allVisible[name] = true; });
+                                  setParameterVisibilityOverrides(allVisible);
+                                }}
+                                onResetParamsToDefaults={() => {
+                                  setParameterVisibilityOverrides({});
+                                }}
                               />
                             </div>
                           )}

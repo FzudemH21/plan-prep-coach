@@ -30,6 +30,9 @@ interface WorkoutSectionCardProps {
   onSectionCommentsChange?: (sectionId: string, comments: string) => void;
   toolboxData?: ToolboxDatabase;
   visibilityOverrides?: ParameterVisibilityOverrides;
+  onVisibilityChange?: (paramName: string, visible: boolean) => void;
+  onShowAllParams?: () => void;
+  onResetParamsToDefaults?: () => void;
 }
 
 export function WorkoutSectionCard({
@@ -50,7 +53,10 @@ export function WorkoutSectionCard({
   onExerciseNotesChange,
   onSectionCommentsChange,
   toolboxData,
-  visibilityOverrides
+  visibilityOverrides,
+  onVisibilityChange,
+  onShowAllParams,
+  onResetParamsToDefaults
 }: WorkoutSectionCardProps) {
   // Helper to get toolbox params for an exercise based on method
   const getToolboxParamsForExercise = (exercise: WorkoutExercise): ToolboxEntry[] => {
@@ -267,6 +273,9 @@ export function WorkoutSectionCard({
                                             onNotesChange={(notes) => onExerciseNotesChange?.(exercise.id, notes)}
                                             toolboxParams={getToolboxParamsForExercise(exercise)}
                                             visibilityOverrides={visibilityOverrides}
+                                            onVisibilityChange={onVisibilityChange}
+                                            onShowAllParams={onShowAllParams}
+                                            onResetParamsToDefaults={onResetParamsToDefaults}
                                           />
                                         </div>
                                       )}
@@ -337,6 +346,9 @@ export function WorkoutSectionCard({
                                     onNotesChange={(notes) => onExerciseNotesChange?.(exercise.id, notes)}
                                     toolboxParams={getToolboxParamsForExercise(exercise)}
                                     visibilityOverrides={visibilityOverrides}
+                                    onVisibilityChange={onVisibilityChange}
+                                    onShowAllParams={onShowAllParams}
+                                    onResetParamsToDefaults={onResetParamsToDefaults}
                                   />
                                 </div>
                               )}

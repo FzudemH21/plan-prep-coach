@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { WorkoutExercise } from '@/types/workout';
 import { ParameterInputField } from './ParameterInputField';
 import { getParametersForMethod } from '@/data/methodParameters';
-import { ParameterVisibilityOverrides, isParameterVisible } from './ParameterVisibilityPopover';
+import { ParameterVisibilityPopover, ParameterVisibilityOverrides, isParameterVisible } from './ParameterVisibilityPopover';
 import { ToolboxEntry } from '@/types/toolbox';
 
 interface WorkoutExerciseCardProps {
@@ -26,6 +26,9 @@ interface WorkoutExerciseCardProps {
   // Parameter visibility props
   toolboxParams?: ToolboxEntry[];
   visibilityOverrides?: ParameterVisibilityOverrides;
+  onVisibilityChange?: (paramName: string, visible: boolean) => void;
+  onShowAllParams?: () => void;
+  onResetParamsToDefaults?: () => void;
 }
 
 export function WorkoutExerciseCard({
@@ -41,6 +44,9 @@ export function WorkoutExerciseCard({
   onNotesChange,
   toolboxParams,
   visibilityOverrides = {},
+  onVisibilityChange,
+  onShowAllParams,
+  onResetParamsToDefaults,
 }: WorkoutExerciseCardProps) {
   // Get parameters: FIRST derive from exercise.parameters (from method periodization), THEN fallback to static dictionary
   const methodParams = (() => {
@@ -171,6 +177,19 @@ export function WorkoutExerciseCard({
                 <Badge variant="outline" className="text-xs">
                   {supersetLabel}
                 </Badge>
+              )}
+              {/* Parameter Visibility Popover */}
+              {onVisibilityChange && displayableParams.length > 0 && (
+                <ParameterVisibilityPopover
+                  parameters={displayableParams.map(p => ({
+                    name: p.name,
+                    showInGridByDefault: p.showInGridByDefault
+                  }))}
+                  visibilityOverrides={visibilityOverrides}
+                  onVisibilityChange={onVisibilityChange}
+                  onShowAll={onShowAllParams || (() => {})}
+                  onResetToDefaults={onResetParamsToDefaults || (() => {})}
+                />
               )}
               <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
