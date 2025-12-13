@@ -1761,6 +1761,8 @@ export function WorkoutSessionSheet({
                                 sectionDragHandleProps={provided.dragHandleProps}
                                 onExerciseNotesChange={handleExerciseNotesChange}
                                 onSectionCommentsChange={handleSectionCommentsChange}
+                                toolboxData={toolboxData}
+                                visibilityOverrides={parameterVisibilityOverrides}
                               />
                             </div>
                           )}

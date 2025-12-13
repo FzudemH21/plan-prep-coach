@@ -8,6 +8,8 @@ import { WorkoutSection, WorkoutExercise } from '@/types/workout';
 import { WorkoutExerciseCard } from './WorkoutExerciseCard';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
+import { ToolboxDatabase, ToolboxEntry } from '@/types/toolbox';
+import { ParameterVisibilityOverrides } from './ParameterVisibilityPopover';
 
 interface WorkoutSectionCardProps {
   section: WorkoutSection;
@@ -26,6 +28,8 @@ interface WorkoutSectionCardProps {
   sectionDragHandleProps?: any;
   onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
   onSectionCommentsChange?: (sectionId: string, comments: string) => void;
+  toolboxData?: ToolboxDatabase;
+  visibilityOverrides?: ParameterVisibilityOverrides;
 }
 
 export function WorkoutSectionCard({
@@ -44,8 +48,26 @@ export function WorkoutSectionCard({
   getSupersetLabel,
   sectionDragHandleProps,
   onExerciseNotesChange,
-  onSectionCommentsChange
+  onSectionCommentsChange,
+  toolboxData,
+  visibilityOverrides
 }: WorkoutSectionCardProps) {
+  // Helper to get toolbox params for an exercise based on method and category
+  const getToolboxParamsForExercise = (exercise: WorkoutExercise): ToolboxEntry[] => {
+    if (!toolboxData?.entries) return [];
+    
+    const methodMain = exercise.methodId;
+    const exerciseCategory = exercise.categoryName || '';
+    
+    // Match: entry.category = method name, entry.subCategory = exercise category
+    return toolboxData.entries.filter(entry => {
+      if (exerciseCategory) {
+        return entry.category === methodMain && entry.subCategory === exerciseCategory;
+      }
+      // If no category, just match method
+      return entry.category === methodMain && (!entry.subCategory || entry.subCategory === '');
+    });
+  };
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(section.name);
 
@@ -232,7 +254,7 @@ export function WorkoutSectionCard({
                                           style={provided.draggableProps.style}
                                           className={snapshot.isDragging ? 'opacity-50' : ''}
                                         >
-                                          <WorkoutExerciseCard
+                                        <WorkoutExerciseCard
                                             exercise={exercise}
                                             isInSuperset={!!getSupersetLabel(exercise.id)}
                                             supersetLabel={getSupersetLabel(exercise.id)}
@@ -243,6 +265,8 @@ export function WorkoutSectionCard({
                                             dragHandleProps={provided.dragHandleProps}
                                             notes={exercise.notes}
                                             onNotesChange={(notes) => onExerciseNotesChange?.(exercise.id, notes)}
+                                            toolboxParams={getToolboxParamsForExercise(exercise)}
+                                            visibilityOverrides={visibilityOverrides}
                                           />
                                         </div>
                                       )}
@@ -311,6 +335,8 @@ export function WorkoutSectionCard({
                                     dragHandleProps={provided.dragHandleProps}
                                     notes={exercise.notes}
                                     onNotesChange={(notes) => onExerciseNotesChange?.(exercise.id, notes)}
+                                    toolboxParams={getToolboxParamsForExercise(exercise)}
+                                    visibilityOverrides={visibilityOverrides}
                                   />
                                 </div>
                               )}
