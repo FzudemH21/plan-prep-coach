@@ -6,7 +6,11 @@ import { defaultToolboxData } from '@/data/toolboxData';
 function migrateLegacyEntry(entry: ToolboxEntry): ToolboxEntry {
   // If already migrated, return as-is
   if (entry.parameterName && entry.parameterType && entry.options && 'exerciseCategories' in entry) {
-    return entry;
+    // Still need to ensure showInGridByDefault is set
+    return {
+      ...entry,
+      showInGridByDefault: entry.showInGridByDefault ?? true
+    };
   }
 
   const parameter = entry.parameter;
@@ -31,7 +35,8 @@ function migrateLegacyEntry(entry: ToolboxEntry): ToolboxEntry {
       parameterName,
       parameterType: hasUnits ? 'quantitative' : 'qualitative',
       options,
-      exerciseCategories: entry.exerciseCategories || []
+      exerciseCategories: entry.exerciseCategories || [],
+      showInGridByDefault: entry.showInGridByDefault ?? true
     };
   } else {
     // No brackets - treat as qualitative with empty options
@@ -40,7 +45,8 @@ function migrateLegacyEntry(entry: ToolboxEntry): ToolboxEntry {
       parameterName: parameter,
       parameterType: 'qualitative',
       options: [],
-      exerciseCategories: entry.exerciseCategories || []
+      exerciseCategories: entry.exerciseCategories || [],
+      showInGridByDefault: entry.showInGridByDefault ?? true
     };
   }
 }

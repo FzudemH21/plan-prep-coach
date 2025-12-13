@@ -44,6 +44,7 @@ export function ParameterManagementDialog({
     options: [] as string[],
     isFrequencyParameter: false,
     isSetParameter: false,
+    showInGridByDefault: true,
   });
   const [newExerciseCategory, setNewExerciseCategory] = useState('');
 
@@ -95,6 +96,7 @@ export function ParameterManagementDialog({
       options: newParameter.options,
       isFrequencyParameter: newParameter.isFrequencyParameter,
       isSetParameter: newParameter.isSetParameter,
+      showInGridByDefault: newParameter.showInGridByDefault,
     };
 
     let updatedParameters = [...parameters, parameter];
@@ -125,6 +127,7 @@ export function ParameterManagementDialog({
       options: [],
       isFrequencyParameter: false,
       isSetParameter: false,
+      showInGridByDefault: true,
     });
     setShowAddDialog(false);
   };
@@ -403,6 +406,32 @@ export function ParameterManagementDialog({
               </div>
 
               <div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="showInGridByDefault"
+                    checked={editingParameter.showInGridByDefault ?? true}
+                    onChange={(e) => {
+                      setEditingParameter({
+                        ...editingParameter,
+                        showInGridByDefault: e.target.checked
+                      });
+                    }}
+                    className="h-4 w-4"
+                  />
+                  <Label 
+                    htmlFor="showInGridByDefault" 
+                    className="text-sm font-medium"
+                  >
+                    Show in parameter grid by default
+                  </Label>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  When disabled, this parameter will be shown as a label badge on the exercise instead of in the set grid. Users can still toggle visibility in workout views.
+                </p>
+              </div>
+
+              <div>
                 <Label>Options</Label>
                 <div className="space-y-2">
                   <div className="flex gap-2">
@@ -566,6 +595,32 @@ export function ParameterManagementDialog({
                 {newParameter.parameterType === 'quantitative' 
                   ? 'Mark this parameter as the set parameter (determines number of rows in exercise detail view)'
                   : 'Only quantitative parameters can be used as set parameters'}
+              </p>
+            </div>
+
+            <div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="newShowInGridByDefault"
+                  checked={newParameter.showInGridByDefault}
+                  onChange={(e) => {
+                    setNewParameter({
+                      ...newParameter,
+                      showInGridByDefault: e.target.checked
+                    });
+                  }}
+                  className="h-4 w-4"
+                />
+                <Label 
+                  htmlFor="newShowInGridByDefault" 
+                  className="text-sm font-medium"
+                >
+                  Show in parameter grid by default
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                When disabled, this parameter will be shown as a label badge on the exercise instead of in the set grid. Users can still toggle visibility in workout views.
               </p>
             </div>
 

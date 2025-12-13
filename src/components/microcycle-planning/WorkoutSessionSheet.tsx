@@ -19,10 +19,12 @@ import { WorkoutArrangementSidebar } from './WorkoutArrangementSidebar';
 import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
 import { MethodSelectionDialog } from './MethodSelectionDialog';
 import { CombinedTestEventDialog } from './CombinedTestEventDialog';
+import { ParameterVisibilityPopover, ParameterVisibilityOverrides } from './ParameterVisibilityPopover';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { format } from 'date-fns';
 import { getParametersForMethod } from '@/data/methodParameters';
 import { ExerciseSelection } from '@/types/microcycle-planning';
+import { ToolboxDatabase } from '@/types/toolbox';
 import { cn } from '@/lib/utils';
 
 interface ExerciseDistribution {
@@ -101,6 +103,8 @@ interface WorkoutSessionSheetProps {
   supersets?: SupersetMappingProp;
   onSectionsChange?: (sections: SessionSectionProp[]) => void;
   onSupersetsChange?: (supersets: SupersetMappingProp) => void;
+  // Toolbox data for parameter visibility
+  toolboxData?: ToolboxDatabase;
 }
 
 export function WorkoutSessionSheet({
@@ -136,7 +140,8 @@ export function WorkoutSessionSheet({
   sessionSections: sessionSectionsProp,
   supersets: supersetsProp,
   onSectionsChange,
-  onSupersetsChange
+  onSupersetsChange,
+  toolboxData
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -155,6 +160,19 @@ export function WorkoutSessionSheet({
   const [isTestEventDialogOpen, setIsTestEventDialogOpen] = useState(false);
   const [testsEventsExpanded, setTestsEventsExpanded] = useState(true);
   const [sectionToDelete, setSectionToDelete] = useState<string | null>(null);
+
+  // Parameter visibility overrides (loaded from localStorage, saved on save)
+  const [parameterVisibilityOverrides, setParameterVisibilityOverrides] = useState<ParameterVisibilityOverrides>(() => {
+    const metadataKey = `workoutSessions_${mesocycleId}_${dayDate}_${sessionIndex}`;
+    try {
+      const stored = localStorage.getItem(metadataKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return parsed.parameterVisibility || {};
+      }
+    } catch {}
+    return {};
+  });
 
   // DEBUG: Log parameterValues structure
   console.log('[WorkoutSessionSheet] Props received:', {
@@ -819,10 +837,11 @@ export function WorkoutSessionSheet({
   };
 
   const handleSave = () => {
-    // Save session comments only (session name is now synced via onRenameSession to trainingDays.sessionNames)
+    // Save session comments and parameter visibility (session name is now synced via onRenameSession to trainingDays.sessionNames)
     const metadataKey = `workoutSessions_${mesocycleId}_${dayDate}_${sessionIndex}`;
     localStorage.setItem(metadataKey, JSON.stringify({
-      comments: sessionComments
+      comments: sessionComments,
+      parameterVisibility: parameterVisibilityOverrides
     }));
 
     // Save session intensity
@@ -1471,6 +1490,61 @@ export function WorkoutSessionSheet({
               )}
             </div>
             <div className="flex items-center gap-2 pr-10">
+              {/* Parameter Visibility Control */}
+              {toolboxData && (() => {
+                // Collect all unique parameters from exercises for visibility control
+                const allParams: Array<{ name: string; showInGridByDefault: boolean }> = [];
+                const seenParams = new Set<string>();
+                
+                workoutSections.forEach(section => {
+                  section.exercises.forEach(ex => {
+                    const methodParts = ex.methodId.split(' - ');
+                    const methodMain = methodParts[0] || ex.methodId;
+                    const methodSub = methodParts[1] || '';
+                    
+                    const toolboxParams = toolboxData.entries.filter(entry => {
+                      if (methodSub) {
+                        return entry.category === methodMain && entry.subCategory === methodSub;
+                      }
+                      return entry.category === methodMain;
+                    });
+                    
+                    toolboxParams.forEach(tp => {
+                      const name = tp.parameterName || tp.parameter;
+                      if (!seenParams.has(name) && !tp.isSetParameter && !tp.isFrequencyParameter) {
+                        seenParams.add(name);
+                        allParams.push({
+                          name,
+                          showInGridByDefault: tp.showInGridByDefault ?? true
+                        });
+                      }
+                    });
+                  });
+                });
+                
+                if (allParams.length === 0) return null;
+                
+                return (
+                  <ParameterVisibilityPopover
+                    parameters={allParams}
+                    visibilityOverrides={parameterVisibilityOverrides}
+                    onVisibilityChange={(paramName, visible) => {
+                      setParameterVisibilityOverrides(prev => ({
+                        ...prev,
+                        [paramName]: visible
+                      }));
+                    }}
+                    onShowAll={() => {
+                      const allVisible: ParameterVisibilityOverrides = {};
+                      allParams.forEach(p => { allVisible[p.name] = true; });
+                      setParameterVisibilityOverrides(allVisible);
+                    }}
+                    onResetToDefaults={() => {
+                      setParameterVisibilityOverrides({});
+                    }}
+                  />
+                );
+              })()}
               <Button variant="outline" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
                 {sidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
               </Button>
