@@ -52,20 +52,20 @@ export function WorkoutSectionCard({
   toolboxData,
   visibilityOverrides
 }: WorkoutSectionCardProps) {
-  // Helper to get toolbox params for an exercise based on method and category
+  // Helper to get toolbox params for an exercise based on method
   const getToolboxParamsForExercise = (exercise: WorkoutExercise): ToolboxEntry[] => {
     if (!toolboxData?.entries) return [];
     
-    const methodMain = exercise.methodId;
-    const exerciseCategory = exercise.categoryName || '';
+    const methodId = exercise.methodId; // e.g., "Lower Body Resistance Training - Strength"
     
-    // Match: entry.category = method name, entry.subCategory = exercise category
     return toolboxData.entries.filter(entry => {
-      if (exerciseCategory) {
-        return entry.category === methodMain && entry.subCategory === exerciseCategory;
-      }
-      // If no category, just match method
-      return entry.category === methodMain && (!entry.subCategory || entry.subCategory === '');
+      // Build the full method identifier from toolbox entry
+      const toolboxMethodId = entry.subCategory 
+        ? `${entry.category} - ${entry.subCategory}`
+        : entry.category;
+      
+      // Match parameters by method only - exercise categories don't affect parameter visibility
+      return toolboxMethodId === methodId;
     });
   };
   const [isEditing, setIsEditing] = useState(false);
