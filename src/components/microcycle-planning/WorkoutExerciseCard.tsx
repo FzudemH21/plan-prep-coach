@@ -253,12 +253,21 @@ export function WorkoutExerciseCard({
                     <TableRow>
                       <TableHead className="w-16">Set</TableHead>
                       {visibleParams.map(param => {
-                        // Check if this parameter has a selected unit stored
-                        const selectedUnit = exercise.parameters[`${param.name}_unit`];
+                        // First try stored unit in exercise parameters
+                        let unit = exercise.parameters[`${param.name}_unit`] as string | undefined;
+                        
+                        // If no unit stored, look up from toolbox (for quantitative params)
+                        if (!unit && toolboxParams) {
+                          const toolboxEntry = toolboxParams.find(tp => tp.parameterName === param.name);
+                          if (toolboxEntry && toolboxEntry.parameterType === 'quantitative' && toolboxEntry.options.length > 0) {
+                            // For quantitative params, first option is the default unit
+                            unit = toolboxEntry.options[0];
+                          }
+                        }
                         
                         // Format the header with unit if it exists
-                        const headerText = selectedUnit 
-                          ? `${param.name} [${selectedUnit}]`
+                        const headerText = unit 
+                          ? `${param.name} [${unit}]`
                           : param.name;
                         
                         return (
@@ -313,17 +322,28 @@ export function WorkoutExerciseCard({
             ) : (
               // FALLBACK: Grid layout for non-set-based exercises - use visibleParams
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {visibleParams.map((param) => (
-                  <ParameterInputField
-                    key={param.name}
-                    parameter={param}
-                    value={exercise.parameters[param.name] ?? param.defaultValue ?? ''}
-                    unit={exercise.parameters[`${param.name}_unit`] as string}
-                    onValueChange={(value) => onParameterChange(param.name, value)}
-                    onUnitChange={(unit) => onUnitChange(param.name, unit)}
-                    showLabel={false}
-                  />
-                ))}
+                {visibleParams.map((param) => {
+                  // Look up unit from toolbox if not in exercise parameters
+                  let unit = exercise.parameters[`${param.name}_unit`] as string | undefined;
+                  if (!unit && toolboxParams) {
+                    const toolboxEntry = toolboxParams.find(tp => tp.parameterName === param.name);
+                    if (toolboxEntry && toolboxEntry.parameterType === 'quantitative' && toolboxEntry.options.length > 0) {
+                      unit = toolboxEntry.options[0];
+                    }
+                  }
+                  
+                  return (
+                    <ParameterInputField
+                      key={param.name}
+                      parameter={param}
+                      value={exercise.parameters[param.name] ?? param.defaultValue ?? ''}
+                      unit={unit}
+                      onValueChange={(value) => onParameterChange(param.name, value)}
+                      onUnitChange={(unit) => onUnitChange(param.name, unit)}
+                      showLabel={false}
+                    />
+                  );
+                })}
               </div>
             )
           )}
