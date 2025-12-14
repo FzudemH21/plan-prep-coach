@@ -91,6 +91,8 @@ export interface ExerciseDistribution {
   supersetId?: string;
   notes?: string;
   eachSide?: boolean; // Mark exercise as unilateral (perform reps on each side)
+  autoCalculateWeight?: boolean; // Auto-calculate weight from %1RM
+  autoCalculateTargetHR?: boolean; // Auto-calculate target HR from %maxHR
 }
 
 export interface SessionSection {
