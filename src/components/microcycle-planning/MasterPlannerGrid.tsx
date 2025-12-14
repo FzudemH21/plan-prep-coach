@@ -20,6 +20,8 @@ interface ExerciseDistribution {
   sectionId?: string;
   notes?: string;
   eachSide?: boolean;
+  autoCalculateWeight?: boolean;
+  autoCalculateTargetHR?: boolean;
 }
 
 interface TrainingDay {
@@ -80,6 +82,8 @@ interface MasterPlannerGridProps {
   // New props for Phase 2 - editable notes and eachSide
   onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
   onExerciseEachSideChange?: (exerciseId: string, eachSide: boolean) => void;
+  // New props for Phase 3 - auto-calculate toggles
+  onExerciseAutoCalcChange?: (exerciseId: string, field: 'autoCalculateWeight' | 'autoCalculateTargetHR', value: boolean) => void;
 }
 
 const MAX_WEEKS_DISPLAY = 6;
@@ -103,6 +107,7 @@ export function MasterPlannerGrid({
   onSectionCommentChange,
   onExerciseNotesChange,
   onExerciseEachSideChange,
+  onExerciseAutoCalcChange,
 }: MasterPlannerGridProps) {
   const [startWeekOffset, setStartWeekOffset] = useState(0);
 
@@ -205,6 +210,7 @@ export function MasterPlannerGrid({
               totalWeeks={filteredDays.length}
               onExerciseNotesChange={onExerciseNotesChange}
               onExerciseEachSideChange={onExerciseEachSideChange}
+              onExerciseAutoCalcChange={onExerciseAutoCalcChange}
             />
           ))}
         </div>

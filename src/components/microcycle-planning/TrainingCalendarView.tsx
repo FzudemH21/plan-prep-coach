@@ -595,6 +595,15 @@ export function TrainingCalendarView({
                   onDistributionChange(updated);
                 }
               }}
+              onExerciseAutoCalcChange={(exerciseId, field, value) => {
+                // Sync auto-calculate toggle to parent's exerciseDistribution
+                if (onDistributionChange) {
+                  const updated = exerciseDistribution.map(ex =>
+                    (ex.id === exerciseId || ex.exerciseId === exerciseId) ? { ...ex, [field]: value } : ex
+                  );
+                  onDistributionChange(updated);
+                }
+              }}
             />
           ) : (
             /* Calendar View */
