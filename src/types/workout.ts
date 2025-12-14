@@ -16,6 +16,7 @@ export interface WorkoutExercise {
   supersetId?: string;
   parameters: Record<string, string | number>;
   notes?: string;
+  eachSide?: boolean; // Mark exercise as unilateral (perform reps on each side)
 }
 
 export interface WorkoutSession {

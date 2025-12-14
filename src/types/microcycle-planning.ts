@@ -90,6 +90,7 @@ export interface ExerciseDistribution {
   sectionId?: string;
   supersetId?: string;
   notes?: string;
+  eachSide?: boolean; // Mark exercise as unilateral (perform reps on each side)
 }
 
 export interface SessionSection {
