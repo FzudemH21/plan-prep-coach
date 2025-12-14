@@ -158,7 +158,14 @@ export function TrainingCalendarView({
     totalSessions: number;
   } | null>(null);
   const [sessionDataVersion, setSessionDataVersion] = useState(0);
+  // Track which mesocycle is being viewed in Master Planner mode
+  const [viewedMesocycleId, setViewedMesocycleId] = useState<string>(currentMesocycle.id);
   const dayOfWeekNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+  // Get the currently viewed mesocycle (for Master Planner view)
+  const viewedMesocycle = useMemo(() => {
+    return mesocycles.find(m => m.id === viewedMesocycleId) || currentMesocycle;
+  }, [mesocycles, viewedMesocycleId, currentMesocycle]);
 
   // Helper function to get microcycle index from date
   const getMicrocycleIndex = (dayDate: string): number => {
@@ -279,12 +286,12 @@ export function TrainingCalendarView({
     return result;
   }, [calendarDays]);
 
-  // Calculate all days in the current mesocycle for Master Planner view
+  // Calculate all days in the viewed mesocycle for Master Planner view
   const allMesocycleDays = useMemo((): CalendarDay[] => {
     if (viewMode !== 'master') return [];
 
-    const start = currentMesocycle.startDate;
-    const end = currentMesocycle.endDate;
+    const start = viewedMesocycle.startDate;
+    const end = viewedMesocycle.endDate;
     const days = eachDayOfInterval({ start, end });
 
     return days.map(date => {
@@ -311,7 +318,7 @@ export function TrainingCalendarView({
           
           let sessionName = trainingDay?.sessionNames?.[parseInt(idx)] || `Session ${parseInt(idx) + 1}`;
           
-          const intensityKey = `sessionIntensity_${currentMesocycle.id}_${dateString}_${idx}`;
+          const intensityKey = `sessionIntensity_${viewedMesocycle.id}_${dateString}_${idx}`;
           const storedIntensity = localStorage.getItem(intensityKey);
           const dayIntensity = trainingDay ? (dailyIntensityData?.find(di => di.date === dateString)?.intensity || 'moderate') : 'moderate';
           const sessionIntensity = storedIntensity || dayIntensity;
@@ -336,7 +343,7 @@ export function TrainingCalendarView({
         totalExercises: exercises.length,
       };
     });
-  }, [viewMode, currentMesocycle, exercisesByDate, trainingDays, dailyIntensityData]);
+  }, [viewMode, viewedMesocycle, exercisesByDate, trainingDays, dailyIntensityData]);
 
   const handlePrevious = () => {
     setCurrentDate(prev => subWeeks(prev, 1));
@@ -437,6 +444,25 @@ export function TrainingCalendarView({
                 </div>
               )}
 
+              {/* Mesocycle selector - only show in Master Planner mode when multiple mesocycles exist */}
+              {viewMode === 'master' && mesocycles.length > 1 && (
+                <Select
+                  value={viewedMesocycleId}
+                  onValueChange={(id) => setViewedMesocycleId(id)}
+                >
+                  <SelectTrigger className="w-40 h-8">
+                    <SelectValue placeholder="Select Mesocycle" />
+                  </SelectTrigger>
+                  <SelectContent className="z-[200] bg-background border">
+                    {mesocycles.map((meso, idx) => (
+                      <SelectItem key={meso.id} value={meso.id}>
+                        {meso.name || `Mesocycle ${idx + 1}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
               {/* Day selector - only show in Master Planner mode */}
               {viewMode === 'master' && (
                 <Select
@@ -446,7 +472,7 @@ export function TrainingCalendarView({
                   <SelectTrigger className="w-32 h-8">
                     <SelectValue placeholder="Select Day" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="z-[200] bg-background border">
                     {dayOfWeekNames.map((day, idx) => (
                       <SelectItem key={idx} value={(idx + 1).toString()}>
                         {day}
@@ -513,22 +539,22 @@ export function TrainingCalendarView({
               getIntensityColor={getIntensityColor}
               dailyIntensityData={dailyIntensityData}
               parameterValues={parameterValues}
-              currentMesocycle={currentMesocycle}
+              currentMesocycle={viewedMesocycle}
               trainingDays={trainingDays}
               toolboxData={toolboxData}
               onParameterChange={onSaveParameters ? (dayDate, sessionIndex, methodId, categoryName, paramName, value) => {
                 const trainingDay = trainingDays.find(td => td.date === dayDate);
                 const microcycleId = trainingDay?.microcycleId;
-                const microcycleIndex = currentMesocycle.microcycles?.findIndex(m => m.id === microcycleId) ?? 0;
+                const microcycleIndex = viewedMesocycle.microcycles?.findIndex(m => m.id === microcycleId) ?? 0;
                 const fullMethodKey = categoryName ? `${methodId}::${categoryName}` : methodId;
-                onSaveParameters(currentMesocycle.id, microcycleIndex, fullMethodKey, sessionIndex, '', { [paramName]: value });
+                onSaveParameters(viewedMesocycle.id, microcycleIndex, fullMethodKey, sessionIndex, '', { [paramName]: value });
               } : undefined}
               sessionSections={sessionSections}
               supersets={supersets}
               onSessionNameChange={onRenameSession}
               onSessionCommentChange={(dayDate, sessionIndex, comment) => {
                 // Save session comment to localStorage
-                const key = `workoutSessions_${currentMesocycle.id}_${dayDate}_${sessionIndex}`;
+                const key = `workoutSessions_${viewedMesocycle.id}_${dayDate}_${sessionIndex}`;
                 try {
                   const existing = localStorage.getItem(key);
                   const parsed = existing ? JSON.parse(existing) : {};

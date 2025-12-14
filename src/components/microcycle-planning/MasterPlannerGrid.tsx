@@ -135,34 +135,45 @@ export function MasterPlannerGrid({
 
   return (
     <div className="w-full">
-      {/* Week Navigation for 6+ week mesocycles */}
-      {hasMoreWeeks && (
-        <div className="flex items-center justify-between mb-2 px-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setStartWeekOffset(prev => Math.max(0, prev - 1))}
-            disabled={!canGoBack}
-            className="h-7"
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Previous
-          </Button>
-          <span className="text-xs text-muted-foreground">
-            Weeks {startWeekOffset + 1}-{Math.min(startWeekOffset + MAX_WEEKS_DISPLAY, totalWeeksInMesocycle)} of {totalWeeksInMesocycle}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setStartWeekOffset(prev => Math.min(totalWeeksInMesocycle - MAX_WEEKS_DISPLAY, prev + 1))}
-            disabled={!canGoForward}
-            className="h-7"
-          >
-            Next
-            <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
-        </div>
-      )}
+      {/* Week Navigation - always show indicator, buttons only for 6+ weeks */}
+      <div className="flex items-center justify-between mb-2 px-2">
+        {hasMoreWeeks ? (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setStartWeekOffset(prev => Math.max(0, prev - 1))}
+              disabled={!canGoBack}
+              className="h-7"
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Previous
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Weeks {startWeekOffset + 1}-{Math.min(startWeekOffset + MAX_WEEKS_DISPLAY, totalWeeksInMesocycle)} of {totalWeeksInMesocycle}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setStartWeekOffset(prev => Math.min(totalWeeksInMesocycle - MAX_WEEKS_DISPLAY, prev + 1))}
+              disabled={!canGoForward}
+              className="h-7"
+            >
+              Next
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </>
+        ) : (
+          <div className="w-full text-center">
+            <span className="text-xs text-muted-foreground">
+              {totalWeeksInMesocycle === 1 
+                ? `Week 1 of 1`
+                : `Weeks 1-${totalWeeksInMesocycle} of ${totalWeeksInMesocycle}`
+              }
+            </span>
+          </div>
+        )}
+      </div>
 
       <ScrollArea className="w-full">
         <div className="flex min-h-[500px]">

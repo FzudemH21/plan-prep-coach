@@ -248,10 +248,15 @@ const EditableSessionName = memo(({
   }, [sessionName]);
 
   const handleSave = () => {
-    if (localName.trim() && localName !== sessionName) {
-      onSave(localName.trim());
-    }
+    // Always close editing mode
     setIsEditing(false);
+    // Only save if there's a change and the name is not empty
+    if (localName.trim() && localName.trim() !== sessionName) {
+      onSave(localName.trim());
+    } else {
+      // Reset to original if empty
+      setLocalName(sessionName);
+    }
   };
 
   if (isEditing) {
@@ -262,7 +267,10 @@ const EditableSessionName = memo(({
         onChange={(e) => setLocalName(e.target.value)}
         onBlur={handleSave}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') handleSave();
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            handleSave();
+          }
           if (e.key === 'Escape') {
             setLocalName(sessionName);
             setIsEditing(false);
@@ -308,9 +316,8 @@ const EditableComment = memo(({
   }, [comment]);
 
   const handleSave = () => {
-    if (localComment !== comment) {
-      onSave(localComment);
-    }
+    // Always save (even if empty) and close
+    onSave(localComment);
   };
 
   if (!isExpanded && !comment) {
@@ -347,6 +354,10 @@ const EditableComment = memo(({
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               handleSave();
+              setIsExpanded(false);
+            }
+            if (e.key === 'Escape') {
+              setLocalComment(comment);
               setIsExpanded(false);
             }
           }}
