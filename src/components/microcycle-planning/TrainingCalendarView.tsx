@@ -16,7 +16,9 @@ import { WorkoutSessionSheet } from './WorkoutSessionSheet';
 import { useToast } from '@/hooks/use-toast';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { useToolboxData } from '@/hooks/useToolboxData';
-import { ExerciseDistribution as CanonicalExerciseDistribution, SessionSection, SupersetMapping } from '@/types/microcycle-planning';
+import { ExerciseDistribution as CanonicalExerciseDistribution, SessionSection, SupersetMapping, ExerciseSelection } from '@/types/microcycle-planning';
+import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
+import { MethodSelectionDialog } from './MethodSelectionDialog';
 
 // Local interface for internal use - compatible with WeekRow, TrainingDayCell etc.
 interface ExerciseDistribution {
@@ -162,6 +164,16 @@ export function TrainingCalendarView({
   // Track which mesocycle is being viewed in Master Planner mode
   const [viewedMesocycleId, setViewedMesocycleId] = useState<string>(currentMesocycle.id);
   const dayOfWeekNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+  // State for adding exercises from Master Planner
+  const [isLibraryPopupOpen, setIsLibraryPopupOpen] = useState(false);
+  const [isMethodSelectionOpen, setIsMethodSelectionOpen] = useState(false);
+  const [selectedExercisesForMethod, setSelectedExercisesForMethod] = useState<ExerciseSelection[]>([]);
+  const [addExerciseContext, setAddExerciseContext] = useState<{
+    dayDate: string;
+    sessionIndex: number;
+    sectionId: string;
+  } | null>(null);
 
   // Get the currently viewed mesocycle (for Master Planner view)
   const viewedMesocycle = useMemo(() => {
@@ -381,6 +393,80 @@ export function TrainingCalendarView({
     const lastDay = calendarDays[calendarDays.length - 1].date;
     return `${format(firstDay, 'MMM d')} - ${format(lastDay, 'MMM d, yyyy')}`;
   }, [calendarDays]);
+
+  // Get microcycle index for the add exercise context
+  const addExerciseMicrocycleIndex = useMemo(() => {
+    if (!addExerciseContext) return 0;
+    const trainingDay = trainingDays.find(td => td.date === addExerciseContext.dayDate);
+    if (!trainingDay) return 0;
+    const idx = viewedMesocycle.microcycles.findIndex(mc => mc.id === trainingDay.microcycleId);
+    return idx >= 0 ? idx : 0;
+  }, [addExerciseContext, trainingDays, viewedMesocycle.microcycles]);
+
+  // Compute available methods for the add exercise flow (same logic as WorkoutSessionSheet)
+  const availableMethodsForAdd = useMemo(() => {
+    if (!addExerciseContext || !parameterValues) return [];
+    const { sessionIndex } = addExerciseContext;
+    const methodsForSession = parameterValues[viewedMesocycle.id]?.[addExerciseMicrocycleIndex];
+    if (!methodsForSession) return [];
+    
+    return Object.keys(methodsForSession).flatMap(methodKey => {
+      const sessionData = methodsForSession[methodKey];
+      if (!sessionData[sessionIndex] || Object.keys(sessionData[sessionIndex]).length === 0) {
+        return [];
+      }
+      const [methodId, categoryName] = methodKey.includes('::') 
+        ? methodKey.split('::') 
+        : [methodKey, undefined];
+      return [{ id: methodKey, methodId, categoryName: categoryName || undefined }];
+    });
+  }, [addExerciseContext, parameterValues, viewedMesocycle.id, addExerciseMicrocycleIndex]);
+
+  // Handler for exercises selected from library popup
+  const handleExercisesSelectedFromLibrary = (exercises: ExerciseSelection[]) => {
+    if (!addExerciseContext) return;
+    setSelectedExercisesForMethod(exercises);
+    setIsLibraryPopupOpen(false);
+    setIsMethodSelectionOpen(true);
+  };
+
+  // Handler for method selected after exercises
+  const handleMethodSelectedForExercises = (methodId: string, categoryName?: string) => {
+    if (!addExerciseContext || !onDistributionChange) return;
+    const { dayDate, sessionIndex, sectionId } = addExerciseContext;
+    
+    // Get existing exercises in this section to determine order
+    const sectionExercises = exerciseDistribution.filter(
+      e => e.dayDate === dayDate && e.sessionIndex === sessionIndex && e.sectionId === sectionId
+    );
+    
+    // Create new distribution entries
+    const newEntries: ExerciseDistribution[] = selectedExercisesForMethod.map((ex, index) => ({
+      id: `${ex.exerciseId}-${Date.now()}-${index}`,
+      exerciseId: ex.exerciseId,
+      exerciseName: ex.exerciseName,
+      methodId,
+      categoryName: categoryName || '',
+      subCategory: ex.subCategory,
+      dayDate,
+      sessionIndex,
+      order: sectionExercises.length + index,
+      sectionId,
+    }));
+    
+    // Update exerciseDistribution via onDistributionChange
+    onDistributionChange([...exerciseDistribution, ...newEntries]);
+    
+    // Clean up state
+    setIsMethodSelectionOpen(false);
+    setSelectedExercisesForMethod([]);
+    setAddExerciseContext(null);
+    
+    toast({ 
+      title: "Exercise(s) added", 
+      description: `Added ${newEntries.length} exercise(s) to the section.`
+    });
+  };
 
   const dayHeaders = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -697,23 +783,9 @@ export function TrainingCalendarView({
                 toast({ title: "Section added" });
               }}
               onAddExerciseToSection={(dayDate, sessionIndex, sectionId) => {
-                // Open the WorkoutSessionSheet for adding exercises
-                const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
-                const uniqueSessionIndices = new Set(dayExercises.map(ex => ex.sessionIndex));
-                const totalSessions = uniqueSessionIndices.size;
-                const sessionExercises = dayExercises.filter(ex => ex.sessionIndex === sessionIndex);
-                
-                setSelectedSession({
-                  dayDate,
-                  sessionIndex,
-                  exercises: sessionExercises,
-                  totalSessions: Math.max(totalSessions, 1)
-                });
-                
-                toast({ 
-                  title: "Add exercise", 
-                  description: "Use the exercise library panel to add exercises to this section."
-                });
+                // Store context and open the exercise library popup directly
+                setAddExerciseContext({ dayDate, sessionIndex, sectionId });
+                setIsLibraryPopupOpen(true);
               }}
             />
           ) : (
@@ -830,6 +902,38 @@ export function TrainingCalendarView({
           onDistributionChange={onDistributionChange}
         />
       )}
+
+      {/* Exercise Library Popup for Master Planner "Add Exercise" */}
+      <ExerciseLibraryPopup
+        isOpen={isLibraryPopupOpen}
+        onClose={() => {
+          setIsLibraryPopupOpen(false);
+          setAddExerciseContext(null);
+        }}
+        onSelectExercises={handleExercisesSelectedFromLibrary}
+        selectedExerciseIds={[]}
+        onExerciseCreated={(exercise) => {
+          // When a new exercise is created in the popup, directly add it to the selection flow
+          setSelectedExercisesForMethod([exercise]);
+          setIsLibraryPopupOpen(false);
+          setIsMethodSelectionOpen(true);
+        }}
+      />
+
+      {/* Method Selection Dialog for Master Planner "Add Exercise" */}
+      <MethodSelectionDialog
+        isOpen={isMethodSelectionOpen}
+        onClose={() => {
+          setIsMethodSelectionOpen(false);
+          setSelectedExercisesForMethod([]);
+          setAddExerciseContext(null);
+        }}
+        onMethodSelected={handleMethodSelectedForExercises}
+        availableMethods={availableMethodsForAdd}
+        mesocycleId={viewedMesocycle.id}
+        microcycleIndex={addExerciseMicrocycleIndex}
+        sessionIndex={addExerciseContext?.sessionIndex || 0}
+      />
     </div>
   );
 }
