@@ -654,23 +654,23 @@ export function MasterPlannerColumn({
               <span className="font-medium">Auto-calculate:</span>
             </div>
             {autoCalcDetection.has1RMParam && (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-4">
                 <Switch
                   checked={exercise.autoCalculateWeight ?? true}
                   onCheckedChange={(checked) => onExerciseAutoCalcChange?.(exercise.exerciseId, 'autoCalculateWeight', checked)}
                   className="h-3 w-6 data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted"
                 />
-                <span className="ml-0.5">Weight [kg]</span>
+                <span className="ml-1">Weight [kg]</span>
               </div>
             )}
             {autoCalcDetection.hasMaxHRParam && (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-4">
                 <Switch
                   checked={exercise.autoCalculateTargetHR ?? true}
                   onCheckedChange={(checked) => onExerciseAutoCalcChange?.(exercise.exerciseId, 'autoCalculateTargetHR', checked)}
                   className="h-3 w-6 data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted"
                 />
-                <span className="ml-0.5">HR [bpm]</span>
+                <span className="ml-1">HR [bpm]</span>
               </div>
             )}
           </div>
