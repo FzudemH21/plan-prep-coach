@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dumbbell, Plus, Trophy, Calendar, ChevronDown, ChevronRight, MessageSquare, Pencil, StickyNote, Calculator } from 'lucide-react';
+import { Dumbbell, Plus, Trophy, Calendar, ChevronDown, ChevronRight, MessageSquare, Pencil, StickyNote, Calculator, ArrowUp, ArrowDown } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { IntensityLevel } from '@/types/training';
 import { ExtendedMesocycle } from '@/features/planner/types';
@@ -134,6 +134,9 @@ interface MasterPlannerColumnProps {
   onDayIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
   onSessionIntensityChange?: (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => void;
   intensityLevels?: IntensityLevel[];
+  // New props for Phase 5 - section and exercise reordering
+  onSectionReorder?: (dayDate: string, sessionIndex: number, sectionId: string, direction: 'up' | 'down') => void;
+  onExerciseReorder?: (dayDate: string, sessionIndex: number, sectionId: string, exerciseId: string, direction: 'up' | 'down') => void;
 }
 
 // Helper to format parameter names nicely
@@ -426,6 +429,8 @@ export function MasterPlannerColumn({
   onDayIntensityChange,
   onSessionIntensityChange,
   intensityLevels,
+  onSectionReorder,
+  onExerciseReorder,
 }: MasterPlannerColumnProps) {
   const [dayIntensityPopoverOpen, setDayIntensityPopoverOpen] = useState(false);
   const [sessionIntensityPopovers, setSessionIntensityPopovers] = useState<Record<number, boolean>>({});
@@ -904,22 +909,59 @@ export function MasterPlannerColumn({
         {/* Sections with exercises */}
         {sections.length > 0 ? (
           <div className="space-y-2">
-            {sections.map((section) => {
+            {sections.map((section, sectionIdx) => {
               const sectionExercises = exercisesBySection.grouped[section.id] || [];
+              const isFirstSection = sectionIdx === 0;
+              const isLastSection = sectionIdx === sections.length - 1;
               
               return (
                 <Collapsible key={section.id} defaultOpen>
                   <div className="border rounded-md bg-muted/20">
-                    <CollapsibleTrigger 
-                      className="flex items-center gap-1 w-full px-2 py-1 hover:bg-muted/30 text-left"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <ChevronDown className="h-3 w-3 text-muted-foreground collapsible-chevron" />
-                      <span className="text-xs font-medium">{section.name}</span>
-                      <Badge variant="outline" className="ml-auto text-[10px] h-4">
-                        {sectionExercises.length}
-                      </Badge>
-                    </CollapsibleTrigger>
+                    <div className="flex items-center gap-1 w-full px-2 py-1 hover:bg-muted/30">
+                      <CollapsibleTrigger 
+                        className="flex items-center gap-1 flex-1 text-left"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <ChevronDown className="h-3 w-3 text-muted-foreground collapsible-chevron" />
+                        <span className="text-xs font-medium">{section.name}</span>
+                        <Badge variant="outline" className="ml-auto text-[10px] h-4">
+                          {sectionExercises.length}
+                        </Badge>
+                      </CollapsibleTrigger>
+                      {/* Section reorder arrows */}
+                      {sections.length > 1 && (
+                        <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+                          {!isFirstSection && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 w-5 p-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSectionReorder?.(day.dateString, session.sessionIndex, section.id, 'up');
+                              }}
+                              title="Move section up"
+                            >
+                              <ArrowUp className="h-3 w-3" />
+                            </Button>
+                          )}
+                          {!isLastSection && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 w-5 p-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSectionReorder?.(day.dateString, session.sessionIndex, section.id, 'down');
+                              }}
+                              title="Move section down"
+                            >
+                              <ArrowDown className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     <CollapsibleContent>
                       <div className="px-2 pb-2">
                         {/* Section Comment - Editable */}
@@ -933,6 +975,9 @@ export function MasterPlannerColumn({
                         <div className="space-y-2">
                           {sectionExercises.map((exercise, exIdx) => {
                             const supersetLabel = getSupersetLabel(exercise);
+                            const isFirstExercise = exIdx === 0;
+                            const isLastExercise = exIdx === sectionExercises.length - 1;
+                            
                             return (
                               <div
                                 key={`${exercise.exerciseId}-${exIdx}`}
@@ -950,7 +995,40 @@ export function MasterPlannerColumn({
                                           {supersetLabel}
                                         </Badge>
                                       )}
-                                      <p className="font-medium truncate">{exercise.exerciseName}</p>
+                                      <p className="font-medium truncate flex-1">{exercise.exerciseName}</p>
+                                      {/* Exercise reorder arrows */}
+                                      {sectionExercises.length > 1 && (
+                                        <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                          {!isFirstExercise && (
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-4 w-4 p-0"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                onExerciseReorder?.(day.dateString, session.sessionIndex, section.id, exercise.exerciseId, 'up');
+                                              }}
+                                              title="Move exercise up"
+                                            >
+                                              <ArrowUp className="h-2.5 w-2.5" />
+                                            </Button>
+                                          )}
+                                          {!isLastExercise && (
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-4 w-4 p-0"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                onExerciseReorder?.(day.dateString, session.sessionIndex, section.id, exercise.exerciseId, 'down');
+                                              }}
+                                              title="Move exercise down"
+                                            >
+                                              <ArrowDown className="h-2.5 w-2.5" />
+                                            </Button>
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
                                     <p className="text-muted-foreground truncate text-[11px]">
                                       {exercise.methodId}
