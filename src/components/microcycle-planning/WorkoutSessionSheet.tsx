@@ -277,6 +277,17 @@ export function WorkoutSessionSheet({
                   }
                 });
                 
+                // Detect %1RM and %maxHR units for auto-calculation defaults
+                const paramUnits = Object.entries(parameters)
+                  .filter(([key]) => key.endsWith('_unit'))
+                  .map(([, value]) => String(value));
+                const has1RMUnit = paramUnits.some(u => u.includes('%1RM'));
+                const hasMaxHRUnit = paramUnits.some(u => u.includes('%maxHR') || u.includes('%HRmax'));
+                
+                // Use existing values if set, otherwise default to true when relevant unit exists
+                const existingAutoWeight = (ex as any).autoCalculateWeight;
+                const existingAutoHR = (ex as any).autoCalculateTargetHR;
+                
                 return {
                   id: (ex as any).id || `${ex.exerciseId}-${idx}`,
                   exerciseId: ex.exerciseId,
@@ -286,7 +297,9 @@ export function WorkoutSessionSheet({
                   order: (ex as any).order ?? idx,
                   supersetId: (ex as any).supersetId,
                   parameters,
-                  notes: ex.notes
+                  notes: ex.notes,
+                  autoCalculateWeight: existingAutoWeight !== undefined ? existingAutoWeight : (has1RMUnit ? true : undefined),
+                  autoCalculateTargetHR: existingAutoHR !== undefined ? existingAutoHR : (hasMaxHRUnit ? true : undefined)
                 };
               })
               .sort((a, b) => a.order - b.order);
@@ -379,6 +392,17 @@ export function WorkoutSessionSheet({
         }
       });
       
+      // Detect %1RM and %maxHR units for auto-calculation defaults
+      const paramUnits = Object.entries(parameters)
+        .filter(([key]) => key.endsWith('_unit'))
+        .map(([, value]) => String(value));
+      const has1RMUnit = paramUnits.some(u => u.includes('%1RM'));
+      const hasMaxHRUnit = paramUnits.some(u => u.includes('%maxHR') || u.includes('%HRmax'));
+      
+      // Use existing values if set, otherwise default to true when relevant unit exists
+      const existingAutoWeight = (ex as any).autoCalculateWeight;
+      const existingAutoHR = (ex as any).autoCalculateTargetHR;
+      
       sectionsMap.get(sectionName)!.push({
         id: `${ex.exerciseId}-${index}`,
         exerciseId: ex.exerciseId,
@@ -387,7 +411,9 @@ export function WorkoutSessionSheet({
         categoryName: ex.categoryName || '',
         order: index,
         parameters,
-        notes: ex.notes
+        notes: ex.notes,
+        autoCalculateWeight: existingAutoWeight !== undefined ? existingAutoWeight : (has1RMUnit ? true : undefined),
+        autoCalculateTargetHR: existingAutoHR !== undefined ? existingAutoHR : (hasMaxHRUnit ? true : undefined)
       });
     });
     
