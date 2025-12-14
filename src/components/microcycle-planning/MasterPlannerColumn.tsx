@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dumbbell, Plus, Trophy, Calendar, ChevronDown, ChevronRight, MessageSquare, Pencil, StickyNote } from 'lucide-react';
 import { IntensityLevel } from '@/types/training';
 import { ExtendedMesocycle } from '@/features/planner/types';
@@ -116,6 +117,9 @@ interface MasterPlannerColumnProps {
   onSessionCommentChange?: (dayDate: string, sessionIndex: number, comment: string) => void;
   onSectionCommentChange?: (sectionId: string, comment: string) => void;
   totalWeeks?: number;
+  // New props for Phase 2 - editable notes and eachSide
+  onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
+  onExerciseEachSideChange?: (exerciseId: string, eachSide: boolean) => void;
 }
 
 // Helper to format parameter names nicely
@@ -397,6 +401,8 @@ export function MasterPlannerColumn({
   onSessionCommentChange,
   onSectionCommentChange,
   totalWeeks = 6,
+  onExerciseNotesChange,
+  onExerciseEachSideChange,
 }: MasterPlannerColumnProps) {
   const hasTraining = day.sessions.length > 0;
   const currentIntensity: IntensityLevel = dailyIntensityData?.find(di => di.date === day.dateString)?.intensity || 'moderate';
@@ -739,22 +745,39 @@ export function MasterPlannerColumn({
                                         </Badge>
                                       )}
                                       <p className="font-medium truncate">{exercise.exerciseName}</p>
-                                      {exercise.eachSide && (
-                                        <Badge variant="outline" className="text-[9px] h-4 px-1">
-                                          Each side
-                                        </Badge>
-                                      )}
                                     </div>
                                     <p className="text-muted-foreground truncate text-[10px]">
                                       {exercise.methodId}
                                       {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
                                     </p>
-                                    {exercise.notes && (
-                                      <div className="flex items-start gap-1 text-[10px] text-muted-foreground italic bg-muted/30 rounded px-1.5 py-0.5 mt-1">
-                                        <StickyNote className="h-3 w-3 shrink-0 mt-0.5" />
-                                        <span>{exercise.notes}</span>
+                                    {/* Editable Each Side Toggle */}
+                                    <div className="flex items-center gap-1.5 mt-1">
+                                      <Checkbox
+                                        id={`each-side-section-${exercise.exerciseId}`}
+                                        checked={exercise.eachSide || false}
+                                        onCheckedChange={(checked) => onExerciseEachSideChange?.(exercise.exerciseId, !!checked)}
+                                        className="h-3 w-3"
+                                      />
+                                      <label
+                                        htmlFor={`each-side-section-${exercise.exerciseId}`}
+                                        className="text-[9px] text-muted-foreground cursor-pointer"
+                                      >
+                                        Each side
+                                      </label>
+                                    </div>
+                                    {/* Editable Notes */}
+                                    <div className="mt-1">
+                                      <div className="flex items-center gap-1 mb-0.5">
+                                        <StickyNote className="h-3 w-3 text-muted-foreground" />
+                                        <span className="text-[9px] text-muted-foreground">Notes</span>
                                       </div>
-                                    )}
+                                      <Textarea
+                                        value={exercise.notes || ''}
+                                        onChange={(e) => onExerciseNotesChange?.(exercise.exerciseId, e.target.value)}
+                                        placeholder="Add notes..."
+                                        className="text-[10px] min-h-[36px] resize-none p-1"
+                                      />
+                                    </div>
                                     {renderExerciseParams(exercise)}
                                   </div>
                                 </div>
@@ -792,22 +815,39 @@ export function MasterPlannerColumn({
                               </Badge>
                             )}
                             <p className="font-medium truncate">{exercise.exerciseName}</p>
-                            {exercise.eachSide && (
-                              <Badge variant="outline" className="text-[9px] h-4 px-1">
-                                Each side
-                              </Badge>
-                            )}
                           </div>
                           <p className="text-muted-foreground truncate text-[10px]">
                             {exercise.methodId}
                             {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
                           </p>
-                          {exercise.notes && (
-                            <div className="flex items-start gap-1 text-[10px] text-muted-foreground italic bg-muted/30 rounded px-1.5 py-0.5 mt-1">
-                              <StickyNote className="h-3 w-3 shrink-0 mt-0.5" />
-                              <span>{exercise.notes}</span>
+                          {/* Editable Each Side Toggle */}
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <Checkbox
+                              id={`each-side-unsectioned-${exercise.exerciseId}`}
+                              checked={exercise.eachSide || false}
+                              onCheckedChange={(checked) => onExerciseEachSideChange?.(exercise.exerciseId, !!checked)}
+                              className="h-3 w-3"
+                            />
+                            <label
+                              htmlFor={`each-side-unsectioned-${exercise.exerciseId}`}
+                              className="text-[9px] text-muted-foreground cursor-pointer"
+                            >
+                              Each side
+                            </label>
+                          </div>
+                          {/* Editable Notes */}
+                          <div className="mt-1">
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <StickyNote className="h-3 w-3 text-muted-foreground" />
+                              <span className="text-[9px] text-muted-foreground">Notes</span>
                             </div>
-                          )}
+                            <Textarea
+                              value={exercise.notes || ''}
+                              onChange={(e) => onExerciseNotesChange?.(exercise.exerciseId, e.target.value)}
+                              placeholder="Add notes..."
+                              className="text-[10px] min-h-[36px] resize-none p-1"
+                            />
+                          </div>
                           {renderExerciseParams(exercise)}
                         </div>
                       </div>
@@ -840,22 +880,39 @@ export function MasterPlannerColumn({
                           </Badge>
                         )}
                         <p className="font-medium truncate">{exercise.exerciseName}</p>
-                        {exercise.eachSide && (
-                          <Badge variant="outline" className="text-[9px] h-4 px-1">
-                            Each side
-                          </Badge>
-                        )}
                       </div>
                       <p className="text-muted-foreground truncate text-[10px]">
                         {exercise.methodId}
                         {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
                       </p>
-                      {exercise.notes && (
-                        <div className="flex items-start gap-1 text-[10px] text-muted-foreground italic bg-muted/30 rounded px-1.5 py-0.5 mt-1">
-                          <StickyNote className="h-3 w-3 shrink-0 mt-0.5" />
-                          <span>{exercise.notes}</span>
+                      {/* Editable Each Side Toggle */}
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Checkbox
+                          id={`each-side-flat-${exercise.exerciseId}`}
+                          checked={exercise.eachSide || false}
+                          onCheckedChange={(checked) => onExerciseEachSideChange?.(exercise.exerciseId, !!checked)}
+                          className="h-3 w-3"
+                        />
+                        <label
+                          htmlFor={`each-side-flat-${exercise.exerciseId}`}
+                          className="text-[9px] text-muted-foreground cursor-pointer"
+                        >
+                          Each side
+                        </label>
+                      </div>
+                      {/* Editable Notes */}
+                      <div className="mt-1">
+                        <div className="flex items-center gap-1 mb-0.5">
+                          <StickyNote className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-[9px] text-muted-foreground">Notes</span>
                         </div>
-                      )}
+                        <Textarea
+                          value={exercise.notes || ''}
+                          onChange={(e) => onExerciseNotesChange?.(exercise.exerciseId, e.target.value)}
+                          placeholder="Add notes..."
+                          className="text-[10px] min-h-[36px] resize-none p-1"
+                        />
+                      </div>
                       {renderExerciseParams(exercise)}
                     </div>
                   </div>
