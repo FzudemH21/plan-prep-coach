@@ -105,6 +105,9 @@ interface WorkoutSessionSheetProps {
   onSupersetsChange?: (supersets: SupersetMappingProp) => void;
   // Toolbox data for parameter visibility
   toolboxData?: ToolboxDatabase;
+  // Sync exercise distribution changes back to Step 1
+  allExerciseDistribution?: ExerciseDistribution[];
+  onDistributionChange?: (distribution: ExerciseDistribution[]) => void;
 }
 
 export function WorkoutSessionSheet({
@@ -141,7 +144,9 @@ export function WorkoutSessionSheet({
   supersets: supersetsProp,
   onSectionsChange,
   onSupersetsChange,
-  toolboxData
+  toolboxData,
+  allExerciseDistribution,
+  onDistributionChange,
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -991,6 +996,24 @@ export function WorkoutSessionSheet({
       })
     );
 
+    // Sync to Step 1 - create ExerciseDistribution entries
+    if (onDistributionChange && allExerciseDistribution) {
+      const newDistributionEntries = selectedExercisesForMethod.map((ex, index) => ({
+        id: newExercises[index]?.id || `${ex.exerciseId}-${Date.now()}-${index}`,
+        exerciseId: ex.exerciseId,
+        exerciseName: ex.exerciseName,
+        methodId,
+        categoryName: categoryName || '',
+        subCategory: ex.subCategory,
+        dayDate,
+        sessionIndex,
+        order: section.exercises.length + index,
+        sectionId: currentSectionId,
+      }));
+      
+      onDistributionChange([...allExerciseDistribution, ...newDistributionEntries]);
+    }
+
     // Clean up
     setIsMethodSelectionOpen(false);
     setSelectedExercisesForMethod([]);
@@ -1003,17 +1026,20 @@ export function WorkoutSessionSheet({
   };
 
   const handleDuplicateExercise = (exerciseId: string) => {
+    let duplicatedExercise: any = null;
+    
     setWorkoutSections(sections =>
       sections.map(section => {
         const exIndex = section.exercises.findIndex(ex => ex.id === exerciseId);
         if (exIndex === -1) return section;
         
         const original = section.exercises[exIndex];
-        const duplicate: WorkoutExercise = {
+        const duplicate = {
           ...original,
           id: `${original.id}-copy-${Date.now()}`,
           order: exIndex + 1
         };
+        duplicatedExercise = duplicate;
         
         const newExercises = [...section.exercises];
         newExercises.splice(exIndex + 1, 0, duplicate);
@@ -1024,6 +1050,23 @@ export function WorkoutSessionSheet({
         };
       })
     );
+    
+    // Sync to Step 1 - add duplicated exercise
+    if (onDistributionChange && allExerciseDistribution && duplicatedExercise) {
+      const newDistributionEntry = {
+        id: duplicatedExercise.id,
+        exerciseId: duplicatedExercise.exerciseId,
+        exerciseName: duplicatedExercise.exerciseName,
+        methodId: duplicatedExercise.methodId,
+        categoryName: duplicatedExercise.categoryName || '',
+        subCategory: duplicatedExercise.subCategory,
+        dayDate,
+        sessionIndex,
+        order: duplicatedExercise.order,
+        sectionId: duplicatedExercise.sectionId,
+      };
+      onDistributionChange([...allExerciseDistribution, newDistributionEntry]);
+    }
   };
 
   const handleDeleteExercise = (exerciseId: string) => {
@@ -1033,6 +1076,12 @@ export function WorkoutSessionSheet({
         exercises: section.exercises.filter(ex => ex.id !== exerciseId).map((ex, idx) => ({ ...ex, order: idx }))
       }))
     );
+    
+    // Sync to Step 1 - remove exercise from distribution
+    if (onDistributionChange && allExerciseDistribution) {
+      const updatedDistribution = allExerciseDistribution.filter(ex => ex.id !== exerciseId);
+      onDistributionChange(updatedDistribution);
+    }
   };
 
   const handleExerciseNotesChange = (exerciseId: string, notes: string) => {
