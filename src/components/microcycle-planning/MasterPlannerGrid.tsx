@@ -91,6 +91,9 @@ interface MasterPlannerGridProps {
   // New props for Phase 5 - section and exercise reordering
   onSectionReorder?: (dayDate: string, sessionIndex: number, sectionId: string, direction: 'up' | 'down') => void;
   onExerciseReorder?: (dayDate: string, sessionIndex: number, sectionId: string, exerciseId: string, direction: 'up' | 'down') => void;
+  // New props for Phase 6 - add section and exercise buttons
+  onAddSectionToSession?: (dayDate: string, sessionIndex: number) => void;
+  onAddExerciseToSection?: (dayDate: string, sessionIndex: number, sectionId: string) => void;
 }
 
 const MAX_WEEKS_DISPLAY = 6;
@@ -120,6 +123,8 @@ export function MasterPlannerGrid({
   intensityLevels,
   onSectionReorder,
   onExerciseReorder,
+  onAddSectionToSession,
+  onAddExerciseToSection,
 }: MasterPlannerGridProps) {
   const [startWeekOffset, setStartWeekOffset] = useState(0);
 
@@ -228,6 +233,8 @@ export function MasterPlannerGrid({
               intensityLevels={intensityLevels}
               onSectionReorder={onSectionReorder}
               onExerciseReorder={onExerciseReorder}
+              onAddSectionToSession={onAddSectionToSession}
+              onAddExerciseToSection={onAddExerciseToSection}
             />
           ))}
         </div>
