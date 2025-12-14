@@ -550,7 +550,7 @@ export function SessionColumnView({
         )}
 
         <CardContent className="flex-1 overflow-hidden p-3 pt-0">
-          <ScrollArea className="h-full">
+          <ScrollArea className="h-full [&>div>div]:!overflow-x-hidden">
             <div className="space-y-3">
               {/* Unsectioned exercises */}
               {exercisesBySection.unsectioned.length > 0 && (
