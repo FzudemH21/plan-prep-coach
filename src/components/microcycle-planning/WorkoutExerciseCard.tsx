@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
 import { GripVertical, MoreVertical, Link2, Copy, Trash2, Plus, StickyNote } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { WorkoutExercise } from '@/types/workout';
@@ -23,6 +24,8 @@ interface WorkoutExerciseCardProps {
   dragHandleProps?: any;
   notes?: string;
   onNotesChange?: (notes: string) => void;
+  eachSide?: boolean;
+  onEachSideChange?: (value: boolean) => void;
   // Parameter visibility props
   toolboxParams?: ToolboxEntry[];
   visibilityOverrides?: ParameterVisibilityOverrides;
@@ -42,6 +45,8 @@ export function WorkoutExerciseCard({
   dragHandleProps,
   notes,
   onNotesChange,
+  eachSide,
+  onEachSideChange,
   toolboxParams,
   visibilityOverrides = {},
   onVisibilityChange,
@@ -322,6 +327,21 @@ export function WorkoutExerciseCard({
               </div>
             )
           )}
+
+          {/* Each Side Toggle */}
+          <div className="flex items-center gap-2 mt-2">
+            <Checkbox 
+              id={`each-side-${exercise.id}`}
+              checked={eachSide || false}
+              onCheckedChange={(checked) => onEachSideChange?.(!!checked)}
+            />
+            <label 
+              htmlFor={`each-side-${exercise.id}`} 
+              className="text-sm text-muted-foreground cursor-pointer"
+            >
+              Each Side
+            </label>
+          </div>
 
           {/* Always visible notes section */}
           <div className="mt-3 pt-3 border-t">

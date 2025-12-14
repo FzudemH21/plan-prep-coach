@@ -1035,6 +1035,17 @@ export function WorkoutSessionSheet({
     );
   };
 
+  const handleExerciseEachSideChange = (exerciseId: string, eachSide: boolean) => {
+    setWorkoutSections(sections =>
+      sections.map(section => ({
+        ...section,
+        exercises: section.exercises.map(ex => 
+          ex.id === exerciseId ? { ...ex, eachSide } : ex
+        )
+      }))
+    );
+  };
+
   const handleToggleSuperset = (exerciseId1: string, exerciseId2: string, sectionId?: string) => {
     const sectionKey = sectionId || '__unsectioned__';
     
@@ -1705,6 +1716,7 @@ export function WorkoutSessionSheet({
                                 getSupersetLabel={getSupersetLabel}
                                 sectionDragHandleProps={provided.dragHandleProps}
                                 onExerciseNotesChange={handleExerciseNotesChange}
+                                onExerciseEachSideChange={handleExerciseEachSideChange}
                                 onSectionCommentsChange={handleSectionCommentsChange}
                                 toolboxData={toolboxData}
                                 visibilityOverrides={parameterVisibilityOverrides}

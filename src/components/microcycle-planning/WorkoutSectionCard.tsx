@@ -27,6 +27,7 @@ interface WorkoutSectionCardProps {
   getSupersetLabel: (exerciseId: string) => string | undefined;
   sectionDragHandleProps?: any;
   onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
+  onExerciseEachSideChange?: (exerciseId: string, eachSide: boolean) => void;
   onSectionCommentsChange?: (sectionId: string, comments: string) => void;
   toolboxData?: ToolboxDatabase;
   visibilityOverrides?: ParameterVisibilityOverrides;
@@ -51,6 +52,7 @@ export function WorkoutSectionCard({
   getSupersetLabel,
   sectionDragHandleProps,
   onExerciseNotesChange,
+  onExerciseEachSideChange,
   onSectionCommentsChange,
   toolboxData,
   visibilityOverrides,
@@ -271,6 +273,8 @@ export function WorkoutSectionCard({
                                             dragHandleProps={provided.dragHandleProps}
                                             notes={exercise.notes}
                                             onNotesChange={(notes) => onExerciseNotesChange?.(exercise.id, notes)}
+                                            eachSide={exercise.eachSide}
+                                            onEachSideChange={(value) => onExerciseEachSideChange?.(exercise.id, value)}
                                             toolboxParams={getToolboxParamsForExercise(exercise)}
                                             visibilityOverrides={visibilityOverrides}
                                             onVisibilityChange={onVisibilityChange}
@@ -344,6 +348,8 @@ export function WorkoutSectionCard({
                                     dragHandleProps={provided.dragHandleProps}
                                     notes={exercise.notes}
                                     onNotesChange={(notes) => onExerciseNotesChange?.(exercise.id, notes)}
+                                    eachSide={exercise.eachSide}
+                                    onEachSideChange={(value) => onExerciseEachSideChange?.(exercise.id, value)}
                                     toolboxParams={getToolboxParamsForExercise(exercise)}
                                     visibilityOverrides={visibilityOverrides}
                                     onVisibilityChange={onVisibilityChange}
