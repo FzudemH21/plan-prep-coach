@@ -148,6 +148,7 @@ interface EditableParamInputProps {
   currentValue: string | number | undefined;
   options?: string[];
   displayName?: string;
+  setIndex?: number; // 1-based set number for per-set parameter storage
   onParameterChange?: (
     dayDate: string,
     sessionIndex: number,
@@ -167,6 +168,7 @@ const EditableParamInput = memo(({
   currentValue,
   options,
   displayName,
+  setIndex,
   onParameterChange
 }: EditableParamInputProps) => {
   const [localValue, setLocalValue] = useState(currentValue ?? '');
@@ -175,6 +177,9 @@ const EditableParamInput = memo(({
   useEffect(() => {
     setLocalValue(currentValue ?? '');
   }, [currentValue]);
+
+  // Compute the actual parameter key - use per-set key when setIndex is provided
+  const actualParamName = setIndex ? `${paramName}_set${setIndex}` : paramName;
   
   const handleBlur = useCallback(() => {
     const finalValue = paramType === 'number' && localValue !== '' 
@@ -185,10 +190,10 @@ const EditableParamInput = memo(({
       exercise.sessionIndex,
       exercise.methodId,
       exercise.categoryName,
-      paramName,
+      actualParamName,
       finalValue
     );
-  }, [dayDateString, exercise.sessionIndex, exercise.methodId, exercise.categoryName, paramName, paramType, localValue, onParameterChange]);
+  }, [dayDateString, exercise.sessionIndex, exercise.methodId, exercise.categoryName, actualParamName, paramType, localValue, onParameterChange]);
 
   const handleSelectChange = useCallback((value: string) => {
     setLocalValue(value);
@@ -198,10 +203,10 @@ const EditableParamInput = memo(({
       exercise.sessionIndex,
       exercise.methodId,
       exercise.categoryName,
-      paramName,
+      actualParamName,
       value
     );
-  }, [dayDateString, exercise.sessionIndex, exercise.methodId, exercise.categoryName, paramName, onParameterChange]);
+  }, [dayDateString, exercise.sessionIndex, exercise.methodId, exercise.categoryName, actualParamName, onParameterChange]);
 
   // Render Select dropdown for select type with options
   if (paramType === 'select' && options && options.length > 0) {
@@ -620,25 +625,35 @@ export function MasterPlannerColumn({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {Array.from({ length: rowCount }, (_, idx) => (
-                  <TableRow key={idx} className="h-6 border-0">
-                    <TableCell className="py-0 px-0.5 text-center text-muted-foreground">{idx + 1}</TableCell>
-                    {visibleParams.slice(0, 4).map(p => (
-                      <TableCell key={p.name} className="py-0 px-0.5">
-                        <EditableParamInput
-                          dayDateString={day.dateString}
-                          exercise={exercise}
-                          paramName={p.name}
-                          paramType={p.type as 'number' | 'text' | 'select'}
-                          currentValue={storedParams[p.name]}
-                          options={p.options}
-                          displayName={p.displayName}
-                          onParameterChange={onParameterChange}
-                        />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
+                {Array.from({ length: rowCount }, (_, idx) => {
+                  const setNumber = idx + 1;
+                  return (
+                    <TableRow key={idx} className="h-6 border-0">
+                      <TableCell className="py-0 px-0.5 text-center text-muted-foreground">{setNumber}</TableCell>
+                      {visibleParams.slice(0, 4).map(p => {
+                        // Read per-set value first, fallback to base param value
+                        const perSetKey = `${p.name}_set${setNumber}`;
+                        const currentValue = storedParams[perSetKey] ?? storedParams[p.name];
+                        
+                        return (
+                          <TableCell key={p.name} className="py-0 px-0.5">
+                            <EditableParamInput
+                              dayDateString={day.dateString}
+                              exercise={exercise}
+                              paramName={p.name}
+                              paramType={p.type as 'number' | 'text' | 'select'}
+                              currentValue={currentValue}
+                              options={p.options}
+                              displayName={p.displayName}
+                              setIndex={setNumber}
+                              onParameterChange={onParameterChange}
+                            />
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
