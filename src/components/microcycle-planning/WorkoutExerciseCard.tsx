@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { GripVertical, MoreVertical, Link2, Copy, Trash2, Plus, StickyNote } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { GripVertical, MoreVertical, Link2, Copy, Trash2, Plus, StickyNote, Calculator } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { WorkoutExercise } from '@/types/workout';
 import { ParameterInputField } from './ParameterInputField';
 import { getParametersForMethod } from '@/data/methodParameters';
@@ -32,6 +34,11 @@ interface WorkoutExerciseCardProps {
   onVisibilityChange?: (paramName: string, visible: boolean) => void;
   onShowAllParams?: () => void;
   onResetParamsToDefaults?: () => void;
+  // Auto-calculation props
+  autoCalculateWeight?: boolean;
+  onAutoCalculateWeightChange?: (value: boolean) => void;
+  autoCalculateTargetHR?: boolean;
+  onAutoCalculateTargetHRChange?: (value: boolean) => void;
 }
 
 export function WorkoutExerciseCard({
@@ -52,6 +59,10 @@ export function WorkoutExerciseCard({
   onVisibilityChange,
   onShowAllParams,
   onResetParamsToDefaults,
+  autoCalculateWeight,
+  onAutoCalculateWeightChange,
+  autoCalculateTargetHR,
+  onAutoCalculateTargetHRChange,
 }: WorkoutExerciseCardProps) {
   // Get parameters: FIRST derive from exercise.parameters (from method periodization), THEN fallback to static dictionary
   const methodParams = (() => {
@@ -109,6 +120,55 @@ export function WorkoutExerciseCard({
   const hiddenParams = displayableParams.filter(p => 
     !isParameterVisible(p.name, p.showInGridByDefault, visibilityOverrides)
   );
+
+  // Detect %1RM and %maxHR parameters for auto-calculation toggles
+  const autoCalcDetection = useMemo(() => {
+    let has1RMParam = false;
+    let hasMaxHRParam = false;
+    let intensityParamName: string | null = null;
+    let hrParamName: string | null = null;
+
+    // Check stored units in exercise.parameters
+    for (const param of displayableParams) {
+      const unit = exercise.parameters[`${param.name}_unit`] as string | undefined;
+      if (unit === '%1RM') {
+        has1RMParam = true;
+        intensityParamName = param.name;
+      }
+      if (unit === '%maxHR') {
+        hasMaxHRParam = true;
+        hrParamName = param.name;
+      }
+    }
+
+    // Also check toolbox params for default units
+    if (toolboxParams) {
+      for (const tp of toolboxParams) {
+        if (tp.parameterType === 'quantitative' && tp.options.includes('%1RM')) {
+          const matchedParam = displayableParams.find(p => p.name === tp.parameterName);
+          if (matchedParam) {
+            const storedUnit = exercise.parameters[`${matchedParam.name}_unit`];
+            if (!storedUnit || storedUnit === '%1RM') {
+              has1RMParam = true;
+              intensityParamName = matchedParam.name;
+            }
+          }
+        }
+        if (tp.parameterType === 'quantitative' && tp.options.includes('%maxHR')) {
+          const matchedParam = displayableParams.find(p => p.name === tp.parameterName);
+          if (matchedParam) {
+            const storedUnit = exercise.parameters[`${matchedParam.name}_unit`];
+            if (!storedUnit || storedUnit === '%maxHR') {
+              hasMaxHRParam = true;
+              hrParamName = matchedParam.name;
+            }
+          }
+        }
+      }
+    }
+
+    return { has1RMParam, hasMaxHRParam, intensityParamName, hrParamName };
+  }, [displayableParams, exercise.parameters, toolboxParams]);
 
   // Handle deleting a set
   const handleDeleteSet = (setNumber: number) => {
@@ -243,6 +303,68 @@ export function WorkoutExerciseCard({
             </div>
           )}
 
+          {/* Auto-Calculation Toggles */}
+          {(autoCalcDetection.has1RMParam || autoCalcDetection.hasMaxHRParam) && (
+            <div className="flex flex-wrap items-center gap-4 p-2 bg-muted/50 rounded-md">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Calculator className="h-3.5 w-3.5" />
+                <span className="font-medium">Auto-calculate:</span>
+              </div>
+              
+              {autoCalcDetection.has1RMParam && onAutoCalculateWeightChange && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id={`calc-weight-${exercise.id}`}
+                          checked={autoCalculateWeight || false}
+                          onCheckedChange={onAutoCalculateWeightChange}
+                          className="h-4 w-7"
+                        />
+                        <label
+                          htmlFor={`calc-weight-${exercise.id}`}
+                          className="text-xs cursor-pointer"
+                        >
+                          Weight [kg]
+                        </label>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs">Calculate weight from {autoCalcDetection.intensityParamName} × Athlete's 1RM</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              
+              {autoCalcDetection.hasMaxHRParam && onAutoCalculateTargetHRChange && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id={`calc-hr-${exercise.id}`}
+                          checked={autoCalculateTargetHR || false}
+                          onCheckedChange={onAutoCalculateTargetHRChange}
+                          className="h-4 w-7"
+                        />
+                        <label
+                          htmlFor={`calc-hr-${exercise.id}`}
+                          className="text-xs cursor-pointer"
+                        >
+                          Target HR [bpm]
+                        </label>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs">Calculate target HR from %maxHR × Athlete's Max HR</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
+          )}
+
           {/* Parameters Display - only render if there are visible params */}
           {visibleParams.length > 0 && (
             setParam && setCount > 0 ? (
@@ -274,6 +396,24 @@ export function WorkoutExerciseCard({
                           <TableHead key={param.name}>{headerText}</TableHead>
                         );
                       })}
+                      {/* Auto-calculated Weight column */}
+                      {autoCalculateWeight && autoCalcDetection.has1RMParam && (
+                        <TableHead className="text-primary">
+                          <div className="flex items-center gap-1">
+                            <Calculator className="h-3 w-3" />
+                            Weight [kg]
+                          </div>
+                        </TableHead>
+                      )}
+                      {/* Auto-calculated Target HR column */}
+                      {autoCalculateTargetHR && autoCalcDetection.hasMaxHRParam && (
+                        <TableHead className="text-primary">
+                          <div className="flex items-center gap-1">
+                            <Calculator className="h-3 w-3" />
+                            Target HR [bpm]
+                          </div>
+                        </TableHead>
+                      )}
                       <TableHead className="w-12"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -293,6 +433,24 @@ export function WorkoutExerciseCard({
                             />
                           </TableCell>
                         ))}
+                        {/* Auto-calculated Weight cell */}
+                        {autoCalculateWeight && autoCalcDetection.has1RMParam && (
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs text-primary border-primary/50 bg-primary/5">
+                              <Calculator className="h-3 w-3 mr-1" />
+                              Auto
+                            </Badge>
+                          </TableCell>
+                        )}
+                        {/* Auto-calculated Target HR cell */}
+                        {autoCalculateTargetHR && autoCalcDetection.hasMaxHRParam && (
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs text-primary border-primary/50 bg-primary/5">
+                              <Calculator className="h-3 w-3 mr-1" />
+                              Auto
+                            </Badge>
+                          </TableCell>
+                        )}
                         <TableCell>
                           <Button
                             variant="ghost"
@@ -344,6 +502,25 @@ export function WorkoutExerciseCard({
                     />
                   );
                 })}
+                {/* Auto-calculated badges for grid layout */}
+                {autoCalculateWeight && autoCalcDetection.has1RMParam && (
+                  <div className="flex items-center gap-2 p-2 border rounded-md bg-primary/5 border-primary/20">
+                    <Calculator className="h-4 w-4 text-primary" />
+                    <div className="text-xs">
+                      <div className="font-medium text-primary">Weight [kg]</div>
+                      <div className="text-muted-foreground">Auto-calculated</div>
+                    </div>
+                  </div>
+                )}
+                {autoCalculateTargetHR && autoCalcDetection.hasMaxHRParam && (
+                  <div className="flex items-center gap-2 p-2 border rounded-md bg-primary/5 border-primary/20">
+                    <Calculator className="h-4 w-4 text-primary" />
+                    <div className="text-xs">
+                      <div className="font-medium text-primary">Target HR [bpm]</div>
+                      <div className="text-muted-foreground">Auto-calculated</div>
+                    </div>
+                  </div>
+                )}
               </div>
             )
           )}

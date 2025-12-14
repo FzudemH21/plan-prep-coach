@@ -17,6 +17,8 @@ export interface WorkoutExercise {
   parameters: Record<string, string | number>;
   notes?: string;
   eachSide?: boolean; // Mark exercise as unilateral (perform reps on each side)
+  autoCalculateWeight?: boolean; // Auto-calculate weight from %1RM when assigned to athlete
+  autoCalculateTargetHR?: boolean; // Auto-calculate target HR from %maxHR when assigned to athlete
 }
 
 export interface WorkoutSession {
