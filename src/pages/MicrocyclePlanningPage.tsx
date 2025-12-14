@@ -2765,6 +2765,7 @@ export default function MicrocyclePlanningPage() {
               supersets={supersets}
               onSectionsChange={setSessionSections}
               onSupersetsChange={setSupersets}
+              onDistributionChange={(dist) => setExerciseDistribution(dist as ExerciseDistribution[])}
             />
         </>
       )}

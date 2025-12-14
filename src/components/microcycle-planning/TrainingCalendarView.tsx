@@ -16,8 +16,11 @@ import { WorkoutSessionSheet } from './WorkoutSessionSheet';
 import { useToast } from '@/hooks/use-toast';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { useToolboxData } from '@/hooks/useToolboxData';
+import { ExerciseDistribution as CanonicalExerciseDistribution, SessionSection, SupersetMapping } from '@/types/microcycle-planning';
 
+// Local interface for internal use - compatible with WeekRow, TrainingDayCell etc.
 interface ExerciseDistribution {
+  id?: string;
   exerciseId: string;
   exerciseName: string;
   methodId: string;
@@ -25,25 +28,10 @@ interface ExerciseDistribution {
   subCategory?: string;
   dayDate: string;
   sessionIndex: number;
-}
-
-interface SessionSection {
-  id: string;
-  dayDate: string;
-  sessionIndex: number;
-  name: string;
-  order: number;
-  comments?: string;
-}
-
-interface SupersetMapping {
-  [dayDate: string]: {
-    [sessionIndex: number]: {
-      [sectionId: string]: {
-        [supersetId: string]: string[];
-      };
-    };
-  };
+  order?: number;
+  sectionId?: string;
+  supersetId?: string;
+  notes?: string;
 }
 
 interface TrainingCalendarViewProps {
@@ -94,6 +82,8 @@ interface TrainingCalendarViewProps {
   supersets?: SupersetMapping;
   onSectionsChange?: (sections: SessionSection[]) => void;
   onSupersetsChange?: (supersets: SupersetMapping) => void;
+  // Sync exercise distribution changes back to Step 1
+  onDistributionChange?: (distribution: ExerciseDistribution[]) => void;
 }
 
 export interface CalendarDay {
@@ -154,6 +144,7 @@ export function TrainingCalendarView({
   supersets,
   onSectionsChange,
   onSupersetsChange,
+  onDistributionChange,
 }: TrainingCalendarViewProps) {
   const { toast } = useToast();
   const { data: toolboxData } = useToolboxData();
@@ -648,6 +639,8 @@ export function TrainingCalendarView({
           }
           onRenameSession={onRenameSession}
           toolboxData={toolboxData}
+          allExerciseDistribution={exerciseDistribution}
+          onDistributionChange={onDistributionChange}
         />
       )}
     </div>
