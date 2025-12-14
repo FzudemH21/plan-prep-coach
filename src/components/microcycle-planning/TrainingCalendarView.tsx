@@ -608,6 +608,69 @@ export function TrainingCalendarView({
               onDayIntensityChange={onIntensityChange}
               onSessionIntensityChange={onSessionIntensityChange}
               intensityLevels={intensityLevels}
+              // Phase 5: Pass section and exercise reordering props
+              onSectionReorder={(dayDate, sessionIndex, sectionId, direction) => {
+                if (!sessionSections || !onSectionsChange) return;
+                
+                // Get sections for this specific session, sorted by order
+                const sessionSpecificSections = sessionSections
+                  .filter(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex)
+                  .sort((a, b) => a.order - b.order);
+                
+                // Find current section index
+                const currentIndex = sessionSpecificSections.findIndex(s => s.id === sectionId);
+                if (currentIndex < 0) return;
+                
+                // Calculate new index
+                const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+                if (newIndex < 0 || newIndex >= sessionSpecificSections.length) return;
+                
+                // Swap sections
+                const reordered = [...sessionSpecificSections];
+                [reordered[currentIndex], reordered[newIndex]] = [reordered[newIndex], reordered[currentIndex]];
+                
+                // Reassign order values
+                const reorderedWithOrder = reordered.map((s, idx) => ({ ...s, order: idx }));
+                
+                // Update sessionSections state (keep other sessions' sections unchanged)
+                const otherSections = sessionSections.filter(
+                  s => !(s.dayDate === dayDate && s.sessionIndex === sessionIndex)
+                );
+                onSectionsChange([...otherSections, ...reorderedWithOrder]);
+                
+                toast({ title: "Section reordered" });
+              }}
+              onExerciseReorder={(dayDate, sessionIndex, sectionId, exerciseId, direction) => {
+                if (!onDistributionChange) return;
+                
+                // Get exercises for this specific section, sorted by order
+                const sectionExercises = exerciseDistribution
+                  .filter(e => e.dayDate === dayDate && e.sessionIndex === sessionIndex && e.sectionId === sectionId)
+                  .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+                
+                // Find current exercise index
+                const currentIndex = sectionExercises.findIndex(e => e.exerciseId === exerciseId || e.id === exerciseId);
+                if (currentIndex < 0) return;
+                
+                // Calculate new index
+                const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+                if (newIndex < 0 || newIndex >= sectionExercises.length) return;
+                
+                // Swap exercises
+                const reordered = [...sectionExercises];
+                [reordered[currentIndex], reordered[newIndex]] = [reordered[newIndex], reordered[currentIndex]];
+                
+                // Reassign order values
+                const reorderedWithOrder = reordered.map((e, idx) => ({ ...e, order: idx }));
+                
+                // Update exerciseDistribution state (keep other exercises unchanged)
+                const otherExercises = exerciseDistribution.filter(
+                  e => !(e.dayDate === dayDate && e.sessionIndex === sessionIndex && e.sectionId === sectionId)
+                );
+                onDistributionChange([...otherExercises, ...reorderedWithOrder]);
+                
+                toast({ title: "Exercise reordered" });
+              }}
             />
           ) : (
             /* Calendar View */
