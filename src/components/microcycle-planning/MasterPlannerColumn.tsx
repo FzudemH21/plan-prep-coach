@@ -646,28 +646,31 @@ export function MasterPlannerColumn({
           </div>
         )}
 
-        {/* Auto-Calculation Toggles - compact version */}
+        {/* Auto-Calculation Toggles - matching WorkoutExerciseCard format */}
         {(autoCalcDetection.has1RMParam || autoCalcDetection.hasMaxHRParam) && (
-          <div className="flex items-center gap-2 mt-1.5 text-[10px]" onClick={(e) => e.stopPropagation()}>
-            <Calculator className="h-3 w-3 text-muted-foreground" />
+          <div className="flex flex-wrap items-center gap-3 mt-1.5 p-1.5 bg-muted/50 rounded text-[10px]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <Calculator className="h-3 w-3" />
+              <span className="font-medium">Auto-calculate:</span>
+            </div>
             {autoCalcDetection.has1RMParam && (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2">
                 <Switch
                   checked={exercise.autoCalculateWeight ?? true}
                   onCheckedChange={(checked) => onExerciseAutoCalcChange?.(exercise.exerciseId, 'autoCalculateWeight', checked)}
                   className="h-3 w-6 data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted"
                 />
-                <span className="text-muted-foreground">Weight</span>
+                <span>Weight [kg]</span>
               </div>
             )}
             {autoCalcDetection.hasMaxHRParam && (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2">
                 <Switch
                   checked={exercise.autoCalculateTargetHR ?? true}
                   onCheckedChange={(checked) => onExerciseAutoCalcChange?.(exercise.exerciseId, 'autoCalculateTargetHR', checked)}
                   className="h-3 w-6 data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted"
                 />
-                <span className="text-muted-foreground">HR</span>
+                <span>HR [bpm]</span>
               </div>
             )}
           </div>
