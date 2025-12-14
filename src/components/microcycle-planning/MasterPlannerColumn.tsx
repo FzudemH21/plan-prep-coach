@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Dumbbell, Plus, Trophy, Calendar, ChevronDown, ChevronRight, MessageSquare, Pencil } from 'lucide-react';
+import { Dumbbell, Plus, Trophy, Calendar, ChevronDown, ChevronRight, MessageSquare, Pencil, StickyNote } from 'lucide-react';
 import { IntensityLevel } from '@/types/training';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { ToolboxDatabase } from '@/types/toolbox';
@@ -46,6 +46,7 @@ interface ExerciseDistribution {
   sessionIndex: number;
   sectionId?: string;
   notes?: string;
+  eachSide?: boolean;
 }
 
 interface TrainingDay {
@@ -85,6 +86,8 @@ interface MethodParameter {
   options?: string[];
   isSetParameter?: boolean;
   isFrequencyParameter?: boolean;
+  showInGridByDefault?: boolean;
+  unit?: string;
 }
 
 interface MasterPlannerColumnProps {
@@ -492,6 +495,11 @@ export function MasterPlannerColumn({
       const isQualitative = entry.parameterType === 'qualitative';
       const hasOptions = entry.options && entry.options.length > 0;
       
+      // For quantitative params, first option is the unit
+      const unit = entry.parameterType === 'quantitative' && entry.options && entry.options.length > 0
+        ? entry.options[0]
+        : undefined;
+      
       return {
         name: paramName,
         displayName: paramName.replace(/\s*\[.*?\]\s*$/, '').trim(),
@@ -499,6 +507,8 @@ export function MasterPlannerColumn({
         options: (isQualitative && hasOptions) ? entry.options : undefined,
         isSetParameter: entry.isSetParameter || false,
         isFrequencyParameter: entry.isFrequencyParameter || false,
+        showInGridByDefault: entry.showInGridByDefault ?? true,
+        unit,
       };
     });
 
@@ -518,6 +528,27 @@ export function MasterPlannerColumn({
     return { storedParams, methodParams };
   }, [currentMesocycle, parameterValues, trainingDays, day.dateString, toolboxData, weekNumber]);
 
+  // Get superset label for an exercise (A1, A2, B1, B2, etc.)
+  const getSupersetLabel = useCallback((exercise: ExerciseDistribution): string | null => {
+    const daySupersets = supersets?.[day.dateString]?.[exercise.sessionIndex];
+    if (!daySupersets) return null;
+    
+    const sectionKey = exercise.sectionId || '__unsectioned__';
+    const sectionSupersets = daySupersets[sectionKey];
+    if (!sectionSupersets) return null;
+    
+    let labelIndex = 0;
+    for (const [supersetId, exerciseIds] of Object.entries(sectionSupersets)) {
+      if (exerciseIds.includes(exercise.exerciseId)) {
+        const positionInSuperset = exerciseIds.indexOf(exercise.exerciseId);
+        const letter = String.fromCharCode(65 + labelIndex); // A, B, C...
+        return `${letter}${positionInSuperset + 1}`; // A1, A2, B1...
+      }
+      labelIndex++;
+    }
+    return null;
+  }, [supersets, day.dateString]);
+
   // Render parameter values for an exercise
   const renderExerciseParams = (exercise: ExerciseDistribution) => {
     const { storedParams, methodParams } = getExerciseParams(exercise);
@@ -531,54 +562,83 @@ export function MasterPlannerColumn({
       ? Number(storedParams[setParam.name] || 0) 
       : 0;
 
-    const displayParams = methodParams.filter(p => 
+    // Split params into visible (grid) and hidden (badges)
+    const visibleParams = methodParams.filter(p => 
       !p.isSetParameter && 
       !p.isFrequencyParameter &&
       p.name !== 'frequency_per_week' && 
-      p.name !== 'Frequency'
+      p.name !== 'Frequency' &&
+      p.showInGridByDefault !== false
+    );
+
+    const hiddenParams = methodParams.filter(p => 
+      p.showInGridByDefault === false &&
+      !p.isSetParameter && 
+      !p.isFrequencyParameter
     );
 
     const rowCount = Math.max(setCount, 1);
 
-    if (displayParams.length > 0) {
-      return (
-        <div className="mt-1">
-          <Table className="text-[10px]">
-            <TableHeader>
-              <TableRow className="h-5 border-b">
-                {displayParams.slice(0, 4).map(p => (
-                  <TableHead key={p.name} className="py-0.5 px-1 font-medium h-5">
-                    {formatParamName(p.displayName || p.name)}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {Array.from({ length: rowCount }, (_, idx) => (
-                <TableRow key={idx} className="h-6 border-0">
-                  {displayParams.slice(0, 4).map(p => (
-                    <TableCell key={p.name} className="py-0 px-0.5">
-                      <EditableParamInput
-                        dayDateString={day.dateString}
-                        exercise={exercise}
-                        paramName={p.name}
-                        paramType={p.type as 'number' | 'text' | 'select'}
-                        currentValue={storedParams[p.name]}
-                        options={p.options}
-                        displayName={p.displayName}
-                        onParameterChange={onParameterChange}
-                      />
-                    </TableCell>
+    return (
+      <>
+        {/* Hidden parameter badges */}
+        {hiddenParams.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {hiddenParams.map(param => {
+              const value = storedParams[param.name];
+              if (!value) return null;
+              return (
+                <Badge key={param.name} variant="secondary" className="text-[9px] h-4 px-1 font-normal">
+                  {param.displayName || param.name}: {value}
+                </Badge>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Visible parameter grid with set numbers */}
+        {visibleParams.length > 0 && (
+          <div className="mt-1">
+            <Table className="text-[10px]">
+              <TableHeader>
+                <TableRow className="h-5 border-b">
+                  <TableHead className="py-0.5 px-1 font-medium h-5 w-6 text-center">#</TableHead>
+                  {visibleParams.slice(0, 4).map(p => (
+                    <TableHead key={p.name} className="py-0.5 px-1 font-medium h-5">
+                      {formatParamName(p.displayName || p.name)}
+                      {p.unit && (
+                        <span className="text-muted-foreground ml-0.5 font-normal">[{p.unit}]</span>
+                      )}
+                    </TableHead>
                   ))}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      );
-    }
-
-    return null;
+              </TableHeader>
+              <TableBody>
+                {Array.from({ length: rowCount }, (_, idx) => (
+                  <TableRow key={idx} className="h-6 border-0">
+                    <TableCell className="py-0 px-0.5 text-center text-muted-foreground">{idx + 1}</TableCell>
+                    {visibleParams.slice(0, 4).map(p => (
+                      <TableCell key={p.name} className="py-0 px-0.5">
+                        <EditableParamInput
+                          dayDateString={day.dateString}
+                          exercise={exercise}
+                          paramName={p.name}
+                          paramType={p.type as 'number' | 'text' | 'select'}
+                          currentValue={storedParams[p.name]}
+                          options={p.options}
+                          displayName={p.displayName}
+                          onParameterChange={onParameterChange}
+                        />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </>
+    );
   };
 
   // Group exercises by section
@@ -659,24 +719,48 @@ export function MasterPlannerColumn({
                         
                         {/* Section Exercises */}
                         <div className="space-y-2">
-                          {sectionExercises.map((exercise, exIdx) => (
-                            <div
-                              key={`${exercise.exerciseId}-${exIdx}`}
-                              className="text-xs"
-                            >
-                              <div className="flex items-start gap-2">
-                                <span className="text-muted-foreground w-4 shrink-0">{exIdx + 1}.</span>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium truncate">{exercise.exerciseName}</p>
-                                  <p className="text-muted-foreground truncate text-[10px]">
-                                    {exercise.methodId}
-                                    {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
-                                  </p>
-                                  {renderExerciseParams(exercise)}
+                          {sectionExercises.map((exercise, exIdx) => {
+                            const supersetLabel = getSupersetLabel(exercise);
+                            return (
+                              <div
+                                key={`${exercise.exerciseId}-${exIdx}`}
+                                className={cn(
+                                  "text-xs",
+                                  supersetLabel && "border-l-2 border-l-primary pl-2"
+                                )}
+                              >
+                                <div className="flex items-start gap-2">
+                                  <span className="text-muted-foreground w-4 shrink-0">{exIdx + 1}.</span>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1 flex-wrap">
+                                      {supersetLabel && (
+                                        <Badge variant="default" className="text-[9px] h-4 px-1 font-semibold">
+                                          {supersetLabel}
+                                        </Badge>
+                                      )}
+                                      <p className="font-medium truncate">{exercise.exerciseName}</p>
+                                      {exercise.eachSide && (
+                                        <Badge variant="outline" className="text-[9px] h-4 px-1">
+                                          Each side
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <p className="text-muted-foreground truncate text-[10px]">
+                                      {exercise.methodId}
+                                      {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
+                                    </p>
+                                    {exercise.notes && (
+                                      <div className="flex items-start gap-1 text-[10px] text-muted-foreground italic bg-muted/30 rounded px-1.5 py-0.5 mt-1">
+                                        <StickyNote className="h-3 w-3 shrink-0 mt-0.5" />
+                                        <span>{exercise.notes}</span>
+                                      </div>
+                                    )}
+                                    {renderExerciseParams(exercise)}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     </CollapsibleContent>
@@ -688,48 +772,96 @@ export function MasterPlannerColumn({
             {/* Unsectioned exercises (fallback) */}
             {exercisesBySection.unsectioned.length > 0 && (
               <div className="space-y-2 mt-2">
-                {exercisesBySection.unsectioned.map((exercise, exIdx) => (
-                  <div
-                    key={`${exercise.exerciseId}-${exIdx}`}
-                    className="text-xs"
-                  >
-                    <div className="flex items-start gap-2">
-                      <span className="text-muted-foreground w-4 shrink-0">{exIdx + 1}.</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{exercise.exerciseName}</p>
-                        <p className="text-muted-foreground truncate text-[10px]">
-                          {exercise.methodId}
-                          {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
-                        </p>
-                        {renderExerciseParams(exercise)}
+                {exercisesBySection.unsectioned.map((exercise, exIdx) => {
+                  const supersetLabel = getSupersetLabel(exercise);
+                  return (
+                    <div
+                      key={`${exercise.exerciseId}-${exIdx}`}
+                      className={cn(
+                        "text-xs",
+                        supersetLabel && "border-l-2 border-l-primary pl-2"
+                      )}
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className="text-muted-foreground w-4 shrink-0">{exIdx + 1}.</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {supersetLabel && (
+                              <Badge variant="default" className="text-[9px] h-4 px-1 font-semibold">
+                                {supersetLabel}
+                              </Badge>
+                            )}
+                            <p className="font-medium truncate">{exercise.exerciseName}</p>
+                            {exercise.eachSide && (
+                              <Badge variant="outline" className="text-[9px] h-4 px-1">
+                                Each side
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-muted-foreground truncate text-[10px]">
+                            {exercise.methodId}
+                            {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
+                          </p>
+                          {exercise.notes && (
+                            <div className="flex items-start gap-1 text-[10px] text-muted-foreground italic bg-muted/30 rounded px-1.5 py-0.5 mt-1">
+                              <StickyNote className="h-3 w-3 shrink-0 mt-0.5" />
+                              <span>{exercise.notes}</span>
+                            </div>
+                          )}
+                          {renderExerciseParams(exercise)}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         ) : (
           // No sections - show exercises flat
           <div className="space-y-2">
-            {session.exercises.map((exercise, exIdx) => (
-              <div
-                key={`${exercise.exerciseId}-${exIdx}`}
-                className="text-xs"
-              >
-                <div className="flex items-start gap-2">
-                  <span className="text-muted-foreground w-4 shrink-0">{exIdx + 1}.</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{exercise.exerciseName}</p>
-                    <p className="text-muted-foreground truncate text-[10px]">
-                      {exercise.methodId}
-                      {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
-                    </p>
-                    {renderExerciseParams(exercise)}
+            {session.exercises.map((exercise, exIdx) => {
+              const supersetLabel = getSupersetLabel(exercise);
+              return (
+                <div
+                  key={`${exercise.exerciseId}-${exIdx}`}
+                  className={cn(
+                    "text-xs",
+                    supersetLabel && "border-l-2 border-l-primary pl-2"
+                  )}
+                >
+                  <div className="flex items-start gap-2">
+                    <span className="text-muted-foreground w-4 shrink-0">{exIdx + 1}.</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {supersetLabel && (
+                          <Badge variant="default" className="text-[9px] h-4 px-1 font-semibold">
+                            {supersetLabel}
+                          </Badge>
+                        )}
+                        <p className="font-medium truncate">{exercise.exerciseName}</p>
+                        {exercise.eachSide && (
+                          <Badge variant="outline" className="text-[9px] h-4 px-1">
+                            Each side
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-muted-foreground truncate text-[10px]">
+                        {exercise.methodId}
+                        {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
+                      </p>
+                      {exercise.notes && (
+                        <div className="flex items-start gap-1 text-[10px] text-muted-foreground italic bg-muted/30 rounded px-1.5 py-0.5 mt-1">
+                          <StickyNote className="h-3 w-3 shrink-0 mt-0.5" />
+                          <span>{exercise.notes}</span>
+                        </div>
+                      )}
+                      {renderExerciseParams(exercise)}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
