@@ -603,7 +603,18 @@ export function WorkoutSessionSheet({
       const newSections = Array.from(workoutSections);
       const [removed] = newSections.splice(source.index, 1);
       newSections.splice(destination.index, 0, removed);
-      setWorkoutSections(newSections.map((s, idx) => ({ ...s, order: idx })));
+      const reorderedSections = newSections.map((s, idx) => ({ ...s, order: idx }));
+      setWorkoutSections(reorderedSections);
+      
+      // Sync to Step 1 - update section orders
+      if (sessionSectionsProp && onSectionsChange) {
+        const sectionOrderMap = new Map(reorderedSections.map(s => [s.id, s.order]));
+        const updatedSections = sessionSectionsProp.map(s => 
+          sectionOrderMap.has(s.id) ? { ...s, order: sectionOrderMap.get(s.id)! } : s
+        );
+        onSectionsChange(updatedSections);
+      }
+      
       console.info('✓ Sections reordered');
       return;
     }
@@ -1156,6 +1167,24 @@ export function WorkoutSessionSheet({
     
     setWorkoutSections([...workoutSections, newSection]);
     
+    // Sync to Step 1
+    if (onSectionsChange) {
+      const step1Section: SessionSectionProp = {
+        id: newSection.id,
+        dayDate,
+        sessionIndex,
+        name: newSection.name,
+        order: newSection.order,
+      };
+      const otherSections = sessionSectionsProp?.filter(
+        s => !(s.dayDate === dayDate && s.sessionIndex === sessionIndex)
+      ) || [];
+      const currentSections = sessionSectionsProp?.filter(
+        s => s.dayDate === dayDate && s.sessionIndex === sessionIndex
+      ) || [];
+      onSectionsChange([...otherSections, ...currentSections, step1Section]);
+    }
+    
     toast({
       title: "Section added",
       description: "New section created successfully",
@@ -1166,6 +1195,14 @@ export function WorkoutSessionSheet({
     setWorkoutSections(sections =>
       sections.map(s => s.id === sectionId ? { ...s, name: newName } : s)
     );
+    
+    // Sync to Step 1
+    if (sessionSectionsProp && onSectionsChange) {
+      const updatedSections = sessionSectionsProp.map(s =>
+        s.id === sectionId ? { ...s, name: newName } : s
+      );
+      onSectionsChange(updatedSections);
+    }
   };
 
   const handleSectionCommentsChange = (sectionId: string, comments: string) => {
@@ -1202,6 +1239,14 @@ export function WorkoutSessionSheet({
         .filter(s => s.id !== sectionId)
         .map((s, idx) => ({ ...s, order: idx }))
     );
+    
+    // Sync to Step 1 - remove section and update orders
+    if (sessionSectionsProp && onSectionsChange) {
+      const updatedSections = sessionSectionsProp
+        .filter(s => s.id !== sectionId)
+        .map((s, idx) => ({ ...s, order: idx }));
+      onSectionsChange(updatedSections);
+    }
     
     setSectionToDelete(null);
     
@@ -1290,6 +1335,29 @@ export function WorkoutSessionSheet({
     // Reorder all sections
     const reorderedSections = newSections.map((s, idx) => ({ ...s, order: idx }));
     setWorkoutSections(reorderedSections);
+    
+    // Sync to Step 1 - add duplicated section
+    if (onSectionsChange) {
+      const step1Section: SessionSectionProp = {
+        id: duplicatedSection.id,
+        dayDate,
+        sessionIndex,
+        name: duplicatedSection.name,
+        order: duplicatedSection.order,
+      };
+      const otherSections = sessionSectionsProp?.filter(
+        s => !(s.dayDate === dayDate && s.sessionIndex === sessionIndex)
+      ) || [];
+      const currentSections = sessionSectionsProp?.filter(
+        s => s.dayDate === dayDate && s.sessionIndex === sessionIndex
+      ) || [];
+      // Reorder existing sections and add duplicated section
+      const reorderedStep1Sections = currentSections.map(s => {
+        const localSection = reorderedSections.find(ls => ls.id === s.id);
+        return localSection ? { ...s, order: localSection.order } : s;
+      });
+      onSectionsChange([...otherSections, ...reorderedStep1Sections, step1Section]);
+    }
     
     toast({
       title: "Section duplicated",
