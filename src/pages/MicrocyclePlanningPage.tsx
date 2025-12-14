@@ -133,7 +133,13 @@ export default function MicrocyclePlanningPage() {
 
     if (savedMesocycleData) {
       const data = JSON.parse(savedMesocycleData);
-      setMesocycles(data.mesocycles || []);
+      // Convert date strings back to Date objects (localStorage serializes dates as strings)
+      const mesocyclesWithDates = (data.mesocycles || []).map((meso: any) => ({
+        ...meso,
+        startDate: meso.startDate ? new Date(meso.startDate) : new Date(),
+        endDate: meso.endDate ? new Date(meso.endDate) : new Date(),
+      }));
+      setMesocycles(mesocyclesWithDates);
     }
 
     if (savedParameters) {
