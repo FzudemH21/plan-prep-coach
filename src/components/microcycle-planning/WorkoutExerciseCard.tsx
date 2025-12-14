@@ -373,7 +373,7 @@ export function WorkoutExerciseCard({
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-16">Set</TableHead>
+                      <TableHead className="w-16">{setParam?.name || 'Set'}</TableHead>
                       {visibleParams.map(param => {
                         // First try stored unit in exercise parameters
                         let unit = exercise.parameters[`${param.name}_unit`] as string | undefined;

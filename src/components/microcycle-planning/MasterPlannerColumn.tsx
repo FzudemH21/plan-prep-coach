@@ -682,7 +682,7 @@ export function MasterPlannerColumn({
             <Table className="text-[11px] w-auto min-w-full">
               <TableHeader>
                 <TableRow className="h-6 border-b">
-                  <TableHead className="py-0.5 px-1 font-medium h-6 min-w-[40px] w-[40px] text-center whitespace-nowrap">Set</TableHead>
+                  <TableHead className="py-0.5 px-1 font-medium h-6 min-w-[40px] w-[40px] text-center whitespace-nowrap">{setParam?.name || 'Set'}</TableHead>
                   {visibleParams.slice(0, 4).map(p => (
                     <TableHead key={p.name} className="py-0.5 px-1 font-medium h-6 min-w-[80px] whitespace-nowrap">
                       {formatParamName(p.displayName || p.name)}
