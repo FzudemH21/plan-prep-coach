@@ -290,8 +290,13 @@ export function TrainingCalendarView({
   const allMesocycleDays = useMemo((): CalendarDay[] => {
     if (viewMode !== 'master') return [];
 
-    const start = viewedMesocycle.startDate;
-    const end = viewedMesocycle.endDate;
+    // Ensure dates are Date objects (handle string dates from localStorage serialization)
+    const start = viewedMesocycle.startDate instanceof Date 
+      ? viewedMesocycle.startDate 
+      : new Date(viewedMesocycle.startDate);
+    const end = viewedMesocycle.endDate instanceof Date 
+      ? viewedMesocycle.endDate 
+      : new Date(viewedMesocycle.endDate);
     const days = eachDayOfInterval({ start, end });
 
     return days.map(date => {
