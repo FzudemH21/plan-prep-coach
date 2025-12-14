@@ -671,6 +671,50 @@ export function TrainingCalendarView({
                 
                 toast({ title: "Exercise reordered" });
               }}
+              // Phase 6: Add section and exercise buttons
+              onAddSectionToSession={(dayDate, sessionIndex) => {
+                if (!onSectionsChange) return;
+                
+                // Get existing sections for this session
+                const existingSections = (sessionSections || [])
+                  .filter(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex);
+                
+                // Calculate next section number
+                const nextSectionNum = existingSections.length + 1;
+                
+                // Create new section
+                const newSection: SessionSection = {
+                  id: `section-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                  name: `Section ${nextSectionNum}`,
+                  dayDate,
+                  sessionIndex,
+                  order: existingSections.length,
+                };
+                
+                // Add to sessionSections
+                onSectionsChange([...(sessionSections || []), newSection]);
+                
+                toast({ title: "Section added" });
+              }}
+              onAddExerciseToSection={(dayDate, sessionIndex, sectionId) => {
+                // Open the WorkoutSessionSheet for adding exercises
+                const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
+                const uniqueSessionIndices = new Set(dayExercises.map(ex => ex.sessionIndex));
+                const totalSessions = uniqueSessionIndices.size;
+                const sessionExercises = dayExercises.filter(ex => ex.sessionIndex === sessionIndex);
+                
+                setSelectedSession({
+                  dayDate,
+                  sessionIndex,
+                  exercises: sessionExercises,
+                  totalSessions: Math.max(totalSessions, 1)
+                });
+                
+                toast({ 
+                  title: "Add exercise", 
+                  description: "Use the exercise library panel to add exercises to this section."
+                });
+              }}
             />
           ) : (
             /* Calendar View */

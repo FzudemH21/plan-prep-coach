@@ -137,6 +137,9 @@ interface MasterPlannerColumnProps {
   // New props for Phase 5 - section and exercise reordering
   onSectionReorder?: (dayDate: string, sessionIndex: number, sectionId: string, direction: 'up' | 'down') => void;
   onExerciseReorder?: (dayDate: string, sessionIndex: number, sectionId: string, exerciseId: string, direction: 'up' | 'down') => void;
+  // New props for Phase 6 - add section and exercise buttons
+  onAddSectionToSession?: (dayDate: string, sessionIndex: number) => void;
+  onAddExerciseToSection?: (dayDate: string, sessionIndex: number, sectionId: string) => void;
 }
 
 // Helper to format parameter names nicely
@@ -431,6 +434,8 @@ export function MasterPlannerColumn({
   intensityLevels,
   onSectionReorder,
   onExerciseReorder,
+  onAddSectionToSession,
+  onAddExerciseToSection,
 }: MasterPlannerColumnProps) {
   const [dayIntensityPopoverOpen, setDayIntensityPopoverOpen] = useState(false);
   const [sessionIntensityPopovers, setSessionIntensityPopovers] = useState<Record<number, boolean>>({});
@@ -1071,6 +1076,20 @@ export function MasterPlannerColumn({
                               </div>
                             );
                           })}
+                          
+                          {/* Add Exercise Button */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full h-6 mt-2 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onAddExerciseToSection?.(day.dateString, session.sessionIndex, section.id);
+                            }}
+                          >
+                            <Plus className="h-3 w-3 mr-1" />
+                            Add Exercise
+                          </Button>
                         </div>
                       </div>
                     </CollapsibleContent>
@@ -1078,6 +1097,20 @@ export function MasterPlannerColumn({
                 </Collapsible>
               );
             })}
+
+            {/* Add Section Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full h-7 mt-2 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddSectionToSession?.(day.dateString, session.sessionIndex);
+              }}
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              Add Section
+            </Button>
 
             {/* Unsectioned exercises (fallback) */}
             {exercisesBySection.unsectioned.length > 0 && (
@@ -1212,6 +1245,20 @@ export function MasterPlannerColumn({
                 </div>
               );
             })}
+            
+            {/* Add Section Button - for flat view */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full h-7 mt-2 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddSectionToSession?.(day.dateString, session.sessionIndex);
+              }}
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              Add Section
+            </Button>
           </div>
         )}
       </div>
