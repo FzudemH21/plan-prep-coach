@@ -315,7 +315,7 @@ export function WorkoutExerciseCard({
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3">
                         <Switch
                           id={`calc-weight-${exercise.id}`}
                           checked={autoCalculateWeight || false}
@@ -324,7 +324,7 @@ export function WorkoutExerciseCard({
                         />
                         <label
                           htmlFor={`calc-weight-${exercise.id}`}
-                          className="text-xs cursor-pointer"
+                          className="text-xs cursor-pointer ml-0.5"
                         >
                           Weight [kg]
                         </label>
@@ -341,7 +341,7 @@ export function WorkoutExerciseCard({
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3">
                         <Switch
                           id={`calc-hr-${exercise.id}`}
                           checked={autoCalculateTargetHR || false}
@@ -350,7 +350,7 @@ export function WorkoutExerciseCard({
                         />
                         <label
                           htmlFor={`calc-hr-${exercise.id}`}
-                          className="text-xs cursor-pointer"
+                          className="text-xs cursor-pointer ml-0.5"
                         >
                           Target HR [bpm]
                         </label>
