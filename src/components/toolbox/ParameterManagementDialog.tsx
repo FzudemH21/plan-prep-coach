@@ -17,6 +17,34 @@ import { DraggableParameterList } from './DraggableParameterList';
 import { DraggableExerciseCategoryList } from './DraggableExerciseCategoryList';
 import { QuantitativeParameterInput, QualitativeParameterInput } from '@/components/ui/parameter-input';
 
+// Predefined units for quantitative parameters
+const PREDEFINED_UNITS = [
+  { value: '#', label: '# (count)' },
+  { value: 'm', label: 'm (meters)' },
+  { value: 'km', label: 'km (kilometers)' },
+  { value: 'cm', label: 'cm (centimeters)' },
+  { value: 'ft', label: 'ft (feet)' },
+  { value: 'yd', label: 'yd (yards)' },
+  { value: 's', label: 's (seconds)' },
+  { value: 'min', label: 'min (minutes)' },
+  { value: 'h', label: 'h (hours)' },
+  { value: 'kg', label: 'kg (kilograms)' },
+  { value: 'lbs', label: 'lbs (pounds)' },
+  { value: '%', label: '% (percentage)' },
+  { value: '%1RM', label: '%1RM (% of 1 Rep Max)' },
+  { value: 'RPE', label: 'RPE (Rate of Perceived Exertion)' },
+  { value: 'RiR', label: 'RiR (Reps in Reserve)' },
+  { value: 'm/s', label: 'm/s (velocity)' },
+  { value: '%maxV', label: '%maxV (% of peak velocity)' },
+  { value: 'bpm', label: 'bpm (heart rate)' },
+  { value: '%maxHR', label: '%maxHR (% of max heart rate)' },
+  { value: 'kcal', label: 'kcal (calories)' },
+  { value: 'W', label: 'W (watts)' },
+  { value: 'W/kg', label: 'W/kg (watts per kg bodyweight)' },
+  { value: 'rpm', label: 'rpm (revolutions per minute)' },
+  { value: 'steps/min', label: 'steps/min (cadence)' },
+];
+
 interface ParameterManagementDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -428,41 +456,110 @@ export function ParameterManagementDialog({
                 </p>
               </div>
 
-              <div>
-                <Label>Options</Label>
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Add option"
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          addOption(e.currentTarget.value);
-                          e.currentTarget.value = '';
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      onClick={() => {
-                        const input = document.querySelector('input[placeholder="Add option"]') as HTMLInputElement;
-                        if (input?.value) {
-                          addOption(input.value);
-                          input.value = '';
+              {editingParameter.parameterType === 'quantitative' ? (
+                <div>
+                  <Label>Units</Label>
+                  <div className="space-y-3">
+                    <Select
+                      value=""
+                      onValueChange={(value) => {
+                        if (value && !(editingParameter.options || []).includes(value)) {
+                          addOption(value);
                         }
                       }}
                     >
-                      Add
-                    </Button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {(editingParameter.options || []).map((option) => (
-                      <Badge key={option} variant="secondary" className="cursor-pointer" onClick={() => removeOption(option)}>
-                        {option} ×
-                      </Badge>
-                    ))}
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a unit..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PREDEFINED_UNITS.filter(u => !(editingParameter.options || []).includes(u.value)).map((unit) => (
+                          <SelectItem key={unit.value} value={unit.value}>
+                            {unit.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Add custom field</Label>
+                      <div className="flex gap-2 mt-1">
+                        <Input
+                          placeholder="Custom unit..."
+                          id="edit-custom-unit-input"
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                              addOption(e.currentTarget.value);
+                              e.currentTarget.value = '';
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            const input = document.getElementById('edit-custom-unit-input') as HTMLInputElement;
+                            if (input?.value) {
+                              addOption(input.value);
+                              input.value = '';
+                            }
+                          }}
+                        >
+                          Add
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    {(editingParameter.options || []).length > 0 && (
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Selected units</Label>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {(editingParameter.options || []).map((option) => (
+                            <Badge key={option} variant="secondary" className="cursor-pointer" onClick={() => removeOption(option)}>
+                              {option} ×
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <Label>Options</Label>
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Add option"
+                        id="edit-qualitative-option-input"
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            addOption(e.currentTarget.value);
+                            e.currentTarget.value = '';
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          const input = document.getElementById('edit-qualitative-option-input') as HTMLInputElement;
+                          if (input?.value) {
+                            addOption(input.value);
+                            input.value = '';
+                          }
+                        }}
+                      >
+                        Add
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {(editingParameter.options || []).map((option) => (
+                        <Badge key={option} variant="secondary" className="cursor-pointer" onClick={() => removeOption(option)}>
+                          {option} ×
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-between">
                 <Button
@@ -620,41 +717,110 @@ export function ParameterManagementDialog({
               </p>
             </div>
 
-            <div>
-              <Label>Options</Label>
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Add option"
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        addNewParameterOption(e.currentTarget.value);
-                        e.currentTarget.value = '';
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      const input = document.querySelector('input[placeholder="Add option"]') as HTMLInputElement;
-                      if (input?.value) {
-                        addNewParameterOption(input.value);
-                        input.value = '';
+            {newParameter.parameterType === 'quantitative' ? (
+              <div>
+                <Label>Units</Label>
+                <div className="space-y-3">
+                  <Select
+                    value=""
+                    onValueChange={(value) => {
+                      if (value && !newParameter.options.includes(value)) {
+                        addNewParameterOption(value);
                       }
                     }}
                   >
-                    Add
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {newParameter.options.map((option) => (
-                    <Badge key={option} variant="secondary" className="cursor-pointer" onClick={() => removeNewParameterOption(option)}>
-                      {option} ×
-                    </Badge>
-                  ))}
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a unit..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PREDEFINED_UNITS.filter(u => !newParameter.options.includes(u.value)).map((unit) => (
+                        <SelectItem key={unit.value} value={unit.value}>
+                          {unit.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Add custom field</Label>
+                    <div className="flex gap-2 mt-1">
+                      <Input
+                        placeholder="Custom unit..."
+                        id="add-custom-unit-input"
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            addNewParameterOption(e.currentTarget.value);
+                            e.currentTarget.value = '';
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          const input = document.getElementById('add-custom-unit-input') as HTMLInputElement;
+                          if (input?.value) {
+                            addNewParameterOption(input.value);
+                            input.value = '';
+                          }
+                        }}
+                      >
+                        Add
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {newParameter.options.length > 0 && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Selected units</Label>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {newParameter.options.map((option) => (
+                          <Badge key={option} variant="secondary" className="cursor-pointer" onClick={() => removeNewParameterOption(option)}>
+                            {option} ×
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
+            ) : (
+              <div>
+                <Label>Options</Label>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Add option"
+                      id="add-qualitative-option-input"
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          addNewParameterOption(e.currentTarget.value);
+                          e.currentTarget.value = '';
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        const input = document.getElementById('add-qualitative-option-input') as HTMLInputElement;
+                        if (input?.value) {
+                          addNewParameterOption(input.value);
+                          input.value = '';
+                        }
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {newParameter.options.map((option) => (
+                      <Badge key={option} variant="secondary" className="cursor-pointer" onClick={() => removeNewParameterOption(option)}>
+                        {option} ×
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="flex justify-end space-x-2">
               <Button variant="outline" onClick={() => setShowAddDialog(false)}>
