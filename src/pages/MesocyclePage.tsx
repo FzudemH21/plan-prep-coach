@@ -177,7 +177,13 @@ export default function MesocyclePage() {
           const savedMesocycles = JSON.parse(savedMesocycleData);
           if (savedMesocycles.mesocycles && savedMesocycles.mesocycles.length > 0) {
             console.log('DEBUG: Loading saved mesocycles with allocatedSubGoals:', savedMesocycles);
-            setMesocycles(savedMesocycles.mesocycles);
+            // Convert date strings back to Date objects (localStorage serializes dates as strings)
+            const mesocyclesWithDates = savedMesocycles.mesocycles.map((meso: any) => ({
+              ...meso,
+              startDate: meso.startDate ? new Date(meso.startDate) : new Date(),
+              endDate: meso.endDate ? new Date(meso.endDate) : new Date(),
+            }));
+            setMesocycles(mesocyclesWithDates);
             setMesocycleLength(4);
             return; // Skip default mesocycle creation
           }
