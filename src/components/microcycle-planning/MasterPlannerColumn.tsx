@@ -624,12 +624,12 @@ export function MasterPlannerColumn({
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <div className="px-2 pb-2">
-                        {/* Section Comment */}
-                        {section.comments && (
-                          <div className="text-[10px] text-muted-foreground bg-muted/30 rounded px-2 py-1 mb-2">
-                            {section.comments}
-                          </div>
-                        )}
+                        {/* Section Comment - Editable */}
+                        <EditableComment
+                          comment={section.comments || ''}
+                          placeholder="Section notes..."
+                          onSave={(comment) => onSectionCommentChange?.(section.id, comment)}
+                        />
                         
                         {/* Section Exercises */}
                         <div className="space-y-2">

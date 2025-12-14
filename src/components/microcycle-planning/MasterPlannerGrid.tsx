@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { getDay } from 'date-fns';
 import { MasterPlannerColumn } from './MasterPlannerColumn';
 import { IntensityLevel } from '@/types/training';
@@ -6,6 +6,8 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { ToolboxDatabase } from '@/types/toolbox';
 import { SessionSection, SupersetMapping } from '@/types/microcycle-planning';
+import { Button } from '@/components/ui/button';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -96,16 +98,32 @@ export function MasterPlannerGrid({
   onSessionCommentChange,
   onSectionCommentChange,
 }: MasterPlannerGridProps) {
+  const [startWeekOffset, setStartWeekOffset] = useState(0);
+
   // Filter days that match the selected day of week
   // getDay returns 0=Sunday, 1=Monday, etc.
   // Our selectedDayOfWeek: 1=Monday, 7=Sunday
-  const filteredDays = useMemo(() => {
+  const allMatchingDays = useMemo(() => {
     const targetDay = selectedDayOfWeek === 7 ? 0 : selectedDayOfWeek;
     return calendarDays
       .filter(day => getDay(day.date) === targetDay)
-      .sort((a, b) => a.date.getTime() - b.date.getTime())
-      .slice(0, MAX_WEEKS_DISPLAY); // Limit to 6 weeks
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
   }, [calendarDays, selectedDayOfWeek]);
+
+  // Apply pagination for mesocycles with more than 6 weeks
+  const filteredDays = useMemo(() => {
+    return allMatchingDays.slice(startWeekOffset, startWeekOffset + MAX_WEEKS_DISPLAY);
+  }, [allMatchingDays, startWeekOffset]);
+
+  const totalWeeksInMesocycle = allMatchingDays.length;
+  const hasMoreWeeks = totalWeeksInMesocycle > MAX_WEEKS_DISPLAY;
+  const canGoBack = startWeekOffset > 0;
+  const canGoForward = startWeekOffset + MAX_WEEKS_DISPLAY < totalWeeksInMesocycle;
+
+  // Reset offset when mesocycle changes
+  useMemo(() => {
+    setStartWeekOffset(0);
+  }, [currentMesocycle?.id]);
 
   if (filteredDays.length === 0) {
     return (
@@ -116,32 +134,63 @@ export function MasterPlannerGrid({
   }
 
   return (
-    <ScrollArea className="w-full">
-      <div className="flex min-h-[500px]">
-        {filteredDays.map((day, idx) => (
-          <MasterPlannerColumn
-            key={day.dateString}
-            day={day}
-            weekNumber={idx + 1}
-            onSessionClick={onSessionClick}
-            onAddSession={onAddSession}
-            getIntensityColor={getIntensityColor}
-            dailyIntensityData={dailyIntensityData}
-            parameterValues={parameterValues}
-            currentMesocycle={currentMesocycle}
-            trainingDays={trainingDays}
-            toolboxData={toolboxData}
-            onParameterChange={onParameterChange}
-            sessionSections={sessionSections}
-            supersets={supersets}
-            onSessionNameChange={onSessionNameChange}
-            onSessionCommentChange={onSessionCommentChange}
-            onSectionCommentChange={onSectionCommentChange}
-            totalWeeks={filteredDays.length}
-          />
-        ))}
-      </div>
-      <ScrollBar orientation="horizontal" />
-    </ScrollArea>
+    <div className="w-full">
+      {/* Week Navigation for 6+ week mesocycles */}
+      {hasMoreWeeks && (
+        <div className="flex items-center justify-between mb-2 px-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setStartWeekOffset(prev => Math.max(0, prev - 1))}
+            disabled={!canGoBack}
+            className="h-7"
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Previous
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            Weeks {startWeekOffset + 1}-{Math.min(startWeekOffset + MAX_WEEKS_DISPLAY, totalWeeksInMesocycle)} of {totalWeeksInMesocycle}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setStartWeekOffset(prev => Math.min(totalWeeksInMesocycle - MAX_WEEKS_DISPLAY, prev + 1))}
+            disabled={!canGoForward}
+            className="h-7"
+          >
+            Next
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
+        </div>
+      )}
+
+      <ScrollArea className="w-full">
+        <div className="flex min-h-[500px]">
+          {filteredDays.map((day, idx) => (
+            <MasterPlannerColumn
+              key={day.dateString}
+              day={day}
+              weekNumber={startWeekOffset + idx + 1}
+              onSessionClick={onSessionClick}
+              onAddSession={onAddSession}
+              getIntensityColor={getIntensityColor}
+              dailyIntensityData={dailyIntensityData}
+              parameterValues={parameterValues}
+              currentMesocycle={currentMesocycle}
+              trainingDays={trainingDays}
+              toolboxData={toolboxData}
+              onParameterChange={onParameterChange}
+              sessionSections={sessionSections}
+              supersets={supersets}
+              onSessionNameChange={onSessionNameChange}
+              onSessionCommentChange={onSessionCommentChange}
+              onSectionCommentChange={onSectionCommentChange}
+              totalWeeks={filteredDays.length}
+            />
+          ))}
+        </div>
+        <ScrollBar orientation="horizontal" />
+      </ScrollArea>
+    </div>
   );
 }
