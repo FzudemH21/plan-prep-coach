@@ -910,7 +910,10 @@ export function MasterPlannerColumn({
               return (
                 <Collapsible key={section.id} defaultOpen>
                   <div className="border rounded-md bg-muted/20">
-                    <CollapsibleTrigger className="flex items-center gap-1 w-full px-2 py-1 hover:bg-muted/30 text-left">
+                    <CollapsibleTrigger 
+                      className="flex items-center gap-1 w-full px-2 py-1 hover:bg-muted/30 text-left"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <ChevronDown className="h-3 w-3 text-muted-foreground collapsible-chevron" />
                       <span className="text-xs font-medium">{section.name}</span>
                       <Badge variant="outline" className="ml-auto text-[10px] h-4">
