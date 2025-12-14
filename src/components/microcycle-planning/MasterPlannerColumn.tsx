@@ -494,47 +494,40 @@ export function MasterPlannerColumn({
     const methodMain = methodParts[0] || exercise.methodId;
     const methodSubCategory = methodParts[1] || '';
 
-    let toolboxParams = toolboxData?.entries.filter(entry => {
+    // Get toolbox entries for metadata enrichment
+    const toolboxEntries = toolboxData?.entries.filter(entry => {
       if (methodSubCategory) {
         return entry.category === methodMain && entry.subCategory === methodSubCategory;
       }
       return entry.category === methodMain && (!entry.subCategory || entry.subCategory === '');
     }) || [];
 
-    const methodParams: MethodParameter[] = toolboxParams.map(entry => {
-      const paramName = entry.parameterName;
-      const isQualitative = entry.parameterType === 'qualitative';
-      const hasOptions = entry.options && entry.options.length > 0;
+    // Build methodParams from storedParams keys ONLY (no toolbox fallback)
+    // This ensures Master Planner shows exactly the same params as Workout Session Card
+    const storedParamKeys = Object.keys(storedParams)
+      .filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k));
+
+    const methodParams: MethodParameter[] = storedParamKeys.map(paramName => {
+      // Find matching toolbox entry for metadata
+      const toolboxEntry = toolboxEntries.find(entry => entry.parameterName === paramName);
       
-      // For quantitative params, first option is the unit
-      const unit = entry.parameterType === 'quantitative' && entry.options && entry.options.length > 0
-        ? entry.options[0]
+      const isQualitative = toolboxEntry?.parameterType === 'qualitative';
+      const hasOptions = toolboxEntry?.options && toolboxEntry.options.length > 0;
+      const unit = toolboxEntry?.parameterType === 'quantitative' && toolboxEntry.options?.[0]
+        ? toolboxEntry.options[0]
         : undefined;
       
       return {
         name: paramName,
         displayName: paramName.replace(/\s*\[.*?\]\s*$/, '').trim(),
         type: (isQualitative && hasOptions) ? 'select' : 'number',
-        options: (isQualitative && hasOptions) ? entry.options : undefined,
-        isSetParameter: entry.isSetParameter || false,
-        isFrequencyParameter: entry.isFrequencyParameter || false,
-        showInGridByDefault: entry.showInGridByDefault ?? true,
+        options: (isQualitative && hasOptions) ? toolboxEntry.options : undefined,
+        isSetParameter: toolboxEntry?.isSetParameter || /^sets?$/i.test(paramName) || /ground contacts/i.test(paramName),
+        isFrequencyParameter: toolboxEntry?.isFrequencyParameter || false,
+        showInGridByDefault: toolboxEntry?.showInGridByDefault ?? true,
         unit,
       };
     });
-
-    if (methodParams.length === 0 && Object.keys(storedParams).length > 0) {
-      Object.keys(storedParams)
-        .filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k))
-        .forEach((name) => {
-          methodParams.push({
-            name,
-            displayName: name.replace(/\s*\[.*?\]\s*$/, '').trim(),
-            type: typeof storedParams[name] === 'number' ? 'number' : 'text',
-            isSetParameter: /^sets?$/i.test(name.replace(/\s*\[.*?\]\s*$/, '').trim()),
-          });
-        });
-    }
 
     return { storedParams, methodParams };
   }, [currentMesocycle, parameterValues, trainingDays, day.dateString, toolboxData, weekNumber]);
