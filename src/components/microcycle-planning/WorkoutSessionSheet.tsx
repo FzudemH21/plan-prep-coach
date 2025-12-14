@@ -277,12 +277,33 @@ export function WorkoutSessionSheet({
                   }
                 });
                 
-                // Detect %1RM and %maxHR units for auto-calculation defaults
-                const paramUnits = Object.entries(parameters)
-                  .filter(([key]) => key.endsWith('_unit'))
-                  .map(([, value]) => String(value));
-                const has1RMUnit = paramUnits.some(u => u.includes('%1RM'));
-                const hasMaxHRUnit = paramUnits.some(u => u.includes('%maxHR') || u.includes('%HRmax'));
+                // Detect %1RM and %maxHR units from toolbox data for auto-calculation defaults
+                let has1RMUnit = false;
+                let hasMaxHRUnit = false;
+                
+                if (toolboxData) {
+                  // Parse methodId to match toolbox category/subCategory structure
+                  // e.g., "Lower Body Resistance Training - Strength" -> category: "Lower Body Resistance Training", subCategory: "Strength"
+                  const methodParts = ex.methodId.split(' - ');
+                  const methodCategory = methodParts[0];
+                  const methodSubCategory = methodParts.length > 1 ? methodParts.slice(1).join(' - ') : '';
+                  
+                  const methodEntries = toolboxData.entries.filter(entry => {
+                    return entry.category === methodCategory && 
+                           (methodSubCategory === '' || entry.subCategory === methodSubCategory);
+                  });
+                  
+                  for (const entry of methodEntries) {
+                    if (entry.parameterType === 'quantitative' && entry.options) {
+                      if (entry.options.includes('%1RM')) {
+                        has1RMUnit = true;
+                      }
+                      if (entry.options.includes('%maxHR') || entry.options.includes('%HRmax')) {
+                        hasMaxHRUnit = true;
+                      }
+                    }
+                  }
+                }
                 
                 // Use existing values if set, otherwise default to true when relevant unit exists
                 const existingAutoWeight = (ex as any).autoCalculateWeight;
@@ -392,12 +413,33 @@ export function WorkoutSessionSheet({
         }
       });
       
-      // Detect %1RM and %maxHR units for auto-calculation defaults
-      const paramUnits = Object.entries(parameters)
-        .filter(([key]) => key.endsWith('_unit'))
-        .map(([, value]) => String(value));
-      const has1RMUnit = paramUnits.some(u => u.includes('%1RM'));
-      const hasMaxHRUnit = paramUnits.some(u => u.includes('%maxHR') || u.includes('%HRmax'));
+      // Detect %1RM and %maxHR units from toolbox data for auto-calculation defaults
+      let has1RMUnit = false;
+      let hasMaxHRUnit = false;
+      
+      if (toolboxData) {
+        // Parse methodId to match toolbox category/subCategory structure
+        // e.g., "Lower Body Resistance Training - Strength" -> category: "Lower Body Resistance Training", subCategory: "Strength"
+        const methodParts = ex.methodId.split(' - ');
+        const methodCategory = methodParts[0];
+        const methodSubCategory = methodParts.length > 1 ? methodParts.slice(1).join(' - ') : '';
+        
+        const methodEntries = toolboxData.entries.filter(entry => {
+          return entry.category === methodCategory && 
+                 (methodSubCategory === '' || entry.subCategory === methodSubCategory);
+        });
+        
+        for (const entry of methodEntries) {
+          if (entry.parameterType === 'quantitative' && entry.options) {
+            if (entry.options.includes('%1RM')) {
+              has1RMUnit = true;
+            }
+            if (entry.options.includes('%maxHR') || entry.options.includes('%HRmax')) {
+              hasMaxHRUnit = true;
+            }
+          }
+        }
+      }
       
       // Use existing values if set, otherwise default to true when relevant unit exists
       const existingAutoWeight = (ex as any).autoCalculateWeight;
