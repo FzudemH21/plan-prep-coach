@@ -238,87 +238,89 @@ export function WorkoutExerciseCard({
             </div>
           )}
 
-          {/* Parameters Display */}
-          {setParam && setCount > 0 && visibleParams.length > 0 ? (
-            // TABLE LAYOUT (when set parameter exists and there are visible params)
-            <div className="w-full space-y-2">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-16">Set</TableHead>
-                    {visibleParams.map(param => {
-                      // Check if this parameter has a selected unit stored
-                      const selectedUnit = exercise.parameters[`${param.name}_unit`];
-                      
-                      // Format the header with unit if it exists
-                      const headerText = selectedUnit 
-                        ? `${param.name} [${selectedUnit}]`
-                        : param.name;
-                      
-                      return (
-                        <TableHead key={param.name}>{headerText}</TableHead>
-                      );
-                    })}
-                    <TableHead className="w-12"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {Array.from({ length: setCount }, (_, setIndex) => (
-                    <TableRow key={setIndex}>
-                      <TableCell className="font-medium">{setIndex + 1}</TableCell>
-                      {visibleParams.map(param => (
-                        <TableCell key={param.name}>
-                          <ParameterInputField
-                            parameter={param}
-                            value={exercise.parameters[`${param.name}_set${setIndex + 1}`] ?? param.defaultValue ?? ''}
-                            unit={exercise.parameters[`${param.name}_unit`] as string}
-                            onValueChange={(value) => onParameterChange(`${param.name}_set${setIndex + 1}`, value)}
-                            onUnitChange={(unit) => onUnitChange(param.name, unit)}
-                            showLabel={false}
-                          />
-                        </TableCell>
-                      ))}
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() => handleDeleteSet(setIndex + 1)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
+          {/* Parameters Display - only render if there are visible params */}
+          {visibleParams.length > 0 && (
+            setParam && setCount > 0 ? (
+              // TABLE LAYOUT (when set parameter exists and there are visible params)
+              <div className="w-full space-y-2">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-16">Set</TableHead>
+                      {visibleParams.map(param => {
+                        // Check if this parameter has a selected unit stored
+                        const selectedUnit = exercise.parameters[`${param.name}_unit`];
+                        
+                        // Format the header with unit if it exists
+                        const headerText = selectedUnit 
+                          ? `${param.name} [${selectedUnit}]`
+                          : param.name;
+                        
+                        return (
+                          <TableHead key={param.name}>{headerText}</TableHead>
+                        );
+                      })}
+                      <TableHead className="w-12"></TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              
-              {/* Add Set Button */}
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="w-full"
-                onClick={handleAddSet}
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Add Set
-              </Button>
-            </div>
-          ) : (
-            // FALLBACK: Original grid layout if no set parameter is defined
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {methodParams.map((param) => (
-                <ParameterInputField
-                  key={param.name}
-                  parameter={param}
-                  value={exercise.parameters[param.name] ?? param.defaultValue ?? ''}
-                  unit={exercise.parameters[`${param.name}_unit`] as string}
-                  onValueChange={(value) => onParameterChange(param.name, value)}
-                  onUnitChange={(unit) => onUnitChange(param.name, unit)}
-                  showLabel={false}
-                />
-              ))}
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {Array.from({ length: setCount }, (_, setIndex) => (
+                      <TableRow key={setIndex}>
+                        <TableCell className="font-medium">{setIndex + 1}</TableCell>
+                        {visibleParams.map(param => (
+                          <TableCell key={param.name}>
+                            <ParameterInputField
+                              parameter={param}
+                              value={exercise.parameters[`${param.name}_set${setIndex + 1}`] ?? param.defaultValue ?? ''}
+                              unit={exercise.parameters[`${param.name}_unit`] as string}
+                              onValueChange={(value) => onParameterChange(`${param.name}_set${setIndex + 1}`, value)}
+                              onUnitChange={(unit) => onUnitChange(param.name, unit)}
+                              showLabel={false}
+                            />
+                          </TableCell>
+                        ))}
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => handleDeleteSet(setIndex + 1)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                
+                {/* Add Set Button */}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full"
+                  onClick={handleAddSet}
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Set
+                </Button>
+              </div>
+            ) : (
+              // FALLBACK: Grid layout for non-set-based exercises - use visibleParams
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {visibleParams.map((param) => (
+                  <ParameterInputField
+                    key={param.name}
+                    parameter={param}
+                    value={exercise.parameters[param.name] ?? param.defaultValue ?? ''}
+                    unit={exercise.parameters[`${param.name}_unit`] as string}
+                    onValueChange={(value) => onParameterChange(param.name, value)}
+                    onUnitChange={(unit) => onUnitChange(param.name, unit)}
+                    showLabel={false}
+                  />
+                ))}
+              </div>
+            )
           )}
 
           {/* Always visible notes section */}
