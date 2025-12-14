@@ -19,6 +19,7 @@ interface ExerciseDistribution {
   sessionIndex: number;
   sectionId?: string;
   notes?: string;
+  eachSide?: boolean;
 }
 
 interface TrainingDay {

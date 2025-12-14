@@ -32,6 +32,7 @@ interface ExerciseDistribution {
   sectionId?: string;
   supersetId?: string;
   notes?: string;
+  eachSide?: boolean;
 }
 
 interface TrainingCalendarViewProps {

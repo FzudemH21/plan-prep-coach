@@ -602,7 +602,7 @@ export function MasterPlannerColumn({
             <Table className="text-[10px]">
               <TableHeader>
                 <TableRow className="h-5 border-b">
-                  <TableHead className="py-0.5 px-1 font-medium h-5 w-6 text-center">#</TableHead>
+                  <TableHead className="py-0.5 px-1 font-medium h-5 w-6 text-center">Set</TableHead>
                   {visibleParams.slice(0, 4).map(p => (
                     <TableHead key={p.name} className="py-0.5 px-1 font-medium h-5">
                       {formatParamName(p.displayName || p.name)}
