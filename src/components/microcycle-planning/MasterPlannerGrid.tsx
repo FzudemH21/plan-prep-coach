@@ -77,6 +77,9 @@ interface MasterPlannerGridProps {
   onSessionNameChange?: (dayDate: string, sessionIndex: number, newName: string) => void;
   onSessionCommentChange?: (dayDate: string, sessionIndex: number, comment: string) => void;
   onSectionCommentChange?: (sectionId: string, comment: string) => void;
+  // New props for Phase 2 - editable notes and eachSide
+  onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
+  onExerciseEachSideChange?: (exerciseId: string, eachSide: boolean) => void;
 }
 
 const MAX_WEEKS_DISPLAY = 6;
@@ -98,6 +101,8 @@ export function MasterPlannerGrid({
   onSessionNameChange,
   onSessionCommentChange,
   onSectionCommentChange,
+  onExerciseNotesChange,
+  onExerciseEachSideChange,
 }: MasterPlannerGridProps) {
   const [startWeekOffset, setStartWeekOffset] = useState(0);
 
@@ -198,6 +203,8 @@ export function MasterPlannerGrid({
               onSessionCommentChange={onSessionCommentChange}
               onSectionCommentChange={onSectionCommentChange}
               totalWeeks={filteredDays.length}
+              onExerciseNotesChange={onExerciseNotesChange}
+              onExerciseEachSideChange={onExerciseEachSideChange}
             />
           ))}
         </div>

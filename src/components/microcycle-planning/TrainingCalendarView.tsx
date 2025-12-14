@@ -577,6 +577,24 @@ export function TrainingCalendarView({
                   onSectionsChange(updated);
                 }
               }}
+              onExerciseNotesChange={(exerciseId, notes) => {
+                // Sync exercise notes to parent's exerciseDistribution
+                if (onDistributionChange) {
+                  const updated = exerciseDistribution.map(ex =>
+                    (ex.id === exerciseId || ex.exerciseId === exerciseId) ? { ...ex, notes } : ex
+                  );
+                  onDistributionChange(updated);
+                }
+              }}
+              onExerciseEachSideChange={(exerciseId, eachSide) => {
+                // Sync eachSide toggle to parent's exerciseDistribution
+                if (onDistributionChange) {
+                  const updated = exerciseDistribution.map(ex =>
+                    (ex.id === exerciseId || ex.exerciseId === exerciseId) ? { ...ex, eachSide } : ex
+                  );
+                  onDistributionChange(updated);
+                }
+              }}
             />
           ) : (
             /* Calendar View */
