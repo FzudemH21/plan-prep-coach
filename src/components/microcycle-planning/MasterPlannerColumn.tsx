@@ -37,6 +37,11 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -125,6 +130,10 @@ interface MasterPlannerColumnProps {
   onExerciseEachSideChange?: (exerciseId: string, eachSide: boolean) => void;
   // New props for Phase 3 - auto-calculate toggles
   onExerciseAutoCalcChange?: (exerciseId: string, field: 'autoCalculateWeight' | 'autoCalculateTargetHR', value: boolean) => void;
+  // New props for Phase 4 - intensity editing
+  onDayIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
+  onSessionIntensityChange?: (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => void;
+  intensityLevels?: IntensityLevel[];
 }
 
 // Helper to format parameter names nicely
@@ -414,9 +423,36 @@ export function MasterPlannerColumn({
   onExerciseNotesChange,
   onExerciseEachSideChange,
   onExerciseAutoCalcChange,
+  onDayIntensityChange,
+  onSessionIntensityChange,
+  intensityLevels,
 }: MasterPlannerColumnProps) {
+  const [dayIntensityPopoverOpen, setDayIntensityPopoverOpen] = useState(false);
+  const [sessionIntensityPopovers, setSessionIntensityPopovers] = useState<Record<number, boolean>>({});
+  
   const hasTraining = day.sessions.length > 0;
+  const isSingleSession = day.sessions.length === 1;
   const currentIntensity: IntensityLevel = dailyIntensityData?.find(di => di.date === day.dateString)?.intensity || 'moderate';
+
+  // Handle day intensity change with coupled/decoupled logic
+  const handleDayIntensityChange = (newIntensity: IntensityLevel) => {
+    onDayIntensityChange?.(day.dateString, newIntensity);
+    // If single session, also update session intensity (coupled)
+    if (isSingleSession) {
+      onSessionIntensityChange?.(day.dateString, 0, newIntensity);
+    }
+    setDayIntensityPopoverOpen(false);
+  };
+
+  // Handle session intensity change with coupled/decoupled logic
+  const handleSessionIntensityChange = (sessionIndex: number, newIntensity: IntensityLevel) => {
+    onSessionIntensityChange?.(day.dateString, sessionIndex, newIntensity);
+    // If single session, also update day intensity (coupled)
+    if (isSingleSession) {
+      onDayIntensityChange?.(day.dateString, newIntensity);
+    }
+    setSessionIntensityPopovers(prev => ({ ...prev, [sessionIndex]: false }));
+  };
 
   // Get sections for this day and session
   const getSectionsForSession = useCallback((sessionIndex: number): SessionSection[] => {
@@ -798,7 +834,56 @@ export function MasterPlannerColumn({
             sessionName={session.sessionName || `Session ${session.sessionIndex + 1}`}
             onSave={(name) => onSessionNameChange?.(day.dateString, session.sessionIndex, name)}
           />
-          {session.sessionIntensity && getIntensityColor && (
+          {session.sessionIntensity && getIntensityColor && intensityLevels && onSessionIntensityChange ? (
+            <Popover 
+              open={sessionIntensityPopovers[session.sessionIndex] || false}
+              onOpenChange={(open) => setSessionIntensityPopovers(prev => ({ ...prev, [session.sessionIndex]: open }))}
+            >
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={cn(
+                    "ml-auto text-[10px] font-medium px-1.5 py-0.5 h-auto hover:opacity-80",
+                    getIntensityColor(session.sessionIntensity)
+                  )}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {session.sessionIntensity.replace('-', ' ').toUpperCase()}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-48 p-2 z-[200]" align="end" onClick={(e) => e.stopPropagation()}>
+                <div className="space-y-1">
+                  <div className="text-xs font-medium mb-2">
+                    {isSingleSession ? 'Change Intensity' : 'Session Intensity'}
+                  </div>
+                  {intensityLevels.map((level) => (
+                    <Button
+                      key={level}
+                      variant="ghost"
+                      size="sm"
+                      className={cn(
+                        "w-full justify-start text-xs h-7",
+                        level === session.sessionIntensity && "bg-accent"
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSessionIntensityChange(session.sessionIndex, level);
+                      }}
+                    >
+                      <span
+                        className={cn(
+                          "inline-block w-2.5 h-2.5 rounded-full mr-2",
+                          getIntensityColor(level)
+                        )}
+                      />
+                      {level.replace('-', ' ')}
+                    </Button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          ) : session.sessionIntensity && getIntensityColor && (
             <div 
               className={cn(
                 "w-3.5 h-3.5 rounded-sm border ml-auto",
@@ -1067,7 +1152,49 @@ export function MasterPlannerColumn({
             <Badge variant="outline" className="text-xs font-semibold">
               Week {weekNumber}
             </Badge>
-            {getIntensityColor && (
+            {getIntensityColor && intensityLevels && onDayIntensityChange ? (
+              <Popover open={dayIntensityPopoverOpen} onOpenChange={setDayIntensityPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                      "text-[10px] font-medium px-1.5 py-0.5 h-auto hover:opacity-80",
+                      getIntensityColor(currentIntensity)
+                    )}
+                  >
+                    {currentIntensity.replace('-', ' ').toUpperCase()}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-2 z-[200]" align="start">
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium mb-2">
+                      {isSingleSession ? 'Change Intensity' : 'Day Intensity'}
+                    </div>
+                    {intensityLevels.map((level) => (
+                      <Button
+                        key={level}
+                        variant="ghost"
+                        size="sm"
+                        className={cn(
+                          "w-full justify-start text-xs h-7",
+                          level === currentIntensity && "bg-accent"
+                        )}
+                        onClick={() => handleDayIntensityChange(level)}
+                      >
+                        <span
+                          className={cn(
+                            "inline-block w-2.5 h-2.5 rounded-full mr-2",
+                            getIntensityColor(level)
+                          )}
+                        />
+                        {level.replace('-', ' ')}
+                      </Button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            ) : getIntensityColor && (
               <div 
                 className={cn(
                   "w-4 h-4 rounded-sm border",

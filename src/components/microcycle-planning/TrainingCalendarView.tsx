@@ -604,6 +604,10 @@ export function TrainingCalendarView({
                   onDistributionChange(updated);
                 }
               }}
+              // Phase 4: Pass intensity editing props
+              onDayIntensityChange={onIntensityChange}
+              onSessionIntensityChange={onSessionIntensityChange}
+              intensityLevels={intensityLevels}
             />
           ) : (
             /* Calendar View */
