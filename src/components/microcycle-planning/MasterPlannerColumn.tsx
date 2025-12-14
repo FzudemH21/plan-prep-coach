@@ -332,7 +332,7 @@ const EditableComment = memo(({
       <Button
         variant="ghost"
         size="sm"
-        className="h-5 px-1.5 text-[10px] text-muted-foreground"
+        className="h-5 px-1.5 text-xs text-muted-foreground"
         onClick={(e) => {
           e.stopPropagation();
           setIsExpanded(true);
@@ -356,7 +356,7 @@ const EditableComment = memo(({
             setIsExpanded(false);
           }}
           placeholder={placeholder}
-          className="text-[10px] min-h-[40px] resize-none"
+          className="text-xs min-h-[40px] resize-none"
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
@@ -371,7 +371,7 @@ const EditableComment = memo(({
         />
       ) : (
         <div 
-          className="text-[10px] text-muted-foreground bg-muted/30 rounded px-2 py-1 cursor-pointer hover:bg-muted/50"
+          className="text-xs text-muted-foreground bg-muted/30 rounded px-2 py-1 cursor-pointer hover:bg-muted/50"
           onClick={() => setIsExpanded(true)}
         >
           {comment}
@@ -594,7 +594,7 @@ export function MasterPlannerColumn({
               const value = storedParams[param.name];
               if (!value) return null;
               return (
-                <Badge key={param.name} variant="secondary" className="text-[9px] h-4 px-1 font-normal">
+                <Badge key={param.name} variant="secondary" className="text-[11px] h-4 px-1 font-normal">
                   {param.displayName || param.name}: {value}
                 </Badge>
               );
@@ -762,7 +762,7 @@ export function MasterPlannerColumn({
                                       />
                                       <label
                                         htmlFor={`each-side-section-${exercise.exerciseId}`}
-                                        className="text-[11px] text-muted-foreground cursor-pointer"
+                                        className="text-xs text-muted-foreground cursor-pointer"
                                         onClick={(e) => e.stopPropagation()}
                                       >
                                         Each side
@@ -772,7 +772,7 @@ export function MasterPlannerColumn({
                                     <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
                                       <div className="flex items-center gap-1 mb-0.5">
                                         <StickyNote className="h-3 w-3 text-muted-foreground" />
-                                        <span className="text-[11px] text-muted-foreground">Notes</span>
+                                        <span className="text-xs text-muted-foreground">Notes</span>
                                       </div>
                                       <Textarea
                                         value={exercise.notes || ''}
@@ -835,7 +835,7 @@ export function MasterPlannerColumn({
                             />
                             <label
                               htmlFor={`each-side-unsectioned-${exercise.exerciseId}`}
-                              className="text-[11px] text-muted-foreground cursor-pointer"
+                              className="text-xs text-muted-foreground cursor-pointer"
                               onClick={(e) => e.stopPropagation()}
                             >
                               Each side
@@ -845,7 +845,7 @@ export function MasterPlannerColumn({
                           <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center gap-1 mb-0.5">
                               <StickyNote className="h-3 w-3 text-muted-foreground" />
-                              <span className="text-[11px] text-muted-foreground">Notes</span>
+                              <span className="text-xs text-muted-foreground">Notes</span>
                             </div>
                             <Textarea
                               value={exercise.notes || ''}
@@ -903,7 +903,7 @@ export function MasterPlannerColumn({
                         />
                         <label
                           htmlFor={`each-side-flat-${exercise.exerciseId}`}
-                          className="text-[11px] text-muted-foreground cursor-pointer"
+                          className="text-xs text-muted-foreground cursor-pointer"
                           onClick={(e) => e.stopPropagation()}
                         >
                           Each side
@@ -913,7 +913,7 @@ export function MasterPlannerColumn({
                       <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1 mb-0.5">
                           <StickyNote className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-[11px] text-muted-foreground">Notes</span>
+                          <span className="text-xs text-muted-foreground">Notes</span>
                         </div>
                         <Textarea
                           value={exercise.notes || ''}
