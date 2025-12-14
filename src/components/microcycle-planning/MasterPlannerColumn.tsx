@@ -213,7 +213,7 @@ const EditableParamInput = memo(({
     return (
       <Select value={String(localValue)} onValueChange={handleSelectChange}>
         <SelectTrigger 
-          className="h-5 w-20 text-[10px] px-1 border-muted bg-background/50" 
+          className="h-6 w-full text-[10px] px-1 border-muted bg-background/50" 
           onClick={(e) => e.stopPropagation()}
         >
           <SelectValue placeholder="-" />
@@ -237,7 +237,7 @@ const EditableParamInput = memo(({
       onChange={(e) => setLocalValue(e.target.value)}
       onBlur={handleBlur}
       onClick={(e) => e.stopPropagation()}
-      className="h-5 w-14 text-[10px] px-1 py-0 text-center border-muted bg-background/50 focus:bg-background"
+      className="h-6 w-full text-[10px] px-1 py-0 text-center border-muted bg-background/50 focus:bg-background"
     />
   );
 });
@@ -600,15 +600,15 @@ export function MasterPlannerColumn({
           </div>
         )}
 
-        {/* Visible parameter grid with set numbers */}
+        {/* Visible parameter grid with set numbers - horizontal scroll for overflow */}
         {visibleParams.length > 0 && (
-          <div className="mt-1">
-            <Table className="text-[11px]">
+          <div className="mt-1 overflow-x-auto">
+            <Table className="text-[11px] w-auto min-w-full">
               <TableHeader>
-                <TableRow className="h-5 border-b">
-                  <TableHead className="py-0.5 px-1 font-medium h-5 w-6 text-center">Set</TableHead>
+                <TableRow className="h-6 border-b">
+                  <TableHead className="py-0.5 px-1 font-medium h-6 min-w-[40px] w-[40px] text-center whitespace-nowrap">Set</TableHead>
                   {visibleParams.slice(0, 4).map(p => (
-                    <TableHead key={p.name} className="py-0.5 px-1 font-medium h-5">
+                    <TableHead key={p.name} className="py-0.5 px-1 font-medium h-6 min-w-[80px] whitespace-nowrap">
                       {formatParamName(p.displayName || p.name)}
                       {p.unit && (
                         <span className="text-muted-foreground ml-0.5 font-normal">[{p.unit}]</span>
@@ -621,15 +621,15 @@ export function MasterPlannerColumn({
                 {Array.from({ length: rowCount }, (_, idx) => {
                   const setNumber = idx + 1;
                   return (
-                    <TableRow key={idx} className="h-6 border-0">
-                      <TableCell className="py-0 px-0.5 text-center text-muted-foreground">{setNumber}</TableCell>
+                    <TableRow key={idx} className="h-7 border-0">
+                      <TableCell className="py-0 px-1 text-center text-muted-foreground min-w-[40px] w-[40px]">{setNumber}</TableCell>
                       {visibleParams.slice(0, 4).map(p => {
                         // Read per-set value first, fallback to base param value
                         const perSetKey = `${p.name}_set${setNumber}`;
                         const currentValue = storedParams[perSetKey] ?? storedParams[p.name];
                         
                         return (
-                          <TableCell key={p.name} className="py-0 px-0.5">
+                          <TableCell key={p.name} className="py-0 px-1 min-w-[80px]">
                             <EditableParamInput
                               dayDateString={day.dateString}
                               exercise={exercise}
