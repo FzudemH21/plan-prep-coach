@@ -1106,6 +1106,28 @@ export function WorkoutSessionSheet({
     );
   };
 
+  const handleAutoCalculateWeightChange = (exerciseId: string, autoCalculateWeight: boolean) => {
+    setWorkoutSections(sections =>
+      sections.map(section => ({
+        ...section,
+        exercises: section.exercises.map(ex => 
+          ex.id === exerciseId ? { ...ex, autoCalculateWeight } : ex
+        )
+      }))
+    );
+  };
+
+  const handleAutoCalculateTargetHRChange = (exerciseId: string, autoCalculateTargetHR: boolean) => {
+    setWorkoutSections(sections =>
+      sections.map(section => ({
+        ...section,
+        exercises: section.exercises.map(ex => 
+          ex.id === exerciseId ? { ...ex, autoCalculateTargetHR } : ex
+        )
+      }))
+    );
+  };
+
   const handleToggleSuperset = (exerciseId1: string, exerciseId2: string, sectionId?: string) => {
     const sectionKey = sectionId || '__unsectioned__';
     
@@ -1862,6 +1884,8 @@ export function WorkoutSessionSheet({
                                 onResetParamsToDefaults={() => {
                                   setParameterVisibilityOverrides({});
                                 }}
+                                onAutoCalculateWeightChange={handleAutoCalculateWeightChange}
+                                onAutoCalculateTargetHRChange={handleAutoCalculateTargetHRChange}
                               />
                             </div>
                           )}

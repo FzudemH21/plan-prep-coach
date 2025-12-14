@@ -34,6 +34,8 @@ interface WorkoutSectionCardProps {
   onVisibilityChange?: (paramName: string, visible: boolean) => void;
   onShowAllParams?: () => void;
   onResetParamsToDefaults?: () => void;
+  onAutoCalculateWeightChange?: (exerciseId: string, value: boolean) => void;
+  onAutoCalculateTargetHRChange?: (exerciseId: string, value: boolean) => void;
 }
 
 export function WorkoutSectionCard({
@@ -58,7 +60,9 @@ export function WorkoutSectionCard({
   visibilityOverrides,
   onVisibilityChange,
   onShowAllParams,
-  onResetParamsToDefaults
+  onResetParamsToDefaults,
+  onAutoCalculateWeightChange,
+  onAutoCalculateTargetHRChange,
 }: WorkoutSectionCardProps) {
   // Helper to get toolbox params for an exercise based on method
   const getToolboxParamsForExercise = (exercise: WorkoutExercise): ToolboxEntry[] => {
@@ -280,6 +284,10 @@ export function WorkoutSectionCard({
                                             onVisibilityChange={onVisibilityChange}
                                             onShowAllParams={onShowAllParams}
                                             onResetParamsToDefaults={onResetParamsToDefaults}
+                                            autoCalculateWeight={exercise.autoCalculateWeight}
+                                            onAutoCalculateWeightChange={(value) => onAutoCalculateWeightChange?.(exercise.id, value)}
+                                            autoCalculateTargetHR={exercise.autoCalculateTargetHR}
+                                            onAutoCalculateTargetHRChange={(value) => onAutoCalculateTargetHRChange?.(exercise.id, value)}
                                           />
                                         </div>
                                       )}
@@ -355,6 +363,10 @@ export function WorkoutSectionCard({
                                     onVisibilityChange={onVisibilityChange}
                                     onShowAllParams={onShowAllParams}
                                     onResetParamsToDefaults={onResetParamsToDefaults}
+                                    autoCalculateWeight={exercise.autoCalculateWeight}
+                                    onAutoCalculateWeightChange={(value) => onAutoCalculateWeightChange?.(exercise.id, value)}
+                                    autoCalculateTargetHR={exercise.autoCalculateTargetHR}
+                                    onAutoCalculateTargetHRChange={(value) => onAutoCalculateTargetHRChange?.(exercise.id, value)}
                                   />
                                 </div>
                               )}
