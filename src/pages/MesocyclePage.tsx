@@ -183,7 +183,33 @@ export default function MesocyclePage() {
               startDate: meso.startDate ? new Date(meso.startDate) : new Date(),
               endDate: meso.endDate ? new Date(meso.endDate) : new Date(),
             }));
-            setMesocycles(mesocyclesWithDates);
+            
+            // Recalculate all dates based on microcycle durations to fix any stale endDate values
+            let currentMesoStart = startDate;
+            const recalculatedMesocycles = mesocyclesWithDates.map((meso: any) => {
+              const totalDays = (meso.microcycles || []).reduce((sum: number, mc: any) => sum + (mc.duration || 7), 0);
+              const mesoStartDate = currentMesoStart;
+              const mesoEndDate = addDays(currentMesoStart, totalDays - 1);
+              currentMesoStart = addDays(mesoEndDate, 1);
+              return {
+                ...meso,
+                startDate: mesoStartDate,
+                endDate: mesoEndDate,
+                weeks: Math.ceil(totalDays / 7),
+                duration: Math.ceil(totalDays / 7)
+              };
+            });
+            
+            console.log('DEBUG: Recalculated mesocycles:', recalculatedMesocycles.map((m: any) => ({
+              name: m.name,
+              microcycleCount: m.microcycles?.length,
+              totalDays: m.microcycles?.reduce((s: number, mc: any) => s + (mc.duration || 7), 0),
+              startDate: m.startDate,
+              endDate: m.endDate,
+              weeks: m.weeks
+            })));
+            
+            setMesocycles(recalculatedMesocycles);
             setMesocycleLength(4);
             return; // Skip default mesocycle creation
           }
