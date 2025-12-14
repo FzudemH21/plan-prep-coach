@@ -1,13 +1,15 @@
-import React, { useState, useCallback, useEffect, memo } from 'react';
+import React, { useState, useCallback, useEffect, memo, useMemo } from 'react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dumbbell, Plus, Trophy, Calendar } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Dumbbell, Plus, Trophy, Calendar, ChevronDown, ChevronRight, MessageSquare, Pencil } from 'lucide-react';
 import { IntensityLevel } from '@/types/training';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { ToolboxDatabase } from '@/types/toolbox';
+import { SessionSection, SupersetMapping } from '@/types/microcycle-planning';
 import {
   Table,
   TableBody,
@@ -28,6 +30,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -99,6 +106,13 @@ interface MasterPlannerColumnProps {
     parameterName: string,
     value: string | number
   ) => void;
+  // New props for Phase 1
+  sessionSections?: SessionSection[];
+  supersets?: SupersetMapping;
+  onSessionNameChange?: (dayDate: string, sessionIndex: number, newName: string) => void;
+  onSessionCommentChange?: (dayDate: string, sessionIndex: number, comment: string) => void;
+  onSectionCommentChange?: (sectionId: string, comment: string) => void;
+  totalWeeks?: number;
 }
 
 // Helper to format parameter names nicely
@@ -218,6 +232,139 @@ const EditableParamInput = memo(({
 
 EditableParamInput.displayName = 'EditableParamInput';
 
+// Session name edit component
+const EditableSessionName = memo(({ 
+  sessionName, 
+  onSave,
+}: { 
+  sessionName: string; 
+  onSave: (name: string) => void;
+}) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [localName, setLocalName] = useState(sessionName);
+
+  useEffect(() => {
+    setLocalName(sessionName);
+  }, [sessionName]);
+
+  const handleSave = () => {
+    if (localName.trim() && localName !== sessionName) {
+      onSave(localName.trim());
+    }
+    setIsEditing(false);
+  };
+
+  if (isEditing) {
+    return (
+      <Input
+        autoFocus
+        value={localName}
+        onChange={(e) => setLocalName(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') handleSave();
+          if (e.key === 'Escape') {
+            setLocalName(sessionName);
+            setIsEditing(false);
+          }
+        }}
+        className="h-6 text-sm font-medium px-1 w-full"
+        onClick={(e) => e.stopPropagation()}
+      />
+    );
+  }
+
+  return (
+    <div 
+      className="flex items-center gap-1 cursor-pointer group"
+      onClick={(e) => {
+        e.stopPropagation();
+        setIsEditing(true);
+      }}
+    >
+      <span className="text-sm font-medium text-primary">{sessionName}</span>
+      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+    </div>
+  );
+});
+
+EditableSessionName.displayName = 'EditableSessionName';
+
+// Session/Section comment component
+const EditableComment = memo(({
+  comment,
+  placeholder,
+  onSave,
+}: {
+  comment: string;
+  placeholder: string;
+  onSave: (comment: string) => void;
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [localComment, setLocalComment] = useState(comment);
+
+  useEffect(() => {
+    setLocalComment(comment);
+  }, [comment]);
+
+  const handleSave = () => {
+    if (localComment !== comment) {
+      onSave(localComment);
+    }
+  };
+
+  if (!isExpanded && !comment) {
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-5 px-1.5 text-[10px] text-muted-foreground"
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsExpanded(true);
+        }}
+      >
+        <MessageSquare className="h-3 w-3 mr-1" />
+        Add note
+      </Button>
+    );
+  }
+
+  return (
+    <div className="mt-1" onClick={(e) => e.stopPropagation()}>
+      {isExpanded ? (
+        <Textarea
+          autoFocus
+          value={localComment}
+          onChange={(e) => setLocalComment(e.target.value)}
+          onBlur={() => {
+            handleSave();
+            setIsExpanded(false);
+          }}
+          placeholder={placeholder}
+          className="text-[10px] min-h-[40px] resize-none"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSave();
+              setIsExpanded(false);
+            }
+          }}
+        />
+      ) : (
+        <div 
+          className="text-[10px] text-muted-foreground bg-muted/30 rounded px-2 py-1 cursor-pointer hover:bg-muted/50"
+          onClick={() => setIsExpanded(true)}
+        >
+          {comment}
+        </div>
+      )}
+    </div>
+  );
+});
+
+EditableComment.displayName = 'EditableComment';
+
 export function MasterPlannerColumn({
   day,
   weekNumber,
@@ -230,13 +377,40 @@ export function MasterPlannerColumn({
   trainingDays,
   toolboxData,
   onParameterChange,
+  sessionSections,
+  supersets,
+  onSessionNameChange,
+  onSessionCommentChange,
+  onSectionCommentChange,
+  totalWeeks = 6,
 }: MasterPlannerColumnProps) {
   const hasTraining = day.sessions.length > 0;
   const currentIntensity: IntensityLevel = dailyIntensityData?.find(di => di.date === day.dateString)?.intensity || 'moderate';
 
+  // Get sections for this day and session
+  const getSectionsForSession = useCallback((sessionIndex: number): SessionSection[] => {
+    if (!sessionSections) return [];
+    return sessionSections
+      .filter(s => s.dayDate === day.dateString && s.sessionIndex === sessionIndex)
+      .sort((a, b) => a.order - b.order);
+  }, [sessionSections, day.dateString]);
+
+  // Get session comment from localStorage
+  const getSessionComment = useCallback((sessionIndex: number): string => {
+    if (!currentMesocycle) return '';
+    const key = `workoutSessions_${currentMesocycle.id}_${day.dateString}_${sessionIndex}`;
+    try {
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return parsed.comments || '';
+      }
+    } catch {}
+    return '';
+  }, [currentMesocycle, day.dateString]);
+
   // Helper to normalize method keys for consistent lookup
   const normalizeMethodKey = (key: string): string => {
-    // Normalize "Tier" spelling: "Reactive Tier" -> "Reactive-Tier"
     return key.replace(/ Tier/g, '-Tier').replace(/ tier/g, '-tier');
   };
 
@@ -246,39 +420,25 @@ export function MasterPlannerColumn({
       return { storedParams: {}, methodParams: [] as MethodParameter[] };
     }
 
-    // Find microcycle index for this day
     const trainingDay = trainingDays?.find(td => td.date === day.dateString);
     const microcycleId = trainingDay?.microcycleId;
     
-    // Calculate microcycle index - with fallback based on week number
     let microcycleIndex = currentMesocycle.microcycles?.findIndex(m => m.id === microcycleId) ?? -1;
     if (microcycleIndex < 0) {
-      // Fallback: use week number - 1 (Week 1 = index 0)
       microcycleIndex = Math.max(0, weekNumber - 1);
     }
 
-    // Build method key (with or without category)
-    // Treat empty string or 'Uncategorized' as no real category
     const hasValidCategory = exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '';
     const fullMethodKey = hasValidCategory
       ? `${exercise.methodId}::${exercise.categoryName}` 
       : exercise.methodId;
 
-    // Normalize keys for lookup (handles spelling variations like "Reactive Tier" vs "Reactive-Tier")
     const normalizedMethodId = normalizeMethodKey(exercise.methodId);
     const normalizedFullMethodKey = normalizeMethodKey(fullMethodKey);
 
-    // Get stored parameter values
     const mesocycleParams = parameterValues[currentMesocycle.id];
     const microcycleParams = mesocycleParams?.[microcycleIndex];
     
-    
-    // Priority order for lookup (try both original and normalized keys):
-    // 1. Category-specific key with session 0 (most specific - category was split & specified)
-    // 2. Category-specific key with exercise's session index
-    // 3. Method key (without category) with session 0 (fallback - applies to all categories)
-    // 4. Method key with exercise's session index
-    // Also try normalized versions for each
     const storedParams = 
       microcycleParams?.[fullMethodKey]?.[0] ||
       microcycleParams?.[normalizedFullMethodKey]?.[0] ||
@@ -289,29 +449,18 @@ export function MasterPlannerColumn({
       microcycleParams?.[exercise.methodId]?.[exercise.sessionIndex] ||
       microcycleParams?.[normalizedMethodId]?.[exercise.sessionIndex] ||
       {};
-    
-    
-    
 
-    // Parse methodId to extract main method and sub-method
-    // Format: "Lower Body Resistance Training - Strength" → ["Lower Body Resistance Training", "Strength"]
     const methodParts = exercise.methodId.split(' - ');
     const methodMain = methodParts[0] || exercise.methodId;
     const methodSubCategory = methodParts[1] || '';
 
-    // Look up parameters from toolbox data for this method
-    // Match: toolbox.category = methodMain AND toolbox.subCategory = methodSubCategory
     let toolboxParams = toolboxData?.entries.filter(entry => {
       if (methodSubCategory) {
         return entry.category === methodMain && entry.subCategory === methodSubCategory;
       }
-      // For methods without sub-category, match just category
       return entry.category === methodMain && (!entry.subCategory || entry.subCategory === '');
     }) || [];
 
-
-
-    // Convert toolbox entries to MethodParameter format
     const methodParams: MethodParameter[] = toolboxParams.map(entry => {
       const paramName = entry.parameterName;
       const isQualitative = entry.parameterType === 'qualitative';
@@ -319,7 +468,7 @@ export function MasterPlannerColumn({
       
       return {
         name: paramName,
-        displayName: paramName.replace(/\s*\[.*?\]\s*$/, '').trim(), // Clean display name
+        displayName: paramName.replace(/\s*\[.*?\]\s*$/, '').trim(),
         type: (isQualitative && hasOptions) ? 'select' : 'number',
         options: (isQualitative && hasOptions) ? entry.options : undefined,
         isSetParameter: entry.isSetParameter || false,
@@ -327,7 +476,6 @@ export function MasterPlannerColumn({
       };
     });
 
-    // Fallback: if no toolbox data found, derive from storedParams keys
     if (methodParams.length === 0 && Object.keys(storedParams).length > 0) {
       Object.keys(storedParams)
         .filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k))
@@ -348,31 +496,27 @@ export function MasterPlannerColumn({
   const renderExerciseParams = (exercise: ExerciseDistribution) => {
     const { storedParams, methodParams } = getExerciseParams(exercise);
     
-    // If no method params from toolbox and no stored params, show nothing
     if (methodParams.length === 0 && Object.keys(storedParams).length === 0) {
       return null;
     }
 
-    // Find the set parameter
     const setParam = methodParams.find(p => p.isSetParameter);
     const setCount = setParam 
       ? Number(storedParams[setParam.name] || 0) 
       : 0;
 
-    // Filter parameters for display (exclude frequency and set param - set param determines row count)
     const displayParams = methodParams.filter(p => 
       !p.isSetParameter && 
+      !p.isFrequencyParameter &&
       p.name !== 'frequency_per_week' && 
       p.name !== 'Frequency'
     );
 
-    // The set count determines how many rows to display
-    const rowCount = Math.max(setCount, 1); // At least 1 row
+    const rowCount = Math.max(setCount, 1);
 
-    // Render table if we have display params
     if (displayParams.length > 0) {
       return (
-        <div className="mt-2">
+        <div className="mt-1">
           <Table className="text-[10px]">
             <TableHeader>
               <TableRow className="h-5 border-b">
@@ -408,21 +552,172 @@ export function MasterPlannerColumn({
       );
     }
 
-    // If no parameters defined in toolbox, show a message
-    if (methodParams.length === 0) {
-      return (
-        <div className="mt-1.5 text-[10px] text-muted-foreground italic">
-          No parameters defined for this method
-        </div>
-      );
-    }
-
-    // No parameters with values to display
     return null;
   };
 
+  // Group exercises by section
+  const renderSessionContent = (session: typeof day.sessions[0]) => {
+    const sections = getSectionsForSession(session.sessionIndex);
+    const sessionComment = getSessionComment(session.sessionIndex);
+
+    // Get exercises grouped by section
+    const exercisesBySection = useMemo(() => {
+      const grouped: Record<string, ExerciseDistribution[]> = {};
+      const unsectioned: ExerciseDistribution[] = [];
+
+      session.exercises.forEach(ex => {
+        if (ex.sectionId) {
+          if (!grouped[ex.sectionId]) {
+            grouped[ex.sectionId] = [];
+          }
+          grouped[ex.sectionId].push(ex);
+        } else {
+          unsectioned.push(ex);
+        }
+      });
+
+      return { grouped, unsectioned };
+    }, [session.exercises]);
+
+    return (
+      <div className="space-y-2">
+        {/* Session Header */}
+        <div className="flex items-center gap-2 mb-2">
+          <Dumbbell className="h-4 w-4 text-primary" />
+          <EditableSessionName
+            sessionName={session.sessionName || `Session ${session.sessionIndex + 1}`}
+            onSave={(name) => onSessionNameChange?.(day.dateString, session.sessionIndex, name)}
+          />
+          {session.sessionIntensity && getIntensityColor && (
+            <div 
+              className={cn(
+                "w-3.5 h-3.5 rounded-sm border ml-auto",
+                getIntensityColor(session.sessionIntensity)
+              )}
+              title={`Session intensity: ${session.sessionIntensity.replace('-', ' ')}`}
+            />
+          )}
+        </div>
+
+        {/* Session Comment */}
+        <EditableComment
+          comment={sessionComment}
+          placeholder="Session notes..."
+          onSave={(comment) => onSessionCommentChange?.(day.dateString, session.sessionIndex, comment)}
+        />
+
+        {/* Sections with exercises */}
+        {sections.length > 0 ? (
+          <div className="space-y-2">
+            {sections.map((section) => {
+              const sectionExercises = exercisesBySection.grouped[section.id] || [];
+              
+              return (
+                <Collapsible key={section.id} defaultOpen>
+                  <div className="border rounded-md bg-muted/20">
+                    <CollapsibleTrigger className="flex items-center gap-1 w-full px-2 py-1 hover:bg-muted/30 text-left">
+                      <ChevronDown className="h-3 w-3 text-muted-foreground collapsible-chevron" />
+                      <span className="text-xs font-medium">{section.name}</span>
+                      <Badge variant="outline" className="ml-auto text-[10px] h-4">
+                        {sectionExercises.length}
+                      </Badge>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="px-2 pb-2">
+                        {/* Section Comment */}
+                        {section.comments && (
+                          <div className="text-[10px] text-muted-foreground bg-muted/30 rounded px-2 py-1 mb-2">
+                            {section.comments}
+                          </div>
+                        )}
+                        
+                        {/* Section Exercises */}
+                        <div className="space-y-2">
+                          {sectionExercises.map((exercise, exIdx) => (
+                            <div
+                              key={`${exercise.exerciseId}-${exIdx}`}
+                              className="text-xs"
+                            >
+                              <div className="flex items-start gap-2">
+                                <span className="text-muted-foreground w-4 shrink-0">{exIdx + 1}.</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium truncate">{exercise.exerciseName}</p>
+                                  <p className="text-muted-foreground truncate text-[10px]">
+                                    {exercise.methodId}
+                                    {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
+                                  </p>
+                                  {renderExerciseParams(exercise)}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </CollapsibleContent>
+                  </div>
+                </Collapsible>
+              );
+            })}
+
+            {/* Unsectioned exercises (fallback) */}
+            {exercisesBySection.unsectioned.length > 0 && (
+              <div className="space-y-2 mt-2">
+                {exercisesBySection.unsectioned.map((exercise, exIdx) => (
+                  <div
+                    key={`${exercise.exerciseId}-${exIdx}`}
+                    className="text-xs"
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="text-muted-foreground w-4 shrink-0">{exIdx + 1}.</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{exercise.exerciseName}</p>
+                        <p className="text-muted-foreground truncate text-[10px]">
+                          {exercise.methodId}
+                          {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
+                        </p>
+                        {renderExerciseParams(exercise)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          // No sections - show exercises flat
+          <div className="space-y-2">
+            {session.exercises.map((exercise, exIdx) => (
+              <div
+                key={`${exercise.exerciseId}-${exIdx}`}
+                className="text-xs"
+              >
+                <div className="flex items-start gap-2">
+                  <span className="text-muted-foreground w-4 shrink-0">{exIdx + 1}.</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{exercise.exerciseName}</p>
+                    <p className="text-muted-foreground truncate text-[10px]">
+                      {exercise.methodId}
+                      {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
+                    </p>
+                    {renderExerciseParams(exercise)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Calculate column width based on total weeks (full width distribution)
+  const columnWidth = totalWeeks <= 6 ? `calc((100% - ${(totalWeeks - 1) * 8}px) / ${totalWeeks})` : '320px';
+
   return (
-    <div className="flex-shrink-0 w-96 border-r last:border-r-0 flex flex-col bg-card">
+    <div 
+      className="flex-shrink-0 border-r last:border-r-0 flex flex-col bg-card"
+      style={{ width: columnWidth, minWidth: '280px' }}
+    >
       {/* Header with week number and date */}
       <div className="p-3 border-b bg-muted/30">
         <div className="flex items-center justify-between">
@@ -494,50 +789,13 @@ export function MasterPlannerColumn({
       <div className="flex-1 p-3 overflow-y-auto">
         {hasTraining ? (
           <div className="space-y-3">
-            {day.sessions.map((session, idx) => (
+            {day.sessions.map((session) => (
               <div
                 key={session.id}
                 onClick={() => onSessionClick?.(day.dateString, session.sessionIndex, session.exercises)}
                 className="p-3 rounded-lg border bg-primary/5 hover:bg-primary/10 cursor-pointer transition-colors"
               >
-                {/* Session Header */}
-                <div className="flex items-center gap-2 mb-2">
-                  <Dumbbell className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium text-primary">
-                    {session.sessionName || `Session ${idx + 1}`}
-                  </span>
-                  {session.sessionIntensity && getIntensityColor && (
-                    <div 
-                      className={cn(
-                        "w-3.5 h-3.5 rounded-sm border ml-auto",
-                        getIntensityColor(session.sessionIntensity)
-                      )}
-                      title={`Session intensity: ${session.sessionIntensity.replace('-', ' ')}`}
-                    />
-                  )}
-                </div>
-
-                {/* Exercise List with Parameters */}
-                <div className="space-y-2">
-                  {session.exercises.map((exercise, exIdx) => (
-                    <div
-                      key={`${exercise.exerciseId}-${exIdx}`}
-                      className="text-xs"
-                    >
-                      <div className="flex items-start gap-2">
-                        <span className="text-muted-foreground w-4 shrink-0">{exIdx + 1}.</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{exercise.exerciseName}</p>
-                          <p className="text-muted-foreground truncate text-[10px]">
-                            {exercise.methodId}
-                            {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
-                          </p>
-                          {renderExerciseParams(exercise)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                {renderSessionContent(session)}
               </div>
             ))}
           </div>
