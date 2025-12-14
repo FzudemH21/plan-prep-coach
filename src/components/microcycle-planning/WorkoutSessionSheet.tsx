@@ -40,6 +40,7 @@ interface ExerciseDistribution {
   sectionId?: string;
   supersetId?: string;
   notes?: string;
+  eachSide?: boolean;
 }
 
 interface SessionSectionProp {
@@ -1161,6 +1162,14 @@ export function WorkoutSessionSheet({
         )
       }))
     );
+    
+    // Sync to parent's exerciseDistribution
+    if (onDistributionChange && allExerciseDistribution) {
+      const updatedDistribution = allExerciseDistribution.map(ex =>
+        ex.id === exerciseId ? { ...ex, notes } : ex
+      );
+      onDistributionChange(updatedDistribution);
+    }
   };
 
   const handleExerciseEachSideChange = (exerciseId: string, eachSide: boolean) => {
@@ -1172,6 +1181,14 @@ export function WorkoutSessionSheet({
         )
       }))
     );
+    
+    // Sync to parent's exerciseDistribution
+    if (onDistributionChange && allExerciseDistribution) {
+      const updatedDistribution = allExerciseDistribution.map(ex =>
+        ex.id === exerciseId ? { ...ex, eachSide } : ex
+      );
+      onDistributionChange(updatedDistribution);
+    }
   };
 
   const handleAutoCalculateWeightChange = (exerciseId: string, autoCalculateWeight: boolean) => {
