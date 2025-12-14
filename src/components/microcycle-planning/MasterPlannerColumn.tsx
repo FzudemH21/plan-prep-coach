@@ -605,7 +605,7 @@ export function MasterPlannerColumn({
         {/* Visible parameter grid with set numbers */}
         {visibleParams.length > 0 && (
           <div className="mt-1">
-            <Table className="text-[10px]">
+            <Table className="text-[11px]">
               <TableHeader>
                 <TableRow className="h-5 border-b">
                   <TableHead className="py-0.5 px-1 font-medium h-5 w-6 text-center">Set</TableHead>
@@ -746,39 +746,42 @@ export function MasterPlannerColumn({
                                       )}
                                       <p className="font-medium truncate">{exercise.exerciseName}</p>
                                     </div>
-                                    <p className="text-muted-foreground truncate text-[10px]">
+                                    <p className="text-muted-foreground truncate text-[11px]">
                                       {exercise.methodId}
                                       {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
                                     </p>
-                                    {/* Editable Each Side Toggle */}
-                                    <div className="flex items-center gap-1.5 mt-1">
+                                    {renderExerciseParams(exercise)}
+                                    {/* Editable Each Side Toggle - below parameter grid */}
+                                    <div className="flex items-center gap-1.5 mt-1.5" onClick={(e) => e.stopPropagation()}>
                                       <Checkbox
                                         id={`each-side-section-${exercise.exerciseId}`}
                                         checked={exercise.eachSide || false}
                                         onCheckedChange={(checked) => onExerciseEachSideChange?.(exercise.exerciseId, !!checked)}
-                                        className="h-3 w-3"
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="h-3.5 w-3.5"
                                       />
                                       <label
                                         htmlFor={`each-side-section-${exercise.exerciseId}`}
-                                        className="text-[9px] text-muted-foreground cursor-pointer"
+                                        className="text-[11px] text-muted-foreground cursor-pointer"
+                                        onClick={(e) => e.stopPropagation()}
                                       >
                                         Each side
                                       </label>
                                     </div>
-                                    {/* Editable Notes */}
-                                    <div className="mt-1">
+                                    {/* Editable Notes - below each side toggle */}
+                                    <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
                                       <div className="flex items-center gap-1 mb-0.5">
                                         <StickyNote className="h-3 w-3 text-muted-foreground" />
-                                        <span className="text-[9px] text-muted-foreground">Notes</span>
+                                        <span className="text-[11px] text-muted-foreground">Notes</span>
                                       </div>
                                       <Textarea
                                         value={exercise.notes || ''}
                                         onChange={(e) => onExerciseNotesChange?.(exercise.exerciseId, e.target.value)}
+                                        onClick={(e) => e.stopPropagation()}
                                         placeholder="Add notes..."
-                                        className="text-[10px] min-h-[36px] resize-none p-1"
+                                        className="text-xs min-h-[36px] resize-none p-1"
                                       />
                                     </div>
-                                    {renderExerciseParams(exercise)}
                                   </div>
                                 </div>
                               </div>
@@ -816,39 +819,42 @@ export function MasterPlannerColumn({
                             )}
                             <p className="font-medium truncate">{exercise.exerciseName}</p>
                           </div>
-                          <p className="text-muted-foreground truncate text-[10px]">
+                          <p className="text-muted-foreground truncate text-[11px]">
                             {exercise.methodId}
                             {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
                           </p>
-                          {/* Editable Each Side Toggle */}
-                          <div className="flex items-center gap-1.5 mt-1">
+                          {renderExerciseParams(exercise)}
+                          {/* Editable Each Side Toggle - below parameter grid */}
+                          <div className="flex items-center gap-1.5 mt-1.5" onClick={(e) => e.stopPropagation()}>
                             <Checkbox
                               id={`each-side-unsectioned-${exercise.exerciseId}`}
                               checked={exercise.eachSide || false}
                               onCheckedChange={(checked) => onExerciseEachSideChange?.(exercise.exerciseId, !!checked)}
-                              className="h-3 w-3"
+                              onClick={(e) => e.stopPropagation()}
+                              className="h-3.5 w-3.5"
                             />
                             <label
                               htmlFor={`each-side-unsectioned-${exercise.exerciseId}`}
-                              className="text-[9px] text-muted-foreground cursor-pointer"
+                              className="text-[11px] text-muted-foreground cursor-pointer"
+                              onClick={(e) => e.stopPropagation()}
                             >
                               Each side
                             </label>
                           </div>
-                          {/* Editable Notes */}
-                          <div className="mt-1">
+                          {/* Editable Notes - below each side toggle */}
+                          <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center gap-1 mb-0.5">
                               <StickyNote className="h-3 w-3 text-muted-foreground" />
-                              <span className="text-[9px] text-muted-foreground">Notes</span>
+                              <span className="text-[11px] text-muted-foreground">Notes</span>
                             </div>
                             <Textarea
                               value={exercise.notes || ''}
                               onChange={(e) => onExerciseNotesChange?.(exercise.exerciseId, e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
                               placeholder="Add notes..."
-                              className="text-[10px] min-h-[36px] resize-none p-1"
+                              className="text-xs min-h-[36px] resize-none p-1"
                             />
                           </div>
-                          {renderExerciseParams(exercise)}
                         </div>
                       </div>
                     </div>
@@ -881,39 +887,42 @@ export function MasterPlannerColumn({
                         )}
                         <p className="font-medium truncate">{exercise.exerciseName}</p>
                       </div>
-                      <p className="text-muted-foreground truncate text-[10px]">
+                      <p className="text-muted-foreground truncate text-[11px]">
                         {exercise.methodId}
                         {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
                       </p>
-                      {/* Editable Each Side Toggle */}
-                      <div className="flex items-center gap-1.5 mt-1">
+                      {renderExerciseParams(exercise)}
+                      {/* Editable Each Side Toggle - below parameter grid */}
+                      <div className="flex items-center gap-1.5 mt-1.5" onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           id={`each-side-flat-${exercise.exerciseId}`}
                           checked={exercise.eachSide || false}
                           onCheckedChange={(checked) => onExerciseEachSideChange?.(exercise.exerciseId, !!checked)}
-                          className="h-3 w-3"
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-3.5 w-3.5"
                         />
                         <label
                           htmlFor={`each-side-flat-${exercise.exerciseId}`}
-                          className="text-[9px] text-muted-foreground cursor-pointer"
+                          className="text-[11px] text-muted-foreground cursor-pointer"
+                          onClick={(e) => e.stopPropagation()}
                         >
                           Each side
                         </label>
                       </div>
-                      {/* Editable Notes */}
-                      <div className="mt-1">
+                      {/* Editable Notes - below each side toggle */}
+                      <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1 mb-0.5">
                           <StickyNote className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-[9px] text-muted-foreground">Notes</span>
+                          <span className="text-[11px] text-muted-foreground">Notes</span>
                         </div>
                         <Textarea
                           value={exercise.notes || ''}
                           onChange={(e) => onExerciseNotesChange?.(exercise.exerciseId, e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
                           placeholder="Add notes..."
-                          className="text-[10px] min-h-[36px] resize-none p-1"
+                          className="text-xs min-h-[36px] resize-none p-1"
                         />
                       </div>
-                      {renderExerciseParams(exercise)}
                     </div>
                   </div>
                 </div>
