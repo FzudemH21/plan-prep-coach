@@ -400,10 +400,25 @@ export function MasterPlannerColumn({
 
   // Get sections for this day and session
   const getSectionsForSession = useCallback((sessionIndex: number): SessionSection[] => {
-    if (!sessionSections) return [];
-    return sessionSections
+    if (!sessionSections) {
+      console.log('[MasterPlannerColumn] sessionSections is undefined or empty');
+      return [];
+    }
+    const filtered = sessionSections
       .filter(s => s.dayDate === day.dateString && s.sessionIndex === sessionIndex)
       .sort((a, b) => a.order - b.order);
+    
+    // Debug logging
+    if (sessionSections.length > 0 && filtered.length === 0) {
+      console.log('[MasterPlannerColumn] No sections matched for:', {
+        dayDateString: day.dateString,
+        sessionIndex,
+        totalSections: sessionSections.length,
+        sampleSectionDates: sessionSections.slice(0, 3).map(s => s.dayDate)
+      });
+    }
+    
+    return filtered;
   }, [sessionSections, day.dateString]);
 
   // Get session comment from localStorage

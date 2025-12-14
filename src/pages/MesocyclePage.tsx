@@ -35,7 +35,7 @@ import { CrossMesocycleMicrocycleCopyDialog } from "@/components/ui/cross-mesocy
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy, AlertCircle } from "lucide-react";
-import { format, addWeeks, differenceInWeeks } from "date-fns";
+import { format, addWeeks, differenceInWeeks, addDays } from "date-fns";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 import { IntensityLevel } from "@/types/training";
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
@@ -451,6 +451,24 @@ export default function MesocyclePage() {
     setExpandedMesocycles(newExpanded);
   };
 
+  // Helper to recalculate all mesocycle dates based on microcycle durations
+  const recalculateAllMesocycleDates = (mesocyclesArray: ExtendedMesocycle[], startDate: Date): ExtendedMesocycle[] => {
+    let currentDate = startDate;
+    return mesocyclesArray.map(meso => {
+      const totalDays = meso.microcycles.reduce((sum, mc) => sum + mc.duration, 0);
+      const mesoStartDate = currentDate;
+      const mesoEndDate = addDays(currentDate, totalDays - 1);
+      currentDate = addDays(mesoEndDate, 1); // Next mesocycle starts day after
+      return {
+        ...meso,
+        startDate: mesoStartDate,
+        endDate: mesoEndDate,
+        weeks: Math.ceil(totalDays / 7),
+        duration: Math.ceil(totalDays / 7)
+      };
+    });
+  };
+
   const addMicrocycle = (mesocycleIndex: number) => {
     const updated = [...mesocycles];
     const mesocycle = updated[mesocycleIndex];
@@ -461,19 +479,32 @@ export default function MesocyclePage() {
       intensity: "moderate"
     };
     mesocycle.microcycles.push(newMicrocycle);
-    setMesocycles(updated);
+    
+    // Recalculate all mesocycle dates
+    const recalculated = recalculateAllMesocycleDates(updated, planStartDate);
+    setMesocycles(recalculated);
   };
 
   const removeMicrocycle = (mesocycleIndex: number, microcycleIndex: number) => {
     const updated = [...mesocycles];
     updated[mesocycleIndex].microcycles.splice(microcycleIndex, 1);
-    setMesocycles(updated);
+    
+    // Recalculate all mesocycle dates
+    const recalculated = recalculateAllMesocycleDates(updated, planStartDate);
+    setMesocycles(recalculated);
   };
 
   const updateMicrocycle = (mesocycleIndex: number, microcycleIndex: number, field: keyof Microcycle, value: any) => {
     const updated = [...mesocycles];
     (updated[mesocycleIndex].microcycles[microcycleIndex] as any)[field] = value;
-    setMesocycles(updated);
+    
+    // Recalculate all mesocycle dates when duration changes
+    if (field === 'duration') {
+      const recalculated = recalculateAllMesocycleDates(updated, planStartDate);
+      setMesocycles(recalculated);
+    } else {
+      setMesocycles(updated);
+    }
   };
 
   const renderMesocycleSetup = () => (
