@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dumbbell, Plus, Trophy, Calendar, ChevronDown, ChevronRight, MessageSquare, Pencil, StickyNote, Calculator, ArrowUp, ArrowDown } from 'lucide-react';
+import { Dumbbell, Plus, Trophy, Calendar, ChevronDown, ChevronRight, MessageSquare, Pencil, StickyNote, Calculator, ArrowUp, ArrowDown, Copy, Trash2, MoreVertical } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { IntensityLevel } from '@/types/training';
 import { ExtendedMesocycle } from '@/features/planner/types';
@@ -42,6 +42,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -140,6 +146,9 @@ interface MasterPlannerColumnProps {
   // New props for Phase 6 - add section and exercise buttons
   onAddSectionToSession?: (dayDate: string, sessionIndex: number) => void;
   onAddExerciseToSection?: (dayDate: string, sessionIndex: number, sectionId: string) => void;
+  // New props for duplicate/delete exercise
+  onExerciseDuplicate?: (dayDate: string, sessionIndex: number, sectionId: string, exerciseId: string) => void;
+  onExerciseDelete?: (dayDate: string, sessionIndex: number, sectionId: string, exerciseId: string) => void;
 }
 
 // Helper to format parameter names nicely
@@ -436,6 +445,8 @@ export function MasterPlannerColumn({
   onExerciseReorder,
   onAddSectionToSession,
   onAddExerciseToSection,
+  onExerciseDuplicate,
+  onExerciseDelete,
 }: MasterPlannerColumnProps) {
   const [dayIntensityPopoverOpen, setDayIntensityPopoverOpen] = useState(false);
   const [sessionIntensityPopovers, setSessionIntensityPopovers] = useState<Record<number, boolean>>({});
@@ -994,12 +1005,28 @@ export function MasterPlannerColumn({
                               <div
                                 key={`${exercise.exerciseId}-${exIdx}`}
                                 className={cn(
-                                  "text-xs bg-background border rounded-md p-2.5 shadow-sm",
+                                  "text-xs bg-muted/30 border rounded-md p-2.5 shadow-sm",
                                   supersetLabel && "border-l-4 border-l-primary"
                                 )}
                               >
-                                <div className="flex items-start gap-2">
-                                  <span className="text-muted-foreground w-4 shrink-0 font-medium">{exIdx + 1}.</span>
+                                <div className="flex items-start gap-1.5">
+                                  {/* Collapse toggle - first position */}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-4 w-4 p-0 shrink-0 mt-0.5"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleExerciseCollapse(exercise.exerciseId);
+                                    }}
+                                    title={collapsedExercises[exercise.exerciseId] ? "Expand" : "Collapse"}
+                                  >
+                                    {collapsedExercises[exercise.exerciseId] ? (
+                                      <ChevronRight className="h-3 w-3" />
+                                    ) : (
+                                      <ChevronDown className="h-3 w-3" />
+                                    )}
+                                  </Button>
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-1 flex-wrap">
                                       {supersetLabel && (
@@ -1008,23 +1035,6 @@ export function MasterPlannerColumn({
                                         </Badge>
                                       )}
                                       <p className="font-semibold truncate flex-1">{exercise.exerciseName}</p>
-                                      {/* Collapse toggle */}
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-4 w-4 p-0"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          toggleExerciseCollapse(exercise.exerciseId);
-                                        }}
-                                        title={collapsedExercises[exercise.exerciseId] ? "Expand" : "Collapse"}
-                                      >
-                                        {collapsedExercises[exercise.exerciseId] ? (
-                                          <ChevronRight className="h-3 w-3" />
-                                        ) : (
-                                          <ChevronDown className="h-3 w-3" />
-                                        )}
-                                      </Button>
                                       {/* Exercise reorder arrows */}
                                       {sectionExercises.length > 1 && (
                                         <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -1058,6 +1068,35 @@ export function MasterPlannerColumn({
                                           )}
                                         </div>
                                       )}
+                                      {/* Dropdown menu for duplicate/delete */}
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                          <Button variant="ghost" size="sm" className="h-4 w-4 p-0 shrink-0">
+                                            <MoreVertical className="h-3 w-3" />
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="z-[300] bg-background border">
+                                          <DropdownMenuItem
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onExerciseDuplicate?.(day.dateString, session.sessionIndex, section.id, exercise.exerciseId);
+                                            }}
+                                          >
+                                            <Copy className="h-3.5 w-3.5 mr-2" />
+                                            Duplicate
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onExerciseDelete?.(day.dateString, session.sessionIndex, section.id, exercise.exerciseId);
+                                            }}
+                                            className="text-destructive focus:text-destructive"
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                            Delete
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
                                     </div>
                                     
                                     {/* Collapsible content */}
@@ -1151,12 +1190,28 @@ export function MasterPlannerColumn({
                     <div
                       key={`${exercise.exerciseId}-${exIdx}`}
                       className={cn(
-                        "text-xs bg-background border rounded-md p-2.5 shadow-sm",
+                        "text-xs bg-muted/30 border rounded-md p-2.5 shadow-sm",
                         supersetLabel && "border-l-4 border-l-primary"
                       )}
                     >
-                      <div className="flex items-start gap-2">
-                        <span className="text-muted-foreground w-4 shrink-0 font-medium">{exIdx + 1}.</span>
+                      <div className="flex items-start gap-1.5">
+                        {/* Collapse toggle - first position */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-4 w-4 p-0 shrink-0 mt-0.5"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleExerciseCollapse(exercise.exerciseId);
+                          }}
+                          title={collapsedExercises[exercise.exerciseId] ? "Expand" : "Collapse"}
+                        >
+                          {collapsedExercises[exercise.exerciseId] ? (
+                            <ChevronRight className="h-3 w-3" />
+                          ) : (
+                            <ChevronDown className="h-3 w-3" />
+                          )}
+                        </Button>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1 flex-wrap">
                             {supersetLabel && (
@@ -1165,23 +1220,35 @@ export function MasterPlannerColumn({
                               </Badge>
                             )}
                             <p className="font-semibold truncate flex-1">{exercise.exerciseName}</p>
-                            {/* Collapse toggle */}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-4 w-4 p-0"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleExerciseCollapse(exercise.exerciseId);
-                              }}
-                              title={collapsedExercises[exercise.exerciseId] ? "Expand" : "Collapse"}
-                            >
-                              {collapsedExercises[exercise.exerciseId] ? (
-                                <ChevronRight className="h-3 w-3" />
-                              ) : (
-                                <ChevronDown className="h-3 w-3" />
-                              )}
-                            </Button>
+                            {/* Dropdown menu for duplicate/delete */}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="sm" className="h-4 w-4 p-0 shrink-0">
+                                  <MoreVertical className="h-3 w-3" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="z-[300] bg-background border">
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onExerciseDuplicate?.(day.dateString, session.sessionIndex, '', exercise.exerciseId);
+                                  }}
+                                >
+                                  <Copy className="h-3.5 w-3.5 mr-2" />
+                                  Duplicate
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onExerciseDelete?.(day.dateString, session.sessionIndex, '', exercise.exerciseId);
+                                  }}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                           
                           {/* Collapsible content */}

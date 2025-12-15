@@ -2040,6 +2040,7 @@ export function WorkoutSessionSheet({
         mesocycleId={mesocycleId}
         microcycleIndex={microcycleIndex}
         sessionIndex={sessionIndex}
+        needsExplicitOverlay={true}
       />
 
       {/* Combined Test/Event Dialog */}

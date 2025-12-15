@@ -787,6 +787,61 @@ export function TrainingCalendarView({
                 setAddExerciseContext({ dayDate, sessionIndex, sectionId });
                 setIsLibraryPopupOpen(true);
               }}
+              onExerciseDuplicate={(dayDate, sessionIndex, sectionId, exerciseId) => {
+                if (!onDistributionChange) return;
+                
+                // Find the exercise to duplicate
+                const exerciseToDuplicate = exerciseDistribution.find(
+                  e => (e.id === exerciseId || e.exerciseId === exerciseId) && 
+                       e.dayDate === dayDate && 
+                       e.sessionIndex === sessionIndex &&
+                       (sectionId === '' || e.sectionId === sectionId)
+                );
+                
+                if (!exerciseToDuplicate) return;
+                
+                // Find exercises in same section to determine order
+                const sectionExercises = exerciseDistribution.filter(
+                  e => e.dayDate === dayDate && 
+                       e.sessionIndex === sessionIndex && 
+                       e.sectionId === exerciseToDuplicate.sectionId
+                );
+                
+                // Create duplicate with new ID, placed right after original
+                const newExercise = {
+                  ...exerciseToDuplicate,
+                  id: `${exerciseToDuplicate.exerciseId}-${Date.now()}-dup`,
+                  order: (exerciseToDuplicate.order ?? sectionExercises.length - 1) + 1,
+                };
+                
+                // Update order of exercises after the duplicated one
+                const updatedDistribution = exerciseDistribution.map(e => {
+                  if (e.dayDate === dayDate && 
+                      e.sessionIndex === sessionIndex && 
+                      e.sectionId === exerciseToDuplicate.sectionId &&
+                      (e.order ?? 0) > (exerciseToDuplicate.order ?? 0)) {
+                    return { ...e, order: (e.order ?? 0) + 1 };
+                  }
+                  return e;
+                });
+                
+                onDistributionChange([...updatedDistribution, newExercise]);
+                toast({ title: "Exercise duplicated" });
+              }}
+              onExerciseDelete={(dayDate, sessionIndex, sectionId, exerciseId) => {
+                if (!onDistributionChange) return;
+                
+                // Remove the exercise
+                const updatedDistribution = exerciseDistribution.filter(
+                  e => !((e.id === exerciseId || e.exerciseId === exerciseId) && 
+                         e.dayDate === dayDate && 
+                         e.sessionIndex === sessionIndex &&
+                         (sectionId === '' || e.sectionId === sectionId))
+                );
+                
+                onDistributionChange(updatedDistribution);
+                toast({ title: "Exercise deleted" });
+              }}
             />
           ) : (
             /* Calendar View */
