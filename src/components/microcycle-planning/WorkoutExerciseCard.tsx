@@ -222,7 +222,7 @@ export function WorkoutExerciseCard({
   };
 
   return (
-    <Card className={`p-4 bg-muted/30 ${isInSuperset ? 'border-l-4 border-l-primary' : ''}`}>
+    <Card className={`p-4 bg-muted/50 ${isInSuperset ? 'border-l-4 border-l-primary' : ''}`}>
       <div className="flex items-start gap-3">
         {/* Drag Handle */}
         <div 
@@ -328,7 +328,7 @@ export function WorkoutExerciseCard({
 
           {/* Auto-Calculation Toggles */}
           {(autoCalcDetection.has1RMParam || autoCalcDetection.hasMaxHRParam) && (
-            <div className="flex flex-wrap items-center gap-4 p-2 bg-muted/50 rounded-md">
+            <div className="flex flex-wrap items-center gap-4 p-2 bg-transparent rounded-md">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Calculator className="h-3.5 w-3.5" />
                 <span className="font-medium">Auto-calculate:</span>
