@@ -1187,8 +1187,8 @@ export function MasterPlannerColumn({
                                         onToggleSuperset?.(
                                           day.dateString, 
                                           session.sessionIndex, 
-                                          exercise.exerciseId, 
-                                          nextExercise.exerciseId, 
+                                          exercise.id || exercise.exerciseId, 
+                                          nextExercise.id || nextExercise.exerciseId, 
                                           section.id
                                         );
                                       }}
@@ -1373,8 +1373,8 @@ export function MasterPlannerColumn({
                               onToggleSuperset?.(
                                 day.dateString, 
                                 session.sessionIndex, 
-                                exercise.exerciseId, 
-                                nextExercise.exerciseId, 
+                                exercise.id || exercise.exerciseId, 
+                                nextExercise.id || nextExercise.exerciseId, 
                                 undefined
                               );
                             }}
