@@ -24,6 +24,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
+import { cleanupSupersetsOnExerciseDelete } from '@/utils/supersetUtils';
 
 interface ExerciseDistribution {
   id: string;
@@ -1209,6 +1210,11 @@ export function EnhancedExerciseDistribution({
     );
 
     onDistributionChange([...otherExercises, ...sessionExercises]);
+    
+    // Clean up supersets - remove deleted exercise from all superset groups
+    const cleanedSupersets = cleanupSupersetsOnExerciseDelete(supersets, exerciseDistId);
+    onSupersetsChange(cleanedSupersets);
+    
     toast({ title: 'Exercise removed', description: `${exercise.exerciseName} removed from session` });
   };
 
