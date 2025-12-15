@@ -12,6 +12,7 @@ import { IntensityLevel } from '@/types/training';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { ToolboxDatabase } from '@/types/toolbox';
 import { SessionSection, SupersetMapping } from '@/types/microcycle-planning';
+import { getSupersetLabelFromMapping } from '@/utils/supersetUtils';
 import {
   Table,
   TableBody,
@@ -631,23 +632,13 @@ export function MasterPlannerColumn({
 
   // Get superset label for an exercise (A1, A2, B1, B2, etc.)
   const getSupersetLabel = useCallback((exercise: ExerciseDistribution): string | null => {
-    const daySupersets = supersets?.[day.dateString]?.[exercise.sessionIndex];
-    if (!daySupersets) return null;
-    
-    const sectionKey = exercise.sectionId || '__unsectioned__';
-    const sectionSupersets = daySupersets[sectionKey];
-    if (!sectionSupersets) return null;
-    
-    let labelIndex = 0;
-    for (const [supersetId, exerciseIds] of Object.entries(sectionSupersets)) {
-      if (exerciseIds.includes(exercise.exerciseId)) {
-        const positionInSuperset = exerciseIds.indexOf(exercise.exerciseId);
-        const letter = String.fromCharCode(65 + labelIndex); // A, B, C...
-        return `${letter}${positionInSuperset + 1}`; // A1, A2, B1...
-      }
-      labelIndex++;
-    }
-    return null;
+    return getSupersetLabelFromMapping(
+      supersets,
+      day.dateString,
+      exercise.sessionIndex,
+      exercise.exerciseId,
+      exercise.sectionId
+    );
   }, [supersets, day.dateString]);
 
   // Render parameter values for an exercise

@@ -26,6 +26,7 @@ import { getParametersForMethod } from '@/data/methodParameters';
 import { ExerciseSelection } from '@/types/microcycle-planning';
 import { ToolboxDatabase } from '@/types/toolbox';
 import { cn } from '@/lib/utils';
+import { toggleSuperset, getSupersetLabelFromMapping } from '@/utils/supersetUtils';
 
 interface ExerciseDistribution {
   id?: string;
@@ -630,20 +631,14 @@ export function WorkoutSessionSheet({
   }, [mesocycleId, microcycleIndex, sessionIndex, parameterValues]);
 
   const getSupersetLabel = (exerciseId: string): string | undefined => {
-    // Use supersetsProp (from Step 1) as primary source, fallback to local state
-    const sessionSupersets = (supersetsProp || supersets)?.[dayDate]?.[sessionIndex];
-    if (!sessionSupersets) return undefined;
-    
-    // Check all sections (including unsectioned)
-    for (const [sectionId, sectionSupersets] of Object.entries(sessionSupersets)) {
-      for (const [supersetId, exerciseIds] of Object.entries(sectionSupersets)) {
-        if (exerciseIds.includes(exerciseId)) {
-          const match = supersetId.match(/superset-(\d+)/);
-          return match ? `SS${match[1]}` : `SS?`;
-        }
-      }
-    }
-    return undefined;
+    // Use shared utility for consistent A1/B1/C1 format
+    const label = getSupersetLabelFromMapping(
+      supersetsProp || supersets,
+      dayDate,
+      sessionIndex,
+      exerciseId
+    );
+    return label ?? undefined;
   };
 
   const getSupersetPartners = (exerciseId: string): string[] => {
@@ -1214,97 +1209,29 @@ export function WorkoutSessionSheet({
   };
 
   const handleToggleSuperset = (exerciseId1: string, exerciseId2: string, sectionId?: string) => {
-    const sectionKey = sectionId || '__unsectioned__';
+    // Use shared utility for consistent behavior with Master Planner
+    const result = toggleSuperset(
+      supersetsProp || supersets,
+      dayDate,
+      sessionIndex,
+      exerciseId1,
+      exerciseId2,
+      sectionId
+    );
     
-    // Read from supersetsProp (authoritative source from Step 1) instead of local state
-    const sessionSupersets = supersetsProp?.[dayDate]?.[sessionIndex] || {};
-    const sectionSupersets = sessionSupersets[sectionKey] || {};
-    const daySuperset: Record<string, string[]> = JSON.parse(JSON.stringify(sectionSupersets));
-    
-    // Find if exercises are in any superset
-    let superset1: string | null = null;
-    let superset2: string | null = null;
-    
-    for (const [supersetId, exerciseIds] of Object.entries(daySuperset)) {
-      if (exerciseIds.includes(exerciseId1)) superset1 = supersetId;
-      if (exerciseIds.includes(exerciseId2)) superset2 = supersetId;
-    }
-    
-    if (superset1 && superset1 === superset2) {
-      // UNLINK: split the superset at this connection point
-      const currentIds = daySuperset[superset1];
-      const index1 = currentIds.indexOf(exerciseId1);
-      const index2 = currentIds.indexOf(exerciseId2);
-      
-      // Only unlink if they are adjacent in the array
-      if (Math.abs(index1 - index2) === 1) {
-        const splitPoint = Math.min(index1, index2) + 1;
-        const firstGroup = currentIds.slice(0, splitPoint);
-        const secondGroup = currentIds.slice(splitPoint);
-        
-        // Keep first group in original superset (if 2+ exercises)
-        if (firstGroup.length >= 2) {
-          daySuperset[superset1] = firstGroup;
-        } else {
-          delete daySuperset[superset1];
-        }
-        
-        // Create new superset for second group (if 2+ exercises)
-        if (secondGroup.length >= 2) {
-          const existingSupersetIds = Object.keys(daySuperset).map(id => {
-            const match = id.match(/superset-(\d+)/);
-            return match ? parseInt(match[1]) : 0;
-          });
-          const nextId = existingSupersetIds.length > 0 ? Math.max(...existingSupersetIds) + 1 : 1;
-          const newSupersetId = `superset-${nextId}`;
-          daySuperset[newSupersetId] = secondGroup;
-        }
-        
-        toast({ title: "Exercises unlinked", description: "Connection removed" });
-      } else {
-        // Not adjacent - shouldn't happen with current UI, but handle gracefully
-        toast({ title: "Cannot unlink", description: "Exercises must be adjacent" });
-      }
-    } else if (superset1 && superset2 && superset1 !== superset2) {
-      // MERGE two different supersets
-      const merged = Array.from(new Set([...(daySuperset[superset1] || []), ...(daySuperset[superset2] || [])]));
-      daySuperset[superset1] = merged;
-      delete daySuperset[superset2];
-      toast({ title: "Exercises linked", description: "Supersets merged" });
-    } else if (superset1 && !superset2) {
-      // Add exercise2 to superset1
-      daySuperset[superset1] = Array.from(new Set([...(daySuperset[superset1] || []), exerciseId2]));
-      toast({ title: "Exercises linked", description: "Added to superset" });
-    } else if (!superset1 && superset2) {
-      // Add exercise1 to superset2
-      daySuperset[superset2] = Array.from(new Set([...(daySuperset[superset2] || []), exerciseId1]));
-      toast({ title: "Exercises linked", description: "Added to superset" });
-    } else {
-      // Create new superset
-      const existingSupersetIds = Object.keys(daySuperset).map(id => {
-        const match = id.match(/superset-(\d+)/);
-        return match ? parseInt(match[1]) : 0;
-      });
-      const nextId = existingSupersetIds.length > 0 ? Math.max(...existingSupersetIds) + 1 : 1;
-      const newSupersetId = `superset-${nextId}`;
-      daySuperset[newSupersetId] = [exerciseId1, exerciseId2];
-      toast({ title: "Exercises linked", description: "Superset created" });
-    }
-    
-    // Update state - use supersetsProp as base to sync with Step 1
-    const newSupersets = structuredClone(supersetsProp || {});
-    if (!newSupersets[dayDate]) newSupersets[dayDate] = {};
-    if (!newSupersets[dayDate][sessionIndex]) newSupersets[dayDate][sessionIndex] = {};
-    newSupersets[dayDate][sessionIndex][sectionKey] = daySuperset;
-    
-    setSupersets(newSupersets);
+    setSupersets(result.newSupersets);
     
     // Persist to localStorage
     const key = `workoutSupersets_${mesocycleId}_${dayDate}_${sessionIndex}`;
-    localStorage.setItem(key, JSON.stringify(newSupersets[dayDate][sessionIndex]));
+    localStorage.setItem(key, JSON.stringify(result.newSupersets[dayDate][sessionIndex]));
     
     // Propagate to Step 1
-    onSupersetsChange?.(newSupersets);
+    onSupersetsChange?.(result.newSupersets);
+    
+    toast({ 
+      title: result.action === 'unlinked' ? 'Exercises unlinked' : 'Exercises linked', 
+      description: result.message 
+    });
   };
 
   const handleScrollToExercise = (exerciseId: string) => {
