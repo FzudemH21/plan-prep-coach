@@ -24,7 +24,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
-import { cleanupSupersetsOnExerciseDelete } from '@/utils/supersetUtils';
+import { cleanupSupersetsOnExerciseDelete, toggleSuperset } from '@/utils/supersetUtils';
 
 interface ExerciseDistribution {
   id: string;
@@ -1296,84 +1296,20 @@ export function EnhancedExerciseDistribution({
   };
 
   const handleToggleSuperset = (dayDate: string, sessionIndex: number, exerciseId1: string, exerciseId2: string, sectionId?: string) => {
-    const sectionKey = sectionId || '__unsectioned__';
-    const sectionSupersets = supersets[dayDate]?.[sessionIndex]?.[sectionKey] || {};
+    // Use the shared utility for consistent superset logic across all views
+    const result = toggleSuperset(supersets, dayDate, sessionIndex, exerciseId1, exerciseId2, sectionId);
+    onSupersetsChange(result.newSupersets);
     
-    // Find if either exercise is in a superset
-    let superset1: string | undefined;
-    let superset2: string | undefined;
-    
-    Object.entries(sectionSupersets).forEach(([ssId, exerciseIds]) => {
-      if (exerciseIds.includes(exerciseId1)) superset1 = ssId;
-      if (exerciseIds.includes(exerciseId2)) superset2 = ssId;
-    });
-
-    const newSupersets = { ...supersets };
-    if (!newSupersets[dayDate]) newSupersets[dayDate] = {};
-    if (!newSupersets[dayDate][sessionIndex]) newSupersets[dayDate][sessionIndex] = {};
-    if (!newSupersets[dayDate][sessionIndex][sectionKey]) newSupersets[dayDate][sessionIndex][sectionKey] = {};
-    const sectionSuperset = newSupersets[dayDate][sessionIndex][sectionKey];
-
-    if (!superset1 && !superset2) {
-      // CREATE: Neither in a superset, create new one
-      const existingSupersetIds = Object.keys(sectionSuperset).map(id => {
-        const match = id.match(/superset-(\d+)/);
-        return match ? parseInt(match[1]) : 0;
-      });
-      const nextId = existingSupersetIds.length > 0 ? Math.max(...existingSupersetIds) + 1 : 1;
-      const newSupersetId = `superset-${nextId}`;
-      sectionSuperset[newSupersetId] = [exerciseId1, exerciseId2];
-      toast({ title: 'Superset created', description: 'Exercises linked' });
-    } else if (superset1 && superset1 === superset2) {
-      // UNLINK: Split the superset at this connection point
-      const currentIds = sectionSuperset[superset1];
-      const index1 = currentIds.indexOf(exerciseId1);
-      const index2 = currentIds.indexOf(exerciseId2);
-      
-      if (Math.abs(index1 - index2) === 1) {
-        const splitPoint = Math.min(index1, index2) + 1;
-        const firstGroup = currentIds.slice(0, splitPoint);
-        const secondGroup = currentIds.slice(splitPoint);
-        
-        if (firstGroup.length >= 2) {
-          sectionSuperset[superset1] = firstGroup;
-        } else {
-          delete sectionSuperset[superset1];
-        }
-        
-        if (secondGroup.length >= 2) {
-          const existingSupersetIds = Object.keys(sectionSuperset).map(id => {
-            const match = id.match(/superset-(\d+)/);
-            return match ? parseInt(match[1]) : 0;
-          });
-          const nextId = existingSupersetIds.length > 0 ? Math.max(...existingSupersetIds) + 1 : 1;
-          const newSupersetId = `superset-${nextId}`;
-          sectionSuperset[newSupersetId] = secondGroup;
-        }
-        
-        toast({ title: 'Exercises unlinked', description: 'Connection removed' });
-      }
-    } else if (superset1 && superset2 && superset1 !== superset2) {
-      // MERGE: Combine two different supersets
-      const merged = Array.from(new Set([...(sectionSuperset[superset1] || []), ...(sectionSuperset[superset2] || [])]));
-      sectionSuperset[superset1] = merged;
-      delete sectionSuperset[superset2];
-      toast({ title: 'Supersets merged', description: 'Exercises linked' });
-    } else {
-      // ADD: One is in a superset, add the other
-      const targetSuperset = superset1 || superset2;
-      if (targetSuperset) {
-        if (!sectionSuperset[targetSuperset].includes(exerciseId1)) {
-          sectionSuperset[targetSuperset].push(exerciseId1);
-        }
-        if (!sectionSuperset[targetSuperset].includes(exerciseId2)) {
-          sectionSuperset[targetSuperset].push(exerciseId2);
-        }
-        toast({ title: 'Exercise added to superset', description: 'Exercise linked' });
-      }
+    // Show appropriate toast based on action
+    if (result.action === 'created') {
+      toast({ title: 'Superset created', description: result.message });
+    } else if (result.action === 'unlinked') {
+      toast({ title: 'Exercises unlinked', description: result.message });
+    } else if (result.action === 'merged') {
+      toast({ title: 'Supersets merged', description: result.message });
+    } else if (result.action === 'linked') {
+      toast({ title: 'Exercise added to superset', description: result.message });
     }
-
-    onSupersetsChange(newSupersets);
   };
 
   const handleCopyFromPreviousMicrocycle = (targetMicrocycleId: string) => {
