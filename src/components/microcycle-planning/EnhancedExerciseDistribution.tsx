@@ -285,34 +285,50 @@ export function EnhancedExerciseDistribution({
       return true;
     };
 
-    Object.entries(exerciseSelectionData).forEach(([key, cellData]) => {
-      if (cellData.mesocycleId !== mesocycle.id) return;
-
-      const methodId = cellData.methodId;
-      // Use empty string for invalid/corrupted category names
-      const categoryName = isValidCategoryName(cellData.categoryName) ? cellData.categoryName! : '';
-
+    // Helper to add exercise to grouped structure
+    const addExercise = (methodId: string, categoryName: string, ex: { exerciseId: string; exerciseName: string; subCategory?: string }) => {
       if (!grouped[methodId]) {
         grouped[methodId] = {};
       }
       if (!grouped[methodId][categoryName]) {
         grouped[methodId][categoryName] = [];
       }
+      // Avoid duplicates
+      if (!grouped[methodId][categoryName].find(e => e.exerciseId === ex.exerciseId)) {
+        grouped[methodId][categoryName].push({
+          exerciseId: ex.exerciseId,
+          exerciseName: ex.exerciseName,
+          subCategory: ex.subCategory,
+        });
+      }
+    };
+
+    // 1. Add exercises from exerciseSelectionData (Step 0)
+    Object.entries(exerciseSelectionData).forEach(([key, cellData]) => {
+      if (cellData.mesocycleId !== mesocycle.id) return;
+
+      const methodId = cellData.methodId;
+      const categoryName = isValidCategoryName(cellData.categoryName) ? cellData.categoryName! : '';
 
       cellData.exercises.forEach(ex => {
-        // Avoid duplicates
-        if (!grouped[methodId][categoryName].find(e => e.exerciseId === ex.exerciseId)) {
-          grouped[methodId][categoryName].push({
-            exerciseId: ex.exerciseId,
-            exerciseName: ex.exerciseName,
-            subCategory: ex.subCategory,
-          });
-        }
+        addExercise(methodId, categoryName, ex);
+      });
+    });
+
+    // 2. Also add exercises from exerciseDistribution (captures exercises added in Master Planner or Workout Session Card)
+    exerciseDistribution.forEach(ex => {
+      const methodId = ex.methodId;
+      const categoryName = isValidCategoryName(ex.categoryName) ? ex.categoryName : '';
+      
+      addExercise(methodId, categoryName, {
+        exerciseId: ex.exerciseId,
+        exerciseName: ex.exerciseName,
+        subCategory: ex.subCategory,
       });
     });
 
     return grouped;
-  }, [exerciseSelectionData, mesocycle.id]);
+  }, [exerciseSelectionData, exerciseDistribution, mesocycle.id]);
 
   // Helper to find superset in mapping
   const findSessionSuperset = (
