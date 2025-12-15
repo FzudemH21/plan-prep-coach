@@ -450,14 +450,18 @@ export function MasterPlannerColumn({
 }: MasterPlannerColumnProps) {
   const [dayIntensityPopoverOpen, setDayIntensityPopoverOpen] = useState(false);
   const [sessionIntensityPopovers, setSessionIntensityPopovers] = useState<Record<number, boolean>>({});
-  const [collapsedExercises, setCollapsedExercises] = useState<Record<string, boolean>>({});
+  // Default all exercises to collapsed (true = collapsed)
+  const [expandedExercises, setExpandedExercises] = useState<Record<string, boolean>>({});
   
   const toggleExerciseCollapse = (exerciseId: string) => {
-    setCollapsedExercises(prev => ({
+    setExpandedExercises(prev => ({
       ...prev,
       [exerciseId]: !prev[exerciseId]
     }));
   };
+  
+  // Helper: check if exercise is collapsed (default is collapsed = true, so check if NOT in expanded)
+  const isExerciseCollapsed = (exerciseId: string) => !expandedExercises[exerciseId];
   const hasTraining = day.sessions.length > 0;
   const isSingleSession = day.sessions.length === 1;
   const currentIntensity: IntensityLevel = dailyIntensityData?.find(di => di.date === day.dateString)?.intensity || 'moderate';
@@ -938,7 +942,7 @@ export function MasterPlannerColumn({
               const isLastSection = sectionIdx === sections.length - 1;
               
               return (
-                <Collapsible key={section.id} defaultOpen>
+                <Collapsible key={section.id} defaultOpen={false}>
                   <div className="border rounded-lg bg-card shadow-sm">
                     <div className="flex items-center gap-1 w-full px-3 py-2 hover:bg-muted/30 border-b bg-muted/20">
                       <CollapsibleTrigger 
@@ -1005,7 +1009,7 @@ export function MasterPlannerColumn({
                               <div
                                 key={`${exercise.exerciseId}-${exIdx}`}
                                 className={cn(
-                                  "text-xs bg-muted/30 border rounded-md p-2.5 shadow-sm",
+                                  "text-xs bg-muted/50 border rounded-md p-2.5 shadow-sm",
                                   supersetLabel && "border-l-4 border-l-primary"
                                 )}
                               >
@@ -1019,9 +1023,9 @@ export function MasterPlannerColumn({
                                       e.stopPropagation();
                                       toggleExerciseCollapse(exercise.exerciseId);
                                     }}
-                                    title={collapsedExercises[exercise.exerciseId] ? "Expand" : "Collapse"}
+                                    title={isExerciseCollapsed(exercise.exerciseId) ? "Expand" : "Collapse"}
                                   >
-                                    {collapsedExercises[exercise.exerciseId] ? (
+                                    {isExerciseCollapsed(exercise.exerciseId) ? (
                                       <ChevronRight className="h-3 w-3" />
                                     ) : (
                                       <ChevronDown className="h-3 w-3" />
@@ -1100,7 +1104,7 @@ export function MasterPlannerColumn({
                                     </div>
                                     
                                     {/* Collapsible content */}
-                                    {!collapsedExercises[exercise.exerciseId] && (
+                                    {!isExerciseCollapsed(exercise.exerciseId) && (
                                       <>
                                         <p className="text-muted-foreground truncate text-[11px]">
                                           {exercise.methodId}
@@ -1190,7 +1194,7 @@ export function MasterPlannerColumn({
                     <div
                       key={`${exercise.exerciseId}-${exIdx}`}
                       className={cn(
-                        "text-xs bg-muted/30 border rounded-md p-2.5 shadow-sm",
+                        "text-xs bg-muted/50 border rounded-md p-2.5 shadow-sm",
                         supersetLabel && "border-l-4 border-l-primary"
                       )}
                     >
@@ -1204,9 +1208,9 @@ export function MasterPlannerColumn({
                             e.stopPropagation();
                             toggleExerciseCollapse(exercise.exerciseId);
                           }}
-                          title={collapsedExercises[exercise.exerciseId] ? "Expand" : "Collapse"}
+                          title={isExerciseCollapsed(exercise.exerciseId) ? "Expand" : "Collapse"}
                         >
-                          {collapsedExercises[exercise.exerciseId] ? (
+                          {isExerciseCollapsed(exercise.exerciseId) ? (
                             <ChevronRight className="h-3 w-3" />
                           ) : (
                             <ChevronDown className="h-3 w-3" />
@@ -1252,7 +1256,7 @@ export function MasterPlannerColumn({
                           </div>
                           
                           {/* Collapsible content */}
-                          {!collapsedExercises[exercise.exerciseId] && (
+                          {!isExerciseCollapsed(exercise.exerciseId) && (
                             <>
                               <p className="text-muted-foreground truncate text-[11px]">
                                 {exercise.methodId}

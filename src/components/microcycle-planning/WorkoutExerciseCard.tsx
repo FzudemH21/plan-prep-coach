@@ -222,7 +222,7 @@ export function WorkoutExerciseCard({
   };
 
   return (
-    <Card className={`p-4 ${isInSuperset ? 'border-l-4 border-l-primary' : ''}`}>
+    <Card className={`p-4 bg-muted/30 ${isInSuperset ? 'border-l-4 border-l-primary' : ''}`}>
       <div className="flex items-start gap-3">
         {/* Drag Handle */}
         <div 
