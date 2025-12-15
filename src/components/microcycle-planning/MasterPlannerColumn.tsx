@@ -51,6 +51,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 interface ExerciseDistribution {
+  id?: string; // Unique distribution ID used for superset mapping
   exerciseId: string;
   exerciseName: string;
   methodId: string;
@@ -471,7 +472,8 @@ export function MasterPlannerColumn({
   const currentIntensity: IntensityLevel = dailyIntensityData?.find(di => di.date === day.dateString)?.intensity || 'moderate';
 
   // Helper: check if two exercises are linked in a superset
-  const areExercisesLinked = useCallback((exerciseId1: string, exerciseId2: string, sessionIndex: number, sectionId?: string): boolean => {
+  // Uses distribution id (exercise.id) which is what Step 1 uses when creating supersets
+  const areExercisesLinked = useCallback((id1: string, id2: string, sessionIndex: number, sectionId?: string): boolean => {
     const sectionKey = sectionId || '__unsectioned__';
     const daySupersets = supersets?.[day.dateString];
     if (!daySupersets) return false;
@@ -483,7 +485,7 @@ export function MasterPlannerColumn({
     if (!sectionSupersets) return false;
     
     for (const [, exerciseIds] of Object.entries(sectionSupersets)) {
-      if (exerciseIds.includes(exerciseId1) && exerciseIds.includes(exerciseId2)) {
+      if (exerciseIds.includes(id1) && exerciseIds.includes(id2)) {
         return true;
       }
     }
@@ -632,11 +634,13 @@ export function MasterPlannerColumn({
 
   // Get superset label for an exercise (A1, A2, B1, B2, etc.)
   const getSupersetLabel = useCallback((exercise: ExerciseDistribution): string | null => {
+    // Use distribution id (used by Step 1) with fallback to exerciseId
+    const lookupId = exercise.id || exercise.exerciseId;
     return getSupersetLabelFromMapping(
       supersets,
       day.dateString,
       exercise.sessionIndex,
-      exercise.exerciseId,
+      lookupId,
       exercise.sectionId
     );
   }, [supersets, day.dateString]);
@@ -1021,7 +1025,7 @@ export function MasterPlannerColumn({
                             const isFirstExercise = exIdx === 0;
                             const isLastExercise = exIdx === sectionExercises.length - 1;
                             const nextExercise = !isLastExercise ? sectionExercises[exIdx + 1] : null;
-                            const isLinkedToNext = nextExercise ? areExercisesLinked(exercise.exerciseId, nextExercise.exerciseId, session.sessionIndex, section.id) : false;
+                            const isLinkedToNext = nextExercise ? areExercisesLinked(exercise.id || exercise.exerciseId, nextExercise.id || nextExercise.exerciseId, session.sessionIndex, section.id) : false;
                             
                             return (
                               <React.Fragment key={`${exercise.exerciseId}-${exIdx}`}>
@@ -1240,7 +1244,7 @@ export function MasterPlannerColumn({
                   const supersetLabel = getSupersetLabel(exercise);
                   const isLastExercise = exIdx === exercisesBySection.unsectioned.length - 1;
                   const nextExercise = !isLastExercise ? exercisesBySection.unsectioned[exIdx + 1] : null;
-                  const isLinkedToNext = nextExercise ? areExercisesLinked(exercise.exerciseId, nextExercise.exerciseId, session.sessionIndex, undefined) : false;
+                  const isLinkedToNext = nextExercise ? areExercisesLinked(exercise.id || exercise.exerciseId, nextExercise.id || nextExercise.exerciseId, session.sessionIndex, undefined) : false;
                   
                   return (
                     <React.Fragment key={`${exercise.exerciseId}-${exIdx}`}>
