@@ -82,6 +82,15 @@ export function WorkoutSectionCard({
   };
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(section.name);
+  // Track collapsed exercises
+  const [collapsedExercises, setCollapsedExercises] = useState<Record<string, boolean>>({});
+
+  const toggleExerciseCollapse = (exerciseId: string) => {
+    setCollapsedExercises(prev => ({
+      ...prev,
+      [exerciseId]: !prev[exerciseId]
+    }));
+  };
 
   const handleSaveRename = () => {
     if (editedName.trim() && editedName !== section.name) {
@@ -288,6 +297,8 @@ export function WorkoutSectionCard({
                                             onAutoCalculateWeightChange={(value) => onAutoCalculateWeightChange?.(exercise.id, value)}
                                             autoCalculateTargetHR={exercise.autoCalculateTargetHR}
                                             onAutoCalculateTargetHRChange={(value) => onAutoCalculateTargetHRChange?.(exercise.id, value)}
+                                            isCollapsed={collapsedExercises[exercise.id] || false}
+                                            onToggleCollapse={() => toggleExerciseCollapse(exercise.id)}
                                           />
                                         </div>
                                       )}
@@ -367,6 +378,8 @@ export function WorkoutSectionCard({
                                     onAutoCalculateWeightChange={(value) => onAutoCalculateWeightChange?.(exercise.id, value)}
                                     autoCalculateTargetHR={exercise.autoCalculateTargetHR}
                                     onAutoCalculateTargetHRChange={(value) => onAutoCalculateTargetHRChange?.(exercise.id, value)}
+                                    isCollapsed={collapsedExercises[exercise.id] || false}
+                                    onToggleCollapse={() => toggleExerciseCollapse(exercise.id)}
                                   />
                                 </div>
                               )}
