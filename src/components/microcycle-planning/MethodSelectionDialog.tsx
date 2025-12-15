@@ -57,13 +57,13 @@ export function MethodSelectionDialog({
     );
   }, [enrichedMethods, searchQuery]);
 
-  // Group methods by category
+  // Group methods by training method (methodId) first, with categories as sub-items
   const groupedMethods = useMemo(() => {
     const groups: Record<string, typeof enrichedMethods> = {};
     filteredMethods.forEach(method => {
-      const cat = method.category || 'Uncategorized';
-      if (!groups[cat]) groups[cat] = [];
-      groups[cat].push(method);
+      const methodName = method.methodId; // Group by training method
+      if (!groups[methodName]) groups[methodName] = [];
+      groups[methodName].push(method);
     });
     return groups;
   }, [filteredMethods]);
@@ -124,16 +124,16 @@ export function MethodSelectionDialog({
                   </div>
                 ) : (
                   <RadioGroup value={selectedMethodKey} onValueChange={setSelectedMethodKey}>
-                    {Object.entries(groupedMethods).map(([category, methods]) => (
-                      <div key={category} className="space-y-2">
+                    {Object.entries(groupedMethods).map(([trainingMethod, methods]) => (
+                      <div key={trainingMethod} className="space-y-2">
                         <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-                          {category}
+                          {trainingMethod}
                         </h3>
                         <div className="space-y-2">
                           {methods.map(method => (
                             <div
                               key={method.id}
-                              className={`flex items-start space-x-3 rounded-lg border p-4 cursor-pointer transition-colors ${
+                              className={`flex items-start space-x-3 rounded-lg border p-3 cursor-pointer transition-colors ${
                                 selectedMethodKey === method.id
                                   ? 'border-primary bg-primary/5'
                                   : 'border-border hover:border-primary/50 hover:bg-accent/50'
@@ -141,9 +141,9 @@ export function MethodSelectionDialog({
                               onClick={() => setSelectedMethodKey(method.id)}
                             >
                               <RadioGroupItem value={method.id} id={method.id} className="mt-0.5" />
-                              <div className="flex-1 space-y-1">
-                                <Label htmlFor={method.id} className="font-medium cursor-pointer text-sm leading-relaxed">
-                                  {method.displayName}
+                              <div className="flex-1">
+                                <Label htmlFor={method.id} className="font-medium cursor-pointer text-sm">
+                                  {method.categoryName || 'All Exercises'}
                                 </Label>
                               </div>
                             </div>
