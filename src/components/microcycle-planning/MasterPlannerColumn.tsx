@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dumbbell, Plus, Trophy, Calendar, ChevronDown, ChevronRight, MessageSquare, Pencil, StickyNote, Calculator, ArrowUp, ArrowDown, Copy, Trash2, MoreVertical } from 'lucide-react';
+import { Dumbbell, Plus, Trophy, Calendar, ChevronDown, ChevronRight, MessageSquare, Pencil, StickyNote, Calculator, ArrowUp, ArrowDown, Copy, Trash2, MoreVertical, Link2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { IntensityLevel } from '@/types/training';
 import { ExtendedMesocycle } from '@/features/planner/types';
@@ -149,6 +149,8 @@ interface MasterPlannerColumnProps {
   // New props for duplicate/delete exercise
   onExerciseDuplicate?: (dayDate: string, sessionIndex: number, sectionId: string, exerciseId: string) => void;
   onExerciseDelete?: (dayDate: string, sessionIndex: number, sectionId: string, exerciseId: string) => void;
+  // New prop for superset toggling
+  onToggleSuperset?: (dayDate: string, sessionIndex: number, exerciseId1: string, exerciseId2: string, sectionId?: string) => void;
 }
 
 // Helper to format parameter names nicely
@@ -447,6 +449,7 @@ export function MasterPlannerColumn({
   onAddExerciseToSection,
   onExerciseDuplicate,
   onExerciseDelete,
+  onToggleSuperset,
 }: MasterPlannerColumnProps) {
   const [dayIntensityPopoverOpen, setDayIntensityPopoverOpen] = useState(false);
   const [sessionIntensityPopovers, setSessionIntensityPopovers] = useState<Record<number, boolean>>({});
@@ -465,6 +468,26 @@ export function MasterPlannerColumn({
   const hasTraining = day.sessions.length > 0;
   const isSingleSession = day.sessions.length === 1;
   const currentIntensity: IntensityLevel = dailyIntensityData?.find(di => di.date === day.dateString)?.intensity || 'moderate';
+
+  // Helper: check if two exercises are linked in a superset
+  const areExercisesLinked = useCallback((exerciseId1: string, exerciseId2: string, sessionIndex: number, sectionId?: string): boolean => {
+    const sectionKey = sectionId || '__unsectioned__';
+    const daySupersets = supersets?.[day.dateString];
+    if (!daySupersets) return false;
+    
+    const sessionSupersets = daySupersets[sessionIndex];
+    if (!sessionSupersets) return false;
+    
+    const sectionSupersets = sessionSupersets[sectionKey];
+    if (!sectionSupersets) return false;
+    
+    for (const [, exerciseIds] of Object.entries(sectionSupersets)) {
+      if (exerciseIds.includes(exerciseId1) && exerciseIds.includes(exerciseId2)) {
+        return true;
+      }
+    }
+    return false;
+  }, [supersets, day.dateString]);
 
   // Handle day intensity change with coupled/decoupled logic
   const handleDayIntensityChange = (newIntensity: IntensityLevel) => {
@@ -999,154 +1022,186 @@ export function MasterPlannerColumn({
                         />
                         
                         {/* Section Exercises */}
-                        <div className="space-y-2 mt-2">
+                        <div className="space-y-0 mt-2">
                           {sectionExercises.map((exercise, exIdx) => {
                             const supersetLabel = getSupersetLabel(exercise);
                             const isFirstExercise = exIdx === 0;
                             const isLastExercise = exIdx === sectionExercises.length - 1;
+                            const nextExercise = !isLastExercise ? sectionExercises[exIdx + 1] : null;
+                            const isLinkedToNext = nextExercise ? areExercisesLinked(exercise.exerciseId, nextExercise.exerciseId, session.sessionIndex, section.id) : false;
                             
                             return (
-                              <div
-                                key={`${exercise.exerciseId}-${exIdx}`}
-                                className={cn(
-                                  "text-xs bg-muted/50 border rounded-md p-2.5 shadow-sm",
-                                  supersetLabel && "border-l-4 border-l-primary"
-                                )}
-                              >
-                                <div className="flex items-start gap-1.5">
-                                  {/* Collapse toggle - first position */}
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-4 w-4 p-0 shrink-0 mt-0.5"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleExerciseCollapse(exercise.exerciseId);
-                                    }}
-                                    title={isExerciseCollapsed(exercise.exerciseId) ? "Expand" : "Collapse"}
-                                  >
-                                    {isExerciseCollapsed(exercise.exerciseId) ? (
-                                      <ChevronRight className="h-3 w-3" />
-                                    ) : (
-                                      <ChevronDown className="h-3 w-3" />
-                                    )}
-                                  </Button>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-1 flex-wrap">
-                                      {supersetLabel && (
-                                        <Badge variant="default" className="text-[9px] h-4 px-1 font-semibold">
-                                          {supersetLabel}
-                                        </Badge>
+                              <React.Fragment key={`${exercise.exerciseId}-${exIdx}`}>
+                                <div
+                                  className={cn(
+                                    "text-xs bg-muted/50 border rounded-md p-2.5 shadow-sm",
+                                    supersetLabel && "border-l-4 border-l-primary"
+                                  )}
+                                >
+                                  <div className="flex items-start gap-1.5">
+                                    {/* Collapse toggle - first position */}
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-4 w-4 p-0 shrink-0 mt-0.5"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleExerciseCollapse(exercise.exerciseId);
+                                      }}
+                                      title={isExerciseCollapsed(exercise.exerciseId) ? "Expand" : "Collapse"}
+                                    >
+                                      {isExerciseCollapsed(exercise.exerciseId) ? (
+                                        <ChevronRight className="h-3 w-3" />
+                                      ) : (
+                                        <ChevronDown className="h-3 w-3" />
                                       )}
-                                      <p className="font-semibold truncate flex-1">{exercise.exerciseName}</p>
-                                      {/* Exercise reorder arrows */}
-                                      {sectionExercises.length > 1 && (
-                                        <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                                          {!isFirstExercise && (
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              className="h-4 w-4 p-0"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                onExerciseReorder?.(day.dateString, session.sessionIndex, section.id, exercise.exerciseId, 'up');
-                                              }}
-                                              title="Move exercise up"
-                                            >
-                                              <ArrowUp className="h-2.5 w-2.5" />
-                                            </Button>
-                                          )}
-                                          {!isLastExercise && (
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              className="h-4 w-4 p-0"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                onExerciseReorder?.(day.dateString, session.sessionIndex, section.id, exercise.exerciseId, 'down');
-                                              }}
-                                              title="Move exercise down"
-                                            >
-                                              <ArrowDown className="h-2.5 w-2.5" />
-                                            </Button>
-                                          )}
-                                        </div>
-                                      )}
-                                      {/* Dropdown menu for duplicate/delete */}
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                          <Button variant="ghost" size="sm" className="h-4 w-4 p-0 shrink-0">
-                                            <MoreVertical className="h-3 w-3" />
-                                          </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end" className="z-[300] bg-background border">
-                                          <DropdownMenuItem
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              onExerciseDuplicate?.(day.dateString, session.sessionIndex, section.id, exercise.exerciseId);
-                                            }}
-                                          >
-                                            <Copy className="h-3.5 w-3.5 mr-2" />
-                                            Duplicate
-                                          </DropdownMenuItem>
-                                          <DropdownMenuItem
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              onExerciseDelete?.(day.dateString, session.sessionIndex, section.id, exercise.exerciseId);
-                                            }}
-                                            className="text-destructive focus:text-destructive"
-                                          >
-                                            <Trash2 className="h-3.5 w-3.5 mr-2" />
-                                            Delete
-                                          </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
-                                    </div>
-                                    
-                                    {/* Collapsible content */}
-                                    {!isExerciseCollapsed(exercise.exerciseId) && (
-                                      <>
-                                        <p className="text-muted-foreground truncate text-[11px]">
-                                          {exercise.methodId}
-                                          {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
-                                        </p>
-                                        {renderExerciseParams(exercise)}
-                                        {/* Editable Each Side Toggle - below parameter grid */}
-                                        <div className="flex items-center gap-1.5 mt-1.5" onClick={(e) => e.stopPropagation()}>
-                                          <Checkbox
-                                            id={`each-side-section-${exercise.exerciseId}`}
-                                            checked={exercise.eachSide || false}
-                                            onCheckedChange={(checked) => onExerciseEachSideChange?.(exercise.exerciseId, !!checked)}
-                                            onClick={(e) => e.stopPropagation()}
-                                            className="h-3.5 w-3.5"
-                                          />
-                                          <label
-                                            htmlFor={`each-side-section-${exercise.exerciseId}`}
-                                            className="text-xs text-muted-foreground cursor-pointer"
-                                            onClick={(e) => e.stopPropagation()}
-                                          >
-                                            Each side
-                                          </label>
-                                        </div>
-                                        {/* Editable Notes - below each side toggle */}
-                                        <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
-                                          <div className="flex items-center gap-1 mb-0.5">
-                                            <StickyNote className="h-3 w-3 text-muted-foreground" />
-                                            <span className="text-xs text-muted-foreground">Notes</span>
+                                    </Button>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-1 flex-wrap">
+                                        {supersetLabel && (
+                                          <Badge variant="default" className="text-[9px] h-4 px-1 font-semibold">
+                                            {supersetLabel}
+                                          </Badge>
+                                        )}
+                                        <p className="font-semibold truncate flex-1">{exercise.exerciseName}</p>
+                                        {/* Exercise reorder arrows */}
+                                        {sectionExercises.length > 1 && (
+                                          <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                            {!isFirstExercise && (
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-4 w-4 p-0"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  onExerciseReorder?.(day.dateString, session.sessionIndex, section.id, exercise.exerciseId, 'up');
+                                                }}
+                                                title="Move exercise up"
+                                              >
+                                                <ArrowUp className="h-2.5 w-2.5" />
+                                              </Button>
+                                            )}
+                                            {!isLastExercise && (
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-4 w-4 p-0"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  onExerciseReorder?.(day.dateString, session.sessionIndex, section.id, exercise.exerciseId, 'down');
+                                                }}
+                                                title="Move exercise down"
+                                              >
+                                                <ArrowDown className="h-2.5 w-2.5" />
+                                              </Button>
+                                            )}
                                           </div>
-                                          <Textarea
-                                            value={exercise.notes || ''}
-                                            onChange={(e) => onExerciseNotesChange?.(exercise.exerciseId, e.target.value)}
-                                            onClick={(e) => e.stopPropagation()}
-                                            placeholder="Add notes..."
-                                            className="text-xs min-h-[36px] resize-none p-1"
-                                          />
-                                        </div>
-                                      </>
-                                    )}
+                                        )}
+                                        {/* Dropdown menu for duplicate/delete */}
+                                        <DropdownMenu>
+                                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                            <Button variant="ghost" size="sm" className="h-4 w-4 p-0 shrink-0">
+                                              <MoreVertical className="h-3 w-3" />
+                                            </Button>
+                                          </DropdownMenuTrigger>
+                                          <DropdownMenuContent align="end" className="z-[300] bg-background border">
+                                            <DropdownMenuItem
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                onExerciseDuplicate?.(day.dateString, session.sessionIndex, section.id, exercise.exerciseId);
+                                              }}
+                                            >
+                                              <Copy className="h-3.5 w-3.5 mr-2" />
+                                              Duplicate
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                onExerciseDelete?.(day.dateString, session.sessionIndex, section.id, exercise.exerciseId);
+                                              }}
+                                              className="text-destructive focus:text-destructive"
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                              Delete
+                                            </DropdownMenuItem>
+                                          </DropdownMenuContent>
+                                        </DropdownMenu>
+                                      </div>
+                                      
+                                      {/* Collapsible content */}
+                                      {!isExerciseCollapsed(exercise.exerciseId) && (
+                                        <>
+                                          <p className="text-muted-foreground truncate text-[11px]">
+                                            {exercise.methodId}
+                                            {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
+                                          </p>
+                                          {renderExerciseParams(exercise)}
+                                          {/* Editable Each Side Toggle - below parameter grid */}
+                                          <div className="flex items-center gap-1.5 mt-1.5" onClick={(e) => e.stopPropagation()}>
+                                            <Checkbox
+                                              id={`each-side-section-${exercise.exerciseId}`}
+                                              checked={exercise.eachSide || false}
+                                              onCheckedChange={(checked) => onExerciseEachSideChange?.(exercise.exerciseId, !!checked)}
+                                              onClick={(e) => e.stopPropagation()}
+                                              className="h-3.5 w-3.5"
+                                            />
+                                            <label
+                                              htmlFor={`each-side-section-${exercise.exerciseId}`}
+                                              className="text-xs text-muted-foreground cursor-pointer"
+                                              onClick={(e) => e.stopPropagation()}
+                                            >
+                                              Each side
+                                            </label>
+                                          </div>
+                                          {/* Editable Notes - below each side toggle */}
+                                          <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex items-center gap-1 mb-0.5">
+                                              <StickyNote className="h-3 w-3 text-muted-foreground" />
+                                              <span className="text-xs text-muted-foreground">Notes</span>
+                                            </div>
+                                            <Textarea
+                                              value={exercise.notes || ''}
+                                              onChange={(e) => onExerciseNotesChange?.(exercise.exerciseId, e.target.value)}
+                                              onClick={(e) => e.stopPropagation()}
+                                              placeholder="Add notes..."
+                                              className="text-xs min-h-[36px] resize-none p-1"
+                                            />
+                                          </div>
+                                        </>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
+                                
+                                {/* Chain icon between exercises - always visible */}
+                                {!isLastExercise && nextExercise && (
+                                  <div className="flex justify-center py-0.5 relative z-10">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className={cn(
+                                        "h-5 w-5 rounded-full p-0",
+                                        isLinkedToNext
+                                          ? "bg-primary/20 text-primary hover:bg-primary/30"
+                                          : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                                      )}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onToggleSuperset?.(
+                                          day.dateString, 
+                                          session.sessionIndex, 
+                                          exercise.exerciseId, 
+                                          nextExercise.exerciseId, 
+                                          section.id
+                                        );
+                                      }}
+                                      title={isLinkedToNext ? "Remove from superset" : "Add to superset"}
+                                    >
+                                      <Link2 className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                )}
+                              </React.Fragment>
                             );
                           })}
                           
@@ -1187,118 +1242,152 @@ export function MasterPlannerColumn({
 
             {/* Unsectioned exercises (fallback) */}
             {exercisesBySection.unsectioned.length > 0 && (
-              <div className="space-y-2 mt-2">
+              <div className="space-y-0 mt-2">
                 {exercisesBySection.unsectioned.map((exercise, exIdx) => {
                   const supersetLabel = getSupersetLabel(exercise);
+                  const isLastExercise = exIdx === exercisesBySection.unsectioned.length - 1;
+                  const nextExercise = !isLastExercise ? exercisesBySection.unsectioned[exIdx + 1] : null;
+                  const isLinkedToNext = nextExercise ? areExercisesLinked(exercise.exerciseId, nextExercise.exerciseId, session.sessionIndex, undefined) : false;
+                  
                   return (
-                    <div
-                      key={`${exercise.exerciseId}-${exIdx}`}
-                      className={cn(
-                        "text-xs bg-muted/50 border rounded-md p-2.5 shadow-sm",
-                        supersetLabel && "border-l-4 border-l-primary"
-                      )}
-                    >
-                      <div className="flex items-start gap-1.5">
-                        {/* Collapse toggle - first position */}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-4 w-4 p-0 shrink-0 mt-0.5"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleExerciseCollapse(exercise.exerciseId);
-                          }}
-                          title={isExerciseCollapsed(exercise.exerciseId) ? "Expand" : "Collapse"}
-                        >
-                          {isExerciseCollapsed(exercise.exerciseId) ? (
-                            <ChevronRight className="h-3 w-3" />
-                          ) : (
-                            <ChevronDown className="h-3 w-3" />
-                          )}
-                        </Button>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1 flex-wrap">
-                            {supersetLabel && (
-                              <Badge variant="default" className="text-[9px] h-4 px-1 font-semibold">
-                                {supersetLabel}
-                              </Badge>
+                    <React.Fragment key={`${exercise.exerciseId}-${exIdx}`}>
+                      <div
+                        className={cn(
+                          "text-xs bg-muted/50 border rounded-md p-2.5 shadow-sm",
+                          supersetLabel && "border-l-4 border-l-primary"
+                        )}
+                      >
+                        <div className="flex items-start gap-1.5">
+                          {/* Collapse toggle - first position */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-4 w-4 p-0 shrink-0 mt-0.5"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleExerciseCollapse(exercise.exerciseId);
+                            }}
+                            title={isExerciseCollapsed(exercise.exerciseId) ? "Expand" : "Collapse"}
+                          >
+                            {isExerciseCollapsed(exercise.exerciseId) ? (
+                              <ChevronRight className="h-3 w-3" />
+                            ) : (
+                              <ChevronDown className="h-3 w-3" />
                             )}
-                            <p className="font-semibold truncate flex-1">{exercise.exerciseName}</p>
-                            {/* Dropdown menu for duplicate/delete */}
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                <Button variant="ghost" size="sm" className="h-4 w-4 p-0 shrink-0">
-                                  <MoreVertical className="h-3 w-3" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="z-[300] bg-background border">
-                                <DropdownMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onExerciseDuplicate?.(day.dateString, session.sessionIndex, '', exercise.exerciseId);
-                                  }}
-                                >
-                                  <Copy className="h-3.5 w-3.5 mr-2" />
-                                  Duplicate
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onExerciseDelete?.(day.dateString, session.sessionIndex, '', exercise.exerciseId);
-                                  }}
-                                  className="text-destructive focus:text-destructive"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                          
-                          {/* Collapsible content */}
-                          {!isExerciseCollapsed(exercise.exerciseId) && (
-                            <>
-                              <p className="text-muted-foreground truncate text-[11px]">
-                                {exercise.methodId}
-                                {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
-                              </p>
-                              {renderExerciseParams(exercise)}
-                              {/* Editable Each Side Toggle - below parameter grid */}
-                              <div className="flex items-center gap-1.5 mt-1.5" onClick={(e) => e.stopPropagation()}>
-                                <Checkbox
-                                  id={`each-side-unsectioned-${exercise.exerciseId}`}
-                                  checked={exercise.eachSide || false}
-                                  onCheckedChange={(checked) => onExerciseEachSideChange?.(exercise.exerciseId, !!checked)}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="h-3.5 w-3.5"
-                                />
-                                <label
-                                  htmlFor={`each-side-unsectioned-${exercise.exerciseId}`}
-                                  className="text-xs text-muted-foreground cursor-pointer"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  Each side
-                                </label>
-                              </div>
-                              {/* Editable Notes - below each side toggle */}
-                              <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
-                                <div className="flex items-center gap-1 mb-0.5">
-                                  <StickyNote className="h-3 w-3 text-muted-foreground" />
-                                  <span className="text-xs text-muted-foreground">Notes</span>
+                          </Button>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {supersetLabel && (
+                                <Badge variant="default" className="text-[9px] h-4 px-1 font-semibold">
+                                  {supersetLabel}
+                                </Badge>
+                              )}
+                              <p className="font-semibold truncate flex-1">{exercise.exerciseName}</p>
+                              {/* Dropdown menu for duplicate/delete */}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                  <Button variant="ghost" size="sm" className="h-4 w-4 p-0 shrink-0">
+                                    <MoreVertical className="h-3 w-3" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="z-[300] bg-background border">
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onExerciseDuplicate?.(day.dateString, session.sessionIndex, '', exercise.exerciseId);
+                                    }}
+                                  >
+                                    <Copy className="h-3.5 w-3.5 mr-2" />
+                                    Duplicate
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onExerciseDelete?.(day.dateString, session.sessionIndex, '', exercise.exerciseId);
+                                    }}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                            
+                            {/* Collapsible content */}
+                            {!isExerciseCollapsed(exercise.exerciseId) && (
+                              <>
+                                <p className="text-muted-foreground truncate text-[11px]">
+                                  {exercise.methodId}
+                                  {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
+                                </p>
+                                {renderExerciseParams(exercise)}
+                                {/* Editable Each Side Toggle - below parameter grid */}
+                                <div className="flex items-center gap-1.5 mt-1.5" onClick={(e) => e.stopPropagation()}>
+                                  <Checkbox
+                                    id={`each-side-unsectioned-${exercise.exerciseId}`}
+                                    checked={exercise.eachSide || false}
+                                    onCheckedChange={(checked) => onExerciseEachSideChange?.(exercise.exerciseId, !!checked)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="h-3.5 w-3.5"
+                                  />
+                                  <label
+                                    htmlFor={`each-side-unsectioned-${exercise.exerciseId}`}
+                                    className="text-xs text-muted-foreground cursor-pointer"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    Each side
+                                  </label>
                                 </div>
-                                <Textarea
-                                  value={exercise.notes || ''}
-                                  onChange={(e) => onExerciseNotesChange?.(exercise.exerciseId, e.target.value)}
-                                  onClick={(e) => e.stopPropagation()}
-                                  placeholder="Add notes..."
-                                  className="text-xs min-h-[36px] resize-none p-1"
-                                />
-                              </div>
-                            </>
-                          )}
+                                {/* Editable Notes - below each side toggle */}
+                                <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex items-center gap-1 mb-0.5">
+                                    <StickyNote className="h-3 w-3 text-muted-foreground" />
+                                    <span className="text-xs text-muted-foreground">Notes</span>
+                                  </div>
+                                  <Textarea
+                                    value={exercise.notes || ''}
+                                    onChange={(e) => onExerciseNotesChange?.(exercise.exerciseId, e.target.value)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    placeholder="Add notes..."
+                                    className="text-xs min-h-[36px] resize-none p-1"
+                                  />
+                                </div>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
+                      
+                      {/* Chain icon between exercises - always visible */}
+                      {!isLastExercise && nextExercise && (
+                        <div className="flex justify-center py-0.5 relative z-10">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={cn(
+                              "h-5 w-5 rounded-full p-0",
+                              isLinkedToNext
+                                ? "bg-primary/20 text-primary hover:bg-primary/30"
+                                : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                            )}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onToggleSuperset?.(
+                                day.dateString, 
+                                session.sessionIndex, 
+                                exercise.exerciseId, 
+                                nextExercise.exerciseId, 
+                                undefined
+                              );
+                            }}
+                            title={isLinkedToNext ? "Remove from superset" : "Add to superset"}
+                          >
+                            <Link2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </React.Fragment>
                   );
                 })}
               </div>

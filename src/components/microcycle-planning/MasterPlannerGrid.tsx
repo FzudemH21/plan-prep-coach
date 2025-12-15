@@ -97,6 +97,8 @@ interface MasterPlannerGridProps {
   // New props for duplicate/delete exercise
   onExerciseDuplicate?: (dayDate: string, sessionIndex: number, sectionId: string, exerciseId: string) => void;
   onExerciseDelete?: (dayDate: string, sessionIndex: number, sectionId: string, exerciseId: string) => void;
+  // New prop for superset toggling
+  onToggleSuperset?: (dayDate: string, sessionIndex: number, exerciseId1: string, exerciseId2: string, sectionId?: string) => void;
 }
 
 const MAX_WEEKS_DISPLAY = 6;
@@ -130,6 +132,7 @@ export function MasterPlannerGrid({
   onAddExerciseToSection,
   onExerciseDuplicate,
   onExerciseDelete,
+  onToggleSuperset,
 }: MasterPlannerGridProps) {
   const [startWeekOffset, setStartWeekOffset] = useState(0);
 
@@ -242,6 +245,7 @@ export function MasterPlannerGrid({
               onAddExerciseToSection={onAddExerciseToSection}
               onExerciseDuplicate={onExerciseDuplicate}
               onExerciseDelete={onExerciseDelete}
+              onToggleSuperset={onToggleSuperset}
             />
           ))}
         </div>
