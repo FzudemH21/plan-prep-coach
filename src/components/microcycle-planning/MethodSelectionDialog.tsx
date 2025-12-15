@@ -126,10 +126,10 @@ export function MethodSelectionDialog({
                   <RadioGroup value={selectedMethodKey} onValueChange={setSelectedMethodKey}>
                     {Object.entries(groupedMethods).map(([trainingMethod, methods]) => (
                       <div key={trainingMethod} className="space-y-2">
-                        <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                        <h3 className="font-semibold text-sm text-foreground uppercase tracking-wide">
                           {trainingMethod}
                         </h3>
-                        <div className="space-y-2">
+                        <div className="space-y-2 ml-4">
                           {methods.map(method => (
                             <div
                               key={method.id}
