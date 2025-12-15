@@ -852,8 +852,8 @@ export function MasterPlannerColumn({
     const sections = getSectionsForSession(session.sessionIndex);
     const sessionComment = getSessionComment(session.sessionIndex);
 
-    // Get exercises grouped by section
-    const exercisesBySection = useMemo(() => {
+    // Get exercises grouped by section (no hook here - just compute directly)
+    const getExercisesBySection = () => {
       const grouped: Record<string, ExerciseDistribution[]> = {};
       const unsectioned: ExerciseDistribution[] = [];
 
@@ -869,7 +869,9 @@ export function MasterPlannerColumn({
       });
 
       return { grouped, unsectioned };
-    }, [session.exercises]);
+    };
+    
+    const exercisesBySection = getExercisesBySection();
 
     return (
       <div className="space-y-2">
