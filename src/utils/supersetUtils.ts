@@ -69,17 +69,24 @@ export function toggleSuperset(
       const firstGroup = currentIds.slice(0, splitPoint);
       const secondGroup = currentIds.slice(splitPoint);
       
-      // Keep first group in original superset (if 2+ exercises)
-      if (firstGroup.length >= 2) {
-        sectionSupersets[superset1] = firstGroup;
-      } else {
-        delete sectionSupersets[superset1];
-      }
+      // Determine which group(s) should remain as supersets
+      const firstGroupValid = firstGroup.length >= 2;
+      const secondGroupValid = secondGroup.length >= 2;
       
-      // Create new superset for second group (if 2+ exercises)
-      if (secondGroup.length >= 2) {
+      if (firstGroupValid && secondGroupValid) {
+        // Both groups are valid - keep first in original, create new for second
+        sectionSupersets[superset1] = firstGroup;
         const newSupersetId = getNextSupersetId();
         sectionSupersets[newSupersetId] = secondGroup;
+      } else if (firstGroupValid) {
+        // Only first group is valid - keep it in original superset
+        sectionSupersets[superset1] = firstGroup;
+      } else if (secondGroupValid) {
+        // Only second group is valid - keep it in original superset (reuse ID)
+        sectionSupersets[superset1] = secondGroup;
+      } else {
+        // Neither group is valid (both have < 2 exercises) - delete superset
+        delete sectionSupersets[superset1];
       }
       
       return { newSupersets, action: 'unlinked', message: 'Connection removed' };
