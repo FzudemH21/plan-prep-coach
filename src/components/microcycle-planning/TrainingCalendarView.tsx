@@ -19,7 +19,7 @@ import { useToolboxData } from '@/hooks/useToolboxData';
 import { ExerciseDistribution as CanonicalExerciseDistribution, SessionSection, SupersetMapping, ExerciseSelection } from '@/types/microcycle-planning';
 import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
 import { MethodSelectionDialog } from './MethodSelectionDialog';
-import { toggleSuperset } from '@/utils/supersetUtils';
+import { toggleSuperset, cleanupSupersetsOnExerciseDelete } from '@/utils/supersetUtils';
 
 // Local interface for internal use - compatible with WeekRow, TrainingDayCell etc.
 interface ExerciseDistribution {
@@ -839,6 +839,10 @@ export function TrainingCalendarView({
                          e.sessionIndex === sessionIndex &&
                          (sectionId === '' || e.sectionId === sectionId))
                 );
+                
+                // Clean up supersets - remove deleted exercise from all superset groups
+                const cleanedSupersets = cleanupSupersetsOnExerciseDelete(supersets, exerciseId);
+                onSupersetsChange?.(cleanedSupersets);
                 
                 onDistributionChange(updatedDistribution);
                 toast({ title: "Exercise deleted" });
