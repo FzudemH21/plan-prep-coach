@@ -23,6 +23,8 @@ interface MethodSelectionDialogProps {
   mesocycleId: string;
   microcycleIndex: number;
   sessionIndex: number;
+  /** When true, renders an explicit overlay. Set to true when opening from inside another dialog. */
+  needsExplicitOverlay?: boolean;
 }
 
 export function MethodSelectionDialog({
@@ -32,7 +34,8 @@ export function MethodSelectionDialog({
   availableMethods,
   mesocycleId,
   microcycleIndex,
-  sessionIndex
+  sessionIndex,
+  needsExplicitOverlay = false
 }: MethodSelectionDialogProps) {
   const [selectedMethodKey, setSelectedMethodKey] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -88,8 +91,8 @@ export function MethodSelectionDialog({
   return (
     <Dialog open={isOpen} onOpenChange={handleCancel}>
       <DialogPortal>
-        <DialogOverlay className="z-[150]" />
-        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col z-[151]">
+        {needsExplicitOverlay && <DialogOverlay className="z-[150]" />}
+        <DialogContent className={`max-w-2xl max-h-[80vh] flex flex-col ${needsExplicitOverlay ? 'z-[151]' : ''}`}>
         <DialogHeader>
           <DialogTitle>Select Training Method</DialogTitle>
           <DialogDescription>

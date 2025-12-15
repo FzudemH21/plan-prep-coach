@@ -94,6 +94,9 @@ interface MasterPlannerGridProps {
   // New props for Phase 6 - add section and exercise buttons
   onAddSectionToSession?: (dayDate: string, sessionIndex: number) => void;
   onAddExerciseToSection?: (dayDate: string, sessionIndex: number, sectionId: string) => void;
+  // New props for duplicate/delete exercise
+  onExerciseDuplicate?: (dayDate: string, sessionIndex: number, sectionId: string, exerciseId: string) => void;
+  onExerciseDelete?: (dayDate: string, sessionIndex: number, sectionId: string, exerciseId: string) => void;
 }
 
 const MAX_WEEKS_DISPLAY = 6;
@@ -125,6 +128,8 @@ export function MasterPlannerGrid({
   onExerciseReorder,
   onAddSectionToSession,
   onAddExerciseToSection,
+  onExerciseDuplicate,
+  onExerciseDelete,
 }: MasterPlannerGridProps) {
   const [startWeekOffset, setStartWeekOffset] = useState(0);
 
@@ -235,6 +240,8 @@ export function MasterPlannerGrid({
               onExerciseReorder={onExerciseReorder}
               onAddSectionToSession={onAddSectionToSession}
               onAddExerciseToSection={onAddExerciseToSection}
+              onExerciseDuplicate={onExerciseDuplicate}
+              onExerciseDelete={onExerciseDelete}
             />
           ))}
         </div>
