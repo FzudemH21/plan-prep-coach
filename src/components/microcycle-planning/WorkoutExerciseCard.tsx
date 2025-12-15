@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
-import { GripVertical, MoreVertical, Link2, Copy, Trash2, Plus, StickyNote, Calculator } from 'lucide-react';
+import { GripVertical, MoreVertical, Link2, Copy, Trash2, Plus, StickyNote, Calculator, ChevronDown, ChevronRight } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { WorkoutExercise } from '@/types/workout';
@@ -39,6 +39,9 @@ interface WorkoutExerciseCardProps {
   onAutoCalculateWeightChange?: (value: boolean) => void;
   autoCalculateTargetHR?: boolean;
   onAutoCalculateTargetHRChange?: (value: boolean) => void;
+  // Collapse state
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 export function WorkoutExerciseCard({
@@ -63,6 +66,8 @@ export function WorkoutExerciseCard({
   onAutoCalculateWeightChange,
   autoCalculateTargetHR,
   onAutoCalculateTargetHRChange,
+  isCollapsed = false,
+  onToggleCollapse,
 }: WorkoutExerciseCardProps) {
   // Get parameters: FIRST derive from exercise.parameters (from method periodization), THEN fallback to static dictionary
   const methodParams = (() => {
@@ -227,15 +232,29 @@ export function WorkoutExerciseCard({
           <GripVertical className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
         </div>
 
+        {/* Collapse Toggle */}
+        {onToggleCollapse && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 mt-0.5"
+            onClick={onToggleCollapse}
+          >
+            {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
+        )}
+
         {/* Exercise Content */}
         <div className="flex-1 space-y-3">
           {/* Exercise Header */}
           <div className="flex items-start justify-between">
             <div>
               <h4 className="font-medium">{exercise.exerciseName}</h4>
-              <p className="text-sm text-muted-foreground">
-                {exercise.methodId} {exercise.categoryName && `• ${exercise.categoryName}`}
-              </p>
+              {!isCollapsed && (
+                <p className="text-sm text-muted-foreground">
+                  {exercise.methodId} {exercise.categoryName && `• ${exercise.categoryName}`}
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {isInSuperset && supersetLabel && (
@@ -243,8 +262,8 @@ export function WorkoutExerciseCard({
                   {supersetLabel}
                 </Badge>
               )}
-              {/* Parameter Visibility Popover */}
-              {onVisibilityChange && displayableParams.length > 0 && (
+              {/* Parameter Visibility Popover - only show when expanded */}
+              {!isCollapsed && onVisibilityChange && displayableParams.length > 0 && (
                 <ParameterVisibilityPopover
                   parameters={displayableParams.map(p => ({
                     name: p.name,
@@ -284,7 +303,7 @@ export function WorkoutExerciseCard({
             </div>
           </div>
 
-          {/* Hidden Parameters as Badges */}
+          {/* Hidden Parameters as Badges - show even when collapsed */}
           {hiddenParams.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {hiddenParams.map(param => {
@@ -302,6 +321,10 @@ export function WorkoutExerciseCard({
               })}
             </div>
           )}
+
+          {/* Collapsible Content */}
+          {!isCollapsed && (
+            <>
 
           {/* Auto-Calculation Toggles */}
           {(autoCalcDetection.has1RMParam || autoCalcDetection.hasMaxHRParam) && (
@@ -540,7 +563,7 @@ export function WorkoutExerciseCard({
             </label>
           </div>
 
-          {/* Always visible notes section */}
+          {/* Always visible notes section - only when expanded */}
           <div className="mt-3 pt-3 border-t">
             <div className="flex items-center gap-1 mb-1">
               <StickyNote className="h-3.5 w-3.5 text-muted-foreground" />
@@ -553,6 +576,8 @@ export function WorkoutExerciseCard({
               className="text-xs min-h-[60px] resize-none"
             />
           </div>
+            </>
+          )}
         </div>
       </div>
     </Card>

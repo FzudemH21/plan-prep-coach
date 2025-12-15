@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogOverlay, DialogPortal } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -87,7 +87,9 @@ export function MethodSelectionDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleCancel}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+      <DialogPortal>
+        <DialogOverlay className="z-[150]" />
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col z-[151]">
         <DialogHeader>
           <DialogTitle>Select Training Method</DialogTitle>
           <DialogDescription>
@@ -172,7 +174,8 @@ export function MethodSelectionDialog({
             </div>
           </>
         )}
-      </DialogContent>
+        </DialogContent>
+      </DialogPortal>
     </Dialog>
   );
 }
