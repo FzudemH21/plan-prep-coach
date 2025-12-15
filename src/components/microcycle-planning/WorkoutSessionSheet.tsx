@@ -26,7 +26,7 @@ import { getParametersForMethod } from '@/data/methodParameters';
 import { ExerciseSelection } from '@/types/microcycle-planning';
 import { ToolboxDatabase } from '@/types/toolbox';
 import { cn } from '@/lib/utils';
-import { toggleSuperset, getSupersetLabelFromMapping } from '@/utils/supersetUtils';
+import { toggleSuperset, getSupersetLabelFromMapping, cleanupSupersetsOnExerciseDelete } from '@/utils/supersetUtils';
 
 interface ExerciseDistribution {
   id?: string;
@@ -1140,6 +1140,11 @@ export function WorkoutSessionSheet({
         exercises: section.exercises.filter(ex => ex.id !== exerciseId).map((ex, idx) => ({ ...ex, order: idx }))
       }))
     );
+    
+    // Clean up supersets - remove deleted exercise from all superset groups
+    const cleanedSupersets = cleanupSupersetsOnExerciseDelete(supersets, exerciseId);
+    setSupersets(cleanedSupersets);
+    onSupersetsChange?.(cleanedSupersets);
     
     // Sync to Step 1 - remove exercise from distribution
     if (onDistributionChange && allExerciseDistribution) {

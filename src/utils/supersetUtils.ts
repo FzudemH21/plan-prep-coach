@@ -145,7 +145,7 @@ export function getSupersetLabelFromMapping(
     ? [sectionId] 
     : Object.keys(sessionSupersets);
   
-  // Collect all supersets from all relevant sections
+  // Collect all supersets from all relevant sections (only those with 2+ exercises)
   const allSupersets: Array<{ supersetId: string; exerciseIds: string[] }> = [];
   
   for (const section of sectionsToCheck) {
@@ -153,7 +153,10 @@ export function getSupersetLabelFromMapping(
     if (!sectionSupersets) continue;
     
     for (const [supersetId, exerciseIds] of Object.entries(sectionSupersets)) {
-      allSupersets.push({ supersetId, exerciseIds });
+      // Only include supersets with 2 or more exercises
+      if (exerciseIds.length >= 2) {
+        allSupersets.push({ supersetId, exerciseIds });
+      }
     }
   }
   
@@ -174,4 +177,61 @@ export function getSupersetLabelFromMapping(
   }
   
   return null;
+}
+
+/**
+ * Cleanup supersets when an exercise is deleted.
+ * Removes the exercise ID from all supersets and deletes supersets with fewer than 2 exercises.
+ */
+export function cleanupSupersetsOnExerciseDelete(
+  currentSupersets: SupersetMapping | undefined,
+  deletedExerciseId: string
+): SupersetMapping {
+  if (!currentSupersets) return {};
+  
+  // Deep clone
+  const newSupersets: SupersetMapping = JSON.parse(JSON.stringify(currentSupersets));
+  
+  // Iterate through all days, sessions, sections, and supersets
+  for (const dayDate of Object.keys(newSupersets)) {
+    const daySupersets = newSupersets[dayDate];
+    
+    for (const sessionIndex of Object.keys(daySupersets)) {
+      const sessionSupersets = daySupersets[parseInt(sessionIndex)];
+      
+      for (const sectionId of Object.keys(sessionSupersets)) {
+        const sectionSupersets = sessionSupersets[sectionId];
+        
+        for (const supersetId of Object.keys(sectionSupersets)) {
+          // Remove the deleted exercise from this superset
+          const exerciseIds = sectionSupersets[supersetId].filter(id => id !== deletedExerciseId);
+          
+          if (exerciseIds.length >= 2) {
+            // Keep the superset with remaining exercises
+            sectionSupersets[supersetId] = exerciseIds;
+          } else {
+            // Delete the superset if fewer than 2 exercises remain
+            delete sectionSupersets[supersetId];
+          }
+        }
+        
+        // Clean up empty section
+        if (Object.keys(sectionSupersets).length === 0) {
+          delete sessionSupersets[sectionId];
+        }
+      }
+      
+      // Clean up empty session
+      if (Object.keys(sessionSupersets).length === 0) {
+        delete daySupersets[parseInt(sessionIndex)];
+      }
+    }
+    
+    // Clean up empty day
+    if (Object.keys(daySupersets).length === 0) {
+      delete newSupersets[dayDate];
+    }
+  }
+  
+  return newSupersets;
 }
