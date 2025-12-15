@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
@@ -498,22 +498,46 @@ export function WorkoutSessionSheet({
     return JSON.stringify(Object.keys(microData).sort());
   }, [parameterValues, mesocycleId, microcycleIndex]);
 
-  // Sync workoutSections when dialog opens, exercises change, or parameterValues become available
+  // Track previous exercise count to detect additions vs deletions
+  const prevExerciseCountRef = useRef(exercises.length);
+  const hasInitializedRef = useRef(false);
+  
+  // Sync workoutSections when dialog opens or exercises are ADDED (not deleted)
   useEffect(() => {
     if (isOpen && exercises.length > 0) {
-      const newSections = buildSectionsFromExercises(exercises, parameterValues);
-      setWorkoutSections(newSections);
+      const prevCount = prevExerciseCountRef.current;
+      const currentCount = exercises.length;
+      
+      // Only rebuild if:
+      // 1. First time opening (not initialized)
+      // 2. Exercises were added (count increased)
+      // 3. Dialog just opened (hasInitializedRef is false)
+      if (!hasInitializedRef.current || currentCount > prevCount) {
+        const newSections = buildSectionsFromExercises(exercises, parameterValues);
+        setWorkoutSections(newSections);
+        hasInitializedRef.current = true;
+      }
+      
+      prevExerciseCountRef.current = currentCount;
     }
   }, [isOpen, exercises.length, dayDate, sessionIndex, parameterValuesKey]);
+  
+  // Reset initialization flag when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      hasInitializedRef.current = false;
+    }
+  }, [isOpen]);
   
   // Force rebuild when dialog opens (separate effect to ensure fresh data)
   useEffect(() => {
     if (isOpen) {
       // Small delay to ensure parameterValues are loaded
       const timeoutId = setTimeout(() => {
-        if (exercises.length > 0) {
+        if (exercises.length > 0 && !hasInitializedRef.current) {
           const newSections = buildSectionsFromExercises(exercises, parameterValues);
           setWorkoutSections(newSections);
+          hasInitializedRef.current = true;
         }
       }, 100);
       return () => clearTimeout(timeoutId);
