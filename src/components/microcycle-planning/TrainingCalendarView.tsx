@@ -19,6 +19,7 @@ import { useToolboxData } from '@/hooks/useToolboxData';
 import { ExerciseDistribution as CanonicalExerciseDistribution, SessionSection, SupersetMapping, ExerciseSelection } from '@/types/microcycle-planning';
 import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
 import { MethodSelectionDialog } from './MethodSelectionDialog';
+import { toggleSuperset } from '@/utils/supersetUtils';
 
 // Local interface for internal use - compatible with WeekRow, TrainingDayCell etc.
 interface ExerciseDistribution {
@@ -843,77 +844,9 @@ export function TrainingCalendarView({
                 toast({ title: "Exercise deleted" });
               }}
               onToggleSuperset={(dayDate, sessionIndex, exerciseId1, exerciseId2, sectionId) => {
-                if (!onSupersetsChange || !supersets) {
-                  // Initialize supersets if needed
-                  const initialSupersets: SupersetMapping = {};
-                  const sectionKey = sectionId || '__unsectioned__';
-                  const newSupersetId = `superset-${Date.now()}`;
-                  initialSupersets[dayDate] = {
-                    [sessionIndex]: {
-                      [sectionKey]: {
-                        [newSupersetId]: [exerciseId1, exerciseId2]
-                      }
-                    }
-                  };
-                  onSupersetsChange?.(initialSupersets);
-                  return;
-                }
-                
-                const sectionKey = sectionId || '__unsectioned__';
-                const newSupersets = { ...supersets };
-                
-                // Ensure structure exists
-                if (!newSupersets[dayDate]) {
-                  newSupersets[dayDate] = {};
-                }
-                if (!newSupersets[dayDate][sessionIndex]) {
-                  newSupersets[dayDate][sessionIndex] = {};
-                }
-                if (!newSupersets[dayDate][sessionIndex][sectionKey]) {
-                  newSupersets[dayDate][sessionIndex][sectionKey] = {};
-                }
-                
-                const sectionSupersets = newSupersets[dayDate][sessionIndex][sectionKey];
-                
-                // Check if exercises are already in a superset together
-                let foundSupersetId: string | null = null;
-                for (const [supersetId, exerciseIds] of Object.entries(sectionSupersets)) {
-                  if (exerciseIds.includes(exerciseId1) && exerciseIds.includes(exerciseId2)) {
-                    foundSupersetId = supersetId;
-                    break;
-                  }
-                }
-                
-                if (foundSupersetId) {
-                  // Remove the link - if superset has only these 2 exercises, remove the superset
-                  const currentExercises = sectionSupersets[foundSupersetId];
-                  if (currentExercises.length === 2) {
-                    delete sectionSupersets[foundSupersetId];
-                  } else {
-                    // Remove exerciseId2 from the superset
-                    sectionSupersets[foundSupersetId] = currentExercises.filter(id => id !== exerciseId2);
-                  }
-                } else {
-                  // Check if exerciseId1 is already in a superset
-                  let existingSupersetId: string | null = null;
-                  for (const [supersetId, exerciseIds] of Object.entries(sectionSupersets)) {
-                    if (exerciseIds.includes(exerciseId1)) {
-                      existingSupersetId = supersetId;
-                      break;
-                    }
-                  }
-                  
-                  if (existingSupersetId) {
-                    // Add exerciseId2 to existing superset
-                    sectionSupersets[existingSupersetId].push(exerciseId2);
-                  } else {
-                    // Create new superset with both exercises
-                    const newSupersetId = `superset-${Date.now()}`;
-                    sectionSupersets[newSupersetId] = [exerciseId1, exerciseId2];
-                  }
-                }
-                
-                onSupersetsChange(newSupersets);
+                const result = toggleSuperset(supersets, dayDate, sessionIndex, exerciseId1, exerciseId2, sectionId);
+                onSupersetsChange?.(result.newSupersets);
+                toast({ title: result.action === 'unlinked' ? 'Exercises unlinked' : 'Exercises linked', description: result.message });
               }}
             />
           ) : (
