@@ -852,6 +852,107 @@ export function TrainingCalendarView({
                 onSupersetsChange?.(result.newSupersets);
                 toast({ title: result.action === 'unlinked' ? 'Exercises unlinked' : 'Exercises linked', description: result.message });
               }}
+              onSectionDelete={(dayDate, sessionIndex, sectionId) => {
+                if (!sessionSections || !onSectionsChange) return;
+                
+                // Get exercises to delete for superset cleanup
+                const exercisesToDelete = exerciseDistribution.filter(
+                  e => e.dayDate === dayDate && e.sessionIndex === sessionIndex && e.sectionId === sectionId
+                );
+                
+                // Remove exercises belonging to this section
+                if (onDistributionChange) {
+                  const updatedDistribution = exerciseDistribution.filter(
+                    e => !(e.dayDate === dayDate && e.sessionIndex === sessionIndex && e.sectionId === sectionId)
+                  );
+                  onDistributionChange(updatedDistribution);
+                }
+                
+                // Clean up supersets for deleted exercises
+                if (onSupersetsChange) {
+                  let cleanedSupersets = { ...supersets };
+                  exercisesToDelete.forEach(ex => {
+                    cleanedSupersets = cleanupSupersetsOnExerciseDelete(cleanedSupersets, ex.id || ex.exerciseId);
+                  });
+                  onSupersetsChange(cleanedSupersets);
+                }
+                
+                // Remove the section and reorder remaining sections
+                const otherSections = sessionSections.filter(
+                  s => !(s.dayDate === dayDate && s.sessionIndex === sessionIndex)
+                );
+                const sessionSpecificSections = sessionSections
+                  .filter(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex && s.id !== sectionId)
+                  .sort((a, b) => a.order - b.order)
+                  .map((s, idx) => ({ ...s, order: idx }));
+                
+                onSectionsChange([...otherSections, ...sessionSpecificSections]);
+                toast({ title: "Section deleted" });
+              }}
+              onSectionDuplicate={(dayDate, sessionIndex, sectionId) => {
+                if (!sessionSections || !onSectionsChange) return;
+                
+                // Find the section to duplicate
+                const sectionToDuplicate = sessionSections.find(s => s.id === sectionId);
+                if (!sectionToDuplicate) return;
+                
+                const timestamp = Date.now();
+                const newSectionId = `section-${timestamp}-${Math.random().toString(36).substr(2, 9)}`;
+                
+                // Get existing sections for this session to calculate order
+                const sessionSpecificSections = sessionSections
+                  .filter(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex)
+                  .sort((a, b) => a.order - b.order);
+                
+                const originalIndex = sessionSpecificSections.findIndex(s => s.id === sectionId);
+                
+                // Create duplicated section
+                const newSection = {
+                  id: newSectionId,
+                  name: `${sectionToDuplicate.name} (Copy)`,
+                  dayDate,
+                  sessionIndex,
+                  order: originalIndex + 1,
+                  comments: sectionToDuplicate.comments,
+                };
+                
+                // Reorder sections after the duplicated one
+                const reorderedSections = sessionSpecificSections.map((s, idx) => {
+                  if (idx > originalIndex) {
+                    return { ...s, order: s.order + 1 };
+                  }
+                  return s;
+                });
+                
+                // Get other sessions' sections
+                const otherSections = sessionSections.filter(
+                  s => !(s.dayDate === dayDate && s.sessionIndex === sessionIndex)
+                );
+                
+                onSectionsChange([...otherSections, ...reorderedSections, newSection]);
+                
+                // Duplicate exercises in this section
+                if (onDistributionChange) {
+                  const sectionExercises = exerciseDistribution.filter(
+                    e => e.dayDate === dayDate && e.sessionIndex === sessionIndex && e.sectionId === sectionId
+                  );
+                  
+                  const duplicatedExercises = sectionExercises.map((ex, idx) => ({
+                    ...ex,
+                    id: `${ex.exerciseId}-${timestamp}-dup-${idx}`,
+                    sectionId: newSectionId,
+                  }));
+                  
+                  onDistributionChange([...exerciseDistribution, ...duplicatedExercises]);
+                }
+                
+                toast({ 
+                  title: "Section duplicated",
+                  description: `"${sectionToDuplicate.name}" copied with ${
+                    exerciseDistribution.filter(e => e.sectionId === sectionId).length
+                  } exercise(s)`
+                });
+              }}
             />
           ) : (
             /* Calendar View */

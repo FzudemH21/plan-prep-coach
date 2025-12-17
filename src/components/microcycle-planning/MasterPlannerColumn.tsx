@@ -154,6 +154,9 @@ interface MasterPlannerColumnProps {
   onExerciseDelete?: (dayDate: string, sessionIndex: number, sectionId: string, exerciseId: string) => void;
   // New prop for superset toggling
   onToggleSuperset?: (dayDate: string, sessionIndex: number, exerciseId1: string, exerciseId2: string, sectionId?: string) => void;
+  // New props for section duplicate/delete
+  onSectionDuplicate?: (dayDate: string, sessionIndex: number, sectionId: string) => void;
+  onSectionDelete?: (dayDate: string, sessionIndex: number, sectionId: string) => void;
 }
 
 // Helper to format parameter names nicely
@@ -453,6 +456,8 @@ export function MasterPlannerColumn({
   onExerciseDuplicate,
   onExerciseDelete,
   onToggleSuperset,
+  onSectionDuplicate,
+  onSectionDelete,
 }: MasterPlannerColumnProps) {
   const [dayIntensityPopoverOpen, setDayIntensityPopoverOpen] = useState(false);
   const [sessionIntensityPopovers, setSessionIntensityPopovers] = useState<Record<number, boolean>>({});
@@ -1013,6 +1018,35 @@ export function MasterPlannerColumn({
                               <ArrowDown className="h-3 w-3" />
                             </Button>
                           )}
+                          {/* Section dropdown menu for duplicate/delete */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button variant="ghost" size="sm" className="h-5 w-5 p-0 shrink-0">
+                                <MoreVertical className="h-3 w-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="z-[300] bg-background border">
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSectionDuplicate?.(day.dateString, session.sessionIndex, section.id);
+                                }}
+                              >
+                                <Copy className="h-3.5 w-3.5 mr-2" />
+                                Duplicate Section
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSectionDelete?.(day.dateString, session.sessionIndex, section.id);
+                                }}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                Delete Section
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       )}
                     </div>
