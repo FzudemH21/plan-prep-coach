@@ -1694,6 +1694,36 @@ export function MasterPlannerColumn({
                 {renderSessionContent(session)}
               </div>
             ))}
+            
+            {/* Add Session and Paste Session buttons for days with existing sessions */}
+            <div className="flex flex-col gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddSession?.(day.dateString);
+                }}
+                className="gap-1.5 w-full"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Session
+              </Button>
+              {copiedSession && onPasteSession && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPasteSession(day.dateString);
+                  }}
+                  className="gap-1.5 w-full"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  Paste Session ({copiedSession.exercises.length})
+                </Button>
+              )}
+            </div>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center py-8 space-y-2">
@@ -1705,7 +1735,7 @@ export function MasterPlannerColumn({
               className="gap-1.5"
             >
               <Plus className="h-3.5 w-3.5" />
-              Add Workout
+              Add Session
             </Button>
             {copiedSession && onPasteSession && (
               <Button
