@@ -2091,11 +2091,27 @@ export default function MicrocyclePlanningPage() {
     });
   };
 
-  // Handle paste day
+  // Handle paste day - OVERWRITE behavior (clears target day first)
   const handlePasteDay = (targetDate: string) => {
     if (!copiedDay) return;
     
-    // 1. Paste exercises
+    // 1. Clear sections from target day first (OVERWRITE)
+    setSessionSections(prev => prev.filter(s => s.dayDate !== targetDate));
+    
+    // 2. Clear supersets from target day
+    setSupersets(prev => {
+      const newSupersets = { ...prev };
+      delete newSupersets[targetDate];
+      return newSupersets;
+    });
+    
+    // 3. Reset daySplitStates for target day (will be set from copied data or 0)
+    setDaySplitStates(prev => ({
+      ...prev,
+      [targetDate]: copiedDay.splitState ?? 0
+    }));
+    
+    // 4. Paste exercises
     setExerciseDistribution(prev => {
       // Remove all existing exercises from target day
       const filteredPrev = prev.filter(ex => ex.dayDate !== targetDate);
@@ -2124,7 +2140,7 @@ export default function MicrocyclePlanningPage() {
       return filteredPrev;
     });
     
-    // 2. Paste intensity
+    // 5. Paste intensity
     if (copiedDay.intensity) {
       setDailyIntensityData(prev => {
         const updated = [...prev];
@@ -2153,7 +2169,7 @@ export default function MicrocyclePlanningPage() {
       });
     }
     
-    // 3. Paste tests/events
+    // 6. Paste tests/events
     if (copiedDay.testNames || copiedDay.eventNames) {
       setTrainingDays(prev => {
         const updated = prev.map(td => {
@@ -2174,13 +2190,22 @@ export default function MicrocyclePlanningPage() {
       });
     }
     
-    // 4. Copy day split state if it exists
-    if (copiedDay.splitState) {
-      setDaySplitStates(prev => ({
-        ...prev,
-        [targetDate]: copiedDay.splitState!
-      }));
-    }
+    // 7. Update trainingDays session info
+    setTrainingDays(prev =>
+      prev.map(day => {
+        if (day.date !== targetDate) return day;
+        const sessionCount = copiedDay.splitState ?? 0;
+        const sessionNames: string[] = [];
+        for (let i = 0; i < sessionCount; i++) {
+          sessionNames.push(`Session ${i + 1}`);
+        }
+        return {
+          ...day,
+          sessions: sessionCount,
+          sessionNames
+        };
+      })
+    );
     
     // Build descriptive toast message
     const parts = [];
@@ -2198,17 +2223,18 @@ export default function MicrocyclePlanningPage() {
     setCopiedDay(null);
   };
 
-  // Handle clear day
+  // Handle clear day - clears ALL session data (exercises, sections, supersets)
   const handleClearDay = (dayDate: string) => {
     const dayExercises = exerciseDistribution.filter(ex => ex.dayDate === dayDate);
     const trainingDay = trainingDays.find(td => td.date === dayDate);
     const hasTestsEvents = (trainingDay?.testNames?.length || 0) + (trainingDay?.eventNames?.length || 0) > 0;
+    const hasSessions = (daySplitStates[dayDate] ?? 0) > 0;
     
-    // Allow clearing if there are exercises OR tests/events
-    if (dayExercises.length === 0 && !hasTestsEvents) {
+    // Allow clearing if there are exercises, sessions, OR tests/events
+    if (dayExercises.length === 0 && !hasTestsEvents && !hasSessions) {
       toast({
         title: "Nothing to clear",
-        description: "This day has no exercises or events",
+        description: "This day has no sessions or events",
         variant: "destructive"
       });
       return;
@@ -2217,7 +2243,23 @@ export default function MicrocyclePlanningPage() {
     // Clear exercises
     setExerciseDistribution(prev => prev.filter(ex => ex.dayDate !== dayDate));
     
-    // Clear tests/events
+    // Clear sections
+    setSessionSections(prev => prev.filter(s => s.dayDate !== dayDate));
+    
+    // Clear supersets
+    setSupersets(prev => {
+      const newSupersets = { ...prev };
+      delete newSupersets[dayDate];
+      return newSupersets;
+    });
+    
+    // Reset split state to 0
+    setDaySplitStates(prev => ({
+      ...prev,
+      [dayDate]: 0
+    }));
+    
+    // Clear tests/events and session info from trainingDays
     setTrainingDays(prev => {
       const updated = prev.map(td => {
         if (td.date === dayDate) {
@@ -2226,7 +2268,9 @@ export default function MicrocyclePlanningPage() {
             isTestDay: false,
             isEventDay: false,
             testNames: undefined,
-            eventNames: undefined
+            eventNames: undefined,
+            sessions: 0,
+            sessionNames: []
           };
         }
         return td;
@@ -2236,17 +2280,17 @@ export default function MicrocyclePlanningPage() {
       return updated;
     });
     
-    // Clear split state
-    if (daySplitStates[dayDate]) {
-      setDaySplitStates(prev => {
-        const updated = { ...prev };
-        delete updated[dayDate];
-        return updated;
-      });
+    // Clean up session intensity and comments from localStorage
+    const mesocycleId = currentMesocycle.id;
+    const maxSessions = daySplitStates[dayDate] ?? 0;
+    for (let i = 0; i < maxSessions; i++) {
+      localStorage.removeItem(`sessionIntensity_${mesocycleId}_${dayDate}_${i}`);
+      localStorage.removeItem(`workoutSessions_${mesocycleId}_${dayDate}_${i}`);
     }
     
     const parts = [];
     if (dayExercises.length > 0) parts.push(`${dayExercises.length} exercise(s)`);
+    if (hasSessions) parts.push(`${daySplitStates[dayDate]} session(s)`);
     if (hasTestsEvents) parts.push("tests/events");
     
     toast({

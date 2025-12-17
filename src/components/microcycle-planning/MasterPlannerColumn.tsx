@@ -6,8 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dumbbell, Plus, Trophy, Calendar, ChevronDown, ChevronRight, MessageSquare, Pencil, StickyNote, Calculator, ArrowUp, ArrowDown, Copy, Trash2, MoreVertical, Link2 } from 'lucide-react';
+import { Dumbbell, Plus, Trophy, Calendar, ChevronDown, ChevronRight, MessageSquare, Pencil, StickyNote, Calculator, ArrowUp, ArrowDown, Copy, Trash2, MoreVertical, Link2, ClipboardPaste } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import { SubGoal, Event } from '@/types/training';
+import { CombinedTestEventDialog } from './CombinedTestEventDialog';
 import { IntensityLevel } from '@/types/training';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { ToolboxDatabase } from '@/types/toolbox';
@@ -48,6 +50,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
 interface ExerciseDistribution {
@@ -162,6 +165,18 @@ interface MasterPlannerColumnProps {
   onDeleteSession?: (dayDate: string, sessionIndex: number) => void;
   onPasteSession?: (dayDate: string) => void;
   copiedSession?: { exercises: ExerciseDistribution[]; sections?: any[]; sourceDate: string; sessionIndex: number } | null;
+  // New props for day management
+  onCopyDay?: (dayDate: string) => void;
+  onClearDay?: (dayDate: string) => void;
+  onPasteDay?: (dayDate: string) => void;
+  copiedDay?: { exercises: ExerciseDistribution[]; sourceDate: string } | null;
+  // Test/Event management props
+  onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean, comments?: string) => void;
+  onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event', name: string) => void;
+  onUpdateTestComment?: (testId: string, comments: string) => void;
+  onUpdateEventComment?: (eventId: string, comments: string) => void;
+  availableTests?: SubGoal[];
+  availableEvents?: Event[];
 }
 
 // Helper to format parameter names nicely
@@ -467,11 +482,22 @@ export function MasterPlannerColumn({
   onDeleteSession,
   onPasteSession,
   copiedSession,
+  onCopyDay,
+  onClearDay,
+  onPasteDay,
+  copiedDay,
+  onAddTestEvent,
+  onDeleteTestEvent,
+  onUpdateTestComment,
+  onUpdateEventComment,
+  availableTests,
+  availableEvents,
 }: MasterPlannerColumnProps) {
   const [dayIntensityPopoverOpen, setDayIntensityPopoverOpen] = useState(false);
   const [sessionIntensityPopovers, setSessionIntensityPopovers] = useState<Record<number, boolean>>({});
   // Default all exercises to collapsed (true = collapsed)
   const [expandedExercises, setExpandedExercises] = useState<Record<string, boolean>>({});
+  const [combinedDialogOpen, setCombinedDialogOpen] = useState(false);
   
   const toggleExerciseCollapse = (exerciseId: string) => {
     setExpandedExercises(prev => ({
@@ -1631,7 +1657,7 @@ export function MasterPlannerColumn({
               />
             )}
           </div>
-          <div className="flex gap-1">
+          <div className="flex gap-1 items-center">
             {day.trainingDay?.testNames && day.trainingDay.testNames.length > 0 && (
               <HoverCard openDelay={100}>
                 <HoverCardTrigger asChild>
@@ -1674,6 +1700,45 @@ export function MasterPlannerColumn({
                 </HoverCardContent>
               </HoverCard>
             )}
+            
+            {/* Day Management 3-dot Menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="h-5 w-5 flex items-center justify-center rounded hover:bg-accent transition-colors">
+                  <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 z-[200]">
+                <DropdownMenuItem onClick={() => onCopyDay?.(day.dateString)}>
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copy day
+                </DropdownMenuItem>
+                
+                {copiedDay && onPasteDay && (
+                  <DropdownMenuItem onClick={() => onPasteDay(day.dateString)}>
+                    <ClipboardPaste className="mr-2 h-4 w-4" />
+                    Paste day ({copiedDay.exercises.length})
+                  </DropdownMenuItem>
+                )}
+                
+                {hasTraining && (
+                  <DropdownMenuItem 
+                    onClick={() => onClearDay?.(day.dateString)}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Clear day
+                  </DropdownMenuItem>
+                )}
+                
+                <DropdownMenuSeparator />
+                
+                <DropdownMenuItem onClick={() => setCombinedDialogOpen(true)}>
+                  <Trophy className="mr-2 h-4 w-4" />
+                  Manage tests/events
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
         <p className="text-sm font-medium mt-1">
@@ -1748,9 +1813,43 @@ export function MasterPlannerColumn({
                 Paste Session ({copiedSession.exercises.length})
               </Button>
             )}
+            {copiedDay && onPasteDay && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => onPasteDay(day.dateString)}
+                className="gap-1.5"
+              >
+                <ClipboardPaste className="h-3.5 w-3.5" />
+                Paste Day ({copiedDay.exercises.length})
+              </Button>
+            )}
           </div>
         )}
       </div>
+      
+      {/* CombinedTestEventDialog for managing tests/events */}
+      <CombinedTestEventDialog
+        open={combinedDialogOpen}
+        onOpenChange={setCombinedDialogOpen}
+        existingTests={availableTests || []}
+        existingEvents={availableEvents || []}
+        scheduledTestNames={day.trainingDay?.testNames || []}
+        scheduledEventNames={day.trainingDay?.eventNames || []}
+        onSelect={(selected) => {
+          onAddTestEvent?.(day.dateString, selected.type, selected.id, selected.name, selected.isNew, selected.comments);
+        }}
+        onDelete={(type, name) => {
+          onDeleteTestEvent?.(day.dateString, type, name);
+        }}
+        onUpdateComment={(type, id, comments) => {
+          if (type === 'test') {
+            onUpdateTestComment?.(id, comments);
+          } else {
+            onUpdateEventComment?.(id, comments);
+          }
+        }}
+      />
     </div>
   );
 }
