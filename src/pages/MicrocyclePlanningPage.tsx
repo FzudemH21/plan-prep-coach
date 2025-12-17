@@ -78,6 +78,9 @@ export default function MicrocyclePlanningPage() {
   } | null>(null);
   const [copiedWeek, setCopiedWeek] = useState<{
     exercises: ExerciseDistribution[];
+    sections: SessionSection[];
+    supersets: SupersetMapping;
+    sessionStructure: Record<string, number[]>;
     weekStartDate: string;
   } | null>(null);
   const [copiedDay, setCopiedDay] = useState<{
@@ -1672,9 +1675,38 @@ export default function MicrocyclePlanningPage() {
       return;
     }
     
+    // Get all sections in this week
+    const weekSections = sessionSections.filter(s => {
+      const sDate = parseISO(s.dayDate);
+      return sDate >= weekStart && sDate <= weekEnd;
+    });
+    
+    // Get all supersets for this week
+    const weekSupersets: SupersetMapping = {};
+    Object.entries(supersets).forEach(([dayDate, daySupersets]) => {
+      const sDate = parseISO(dayDate);
+      if (sDate >= weekStart && sDate <= weekEnd) {
+        weekSupersets[dayDate] = daySupersets;
+      }
+    });
+    
+    // Build session structure (which days have which sessions)
+    const sessionStructure: Record<string, number[]> = {};
+    weekExercises.forEach(ex => {
+      if (!sessionStructure[ex.dayDate]) {
+        sessionStructure[ex.dayDate] = [];
+      }
+      if (!sessionStructure[ex.dayDate].includes(ex.sessionIndex)) {
+        sessionStructure[ex.dayDate].push(ex.sessionIndex);
+      }
+    });
+    
     setCopiedWeek({
       exercises: weekExercises,
-      weekStartDate: weekStartDate
+      sections: weekSections,
+      supersets: weekSupersets,
+      sessionStructure,
+      weekStartDate
     });
     
     // Count unique sessions
@@ -1727,27 +1759,135 @@ export default function MicrocyclePlanningPage() {
     
     const sourceWeekStart = parseISO(copiedWeek.weekStartDate);
     const targetWeekStart = parseISO(targetWeekStartDate);
-    
-    // Calculate day offset
     const dayOffset = differenceInDays(targetWeekStart, sourceWeekStart);
     
-    // Create new exercises with adjusted dates
-    const pastedExercises = copiedWeek.exercises.map(ex => {
-      const originalDate = parseISO(ex.dayDate);
+    // 1. Create mapping from old section IDs to new section IDs
+    const sectionIdMapping = new Map<string, string>();
+    copiedWeek.sections.forEach(section => {
+      const newSectionId = `section-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      sectionIdMapping.set(section.id, newSectionId);
+    });
+    
+    // 2. Create new sections with adjusted dates
+    const pastedSections = copiedWeek.sections.map(section => {
+      const originalDate = parseISO(section.dayDate);
       const newDate = addDays(originalDate, dayOffset);
       return {
-        ...ex,
+        ...section,
+        id: sectionIdMapping.get(section.id)!,
         dayDate: format(newDate, 'yyyy-MM-dd')
       };
     });
     
-    setExerciseDistribution(prev => [...prev, ...pastedExercises]);
+    // 3. Create mapping from old exercise IDs to new exercise IDs
+    const exerciseIdMapping = new Map<string, string>();
     
+    // 4. Create new exercises with new IDs, adjusted dates, and remapped section IDs
+    const pastedExercises = copiedWeek.exercises.map(ex => {
+      const newId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      exerciseIdMapping.set(ex.id, newId);
+      const originalDate = parseISO(ex.dayDate);
+      const newDate = addDays(originalDate, dayOffset);
+      return {
+        ...ex,
+        id: newId,
+        dayDate: format(newDate, 'yyyy-MM-dd'),
+        sectionId: ex.sectionId ? sectionIdMapping.get(ex.sectionId) : undefined
+      };
+    });
+    
+    // 5. Copy supersets with remapped IDs
+    const newSupersets = { ...supersets };
+    
+    Object.entries(copiedWeek.supersets).forEach(([sourceDayDate, daySupersets]) => {
+      const sourceDate = parseISO(sourceDayDate);
+      const targetDate = format(addDays(sourceDate, dayOffset), 'yyyy-MM-dd');
+      
+      if (!newSupersets[targetDate]) {
+        newSupersets[targetDate] = {};
+      }
+      
+      Object.entries(daySupersets).forEach(([sessionIdx, sessionSupersets]) => {
+        const sessionIndex = parseInt(sessionIdx);
+        if (!newSupersets[targetDate][sessionIndex]) {
+          newSupersets[targetDate][sessionIndex] = {};
+        }
+        
+        Object.entries(sessionSupersets).forEach(([sectionKey, supersetMap]) => {
+          const destSectionKey = sectionKey === '__unsectioned__' 
+            ? '__unsectioned__' 
+            : (sectionIdMapping.get(sectionKey) || sectionKey);
+          
+          if (!newSupersets[targetDate][sessionIndex][destSectionKey]) {
+            newSupersets[targetDate][sessionIndex][destSectionKey] = {};
+          }
+          
+          Object.entries(supersetMap).forEach(([supersetId, exerciseIds]) => {
+            const mappedIds = (exerciseIds as string[])
+              .map(id => exerciseIdMapping.get(id))
+              .filter(Boolean) as string[];
+            
+            if (mappedIds.length >= 2) {
+              const newSupersetId = `superset-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+              newSupersets[targetDate][sessionIndex][destSectionKey][newSupersetId] = mappedIds;
+            }
+          });
+        });
+      });
+    });
+    
+    setSupersets(newSupersets);
+    localStorage.setItem('supersets', JSON.stringify(newSupersets));
+    
+    // 6. Update state
+    const updatedExerciseDistribution = [...exerciseDistribution, ...pastedExercises];
+    const updatedSessionSections = [...sessionSections, ...pastedSections];
+    
+    setExerciseDistribution(updatedExerciseDistribution);
+    setSessionSections(updatedSessionSections);
+    
+    localStorage.setItem('exerciseDistribution', JSON.stringify(updatedExerciseDistribution));
+    localStorage.setItem('sessionSections', JSON.stringify(updatedSessionSections));
+    
+    // 7. Update daySplitStates for each day with sessions
+    const newDaySplitStates = { ...daySplitStates };
+    
+    Object.entries(copiedWeek.sessionStructure).forEach(([sourceDayDate, sessionIndices]) => {
+      const sourceDate = parseISO(sourceDayDate);
+      const targetDate = format(addDays(sourceDate, dayOffset), 'yyyy-MM-dd');
+      const maxSessionIndex = Math.max(...sessionIndices);
+      const existingCount = newDaySplitStates[targetDate] || 0;
+      newDaySplitStates[targetDate] = Math.max(existingCount, maxSessionIndex + 1);
+    });
+    
+    setDaySplitStates(newDaySplitStates);
+    localStorage.setItem('daySplitStates', JSON.stringify(newDaySplitStates));
+    
+    // 8. Update trainingDays with session counts
+    setTrainingDays(prev =>
+      prev.map(day => {
+        const sessionCount = newDaySplitStates[day.date];
+        if (!sessionCount) return day;
+        
+        const sessionNames = [...(day.sessionNames || [])];
+        while (sessionNames.length < sessionCount) {
+          sessionNames.push(`Session ${sessionNames.length + 1}`);
+        }
+        
+        return {
+          ...day,
+          sessions: Math.max(day.sessions || 0, sessionCount),
+          sessionNames
+        };
+      })
+    );
+    
+    // 9. Toast and cleanup
     const uniqueSessions = new Set(pastedExercises.map(ex => `${ex.dayDate}-${ex.sessionIndex}`)).size;
     
     toast({
       title: "Week pasted",
-      description: `${uniqueSessions} session(s) pasted to new week`,
+      description: `${uniqueSessions} session(s) with ${pastedExercises.length} exercise(s) pasted`,
     });
     
     setCopiedWeek(null);
