@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { getDay } from 'date-fns';
 import { MasterPlannerColumn } from './MasterPlannerColumn';
-import { IntensityLevel } from '@/types/training';
+import { IntensityLevel, SubGoal, Event } from '@/types/training';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { ToolboxDatabase } from '@/types/toolbox';
@@ -107,6 +107,18 @@ interface MasterPlannerGridProps {
   onDeleteSession?: (dayDate: string, sessionIndex: number) => void;
   onPasteSession?: (dayDate: string) => void;
   copiedSession?: { exercises: ExerciseDistribution[]; sections?: any[]; sourceDate: string; sessionIndex: number } | null;
+  // New props for day management
+  onCopyDay?: (dayDate: string) => void;
+  onClearDay?: (dayDate: string) => void;
+  onPasteDay?: (dayDate: string) => void;
+  copiedDay?: { exercises: ExerciseDistribution[]; sourceDate: string } | null;
+  // Test/Event management props
+  onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean, comments?: string) => void;
+  onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event', name: string) => void;
+  onUpdateTestComment?: (testId: string, comments: string) => void;
+  onUpdateEventComment?: (eventId: string, comments: string) => void;
+  availableTests?: SubGoal[];
+  availableEvents?: Event[];
 }
 
 const MAX_WEEKS_DISPLAY = 6;
@@ -147,6 +159,16 @@ export function MasterPlannerGrid({
   onDeleteSession,
   onPasteSession,
   copiedSession,
+  onCopyDay,
+  onClearDay,
+  onPasteDay,
+  copiedDay,
+  onAddTestEvent,
+  onDeleteTestEvent,
+  onUpdateTestComment,
+  onUpdateEventComment,
+  availableTests,
+  availableEvents,
 }: MasterPlannerGridProps) {
   const [startWeekOffset, setStartWeekOffset] = useState(0);
 
@@ -266,6 +288,16 @@ export function MasterPlannerGrid({
               onDeleteSession={onDeleteSession}
               onPasteSession={onPasteSession}
               copiedSession={copiedSession}
+              onCopyDay={onCopyDay}
+              onClearDay={onClearDay}
+              onPasteDay={onPasteDay}
+              copiedDay={copiedDay}
+              onAddTestEvent={onAddTestEvent}
+              onDeleteTestEvent={onDeleteTestEvent}
+              onUpdateTestComment={onUpdateTestComment}
+              onUpdateEventComment={onUpdateEventComment}
+              availableTests={availableTests}
+              availableEvents={availableEvents}
             />
           ))}
         </div>

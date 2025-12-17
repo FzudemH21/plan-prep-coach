@@ -980,6 +980,21 @@ export function TrainingCalendarView({
               onDeleteSession={onDeleteSession}
               onPasteSession={onPasteSession}
               copiedSession={copiedSession}
+              onCopyDay={onCopyDay}
+              onClearDay={onClearDay}
+              onPasteDay={(dayDate) => {
+                // Trigger paste day - onPasteSession handles both session and day paste
+                if (copiedDay) {
+                  onPasteSession?.(dayDate);
+                }
+              }}
+              copiedDay={copiedDay}
+              onAddTestEvent={onAddTestEvent}
+              onDeleteTestEvent={onDeleteTestEvent}
+              onUpdateTestComment={onUpdateTestComment}
+              onUpdateEventComment={onUpdateEventComment}
+              availableTests={availableTests}
+              availableEvents={availableEvents}
             />
           ) : (
             /* Calendar View */
