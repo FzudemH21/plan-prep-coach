@@ -987,7 +987,7 @@ export function MasterPlannerColumn({
                           {sectionExercises.length}
                         </Badge>
                       </CollapsibleTrigger>
-                      {/* Section reorder arrows */}
+                      {/* Section reorder arrows - only when 2+ sections */}
                       {sections.length > 1 && (
                         <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
                           {!isFirstSection && (
@@ -1018,37 +1018,37 @@ export function MasterPlannerColumn({
                               <ArrowDown className="h-3 w-3" />
                             </Button>
                           )}
-                          {/* Section dropdown menu for duplicate/delete */}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="sm" className="h-5 w-5 p-0 shrink-0">
-                                <MoreVertical className="h-3 w-3" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="z-[300] bg-background border">
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onSectionDuplicate?.(day.dateString, session.sessionIndex, section.id);
-                                }}
-                              >
-                                <Copy className="h-3.5 w-3.5 mr-2" />
-                                Duplicate Section
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onSectionDelete?.(day.dateString, session.sessionIndex, section.id);
-                                }}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="h-3.5 w-3.5 mr-2" />
-                                Delete Section
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
                         </div>
                       )}
+                      {/* Section dropdown menu - always visible */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="sm" className="h-5 w-5 p-0 shrink-0">
+                            <MoreVertical className="h-3 w-3" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="z-[300] bg-background border">
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSectionDuplicate?.(day.dateString, session.sessionIndex, section.id);
+                            }}
+                          >
+                            <Copy className="h-3.5 w-3.5 mr-2" />
+                            Duplicate Section
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSectionDelete?.(day.dateString, session.sessionIndex, section.id);
+                            }}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 mr-2" />
+                            Delete Section
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                     <CollapsibleContent>
                       <div className="px-2 pb-2">
