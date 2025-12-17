@@ -102,6 +102,11 @@ interface MasterPlannerGridProps {
   // New props for section duplicate/delete
   onSectionDuplicate?: (dayDate: string, sessionIndex: number, sectionId: string) => void;
   onSectionDelete?: (dayDate: string, sessionIndex: number, sectionId: string) => void;
+  // New props for session copy/delete/paste
+  onCopySession?: (dayDate: string, sessionIndex: number) => void;
+  onDeleteSession?: (dayDate: string, sessionIndex: number) => void;
+  onPasteSession?: (dayDate: string) => void;
+  copiedSession?: { exercises: ExerciseDistribution[]; sections?: any[]; sourceDate: string; sessionIndex: number } | null;
 }
 
 const MAX_WEEKS_DISPLAY = 6;
@@ -138,6 +143,10 @@ export function MasterPlannerGrid({
   onToggleSuperset,
   onSectionDuplicate,
   onSectionDelete,
+  onCopySession,
+  onDeleteSession,
+  onPasteSession,
+  copiedSession,
 }: MasterPlannerGridProps) {
   const [startWeekOffset, setStartWeekOffset] = useState(0);
 
@@ -253,6 +262,10 @@ export function MasterPlannerGrid({
               onToggleSuperset={onToggleSuperset}
               onSectionDuplicate={onSectionDuplicate}
               onSectionDelete={onSectionDelete}
+              onCopySession={onCopySession}
+              onDeleteSession={onDeleteSession}
+              onPasteSession={onPasteSession}
+              copiedSession={copiedSession}
             />
           ))}
         </div>
