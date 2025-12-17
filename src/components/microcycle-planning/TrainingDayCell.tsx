@@ -3,7 +3,7 @@ import { format, isToday } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Dumbbell, Trophy, Calendar, GripVertical, MoreVertical, Copy, Trash2, ChevronDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Dumbbell, Trophy, Calendar, GripVertical, MoreVertical, Copy, Trash2, ChevronDown, ArrowUp, ArrowDown, Plus } from 'lucide-react';
 import { IntensityLevel, SubGoal, Event } from '@/types/training';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
@@ -81,6 +81,9 @@ interface TrainingDayCellProps {
   onMoveSessionUp?: (dayDate: string, sessionIndex: number) => void;
   onMoveSessionDown?: (dayDate: string, sessionIndex: number) => void;
   
+  // Add session functionality
+  onAddSession?: (dayDate: string) => void;
+  
   // Test/Event selection from macrocycle
   availableTests?: SubGoal[];
   availableEvents?: Event[];
@@ -107,6 +110,7 @@ export function TrainingDayCell({
   copiedDay,
   onMoveSessionUp,
   onMoveSessionDown,
+  onAddSession,
   availableTests,
   availableEvents,
   dailyIntensityData,
@@ -477,6 +481,22 @@ export function TrainingDayCell({
               {day.sessions.length} sessions • {day.totalExercises} total exercises
             </p>
           )}
+
+          {/* Add Session Button - shown on hover */}
+          {isHovering && onAddSession && (
+            <Button
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddSession(day.dateString);
+              }}
+              variant="ghost"
+              size="sm"
+              className="w-full mt-1 h-7 text-xs"
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              Add Session
+            </Button>
+          )}
         </>
       ) : isRestDay ? (
         <Droppable droppableId={`day-${day.dateString}`} type="session">
@@ -485,14 +505,30 @@ export function TrainingDayCell({
               ref={provided.innerRef}
               {...provided.droppableProps}
               className={cn(
-                "flex items-center justify-center h-12 min-h-[60px]",
+                "flex flex-col items-center justify-center min-h-[60px]",
                 snapshot.isDraggingOver && "bg-primary/5 rounded-md"
               )}
             >
               {snapshot.isDraggingOver ? (
                 <span className="text-xs text-muted-foreground">Drop here</span>
               ) : (
-                <span className="text-xs text-muted-foreground">Rest</span>
+                <>
+                  <span className="text-xs text-muted-foreground">Rest</span>
+                  {isHovering && onAddSession && (
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAddSession(day.dateString);
+                      }}
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2 h-7 text-xs"
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Add Workout
+                    </Button>
+                  )}
+                </>
               )}
               {provided.placeholder}
             </div>
@@ -505,13 +541,28 @@ export function TrainingDayCell({
               ref={provided.innerRef}
               {...provided.droppableProps}
               className={cn(
-                "min-h-[60px] flex items-center justify-center",
+                "min-h-[60px] flex flex-col items-center justify-center",
                 snapshot.isDraggingOver && "bg-primary/5 rounded-md"
               )}
             >
               {snapshot.isDraggingOver ? (
                 <span className="text-xs text-muted-foreground">Drop here</span>
-              ) : null}
+              ) : (
+                onAddSession && (
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAddSession(day.dateString);
+                    }}
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add Workout
+                  </Button>
+                )
+              )}
               {provided.placeholder}
             </div>
           )}
