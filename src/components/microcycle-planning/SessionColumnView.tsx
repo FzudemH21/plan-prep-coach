@@ -191,6 +191,12 @@ export function SessionColumnView({
       }
     });
     
+    // Sort exercises by order within each section
+    for (const sectionId of Object.keys(sectioned)) {
+      sectioned[sectionId].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    }
+    unsectioned.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    
     // Sort sections by order
     const sortedSections = [...sections].sort((a, b) => a.order - b.order);
     
