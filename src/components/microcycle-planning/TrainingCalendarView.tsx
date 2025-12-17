@@ -90,6 +90,8 @@ interface TrainingCalendarViewProps {
   onDistributionChange?: (distribution: ExerciseDistribution[]) => void;
   // Add session functionality
   onAddSession?: (dayDate: string) => void;
+  // Day split states for creating empty sessions
+  daySplitStates?: Record<string, number>;
 }
 
 export interface CalendarDay {
@@ -152,6 +154,7 @@ export function TrainingCalendarView({
   onSupersetsChange,
   onDistributionChange,
   onAddSession,
+  daySplitStates,
 }: TrainingCalendarViewProps) {
   const { toast } = useToast();
   const { data: toolboxData } = useToolboxData();
@@ -254,6 +257,14 @@ export function TrainingCalendarView({
         sessionMap[ex.sessionIndex].push(ex);
       });
 
+      // Also create empty sessions from daySplitStates
+      const sessionCount = daySplitStates?.[dateString] ?? 0;
+      for (let i = 0; i < sessionCount; i++) {
+        if (!sessionMap[i]) {
+          sessionMap[i] = [];
+        }
+      }
+
       const sessions = Object.entries(sessionMap)
         .map(([idx, exs]) => {
           // Generate stable ID from sorted exercise IDs
@@ -292,7 +303,7 @@ export function TrainingCalendarView({
         totalExercises: exercises.length,
       };
     });
-  }, [currentDate, viewMode, exercisesByDate, trainingDays, sessionDataVersion]);
+  }, [currentDate, viewMode, exercisesByDate, trainingDays, sessionDataVersion, daySplitStates]);
 
   // Group days into weeks
   const weeks = useMemo(() => {
@@ -330,6 +341,14 @@ export function TrainingCalendarView({
         sessionMap[ex.sessionIndex].push(ex);
       });
 
+      // Also create empty sessions from daySplitStates
+      const sessionCount = daySplitStates?.[dateString] ?? 0;
+      for (let i = 0; i < sessionCount; i++) {
+        if (!sessionMap[i]) {
+          sessionMap[i] = [];
+        }
+      }
+
       const sessions = Object.entries(sessionMap)
         .map(([idx, exs]) => {
           const ids = exs
@@ -365,7 +384,7 @@ export function TrainingCalendarView({
         totalExercises: exercises.length,
       };
     });
-  }, [viewMode, viewedMesocycle, exercisesByDate, trainingDays, dailyIntensityData]);
+  }, [viewMode, viewedMesocycle, exercisesByDate, trainingDays, dailyIntensityData, daySplitStates]);
 
   const handlePrevious = () => {
     setCurrentDate(prev => subWeeks(prev, 1));
