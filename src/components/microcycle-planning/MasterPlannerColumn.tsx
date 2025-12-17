@@ -60,6 +60,7 @@ interface ExerciseDistribution {
   dayDate: string;
   sessionIndex: number;
   sectionId?: string;
+  order?: number;
   notes?: string;
   eachSide?: boolean;
   autoCalculateWeight?: boolean;
@@ -871,6 +872,12 @@ export function MasterPlannerColumn({
           unsectioned.push(ex);
         }
       });
+
+      // Sort exercises by order within each section
+      for (const sectionId of Object.keys(grouped)) {
+        grouped[sectionId].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      }
+      unsectioned.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
       return { grouped, unsectioned };
     };
