@@ -344,7 +344,7 @@ export function SessionColumnView({
 
   return (
     <>
-      <Card className="w-80 flex-shrink-0 flex flex-col h-[600px] bg-muted/20">
+      <Card className="w-80 flex-shrink-0 flex flex-col h-[600px] !bg-muted/20">
         <CardHeader className="pb-3 border-b">
           <div className="space-y-2">
             {/* Session Name and Actions */}
