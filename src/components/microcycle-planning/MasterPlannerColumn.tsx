@@ -1023,8 +1023,13 @@ export function MasterPlannerColumn({
                       {/* Section dropdown menu - always visible */}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="sm" className="h-5 w-5 p-0 shrink-0">
-                            <MoreVertical className="h-3 w-3" />
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-6 w-6 p-0 shrink-0 ml-1"
+                            title="Section options"
+                          >
+                            <MoreVertical className="h-4 w-4 text-muted-foreground" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="z-[300] bg-background border">
