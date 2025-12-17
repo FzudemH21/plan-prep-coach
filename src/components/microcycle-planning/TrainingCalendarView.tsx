@@ -1035,6 +1035,7 @@ export function TrainingCalendarView({
                     intensityLevels={intensityLevels}
                     onMoveSessionUp={onMoveSessionUp}
                     onMoveSessionDown={onMoveSessionDown}
+                    onAddSession={onAddSession}
                   />
                 ))}
               </div>
