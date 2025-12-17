@@ -220,19 +220,9 @@ export function SessionColumnView({
   const displayIntensity = (storedSessionIntensity || day.intensity || 'moderate') as IntensityLevel;
   const intensityClass = getIntensityColor ? getIntensityColor(displayIntensity) : 'bg-muted text-muted-foreground';
 
-  // Superset color scheme for better visual grouping
+  // Superset styling - blue left border to match Master Planner
   const getSupersetColor = (supersetId: string): string => {
-    const label = getSupersetLabel(supersetId);
-    const number = parseInt(label.replace('SS', ''));
-    const colors = [
-      'border-l-blue-400 bg-blue-50/50',
-      'border-l-green-400 bg-green-50/50',
-      'border-l-purple-400 bg-purple-50/50',
-      'border-l-orange-400 bg-orange-50/50',
-      'border-l-pink-400 bg-pink-50/50',
-      'border-l-cyan-400 bg-cyan-50/50',
-    ];
-    return colors[(number - 1) % colors.length] || colors[0];
+    return 'border-l-4 border-l-primary';
   };
 
   const renderExerciseCard = (exercise: ExerciseDistribution, index: number, allExercises: ExerciseDistribution[], sectionId?: string) => {
@@ -253,7 +243,7 @@ export function SessionColumnView({
             >
               <div
                 className={cn(
-                  "p-2 rounded-md border-l-4 border-muted bg-card text-xs",
+                  "text-xs bg-muted/50 border rounded-md p-2.5 shadow-sm",
                   supersetId && getSupersetColor(supersetId),
                   snapshot.isDragging && "opacity-50 shadow-lg"
                 )}
@@ -605,136 +595,141 @@ export function SessionColumnView({
               {/* Sections with their exercises */}
               {exercisesBySection.sortedSections.map(section => (
                 <div key={section.id} className="space-y-2">
-                  {/* Section Container with Background */}
-                  <div className="rounded-lg border-2 bg-muted/20 p-3 space-y-2">
-                    {/* Section Header */}
-                    <div className="flex items-center justify-between pb-2 border-b">
-                      {editingSectionId === section.id ? (
-                        <div className="flex items-center gap-1 flex-1">
-                          <Input
-                            value={editingSectionName}
-                            onChange={(e) => setEditingSectionName(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveRenameSection();
-                              if (e.key === 'Escape') {
+                  {/* Section Container - white background with muted header */}
+                  <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+                    {/* Section Header - muted background */}
+                    <div className="bg-muted/20 px-3 py-2 border-b">
+                      <div className="flex items-center justify-between">
+                        {editingSectionId === section.id ? (
+                          <div className="flex items-center gap-1 flex-1">
+                            <Input
+                              value={editingSectionName}
+                              onChange={(e) => setEditingSectionName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveRenameSection();
+                                if (e.key === 'Escape') {
+                                  setEditingSectionId(null);
+                                  setEditingSectionName('');
+                                }
+                              }}
+                              className="h-6 text-xs px-2 flex-1"
+                              autoFocus
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={handleSaveRenameSection}
+                            >
+                              <Check className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={() => {
                                 setEditingSectionId(null);
                                 setEditingSectionName('');
-                              }
-                            }}
-                            className="h-6 text-xs px-2 flex-1"
-                            autoFocus
-                          />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0"
-                            onClick={handleSaveRenameSection}
-                          >
-                            <Check className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0"
-                            onClick={() => {
-                              setEditingSectionId(null);
-                              setEditingSectionName('');
-                            }}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex items-center gap-2">
-                            <GripVertical className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm font-semibold">{section.name}</span>
-                            <Badge variant="secondary" className="text-xs">
-                              {exercisesBySection.sectioned[section.id]?.length || 0}
-                            </Badge>
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
                           </div>
-                          <div className="flex items-center gap-1">
-                            {/* Copy Section Button */}
-                            {onCopySection && (
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <GripVertical className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm font-semibold">{section.name}</span>
+                              <Badge variant="secondary" className="text-xs">
+                                {exercisesBySection.sectioned[section.id]?.length || 0}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {/* Copy Section Button */}
+                              {onCopySection && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 hover:bg-accent"
+                                  onClick={() => onCopySection(section.id)}
+                                  title="Copy section"
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </Button>
+                              )}
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="h-6 w-6 p-0 hover:bg-accent"
-                                onClick={() => onCopySection(section.id)}
-                                title="Copy section"
+                                onClick={() => handleStartRenameSection(section)}
                               >
-                                <Copy className="h-3 w-3" />
+                                <Pencil className="h-3 w-3" />
                               </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 hover:bg-accent"
-                              onClick={() => handleStartRenameSection(section)}
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 text-destructive hover:bg-accent"
-                              onClick={() => onDeleteSection(section.id)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </>
-                      )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 text-destructive hover:bg-accent"
+                                onClick={() => onDeleteSection(section.id)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Section Comments */}
-                    {!editingSectionId && onSectionCommentsChange && (
-                      <div className="px-2 pb-2">
-                        <label className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
-                          <MessageSquare className="h-3 w-3" />
-                          Section Notes
-                        </label>
-                        <Textarea
-                          value={section.comments || ''}
-                          onChange={(e) => onSectionCommentsChange(section.id, e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                              e.preventDefault();
-                              e.currentTarget.blur();
-                            }
-                          }}
-                          placeholder="Add notes for this section..."
-                          className="min-h-[50px] text-xs resize-none"
-                        />
-                      </div>
-                    )}
-
-                    {/* Section exercises droppable area */}
-                    <Droppable droppableId={`section-${section.id}`} type="EXERCISE">
-                      {(provided, snapshot) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.droppableProps}
-                          className={cn(
-                            "rounded-md border-2 border-dashed p-2 min-h-[60px] transition-colors",
-                            snapshot.isDraggingOver ? "border-primary bg-primary/5" : "border-muted/50 bg-background"
-                          )}
-                        >
-                          <div className="space-y-2">
-                            {exercisesBySection.sectioned[section.id]?.length === 0 ? (
-                              <div className="text-xs text-muted-foreground text-center py-4">
-                                Drop exercises here
-                              </div>
-                            ) : (
-                              exercisesBySection.sectioned[section.id]?.map((exercise, index) => 
-                                renderExerciseCard(exercise, index, exercisesBySection.sectioned[section.id], section.id)
-                              )
-                            )}
-                            {provided.placeholder}
-                          </div>
+                    {/* Section Content Area - white background */}
+                    <div className="p-3 space-y-2">
+                      {/* Section Comments */}
+                      {!editingSectionId && onSectionCommentsChange && (
+                        <div className="pb-2">
+                          <label className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                            <MessageSquare className="h-3 w-3" />
+                            Section Notes
+                          </label>
+                          <Textarea
+                            value={section.comments || ''}
+                            onChange={(e) => onSectionCommentsChange(section.id, e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                e.currentTarget.blur();
+                              }
+                            }}
+                            placeholder="Add notes for this section..."
+                            className="min-h-[50px] text-xs resize-none"
+                          />
                         </div>
                       )}
-                    </Droppable>
+
+                      {/* Section exercises droppable area */}
+                      <Droppable droppableId={`section-${section.id}`} type="EXERCISE">
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.droppableProps}
+                            className={cn(
+                              "rounded-md border-2 border-dashed p-2 min-h-[60px] transition-colors",
+                              snapshot.isDraggingOver ? "border-primary bg-primary/5" : "border-muted/50"
+                            )}
+                          >
+                            <div className="space-y-2">
+                              {exercisesBySection.sectioned[section.id]?.length === 0 ? (
+                                <div className="text-xs text-muted-foreground text-center py-4">
+                                  Drop exercises here
+                                </div>
+                              ) : (
+                                exercisesBySection.sectioned[section.id]?.map((exercise, index) => 
+                                  renderExerciseCard(exercise, index, exercisesBySection.sectioned[section.id], section.id)
+                                )
+                              )}
+                              {provided.placeholder}
+                            </div>
+                          </div>
+                        )}
+                      </Droppable>
+                    </div>
                   </div>
                 </div>
               ))}
