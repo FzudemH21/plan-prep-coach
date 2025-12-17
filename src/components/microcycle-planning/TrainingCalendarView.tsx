@@ -976,6 +976,10 @@ export function TrainingCalendarView({
                   } exercise(s)`
                 });
               }}
+              onCopySession={onCopySession}
+              onDeleteSession={onDeleteSession}
+              onPasteSession={onPasteSession}
+              copiedSession={copiedSession}
             />
           ) : (
             /* Calendar View */

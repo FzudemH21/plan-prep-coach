@@ -157,6 +157,11 @@ interface MasterPlannerColumnProps {
   // New props for section duplicate/delete
   onSectionDuplicate?: (dayDate: string, sessionIndex: number, sectionId: string) => void;
   onSectionDelete?: (dayDate: string, sessionIndex: number, sectionId: string) => void;
+  // New props for session copy/delete/paste
+  onCopySession?: (dayDate: string, sessionIndex: number) => void;
+  onDeleteSession?: (dayDate: string, sessionIndex: number) => void;
+  onPasteSession?: (dayDate: string) => void;
+  copiedSession?: { exercises: ExerciseDistribution[]; sections?: any[]; sourceDate: string; sessionIndex: number } | null;
 }
 
 // Helper to format parameter names nicely
@@ -458,6 +463,10 @@ export function MasterPlannerColumn({
   onToggleSuperset,
   onSectionDuplicate,
   onSectionDelete,
+  onCopySession,
+  onDeleteSession,
+  onPasteSession,
+  copiedSession,
 }: MasterPlannerColumnProps) {
   const [dayIntensityPopoverOpen, setDayIntensityPopoverOpen] = useState(false);
   const [sessionIntensityPopovers, setSessionIntensityPopovers] = useState<Record<number, boolean>>({});
@@ -955,6 +964,40 @@ export function MasterPlannerColumn({
               )}
               title={`Session intensity: ${session.sessionIntensity.replace('-', ' ')}`}
             />
+          )}
+
+          {/* Session 3-dot menu for copy/delete */}
+          {(onCopySession || onDeleteSession) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0 ml-1">
+                  <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40 z-[200] bg-popover">
+                {onCopySession && (
+                  <DropdownMenuItem onClick={(e) => {
+                    e.stopPropagation();
+                    onCopySession(day.dateString, session.sessionIndex);
+                  }}>
+                    <Copy className="mr-2 h-4 w-4" />
+                    Copy session
+                  </DropdownMenuItem>
+                )}
+                {onDeleteSession && (
+                  <DropdownMenuItem 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteSession(day.dateString, session.sessionIndex);
+                    }}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete session
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
 
@@ -1653,8 +1696,8 @@ export function MasterPlannerColumn({
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-center py-8">
-            <p className="text-sm text-muted-foreground mb-3">No training scheduled</p>
+          <div className="flex flex-col items-center justify-center h-full text-center py-8 space-y-2">
+            <p className="text-sm text-muted-foreground mb-1">No training scheduled</p>
             <Button
               variant="outline"
               size="sm"
@@ -1664,6 +1707,17 @@ export function MasterPlannerColumn({
               <Plus className="h-3.5 w-3.5" />
               Add Workout
             </Button>
+            {copiedSession && onPasteSession && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => onPasteSession(day.dateString)}
+                className="gap-1.5"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Paste Session ({copiedSession.exercises.length})
+              </Button>
+            )}
           </div>
         )}
       </div>
