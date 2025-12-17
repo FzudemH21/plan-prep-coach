@@ -525,7 +525,7 @@ export function TrainingDayCell({
                       className="mt-2 h-7 text-xs"
                     >
                       <Plus className="h-3 w-3 mr-1" />
-                      Add Workout
+                      Add Session
                     </Button>
                   )}
                 </>
@@ -559,7 +559,7 @@ export function TrainingDayCell({
                     className="h-7 text-xs"
                   >
                     <Plus className="h-3 w-3 mr-1" />
-                    Add Workout
+                    Add Session
                   </Button>
                 )
               )}
