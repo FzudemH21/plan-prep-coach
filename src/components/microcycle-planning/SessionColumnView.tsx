@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -344,7 +344,7 @@ export function SessionColumnView({
 
   return (
     <>
-      <Card className="w-80 flex-shrink-0 flex flex-col h-[600px] !bg-muted/20">
+      <div className="w-80 flex-shrink-0 flex flex-col h-[600px] rounded-lg border bg-muted text-card-foreground shadow-sm">
         <CardHeader className="pb-3 border-b">
           <div className="space-y-2">
             {/* Session Name and Actions */}
@@ -782,7 +782,7 @@ export function SessionColumnView({
             </div>
           </div>
         </CardContent>
-      </Card>
+      </div>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
