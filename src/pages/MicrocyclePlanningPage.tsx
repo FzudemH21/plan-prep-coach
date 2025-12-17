@@ -85,6 +85,8 @@ export default function MicrocyclePlanningPage() {
   } | null>(null);
   const [copiedDay, setCopiedDay] = useState<{
     exercises: ExerciseDistribution[];
+    sections: SessionSection[];
+    supersets: { [sessionIndex: number]: { [sectionId: string]: { [supersetId: string]: string[] } } };
     sourceDate: string;
     intensity?: IntensityLevel;
     testNames?: string[];
@@ -2059,6 +2061,12 @@ export default function MicrocyclePlanningPage() {
       ex => ex.dayDate === dayDate
     );
     
+    // Get sections for this day
+    const daySections = sessionSections.filter(s => s.dayDate === dayDate);
+    
+    // Get supersets for this day
+    const daySupersets = supersets[dayDate] || {};
+    
     // Get intensity for this day
     const dayIntensity = dailyIntensityData.find(di => di.date === dayDate);
     
@@ -2071,6 +2079,8 @@ export default function MicrocyclePlanningPage() {
     // Always allow copying (every day has at least intensity)
     setCopiedDay({
       exercises: dayExercises,
+      sections: daySections,
+      supersets: daySupersets,
       sourceDate: dayDate,
       intensity: dayIntensity?.intensity,
       testNames: trainingDay?.testNames,
@@ -2081,6 +2091,7 @@ export default function MicrocyclePlanningPage() {
     // Build descriptive toast message
     const parts = [];
     if (dayExercises.length > 0) parts.push(`${dayExercises.length} exercise(s)`);
+    if (daySections.length > 0) parts.push(`${daySections.length} section(s)`);
     if (dayIntensity) parts.push(`intensity: ${dayIntensity.intensity}`);
     if (trainingDay?.testNames?.length) parts.push(`${trainingDay.testNames.length} test(s)`);
     if (trainingDay?.eventNames?.length) parts.push(`${trainingDay.eventNames.length} event(s)`);
@@ -2095,13 +2106,66 @@ export default function MicrocyclePlanningPage() {
   const handlePasteDay = (targetDate: string) => {
     if (!copiedDay) return;
     
-    // 1. Clear sections from target day first (OVERWRITE)
-    setSessionSections(prev => prev.filter(s => s.dayDate !== targetDate));
+    // Create ID mappings for sections (old -> new)
+    const sectionIdMapping = new Map<string, string>();
+    copiedDay.sections.forEach(section => {
+      const newId = `section-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      sectionIdMapping.set(section.id, newId);
+    });
     
-    // 2. Clear supersets from target day
+    // Create ID mappings for exercises (old -> new)
+    const exerciseIdMapping = new Map<string, string>();
+    copiedDay.exercises.forEach(ex => {
+      const newId = `dist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 5)}`;
+      exerciseIdMapping.set(ex.id, newId);
+    });
+    
+    // 1. Clear and paste sections
+    setSessionSections(prev => {
+      // Remove existing sections from target day
+      const filteredPrev = prev.filter(s => s.dayDate !== targetDate);
+      
+      // Create pasted sections with new IDs and target date
+      const pastedSections = copiedDay.sections.map(section => ({
+        ...section,
+        id: sectionIdMapping.get(section.id) || section.id,
+        dayDate: targetDate
+      }));
+      
+      return [...filteredPrev, ...pastedSections];
+    });
+    
+    // 2. Clear and paste supersets with remapped exercise IDs
     setSupersets(prev => {
       const newSupersets = { ...prev };
       delete newSupersets[targetDate];
+      
+      // Remap supersets if any exist
+      const sourceSupersets = copiedDay.supersets;
+      if (Object.keys(sourceSupersets).length > 0) {
+        const targetDaySupersets: SupersetMapping[string] = {};
+        
+        for (const sessionIndex in sourceSupersets) {
+          targetDaySupersets[sessionIndex] = {};
+          for (const sectionId in sourceSupersets[sessionIndex]) {
+            // Remap section ID
+            const newSectionId = sectionIdMapping.get(sectionId) || sectionId;
+            targetDaySupersets[sessionIndex][newSectionId] = {};
+            
+            for (const supersetId in sourceSupersets[sessionIndex][sectionId]) {
+              const exerciseIds = sourceSupersets[sessionIndex][sectionId][supersetId];
+              // Remap exercise IDs
+              const newExerciseIds = exerciseIds.map(exId => exerciseIdMapping.get(exId) || exId);
+              // Generate new superset ID
+              const newSupersetId = `superset-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+              targetDaySupersets[sessionIndex][newSectionId][newSupersetId] = newExerciseIds;
+            }
+          }
+        }
+        
+        newSupersets[targetDate] = targetDaySupersets;
+      }
+      
       return newSupersets;
     });
     
@@ -2111,27 +2175,19 @@ export default function MicrocyclePlanningPage() {
       [targetDate]: copiedDay.splitState ?? 0
     }));
     
-    // 4. Paste exercises
+    // 4. Paste exercises with new IDs and remapped section IDs
     setExerciseDistribution(prev => {
       // Remove all existing exercises from target day
       const filteredPrev = prev.filter(ex => ex.dayDate !== targetDate);
       
       // If there are exercises to copy
       if (copiedDay.exercises.length > 0) {
-        // Get unique session indices from copied exercises
-        const sessionIndices = [...new Set(copiedDay.exercises.map(ex => ex.sessionIndex))].sort((a, b) => a - b);
-        
-        // Create mapping from old session indices to new sequential indices
-        const sessionMapping = new Map<number, number>();
-        sessionIndices.forEach((oldIndex, newIndex) => {
-          sessionMapping.set(oldIndex, newIndex);
-        });
-        
-        // Create new exercises with updated date and remapped session indices
+        // Create new exercises with updated IDs, date, and remapped section IDs
         const pastedExercises = copiedDay.exercises.map(ex => ({
           ...ex,
+          id: exerciseIdMapping.get(ex.id) || ex.id,
           dayDate: targetDate,
-          sessionIndex: sessionMapping.get(ex.sessionIndex) || 0
+          sectionId: ex.sectionId ? (sectionIdMapping.get(ex.sectionId) || ex.sectionId) : ex.sectionId
         }));
         
         return [...filteredPrev, ...pastedExercises];
