@@ -88,6 +88,8 @@ interface TrainingCalendarViewProps {
   onSupersetsChange?: (supersets: SupersetMapping) => void;
   // Sync exercise distribution changes back to Step 1
   onDistributionChange?: (distribution: ExerciseDistribution[]) => void;
+  // Add session functionality
+  onAddSession?: (dayDate: string) => void;
 }
 
 export interface CalendarDay {
@@ -149,6 +151,7 @@ export function TrainingCalendarView({
   onSectionsChange,
   onSupersetsChange,
   onDistributionChange,
+  onAddSession,
 }: TrainingCalendarViewProps) {
   const { toast } = useToast();
   const { data: toolboxData } = useToolboxData();
@@ -629,6 +632,7 @@ export function TrainingCalendarView({
                   totalSessions
                 });
               }}
+              onAddSession={onAddSession}
               getIntensityColor={getIntensityColor}
               dailyIntensityData={dailyIntensityData}
               parameterValues={parameterValues}
