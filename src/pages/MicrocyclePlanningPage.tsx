@@ -2773,6 +2773,7 @@ export default function MicrocyclePlanningPage() {
               onSupersetsChange={setSupersets}
               onDistributionChange={(dist) => setExerciseDistribution(dist as ExerciseDistribution[])}
               onAddSession={handleAddSession}
+              daySplitStates={daySplitStates}
             />
         </>
       )}
