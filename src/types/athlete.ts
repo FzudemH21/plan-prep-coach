@@ -19,7 +19,9 @@ export interface AthleteGroup {
 
 export interface Athlete {
   id: string;
-  fullName: string;
+  firstName: string;
+  middleName: string | null;
+  lastName: string;
   birthday: string | null;
   sex: Sex | null;
   sport: string | null;
@@ -29,6 +31,12 @@ export interface Athlete {
   createdAt: string;
   updatedAt: string;
 }
+
+// Helper to get display name
+export const getAthleteDisplayName = (athlete: Athlete): string => {
+  const parts = [athlete.firstName, athlete.middleName, athlete.lastName].filter(Boolean);
+  return parts.join(' ') || 'Unnamed Athlete';
+};
 
 export interface ParameterDefinition {
   id: string;

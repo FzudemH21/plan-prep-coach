@@ -46,9 +46,18 @@ export function ParameterSection({ athlete, athleteData }: ParameterSectionProps
 
   const athleteParams = athleteData.getAthleteParameters(athlete.id);
 
-  // Get definitions not yet added to this athlete
+  // Exclude Height and Weight from the parameters section (they're shown in Profile Information)
+  const filteredAthleteParams = athleteParams.filter((ap) => {
+    const def = athleteData.getParameterDefinition(ap.parameterDefinitionId);
+    return def && def.name !== 'Height' && def.name !== 'Weight';
+  });
+
+  // Get definitions not yet added to this athlete (excluding Height and Weight)
   const availableDefinitions = athleteData.parameterDefinitions.filter(
-    (def) => !athleteParams.some((ap) => ap.parameterDefinitionId === def.id)
+    (def) => 
+      def.name !== 'Height' && 
+      def.name !== 'Weight' && 
+      !athleteParams.some((ap) => ap.parameterDefinitionId === def.id)
   );
 
   const handleAddParameter = () => {
@@ -103,13 +112,13 @@ export function ParameterSection({ athlete, athleteData }: ParameterSectionProps
           </Button>
         </CardHeader>
         <CardContent>
-          {athleteParams.length === 0 ? (
+          {filteredAthleteParams.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
-              No parameters tracked yet. Add parameters to track metrics like height, weight, or custom values.
+              No custom parameters tracked yet. Add parameters to track custom metrics.
             </p>
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {athleteParams.map((ap) => {
+              {filteredAthleteParams.map((ap) => {
                 const def = getDefinition(ap);
                 if (!def) return null;
 

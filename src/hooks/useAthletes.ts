@@ -71,15 +71,44 @@ export function useAthletes() {
   // Athletes
   const createAthlete = useCallback((athlete: Omit<Athlete, 'id' | 'createdAt' | 'updatedAt'>): Athlete => {
     const now = new Date().toISOString();
+    const athleteId = generateId();
     const newAthlete: Athlete = {
       ...athlete,
-      id: generateId(),
+      id: athleteId,
       createdAt: now,
       updatedAt: now,
     };
-    setData((prev) => ({ ...prev, athletes: [...prev.athletes, newAthlete] }));
+    
+    // Find Height and Weight parameter definitions
+    const heightDef = data.parameterDefinitions.find(d => d.name === 'Height');
+    const weightDef = data.parameterDefinitions.find(d => d.name === 'Weight');
+    
+    // Auto-create Height and Weight parameters for new athlete
+    const newParams: AthleteParameter[] = [];
+    if (heightDef) {
+      newParams.push({
+        id: generateId(),
+        athleteId,
+        parameterDefinitionId: heightDef.id,
+        values: [],
+      });
+    }
+    if (weightDef) {
+      newParams.push({
+        id: generateId(),
+        athleteId,
+        parameterDefinitionId: weightDef.id,
+        values: [],
+      });
+    }
+    
+    setData((prev) => ({ 
+      ...prev, 
+      athletes: [...prev.athletes, newAthlete],
+      athleteParameters: [...prev.athleteParameters, ...newParams],
+    }));
     return newAthlete;
-  }, [setData]);
+  }, [setData, data.parameterDefinitions]);
 
   const updateAthlete = useCallback((id: string, updates: Partial<Omit<Athlete, 'id' | 'createdAt'>>) => {
     setData((prev) => ({

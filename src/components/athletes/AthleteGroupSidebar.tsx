@@ -33,7 +33,7 @@ import {
   Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Athlete, AthleteGroup } from '@/types/athlete';
+import { Athlete, AthleteGroup, getAthleteDisplayName } from '@/types/athlete';
 
 interface AthleteGroupSidebarProps {
   groups: AthleteGroup[];
@@ -187,7 +187,7 @@ export function AthleteGroupSidebar({
                           onClick={() => onSelectAthlete(athlete.id)}
                         >
                           <User className="h-3 w-3" />
-                          <span className="truncate">{athlete.fullName}</span>
+                          <span className="truncate">{getAthleteDisplayName(athlete)}</span>
                         </Button>
                       ))
                     )}
@@ -213,7 +213,7 @@ export function AthleteGroupSidebar({
                   onClick={() => onSelectAthlete(athlete.id)}
                 >
                   <User className="h-3 w-3" />
-                  <span className="truncate">{athlete.fullName}</span>
+                  <span className="truncate">{getAthleteDisplayName(athlete)}</span>
                 </Button>
               ))}
             </div>
