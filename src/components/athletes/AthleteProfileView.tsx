@@ -337,53 +337,6 @@ export function AthleteProfileView({
               </div>
             </div>
 
-            {/* Groups */}
-            <div className="space-y-2">
-              <Label>Groups</Label>
-              <div className="flex flex-wrap gap-2 items-center">
-                {assignedGroups.length > 0 ? (
-                  assignedGroups.map((group) => (
-                    <Badge key={group.id} variant="secondary" className="flex items-center gap-1">
-                      {group.name}
-                      <button
-                        onClick={() => removeFromGroup(group.id)}
-                        className="ml-1 hover:bg-muted-foreground/20 rounded-full p-0.5"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))
-                ) : (
-                  <span className="text-sm text-muted-foreground">No groups</span>
-                )}
-                {availableGroups.length > 0 && (
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className="h-6 w-6 p-0 rounded-full">
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-48 p-2" align="start">
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium text-muted-foreground mb-2">Add to group</p>
-                        {availableGroups.map((group) => (
-                          <Button
-                            key={group.id}
-                            variant="ghost"
-                            size="sm"
-                            className="w-full justify-start text-sm h-8"
-                            onClick={() => addToGroup(group.id)}
-                          >
-                            {group.name}
-                          </Button>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                )}
-              </div>
-            </div>
-
             {/* Other Profile Fields */}
             <div className="grid md:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -526,11 +479,63 @@ export function AthleteProfileView({
               )}
             </div>
             </div>
+
+            {/* Groups - At Bottom */}
+            <div className="space-y-2 pt-4 border-t">
+              <Label>Groups</Label>
+              <div className="flex flex-wrap gap-2 items-center">
+                {assignedGroups.length > 0 ? (
+                  assignedGroups.map((group) => (
+                    <Badge key={group.id} variant="secondary" className="flex items-center gap-1">
+                      {group.name}
+                      <button
+                        onClick={() => removeFromGroup(group.id)}
+                        className="ml-1 hover:bg-muted-foreground/20 rounded-full p-0.5"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))
+                ) : (
+                  <span className="text-sm text-muted-foreground">No groups</span>
+                )}
+                {availableGroups.length > 0 && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-6 w-6 p-0 rounded-full">
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-48 p-2" align="start">
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-muted-foreground mb-2">Add to group</p>
+                        {availableGroups.map((group) => (
+                          <Button
+                            key={group.id}
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start text-sm h-8"
+                            onClick={() => addToGroup(group.id)}
+                          >
+                            {group.name}
+                          </Button>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+              </div>
+            </div>
           </CardContent>
         </Card>
 
         {/* Parameters */}
-        <ParameterSection athlete={athlete} athleteData={athleteData} />
+        <ParameterSection 
+          athlete={athlete} 
+          athleteData={athleteData} 
+          allAthletes={athleteData.athletes}
+          allAthleteParameters={athleteData.athleteParameters}
+        />
 
         {/* Delete Confirmation */}
         <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
@@ -563,6 +568,9 @@ export function AthleteProfileView({
             definition={heightDef}
             onAddValue={(value) => athleteData.addParameterValue(heightParam.id, value)}
             onDeleteValue={(valueId) => athleteData.deleteParameterValue(heightParam.id, valueId)}
+            allAthletes={athleteData.athletes}
+            allAthleteParameters={athleteData.athleteParameters}
+            currentAthlete={athlete}
           />
         )}
 
@@ -575,6 +583,9 @@ export function AthleteProfileView({
             definition={weightDef}
             onAddValue={(value) => athleteData.addParameterValue(weightParam.id, value)}
             onDeleteValue={(valueId) => athleteData.deleteParameterValue(weightParam.id, valueId)}
+            allAthletes={athleteData.athletes}
+            allAthleteParameters={athleteData.athleteParameters}
+            currentAthlete={athlete}
           />
         )}
 

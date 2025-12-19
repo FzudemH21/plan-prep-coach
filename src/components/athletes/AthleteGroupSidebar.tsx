@@ -22,6 +22,11 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import {
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   ChevronDown,
   ChevronRight,
   FolderPlus,
@@ -30,6 +35,7 @@ import {
   Plus,
   Trash2,
   User,
+  UserPlus,
   Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -44,6 +50,7 @@ interface AthleteGroupSidebarProps {
   onUpdateGroup: (id: string, name: string) => void;
   onDeleteGroup: (id: string) => void;
   onAddAthleteToGroup: (groupId: string) => void;
+  onAssignAthleteToGroup: (athleteId: string, groupId: string) => void;
   getAthletesByGroup: (groupId: string) => Athlete[];
   getAthletesWithoutGroup: () => Athlete[];
 }
@@ -57,6 +64,7 @@ export function AthleteGroupSidebar({
   onUpdateGroup,
   onDeleteGroup,
   onAddAthleteToGroup,
+  onAssignAthleteToGroup,
   getAthletesByGroup,
   getAthletesWithoutGroup,
 }: AthleteGroupSidebarProps) {
@@ -175,21 +183,59 @@ export function AthleteGroupSidebar({
                         No athletes in this group
                       </p>
                     ) : (
-                      groupAthletes.map((athlete) => (
-                        <Button
-                          key={athlete.id}
-                          variant="ghost"
-                          size="sm"
-                          className={cn(
-                            'w-full justify-start gap-2 h-8',
-                            selectedAthleteId === athlete.id && 'bg-accent'
-                          )}
-                          onClick={() => onSelectAthlete(athlete.id)}
-                        >
-                          <User className="h-3 w-3" />
-                          <span className="truncate">{getAthleteDisplayName(athlete)}</span>
-                        </Button>
-                      ))
+                      groupAthletes.map((athlete) => {
+                        const availableGroupsForAthlete = groups.filter(
+                          (g) => !athlete.groupIds.includes(g.id)
+                        );
+                        return (
+                          <div key={athlete.id} className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className={cn(
+                                'flex-1 justify-start gap-2 h-8',
+                                selectedAthleteId === athlete.id && 'bg-accent'
+                              )}
+                              onClick={() => onSelectAthlete(athlete.id)}
+                            >
+                              <User className="h-3 w-3" />
+                              <span className="truncate">{getAthleteDisplayName(athlete)}</span>
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
+                                  <MoreHorizontal className="h-3 w-3" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {availableGroupsForAthlete.length > 0 ? (
+                                  <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger>
+                                      <UserPlus className="h-4 w-4 mr-2" />
+                                      Assign to Group
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent>
+                                      {availableGroupsForAthlete.map((g) => (
+                                        <DropdownMenuItem
+                                          key={g.id}
+                                          onClick={() => onAssignAthleteToGroup(athlete.id, g.id)}
+                                        >
+                                          {g.name}
+                                        </DropdownMenuItem>
+                                      ))}
+                                    </DropdownMenuSubContent>
+                                  </DropdownMenuSub>
+                                ) : (
+                                  <DropdownMenuItem disabled>
+                                    <UserPlus className="h-4 w-4 mr-2" />
+                                    Already in all groups
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </CollapsibleContent>
@@ -202,19 +248,47 @@ export function AthleteGroupSidebar({
             <div className="pt-2 border-t mt-2">
               <p className="text-xs text-muted-foreground px-2 py-1">Ungrouped</p>
               {ungroupedAthletes.map((athlete) => (
-                <Button
-                  key={athlete.id}
-                  variant="ghost"
-                  size="sm"
-                  className={cn(
-                    'w-full justify-start gap-2 h-8',
-                    selectedAthleteId === athlete.id && 'bg-accent'
+                <div key={athlete.id} className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                      'flex-1 justify-start gap-2 h-8',
+                      selectedAthleteId === athlete.id && 'bg-accent'
+                    )}
+                    onClick={() => onSelectAthlete(athlete.id)}
+                  >
+                    <User className="h-3 w-3" />
+                    <span className="truncate">{getAthleteDisplayName(athlete)}</span>
+                  </Button>
+                  {groups.length > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
+                          <MoreHorizontal className="h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger>
+                            <UserPlus className="h-4 w-4 mr-2" />
+                            Assign to Group
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent>
+                            {groups.map((g) => (
+                              <DropdownMenuItem
+                                key={g.id}
+                                onClick={() => onAssignAthleteToGroup(athlete.id, g.id)}
+                              >
+                                {g.name}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   )}
-                  onClick={() => onSelectAthlete(athlete.id)}
-                >
-                  <User className="h-3 w-3" />
-                  <span className="truncate">{getAthleteDisplayName(athlete)}</span>
-                </Button>
+                </div>
               ))}
             </div>
           )}

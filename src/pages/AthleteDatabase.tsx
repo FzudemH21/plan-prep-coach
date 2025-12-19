@@ -41,6 +41,16 @@ export default function AthleteDatabase() {
     handleCreateAthlete(groupId);
   };
 
+  const handleAssignAthleteToGroup = (athleteId: string, groupId: string) => {
+    const athlete = athleteData.getAthlete(athleteId);
+    if (athlete) {
+      const currentGroups = athlete.groupIds;
+      if (!currentGroups.includes(groupId)) {
+        athleteData.updateAthlete(athleteId, { groupIds: [...currentGroups, groupId] });
+      }
+    }
+  };
+
   const handleCancelNewAthlete = () => {
     // Delete the unsaved new athlete
     if (selectedAthleteId && isNewAthlete) {
@@ -67,6 +77,7 @@ export default function AthleteDatabase() {
           onUpdateGroup={athleteData.updateGroup}
           onDeleteGroup={athleteData.deleteGroup}
           onAddAthleteToGroup={handleAddAthleteToGroup}
+          onAssignAthleteToGroup={handleAssignAthleteToGroup}
           getAthletesByGroup={athleteData.getAthletesByGroup}
           getAthletesWithoutGroup={athleteData.getAthletesWithoutGroup}
         />

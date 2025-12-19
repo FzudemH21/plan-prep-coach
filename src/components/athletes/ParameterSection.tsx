@@ -32,9 +32,11 @@ import { ParameterValueHistory } from './ParameterValueHistory';
 interface ParameterSectionProps {
   athlete: Athlete;
   athleteData: ReturnType<typeof useAthletes>;
+  allAthletes: Athlete[];
+  allAthleteParameters: AthleteParameter[];
 }
 
-export function ParameterSection({ athlete, athleteData }: ParameterSectionProps) {
+export function ParameterSection({ athlete, athleteData, allAthletes, allAthleteParameters }: ParameterSectionProps) {
   const [showAddParameter, setShowAddParameter] = useState(false);
   const [selectedDefId, setSelectedDefId] = useState<string>('');
   const [newParamName, setNewParamName] = useState('');
@@ -381,6 +383,9 @@ export function ParameterSection({ athlete, athleteData }: ParameterSectionProps
           onDeleteValue={(valueId) =>
             athleteData.deleteParameterValue(showHistory.id, valueId)
           }
+          allAthletes={allAthletes}
+          allAthleteParameters={allAthleteParameters}
+          currentAthlete={athlete}
         />
       )}
     </>
