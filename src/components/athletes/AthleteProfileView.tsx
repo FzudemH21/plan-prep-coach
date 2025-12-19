@@ -35,6 +35,11 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { Plus, Save, Trash2, TrendingUp, X } from 'lucide-react';
 import {
   Athlete,
@@ -119,16 +124,23 @@ export function AthleteProfileView({
     setEditedAthlete((prev) => ({ ...prev, [field]: value }));
   };
 
-  const toggleGroup = (groupId: string) => {
-    const currentGroups = editedAthlete.groupIds ?? athlete.groupIds;
-    const newGroups = currentGroups.includes(groupId)
-      ? currentGroups.filter((id) => id !== groupId)
-      : [...currentGroups, groupId];
-    updateField('groupIds', newGroups);
+  const addToGroup = (groupId: string) => {
+    const currentGroups = athlete.groupIds;
+    if (!currentGroups.includes(groupId)) {
+      onUpdateAthlete({ groupIds: [...currentGroups, groupId] });
+    }
+  };
+
+  const removeFromGroup = (groupId: string) => {
+    const currentGroups = athlete.groupIds;
+    onUpdateAthlete({ groupIds: currentGroups.filter((id) => id !== groupId) });
   };
 
   const displayValue = <K extends keyof Athlete>(field: K): Athlete[K] =>
     isEditing ? ((editedAthlete[field] !== undefined ? editedAthlete[field] : athlete[field]) as Athlete[K]) : athlete[field];
+
+  const assignedGroups = groups.filter(g => athlete.groupIds.includes(g.id));
+  const availableGroups = groups.filter(g => !athlete.groupIds.includes(g.id));
 
   const athleteAge = athlete.birthday
     ? Math.floor(
@@ -245,73 +257,135 @@ export function AthleteProfileView({
   return (
     <ScrollArea className="h-full">
       <div className="space-y-6 p-1 pr-4">
-        {/* Header */}
-        <div className="flex items-start justify-between">
-          <div>
-            {isEditing ? (
-              <div className="flex gap-2 flex-wrap">
-                <Input
-                  className="w-40"
-                  placeholder="First Name"
-                  value={displayValue('firstName')}
-                  onChange={(e) => updateField('firstName', e.target.value)}
-                />
-                <Input
-                  className="w-32"
-                  placeholder="Middle Name"
-                  value={displayValue('middleName') || ''}
-                  onChange={(e) => updateField('middleName', e.target.value || null)}
-                />
-                <Input
-                  className="w-40"
-                  placeholder="Last Name"
-                  value={displayValue('lastName')}
-                  onChange={(e) => updateField('lastName', e.target.value)}
-                />
-              </div>
-            ) : (
-              <h1 className="text-2xl font-bold">{displayName}</h1>
-            )}
-            <p className="text-sm text-muted-foreground mt-1">
-              Created {format(new Date(athlete.createdAt), 'MMM d, yyyy')}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            {isEditing ? (
-              <>
-                <Button variant="outline" size="sm" onClick={cancelEditing}>
-                  <X className="h-4 w-4 mr-1" />
-                  Cancel
-                </Button>
-                <Button size="sm" onClick={saveChanges}>
-                  <Save className="h-4 w-4 mr-1" />
-                  Save
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="outline" size="sm" onClick={startEditing}>
-                  Edit
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => setShowDeleteConfirm(true)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-
         {/* Core Profile */}
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-lg">Profile Information</CardTitle>
+            <div className="flex gap-2">
+              {isEditing ? (
+                <>
+                  <Button variant="outline" size="sm" onClick={cancelEditing}>
+                    <X className="h-4 w-4 mr-1" />
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={saveChanges}>
+                    <Save className="h-4 w-4 mr-1" />
+                    Save
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="outline" size="sm" onClick={startEditing}>
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => setShowDeleteConfirm(true)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+            </div>
           </CardHeader>
-          <CardContent className="grid md:grid-cols-2 gap-4">
+          <CardContent className="space-y-4">
+            {/* Name Fields */}
+            <div className="grid md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>First Name</Label>
+                {isEditing ? (
+                  <Input
+                    placeholder="First Name"
+                    value={displayValue('firstName')}
+                    onChange={(e) => updateField('firstName', e.target.value)}
+                  />
+                ) : (
+                  <p className="text-sm">
+                    {athlete.firstName || <span className="text-muted-foreground">Not set</span>}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label>Middle Name</Label>
+                {isEditing ? (
+                  <Input
+                    placeholder="Middle Name (optional)"
+                    value={displayValue('middleName') || ''}
+                    onChange={(e) => updateField('middleName', e.target.value || null)}
+                  />
+                ) : (
+                  <p className="text-sm">
+                    {athlete.middleName || <span className="text-muted-foreground">-</span>}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label>Last Name</Label>
+                {isEditing ? (
+                  <Input
+                    placeholder="Last Name"
+                    value={displayValue('lastName')}
+                    onChange={(e) => updateField('lastName', e.target.value)}
+                  />
+                ) : (
+                  <p className="text-sm">
+                    {athlete.lastName || <span className="text-muted-foreground">Not set</span>}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Groups */}
+            <div className="space-y-2">
+              <Label>Groups</Label>
+              <div className="flex flex-wrap gap-2 items-center">
+                {assignedGroups.length > 0 ? (
+                  assignedGroups.map((group) => (
+                    <Badge key={group.id} variant="secondary" className="flex items-center gap-1">
+                      {group.name}
+                      <button
+                        onClick={() => removeFromGroup(group.id)}
+                        className="ml-1 hover:bg-muted-foreground/20 rounded-full p-0.5"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))
+                ) : (
+                  <span className="text-sm text-muted-foreground">No groups</span>
+                )}
+                {availableGroups.length > 0 && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-6 w-6 p-0 rounded-full">
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-48 p-2" align="start">
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-muted-foreground mb-2">Add to group</p>
+                        {availableGroups.map((group) => (
+                          <Button
+                            key={group.id}
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start text-sm h-8"
+                            onClick={() => addToGroup(group.id)}
+                          >
+                            {group.name}
+                          </Button>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+              </div>
+            </div>
+
+            {/* Other Profile Fields */}
+            <div className="grid md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Birthday</Label>
               {isEditing ? (
@@ -451,53 +525,7 @@ export function AthleteProfileView({
                 </p>
               )}
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Groups */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Groups</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isEditing ? (
-              <div className="flex flex-wrap gap-2">
-                {groups.map((group) => {
-                  const isInGroup = (
-                    displayValue('groupIds') as string[]
-                  ).includes(group.id);
-                  return (
-                    <Badge
-                      key={group.id}
-                      variant={isInGroup ? 'default' : 'outline'}
-                      className="cursor-pointer"
-                      onClick={() => toggleGroup(group.id)}
-                    >
-                      {group.name}
-                      {isInGroup && <X className="h-3 w-3 ml-1" />}
-                    </Badge>
-                  );
-                })}
-                {groups.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    No groups created yet
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {athlete.groupIds.length > 0 ? (
-                  athlete.groupIds.map((groupId) => {
-                    const group = groups.find((g) => g.id === groupId);
-                    return group ? (
-                      <Badge key={groupId}>{group.name}</Badge>
-                    ) : null;
-                  })
-                ) : (
-                  <p className="text-sm text-muted-foreground">No groups assigned</p>
-                )}
-              </div>
-            )}
+            </div>
           </CardContent>
         </Card>
 
