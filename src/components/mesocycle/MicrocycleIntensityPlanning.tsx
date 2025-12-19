@@ -28,7 +28,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
       {/* Horizontal scrollable grid */}
       <div className="w-full min-w-0 border rounded-lg">
         <div className="force-scrollbar-x overflow-y-hidden" style={{ scrollbarWidth: 'thin', maxHeight: '400px' }}>
-          <div className="w-max p-4">
+          <div className="w-max p-4 pb-8">
             {/* Mesocycle Headers */}
             <div className="flex mb-4">
               <div className="sticky left-0 bg-background z-20 min-w-[140px] mr-4 shrink-0">
