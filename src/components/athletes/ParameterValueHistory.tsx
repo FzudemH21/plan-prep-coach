@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { format, startOfMonth, endOfMonth, eachMonthOfInterval, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -26,7 +26,8 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
+  ReferenceLine,
+  ReferenceArea,
 } from 'recharts';
 import { Athlete, AthleteParameter, ParameterDefinition } from '@/types/athlete';
 
@@ -41,6 +42,20 @@ interface ParameterValueHistoryProps {
   allAthletes?: Athlete[];
   allAthleteParameters?: AthleteParameter[];
   currentAthlete?: Athlete;
+}
+
+interface ComparisonStats {
+  mean: number;
+  stdDev: number;
+  count: number;
+}
+
+// Helper to calculate standard deviation
+function calculateStdDev(values: number[], mean: number): number {
+  if (values.length < 2) return 0;
+  const squaredDiffs = values.map((v) => Math.pow(v - mean, 2));
+  const variance = squaredDiffs.reduce((a, b) => a + b, 0) / (values.length - 1);
+  return Math.sqrt(variance);
 }
 
 export function ParameterValueHistory({
@@ -62,10 +77,10 @@ export function ParameterValueHistory({
 
   const isQuantitative = definition.type === 'quantitative';
 
-  // Calculate group and sex averages for comparison
-  const comparisonData = useMemo(() => {
+  // Calculate group and sex stats using LATEST values from each athlete
+  const comparisonStats = useMemo(() => {
     if (!isQuantitative || !currentAthlete || allAthletes.length === 0) {
-      return { groupAvg: [], sexAvg: [], hasComparisons: false };
+      return { groupStats: null, sexStats: null };
     }
 
     // Get all athletes in the same groups as the current athlete
@@ -83,116 +98,67 @@ export function ParameterValueHistory({
         a.sex === currentAthlete.sex
     );
 
-    // Get parameter values for group athletes
-    const groupParamValues = groupAthletes.flatMap((athlete) => {
+    // Helper to get the latest value for an athlete
+    const getLatestValue = (athleteId: string): number | null => {
       const param = allAthleteParameters.find(
         (ap) =>
-          ap.athleteId === athlete.id &&
+          ap.athleteId === athleteId &&
           ap.parameterDefinitionId === definition.id
       );
-      return param?.values.map((v) => ({ ...v, athleteId: athlete.id })) || [];
-    });
-
-    // Get parameter values for same-sex athletes
-    const sexParamValues = sameSexAthletes.flatMap((athlete) => {
-      const param = allAthleteParameters.find(
-        (ap) =>
-          ap.athleteId === athlete.id &&
-          ap.parameterDefinitionId === definition.id
+      if (!param || param.values.length === 0) return null;
+      const sorted = [...param.values].sort(
+        (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
       );
-      return param?.values.map((v) => ({ ...v, athleteId: athlete.id })) || [];
-    });
-
-    return {
-      groupValues: groupParamValues,
-      sexValues: sexParamValues,
-      hasGroupData: groupParamValues.length > 0,
-      hasSexData: sexParamValues.length > 0,
-      hasComparisons: groupParamValues.length > 0 || sexParamValues.length > 0,
+      const val = parseFloat(sorted[0].value);
+      return isNaN(val) ? null : val;
     };
-  }, [
-    isQuantitative,
-    currentAthlete,
-    allAthletes,
-    allAthleteParameters,
-    definition.id,
-  ]);
 
-  // Build chart data with individual values and averages
+    // Calculate group stats
+    let groupStats: ComparisonStats | null = null;
+    const groupLatestValues = groupAthletes
+      .map((a) => getLatestValue(a.id))
+      .filter((v): v is number => v !== null);
+
+    if (groupLatestValues.length > 0) {
+      const mean = groupLatestValues.reduce((a, b) => a + b, 0) / groupLatestValues.length;
+      const stdDev = calculateStdDev(groupLatestValues, mean);
+      groupStats = {
+        mean: Math.round(mean * 10) / 10,
+        stdDev: Math.round(stdDev * 10) / 10,
+        count: groupLatestValues.length,
+      };
+    }
+
+    // Calculate sex stats
+    let sexStats: ComparisonStats | null = null;
+    const sexLatestValues = sameSexAthletes
+      .map((a) => getLatestValue(a.id))
+      .filter((v): v is number => v !== null);
+
+    if (sexLatestValues.length > 0) {
+      const mean = sexLatestValues.reduce((a, b) => a + b, 0) / sexLatestValues.length;
+      const stdDev = calculateStdDev(sexLatestValues, mean);
+      sexStats = {
+        mean: Math.round(mean * 10) / 10,
+        stdDev: Math.round(stdDev * 10) / 10,
+        count: sexLatestValues.length,
+      };
+    }
+
+    return { groupStats, sexStats };
+  }, [isQuantitative, currentAthlete, allAthletes, allAthleteParameters, definition.id]);
+
+  // Build chart data with individual athlete values only
   const chartData = useMemo(() => {
     if (!isQuantitative || sortedValues.length === 0) return [];
 
-    // For the current athlete, use individual data points
-    const baseData = sortedValues.map((v) => ({
+    return sortedValues.map((v) => ({
       date: format(new Date(v.recordedAt), 'MMM d'),
       fullDate: format(new Date(v.recordedAt), 'MMM d, yyyy'),
       value: parseFloat(v.value) || 0,
       rawValue: v.value,
-      month: format(new Date(v.recordedAt), 'yyyy-MM'),
     }));
-
-    if (!comparisonData.hasComparisons) {
-      return baseData;
-    }
-
-    // Calculate monthly averages for comparison data
-    const allDates = sortedValues.map((v) => new Date(v.recordedAt));
-    const minDate = new Date(Math.min(...allDates.map((d) => d.getTime())));
-    const maxDate = new Date(Math.max(...allDates.map((d) => d.getTime())));
-
-    const monthsInRange = eachMonthOfInterval({
-      start: startOfMonth(minDate),
-      end: endOfMonth(maxDate),
-    });
-
-    // Calculate averages per month for groups
-    const groupAvgByMonth: Record<string, number[]> = {};
-    const sexAvgByMonth: Record<string, number[]> = {};
-
-    if (comparisonData.groupValues) {
-      comparisonData.groupValues.forEach((v) => {
-        const month = format(new Date(v.recordedAt), 'yyyy-MM');
-        const numVal = parseFloat(v.value);
-        if (!isNaN(numVal)) {
-          if (!groupAvgByMonth[month]) groupAvgByMonth[month] = [];
-          groupAvgByMonth[month].push(numVal);
-        }
-      });
-    }
-
-    if (comparisonData.sexValues) {
-      comparisonData.sexValues.forEach((v) => {
-        const month = format(new Date(v.recordedAt), 'yyyy-MM');
-        const numVal = parseFloat(v.value);
-        if (!isNaN(numVal)) {
-          if (!sexAvgByMonth[month]) sexAvgByMonth[month] = [];
-          sexAvgByMonth[month].push(numVal);
-        }
-      });
-    }
-
-    // Merge averages into base data
-    return baseData.map((point) => {
-      const groupVals = groupAvgByMonth[point.month];
-      const sexVals = sexAvgByMonth[point.month];
-
-      return {
-        ...point,
-        groupAvg:
-          groupVals && groupVals.length > 0
-            ? Math.round(
-                (groupVals.reduce((a, b) => a + b, 0) / groupVals.length) * 10
-              ) / 10
-            : undefined,
-        sexAvg:
-          sexVals && sexVals.length > 0
-            ? Math.round(
-                (sexVals.reduce((a, b) => a + b, 0) / sexVals.length) * 10
-              ) / 10
-            : undefined,
-      };
-    });
-  }, [sortedValues, isQuantitative, comparisonData]);
+  }, [sortedValues, isQuantitative]);
 
   const handleAddValue = () => {
     if (!newValue.trim()) return;
@@ -200,8 +166,27 @@ export function ParameterValueHistory({
     setNewValue('');
   };
 
-  const showGroupLine = comparisonData.hasGroupData;
-  const showSexLine = comparisonData.hasSexData;
+  const { groupStats, sexStats } = comparisonStats;
+
+  // Calculate Y axis domain to include SD bands
+  const yDomain = useMemo(() => {
+    if (chartData.length === 0) return ['auto', 'auto'];
+    const values = chartData.map((d) => d.value);
+    let min = Math.min(...values);
+    let max = Math.max(...values);
+
+    if (groupStats) {
+      min = Math.min(min, groupStats.mean - groupStats.stdDev);
+      max = Math.max(max, groupStats.mean + groupStats.stdDev);
+    }
+    if (sexStats) {
+      min = Math.min(min, sexStats.mean - sexStats.stdDev);
+      max = Math.max(max, sexStats.mean + sexStats.stdDev);
+    }
+
+    const padding = (max - min) * 0.1;
+    return [Math.floor(min - padding), Math.ceil(max + padding)];
+  }, [chartData, groupStats, sexStats]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -218,6 +203,32 @@ export function ParameterValueHistory({
         </DialogHeader>
 
         <div className="flex-1 overflow-auto space-y-6">
+          {/* Stats legend */}
+          {(groupStats || sexStats) && (
+            <div className="flex flex-wrap gap-4 text-sm">
+              {groupStats && (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-0.5 bg-orange-500" style={{ borderStyle: 'dashed', borderWidth: '1px 0 0 0', borderColor: 'hsl(25 95% 53%)' }} />
+                  <span className="text-muted-foreground">
+                    Group Avg: <span className="text-foreground font-medium">{groupStats.mean} ± {groupStats.stdDev}</span>
+                    {definition.unit && <span className="ml-1">{definition.unit}</span>}
+                    <span className="text-muted-foreground ml-1">(n={groupStats.count})</span>
+                  </span>
+                </div>
+              )}
+              {sexStats && (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-0.5" style={{ borderStyle: 'dotted', borderWidth: '2px 0 0 0', borderColor: 'hsl(142 76% 36%)' }} />
+                  <span className="text-muted-foreground">
+                    Sex Avg: <span className="text-foreground font-medium">{sexStats.mean} ± {sexStats.stdDev}</span>
+                    {definition.unit && <span className="ml-1">{definition.unit}</span>}
+                    <span className="text-muted-foreground ml-1">(n={sexStats.count})</span>
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Chart for quantitative data */}
           {isQuantitative && sortedValues.length > 1 && (
             <div className="h-64 w-full">
@@ -232,7 +243,7 @@ export function ParameterValueHistory({
                   <YAxis
                     className="text-xs"
                     tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                    domain={['dataMin - 5', 'dataMax + 5']}
+                    domain={yDomain}
                   />
                   <Tooltip
                     contentStyle={{
@@ -241,31 +252,50 @@ export function ParameterValueHistory({
                       borderRadius: '8px',
                     }}
                     labelStyle={{ color: 'hsl(var(--foreground))' }}
-                    formatter={(value: number, name: string) => {
-                      const labels: Record<string, string> = {
-                        value: 'Athlete',
-                        groupAvg: 'Group Avg',
-                        sexAvg: 'Sex Avg',
-                      };
-                      return [
-                        `${value} ${definition.unit || ''}`,
-                        labels[name] || name,
-                      ];
-                    }}
+                    formatter={(value: number) => [
+                      `${value} ${definition.unit || ''}`,
+                      'Athlete',
+                    ]}
                   />
-                  {(showGroupLine || showSexLine) && (
-                    <Legend
-                      wrapperStyle={{ paddingTop: '10px' }}
-                      formatter={(value) => {
-                        const labels: Record<string, string> = {
-                          value: 'Athlete',
-                          groupAvg: 'Group Average',
-                          sexAvg: 'Sex Average',
-                        };
-                        return labels[value] || value;
-                      }}
+
+                  {/* Group SD band */}
+                  {groupStats && (
+                    <ReferenceArea
+                      y1={groupStats.mean - groupStats.stdDev}
+                      y2={groupStats.mean + groupStats.stdDev}
+                      fill="hsl(25 95% 53%)"
+                      fillOpacity={0.1}
                     />
                   )}
+                  {/* Group mean line */}
+                  {groupStats && (
+                    <ReferenceLine
+                      y={groupStats.mean}
+                      stroke="hsl(25 95% 53%)"
+                      strokeDasharray="5 5"
+                      strokeWidth={2}
+                    />
+                  )}
+
+                  {/* Sex SD band */}
+                  {sexStats && (
+                    <ReferenceArea
+                      y1={sexStats.mean - sexStats.stdDev}
+                      y2={sexStats.mean + sexStats.stdDev}
+                      fill="hsl(142 76% 36%)"
+                      fillOpacity={0.1}
+                    />
+                  )}
+                  {/* Sex mean line */}
+                  {sexStats && (
+                    <ReferenceLine
+                      y={sexStats.mean}
+                      stroke="hsl(142 76% 36%)"
+                      strokeDasharray="2 2"
+                      strokeWidth={2}
+                    />
+                  )}
+
                   {/* Main athlete line */}
                   <Line
                     type="monotone"
@@ -276,32 +306,6 @@ export function ParameterValueHistory({
                     dot={{ fill: 'hsl(var(--primary))' }}
                     activeDot={{ r: 6 }}
                   />
-                  {/* Group average line */}
-                  {showGroupLine && (
-                    <Line
-                      type="monotone"
-                      dataKey="groupAvg"
-                      name="groupAvg"
-                      stroke="hsl(25 95% 53%)"
-                      strokeWidth={2}
-                      strokeDasharray="5 5"
-                      dot={{ fill: 'hsl(25 95% 53%)', r: 3 }}
-                      connectNulls
-                    />
-                  )}
-                  {/* Sex average line */}
-                  {showSexLine && (
-                    <Line
-                      type="monotone"
-                      dataKey="sexAvg"
-                      name="sexAvg"
-                      stroke="hsl(142 76% 36%)"
-                      strokeWidth={2}
-                      strokeDasharray="2 2"
-                      dot={{ fill: 'hsl(142 76% 36%)', r: 3 }}
-                      connectNulls
-                    />
-                  )}
                 </LineChart>
               </ResponsiveContainer>
             </div>
