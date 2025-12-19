@@ -68,10 +68,10 @@ export default function HomePage() {
           </CardHeader>
         </Card>
 
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/clients")}>
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/athletes")}>
           <CardHeader className="text-center pb-4">
             <Users className="h-12 w-12 text-primary mx-auto mb-2" />
-            <CardTitle className="text-lg">Client Database</CardTitle>
+            <CardTitle className="text-lg">Athlete Database</CardTitle>
             <CardDescription>Manage athlete profiles and history</CardDescription>
           </CardHeader>
         </Card>

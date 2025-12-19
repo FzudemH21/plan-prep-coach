@@ -16,6 +16,7 @@ import ToolboxDatabase from "./pages/ToolboxDatabase";
 import ExerciseLibrary from "./pages/ExerciseLibrary";
 import PlyometricsLibrary from "./pages/PlyometricsLibrary";
 import LibraryPage from "./pages/LibraryPage";
+import AthleteDatabase from "./pages/AthleteDatabase";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,7 +35,7 @@ const App = () => (
               <Route path="/macrocycle" element={<MacrocyclePage />} />
               <Route path="/mesocycle" element={<MesocyclePage />} />
               <Route path="/microcycle" element={<MicrocyclePlanningPage />} />
-              <Route path="/clients" element={<div className="text-center py-12">Client database coming soon...</div>} />
+              <Route path="/athletes" element={<AthleteDatabase />} />
               <Route path="/templates" element={<TemplatesPage />} />
               <Route path="/templates/athleticism" element={<AthleticismDatabase />} />
               <Route path="/templates/toolbox" element={<ToolboxDatabase />} />
