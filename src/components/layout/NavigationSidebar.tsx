@@ -40,6 +40,7 @@ interface NavItem {
 interface NavGroup {
   title: string;
   icon: React.ElementType;
+  path?: string;
   items: NavItem[];
   defaultOpen?: boolean;
 }
@@ -50,7 +51,6 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
   const { libraries } = useCustomLibraries();
   
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    training: true,
     athletes: true,
     templates: true,
   });
@@ -83,16 +83,6 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
       icon: Dumbbell
     }));
 
-  const trainingGroup: NavGroup = {
-    title: "Training Planning",
-    icon: Calendar,
-    items: [
-      { title: "Macrocycle", path: "/macrocycle", icon: Target },
-      { title: "Mesocycle", path: "/mesocycle", icon: Calendar },
-      { title: "Microcycle", path: "/microcycle", icon: Activity },
-    ]
-  };
-
   const athletesGroup: NavGroup = {
     title: "Athletes",
     icon: Users,
@@ -104,8 +94,8 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
   const templatesGroup: NavGroup = {
     title: "Templates & Library",
     icon: FileText,
+    path: "/templates",
     items: [
-      { title: "Templates Overview", path: "/templates", icon: Library },
       { title: "Athleticism Database", path: "/templates/athleticism", icon: Activity },
       { title: "Training Toolbox", path: "/templates/toolbox", icon: Wrench },
       { title: "Resistance Training", path: "/templates/libraries/resistancetraining", icon: Dumbbell },
@@ -132,32 +122,48 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
   const renderNavGroup = (group: NavGroup, key: string) => {
     const isOpen = openGroups[key] ?? false;
     const hasActiveChild = isInGroup(group.items);
+    const isHeaderActive = group.path && isActive(group.path);
 
     return (
       <Collapsible
         key={key}
         open={isOpen || hasActiveChild}
-        onOpenChange={() => toggleGroup(key)}
       >
-        <CollapsibleTrigger asChild>
+        <div className={cn(
+          "flex items-center w-full h-10 rounded-md",
+          (isHeaderActive || hasActiveChild) && "text-primary"
+        )}>
           <Button
             variant="ghost"
-            className={cn(
-              "w-full justify-between h-10",
-              hasActiveChild && "text-primary"
-            )}
+            className="flex-1 justify-start h-10 px-4"
+            onClick={() => {
+              if (group.path) {
+                handleNavigate(group.path);
+              }
+              toggleGroup(key);
+            }}
           >
-            <span className="flex items-center">
-              <group.icon className="h-4 w-4 mr-2" />
-              {group.title}
-            </span>
-            {isOpen || hasActiveChild ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
-            )}
+            <group.icon className="h-4 w-4 mr-2" />
+            {group.title}
           </Button>
-        </CollapsibleTrigger>
+          <CollapsibleTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-10 w-10 p-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleGroup(key);
+              }}
+            >
+              {isOpen || hasActiveChild ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </Button>
+          </CollapsibleTrigger>
+        </div>
         <CollapsibleContent className="space-y-1">
           {group.items.map(renderNavItem)}
         </CollapsibleContent>
@@ -185,9 +191,6 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
             <Home className="h-4 w-4 mr-2" />
             Home
           </Button>
-
-          {/* Training Planning Group */}
-          {renderNavGroup(trainingGroup, "training")}
 
           {/* Athletes Group */}
           {renderNavGroup(athletesGroup, "athletes")}
