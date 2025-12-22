@@ -79,7 +79,7 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
     .filter(lib => lib.type === 'custom')
     .map(lib => ({
       title: lib.name,
-      path: `/library/${createSlug(lib.name)}`,
+      path: `/templates/libraries/${createSlug(lib.name)}`,
       icon: Dumbbell
     }));
 
@@ -106,10 +106,10 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
     icon: FileText,
     items: [
       { title: "Templates Overview", path: "/templates", icon: Library },
-      { title: "Athleticism Database", path: "/athleticism", icon: Activity },
-      { title: "Training Toolbox", path: "/toolbox", icon: Wrench },
-      { title: "Resistance Training", path: "/exercises", icon: Dumbbell },
-      { title: "Plyometrics", path: "/plyometrics", icon: Zap },
+      { title: "Athleticism Database", path: "/templates/athleticism", icon: Activity },
+      { title: "Training Toolbox", path: "/templates/toolbox", icon: Wrench },
+      { title: "Resistance Training", path: "/templates/libraries/resistancetraining", icon: Dumbbell },
+      { title: "Plyometrics", path: "/templates/libraries/plyometrics", icon: Zap },
       ...libraryItems,
     ]
   };
