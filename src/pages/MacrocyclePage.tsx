@@ -1,20 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { SmartGoal, SubGoal, TrainableQuality, Event } from "@/types/training";
-import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2, FileText } from "lucide-react";
+import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2, FileText, Check, ChevronsUpDown } from "lucide-react";
 import { 
   getUniqueQualities, 
   getUniqueTrainingMethods
@@ -24,14 +25,16 @@ import { useAthleticismData } from "@/hooks/useAthleticismData";
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
 import { format, parseISO } from "date-fns";
 import { useAthletes } from "@/hooks/useAthletes";
-import { getAthleteDisplayName } from "@/types/athlete";
+import { getAthleteDisplayName, Athlete } from "@/types/athlete";
+import { cn } from "@/lib/utils";
 
 export default function MacrocyclePage() {
   const { displayMode } = useDisplayMode();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { data: athleticismData } = useAthleticismData();
-  const { athletes } = useAthletes();
+  const { athletes, groups } = useAthletes();
+  const [athleteDropdownOpen, setAthleteDropdownOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [planName, setPlanName] = useState<string>("");
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
@@ -45,7 +48,40 @@ export default function MacrocyclePage() {
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
   const [selectionPhase, setSelectionPhase] = useState<'start' | 'end'>('start');
 
-  // Load saved data and step on mount
+  // Group athletes alphabetically by their groups
+  const groupedAthletes = useMemo(() => {
+    const grouped: Record<string, Athlete[]> = {};
+    
+    // Sort groups alphabetically
+    const sortedGroups = [...groups].sort((a, b) => 
+      a.name.localeCompare(b.name)
+    );
+    
+    // For each group, get athletes and sort alphabetically
+    sortedGroups.forEach(group => {
+      const groupAthletes = athletes
+        .filter(a => a.groupIds.includes(group.id))
+        .sort((a, b) => 
+          getAthleteDisplayName(a).localeCompare(getAthleteDisplayName(b))
+        );
+      if (groupAthletes.length > 0) {
+        grouped[group.name] = groupAthletes;
+      }
+    });
+    
+    // Add "Ungrouped" for athletes without any group
+    const ungroupedAthletes = athletes
+      .filter(a => a.groupIds.length === 0)
+      .sort((a, b) => 
+        getAthleteDisplayName(a).localeCompare(getAthleteDisplayName(b))
+      );
+    if (ungroupedAthletes.length > 0) {
+      grouped["Ungrouped"] = ungroupedAthletes;
+    }
+    
+    return grouped;
+  }, [athletes, groups]);
+
   useEffect(() => {
     const savedData = localStorage.getItem('macrocycleData');
     const savedStep = localStorage.getItem('macrocycleStep');
@@ -534,85 +570,119 @@ export default function MacrocyclePage() {
   const selectedAthlete = selectedAthleteId ? athletes.find(a => a.id === selectedAthleteId) : null;
 
   const renderPlanSetupForm = () => (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <FileText className="h-5 w-5" />
-          <span>Plan Setup</span>
-        </CardTitle>
-        <CardDescription>
-          Name your training plan and select the athlete you'll be working with.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="space-y-2">
-          <Label htmlFor="planName">Plan Name *</Label>
-          <Input
-            id="planName"
-            value={planName}
-            onChange={(e) => setPlanName(e.target.value)}
-            placeholder="e.g., Pre-Season 2025, Off-Season Strength Block"
-          />
-        </div>
+    <div className="max-w-xl mx-auto">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <FileText className="h-5 w-5" />
+            <span>Plan Setup</span>
+          </CardTitle>
+          <CardDescription>
+            Name your training plan and select the athlete you'll be working with.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="planName">Plan Name *</Label>
+            <Input
+              id="planName"
+              value={planName}
+              onChange={(e) => setPlanName(e.target.value)}
+              placeholder="e.g., Pre-Season 2025, Off-Season Strength Block"
+            />
+          </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="athlete">Select Athlete *</Label>
-          {athletes.length > 0 ? (
-            <Select 
-              value={selectedAthleteId || ""} 
-              onValueChange={(value) => setSelectedAthleteId(value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Choose an athlete from your database" />
-              </SelectTrigger>
-              <SelectContent>
-                {athletes.map((athlete) => (
-                  <SelectItem key={athlete.id} value={athlete.id}>
-                    {getAthleteDisplayName(athlete)}
-                    {athlete.sport && ` • ${athlete.sport}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <div className="p-4 border border-dashed rounded-lg text-center text-muted-foreground">
-              <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No athletes in your database yet.</p>
-              <Button 
-                variant="link" 
-                className="text-primary"
-                onClick={() => navigate('/athletes')}
-              >
-                Add an athlete first →
-              </Button>
-            </div>
+          <div className="space-y-2">
+            <Label>Select Athlete *</Label>
+            {athletes.length > 0 ? (
+              <Popover open={athleteDropdownOpen} onOpenChange={setAthleteDropdownOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={athleteDropdownOpen}
+                    className="w-full justify-between"
+                  >
+                    {selectedAthlete 
+                      ? `${getAthleteDisplayName(selectedAthlete)}${selectedAthlete.sport ? ` • ${selectedAthlete.sport}` : ''}`
+                      : "Choose an athlete..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-popover" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search athletes..." />
+                    <CommandList>
+                      <CommandEmpty>No athletes found.</CommandEmpty>
+                      {Object.entries(groupedAthletes).map(([groupName, groupAthletes]) => (
+                        <CommandGroup key={groupName} heading={groupName}>
+                          {groupAthletes.map((athlete) => (
+                            <CommandItem
+                              key={athlete.id}
+                              value={`${getAthleteDisplayName(athlete)} ${athlete.sport || ''}`}
+                              onSelect={() => {
+                                setSelectedAthleteId(athlete.id);
+                                setAthleteDropdownOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  selectedAthleteId === athlete.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {getAthleteDisplayName(athlete)}
+                              {athlete.sport && (
+                                <span className="ml-2 text-muted-foreground">• {athlete.sport}</span>
+                              )}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      ))}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <div className="p-4 border border-dashed rounded-lg text-center text-muted-foreground">
+                <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No athletes in your database yet.</p>
+                <Button 
+                  variant="link" 
+                  className="text-primary"
+                  onClick={() => navigate('/athletes')}
+                >
+                  Add an athlete first →
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {selectedAthlete && (
+            <Card className="bg-muted/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Selected Athlete
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1 text-sm">
+                <p><span className="text-muted-foreground">Name:</span> {getAthleteDisplayName(selectedAthlete)}</p>
+                {selectedAthlete.sport && (
+                  <p><span className="text-muted-foreground">Sport:</span> {selectedAthlete.sport}</p>
+                )}
+                {selectedAthlete.birthday && (
+                  <p><span className="text-muted-foreground">Birthday:</span> {format(new Date(selectedAthlete.birthday), 'PP')}</p>
+                )}
+                {selectedAthlete.occupation && (
+                  <p><span className="text-muted-foreground">Occupation:</span> {selectedAthlete.occupation}</p>
+                )}
+              </CardContent>
+            </Card>
           )}
-        </div>
-
-        {selectedAthlete && (
-          <Card className="bg-muted/50">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <User className="h-4 w-4" />
-                Selected Athlete
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1 text-sm">
-              <p><span className="text-muted-foreground">Name:</span> {getAthleteDisplayName(selectedAthlete)}</p>
-              {selectedAthlete.sport && (
-                <p><span className="text-muted-foreground">Sport:</span> {selectedAthlete.sport}</p>
-              )}
-              {selectedAthlete.birthday && (
-                <p><span className="text-muted-foreground">Birthday:</span> {format(new Date(selectedAthlete.birthday), 'PP')}</p>
-              )}
-              {selectedAthlete.occupation && (
-                <p><span className="text-muted-foreground">Occupation:</span> {selectedAthlete.occupation}</p>
-              )}
-            </CardContent>
-          </Card>
-        )}
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   );
 
   const renderGoalSettingForm = () => (
