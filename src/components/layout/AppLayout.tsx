@@ -3,9 +3,10 @@ import { Outlet } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Bot, FileText, Download, Settings } from "lucide-react";
+import { Bot, FileText, Settings, Menu } from "lucide-react";
 import { DisplayMode } from "@/types/training";
 import { useDisplayMode } from "@/contexts/DisplayModeContext";
+import { NavigationSidebar } from "./NavigationSidebar";
 
 interface AppLayoutProps {
   children?: React.ReactNode;
@@ -14,6 +15,7 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const { displayMode, setDisplayMode } = useDisplayMode();
   const [showAIAgent, setShowAIAgent] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
 
   const getModeColor = (mode: DisplayMode) => {
     switch (mode) {
@@ -35,7 +37,15 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Top Navigation Bar */}
       <header className="border-b bg-card shadow-sm">
         <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center space-x-6">
+          <div className="flex items-center space-x-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setNavOpen(true)}
+              className="h-9 w-9 p-0"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
             <h1 className="text-2xl font-bold text-primary">
               Training Programming System
             </h1>
@@ -127,6 +137,9 @@ export function AppLayout({ children }: AppLayoutProps) {
           {children || <Outlet />}
         </main>
       </div>
+
+      {/* Navigation Sidebar */}
+      <NavigationSidebar open={navOpen} onOpenChange={setNavOpen} />
 
       {/* Display Mode Context Banner */}
       <div className="fixed bottom-4 right-4">
