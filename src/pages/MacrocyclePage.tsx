@@ -13,8 +13,8 @@ import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { AthleteInfo, SmartGoal, SubGoal, TrainableQuality, Event } from "@/types/training";
-import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2 } from "lucide-react";
+import { SmartGoal, SubGoal, TrainableQuality, Event } from "@/types/training";
+import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2, FileText } from "lucide-react";
 import { 
   getUniqueQualities, 
   getUniqueTrainingMethods
@@ -23,14 +23,18 @@ import { useDisplayMode } from "@/contexts/DisplayModeContext";
 import { useAthleticismData } from "@/hooks/useAthleticismData";
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
 import { format, parseISO } from "date-fns";
+import { useAthletes } from "@/hooks/useAthletes";
+import { getAthleteDisplayName } from "@/types/athlete";
 
 export default function MacrocyclePage() {
   const { displayMode } = useDisplayMode();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { data: athleticismData } = useAthleticismData();
+  const { athletes } = useAthletes();
   const [currentStep, setCurrentStep] = useState(1);
-  const [athleteInfo, setAthleteInfo] = useState<Partial<AthleteInfo>>({});
+  const [planName, setPlanName] = useState<string>("");
+  const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
   const [smartGoal, setSmartGoal] = useState<Partial<SmartGoal>>({});
   const [subGoals, setSubGoals] = useState<SubGoal[]>([]);
   const [qualities, setQualities] = useState<TrainableQuality[]>([]);
@@ -49,7 +53,8 @@ export default function MacrocyclePage() {
     if (savedData) {
       try {
         const data = JSON.parse(savedData);
-        setAthleteInfo(data.athleteInfo || {});
+        setPlanName(data.planName || "");
+        setSelectedAthleteId(data.selectedAthleteId || null);
         // Convert string dates to Date objects when loading from localStorage
         const parsedSmartGoal = data.smartGoal || {};
         if (parsedSmartGoal.startDate) {
@@ -85,7 +90,8 @@ export default function MacrocyclePage() {
   // Save data whenever form data changes (continuous saving)
   useEffect(() => {
     const macrocycleData = {
-      athleteInfo,
+      planName,
+      selectedAthleteId,
       smartGoal,
       subGoals,
       events,
@@ -96,10 +102,8 @@ export default function MacrocyclePage() {
       selectedEvent,
       lastUpdated: new Date().toISOString()
     };
-    console.log('DEBUG: Saving macrocycle data to localStorage:', macrocycleData);
-    console.log('DEBUG: Events being saved:', events);
     localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
-  }, [athleteInfo, smartGoal, subGoals, events, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest, selectedEvent]);
+  }, [planName, selectedAthleteId, smartGoal, subGoals, events, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest, selectedEvent]);
 
   // Save step whenever it changes (step persistence)
   useEffect(() => {
@@ -527,133 +531,86 @@ export default function MacrocyclePage() {
   const totalSteps = 5;
   const progress = (currentStep / totalSteps) * 100;
 
-  const renderAthleteInfoForm = () => (
+  const selectedAthlete = selectedAthleteId ? athletes.find(a => a.id === selectedAthleteId) : null;
+
+  const renderPlanSetupForm = () => (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
-          <User className="h-5 w-5" />
-          <span>Athlete Information</span>
+          <FileText className="h-5 w-5" />
+          <span>Plan Setup</span>
         </CardTitle>
         <CardDescription>
-          Basic information about the athlete. This will be saved to the client database.
+          Name your training plan and select the athlete you'll be working with.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Name *</Label>
-            <Input
-              id="name"
-              value={athleteInfo.name || ""}
-              onChange={(e) => setAthleteInfo({...athleteInfo, name: e.target.value})}
-              placeholder="Enter athlete's full name"
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="age">Age</Label>
-            <Input
-              id="age"
-              type="number"
-              value={athleteInfo.age || ""}
-              onChange={(e) => setAthleteInfo({...athleteInfo, age: parseInt(e.target.value)})}
-              placeholder="Age in years"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="sex">Sex</Label>
-            <Select value={athleteInfo.sex} onValueChange={(value) => setAthleteInfo({...athleteInfo, sex: value as any})}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select sex" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="male">Male</SelectItem>
-                <SelectItem value="female">Female</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="sport">Sport</Label>
-            <Input
-              id="sport"
-              value={athleteInfo.sport || ""}
-              onChange={(e) => setAthleteInfo({...athleteInfo, sport: e.target.value})}
-              placeholder="Primary sport or activity"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="occupation">Occupation</Label>
-            <Input
-              id="occupation"
-              value={athleteInfo.occupation || ""}
-              onChange={(e) => setAthleteInfo({...athleteInfo, occupation: e.target.value})}
-              placeholder="Current occupation"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="dailyActivity">Daily Activity Level</Label>
-            <Select value={athleteInfo.dailyActivity} onValueChange={(value) => setAthleteInfo({...athleteInfo, dailyActivity: value})}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select activity level" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="sedentary">Sedentary</SelectItem>
-                <SelectItem value="light">Light Activity</SelectItem>
-                <SelectItem value="moderate">Moderate Activity</SelectItem>
-                <SelectItem value="high">High Activity</SelectItem>
-                <SelectItem value="very-high">Very High Activity</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
         <div className="space-y-2">
-          <Label htmlFor="sleep">Sleep Habits</Label>
+          <Label htmlFor="planName">Plan Name *</Label>
           <Input
-            id="sleep"
-            value={athleteInfo.sleep || ""}
-            onChange={(e) => setAthleteInfo({...athleteInfo, sleep: e.target.value})}
-            placeholder="e.g., 7-8 hours nightly, sleep quality issues, etc."
+            id="planName"
+            value={planName}
+            onChange={(e) => setPlanName(e.target.value)}
+            placeholder="e.g., Pre-Season 2025, Off-Season Strength Block"
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="trainingHistory">Training History</Label>
-          <Textarea
-            id="trainingHistory"
-            value={athleteInfo.trainingHistory || ""}
-            onChange={(e) => setAthleteInfo({...athleteInfo, trainingHistory: e.target.value})}
-            placeholder="Previous training experience, years of training, specializations..."
-            rows={3}
-          />
+          <Label htmlFor="athlete">Select Athlete *</Label>
+          {athletes.length > 0 ? (
+            <Select 
+              value={selectedAthleteId || ""} 
+              onValueChange={(value) => setSelectedAthleteId(value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Choose an athlete from your database" />
+              </SelectTrigger>
+              <SelectContent>
+                {athletes.map((athlete) => (
+                  <SelectItem key={athlete.id} value={athlete.id}>
+                    {getAthleteDisplayName(athlete)}
+                    {athlete.sport && ` • ${athlete.sport}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <div className="p-4 border border-dashed rounded-lg text-center text-muted-foreground">
+              <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No athletes in your database yet.</p>
+              <Button 
+                variant="link" 
+                className="text-primary"
+                onClick={() => navigate('/athletes')}
+              >
+                Add an athlete first →
+              </Button>
+            </div>
+          )}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="movementAnalysis">Movement Analysis Results</Label>
-          <Textarea
-            id="movementAnalysis"
-            value={athleteInfo.movementAnalysisResults || ""}
-            onChange={(e) => setAthleteInfo({...athleteInfo, movementAnalysisResults: e.target.value})}
-            placeholder="FMS scores, movement screen results, injury history..."
-            rows={3}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="freeText">Additional Information</Label>
-          <Textarea
-            id="freeText"
-            value={athleteInfo.freeTextInfo || ""}
-            onChange={(e) => setAthleteInfo({...athleteInfo, freeTextInfo: e.target.value})}
-            placeholder="Any other relevant information about the athlete..."
-            rows={3}
-          />
-        </div>
+        {selectedAthlete && (
+          <Card className="bg-muted/50">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <User className="h-4 w-4" />
+                Selected Athlete
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1 text-sm">
+              <p><span className="text-muted-foreground">Name:</span> {getAthleteDisplayName(selectedAthlete)}</p>
+              {selectedAthlete.sport && (
+                <p><span className="text-muted-foreground">Sport:</span> {selectedAthlete.sport}</p>
+              )}
+              {selectedAthlete.birthday && (
+                <p><span className="text-muted-foreground">Birthday:</span> {format(new Date(selectedAthlete.birthday), 'PP')}</p>
+              )}
+              {selectedAthlete.occupation && (
+                <p><span className="text-muted-foreground">Occupation:</span> {selectedAthlete.occupation}</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </CardContent>
     </Card>
   );
@@ -1420,7 +1377,7 @@ export default function MacrocyclePage() {
   };
 
   const stepTitles = [
-    "Athlete Information",
+    "Plan Setup",
     "Goal Setting", 
     "Sub-Goals & Testing",
     "Trainable Qualities",
@@ -1429,12 +1386,13 @@ export default function MacrocyclePage() {
 
   const handleNext = () => {
     if (currentStep === totalSteps) {
-      // Save macrocycle data to localStorage before navigation - INCLUDE EVENTS!
+      // Save macrocycle data to localStorage before navigation
       const macrocycleData = {
-        athleteInfo,
+        planName,
+        selectedAthleteId,
         smartGoal,
         subGoals,
-        events, // ✅ CRITICAL FIX: Include events in final save
+        events,
         qualities,
         qualitiesBySubGoal,
         methodsByQuality,
@@ -1442,8 +1400,6 @@ export default function MacrocyclePage() {
         selectedEvent,
         completedAt: new Date().toISOString()
       };
-      console.log('DEBUG: Final macrocycle save - events included:', events);
-      console.log('DEBUG: Final macrocycle data being saved:', macrocycleData);
       localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
       navigate('/mesocycle');
     } else {
@@ -1472,10 +1428,10 @@ export default function MacrocyclePage() {
 
       {/* All Steps in One View */}
       <div className="space-y-8">
-        {/* Step 1: Athlete Information */}
-        <div id="athlete-info" className="space-y-4">
-          <h2 className="text-2xl font-semibold border-b pb-2">1. Athlete Information</h2>
-          {renderAthleteInfoForm()}
+        {/* Step 1: Plan Setup */}
+        <div id="plan-setup" className="space-y-4">
+          <h2 className="text-2xl font-semibold border-b pb-2">1. Plan Setup</h2>
+          {renderPlanSetupForm()}
         </div>
 
         {/* Step 2: Goal Setting */}
@@ -1555,7 +1511,7 @@ export default function MacrocyclePage() {
 
       {/* Step Content */}
       <div className="space-y-6">
-        {currentStep === 1 && renderAthleteInfoForm()}
+        {currentStep === 1 && renderPlanSetupForm()}
         {currentStep === 2 && renderGoalSettingForm()}
         {currentStep === 3 && renderSubGoalsForm()}
         {currentStep === 4 && renderTrainableQualitiesForm()}
