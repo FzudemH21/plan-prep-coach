@@ -564,18 +564,19 @@ export default function MacrocyclePage() {
     });
   };
 
-  const totalSteps = 5;
+  const totalSteps = 4;
   const progress = (currentStep / totalSteps) * 100;
 
   const selectedAthlete = selectedAthleteId ? athletes.find(a => a.id === selectedAthleteId) : null;
 
-  const renderPlanSetupForm = () => (
-    <div className="max-w-xl mx-auto">
+  const renderPlanAndGoalSetup = () => (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Left Card: Plan & Athlete Selection */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <FileText className="h-5 w-5" />
-            <span>Plan Setup</span>
+            <span>Plan & Athlete</span>
           </CardTitle>
           <CardDescription>
             Name your training plan and select the athlete you'll be working with.
@@ -682,112 +683,86 @@ export default function MacrocyclePage() {
           )}
         </CardContent>
       </Card>
-    </div>
-  );
 
-  const renderGoalSettingForm = () => (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <Target className="h-5 w-5" />
-          <span>S.M.A.R.T. Goal Setting</span>
-        </CardTitle>
-        <CardDescription>
-          Define a specific, measurable, achievable, relevant, and time-bound training goal.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="space-y-2">
-          <Label htmlFor="goalDescription">Goal Description</Label>
-          <Input
-            id="goalDescription"
-            value={smartGoal.description || ""}
-            onChange={(e) => setSmartGoal({...smartGoal, description: e.target.value})}
-            placeholder="e.g., Improve 100m sprint time from 10.9s to 10.8s in 12 weeks"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Right Card: S.M.A.R.T. Goal */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Target className="h-5 w-5" />
+            <span>S.M.A.R.T. Goal</span>
+          </CardTitle>
+          <CardDescription>
+            Define a specific, measurable, achievable, relevant, and time-bound training goal.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="baselineValue">Baseline Value</Label>
-            <div className="flex space-x-2">
-              <Input
-                id="baselineValue"
-                type="number"
-                step="0.01"
-                value={smartGoal.baselineValue || ""}
-                onChange={(e) => setSmartGoal({...smartGoal, baselineValue: parseFloat(e.target.value)})}
-                placeholder="10.9"
-              />
-              <Input
-                value={smartGoal.unit || ""}
-                onChange={(e) => setSmartGoal({...smartGoal, unit: e.target.value})}
-                placeholder="seconds"
-                className="w-24"
-              />
-            </div>
+            <Label htmlFor="goalDescription">Goal Description</Label>
+            <Input
+              id="goalDescription"
+              value={smartGoal.description || ""}
+              onChange={(e) => setSmartGoal({...smartGoal, description: e.target.value})}
+              placeholder="e.g., Improve 100m sprint time from 10.9s to 10.8s in 12 weeks"
+            />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="desiredValue">Target Value</Label>
-            <div className="flex space-x-2">
-              <Input
-                id="desiredValue"
-                type="number"
-                step="0.01"
-                value={smartGoal.desiredValue || ""}
-                onChange={(e) => {
-                  const desired = parseFloat(e.target.value);
-                  const baseline = smartGoal.baselineValue || 0;
-                  const percentChange = baseline > 0 ? ((desired - baseline) / baseline) * 100 : 0;
-                  setSmartGoal({...smartGoal, desiredValue: desired, percentChange});
-                }}
-                placeholder="10.8"
-              />
-              <div className="w-24 flex items-center">
-                <Badge variant={smartGoal.percentChange && smartGoal.percentChange < 0 ? "destructive" : "default"}>
-                  {smartGoal.percentChange ? `${smartGoal.percentChange.toFixed(1)}%` : "0%"}
-                </Badge>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="baselineValue">Baseline Value</Label>
+              <div className="flex space-x-2">
+                <Input
+                  id="baselineValue"
+                  type="number"
+                  step="0.01"
+                  value={smartGoal.baselineValue || ""}
+                  onChange={(e) => setSmartGoal({...smartGoal, baselineValue: parseFloat(e.target.value)})}
+                  placeholder="10.9"
+                />
+                <Input
+                  value={smartGoal.unit || ""}
+                  onChange={(e) => setSmartGoal({...smartGoal, unit: e.target.value})}
+                  placeholder="seconds"
+                  className="w-24"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="desiredValue">Target Value</Label>
+              <div className="flex space-x-2">
+                <Input
+                  id="desiredValue"
+                  type="number"
+                  step="0.01"
+                  value={smartGoal.desiredValue || ""}
+                  onChange={(e) => {
+                    const desired = parseFloat(e.target.value);
+                    const baseline = smartGoal.baselineValue || 0;
+                    const percentChange = baseline > 0 ? ((desired - baseline) / baseline) * 100 : 0;
+                    setSmartGoal({...smartGoal, desiredValue: desired, percentChange});
+                  }}
+                  placeholder="10.8"
+                />
+                <div className="w-24 flex items-center">
+                  <Badge variant={smartGoal.percentChange && smartGoal.percentChange < 0 ? "destructive" : "default"}>
+                    {smartGoal.percentChange ? `${smartGoal.percentChange.toFixed(1)}%` : "0%"}
+                  </Badge>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="space-y-2">
-          <Label>Training Plan Duration</Label>
-          <div className="flex justify-center">
-            <div className="border rounded-md p-3 w-fit">
-            <Calendar
-              mode="single"
-              selected={smartGoal.startDate || smartGoal.endDate}
-              onSelect={(selectedDate) => {
-                if (!selectedDate) return;
+          <div className="space-y-2">
+            <Label>Training Plan Duration</Label>
+            <div className="flex justify-center">
+              <div className="border rounded-md p-3 w-fit">
+              <Calendar
+                mode="single"
+                selected={smartGoal.startDate || smartGoal.endDate}
+                onSelect={(selectedDate) => {
+                  if (!selectedDate) return;
 
-                if (selectionPhase === 'start' || !smartGoal.startDate) {
-                  // First click or reset: set start date, clear end date
-                  setSmartGoal({
-                    ...smartGoal,
-                    startDate: selectedDate,
-                    endDate: undefined,
-                    totalDays: undefined,
-                    totalWeeks: undefined
-                  });
-                  setSelectionPhase('end');
-                } else if (selectionPhase === 'end') {
-                  if (selectedDate >= smartGoal.startDate) {
-                    // Second click: set end date if after start date
-                    const totalDays = Math.ceil((selectedDate.getTime() - smartGoal.startDate.getTime()) / (1000 * 60 * 60 * 24));
-                    const totalWeeks = Math.ceil(totalDays / 7);
-                    
-                    setSmartGoal({
-                      ...smartGoal,
-                      endDate: selectedDate,
-                      totalDays: totalDays > 0 ? totalDays : 1,
-                      totalWeeks: totalWeeks > 0 ? totalWeeks : 1
-                    });
-                    setSelectionPhase('start');
-                  } else {
-                    // If clicked date is before start date, treat as new start date
+                  if (selectionPhase === 'start' || !smartGoal.startDate) {
                     setSmartGoal({
                       ...smartGoal,
                       startDate: selectedDate,
@@ -796,56 +771,78 @@ export default function MacrocyclePage() {
                       totalWeeks: undefined
                     });
                     setSelectionPhase('end');
+                  } else if (selectionPhase === 'end') {
+                    if (selectedDate >= smartGoal.startDate) {
+                      const totalDays = Math.ceil((selectedDate.getTime() - smartGoal.startDate.getTime()) / (1000 * 60 * 60 * 24));
+                      const totalWeeks = Math.ceil(totalDays / 7);
+                      
+                      setSmartGoal({
+                        ...smartGoal,
+                        endDate: selectedDate,
+                        totalDays: totalDays > 0 ? totalDays : 1,
+                        totalWeeks: totalWeeks > 0 ? totalWeeks : 1
+                      });
+                      setSelectionPhase('start');
+                    } else {
+                      setSmartGoal({
+                        ...smartGoal,
+                        startDate: selectedDate,
+                        endDate: undefined,
+                        totalDays: undefined,
+                        totalWeeks: undefined
+                      });
+                      setSelectionPhase('end');
+                    }
                   }
-                }
-              }}
-              modifiers={{
-                start: (date) => smartGoal.startDate && date.getTime() === smartGoal.startDate.getTime(),
-                end: (date) => smartGoal.endDate && date.getTime() === smartGoal.endDate.getTime(),
-                middle: (date) => {
-                  if (!smartGoal.startDate || !smartGoal.endDate) return false;
-                  return date > smartGoal.startDate && date < smartGoal.endDate;
-                }
-              }}
-              modifiersStyles={{
-                start: { 
-                  backgroundColor: 'hsl(var(--foreground))', 
-                  color: 'hsl(var(--background))',
-                  fontWeight: 'bold'
-                },
-                end: { 
-                  backgroundColor: 'hsl(var(--foreground))', 
-                  color: 'hsl(var(--background))',
-                  fontWeight: 'bold'
-                },
-                middle: { 
-                  backgroundColor: 'hsl(var(--muted))', 
-                  color: 'hsl(var(--muted-foreground))'
-                }
-              }}
-              className="rounded-md"
-            />
+                }}
+                modifiers={{
+                  start: (date) => smartGoal.startDate && date.getTime() === smartGoal.startDate.getTime(),
+                  end: (date) => smartGoal.endDate && date.getTime() === smartGoal.endDate.getTime(),
+                  middle: (date) => {
+                    if (!smartGoal.startDate || !smartGoal.endDate) return false;
+                    return date > smartGoal.startDate && date < smartGoal.endDate;
+                  }
+                }}
+                modifiersStyles={{
+                  start: { 
+                    backgroundColor: 'hsl(var(--foreground))', 
+                    color: 'hsl(var(--background))',
+                    fontWeight: 'bold'
+                  },
+                  end: { 
+                    backgroundColor: 'hsl(var(--foreground))', 
+                    color: 'hsl(var(--background))',
+                    fontWeight: 'bold'
+                  },
+                  middle: { 
+                    backgroundColor: 'hsl(var(--muted))', 
+                    color: 'hsl(var(--muted-foreground))'
+                  }
+                }}
+                className="rounded-md pointer-events-auto"
+              />
+              </div>
             </div>
           </div>
-        </div>
 
-        {smartGoal.totalDays && smartGoal.totalWeeks && (
-          <div className="p-4 bg-muted rounded-lg">
-            <h4 className="font-semibold mb-2">Training Plan Duration</h4>
-            <div className="flex space-x-6 text-sm">
-              <div>
-                <span className="text-muted-foreground">Total Days: </span>
-                <span className="font-medium">{smartGoal.totalDays}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Total Weeks: </span>
-                <span className="font-medium">{smartGoal.totalWeeks}</span>
+          {smartGoal.totalDays && smartGoal.totalWeeks && (
+            <div className="p-4 bg-muted rounded-lg">
+              <h4 className="font-semibold mb-2">Training Plan Duration</h4>
+              <div className="flex space-x-6 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Total Days: </span>
+                  <span className="font-medium">{smartGoal.totalDays}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Total Weeks: </span>
+                  <span className="font-medium">{smartGoal.totalWeeks}</span>
+                </div>
               </div>
             </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 
   const renderSubGoalsForm = () => (
@@ -1447,8 +1444,7 @@ export default function MacrocyclePage() {
   };
 
   const stepTitles = [
-    "Plan Setup",
-    "Goal Setting", 
+    "Plan Setup & Goals",
     "Sub-Goals & Testing",
     "Trainable Qualities",
     "Training Methods"
@@ -1498,33 +1494,27 @@ export default function MacrocyclePage() {
 
       {/* All Steps in One View */}
       <div className="space-y-8">
-        {/* Step 1: Plan Setup */}
-        <div id="plan-setup" className="space-y-4">
-          <h2 className="text-2xl font-semibold border-b pb-2">1. Plan Setup</h2>
-          {renderPlanSetupForm()}
+        {/* Step 1: Plan Setup & Goals */}
+        <div id="plan-setup-goals" className="space-y-4">
+          <h2 className="text-2xl font-semibold border-b pb-2">1. Plan Setup & Goals</h2>
+          {renderPlanAndGoalSetup()}
         </div>
 
-        {/* Step 2: Goal Setting */}
-        <div id="goal-setting" className="space-y-4">
-          <h2 className="text-2xl font-semibold border-b pb-2">2. S.M.A.R.T. Goal Setting</h2>
-          {renderGoalSettingForm()}
-        </div>
-
-        {/* Step 3: Sub-Goals */}
+        {/* Step 2: Sub-Goals */}
         <div id="sub-goals" className="space-y-4">
-          <h2 className="text-2xl font-semibold border-b pb-2">3. Sub-Goals & Testing</h2>
+          <h2 className="text-2xl font-semibold border-b pb-2">2. Sub-Goals & Testing</h2>
           {renderSubGoalsForm()}
         </div>
 
-        {/* Step 4: Trainable Qualities */}
+        {/* Step 3: Trainable Qualities */}
         <div id="qualities" className="space-y-4">
-          <h2 className="text-2xl font-semibold border-b pb-2">4. Trainable Qualities</h2>
+          <h2 className="text-2xl font-semibold border-b pb-2">3. Trainable Qualities</h2>
           {renderTrainableQualitiesForm()}
         </div>
 
-        {/* Step 5: Training Methods */}
+        {/* Step 4: Training Methods */}
         <div id="methods" className="space-y-4">
-          <h2 className="text-2xl font-semibold border-b pb-2">5. Training Methods</h2>
+          <h2 className="text-2xl font-semibold border-b pb-2">4. Training Methods</h2>
           {renderTrainingMethodsForm()}
         </div>
       </div>
@@ -1581,11 +1571,10 @@ export default function MacrocyclePage() {
 
       {/* Step Content */}
       <div className="space-y-6">
-        {currentStep === 1 && renderPlanSetupForm()}
-        {currentStep === 2 && renderGoalSettingForm()}
-        {currentStep === 3 && renderSubGoalsForm()}
-        {currentStep === 4 && renderTrainableQualitiesForm()}
-        {currentStep === 5 && renderTrainingMethodsForm()}
+        {currentStep === 1 && renderPlanAndGoalSetup()}
+        {currentStep === 2 && renderSubGoalsForm()}
+        {currentStep === 3 && renderTrainableQualitiesForm()}
+        {currentStep === 4 && renderTrainingMethodsForm()}
       </div>
 
       {/* Navigation */}
