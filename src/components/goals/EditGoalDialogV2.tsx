@@ -19,10 +19,10 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Plus, X, Search } from 'lucide-react';
+import { Plus, X, Pencil, Check } from 'lucide-react';
 import { GoalV2, GoalInteraction, GoalMethodV2, GoalCategory, GOAL_CATEGORIES } from '@/types/goalsV2';
 import { ToolboxEntry } from '@/types/toolbox';
-import { MethodParametersEditor } from './MethodParametersEditor';
+import { MethodParametersDialog } from './MethodParametersDialog';
 import {
   Command,
   CommandEmpty,
@@ -79,6 +79,9 @@ export function EditGoalDialogV2({
   const [category, setCategory] = useState<GoalCategory | ''>(goal.category || '');
   const [goalSearchOpen, setGoalSearchOpen] = useState(false);
   const [methodSearchOpen, setMethodSearchOpen] = useState(false);
+  
+  // State for the method parameters dialog
+  const [editingMethodId, setEditingMethodId] = useState<string | null>(null);
 
   useEffect(() => {
     setName(goal.name);
@@ -110,6 +113,19 @@ export function EditGoalDialogV2({
     (m) => !addedMethodIds.includes(m)
   );
 
+  // Get parameters for a method from toolbox
+  const getMethodParameters = (methodId: string) => {
+    const [category, subCategory] = methodId.split(' - ');
+    const entries = toolboxEntries.filter(
+      (e) => e.category === category && e.subCategory === subCategory
+    );
+    return entries.map((e) => ({
+      parameterName: e.parameterName,
+      parameterType: e.parameterType,
+      options: e.options || [],
+    }));
+  };
+
   const handleSave = () => {
     const finalUnit = unit === 'custom' ? customUnit : unit;
     onUpdateGoal({
@@ -119,230 +135,317 @@ export function EditGoalDialogV2({
     });
   };
 
+  const handleSaveMethodParams = (
+    methodDbId: string,
+    values: Record<string, string | number>,
+    rationale: string
+  ) => {
+    onUpdateMethod(methodDbId, {
+      loadingRecommendations: values,
+      rationale,
+    });
+    setEditingMethodId(null);
+  };
+
+  // Get the method being edited
+  const editingMethod = editingMethodId
+    ? goalMethods.find((m) => m.id === editingMethodId)
+    : null;
+  const editingMethodParams = editingMethod
+    ? getMethodParameters(editingMethod.methodId)
+    : [];
+
+  // Helper to count filled parameters
+  const getFilledParamCount = (method: GoalMethodV2) => {
+    const params = getMethodParameters(method.methodId);
+    const filled = Object.values(method.loadingRecommendations || {}).filter(
+      (v) => v !== '' && v !== undefined
+    ).length;
+    return { filled, total: params.length };
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[85vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Edit Goal</DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[600px] max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Edit Goal</DialogTitle>
+          </DialogHeader>
 
-        <ScrollArea className="flex-1 pr-4">
-          <div className="space-y-6 pb-4">
-            {/* Basic Info */}
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Basic Info
-              </h3>
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-name">Goal Name</Label>
-                  <Input
-                    id="edit-name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    onBlur={handleSave}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label>Unit</Label>
-                    <Select
-                      value={COMMON_UNITS.includes(unit) ? unit : unit ? 'custom' : ''}
-                      onValueChange={(v) => {
-                        if (v === 'custom') {
-                          setUnit('custom');
-                          setCustomUnit(unit);
-                        } else {
-                          setUnit(v);
-                          setTimeout(handleSave, 0);
-                        }
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select unit" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {COMMON_UNITS.map((u) => (
-                          <SelectItem key={u} value={u}>
-                            {u}
-                          </SelectItem>
-                        ))}
-                        <SelectItem value="custom">Custom...</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {unit === 'custom' && (
-                      <Input
-                        value={customUnit}
-                        onChange={(e) => setCustomUnit(e.target.value)}
-                        onBlur={handleSave}
-                        placeholder="Enter custom unit"
-                        className="mt-2"
-                      />
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Category</Label>
-                    <Select
-                      value={category}
-                      onValueChange={(v) => {
-                        setCategory(v as GoalCategory);
-                        setTimeout(handleSave, 0);
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {GOAL_CATEGORIES.map((cat) => (
-                          <SelectItem key={cat.value} value={cat.value}>
-                            {cat.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Interacting Goals */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
+          <ScrollArea className="flex-1 max-h-[60vh] pr-4">
+            <div className="space-y-6 pb-4 px-1">
+              {/* Basic Info */}
+              <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                  Interacting Goals
+                  Basic Info
                 </h3>
-                <Popover open={goalSearchOpen} onOpenChange={setGoalSearchOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" disabled={availableGoals.length === 0}>
-                      <Plus className="h-4 w-4 mr-1" />
-                      Add
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-64 p-0" align="end">
-                    <Command>
-                      <CommandInput placeholder="Search goals..." />
-                      <CommandList>
-                        <CommandEmpty>No goals found.</CommandEmpty>
-                        <CommandGroup>
-                          {availableGoals.map((g) => (
-                            <CommandItem
-                              key={g.id}
-                              onSelect={() => {
-                                onAddInteraction(g.id);
-                                setGoalSearchOpen(false);
-                              }}
-                            >
-                              {g.name}
-                              {g.unit && (
-                                <span className="text-muted-foreground ml-1">({g.unit})</span>
-                              )}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              {interactions.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {interactions.map((interaction) => {
-                    const linkedGoal = allGoals.find((g) => g.id === interaction.interactingGoalId);
-                    if (!linkedGoal) return null;
-                    return (
-                      <Badge
-                        key={interaction.id}
-                        variant="secondary"
-                        className="flex items-center gap-1 py-1"
-                      >
-                        {linkedGoal.name}
-                        <button
-                          onClick={() => onRemoveInteraction(interaction.id)}
-                          className="ml-1 hover:text-destructive"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground italic">
-                  No interacting goals added yet.
-                </p>
-              )}
-            </div>
-
-            <Separator />
-
-            {/* Associated Methods */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                  Associated Methods
-                </h3>
-                <Popover open={methodSearchOpen} onOpenChange={setMethodSearchOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" disabled={selectableMethods.length === 0}>
-                      <Plus className="h-4 w-4 mr-1" />
-                      Add Method
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80 p-0" align="end">
-                    <Command>
-                      <CommandInput placeholder="Search methods..." />
-                      <CommandList>
-                        <CommandEmpty>No methods found.</CommandEmpty>
-                        <CommandGroup>
-                          {selectableMethods.map((methodId) => (
-                            <CommandItem
-                              key={methodId}
-                              onSelect={() => {
-                                onAddMethod(methodId);
-                                setMethodSearchOpen(false);
-                              }}
-                            >
-                              {methodId}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              {goalMethods.length > 0 ? (
-                <div className="space-y-2">
-                  {goalMethods.map((method) => (
-                    <MethodParametersEditor
-                      key={method.id}
-                      method={method}
-                      methodName={method.methodId}
-                      toolboxEntries={toolboxEntries}
-                      onUpdate={(updates) => onUpdateMethod(method.id, updates)}
-                      onRemove={() => onRemoveMethod(method.id)}
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-name">Goal Name</Label>
+                    <Input
+                      id="edit-name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      onBlur={handleSave}
                     />
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground italic">
-                  No methods associated yet.
-                </p>
-              )}
-            </div>
-          </div>
-        </ScrollArea>
+                  </div>
 
-        <DialogFooter>
-          <Button onClick={() => onOpenChange(false)}>Done</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>Unit</Label>
+                      <Select
+                        value={COMMON_UNITS.includes(unit) ? unit : unit ? 'custom' : ''}
+                        onValueChange={(v) => {
+                          if (v === 'custom') {
+                            setUnit('custom');
+                            setCustomUnit(unit);
+                          } else {
+                            setUnit(v);
+                            setTimeout(handleSave, 0);
+                          }
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select unit" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {COMMON_UNITS.map((u) => (
+                            <SelectItem key={u} value={u}>
+                              {u}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value="custom">Custom...</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {unit === 'custom' && (
+                        <Input
+                          value={customUnit}
+                          onChange={(e) => setCustomUnit(e.target.value)}
+                          onBlur={handleSave}
+                          placeholder="Enter custom unit"
+                          className="mt-2"
+                        />
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Category</Label>
+                      <Select
+                        value={category}
+                        onValueChange={(v) => {
+                          setCategory(v as GoalCategory);
+                          setTimeout(handleSave, 0);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {GOAL_CATEGORIES.map((cat) => (
+                            <SelectItem key={cat.value} value={cat.value}>
+                              {cat.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Interacting Goals */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                    Interacting Goals
+                  </h3>
+                  <Popover open={goalSearchOpen} onOpenChange={setGoalSearchOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" disabled={availableGoals.length === 0}>
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-0" align="end">
+                      <Command>
+                        <CommandInput placeholder="Search goals..." />
+                        <CommandList>
+                          <CommandEmpty>No goals found.</CommandEmpty>
+                          <CommandGroup>
+                            {availableGoals.map((g) => (
+                              <CommandItem
+                                key={g.id}
+                                onSelect={() => {
+                                  onAddInteraction(g.id);
+                                  setGoalSearchOpen(false);
+                                }}
+                              >
+                                {g.name}
+                                {g.unit && (
+                                  <span className="text-muted-foreground ml-1">({g.unit})</span>
+                                )}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {interactions.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {interactions.map((interaction) => {
+                      const linkedGoal = allGoals.find((g) => g.id === interaction.interactingGoalId);
+                      if (!linkedGoal) return null;
+                      return (
+                        <Badge
+                          key={interaction.id}
+                          variant="secondary"
+                          className="flex items-center gap-1 py-1"
+                        >
+                          {linkedGoal.name}
+                          <button
+                            onClick={() => onRemoveInteraction(interaction.id)}
+                            className="ml-1 hover:text-destructive"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">
+                    No interacting goals added yet.
+                  </p>
+                )}
+              </div>
+
+              <Separator />
+
+              {/* Associated Methods */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                    Associated Methods
+                  </h3>
+                  <Popover open={methodSearchOpen} onOpenChange={setMethodSearchOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" disabled={selectableMethods.length === 0}>
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Method
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-0" align="end">
+                      <Command>
+                        <CommandInput placeholder="Search methods..." />
+                        <CommandList>
+                          <CommandEmpty>No methods found.</CommandEmpty>
+                          <CommandGroup>
+                            {selectableMethods.map((methodId) => (
+                              <CommandItem
+                                key={methodId}
+                                onSelect={() => {
+                                  onAddMethod(methodId);
+                                  setMethodSearchOpen(false);
+                                }}
+                              >
+                                {methodId}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {goalMethods.length > 0 ? (
+                  <div className="space-y-2">
+                    {goalMethods.map((method) => {
+                      const { filled, total } = getFilledParamCount(method);
+                      const hasParams = total > 0;
+
+                      return (
+                        <div
+                          key={method.id}
+                          className="border rounded-lg p-3 bg-card flex items-center justify-between"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {method.methodId}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {hasParams ? (
+                                filled > 0 ? (
+                                  <span className="flex items-center gap-1">
+                                    <Check className="h-3 w-3 text-green-500" />
+                                    {filled}/{total} parameters set
+                                  </span>
+                                ) : (
+                                  `${total} parameters available`
+                                )
+                              ) : (
+                                'No parameters'
+                              )}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1 ml-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => setEditingMethodId(method.id)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => onRemoveMethod(method.id)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">
+                    No methods associated yet.
+                  </p>
+                )}
+              </div>
+            </div>
+          </ScrollArea>
+
+          <DialogFooter>
+            <Button onClick={() => onOpenChange(false)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Method Parameters Dialog */}
+      {editingMethodId && editingMethod && (
+        <MethodParametersDialog
+          open={!!editingMethodId}
+          onOpenChange={(open) => {
+            if (!open) setEditingMethodId(null);
+          }}
+          methodId={editingMethod.methodId}
+          parameters={editingMethodParams}
+          currentValues={editingMethod.loadingRecommendations || {}}
+          currentRationale={editingMethod.rationale || ''}
+          onSave={(values, rationale) =>
+            handleSaveMethodParams(editingMethodId, values, rationale)
+          }
+        />
+      )}
+    </>
   );
 }
