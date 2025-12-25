@@ -1513,12 +1513,23 @@ export default function MacrocyclePage() {
                   components={{
                     Day: ({ date, ...dayProps }: any) => {
                       const dateStr = format(date, 'yyyy-MM-dd');
-                      const scheduledTests = subGoals.filter(sg => 
+                      
+                      // Check sub-goals for scheduled tests
+                      const scheduledSubGoalTests = subGoals.filter(sg => 
                         sg.testDates?.some(testDate => testDate === dateStr)
                       );
+                      
+                      // Check primary SMART goals for scheduled tests
+                      const scheduledSmartGoalTests = smartGoals.filter(goal => 
+                        goal.testDates?.some(testDate => testDate === dateStr)
+                      );
+                      
                       const scheduledEvents = events.filter(e => 
                         e.eventDates?.some(eventDate => eventDate === dateStr)
                       );
+                      
+                      // Combined check for any scheduled tests
+                      const hasScheduledTests = scheduledSubGoalTests.length > 0 || scheduledSmartGoalTests.length > 0;
 
                       const handleClick = (e: any) => {
                         dayProps?.onClick?.(e);
@@ -1561,11 +1572,11 @@ export default function MacrocyclePage() {
 
                       // Determine styling based on date type (scheduled items take priority)
                       let dateStyle = '';
-                      if (scheduledTests.length > 0 && scheduledEvents.length > 0) {
+                      if (hasScheduledTests && scheduledEvents.length > 0) {
                         dateStyle = 'bg-gradient-to-r from-foreground to-orange-500 text-white rounded-full font-bold';
                       } else if (scheduledEvents.length > 0) {
                         dateStyle = 'bg-orange-500 text-white rounded-full font-bold';
-                      } else if (scheduledTests.length > 0) {
+                      } else if (hasScheduledTests) {
                         dateStyle = 'bg-foreground text-background rounded-full font-bold';
                       } else if (isStartDate || isEndDate) {
                         dateStyle = 'bg-[hsl(142_76%_36%)] text-white font-bold rounded-[4px]';
@@ -1586,7 +1597,7 @@ export default function MacrocyclePage() {
                       );
 
                       // If there are scheduled items, show hover card
-                      if (scheduledTests.length > 0 || scheduledEvents.length > 0) {
+                      if (hasScheduledTests || scheduledEvents.length > 0) {
                         return (
                           <HoverCard>
                             <HoverCardTrigger asChild>
@@ -1598,7 +1609,22 @@ export default function MacrocyclePage() {
                                   {format(date, 'PPP')}
                                 </h4>
                                 <div className="space-y-1">
-                                  {scheduledTests.map((test, index) => (
+                                  {/* Primary SMART goal tests - amber styling with target icon */}
+                                  {scheduledSmartGoalTests.map((goal, index) => (
+                                    <div key={`smart-${index}`} className="text-xs">
+                                      <div className="font-medium flex items-center gap-1 text-amber-600">
+                                        <span>🎯</span>
+                                        {goal.description || "Primary Goal Test"}
+                                      </div>
+                                      {goal.desiredValue && goal.unit && (
+                                        <div className="text-muted-foreground">
+                                          Target: {goal.desiredValue} {goal.unit}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                  {/* Sub-goal tests */}
+                                  {scheduledSubGoalTests.map((test, index) => (
                                     <div key={`test-${index}`} className="text-xs">
                                       <div className="font-medium flex items-center gap-1">
                                         <span className="text-primary">📋</span>
