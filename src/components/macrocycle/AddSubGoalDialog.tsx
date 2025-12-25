@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -29,7 +29,8 @@ import {
 } from "@/components/ui/popover";
 import { Check, ChevronsUpDown, Target, CalendarIcon, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SubGoal, Event } from "@/types/training";
+import { SubGoal, Event, SmartGoal } from "@/types/training";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AthleteParameter, ParameterDefinition } from "@/types/athlete";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 
@@ -54,6 +55,8 @@ interface AddSubGoalDialogProps {
   parameterDefinitions: ParameterDefinition[];
   subGoalOptions: string[];
   testMethodOptions: string[];
+  smartGoals: SmartGoal[];
+  defaultParentGoalId?: string;
 }
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -67,6 +70,8 @@ export function AddSubGoalDialog({
   parameterDefinitions,
   subGoalOptions,
   testMethodOptions,
+  smartGoals,
+  defaultParentGoalId,
 }: AddSubGoalDialogProps) {
   // Category state
   const [category, setCategory] = useState<ItemCategory>("subgoal");
@@ -84,9 +89,15 @@ export function AddSubGoalDialog({
   const [preTestValue, setPreTestValue] = useState<number | "">("");
   const [goalValue, setGoalValue] = useState<number | "">("");
   const [unit, setUnit] = useState("");
+  const [parentGoalId, setParentGoalId] = useState<string | undefined>(defaultParentGoalId);
   
   // Event specific state
   const [eventName, setEventName] = useState("");
+  
+  // Update parentGoalId when defaultParentGoalId changes
+  useEffect(() => {
+    setParentGoalId(defaultParentGoalId);
+  }, [defaultParentGoalId]);
 
   // Get athlete's parameters with their details
   const athleteParamsWithDetails = useMemo((): ParameterWithDetails[] => {
@@ -184,6 +195,7 @@ export function AddSubGoalDialog({
     setGoalValue("");
     setUnit("");
     setEventName("");
+    setParentGoalId(defaultParentGoalId);
   };
 
   const handleSave = () => {
@@ -193,6 +205,7 @@ export function AddSubGoalDialog({
       if (!goalDescription) return;
 
       onAddSubGoal({
+        parentGoalId: parentGoalId || undefined,
         description: goalDescription,
         testMethod,
         preTestValue: typeof preTestValue === "number" ? preTestValue : 0,
@@ -269,6 +282,29 @@ export function AddSubGoalDialog({
 
           {category === "subgoal" ? (
             <>
+              {/* Parent Goal Selector */}
+              {smartGoals.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Related Primary Goal (optional)</Label>
+                  <Select
+                    value={parentGoalId || "none"}
+                    onValueChange={(val) => setParentGoalId(val === "none" ? undefined : val)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select primary goal..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None (Standalone sub-goal)</SelectItem>
+                      {smartGoals.map((goal) => (
+                        <SelectItem key={goal.id} value={goal.id}>
+                          {goal.description} ({goal.baselineValue} → {goal.desiredValue} {goal.unit})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              
               {/* Sub-Goal Parameter / Description Selector */}
               <div className="space-y-2">
                 <Label>Sub-Goal Description</Label>

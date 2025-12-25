@@ -50,6 +50,7 @@ export interface SmartGoal {
 
 export interface SubGoal {
   id: string;
+  parentGoalId?: string; // Links to a SmartGoal.id for hierarchical organization
   description: string;
   testMethod: string;
   preTestValue: number;
