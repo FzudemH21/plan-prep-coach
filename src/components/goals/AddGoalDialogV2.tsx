@@ -196,12 +196,12 @@ const COMMON_UNITS = [
   return (
     <>
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent className="sm:max-w-[600px] max-h-[85vh] flex flex-col">
-          <DialogHeader>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-[600px] max-h-[85vh] overflow-hidden flex flex-col mx-4 sm:mx-auto">
+          <DialogHeader className="shrink-0">
             <DialogTitle>Add New Goal</DialogTitle>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 max-h-[60vh] pr-4">
+          <ScrollArea className="flex-1 min-h-0 pr-4">
             <div className="space-y-6 pb-4 px-1">
               {/* Goal Name */}
               <div className="space-y-2">
@@ -503,7 +503,7 @@ const COMMON_UNITS = [
             </div>
           </ScrollArea>
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0">
             <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>
