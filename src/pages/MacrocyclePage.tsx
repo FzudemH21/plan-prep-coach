@@ -1571,12 +1571,25 @@ export default function MacrocyclePage() {
                         date > planDuration.startDate && date < planDuration.endDate;
 
                       // Determine styling based on date type (scheduled items take priority)
+                      // Priority: Combined items > Events > Primary SMART goals > Sub-goal tests > Date range styling
                       let dateStyle = '';
-                      if (hasScheduledTests && scheduledEvents.length > 0) {
+                      if (scheduledSmartGoalTests.length > 0 && scheduledEvents.length > 0) {
+                        // Primary goal + event combined - amber to orange gradient
+                        dateStyle = 'bg-gradient-to-r from-[hsl(38_92%_50%)] to-orange-500 text-white rounded-full font-bold';
+                      } else if (scheduledSubGoalTests.length > 0 && scheduledEvents.length > 0) {
+                        // Sub-goal + event combined
                         dateStyle = 'bg-gradient-to-r from-foreground to-orange-500 text-white rounded-full font-bold';
+                      } else if (scheduledSmartGoalTests.length > 0 && scheduledSubGoalTests.length > 0) {
+                        // Both primary and sub-goal tests - amber square (primary takes precedence)
+                        dateStyle = 'bg-[hsl(38_92%_50%)] text-white font-bold rounded-[4px]';
                       } else if (scheduledEvents.length > 0) {
+                        // Events only - orange circle
                         dateStyle = 'bg-orange-500 text-white rounded-full font-bold';
-                      } else if (hasScheduledTests) {
+                      } else if (scheduledSmartGoalTests.length > 0) {
+                        // Primary SMART goal tests only - amber square (matches Step 1)
+                        dateStyle = 'bg-[hsl(38_92%_50%)] text-white font-bold rounded-[4px]';
+                      } else if (scheduledSubGoalTests.length > 0) {
+                        // Sub-goal tests only - black circle
                         dateStyle = 'bg-foreground text-background rounded-full font-bold';
                       } else if (isStartDate || isEndDate) {
                         dateStyle = 'bg-[hsl(142_76%_36%)] text-white font-bold rounded-[4px]';
