@@ -265,12 +265,12 @@ export default function AthleticismDatabaseV2() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <div className="space-y-1">
-                            <div className="font-medium">{goal.name}</div>
+                          <div className="font-medium">
+                            {goal.name}
                             {goal.unit && (
-                              <Badge variant="outline" className="text-xs">
-                                {goal.unit}
-                              </Badge>
+                              <span className="font-normal text-muted-foreground ml-1">
+                                ({goal.unit})
+                              </span>
                             )}
                           </div>
                         </TableCell>
@@ -278,12 +278,12 @@ export default function AthleticismDatabaseV2() {
                           {interactingGoalNames.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
                               {interactingGoalNames.slice(0, 3).map((name, i) => (
-                                <Badge key={i} variant="outline" className="text-xs">
+                                <Badge key={i} variant="outline" className="text-[10px] px-1.5 py-0">
                                   {name}
                                 </Badge>
                               ))}
                               {interactingGoalNames.length > 3 && (
-                                <Badge variant="outline" className="text-xs">
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                                   +{interactingGoalNames.length - 3} more
                                 </Badge>
                               )}
@@ -296,12 +296,12 @@ export default function AthleticismDatabaseV2() {
                           {methodNames.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
                               {methodNames.slice(0, 2).map((name, i) => (
-                                <Badge key={i} variant="secondary" className="text-xs">
+                                <Badge key={i} variant="secondary" className="text-[10px] px-1.5 py-0">
                                   {name}
                                 </Badge>
                               ))}
                               {methodNames.length > 2 && (
-                                <Badge variant="secondary" className="text-xs">
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
                                   +{methodNames.length - 2} more
                                 </Badge>
                               )}
