@@ -27,7 +27,7 @@ import { format, parseISO } from "date-fns";
 import { useAthletes } from "@/hooks/useAthletes";
 import { getAthleteDisplayName, Athlete } from "@/types/athlete";
 import { cn } from "@/lib/utils";
-import { AddSmartGoalDialog } from "@/components/macrocycle/AddSmartGoalDialog";
+import { AddSmartGoalDialog, AddSubGoalDialog } from "@/components/macrocycle";
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -46,6 +46,7 @@ export default function MacrocyclePage() {
   const [planDuration, setPlanDuration] = useState<PlanDuration | null>(null);
   const [smartGoals, setSmartGoals] = useState<SmartGoal[]>([]);
   const [isAddGoalDialogOpen, setIsAddGoalDialogOpen] = useState(false);
+  const [isAddSubGoalDialogOpen, setIsAddSubGoalDialogOpen] = useState(false);
   const [selectionPhase, setSelectionPhase] = useState<'start' | 'end'>('start');
   
   // Legacy state for backward compatibility (will be migrated)
@@ -645,6 +646,41 @@ export default function MacrocyclePage() {
     setSmartGoals(prev => prev.filter(g => g.id !== goalId));
   };
 
+  // Handlers for Sub-goals
+  const handleAddSubGoal = (subGoal: Omit<SubGoal, 'id'>) => {
+    const newSubGoal: SubGoal = { ...subGoal, id: `subgoal-${Date.now()}` };
+    setSubGoals(prev => [...prev, newSubGoal]);
+    toast({ title: 'Sub-Goal Added', description: `Created sub-goal "${subGoal.description}"` });
+  };
+
+  const handleRemoveSubGoal = (subGoalId: string) => {
+    const sg = subGoals.find(s => s.id === subGoalId);
+    setSubGoals(prev => prev.filter(s => s.id !== subGoalId));
+    if (selectedTest === subGoalId) {
+      setSelectedTest(null);
+    }
+    if (sg) {
+      toast({ title: 'Sub-Goal Removed', description: `Deleted "${sg.description}"` });
+    }
+  };
+
+  // Handlers for Events
+  const handleAddEvent = (event: Omit<Event, 'id'>) => {
+    const newEvent: Event = { ...event, id: `event-${Date.now()}` };
+    setEvents(prev => [...prev, newEvent]);
+    toast({ title: 'Event Added', description: `Created event "${event.name}"` });
+  };
+
+  // Test method options for the dialog
+  const testMethodOptions = [
+    "1RM Back Squat", "1RM Front Squat", "1RM Deadlift", "1RM Bench Press",
+    "CMJ Height", "CMJ RSI", "Drop Jump RSI", "Broad Jump",
+    "10m Sprint", "20m Sprint", "30m Sprint", "40m Sprint",
+    "505 COD Test", "T-Test", "Pro Agility", "L-Drill",
+    "Yo-Yo IR1", "Yo-Yo IR2", "Beep Test", "Cooper Test",
+    "Grip Strength", "Isometric Mid-Thigh Pull", "Jump Mat Test"
+  ];
+
   // Calendar handlers for plan duration
   const handleCalendarSelect = (selectedDate: Date | undefined) => {
     if (!selectedDate) return;
@@ -938,340 +974,152 @@ export default function MacrocyclePage() {
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
           <CalendarIcon className="h-5 w-5" />
-          <span>Calendar Planning</span>
+          <span>Sub-Goals & Testing</span>
         </CardTitle>
         <CardDescription>
-          Break down your main goal into measurable sub-goals and schedule events that may affect your training plan.
+          Define measurable sub-goals with tests and schedule events that may affect your training plan.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Two-column layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Two-column layout: Items on left, Calendar on right */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           
-          {/* Left Column: Sub-Goals */}
+          {/* Left Column: Sub-Goals & Events (compact cards) */}
           <div className="space-y-4">
-            <h3 className="font-semibold text-lg">Sub-Goals & Testing</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm">Sub-Goals & Events</h3>
+              <Button
+                onClick={() => setIsAddSubGoalDialogOpen(true)}
+                variant="outline"
+                size="sm"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add
+              </Button>
+            </div>
             
-            <div className="space-y-4">
-              {subGoals.map((subGoal, index) => (
-                <div key={subGoal.id} className="p-4 border rounded-lg space-y-4">
-                  <div className="grid grid-cols-1 gap-4">
-                    <div className="space-y-2">
-                      <Label>Sub-Goal Description</Label>
-                       <SearchableDropdown
-                         value={subGoal.description}
-                         onChange={(value) => {
-                           const updated = [...subGoals];
-                           updated[index].description = value;
-                           setSubGoals(updated);
-                         }}
-                         options={getSubGoalsFromAthleticismDB()}
-                         placeholder="Select or type sub-goal..."
-                       />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label>Test Method</Label>
-                      <SearchableDropdown
-                        value={subGoal.testMethod}
-                        onChange={(value) => {
-                          const updated = [...subGoals];
-                          updated[index].testMethod = value;
-                          setSubGoals(updated);
-                        }}
-                        options={["1RM Back Squat", "1RM Front Squat", "1RM Deadlift", "CMJ Height", "CMJ RSI", "Drop Jump RSI", "10m Sprint", "20m Sprint", "40m Sprint", "505 COD Test", "T-Test", "Yo-Yo IR1"]}
-                        placeholder="Select or type test method..."
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label>Pre-Test Value</Label>
-                      <div className="flex space-x-2">
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={subGoal.preTestValue || ""}
-                          onChange={(e) => {
-                            const updated = [...subGoals];
-                            updated[index].preTestValue = parseFloat(e.target.value);
-                            const percentChange = updated[index].preTestValue > 0 ? 
-                              ((updated[index].goalValue - updated[index].preTestValue) / updated[index].preTestValue) * 100 : 0;
-                            updated[index].percentChange = percentChange;
-                            setSubGoals(updated);
-                          }}
-                          placeholder="150"
-                        />
-                        <Input
-                          value={subGoal.unit}
-                          onChange={(e) => {
-                            const updated = [...subGoals];
-                            updated[index].unit = e.target.value;
-                            setSubGoals(updated);
-                          }}
-                          placeholder="kg"
-                          className="w-20"
-                        />
+            {/* Compact Sub-Goal Cards */}
+            <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+              {subGoals.length === 0 && events.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground border border-dashed rounded-lg">
+                  <Target className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No sub-goals or events yet</p>
+                  <p className="text-xs">Click "Add" to create one</p>
+                </div>
+              )}
+              
+              {subGoals.map((subGoal) => (
+                <div 
+                  key={subGoal.id} 
+                  className={cn(
+                    "p-3 border rounded-lg transition-colors",
+                    selectedTest === subGoal.id ? "ring-2 ring-primary bg-primary/5" : "hover:bg-muted/50"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div 
+                      className="flex-1 cursor-pointer"
+                      onClick={() => {
+                        setSelectedTest(selectedTest === subGoal.id ? null : subGoal.id);
+                        setSelectedEvent(null);
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">Test</Badge>
+                        <span className="font-medium text-sm truncate">
+                          {subGoal.testMethod || subGoal.description || "Unnamed"}
+                        </span>
                       </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Goal Value</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={subGoal.goalValue || ""}
-                        onChange={(e) => {
-                          const updated = [...subGoals];
-                          updated[index].goalValue = parseFloat(e.target.value);
-                          const percentChange = updated[index].preTestValue > 0 ? 
-                            ((updated[index].goalValue - updated[index].preTestValue) / updated[index].preTestValue) * 100 : 0;
-                          updated[index].percentChange = percentChange;
-                          setSubGoals(updated);
-                        }}
-                        placeholder="180"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Change</Label>
-                      <div className="flex items-center h-10">
-                        <Badge variant={subGoal.percentChange && subGoal.percentChange > 0 ? "default" : "destructive"}>
-                          {subGoal.percentChange ? `${subGoal.percentChange.toFixed(1)}%` : "0%"}
+                      <div className="text-xs text-muted-foreground mt-1 truncate">
+                        {subGoal.description}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs">
+                          {subGoal.preTestValue || 0} {subGoal.unit} → {subGoal.goalValue || 0} {subGoal.unit}
+                        </span>
+                        <Badge 
+                          variant={subGoal.percentChange && subGoal.percentChange > 0 ? "default" : "secondary"}
+                          className="text-xs"
+                        >
+                          {subGoal.percentChange ? `${subGoal.percentChange > 0 ? "+" : ""}${subGoal.percentChange.toFixed(1)}%` : "0%"}
                         </Badge>
                       </div>
+                      {subGoal.testDates && subGoal.testDates.length > 0 && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          📅 Scheduled: {subGoal.testDates.length} date(s)
+                        </div>
+                      )}
                     </div>
-                  </div>
-
-                  {/* Comments field */}
-                  <div className="space-y-2">
-                    <Label htmlFor={`subgoal-comments-${index}`}>
-                      Comments
-                      <span className="text-xs text-muted-foreground ml-2">(Optional)</span>
-                    </Label>
-                    <Textarea
-                      id={`subgoal-comments-${index}`}
-                      value={subGoal.comments || ""}
-                      onChange={(e) => {
-                        const updated = [...subGoals];
-                        updated[index].comments = e.target.value;
-                        setSubGoals(updated);
-                      }}
-                      placeholder="Add notes about this test (e.g., testing protocol, preparation requirements, etc.)"
-                      rows={2}
-                      className="text-sm"
-                    />
-                  </div>
-
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => {
-                      setSubGoals(subGoals.filter((_, i) => i !== index));
-                    }}
-                  >
-                    Remove Sub-Goal
-                  </Button>
-                </div>
-              ))}
-            </div>
-
-            <Button
-              onClick={() => {
-                const newSubGoal: SubGoal = {
-                  id: `subgoal-${Date.now()}`,
-                  description: "",
-                  testMethod: "",
-                  preTestValue: 0,
-                  goalValue: 0,
-                  unit: "",
-                  percentChange: 0,
-                  testDates: [],
-                  comments: ""
-                };
-                setSubGoals([...subGoals, newSubGoal]);
-              }}
-              variant="outline"
-              className="w-full"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Sub-Goal
-            </Button>
-          </div>
-          
-          {/* Right Column: Other Events */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-lg">Other Events</h3>
-            
-            <div className="space-y-4">
-              {events.map((event) => (
-                <div key={event.id} className="p-4 border rounded-lg space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="font-medium">{event.name}</div>
                     <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => removeEvent(event.id)}
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0"
+                      onClick={() => handleRemoveSubGoal(subGoal.id)}
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-3 w-3" />
                     </Button>
                   </div>
-                  
-                  {/* Comments field */}
-                  <div className="space-y-2">
-                    <Label htmlFor={`event-comments-${event.id}`}>
-                      Comments
-                      <span className="text-xs text-muted-foreground ml-2">(Optional)</span>
-                    </Label>
-                    <Textarea
-                      id={`event-comments-${event.id}`}
-                      value={event.comments || ""}
-                      onChange={(e) => {
-                        const updated = events.map(ev => 
-                          ev.id === event.id 
-                            ? { ...ev, comments: e.target.value }
-                            : ev
-                        );
-                        setEvents(updated);
+                </div>
+              ))}
+              
+              {/* Compact Event Cards */}
+              {events.map((event) => (
+                <div 
+                  key={event.id} 
+                  className={cn(
+                    "p-3 border rounded-lg transition-colors",
+                    selectedEvent === event.id ? "ring-2 ring-orange-500 bg-orange-500/5" : "hover:bg-muted/50"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div 
+                      className="flex-1 cursor-pointer"
+                      onClick={() => {
+                        setSelectedEvent(selectedEvent === event.id ? null : event.id);
+                        setSelectedTest(null);
                       }}
-                      placeholder="Add notes about this event (e.g., logistics, preparation, travel details, etc.)"
-                      rows={2}
-                      className="text-sm"
-                    />
+                    >
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs border-orange-500 text-orange-600">Event</Badge>
+                        <span className="font-medium text-sm truncate">{event.name}</span>
+                      </div>
+                      {event.eventDates && event.eventDates.length > 0 && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          📅 Scheduled: {event.eventDates.length} date(s)
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0"
+                      onClick={() => removeEvent(event.id)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
                   </div>
                 </div>
               ))}
             </div>
-
-            <div className="space-y-2">
-              <Label>Event Name</Label>
-              <div className="flex space-x-2">
-                <Input
-                  placeholder="Enter event name (e.g., Match, Vacation)"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      const target = e.target as HTMLInputElement;
-                      const eventName = target.value.trim();
-                      if (eventName) {
-                        addEvent(eventName);
-                        target.value = '';
-                      }
-                    }
-                  }}
-                />
-                <Button
-                  onClick={(e) => {
-                    const input = (e.target as HTMLElement).parentElement?.querySelector('input') as HTMLInputElement;
-                    const eventName = input?.value?.trim();
-                    if (eventName) {
-                      addEvent(eventName);
-                      input.value = '';
-                    }
-                  }}
-                  variant="outline"
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Calendar Section - Full Width */}
-        {(subGoals.length > 0 || events.length > 0) && smartGoal.startDate && smartGoal.endDate && (
-          <div className="space-y-6 mt-8 border-t pt-6">
-            <h4 className="font-semibold text-center">Calendar Scheduling</h4>
             
-            {/* Available Items - Centered */}
-            <div className="flex flex-col items-center">
-              <Label className="text-sm font-medium mb-3">Available Items</Label>
-              <div className="flex flex-wrap justify-center gap-2 p-4 border rounded-lg bg-muted/50 min-h-24 max-w-4xl">
-                {/* Tests */}
-                {subGoals.map((subGoal) => (
-                  <div
-                    key={`test-${subGoal.id}`}
-                    className={`p-3 bg-background border rounded cursor-pointer hover:bg-accent transition-colors ${
-                      selectedTest === subGoal.id ? 'ring-2 ring-primary bg-primary/10' : ''
-                    }`}
-                    onClick={() => {
-                      setSelectedTest(selectedTest === subGoal.id ? null : subGoal.id);
-                      setSelectedEvent(null);
-                    }}
-                  >
-                    <div className="font-medium text-sm text-center">{subGoal.testMethod || "Unnamed Test"}</div>
-                    <div className="text-xs text-muted-foreground text-center">{subGoal.description}</div>
-                    <div className="text-xs text-blue-600 text-center">Test</div>
-                  </div>
-                ))}
-                {/* Events */}
-                {events.map((event) => (
-                  <div
-                    key={`event-${event.id}`}
-                    className={`p-3 bg-background border rounded cursor-pointer hover:bg-accent transition-colors ${
-                      selectedEvent === event.id ? 'ring-2 ring-secondary bg-secondary/10' : ''
-                    }`}
-                    onClick={() => {
-                      setSelectedEvent(selectedEvent === event.id ? null : event.id);
-                      setSelectedTest(null);
-                    }}
-                  >
-                    <div className="font-medium text-sm text-center">{event.name}</div>
-                    <div className="text-xs text-orange-600 text-center">Event</div>
-                  </div>
-                ))}
-              </div>
-              {(selectedTest || selectedEvent) && (
-                <p className="text-sm text-muted-foreground mt-2 text-center">
-                  Click on a date in the calendar below to schedule this item
-                </p>
-              )}
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex justify-center gap-2">
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={
-                      subGoals.every(sg => !sg.testDates || sg.testDates.length === 0) &&
-                      events.every(e => !e.eventDates || e.eventDates.length === 0)
-                    }
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Clear All Scheduled Items
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Clear all scheduled tests and events?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will remove all test and event dates from the calendar. This action cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={clearAllScheduledItems}>
-                      Clear All
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-
-            {/* Training Calendar - Larger and Centered */}
-            <div className="flex flex-col items-center">
-              <Label className="text-sm font-medium mb-3">Training Calendar</Label>
-              <div className="border rounded-lg p-6 bg-background">
+            {(selectedTest || selectedEvent) && (
+              <p className="text-xs text-muted-foreground text-center bg-muted/50 p-2 rounded">
+                Click on a date in the calendar to schedule the selected item
+              </p>
+            )}
+          </div>
+          
+          {/* Right Column: Calendar */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-sm">Calendar Scheduling</h3>
+            {planDuration?.startDate && planDuration?.endDate ? (
+              <div className="border rounded-lg p-4 bg-background">
                 <Calendar
                   mode="single"
                   selected={undefined}
-                  className="rounded-md scale-110"
+                  className="rounded-md mx-auto"
                   disabled={(date) => {
-                    if (!smartGoal.startDate || !smartGoal.endDate) return true;
-                    return date < smartGoal.startDate || date > smartGoal.endDate;
+                    return date < planDuration.startDate || date > planDuration.endDate;
                   }}
                   modifiers={{
                     scheduled: subGoals
@@ -1323,7 +1171,7 @@ export default function MacrocyclePage() {
                         } else if (selectedEvent) {
                           scheduleEvent(selectedEvent, date);
                         } else {
-                          toast({ title: 'Select an item', description: 'Choose a test or event above, then click a date.' });
+                          toast({ title: 'Select an item', description: 'Choose a sub-goal or event from the list, then click a date.' });
                         }
                       };
                       
@@ -1333,9 +1181,9 @@ export default function MacrocyclePage() {
                           onClick={handleClick}
                           className={`relative h-9 w-9 p-0 font-normal flex items-center justify-center ${
                             scheduledTests.length > 0 && scheduledEvents.length > 0 
-                              ? 'bg-gradient-to-r from-foreground to-red-500 text-white rounded-full font-bold' 
+                              ? 'bg-gradient-to-r from-foreground to-orange-500 text-white rounded-full font-bold' 
                               : scheduledEvents.length > 0 
-                                ? 'bg-red-500 text-white rounded-full font-bold'
+                                ? 'bg-orange-500 text-white rounded-full font-bold'
                                 : scheduledTests.length > 0 
                                   ? 'bg-foreground text-background rounded-full font-bold' 
                                   : ''
@@ -1347,32 +1195,32 @@ export default function MacrocyclePage() {
                         </button>
                       );
 
-                      // If there are scheduled items, always show hover card
+                      // If there are scheduled items, show hover card
                       if (scheduledTests.length > 0 || scheduledEvents.length > 0) {
                         return (
                           <HoverCard>
                             <HoverCardTrigger asChild>
                               {dayContent}
                             </HoverCardTrigger>
-                            <HoverCardContent className="w-80" side="top">
+                            <HoverCardContent className="w-64" side="top">
                               <div className="space-y-2">
-                                <h4 className="font-semibold">
-                                  Scheduled Items for {date.toLocaleDateString()}
+                                <h4 className="font-semibold text-sm">
+                                  {format(date, 'PPP')}
                                 </h4>
                                 <div className="space-y-1">
                                   {scheduledTests.map((test, index) => (
-                                    <div key={`test-${index}`} className="text-sm">
+                                    <div key={`test-${index}`} className="text-xs">
                                       <div className="font-medium flex items-center gap-1">
-                                        <span className="text-blue-600">📋</span>
-                                        {test.testMethod || "Unnamed Test"}
+                                        <span className="text-primary">📋</span>
+                                        {test.testMethod || "Test"}
                                       </div>
-                                      <div className="text-muted-foreground text-xs">{test.description}</div>
+                                      <div className="text-muted-foreground">{test.description}</div>
                                     </div>
                                   ))}
                                   {scheduledEvents.map((event, index) => (
-                                    <div key={`event-${index}`} className="text-sm">
+                                    <div key={`event-${index}`} className="text-xs">
                                       <div className="font-medium flex items-center gap-1">
-                                        <span className="text-orange-600">📅</span>
+                                        <span className="text-orange-500">📅</span>
                                         {event.name}
                                       </div>
                                     </div>
@@ -1388,10 +1236,57 @@ export default function MacrocyclePage() {
                     }
                   }}
                 />
+                
+                {/* Clear button */}
+                {(subGoals.some(sg => sg.testDates && sg.testDates.length > 0) || 
+                  events.some(e => e.eventDates && e.eventDates.length > 0)) && (
+                  <div className="mt-4 flex justify-center">
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <Trash2 className="h-3 w-3 mr-1" />
+                          Clear All
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Clear all scheduled items?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will remove all test and event dates from the calendar.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={clearAllScheduledItems}>
+                            Clear All
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                )}
               </div>
-            </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground border border-dashed rounded-lg">
+                <CalendarIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">Set plan dates in Step 1</p>
+                <p className="text-xs">to enable calendar scheduling</p>
+              </div>
+            )}
           </div>
-        )}
+        </div>
+
+        {/* Add Sub-Goal Dialog */}
+        <AddSubGoalDialog
+          open={isAddSubGoalDialogOpen}
+          onOpenChange={setIsAddSubGoalDialogOpen}
+          onAddSubGoal={handleAddSubGoal}
+          onAddEvent={handleAddEvent}
+          athleteParameters={athleteParams}
+          parameterDefinitions={parameterDefinitions}
+          subGoalOptions={getSubGoalsFromAthleticismDB()}
+          testMethodOptions={testMethodOptions}
+        />
       </CardContent>
     </Card>
   );
