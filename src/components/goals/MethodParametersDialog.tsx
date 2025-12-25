@@ -66,13 +66,13 @@ export function MethodParametersDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
+      <DialogContent className="w-[calc(100%-2rem)] max-w-[500px] max-h-[85vh] overflow-hidden flex flex-col mx-4 sm:mx-auto">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="text-base">Specify Parameters</DialogTitle>
-          <p className="text-sm text-muted-foreground mt-1">{methodId}</p>
+          <p className="text-sm text-muted-foreground mt-1 break-words">{methodId}</p>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
+        <div className="space-y-6 py-4 overflow-y-auto flex-1 min-h-0">
           {/* Parameters Table */}
           <div className="space-y-3">
             <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
@@ -80,7 +80,7 @@ export function MethodParametersDialog({
             </h4>
             {parameters.length > 0 ? (
               <div className="border rounded-lg overflow-hidden">
-                <table className="w-full">
+                <table className="w-full table-fixed">
                   <tbody>
                     {parameters.map((param, index) => (
                       <tr
