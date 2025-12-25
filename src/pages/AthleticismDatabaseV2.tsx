@@ -13,6 +13,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -283,9 +289,23 @@ export default function AthleticismDatabaseV2() {
                                 </Badge>
                               ))}
                               {interactingGoalNames.length > 3 && (
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                                  +{interactingGoalNames.length - 3} more
-                                </Badge>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 cursor-pointer">
+                                        +{interactingGoalNames.length - 3} more
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="max-w-[300px]">
+                                      <div className="text-xs space-y-0.5">
+                                        <div className="font-medium mb-1">All Interacting Goals:</div>
+                                        {interactingGoalNames.map((name, i) => (
+                                          <div key={i}>• {name}</div>
+                                        ))}
+                                      </div>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
                               )}
                             </div>
                           ) : (
@@ -301,9 +321,23 @@ export default function AthleticismDatabaseV2() {
                                 </Badge>
                               ))}
                               {methodNames.length > 2 && (
-                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                                  +{methodNames.length - 2} more
-                                </Badge>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 cursor-pointer">
+                                        +{methodNames.length - 2} more
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="max-w-[300px]">
+                                      <div className="text-xs space-y-0.5">
+                                        <div className="font-medium mb-1">All Methods:</div>
+                                        {methodNames.map((name, i) => (
+                                          <div key={i}>• {name}</div>
+                                        ))}
+                                      </div>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
                               )}
                             </div>
                           ) : (
