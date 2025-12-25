@@ -37,6 +37,7 @@ interface AthleteParameterWithDetails {
   unit: string;
   type: string;
   latestValue: string | null;
+  isFromAthlete: boolean;
 }
 
 interface AddSmartGoalDialogProps {
@@ -65,8 +66,8 @@ export function AddSmartGoalDialog({
   const [unit, setUnit] = useState("");
   const [isCustomMode, setIsCustomMode] = useState(false);
 
-  // Get athlete parameters with their details
-  const parametersWithDetails = useMemo((): AthleteParameterWithDetails[] => {
+  // Get athlete's parameters with their details
+  const athleteParamsWithDetails = useMemo((): AthleteParameterWithDetails[] => {
     return athleteParameters.map((ap) => {
       const definition = parameterDefinitions.find(
         (pd) => pd.id === ap.parameterDefinitionId
@@ -80,8 +81,27 @@ export function AddSmartGoalDialog({
         unit: definition?.unit || "",
         type: definition?.type || "text",
         latestValue,
+        isFromAthlete: true,
       };
-    });
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }, [athleteParameters, parameterDefinitions]);
+
+  // Get all OTHER parameter definitions (not assigned to this athlete)
+  const otherParameters = useMemo((): AthleteParameterWithDetails[] => {
+    const athleteDefIds = new Set(athleteParameters.map(ap => ap.parameterDefinitionId));
+    
+    return parameterDefinitions
+      .filter(pd => !athleteDefIds.has(pd.id))
+      .map(pd => ({
+        id: `def-${pd.id}`,
+        definitionId: pd.id,
+        name: pd.name,
+        unit: pd.unit || "",
+        type: pd.type,
+        latestValue: null,
+        isFromAthlete: false,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [athleteParameters, parameterDefinitions]);
 
   // Calculate percent change
@@ -99,8 +119,8 @@ export function AddSmartGoalDialog({
     setIsCustomMode(false);
     setCustomGoalName("");
     
-    // Auto-fill baseline if value exists
-    if (param.latestValue) {
+    // Auto-fill baseline if value exists (only for athlete's parameters)
+    if (param.latestValue && param.isFromAthlete) {
       const numValue = parseFloat(param.latestValue);
       if (!isNaN(numValue)) {
         setBaselineValue(numValue);
@@ -175,7 +195,7 @@ export function AddSmartGoalDialog({
             Add SMART Goal
           </DialogTitle>
           <DialogDescription>
-            Select an existing parameter from the athlete's database or create a custom goal.
+            Select an existing parameter or create a custom goal.
           </DialogDescription>
         </DialogHeader>
 
@@ -209,12 +229,14 @@ export function AddSmartGoalDialog({
                   <CommandInput placeholder="Search parameters..." />
                   <CommandList>
                     <CommandEmpty>No parameters found.</CommandEmpty>
-                    {parametersWithDetails.length > 0 && (
+                    
+                    {/* Athlete's Parameters */}
+                    {athleteParamsWithDetails.length > 0 && (
                       <CommandGroup heading="Athlete Parameters">
-                        {parametersWithDetails.map((param) => (
+                        {athleteParamsWithDetails.map((param) => (
                           <CommandItem
                             key={param.id}
-                            value={param.name}
+                            value={`athlete-${param.name}`}
                             onSelect={() => handleSelectParameter(param)}
                           >
                             <Check
@@ -235,6 +257,38 @@ export function AddSmartGoalDialog({
                         ))}
                       </CommandGroup>
                     )}
+                    
+                    {/* All Other Parameters */}
+                    {otherParameters.length > 0 && (
+                      <>
+                        <CommandSeparator />
+                        <CommandGroup heading="All Parameters">
+                          {otherParameters.map((param) => (
+                            <CommandItem
+                              key={param.id}
+                              value={`all-${param.name}`}
+                              onSelect={() => handleSelectParameter(param)}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  selectedParameterId === param.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <div className="flex-1">
+                                <span>{param.name}</span>
+                                {param.unit && (
+                                  <span className="ml-2 text-muted-foreground text-sm">
+                                    ({param.unit})
+                                  </span>
+                                )}
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </>
+                    )}
+                    
                     <CommandSeparator />
                     <CommandGroup>
                       <CommandItem onSelect={handleEnterCustomMode}>
