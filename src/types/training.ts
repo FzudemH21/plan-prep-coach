@@ -18,22 +18,34 @@ export interface AthleteInfo {
   updatedAt: Date;
 }
 
-export interface SmartGoal {
-  id: string;
-  description: string;
-  specific: string;
-  measurable: string;
-  achievable: string;
-  relevant: string;
-  timeBound: string;
-  baselineValue: number;
-  desiredValue: number;
-  unit: string;
-  percentChange: number;
+// Plan timeline - shared across all goals
+export interface PlanDuration {
   startDate: Date;
   endDate: Date;
   totalDays: number;
   totalWeeks: number;
+}
+
+// Individual SMART goal - for performance targets
+export interface SmartGoal {
+  id: string;
+  description: string;
+  baselineValue: number;
+  desiredValue: number;
+  unit: string;
+  percentChange: number;
+  // Optional link to athlete parameter for auto-fill
+  linkedParameterId?: string;
+  // Optional legacy fields (deprecated)
+  specific?: string;
+  measurable?: string;
+  achievable?: string;
+  relevant?: string;
+  timeBound?: string;
+  startDate?: Date;
+  endDate?: Date;
+  totalDays?: number;
+  totalWeeks?: number;
 }
 
 export interface SubGoal {
