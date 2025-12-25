@@ -61,6 +61,25 @@ export default function MacrocyclePage() {
   const [selectedTest, setSelectedTest] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
   const [expandedSubGoals, setExpandedSubGoals] = useState<Set<string>>(new Set());
+  const [expandedPrimaryGoals, setExpandedPrimaryGoals] = useState<Set<string>>(new Set());
+  const [addSubGoalForParent, setAddSubGoalForParent] = useState<string | undefined>(undefined);
+
+  // Group sub-goals by parent goal
+  const subGoalsByParent = useMemo(() => {
+    const grouped: Record<string, SubGoal[]> = {};
+    const unlinked: SubGoal[] = [];
+    
+    subGoals.forEach(sg => {
+      if (sg.parentGoalId) {
+        if (!grouped[sg.parentGoalId]) grouped[sg.parentGoalId] = [];
+        grouped[sg.parentGoalId].push(sg);
+      } else {
+        unlinked.push(sg);
+      }
+    });
+    
+    return { grouped, unlinked };
+  }, [subGoals]);
 
   // Group athletes alphabetically by their groups
   const groupedAthletes = useMemo(() => {
@@ -1000,94 +1019,163 @@ export default function MacrocyclePage() {
               </Button>
             </div>
             
-            {/* Compact Sub-Goal Cards */}
-            <div className="space-y-2 max-h-[400px] overflow-y-auto px-1 -mx-1 pr-3">
-              {subGoals.length === 0 && events.length === 0 && (
+            {/* Hierarchical Sub-Goals organized under Primary Goals */}
+            <div className="space-y-3 max-h-[500px] overflow-y-auto px-1 -mx-1 pr-3">
+              {smartGoals.length === 0 && subGoals.length === 0 && events.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground border border-dashed rounded-lg">
                   <Target className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No sub-goals or events yet</p>
-                  <p className="text-xs">Click "Add" to create one</p>
+                  <p className="text-sm">No primary goals or sub-goals yet</p>
+                  <p className="text-xs">Add primary goals in Step 1, then add sub-goals here</p>
                 </div>
               )}
               
-              {subGoals.map((subGoal) => {
-                const isExpanded = expandedSubGoals.has(subGoal.id);
-                const toggleExpand = (e: React.MouseEvent) => {
-                  e.stopPropagation();
-                  setExpandedSubGoals(prev => {
-                    const next = new Set(prev);
-                    if (next.has(subGoal.id)) {
-                      next.delete(subGoal.id);
-                    } else {
-                      next.add(subGoal.id);
-                    }
-                    return next;
-                  });
-                };
+              {/* Primary Goals with nested Sub-Goals */}
+              {smartGoals.map((goal) => {
+                const goalSubGoals = subGoalsByParent.grouped[goal.id] || [];
+                const isGoalExpanded = expandedPrimaryGoals.has(goal.id);
                 
                 return (
-                  <div 
-                    key={subGoal.id} 
-                    className={cn(
-                      "p-3 border rounded-lg transition-colors",
-                      selectedTest === subGoal.id ? "ring-2 ring-primary bg-primary/5" : "hover:bg-muted/50"
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div 
-                        className="flex-1 cursor-pointer min-w-0"
-                        onClick={() => {
-                          setSelectedTest(selectedTest === subGoal.id ? null : subGoal.id);
-                          setSelectedEvent(null);
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs shrink-0">Test</Badge>
-                          <span className="font-medium text-sm truncate">
-                            {subGoal.testMethod || subGoal.description || "Unnamed"}
-                          </span>
+                  <div key={goal.id} className="border rounded-lg overflow-hidden">
+                    {/* Primary Goal Header */}
+                    <div 
+                      className="p-3 bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => {
+                        setExpandedPrimaryGoals(prev => {
+                          const next = new Set(prev);
+                          if (next.has(goal.id)) {
+                            next.delete(goal.id);
+                          } else {
+                            next.add(goal.id);
+                          }
+                          return next;
+                        });
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Target className="h-4 w-4 shrink-0 text-primary" />
+                          <span className="font-medium text-sm truncate">{goal.description}</span>
                         </div>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          <span className="text-xs">
-                            {subGoal.preTestValue || 0} {subGoal.unit} → {subGoal.goalValue || 0} {subGoal.unit}
-                          </span>
-                          <Badge 
-                            variant={subGoal.percentChange && subGoal.percentChange > 0 ? "default" : "secondary"}
-                            className="text-xs"
-                          >
-                            {subGoal.percentChange ? `${subGoal.percentChange > 0 ? "+" : ""}${subGoal.percentChange.toFixed(1)}%` : "0%"}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge variant="outline" className="text-xs">
+                            {goalSubGoals.length} sub-goal{goalSubGoals.length !== 1 ? 's' : ''}
                           </Badge>
+                          <ChevronDown className={cn("h-4 w-4 transition-transform", isGoalExpanded && "rotate-180")} />
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={toggleExpand}
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {goal.baselineValue} {goal.unit} → {goal.desiredValue} {goal.unit}
+                        <Badge 
+                          variant={goal.percentChange > 0 ? "default" : "secondary"}
+                          className="text-xs ml-2"
                         >
-                          <ChevronDown className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => handleRemoveSubGoal(subGoal.id)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
+                          {goal.percentChange > 0 ? "+" : ""}{goal.percentChange.toFixed(1)}%
+                        </Badge>
                       </div>
                     </div>
                     
-                    <Collapsible open={isExpanded}>
+                    {/* Nested Sub-Goals */}
+                    <Collapsible open={isGoalExpanded}>
                       <CollapsibleContent>
-                        <div className="mt-2 pt-2 border-t text-xs text-muted-foreground space-y-1">
-                          {subGoal.description && (
-                            <p>{subGoal.description}</p>
-                          )}
-                          {subGoal.testDates && subGoal.testDates.length > 0 && (
-                            <p>📅 {subGoal.testDates.map(d => format(parseISO(d), 'MMM d')).join(', ')}</p>
-                          )}
+                        <div className="border-l-2 border-primary/20 ml-4">
+                          {goalSubGoals.map((subGoal) => {
+                            const isExpanded = expandedSubGoals.has(subGoal.id);
+                            const toggleExpand = (e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              setExpandedSubGoals(prev => {
+                                const next = new Set(prev);
+                                if (next.has(subGoal.id)) {
+                                  next.delete(subGoal.id);
+                                } else {
+                                  next.add(subGoal.id);
+                                }
+                                return next;
+                              });
+                            };
+                            
+                            return (
+                              <div 
+                                key={subGoal.id} 
+                                className={cn(
+                                  "p-2 pl-3 border-b last:border-b-0 transition-colors",
+                                  selectedTest === subGoal.id ? "ring-2 ring-inset ring-primary bg-primary/5" : "hover:bg-muted/30"
+                                )}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div 
+                                    className="flex-1 cursor-pointer min-w-0"
+                                    onClick={() => {
+                                      setSelectedTest(selectedTest === subGoal.id ? null : subGoal.id);
+                                      setSelectedEvent(null);
+                                    }}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant="outline" className="text-xs shrink-0">Test</Badge>
+                                      <span className="font-medium text-sm truncate">
+                                        {subGoal.testMethod || subGoal.description || "Unnamed"}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                      <span className="text-xs">
+                                        {subGoal.preTestValue || 0} {subGoal.unit} → {subGoal.goalValue || 0} {subGoal.unit}
+                                      </span>
+                                      <Badge 
+                                        variant={subGoal.percentChange && subGoal.percentChange > 0 ? "default" : "secondary"}
+                                        className="text-xs"
+                                      >
+                                        {subGoal.percentChange ? `${subGoal.percentChange > 0 ? "+" : ""}${subGoal.percentChange.toFixed(1)}%` : "0%"}
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      onClick={toggleExpand}
+                                    >
+                                      <ChevronDown className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")} />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      onClick={() => handleRemoveSubGoal(subGoal.id)}
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </div>
+                                
+                                <Collapsible open={isExpanded}>
+                                  <CollapsibleContent>
+                                    <div className="mt-2 pt-2 border-t text-xs text-muted-foreground space-y-1">
+                                      {subGoal.description && (
+                                        <p>{subGoal.description}</p>
+                                      )}
+                                      {subGoal.testDates && subGoal.testDates.length > 0 && (
+                                        <p>📅 {subGoal.testDates.map(d => format(parseISO(d), 'd MMM yyyy')).join(', ')}</p>
+                                      )}
+                                    </div>
+                                  </CollapsibleContent>
+                                </Collapsible>
+                              </div>
+                            );
+                          })}
+                          
+                          {/* Add Sub-Goal button for this primary goal */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start text-muted-foreground hover:text-foreground pl-3"
+                            onClick={() => {
+                              setAddSubGoalForParent(goal.id);
+                              setIsAddSubGoalDialogOpen(true);
+                            }}
+                          >
+                            <Plus className="h-3 w-3 mr-1" />
+                            Add Sub-Goal
+                          </Button>
                         </div>
                       </CollapsibleContent>
                     </Collapsible>
@@ -1095,77 +1183,169 @@ export default function MacrocyclePage() {
                 );
               })}
               
-              {/* Compact Event Cards */}
-              {events.map((event) => {
-                const isExpanded = expandedSubGoals.has(event.id);
-                const toggleExpand = (e: React.MouseEvent) => {
-                  e.stopPropagation();
-                  setExpandedSubGoals(prev => {
-                    const next = new Set(prev);
-                    if (next.has(event.id)) {
-                      next.delete(event.id);
-                    } else {
-                      next.add(event.id);
-                    }
-                    return next;
-                  });
-                };
-                
-                return (
-                  <div 
-                    key={event.id} 
-                    className={cn(
-                      "p-3 border rounded-lg transition-colors",
-                      selectedEvent === event.id ? "ring-2 ring-orange-500 bg-orange-500/5" : "hover:bg-muted/50"
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div 
-                        className="flex-1 cursor-pointer min-w-0"
-                        onClick={() => {
-                          setSelectedEvent(selectedEvent === event.id ? null : event.id);
-                          setSelectedTest(null);
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs border-orange-500 text-orange-600 shrink-0">Event</Badge>
-                          <span className="font-medium text-sm truncate">{event.name}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {event.eventDates && event.eventDates.length > 0 && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={toggleExpand}
-                          >
-                            <ChevronDown className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")} />
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => removeEvent(event.id)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
+              {/* Unlinked Sub-Goals and Events Section */}
+              {(subGoalsByParent.unlinked.length > 0 || events.length > 0) && (
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="p-3 bg-muted/20">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium text-sm">Unlinked Items</span>
                     </div>
-                    
-                    {event.eventDates && event.eventDates.length > 0 && (
-                      <Collapsible open={isExpanded}>
-                        <CollapsibleContent>
-                          <div className="mt-2 pt-2 border-t text-xs text-muted-foreground">
-                            <p>📅 {event.eventDates.map(d => format(parseISO(d), 'MMM d')).join(', ')}</p>
-                          </div>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    )}
                   </div>
-                );
-              })}
+                  
+                  <div className="divide-y">
+                    {/* Unlinked Sub-Goals */}
+                    {subGoalsByParent.unlinked.map((subGoal) => {
+                      const isExpanded = expandedSubGoals.has(subGoal.id);
+                      const toggleExpand = (e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        setExpandedSubGoals(prev => {
+                          const next = new Set(prev);
+                          if (next.has(subGoal.id)) {
+                            next.delete(subGoal.id);
+                          } else {
+                            next.add(subGoal.id);
+                          }
+                          return next;
+                        });
+                      };
+                      
+                      return (
+                        <div 
+                          key={subGoal.id} 
+                          className={cn(
+                            "p-3 transition-colors",
+                            selectedTest === subGoal.id ? "ring-2 ring-inset ring-primary bg-primary/5" : "hover:bg-muted/50"
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div 
+                              className="flex-1 cursor-pointer min-w-0"
+                              onClick={() => {
+                                setSelectedTest(selectedTest === subGoal.id ? null : subGoal.id);
+                                setSelectedEvent(null);
+                              }}
+                            >
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-xs shrink-0">Test</Badge>
+                                <span className="font-medium text-sm truncate">
+                                  {subGoal.testMethod || subGoal.description || "Unnamed"}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                <span className="text-xs">
+                                  {subGoal.preTestValue || 0} {subGoal.unit} → {subGoal.goalValue || 0} {subGoal.unit}
+                                </span>
+                                <Badge 
+                                  variant={subGoal.percentChange && subGoal.percentChange > 0 ? "default" : "secondary"}
+                                  className="text-xs"
+                                >
+                                  {subGoal.percentChange ? `${subGoal.percentChange > 0 ? "+" : ""}${subGoal.percentChange.toFixed(1)}%` : "0%"}
+                                </Badge>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={toggleExpand}
+                              >
+                                <ChevronDown className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")} />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => handleRemoveSubGoal(subGoal.id)}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          <Collapsible open={isExpanded}>
+                            <CollapsibleContent>
+                              <div className="mt-2 pt-2 border-t text-xs text-muted-foreground space-y-1">
+                                {subGoal.description && (
+                                  <p>{subGoal.description}</p>
+                                )}
+                                {subGoal.testDates && subGoal.testDates.length > 0 && (
+                                  <p>📅 {subGoal.testDates.map(d => format(parseISO(d), 'd MMM yyyy')).join(', ')}</p>
+                                )}
+                              </div>
+                            </CollapsibleContent>
+                          </Collapsible>
+                        </div>
+                      );
+                    })}
+                    
+                    {/* Events */}
+                    {events.map((event) => {
+                      const isExpanded = expandedSubGoals.has(event.id);
+                      const toggleExpand = (e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        setExpandedSubGoals(prev => {
+                          const next = new Set(prev);
+                          if (next.has(event.id)) {
+                            next.delete(event.id);
+                          } else {
+                            next.add(event.id);
+                          }
+                          return next;
+                        });
+                      };
+                      
+                      return (
+                        <div 
+                          key={event.id} 
+                          className={cn(
+                            "p-3 transition-colors",
+                            selectedEvent === event.id ? "ring-2 ring-inset ring-orange-500 bg-orange-500/5" : "hover:bg-muted/50"
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div 
+                              className="flex-1 cursor-pointer min-w-0"
+                              onClick={() => {
+                                setSelectedEvent(selectedEvent === event.id ? null : event.id);
+                                setSelectedTest(null);
+                              }}
+                            >
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-xs border-orange-500 text-orange-600 shrink-0">Event</Badge>
+                                <span className="font-medium text-sm truncate">{event.name}</span>
+                              </div>
+                              {event.eventDates && event.eventDates.length > 0 && (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  📅 {event.eventDates.map(d => format(parseISO(d), 'd MMM yyyy')).join(', ')}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => removeEvent(event.id)}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              
+              {/* Empty state when there are primary goals but no sub-goals */}
+              {smartGoals.length > 0 && subGoals.length === 0 && events.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-2">
+                  Expand a primary goal and click "Add Sub-Goal" to get started
+                </p>
+              )}
             </div>
             
             {(selectedTest || selectedEvent) && (
@@ -1184,7 +1364,7 @@ export default function MacrocyclePage() {
                 <div className="text-center text-sm text-muted-foreground space-y-1 mb-4">
                   <p className="font-medium">Plan Duration: {planDuration.totalWeeks} weeks</p>
                   <p className="text-xs">
-                    {format(planDuration.startDate, 'MMM d, yyyy')} — {format(planDuration.endDate, 'MMM d, yyyy')}
+                    {format(planDuration.startDate, 'd MMM yyyy')} — {format(planDuration.endDate, 'd MMM yyyy')}
                   </p>
                 </div>
                 <Calendar
@@ -1352,13 +1532,18 @@ export default function MacrocyclePage() {
         {/* Add Sub-Goal Dialog */}
         <AddSubGoalDialog
           open={isAddSubGoalDialogOpen}
-          onOpenChange={setIsAddSubGoalDialogOpen}
+          onOpenChange={(open) => {
+            setIsAddSubGoalDialogOpen(open);
+            if (!open) setAddSubGoalForParent(undefined);
+          }}
           onAddSubGoal={handleAddSubGoal}
           onAddEvent={handleAddEvent}
           athleteParameters={athleteParams}
           parameterDefinitions={parameterDefinitions}
           subGoalOptions={getSubGoalsFromAthleticismDB()}
           testMethodOptions={testMethodOptions}
+          smartGoals={smartGoals}
+          defaultParentGoalId={addSubGoalForParent}
         />
       </CardContent>
     </Card>
