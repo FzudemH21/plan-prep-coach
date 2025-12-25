@@ -50,6 +50,8 @@ interface AddSubGoalDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAddSubGoal: (subGoal: Omit<SubGoal, 'id'>) => void;
+  onEditSubGoal?: (subGoal: SubGoal) => void;
+  editSubGoal?: SubGoal | null;
   onAddEvent: (event: Omit<Event, 'id'>) => void;
   athleteParameters: AthleteParameter[];
   parameterDefinitions: ParameterDefinition[];
@@ -57,6 +59,7 @@ interface AddSubGoalDialogProps {
   testMethodOptions: string[];
   smartGoals: SmartGoal[];
   defaultParentGoalId?: string;
+  defaultCategory?: ItemCategory;
 }
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -65,6 +68,8 @@ export function AddSubGoalDialog({
   open,
   onOpenChange,
   onAddSubGoal,
+  onEditSubGoal,
+  editSubGoal,
   onAddEvent,
   athleteParameters,
   parameterDefinitions,
@@ -72,9 +77,10 @@ export function AddSubGoalDialog({
   testMethodOptions,
   smartGoals,
   defaultParentGoalId,
+  defaultCategory,
 }: AddSubGoalDialogProps) {
   // Category state
-  const [category, setCategory] = useState<ItemCategory>("subgoal");
+  const [category, setCategory] = useState<ItemCategory>(defaultCategory || "subgoal");
   
   // Common state
   const [comboboxOpen, setComboboxOpen] = useState(false);
@@ -94,10 +100,50 @@ export function AddSubGoalDialog({
   // Event specific state
   const [eventName, setEventName] = useState("");
   
+  // Update category when defaultCategory changes
+  useEffect(() => {
+    if (defaultCategory) {
+      setCategory(defaultCategory);
+    }
+  }, [defaultCategory]);
+
   // Update parentGoalId when defaultParentGoalId changes
   useEffect(() => {
     setParentGoalId(defaultParentGoalId);
   }, [defaultParentGoalId]);
+
+  // Pre-fill form when editing
+  useEffect(() => {
+    if (editSubGoal) {
+      setDescription(editSubGoal.description);
+      setTestMethod(editSubGoal.testMethod);
+      setPreTestValue(editSubGoal.preTestValue);
+      setGoalValue(editSubGoal.goalValue);
+      setUnit(editSubGoal.unit);
+      setComments(editSubGoal.comments || "");
+      setParentGoalId(editSubGoal.parentGoalId);
+      setCategory("subgoal");
+    }
+  }, [editSubGoal]);
+
+  // Reset form when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setCategory(defaultCategory || "subgoal");
+      setComboboxOpen(false);
+      setSelectedParameterId(null);
+      setDescription("");
+      setIsCustomMode(false);
+      setCustomName("");
+      setComments("");
+      setTestMethod("");
+      setPreTestValue("");
+      setGoalValue("");
+      setUnit("");
+      setEventName("");
+      setParentGoalId(defaultParentGoalId);
+    }
+  }, [open, defaultParentGoalId, defaultCategory]);
 
   // Get athlete's parameters with their details
   const athleteParamsWithDetails = useMemo((): ParameterWithDetails[] => {
@@ -183,7 +229,7 @@ export function AddSubGoalDialog({
   };
 
   const resetForm = () => {
-    setCategory("subgoal");
+    setCategory(defaultCategory || "subgoal");
     setComboboxOpen(false);
     setSelectedParameterId(null);
     setDescription("");
@@ -202,19 +248,33 @@ export function AddSubGoalDialog({
     if (category === "subgoal") {
       const goalDescription = isCustomMode ? customName : description;
       
-      if (!goalDescription) return;
+      if (!goalDescription && !editSubGoal) return;
 
-      onAddSubGoal({
-        parentGoalId: parentGoalId || undefined,
-        description: goalDescription,
-        testMethod,
-        preTestValue: typeof preTestValue === "number" ? preTestValue : 0,
-        goalValue: typeof goalValue === "number" ? goalValue : 0,
-        unit,
-        percentChange,
-        testDates: [],
-        comments,
-      });
+      if (editSubGoal && onEditSubGoal) {
+        onEditSubGoal({
+          ...editSubGoal,
+          parentGoalId: parentGoalId || undefined,
+          description: goalDescription || editSubGoal.description,
+          testMethod,
+          preTestValue: typeof preTestValue === "number" ? preTestValue : 0,
+          goalValue: typeof goalValue === "number" ? goalValue : 0,
+          unit,
+          percentChange,
+          comments,
+        });
+      } else {
+        onAddSubGoal({
+          parentGoalId: parentGoalId || undefined,
+          description: goalDescription,
+          testMethod,
+          preTestValue: typeof preTestValue === "number" ? preTestValue : 0,
+          goalValue: typeof goalValue === "number" ? goalValue : 0,
+          unit,
+          percentChange,
+          testDates: [],
+          comments,
+        });
+      }
     } else {
       if (!eventName.trim()) return;
 
@@ -236,8 +296,11 @@ export function AddSubGoalDialog({
   };
 
   const isValid = category === "subgoal" 
-    ? (isCustomMode ? customName : description)
+    ? (isCustomMode ? customName : description) || editSubGoal
     : eventName.trim();
+
+  // Determine if we should hide category selector (when opened with defaultParentGoalId, it's always a sub-goal)
+  const hideCategorySelector = !!defaultParentGoalId || !!editSubGoal;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -249,36 +312,40 @@ export function AddSubGoalDialog({
             ) : (
               <CalendarIcon className="h-5 w-5" />
             )}
-            Add {category === "subgoal" ? "Sub-Goal / Test" : "Event"}
+            {editSubGoal ? "Edit Sub-Goal" : `Add ${category === "subgoal" ? "Sub-Goal / Test" : "Event"}`}
           </DialogTitle>
           <DialogDescription>
-            Add a measurable sub-goal with testing or schedule an event.
+            {editSubGoal 
+              ? "Edit the sub-goal details below."
+              : "Add a measurable sub-goal with testing or schedule an event."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Category Selector */}
-          <div className="space-y-2">
-            <Label>Category</Label>
-            <RadioGroup
-              value={category}
-              onValueChange={(val) => setCategory(val as ItemCategory)}
-              className="flex gap-4"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="subgoal" id="cat-subgoal" />
-                <Label htmlFor="cat-subgoal" className="font-normal cursor-pointer">
-                  Sub-Goal / Test
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="event" id="cat-event" />
-                <Label htmlFor="cat-event" className="font-normal cursor-pointer">
-                  Other Event
-                </Label>
-              </div>
-            </RadioGroup>
-          </div>
+          {/* Category Selector - only show when not adding under a parent goal */}
+          {!hideCategorySelector && (
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <RadioGroup
+                value={category}
+                onValueChange={(val) => setCategory(val as ItemCategory)}
+                className="flex gap-4"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="subgoal" id="cat-subgoal" />
+                  <Label htmlFor="cat-subgoal" className="font-normal cursor-pointer">
+                    Sub-Goal / Test
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="event" id="cat-event" />
+                  <Label htmlFor="cat-event" className="font-normal cursor-pointer">
+                    Other Event
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+          )}
 
           {category === "subgoal" ? (
             <>
@@ -536,7 +603,7 @@ export function AddSubGoalDialog({
             Cancel
           </Button>
           <Button onClick={handleSave} disabled={!isValid}>
-            Add {category === "subgoal" ? "Sub-Goal" : "Event"}
+            {editSubGoal ? "Save Changes" : `Add ${category === "subgoal" ? "Sub-Goal" : "Event"}`}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { SmartGoal, SubGoal, TrainableQuality, Event, PlanDuration } from "@/types/training";
-import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2, FileText, Check, ChevronsUpDown, ChevronDown } from "lucide-react";
+import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2, FileText, Check, ChevronsUpDown, ChevronDown, Pencil } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { 
   getUniqueQualities, 
@@ -60,9 +60,13 @@ export default function MacrocyclePage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [selectedTest, setSelectedTest] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
+  const [selectedSmartGoal, setSelectedSmartGoal] = useState<string | null>(null);
   const [expandedSubGoals, setExpandedSubGoals] = useState<Set<string>>(new Set());
   const [expandedPrimaryGoals, setExpandedPrimaryGoals] = useState<Set<string>>(new Set());
   const [addSubGoalForParent, setAddSubGoalForParent] = useState<string | undefined>(undefined);
+  const [editingGoal, setEditingGoal] = useState<SmartGoal | null>(null);
+  const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
+  const [addEventMode, setAddEventMode] = useState(false);
 
   // Group sub-goals by parent goal
   const subGoalsByParent = useMemo(() => {
@@ -667,6 +671,11 @@ export default function MacrocyclePage() {
     setSmartGoals(prev => prev.filter(g => g.id !== goalId));
   };
 
+  const handleEditGoal = (goal: SmartGoal) => {
+    setSmartGoals(prev => prev.map(g => g.id === goal.id ? goal : g));
+    toast({ title: 'Goal Updated', description: `Updated "${goal.description}"` });
+  };
+
   // Handlers for Sub-goals
   const handleAddSubGoal = (subGoal: Omit<SubGoal, 'id'>) => {
     const newSubGoal: SubGoal = { ...subGoal, id: `subgoal-${Date.now()}` };
@@ -683,6 +692,11 @@ export default function MacrocyclePage() {
     if (sg) {
       toast({ title: 'Sub-Goal Removed', description: `Deleted "${sg.description}"` });
     }
+  };
+
+  const handleEditSubGoal = (subGoal: SubGoal) => {
+    setSubGoals(prev => prev.map(sg => sg.id === subGoal.id ? subGoal : sg));
+    toast({ title: 'Sub-Goal Updated', description: `Updated "${subGoal.testMethod || subGoal.description}"` });
   };
 
   // Handlers for Events
@@ -867,7 +881,13 @@ export default function MacrocyclePage() {
               smartGoals.map((goal) => (
                 <div
                   key={goal.id}
-                  className="p-3 border rounded-lg bg-muted/30 flex items-start justify-between gap-3"
+                  className={cn(
+                    "p-3 border rounded-lg flex items-start justify-between gap-3 cursor-pointer transition-colors",
+                    selectedSmartGoal === goal.id 
+                      ? "ring-2 ring-green-500 bg-green-500/5" 
+                      : "bg-muted/30 hover:bg-muted/50"
+                  )}
+                  onClick={() => setSelectedSmartGoal(selectedSmartGoal === goal.id ? null : goal.id)}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -882,17 +902,44 @@ export default function MacrocyclePage() {
                     <p className="text-sm text-muted-foreground mt-1">
                       {goal.baselineValue} {goal.unit} → {goal.desiredValue} {goal.unit}
                     </p>
+                    {goal.testDates && goal.testDates.length > 0 && (
+                      <p className="text-xs text-green-600 mt-1">
+                        📅 {goal.testDates.map(d => format(parseISO(d), 'd MMM yyyy')).join(', ')}
+                      </p>
+                    )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={() => handleRemoveGoal(goal.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingGoal(goal);
+                        setIsAddGoalDialogOpen(true);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveGoal(goal.id);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))
+            )}
+            {selectedSmartGoal && (
+              <p className="text-xs text-muted-foreground text-center bg-muted/50 p-2 rounded">
+                Click on a date in the calendar to schedule a test for this goal
+              </p>
             )}
           </CardContent>
         </Card>
@@ -914,29 +961,61 @@ export default function MacrocyclePage() {
                 <Calendar
                   mode="single"
                   selected={planDuration?.startDate || planDuration?.endDate}
-                  onSelect={handleCalendarSelect}
+                  onSelect={(selectedDate) => {
+                    if (!selectedDate) return;
+                    
+                    // If a SMART goal is selected, toggle scheduling for that goal
+                    if (selectedSmartGoal) {
+                      const dateStr = format(selectedDate, 'yyyy-MM-dd');
+                      setSmartGoals(prev => prev.map(goal => {
+                        if (goal.id === selectedSmartGoal) {
+                          const currentDates = goal.testDates || [];
+                          const isAlreadyScheduled = currentDates.includes(dateStr);
+                          if (isAlreadyScheduled) {
+                            toast({ title: 'Test Unscheduled', description: `Removed test from ${format(selectedDate, 'PPP')}` });
+                            return { ...goal, testDates: currentDates.filter(d => d !== dateStr) };
+                          } else {
+                            toast({ title: 'Test Scheduled', description: `Scheduled test for ${format(selectedDate, 'PPP')}` });
+                            return { ...goal, testDates: [...currentDates, dateStr] };
+                          }
+                        }
+                        return goal;
+                      }));
+                    } else {
+                      // Original calendar selection behavior
+                      handleCalendarSelect(selectedDate);
+                    }
+                  }}
                   modifiers={{
                     start: (date) => planDuration?.startDate ? date.getTime() === planDuration.startDate.getTime() : false,
                     end: (date) => planDuration?.endDate ? date.getTime() === planDuration.endDate.getTime() : false,
                     middle: (date) => {
                       if (!planDuration?.startDate || !planDuration?.endDate) return false;
                       return date > planDuration.startDate && date < planDuration.endDate;
-                    }
+                    },
+                    goalScheduled: smartGoals
+                      .flatMap(g => g.testDates || [])
+                      .map(dateStr => parseISO(dateStr))
                   }}
                   modifiersStyles={{
                     start: { 
-                      backgroundColor: 'hsl(var(--foreground))', 
-                      color: 'hsl(var(--background))',
+                      backgroundColor: 'hsl(142 76% 36%)', 
+                      color: 'white',
                       fontWeight: 'bold'
                     },
                     end: { 
-                      backgroundColor: 'hsl(var(--foreground))', 
-                      color: 'hsl(var(--background))',
+                      backgroundColor: 'hsl(142 76% 36%)', 
+                      color: 'white',
                       fontWeight: 'bold'
                     },
                     middle: { 
-                      backgroundColor: 'hsl(var(--muted))', 
-                      color: 'hsl(var(--muted-foreground))'
+                      backgroundColor: 'hsl(142 76% 90%)', 
+                      color: 'hsl(142 76% 25%)'
+                    },
+                    goalScheduled: {
+                      backgroundColor: 'hsl(38 92% 50%)',
+                      color: 'white',
+                      fontWeight: 'bold'
                     }
                   }}
                   className="rounded-md pointer-events-auto"
@@ -979,11 +1058,16 @@ export default function MacrocyclePage() {
         </Card>
       </div>
 
-      {/* Add Goal Dialog */}
+      {/* Add/Edit Goal Dialog */}
       <AddSmartGoalDialog
         open={isAddGoalDialogOpen}
-        onOpenChange={setIsAddGoalDialogOpen}
+        onOpenChange={(open) => {
+          setIsAddGoalDialogOpen(open);
+          if (!open) setEditingGoal(null);
+        }}
         onAddGoal={handleAddGoal}
+        onEditGoal={handleEditGoal}
+        editGoal={editingGoal}
         athleteParameters={athleteParams}
         parameterDefinitions={parameterDefinitions}
       />
@@ -1010,12 +1094,15 @@ export default function MacrocyclePage() {
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-sm">Sub-Goals & Events</h3>
               <Button
-                onClick={() => setIsAddSubGoalDialogOpen(true)}
-                variant="outline"
+                onClick={() => {
+                  setAddEventMode(true);
+                  setIsAddSubGoalDialogOpen(true);
+                }}
                 size="sm"
+                className="bg-foreground text-background hover:bg-foreground/90"
               >
                 <Plus className="h-4 w-4 mr-1" />
-                Add
+                Add Event
               </Button>
             </div>
             
@@ -1128,6 +1215,18 @@ export default function MacrocyclePage() {
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-1 shrink-0">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingSubGoal(subGoal);
+                                        setIsAddSubGoalDialogOpen(true);
+                                      }}
+                                    >
+                                      <Pencil className="h-3 w-3" />
+                                    </Button>
                                     <Button
                                       variant="ghost"
                                       size="icon"
@@ -1359,7 +1458,7 @@ export default function MacrocyclePage() {
           <div className="space-y-4">
             <h3 className="font-semibold text-sm">Calendar Scheduling</h3>
             {planDuration?.startDate && planDuration?.endDate ? (
-              <div className="border rounded-lg p-4 bg-background flex flex-col items-center">
+              <div className="border rounded-lg p-4 bg-muted/30 flex flex-col items-center">
                 {/* Plan Duration Summary */}
                 <div className="text-center text-sm text-muted-foreground space-y-1 mb-4">
                   <p className="font-medium">Plan Duration: {planDuration.totalWeeks} weeks</p>
@@ -1529,14 +1628,20 @@ export default function MacrocyclePage() {
           </div>
         </div>
 
-        {/* Add Sub-Goal Dialog */}
+        {/* Add/Edit Sub-Goal Dialog */}
         <AddSubGoalDialog
           open={isAddSubGoalDialogOpen}
           onOpenChange={(open) => {
             setIsAddSubGoalDialogOpen(open);
-            if (!open) setAddSubGoalForParent(undefined);
+            if (!open) {
+              setAddSubGoalForParent(undefined);
+              setEditingSubGoal(null);
+              setAddEventMode(false);
+            }
           }}
           onAddSubGoal={handleAddSubGoal}
+          onEditSubGoal={handleEditSubGoal}
+          editSubGoal={editingSubGoal}
           onAddEvent={handleAddEvent}
           athleteParameters={athleteParams}
           parameterDefinitions={parameterDefinitions}
@@ -1544,6 +1649,7 @@ export default function MacrocyclePage() {
           testMethodOptions={testMethodOptions}
           smartGoals={smartGoals}
           defaultParentGoalId={addSubGoalForParent}
+          defaultCategory={addEventMode ? "event" : undefined}
         />
       </CardContent>
     </Card>
