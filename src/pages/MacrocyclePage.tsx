@@ -1551,19 +1551,33 @@ export default function MacrocyclePage() {
                         }
                       };
                       
+                      // Check date type for styling (dateStr already defined above)
+                      const isStartDate = planDuration.startDate && 
+                        format(planDuration.startDate, 'yyyy-MM-dd') === dateStr;
+                      const isEndDate = planDuration.endDate && 
+                        format(planDuration.endDate, 'yyyy-MM-dd') === dateStr;
+                      const isMiddleDate = planDuration.startDate && planDuration.endDate &&
+                        date > planDuration.startDate && date < planDuration.endDate;
+
+                      // Determine styling based on date type (scheduled items take priority)
+                      let dateStyle = '';
+                      if (scheduledTests.length > 0 && scheduledEvents.length > 0) {
+                        dateStyle = 'bg-gradient-to-r from-foreground to-orange-500 text-white rounded-full font-bold';
+                      } else if (scheduledEvents.length > 0) {
+                        dateStyle = 'bg-orange-500 text-white rounded-full font-bold';
+                      } else if (scheduledTests.length > 0) {
+                        dateStyle = 'bg-foreground text-background rounded-full font-bold';
+                      } else if (isStartDate || isEndDate) {
+                        dateStyle = 'bg-[hsl(142_76%_36%)] text-white font-bold rounded-[4px]';
+                      } else if (isMiddleDate) {
+                        dateStyle = 'bg-muted text-foreground';
+                      }
+
                       const dayContent = (
                         <button 
                           {...dayProps}
                           onClick={handleClick}
-                          className={`relative h-9 w-9 p-0 font-normal flex items-center justify-center ${
-                            scheduledTests.length > 0 && scheduledEvents.length > 0 
-                              ? 'bg-gradient-to-r from-foreground to-orange-500 text-white rounded-full font-bold' 
-                              : scheduledEvents.length > 0 
-                                ? 'bg-orange-500 text-white rounded-full font-bold'
-                                : scheduledTests.length > 0 
-                                  ? 'bg-foreground text-background rounded-full font-bold' 
-                                  : ''
-                          } ${dayProps.className || ''}`}
+                          className={`relative h-9 w-9 p-0 font-normal flex items-center justify-center ${dateStyle} ${dayProps.className || ''}`}
                         >
                           <span>
                             {date.getDate()}
