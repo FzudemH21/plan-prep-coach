@@ -289,14 +289,14 @@ export default function AthleticismDatabaseV2() {
                                 </Badge>
                               ))}
                               {interactingGoalNames.length > 3 && (
-                                <TooltipProvider>
+                                <TooltipProvider delayDuration={0}>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 cursor-pointer">
                                         +{interactingGoalNames.length - 3} more
                                       </Badge>
                                     </TooltipTrigger>
-                                    <TooltipContent side="top" className="max-w-[300px]">
+                                    <TooltipContent side="top" className="max-w-[300px] z-[100]">
                                       <div className="text-xs space-y-0.5">
                                         <div className="font-medium mb-1">All Interacting Goals:</div>
                                         {interactingGoalNames.map((name, i) => (
@@ -321,14 +321,14 @@ export default function AthleticismDatabaseV2() {
                                 </Badge>
                               ))}
                               {methodNames.length > 2 && (
-                                <TooltipProvider>
+                                <TooltipProvider delayDuration={0}>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0 cursor-pointer">
                                         +{methodNames.length - 2} more
                                       </Badge>
                                     </TooltipTrigger>
-                                    <TooltipContent side="top" className="max-w-[300px]">
+                                    <TooltipContent side="top" className="max-w-[300px] z-[100]">
                                       <div className="text-xs space-y-0.5">
                                         <div className="font-medium mb-1">All Methods:</div>
                                         {methodNames.map((name, i) => (
