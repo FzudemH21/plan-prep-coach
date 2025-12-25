@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
 import { Separator } from '@/components/ui/separator';
 import { Plus, X, Pencil, Check } from 'lucide-react';
 import { GoalV2, GOAL_CATEGORIES } from '@/types/goalsV2';
@@ -201,8 +201,8 @@ const COMMON_UNITS = [
             <DialogTitle>Add New Goal</DialogTitle>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 min-h-0 pr-4">
-            <div className="space-y-6 pb-4 px-1">
+          <div className="flex-1 min-h-0 overflow-y-auto pr-4">
+            <div className="space-y-6 pb-6 px-1">
               {/* Goal Name */}
               <div className="space-y-2">
                 <Label htmlFor="goal-name">Goal Name *</Label>
@@ -501,7 +501,7 @@ const COMMON_UNITS = [
                 )}
               </div>
             </div>
-          </ScrollArea>
+          </div>
 
           <DialogFooter className="shrink-0">
             <Button type="button" variant="outline" onClick={handleClose}>
