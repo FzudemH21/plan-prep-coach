@@ -26,7 +26,7 @@ import { ArrowLeft, Plus, Search, Edit2, Trash2, Download, Upload } from 'lucide
 import { useGoalsDataV2 } from '@/hooks/useGoalsDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useToast } from '@/hooks/use-toast';
-import { GoalV2, GOAL_CATEGORIES } from '@/types/goalsV2';
+import { GoalV2, GoalInteraction, GoalMethodV2, GOAL_CATEGORIES } from '@/types/goalsV2';
 import { AddGoalDialogV2 } from '@/components/goals/AddGoalDialogV2';
 import { EditGoalDialogV2 } from '@/components/goals/EditGoalDialogV2';
 
@@ -36,7 +36,6 @@ export default function AthleticismDatabaseV2() {
   const {
     data,
     isLoading,
-    addGoal,
     updateGoal,
     deleteGoal,
     addInteraction,
@@ -46,6 +45,7 @@ export default function AthleticismDatabaseV2() {
     updateGoalMethod,
     removeGoalMethod,
     getMethodsForGoal,
+    saveData,
   } = useGoalsDataV2();
   const { data: toolboxData } = useToolboxData();
 
@@ -88,19 +88,36 @@ export default function AthleticismDatabaseV2() {
     interactions: string[];
     methods: { methodId: string; loadingRecommendations: Record<string, string | number>; rationale?: string }[];
   }) => {
-    // Create the goal first
-    const newGoal = addGoal({ name: goalData.name });
-    
-    // Add all interactions
-    goalData.interactions.forEach((interactingGoalId) => {
-      addInteraction(newGoal.id, interactingGoalId);
+    // Create all data atomically to avoid stale closure issues
+    const newGoalId = Date.now().toString();
+    const newGoal: GoalV2 = {
+      id: newGoalId,
+      name: goalData.name,
+      createdAt: new Date().toISOString(),
+    };
+
+    const newInteractions: GoalInteraction[] = goalData.interactions.map((interactingGoalId, idx) => ({
+      id: (Date.now() + idx + 1).toString(),
+      goalId: newGoalId,
+      interactingGoalId,
+    }));
+
+    const newMethods: GoalMethodV2[] = goalData.methods.map((method, idx) => ({
+      id: (Date.now() + goalData.interactions.length + idx + 1).toString(),
+      goalId: newGoalId,
+      methodId: method.methodId,
+      loadingRecommendations: method.loadingRecommendations,
+      rationale: method.rationale,
+    }));
+
+    // Single atomic save to prevent stale closure overwrites
+    saveData({
+      ...data,
+      goals: [...data.goals, newGoal],
+      interactions: [...data.interactions, ...newInteractions],
+      goalMethods: [...data.goalMethods, ...newMethods],
     });
-    
-    // Add all methods
-    goalData.methods.forEach((method) => {
-      addGoalMethod(newGoal.id, method.methodId, method.loadingRecommendations, method.rationale);
-    });
-    
+
     toast({ title: 'Goal added', description: `"${goalData.name}" has been created.` });
   };
 
