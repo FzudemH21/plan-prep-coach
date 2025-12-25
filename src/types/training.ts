@@ -36,6 +36,8 @@ export interface SmartGoal {
   percentChange: number;
   // Optional link to athlete parameter for auto-fill
   linkedParameterId?: string;
+  // Optional scheduled test dates for this goal
+  testDates?: string[];
   // Optional legacy fields (deprecated)
   specific?: string;
   measurable?: string;

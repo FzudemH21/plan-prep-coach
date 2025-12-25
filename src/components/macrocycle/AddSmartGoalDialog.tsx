@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -44,6 +44,8 @@ interface AddSmartGoalDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAddGoal: (goal: Omit<SmartGoal, 'id'>) => void;
+  onEditGoal?: (goal: SmartGoal) => void;
+  editGoal?: SmartGoal | null;
   athleteParameters: AthleteParameter[];
   parameterDefinitions: ParameterDefinition[];
 }
@@ -54,6 +56,8 @@ export function AddSmartGoalDialog({
   open,
   onOpenChange,
   onAddGoal,
+  onEditGoal,
+  editGoal,
   athleteParameters,
   parameterDefinitions,
 }: AddSmartGoalDialogProps) {
@@ -65,6 +69,34 @@ export function AddSmartGoalDialog({
   const [desiredValue, setDesiredValue] = useState<number | "">("");
   const [unit, setUnit] = useState("");
   const [isCustomMode, setIsCustomMode] = useState(false);
+
+  // Pre-fill form when editing
+  useEffect(() => {
+    if (editGoal) {
+      setDescription(editGoal.description);
+      setBaselineValue(editGoal.baselineValue);
+      setDesiredValue(editGoal.desiredValue);
+      setUnit(editGoal.unit);
+      setSelectedParameterId(editGoal.linkedParameterId || null);
+      setIsCustomMode(!editGoal.linkedParameterId);
+      if (!editGoal.linkedParameterId) {
+        setCustomGoalName(editGoal.description);
+      }
+    }
+  }, [editGoal]);
+
+  // Reset form when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setSelectedParameterId(null);
+      setCustomGoalName("");
+      setDescription("");
+      setBaselineValue("");
+      setDesiredValue("");
+      setUnit("");
+      setIsCustomMode(false);
+    }
+  }, [open]);
 
   // Get athlete's parameters with their details
   const athleteParamsWithDetails = useMemo((): AthleteParameterWithDetails[] => {
@@ -149,36 +181,32 @@ export function AddSmartGoalDialog({
       return;
     }
 
-    onAddGoal({
-      description: goalDescription,
-      baselineValue: typeof baselineValue === "number" ? baselineValue : 0,
-      desiredValue: typeof desiredValue === "number" ? desiredValue : 0,
-      unit,
-      percentChange,
-      linkedParameterId: selectedParameterId || undefined,
-    });
-
-    // Reset form
-    setSelectedParameterId(null);
-    setCustomGoalName("");
-    setDescription("");
-    setBaselineValue("");
-    setDesiredValue("");
-    setUnit("");
-    setIsCustomMode(false);
+    if (editGoal && onEditGoal) {
+      onEditGoal({
+        ...editGoal,
+        description: goalDescription,
+        baselineValue: typeof baselineValue === "number" ? baselineValue : 0,
+        desiredValue: typeof desiredValue === "number" ? desiredValue : 0,
+        unit,
+        percentChange,
+        linkedParameterId: selectedParameterId || undefined,
+      });
+    } else {
+      onAddGoal({
+        description: goalDescription,
+        baselineValue: typeof baselineValue === "number" ? baselineValue : 0,
+        desiredValue: typeof desiredValue === "number" ? desiredValue : 0,
+        unit,
+        percentChange,
+        linkedParameterId: selectedParameterId || undefined,
+      });
+    }
 
     // Auto-close
     onOpenChange(false);
   };
 
   const handleCancel = () => {
-    setSelectedParameterId(null);
-    setCustomGoalName("");
-    setDescription("");
-    setBaselineValue("");
-    setDesiredValue("");
-    setUnit("");
-    setIsCustomMode(false);
     onOpenChange(false);
   };
 
@@ -192,7 +220,7 @@ export function AddSmartGoalDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Target className="h-5 w-5" />
-            Add SMART Goal
+            {editGoal ? "Edit SMART Goal" : "Add SMART Goal"}
           </DialogTitle>
           <DialogDescription>
             Select an existing parameter or create a custom goal.
@@ -379,7 +407,7 @@ export function AddSmartGoalDialog({
             Cancel
           </Button>
           <Button onClick={handleSave} disabled={!isValid}>
-            Add Goal
+            {editGoal ? "Save Changes" : "Add Goal"}
           </Button>
         </DialogFooter>
       </DialogContent>
