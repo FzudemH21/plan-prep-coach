@@ -65,7 +65,8 @@ export default function MacrocyclePage() {
   const [expandedPrimaryGoals, setExpandedPrimaryGoals] = useState<Set<string>>(new Set());
   const [addSubGoalForParent, setAddSubGoalForParent] = useState<string | undefined>(undefined);
   const [editingGoal, setEditingGoal] = useState<SmartGoal | null>(null);
-  const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
+const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
+  const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [addEventMode, setAddEventMode] = useState(false);
 
   // Group sub-goals by parent goal
@@ -704,6 +705,12 @@ export default function MacrocyclePage() {
     const newEvent: Event = { ...event, id: `event-${Date.now()}` };
     setEvents(prev => [...prev, newEvent]);
     toast({ title: 'Event Added', description: `Created event "${event.name}"` });
+  };
+
+  const handleEditEvent = (updatedEvent: Event) => {
+    setEvents(prev => prev.map(e => e.id === updatedEvent.id ? updatedEvent : e));
+    setEditingEvent(null);
+    toast({ title: 'Event Updated', description: `Updated "${updatedEvent.name}"` });
   };
 
   // Test method options for the dialog
@@ -1345,7 +1352,19 @@ export default function MacrocyclePage() {
                                 </Badge>
                               </div>
                             </div>
-                            <div className="flex items-center gap-1 shrink-0">
+                          <div className="flex items-center gap-1 shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingSubGoal(subGoal);
+                                  setIsAddSubGoalDialogOpen(true);
+                                }}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -1424,6 +1443,19 @@ export default function MacrocyclePage() {
                               )}
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingEvent(event);
+                                  setAddEventMode(true);
+                                  setIsAddSubGoalDialogOpen(true);
+                                }}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -1713,6 +1745,7 @@ export default function MacrocyclePage() {
             if (!open) {
               setAddSubGoalForParent(undefined);
               setEditingSubGoal(null);
+              setEditingEvent(null);
               setAddEventMode(false);
             }
           }}
@@ -1720,6 +1753,8 @@ export default function MacrocyclePage() {
           onEditSubGoal={handleEditSubGoal}
           editSubGoal={editingSubGoal}
           onAddEvent={handleAddEvent}
+          onEditEvent={handleEditEvent}
+          editEvent={editingEvent}
           athleteParameters={athleteParams}
           parameterDefinitions={parameterDefinitions}
           subGoalOptions={getSubGoalsFromAthleticismDB()}

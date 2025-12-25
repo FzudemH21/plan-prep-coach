@@ -53,6 +53,8 @@ interface AddSubGoalDialogProps {
   onEditSubGoal?: (subGoal: SubGoal) => void;
   editSubGoal?: SubGoal | null;
   onAddEvent: (event: Omit<Event, 'id'>) => void;
+  onEditEvent?: (event: Event) => void;
+  editEvent?: Event | null;
   athleteParameters: AthleteParameter[];
   parameterDefinitions: ParameterDefinition[];
   subGoalOptions: string[];
@@ -71,6 +73,8 @@ export function AddSubGoalDialog({
   onEditSubGoal,
   editSubGoal,
   onAddEvent,
+  onEditEvent,
+  editEvent,
   athleteParameters,
   parameterDefinitions,
   subGoalOptions,
@@ -112,7 +116,7 @@ export function AddSubGoalDialog({
     setParentGoalId(defaultParentGoalId);
   }, [defaultParentGoalId]);
 
-  // Pre-fill form when editing
+  // Pre-fill form when editing sub-goal
   useEffect(() => {
     if (editSubGoal) {
       setDescription(editSubGoal.description);
@@ -125,6 +129,15 @@ export function AddSubGoalDialog({
       setCategory("subgoal");
     }
   }, [editSubGoal]);
+
+  // Pre-fill form when editing event
+  useEffect(() => {
+    if (editEvent) {
+      setEventName(editEvent.name);
+      setComments(editEvent.comments || "");
+      setCategory("event");
+    }
+  }, [editEvent]);
 
   // Reset form when dialog closes
   useEffect(() => {
@@ -278,12 +291,20 @@ export function AddSubGoalDialog({
     } else {
       if (!eventName.trim()) return;
 
-      onAddEvent({
-        name: eventName.trim(),
-        description: "",
-        eventDates: [],
-        comments,
-      });
+      if (editEvent && onEditEvent) {
+        onEditEvent({
+          ...editEvent,
+          name: eventName.trim(),
+          comments,
+        });
+      } else {
+        onAddEvent({
+          name: eventName.trim(),
+          description: "",
+          eventDates: [],
+          comments,
+        });
+      }
     }
 
     resetForm();
@@ -299,8 +320,8 @@ export function AddSubGoalDialog({
     ? (isCustomMode ? customName : description) || editSubGoal
     : eventName.trim();
 
-  // Determine if we should hide category selector (when opened with defaultParentGoalId, it's always a sub-goal)
-  const hideCategorySelector = !!defaultParentGoalId || !!editSubGoal;
+  // Determine if we should hide category selector (when opened with defaultParentGoalId, it's always a sub-goal, or editing)
+  const hideCategorySelector = !!defaultParentGoalId || !!editSubGoal || !!editEvent;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -312,11 +333,13 @@ export function AddSubGoalDialog({
             ) : (
               <CalendarIcon className="h-5 w-5" />
             )}
-            {editSubGoal ? "Edit Sub-Goal" : `Add ${category === "subgoal" ? "Sub-Goal / Test" : "Event"}`}
+            {editSubGoal ? "Edit Sub-Goal" : editEvent ? "Edit Event" : `Add ${category === "subgoal" ? "Sub-Goal / Test" : "Event"}`}
           </DialogTitle>
           <DialogDescription>
             {editSubGoal 
               ? "Edit the sub-goal details below."
+              : editEvent
+              ? "Edit the event details below."
               : "Add a measurable sub-goal with testing or schedule an event."}
           </DialogDescription>
         </DialogHeader>
