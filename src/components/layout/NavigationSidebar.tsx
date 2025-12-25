@@ -97,6 +97,7 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
     path: "/templates",
     items: [
       { title: "Athleticism Database", path: "/templates/athleticism", icon: Activity },
+      { title: "Athleticism Database (v2)", path: "/templates/athleticism-v2", icon: Activity },
       { title: "Training Toolbox", path: "/templates/toolbox", icon: Wrench },
       { title: "Resistance Training", path: "/templates/libraries/resistancetraining", icon: Dumbbell },
       { title: "Plyometrics", path: "/templates/libraries/plyometrics", icon: Zap },
