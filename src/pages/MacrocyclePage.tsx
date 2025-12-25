@@ -14,7 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
-import { SmartGoal, SubGoal, TrainableQuality, Event } from "@/types/training";
+import { SmartGoal, SubGoal, TrainableQuality, Event, PlanDuration } from "@/types/training";
 import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2, FileText, Check, ChevronsUpDown } from "lucide-react";
 import { 
   getUniqueQualities, 
@@ -27,18 +27,30 @@ import { format, parseISO } from "date-fns";
 import { useAthletes } from "@/hooks/useAthletes";
 import { getAthleteDisplayName, Athlete } from "@/types/athlete";
 import { cn } from "@/lib/utils";
+import { AddSmartGoalDialog } from "@/components/macrocycle/AddSmartGoalDialog";
+
+const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 export default function MacrocyclePage() {
   const { displayMode } = useDisplayMode();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { data: athleticismData } = useAthleticismData();
-  const { athletes, groups } = useAthletes();
+  const { athletes, groups, getAthleteParameters, parameterDefinitions } = useAthletes();
   const [athleteDropdownOpen, setAthleteDropdownOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [planName, setPlanName] = useState<string>("");
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
+  
+  // New state for plan duration and multiple SMART goals
+  const [planDuration, setPlanDuration] = useState<PlanDuration | null>(null);
+  const [smartGoals, setSmartGoals] = useState<SmartGoal[]>([]);
+  const [isAddGoalDialogOpen, setIsAddGoalDialogOpen] = useState(false);
+  const [selectionPhase, setSelectionPhase] = useState<'start' | 'end'>('start');
+  
+  // Legacy state for backward compatibility (will be migrated)
   const [smartGoal, setSmartGoal] = useState<Partial<SmartGoal>>({});
+  
   const [subGoals, setSubGoals] = useState<SubGoal[]>([]);
   const [qualities, setQualities] = useState<TrainableQuality[]>([]);
   const [qualitiesBySubGoal, setQualitiesBySubGoal] = useState<Record<string, { label: string; list: string[] }>>({});
@@ -46,7 +58,6 @@ export default function MacrocyclePage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [selectedTest, setSelectedTest] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
-  const [selectionPhase, setSelectionPhase] = useState<'start' | 'end'>('start');
 
   // Group athletes alphabetically by their groups
   const groupedAthletes = useMemo(() => {
@@ -91,7 +102,26 @@ export default function MacrocyclePage() {
         const data = JSON.parse(savedData);
         setPlanName(data.planName || "");
         setSelectedAthleteId(data.selectedAthleteId || null);
-        // Convert string dates to Date objects when loading from localStorage
+        
+        // Load new planDuration if exists
+        if (data.planDuration) {
+          setPlanDuration({
+            startDate: new Date(data.planDuration.startDate),
+            endDate: new Date(data.planDuration.endDate),
+            totalDays: data.planDuration.totalDays,
+            totalWeeks: data.planDuration.totalWeeks,
+          });
+        }
+        
+        // Load new smartGoals array if exists
+        if (data.smartGoals && Array.isArray(data.smartGoals)) {
+          setSmartGoals(data.smartGoals.map((g: any) => ({
+            ...g,
+            id: g.id || generateId(),
+          })));
+        }
+        
+        // Backward compatibility: migrate old smartGoal to new structure
         const parsedSmartGoal = data.smartGoal || {};
         if (parsedSmartGoal.startDate) {
           parsedSmartGoal.startDate = new Date(parsedSmartGoal.startDate);
@@ -100,6 +130,29 @@ export default function MacrocyclePage() {
           parsedSmartGoal.endDate = new Date(parsedSmartGoal.endDate);
         }
         setSmartGoal(parsedSmartGoal);
+        
+        // If we have old smartGoal data but no new planDuration, migrate it
+        if (!data.planDuration && parsedSmartGoal.startDate && parsedSmartGoal.endDate) {
+          setPlanDuration({
+            startDate: parsedSmartGoal.startDate,
+            endDate: parsedSmartGoal.endDate,
+            totalDays: parsedSmartGoal.totalDays || 1,
+            totalWeeks: parsedSmartGoal.totalWeeks || 1,
+          });
+        }
+        
+        // If we have old smartGoal data but no new smartGoals array, migrate it
+        if (!data.smartGoals && parsedSmartGoal.description) {
+          setSmartGoals([{
+            id: parsedSmartGoal.id || generateId(),
+            description: parsedSmartGoal.description,
+            baselineValue: parsedSmartGoal.baselineValue || 0,
+            desiredValue: parsedSmartGoal.desiredValue || 0,
+            unit: parsedSmartGoal.unit || '',
+            percentChange: parsedSmartGoal.percentChange || 0,
+          }]);
+        }
+        
         const parsedSubGoals = data.subGoals || [];
         setSubGoals(parsedSubGoals);
         const parsedEvents = data.events || [];
@@ -125,10 +178,21 @@ export default function MacrocyclePage() {
 
   // Save data whenever form data changes (continuous saving)
   useEffect(() => {
+    // Build smartGoal for backward compatibility with other pages
+    const legacySmartGoal = smartGoals.length > 0 ? {
+      ...smartGoals[0],
+      startDate: planDuration?.startDate,
+      endDate: planDuration?.endDate,
+      totalDays: planDuration?.totalDays,
+      totalWeeks: planDuration?.totalWeeks,
+    } : smartGoal;
+    
     const macrocycleData = {
       planName,
       selectedAthleteId,
-      smartGoal,
+      planDuration,
+      smartGoals,
+      smartGoal: legacySmartGoal, // Keep for backward compatibility
       subGoals,
       events,
       qualities,
@@ -139,7 +203,7 @@ export default function MacrocyclePage() {
       lastUpdated: new Date().toISOString()
     };
     localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
-  }, [planName, selectedAthleteId, smartGoal, subGoals, events, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest, selectedEvent]);
+  }, [planName, selectedAthleteId, planDuration, smartGoals, smartGoal, subGoals, events, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest, selectedEvent]);
 
   // Save step whenever it changes (step persistence)
   useEffect(() => {
@@ -568,280 +632,304 @@ export default function MacrocyclePage() {
   const progress = (currentStep / totalSteps) * 100;
 
   const selectedAthlete = selectedAthleteId ? athletes.find(a => a.id === selectedAthleteId) : null;
+  
+  // Get athlete parameters for the Add Goal dialog
+  const athleteParams = selectedAthleteId ? getAthleteParameters(selectedAthleteId) : [];
+
+  // Handlers for SMART goals
+  const handleAddGoal = (goal: Omit<SmartGoal, 'id'>) => {
+    setSmartGoals(prev => [...prev, { ...goal, id: generateId() }]);
+  };
+
+  const handleRemoveGoal = (goalId: string) => {
+    setSmartGoals(prev => prev.filter(g => g.id !== goalId));
+  };
+
+  // Calendar handlers for plan duration
+  const handleCalendarSelect = (selectedDate: Date | undefined) => {
+    if (!selectedDate) return;
+
+    if (selectionPhase === 'start' || !planDuration?.startDate) {
+      setPlanDuration({
+        startDate: selectedDate,
+        endDate: selectedDate,
+        totalDays: 1,
+        totalWeeks: 1,
+      });
+      setSelectionPhase('end');
+    } else if (selectionPhase === 'end') {
+      if (selectedDate >= planDuration.startDate) {
+        const totalDays = Math.ceil((selectedDate.getTime() - planDuration.startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        const totalWeeks = Math.ceil(totalDays / 7);
+        
+        setPlanDuration({
+          ...planDuration,
+          endDate: selectedDate,
+          totalDays: totalDays > 0 ? totalDays : 1,
+          totalWeeks: totalWeeks > 0 ? totalWeeks : 1,
+        });
+        setSelectionPhase('start');
+      } else {
+        setPlanDuration({
+          startDate: selectedDate,
+          endDate: selectedDate,
+          totalDays: 1,
+          totalWeeks: 1,
+        });
+        setSelectionPhase('end');
+      }
+    }
+  };
 
   const renderPlanAndGoalSetup = () => (
-    <div className="max-w-2xl mx-auto space-y-6">
-      {/* Left Card: Plan & Athlete Selection */}
+    <div className="space-y-6">
+      {/* Top Row: Plan & Athlete Selection (compact) */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-4">
           <CardTitle className="flex items-center space-x-2">
             <FileText className="h-5 w-5" />
             <span>Plan & Athlete</span>
           </CardTitle>
-          <CardDescription>
-            Name your training plan and select the athlete you'll be working with.
-          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="planName">Plan Name *</Label>
-            <Input
-              id="planName"
-              value={planName}
-              onChange={(e) => setPlanName(e.target.value)}
-              placeholder="e.g., Pre-Season 2025, Off-Season Strength Block"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Select Athlete *</Label>
-            {athletes.length > 0 ? (
-              <Popover open={athleteDropdownOpen} onOpenChange={setAthleteDropdownOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={athleteDropdownOpen}
-                    className="w-full justify-between"
-                  >
-                    {selectedAthlete 
-                      ? `${getAthleteDisplayName(selectedAthlete)}${selectedAthlete.sport ? ` • ${selectedAthlete.sport}` : ''}`
-                      : "Choose an athlete..."}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-popover" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search athletes..." />
-                    <CommandList>
-                      <CommandEmpty>No athletes found.</CommandEmpty>
-                      {Object.entries(groupedAthletes).map(([groupName, groupAthletes]) => (
-                        <CommandGroup key={groupName} heading={groupName}>
-                          {groupAthletes.map((athlete) => (
-                            <CommandItem
-                              key={athlete.id}
-                              value={`${getAthleteDisplayName(athlete)} ${athlete.sport || ''}`}
-                              onSelect={() => {
-                                setSelectedAthleteId(athlete.id);
-                                setAthleteDropdownOpen(false);
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  selectedAthleteId === athlete.id ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                              {getAthleteDisplayName(athlete)}
-                              {athlete.sport && (
-                                <span className="ml-2 text-muted-foreground">• {athlete.sport}</span>
-                              )}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      ))}
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            ) : (
-              <div className="p-4 border border-dashed rounded-lg text-center text-muted-foreground">
-                <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No athletes in your database yet.</p>
-                <Button 
-                  variant="link" 
-                  className="text-primary"
-                  onClick={() => navigate('/athletes')}
-                >
-                  Add an athlete first →
-                </Button>
-              </div>
-            )}
-          </div>
-
-          {selectedAthlete && (
-            <Card className="bg-muted/50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <User className="h-4 w-4" />
-                  Selected Athlete
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-1 text-sm">
-                <p><span className="text-muted-foreground">Name:</span> {getAthleteDisplayName(selectedAthlete)}</p>
-                {selectedAthlete.sport && (
-                  <p><span className="text-muted-foreground">Sport:</span> {selectedAthlete.sport}</p>
-                )}
-                {selectedAthlete.birthday && (
-                  <p><span className="text-muted-foreground">Birthday:</span> {format(new Date(selectedAthlete.birthday), 'PP')}</p>
-                )}
-                {selectedAthlete.occupation && (
-                  <p><span className="text-muted-foreground">Occupation:</span> {selectedAthlete.occupation}</p>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Right Card: S.M.A.R.T. Goal */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Target className="h-5 w-5" />
-            <span>S.M.A.R.T. Goal</span>
-          </CardTitle>
-          <CardDescription>
-            Define a specific, measurable, achievable, relevant, and time-bound training goal.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="goalDescription">Goal Description</Label>
-            <Input
-              id="goalDescription"
-              value={smartGoal.description || ""}
-              onChange={(e) => setSmartGoal({...smartGoal, description: e.target.value})}
-              placeholder="e.g., Improve 100m sprint time from 10.9s to 10.8s in 12 weeks"
-            />
-          </div>
-
+        <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="baselineValue">Baseline Value</Label>
-              <div className="flex space-x-2">
-                <Input
-                  id="baselineValue"
-                  type="number"
-                  step="0.01"
-                  value={smartGoal.baselineValue || ""}
-                  onChange={(e) => setSmartGoal({...smartGoal, baselineValue: parseFloat(e.target.value)})}
-                  placeholder="10.9"
-                />
-                <Input
-                  value={smartGoal.unit || ""}
-                  onChange={(e) => setSmartGoal({...smartGoal, unit: e.target.value})}
-                  placeholder="seconds"
-                  className="w-24"
-                />
-              </div>
+              <Label htmlFor="planName">Plan Name *</Label>
+              <Input
+                id="planName"
+                value={planName}
+                onChange={(e) => setPlanName(e.target.value)}
+                placeholder="e.g., Pre-Season 2025"
+              />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="desiredValue">Target Value</Label>
-              <div className="flex space-x-2">
-                <Input
-                  id="desiredValue"
-                  type="number"
-                  step="0.01"
-                  value={smartGoal.desiredValue || ""}
-                  onChange={(e) => {
-                    const desired = parseFloat(e.target.value);
-                    const baseline = smartGoal.baselineValue || 0;
-                    const percentChange = baseline > 0 ? ((desired - baseline) / baseline) * 100 : 0;
-                    setSmartGoal({...smartGoal, desiredValue: desired, percentChange});
-                  }}
-                  placeholder="10.8"
-                />
-                <div className="w-24 flex items-center">
-                  <Badge variant={smartGoal.percentChange && smartGoal.percentChange < 0 ? "destructive" : "default"}>
-                    {smartGoal.percentChange ? `${smartGoal.percentChange.toFixed(1)}%` : "0%"}
-                  </Badge>
+              <Label>Select Athlete *</Label>
+              {athletes.length > 0 ? (
+                <Popover open={athleteDropdownOpen} onOpenChange={setAthleteDropdownOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={athleteDropdownOpen}
+                      className="w-full justify-between"
+                    >
+                      {selectedAthlete 
+                        ? `${getAthleteDisplayName(selectedAthlete)}${selectedAthlete.sport ? ` • ${selectedAthlete.sport}` : ''}`
+                        : "Choose an athlete..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-popover" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search athletes..." />
+                      <CommandList>
+                        <CommandEmpty>No athletes found.</CommandEmpty>
+                        {Object.entries(groupedAthletes).map(([groupName, groupAthletes]) => (
+                          <CommandGroup key={groupName} heading={groupName}>
+                            {groupAthletes.map((athlete) => (
+                              <CommandItem
+                                key={athlete.id}
+                                value={`${getAthleteDisplayName(athlete)} ${athlete.sport || ''}`}
+                                onSelect={() => {
+                                  setSelectedAthleteId(athlete.id);
+                                  setAthleteDropdownOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    selectedAthleteId === athlete.id ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                {getAthleteDisplayName(athlete)}
+                                {athlete.sport && (
+                                  <span className="ml-2 text-muted-foreground">• {athlete.sport}</span>
+                                )}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        ))}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                <div className="p-4 border border-dashed rounded-lg text-center text-muted-foreground">
+                  <User className="h-6 w-6 mx-auto mb-1 opacity-50" />
+                  <p className="text-sm">No athletes yet.</p>
+                  <Button 
+                    variant="link" 
+                    className="text-primary p-0 h-auto"
+                    onClick={() => navigate('/athletes')}
+                  >
+                    Add an athlete first →
+                  </Button>
                 </div>
-              </div>
+              )}
             </div>
           </div>
-
-          <div className="space-y-2">
-            <Label>Training Plan Duration</Label>
-            <div className="flex justify-center">
-              <div className="border rounded-md p-3 w-fit">
-              <Calendar
-                mode="single"
-                selected={smartGoal.startDate || smartGoal.endDate}
-                onSelect={(selectedDate) => {
-                  if (!selectedDate) return;
-
-                  if (selectionPhase === 'start' || !smartGoal.startDate) {
-                    setSmartGoal({
-                      ...smartGoal,
-                      startDate: selectedDate,
-                      endDate: undefined,
-                      totalDays: undefined,
-                      totalWeeks: undefined
-                    });
-                    setSelectionPhase('end');
-                  } else if (selectionPhase === 'end') {
-                    if (selectedDate >= smartGoal.startDate) {
-                      const totalDays = Math.ceil((selectedDate.getTime() - smartGoal.startDate.getTime()) / (1000 * 60 * 60 * 24));
-                      const totalWeeks = Math.ceil(totalDays / 7);
-                      
-                      setSmartGoal({
-                        ...smartGoal,
-                        endDate: selectedDate,
-                        totalDays: totalDays > 0 ? totalDays : 1,
-                        totalWeeks: totalWeeks > 0 ? totalWeeks : 1
-                      });
-                      setSelectionPhase('start');
-                    } else {
-                      setSmartGoal({
-                        ...smartGoal,
-                        startDate: selectedDate,
-                        endDate: undefined,
-                        totalDays: undefined,
-                        totalWeeks: undefined
-                      });
-                      setSelectionPhase('end');
-                    }
-                  }
-                }}
-                modifiers={{
-                  start: (date) => smartGoal.startDate && date.getTime() === smartGoal.startDate.getTime(),
-                  end: (date) => smartGoal.endDate && date.getTime() === smartGoal.endDate.getTime(),
-                  middle: (date) => {
-                    if (!smartGoal.startDate || !smartGoal.endDate) return false;
-                    return date > smartGoal.startDate && date < smartGoal.endDate;
-                  }
-                }}
-                modifiersStyles={{
-                  start: { 
-                    backgroundColor: 'hsl(var(--foreground))', 
-                    color: 'hsl(var(--background))',
-                    fontWeight: 'bold'
-                  },
-                  end: { 
-                    backgroundColor: 'hsl(var(--foreground))', 
-                    color: 'hsl(var(--background))',
-                    fontWeight: 'bold'
-                  },
-                  middle: { 
-                    backgroundColor: 'hsl(var(--muted))', 
-                    color: 'hsl(var(--muted-foreground))'
-                  }
-                }}
-                className="rounded-md pointer-events-auto"
-              />
-              </div>
-            </div>
-          </div>
-
-          {smartGoal.totalDays && smartGoal.totalWeeks && (
-            <div className="p-4 bg-muted rounded-lg">
-              <h4 className="font-semibold mb-2">Training Plan Duration</h4>
-              <div className="flex space-x-6 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Total Days: </span>
-                  <span className="font-medium">{smartGoal.totalDays}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Total Weeks: </span>
-                  <span className="font-medium">{smartGoal.totalWeeks}</span>
-                </div>
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
+
+      {/* Two Column Layout: SMART Goals (left) + Plan Duration (right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left: SMART Goals List */}
+        <Card className="h-fit">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Target className="h-5 w-5" />
+                <span>SMART Goals</span>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => setIsAddGoalDialogOpen(true)}
+                disabled={!selectedAthleteId}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add Goal
+              </Button>
+            </CardTitle>
+            <CardDescription>
+              Define measurable performance targets for the training plan.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {smartGoals.length === 0 ? (
+              <div className="p-6 border border-dashed rounded-lg text-center text-muted-foreground">
+                <Target className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No goals defined yet.</p>
+                <p className="text-xs mt-1">
+                  {selectedAthleteId 
+                    ? "Click 'Add Goal' to create your first SMART goal."
+                    : "Select an athlete first to add goals."}
+                </p>
+              </div>
+            ) : (
+              smartGoals.map((goal) => (
+                <div
+                  key={goal.id}
+                  className="p-3 border rounded-lg bg-muted/30 flex items-start justify-between gap-3"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium truncate">{goal.description}</span>
+                      <Badge 
+                        variant={goal.percentChange < 0 ? "destructive" : "default"}
+                        className="shrink-0"
+                      >
+                        {goal.percentChange > 0 ? "+" : ""}{goal.percentChange.toFixed(1)}%
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {goal.baselineValue} {goal.unit} → {goal.desiredValue} {goal.unit}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => handleRemoveGoal(goal.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Right: Plan Duration */}
+        <Card className="h-fit">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center space-x-2">
+              <CalendarIcon className="h-5 w-5" />
+              <span>Plan Duration</span>
+            </CardTitle>
+            <CardDescription>
+              Select start and end dates for the training plan.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex justify-center">
+              <div className="border rounded-md p-3 w-fit">
+                <Calendar
+                  mode="single"
+                  selected={planDuration?.startDate || planDuration?.endDate}
+                  onSelect={handleCalendarSelect}
+                  modifiers={{
+                    start: (date) => planDuration?.startDate ? date.getTime() === planDuration.startDate.getTime() : false,
+                    end: (date) => planDuration?.endDate ? date.getTime() === planDuration.endDate.getTime() : false,
+                    middle: (date) => {
+                      if (!planDuration?.startDate || !planDuration?.endDate) return false;
+                      return date > planDuration.startDate && date < planDuration.endDate;
+                    }
+                  }}
+                  modifiersStyles={{
+                    start: { 
+                      backgroundColor: 'hsl(var(--foreground))', 
+                      color: 'hsl(var(--background))',
+                      fontWeight: 'bold'
+                    },
+                    end: { 
+                      backgroundColor: 'hsl(var(--foreground))', 
+                      color: 'hsl(var(--background))',
+                      fontWeight: 'bold'
+                    },
+                    middle: { 
+                      backgroundColor: 'hsl(var(--muted))', 
+                      color: 'hsl(var(--muted-foreground))'
+                    }
+                  }}
+                  className="rounded-md pointer-events-auto"
+                />
+              </div>
+            </div>
+
+            {planDuration && (
+              <div className="p-4 bg-muted rounded-lg">
+                <div className="flex items-center justify-between text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Start: </span>
+                    <span className="font-medium">{format(planDuration.startDate, 'PP')}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">End: </span>
+                    <span className="font-medium">{format(planDuration.endDate, 'PP')}</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-center gap-6 mt-3 pt-3 border-t border-border/50">
+                  <div className="text-center">
+                    <span className="text-2xl font-bold">{planDuration.totalDays}</span>
+                    <span className="text-sm text-muted-foreground ml-1">days</span>
+                  </div>
+                  <div className="text-muted-foreground">•</div>
+                  <div className="text-center">
+                    <span className="text-2xl font-bold">{planDuration.totalWeeks}</span>
+                    <span className="text-sm text-muted-foreground ml-1">weeks</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!planDuration && (
+              <p className="text-sm text-muted-foreground text-center">
+                Click a date to set the start, then click another to set the end.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Add Goal Dialog */}
+      <AddSmartGoalDialog
+        open={isAddGoalDialogOpen}
+        onOpenChange={setIsAddGoalDialogOpen}
+        onAddGoal={handleAddGoal}
+        athleteParameters={athleteParams}
+        parameterDefinitions={parameterDefinitions}
+      />
     </div>
   );
 
