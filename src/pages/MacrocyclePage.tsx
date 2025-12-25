@@ -999,18 +999,20 @@ export default function MacrocyclePage() {
                   }}
                   modifiersStyles={{
                     start: { 
-                      backgroundColor: 'hsl(142 76% 36%)', 
+                      backgroundColor: 'hsl(142 76% 36%)',
                       color: 'white',
-                      fontWeight: 'bold'
+                      fontWeight: 'bold',
+                      borderRadius: '4px'
                     },
                     end: { 
-                      backgroundColor: 'hsl(142 76% 36%)', 
+                      backgroundColor: 'hsl(142 76% 36%)',
                       color: 'white',
-                      fontWeight: 'bold'
+                      fontWeight: 'bold',
+                      borderRadius: '4px'
                     },
                     middle: { 
-                      backgroundColor: 'hsl(142 76% 90%)', 
-                      color: 'hsl(142 76% 25%)'
+                      backgroundColor: 'hsl(var(--muted))',
+                      color: 'hsl(var(--foreground))'
                     },
                     goalScheduled: {
                       backgroundColor: 'hsl(38 92% 50%)',
