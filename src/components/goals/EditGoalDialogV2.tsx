@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
 import { Separator } from '@/components/ui/separator';
 import { Plus, X, Pencil, Check } from 'lucide-react';
 import { GoalV2, GoalInteraction, GoalMethodV2, GOAL_CATEGORIES } from '@/types/goalsV2';
@@ -172,13 +172,13 @@ export function EditGoalDialogV2({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[600px] max-h-[85vh] flex flex-col">
-          <DialogHeader>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-[600px] max-h-[85vh] overflow-hidden flex flex-col mx-4 sm:mx-auto">
+          <DialogHeader className="shrink-0">
             <DialogTitle>Edit Goal</DialogTitle>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 max-h-[60vh] pr-4">
-            <div className="space-y-6 pb-4 px-1">
+          <div className="flex-1 min-h-0 overflow-y-auto pr-4">
+            <div className="space-y-6 pb-6 px-1">
               {/* Basic Info */}
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
@@ -486,9 +486,9 @@ export function EditGoalDialogV2({
                 )}
               </div>
             </div>
-          </ScrollArea>
+          </div>
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0">
             <Button onClick={() => onOpenChange(false)}>Done</Button>
           </DialogFooter>
         </DialogContent>
