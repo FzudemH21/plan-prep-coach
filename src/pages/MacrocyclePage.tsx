@@ -570,7 +570,7 @@ export default function MacrocyclePage() {
   const selectedAthlete = selectedAthleteId ? athletes.find(a => a.id === selectedAthleteId) : null;
 
   const renderPlanAndGoalSetup = () => (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className="max-w-2xl mx-auto space-y-6">
       {/* Left Card: Plan & Athlete Selection */}
       <Card>
         <CardHeader>
