@@ -4,7 +4,7 @@ export interface GoalV2 {
   id: string;
   name: string;                    // "1RM Front Squat", "100m Sprint Time"
   unit?: string;                   // "kg", "s", "cm", etc.
-  category?: GoalCategory;         // Category for organization
+  category?: string;               // Category for organization (can be custom)
   createdAt: string;
 }
 
