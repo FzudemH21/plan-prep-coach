@@ -83,8 +83,24 @@ export default function AthleticismDatabaseV2() {
     return { interactingGoalNames, methodNames };
   };
 
-  const handleAddGoal = (goalData: { name: string; unit?: string; category?: any }) => {
-    addGoal(goalData);
+  const handleAddGoal = (goalData: {
+    name: string;
+    interactions: string[];
+    methods: { methodId: string; loadingRecommendations: Record<string, string | number>; rationale?: string }[];
+  }) => {
+    // Create the goal first
+    const newGoal = addGoal({ name: goalData.name });
+    
+    // Add all interactions
+    goalData.interactions.forEach((interactingGoalId) => {
+      addInteraction(newGoal.id, interactingGoalId);
+    });
+    
+    // Add all methods
+    goalData.methods.forEach((method) => {
+      addGoalMethod(newGoal.id, method.methodId, method.loadingRecommendations, method.rationale);
+    });
+    
     toast({ title: 'Goal added', description: `"${goalData.name}" has been created.` });
   };
 
@@ -195,7 +211,7 @@ export default function AthleticismDatabaseV2() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[30%]">Goal / Parameter</TableHead>
+                  <TableHead className="w-[30%]">Goal</TableHead>
                   <TableHead className="w-[30%]">Interacting Goals</TableHead>
                   <TableHead className="w-[30%]">Associated Methods</TableHead>
                   <TableHead className="w-[10%] text-right">Actions</TableHead>
@@ -304,6 +320,8 @@ export default function AthleticismDatabaseV2() {
       <AddGoalDialogV2
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
+        allGoals={data.goals}
+        toolboxEntries={toolboxData.entries}
         onAdd={handleAddGoal}
       />
 
