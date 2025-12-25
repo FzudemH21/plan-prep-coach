@@ -9,18 +9,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Plus, X, Pencil, Check } from 'lucide-react';
-import { GoalV2, GoalInteraction, GoalMethodV2, GoalCategory, GOAL_CATEGORIES } from '@/types/goalsV2';
+import { GoalV2, GoalInteraction, GoalMethodV2, GOAL_CATEGORIES } from '@/types/goalsV2';
 import { ToolboxEntry } from '@/types/toolbox';
 import { MethodParametersDialog } from './MethodParametersDialog';
 import {
@@ -42,8 +35,8 @@ interface EditGoalDialogV2Props {
   onOpenChange: (open: boolean) => void;
   goal: GoalV2;
   allGoals: GoalV2[];
-  interactions: GoalInteraction[];
-  goalMethods: GoalMethodV2[];
+  allInteractions: GoalInteraction[];
+  allGoalMethods: GoalMethodV2[];
   toolboxEntries: ToolboxEntry[];
   onUpdateGoal: (updates: Partial<GoalV2>) => void;
   onAddInteraction: (interactingGoalId: string) => void;
@@ -63,8 +56,8 @@ export function EditGoalDialogV2({
   onOpenChange,
   goal,
   allGoals,
-  interactions,
-  goalMethods,
+  allInteractions,
+  allGoalMethods,
   toolboxEntries,
   onUpdateGoal,
   onAddInteraction,
@@ -76,12 +69,24 @@ export function EditGoalDialogV2({
   const [name, setName] = useState(goal.name);
   const [unit, setUnit] = useState(goal.unit || '');
   const [customUnit, setCustomUnit] = useState('');
-  const [category, setCategory] = useState<GoalCategory | ''>(goal.category || '');
+  const [category, setCategory] = useState(goal.category || '');
   const [goalSearchOpen, setGoalSearchOpen] = useState(false);
   const [methodSearchOpen, setMethodSearchOpen] = useState(false);
+  const [unitSearchOpen, setUnitSearchOpen] = useState(false);
+  const [categorySearchOpen, setCategorySearchOpen] = useState(false);
   
   // State for the method parameters dialog
   const [editingMethodId, setEditingMethodId] = useState<string | null>(null);
+
+  // Filter interactions and methods for this goal
+  const interactions = useMemo(() => 
+    allInteractions.filter((i) => i.goalId === goal.id),
+    [allInteractions, goal.id]
+  );
+  const goalMethods = useMemo(() => 
+    allGoalMethods.filter((m) => m.goalId === goal.id),
+    [allGoalMethods, goal.id]
+  );
 
   useEffect(() => {
     setName(goal.name);
@@ -193,61 +198,120 @@ export function EditGoalDialogV2({
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
                       <Label>Unit</Label>
-                      <Select
-                        value={COMMON_UNITS.includes(unit) ? unit : unit ? 'custom' : ''}
-                        onValueChange={(v) => {
-                          if (v === 'custom') {
-                            setUnit('custom');
-                            setCustomUnit(unit);
-                          } else {
-                            setUnit(v);
-                            setTimeout(handleSave, 0);
-                          }
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select unit" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {COMMON_UNITS.map((u) => (
-                            <SelectItem key={u} value={u}>
-                              {u}
-                            </SelectItem>
-                          ))}
-                          <SelectItem value="custom">Custom...</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {unit === 'custom' && (
-                        <Input
-                          value={customUnit}
-                          onChange={(e) => setCustomUnit(e.target.value)}
-                          onBlur={handleSave}
-                          placeholder="Enter custom unit"
-                          className="mt-2"
-                        />
-                      )}
+                      <Popover open={unitSearchOpen} onOpenChange={setUnitSearchOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={unitSearchOpen}
+                            className="w-full justify-between font-normal"
+                          >
+                            {unit || "Select unit..."}
+                            <span className="ml-2 h-4 w-4 shrink-0 opacity-50">▼</span>
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-48 p-0" align="start">
+                          <Command>
+                            <CommandInput 
+                              placeholder="Search or type..." 
+                              onValueChange={(search) => {
+                                // Allow setting custom value directly
+                                if (search && !COMMON_UNITS.includes(search)) {
+                                  setUnit(search);
+                                }
+                              }}
+                            />
+                            <CommandList>
+                              <CommandEmpty>
+                                <button
+                                  className="w-full text-left px-2 py-1.5 text-sm hover:bg-accent rounded"
+                                  onClick={() => {
+                                    setUnitSearchOpen(false);
+                                    setTimeout(handleSave, 0);
+                                  }}
+                                >
+                                  Use "{unit}" as custom unit
+                                </button>
+                              </CommandEmpty>
+                              <CommandGroup>
+                                {COMMON_UNITS.map((u) => (
+                                  <CommandItem
+                                    key={u}
+                                    onSelect={() => {
+                                      setUnit(u);
+                                      setUnitSearchOpen(false);
+                                      setTimeout(handleSave, 0);
+                                    }}
+                                  >
+                                    {u}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
 
                     <div className="space-y-2">
                       <Label>Category</Label>
-                      <Select
-                        value={category}
-                        onValueChange={(v) => {
-                          setCategory(v as GoalCategory);
-                          setTimeout(handleSave, 0);
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {GOAL_CATEGORIES.map((cat) => (
-                            <SelectItem key={cat.value} value={cat.value}>
-                              {cat.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Popover open={categorySearchOpen} onOpenChange={setCategorySearchOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={categorySearchOpen}
+                            className="w-full justify-between font-normal"
+                          >
+                            {GOAL_CATEGORIES.find((c) => c.value === category)?.label || category || "Select category..."}
+                            <span className="ml-2 h-4 w-4 shrink-0 opacity-50">▼</span>
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-48 p-0" align="start">
+                          <Command>
+                            <CommandInput 
+                              placeholder="Search or type..." 
+                              onValueChange={(search) => {
+                                // Allow setting custom value directly
+                                const predefined = GOAL_CATEGORIES.find((c) => 
+                                  c.label.toLowerCase() === search.toLowerCase() || 
+                                  c.value === search.toLowerCase()
+                                );
+                                if (!predefined && search) {
+                                  setCategory(search);
+                                }
+                              }}
+                            />
+                            <CommandList>
+                              <CommandEmpty>
+                                <button
+                                  className="w-full text-left px-2 py-1.5 text-sm hover:bg-accent rounded"
+                                  onClick={() => {
+                                    setCategorySearchOpen(false);
+                                    setTimeout(handleSave, 0);
+                                  }}
+                                >
+                                  Use "{category}" as custom category
+                                </button>
+                              </CommandEmpty>
+                              <CommandGroup>
+                                {GOAL_CATEGORIES.map((cat) => (
+                                  <CommandItem
+                                    key={cat.value}
+                                    onSelect={() => {
+                                      setCategory(cat.value);
+                                      setCategorySearchOpen(false);
+                                      setTimeout(handleSave, 0);
+                                    }}
+                                  >
+                                    {cat.label}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
                 </div>

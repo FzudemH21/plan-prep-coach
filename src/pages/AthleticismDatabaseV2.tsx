@@ -85,6 +85,8 @@ export default function AthleticismDatabaseV2() {
 
   const handleAddGoal = (goalData: {
     name: string;
+    unit?: string;
+    category?: string;
     interactions: string[];
     methods: { methodId: string; loadingRecommendations: Record<string, string | number>; rationale?: string }[];
   }) => {
@@ -93,6 +95,8 @@ export default function AthleticismDatabaseV2() {
     const newGoal: GoalV2 = {
       id: newGoalId,
       name: goalData.name,
+      unit: goalData.unit,
+      category: goalData.category,
       createdAt: new Date().toISOString(),
     };
 
@@ -228,16 +232,17 @@ export default function AthleticismDatabaseV2() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[30%]">Goal</TableHead>
-                  <TableHead className="w-[30%]">Interacting Goals</TableHead>
-                  <TableHead className="w-[30%]">Associated Methods</TableHead>
+                  <TableHead className="w-[15%]">Category</TableHead>
+                  <TableHead className="w-[25%]">Goal</TableHead>
+                  <TableHead className="w-[25%]">Interacting Goals</TableHead>
+                  <TableHead className="w-[25%]">Associated Methods</TableHead>
                   <TableHead className="w-[10%] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredGoals.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
                       {searchTerm
                         ? 'No goals match your search.'
                         : 'No goals yet. Click "Add Goal" to create one.'}
@@ -246,25 +251,27 @@ export default function AthleticismDatabaseV2() {
                 ) : (
                   filteredGoals.map((goal) => {
                     const { interactingGoalNames, methodNames } = getGoalDisplayInfo(goal);
-                    const categoryLabel = GOAL_CATEGORIES.find((c) => c.value === goal.category)?.label;
+                    const categoryLabel = GOAL_CATEGORIES.find((c) => c.value === goal.category)?.label || goal.category;
 
                     return (
                       <TableRow key={goal.id}>
                         <TableCell>
+                          {categoryLabel ? (
+                            <Badge variant="secondary" className="text-xs">
+                              {categoryLabel}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
                           <div className="space-y-1">
                             <div className="font-medium">{goal.name}</div>
-                            <div className="flex gap-1 flex-wrap">
-                              {goal.unit && (
-                                <Badge variant="outline" className="text-xs">
-                                  {goal.unit}
-                                </Badge>
-                              )}
-                              {categoryLabel && (
-                                <Badge variant="secondary" className="text-xs">
-                                  {categoryLabel}
-                                </Badge>
-                              )}
-                            </div>
+                            {goal.unit && (
+                              <Badge variant="outline" className="text-xs">
+                                {goal.unit}
+                              </Badge>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -349,8 +356,8 @@ export default function AthleticismDatabaseV2() {
           onOpenChange={(open) => !open && setEditingGoal(null)}
           goal={editingGoal}
           allGoals={data.goals}
-          interactions={getInteractionsForGoal(editingGoal.id)}
-          goalMethods={getMethodsForGoal(editingGoal.id)}
+          allInteractions={data.interactions}
+          allGoalMethods={data.goalMethods}
           toolboxEntries={toolboxData.entries}
           onUpdateGoal={(updates) => updateGoal(editingGoal.id, updates)}
           onAddInteraction={(interactingGoalId) => addInteraction(editingGoal.id, interactingGoalId)}
