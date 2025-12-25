@@ -12,6 +12,7 @@ import MesocyclePage from "./pages/MesocyclePage";
 import MicrocyclePlanningPage from "./pages/MicrocyclePlanningPage";
 import TemplatesPage from "./pages/TemplatesPage";
 import AthleticismDatabase from "./pages/AthleticismDatabase";
+import AthleticismDatabaseV2 from "./pages/AthleticismDatabaseV2";
 import ToolboxDatabase from "./pages/ToolboxDatabase";
 import ExerciseLibrary from "./pages/ExerciseLibrary";
 import PlyometricsLibrary from "./pages/PlyometricsLibrary";
@@ -38,6 +39,7 @@ const App = () => (
               <Route path="/athletes" element={<AthleteDatabase />} />
               <Route path="/templates" element={<TemplatesPage />} />
               <Route path="/templates/athleticism" element={<AthleticismDatabase />} />
+              <Route path="/templates/athleticism-v2" element={<AthleticismDatabaseV2 />} />
               <Route path="/templates/toolbox" element={<ToolboxDatabase />} />
               
               <Route path="/templates/libraries/resistancetraining" element={<ExerciseLibrary />} />
