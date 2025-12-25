@@ -24,7 +24,7 @@ import {
 import { useDisplayMode } from "@/contexts/DisplayModeContext";
 import { useAthleticismData } from "@/hooks/useAthleticismData";
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, addDays } from "date-fns";
 import { useAthletes } from "@/hooks/useAthletes";
 import { getAthleteDisplayName, Athlete } from "@/types/athlete";
 import { cn } from "@/lib/utils";
@@ -1476,12 +1476,34 @@ export default function MacrocyclePage() {
                     return date < planDuration.startDate || date > planDuration.endDate;
                   }}
                   modifiers={{
+                    start: planDuration.startDate,
+                    end: planDuration.endDate,
+                    middle: { 
+                      from: addDays(planDuration.startDate, 1), 
+                      to: addDays(planDuration.endDate, -1) 
+                    },
                     scheduled: subGoals
                       .flatMap(sg => sg.testDates || [])
                       .concat(events.flatMap(e => e.eventDates || []))
                       .map(dateStr => parseISO(dateStr))
                   }}
                   modifiersStyles={{
+                    start: { 
+                      backgroundColor: 'hsl(142 76% 36%)',
+                      color: 'white',
+                      fontWeight: 'bold',
+                      borderRadius: '4px'
+                    },
+                    end: { 
+                      backgroundColor: 'hsl(142 76% 36%)',
+                      color: 'white',
+                      fontWeight: 'bold',
+                      borderRadius: '4px'
+                    },
+                    middle: { 
+                      backgroundColor: 'hsl(var(--muted))',
+                      color: 'hsl(var(--foreground))'
+                    },
                     scheduled: { 
                       backgroundColor: 'hsl(var(--primary) / 0.1)',
                       color: 'hsl(var(--primary))',
