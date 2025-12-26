@@ -100,23 +100,56 @@ export function EditGoalDialogV2({
     (g) => g.id !== goal.id && !interactingGoalIds.includes(g.id)
   );
 
-  // Get unique methods from toolbox (category - subCategory)
+  // Get unique methods from toolbox with structured data
   const availableMethods = useMemo(() => {
-    const methodMap = new Map<string, string>();
+    const methodMap = new Map<string, { category: string; subCategory: string }>();
     toolboxEntries.forEach((entry) => {
-      const methodId = `${entry.category} - ${entry.subCategory}`;
+      // Create method ID without awkward trailing dash for methods with no subcategory
+      const methodId = entry.subCategory 
+        ? `${entry.category} - ${entry.subCategory}`
+        : entry.category;
       if (!methodMap.has(methodId)) {
-        methodMap.set(methodId, methodId);
+        methodMap.set(methodId, { 
+          category: entry.category, 
+          subCategory: entry.subCategory || '' 
+        });
       }
     });
-    return Array.from(methodMap.keys()).sort();
+    return methodMap;
   }, [toolboxEntries]);
 
   // Filter out already added methods
   const addedMethodIds = goalMethods.map((m) => m.methodId);
-  const selectableMethods = availableMethods.filter(
-    (m) => !addedMethodIds.includes(m)
+  const selectableMethods = useMemo(() => 
+    Array.from(availableMethods.keys()).filter((m) => !addedMethodIds.includes(m)),
+    [availableMethods, addedMethodIds]
   );
+
+  // Group methods by category for hierarchical display
+  const groupedMethods = useMemo(() => {
+    const groups = new Map<string, { methodId: string; subCategory: string }[]>();
+    
+    selectableMethods.forEach((methodId) => {
+      const methodInfo = availableMethods.get(methodId);
+      if (methodInfo) {
+        const { category, subCategory } = methodInfo;
+        if (!groups.has(category)) {
+          groups.set(category, []);
+        }
+        groups.get(category)!.push({ methodId, subCategory });
+      }
+    });
+    
+    // Sort groups alphabetically and sort items within each group
+    const sortedGroups = new Map<string, { methodId: string; subCategory: string }[]>();
+    Array.from(groups.keys()).sort().forEach((category) => {
+      const items = groups.get(category)!;
+      items.sort((a, b) => a.subCategory.localeCompare(b.subCategory));
+      sortedGroups.set(category, items);
+    });
+    
+    return sortedGroups;
+  }, [selectableMethods, availableMethods]);
 
   // Get parameters for a method from toolbox
   const getMethodParameters = (methodId: string) => {
@@ -406,21 +439,23 @@ export function EditGoalDialogV2({
                     <PopoverContent className="w-80 p-0" align="end">
                       <Command>
                         <CommandInput placeholder="Search methods..." />
-                        <CommandList>
+                        <CommandList className="max-h-64">
                           <CommandEmpty>No methods found.</CommandEmpty>
-                          <CommandGroup>
-                            {selectableMethods.map((methodId) => (
-                              <CommandItem
-                                key={methodId}
-                                onSelect={() => {
-                                  onAddMethod(methodId);
-                                  setMethodSearchOpen(false);
-                                }}
-                              >
-                                {methodId}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
+                          {Array.from(groupedMethods.entries()).map(([category, methods]) => (
+                            <CommandGroup key={category} heading={category}>
+                              {methods.map(({ methodId, subCategory }) => (
+                                <CommandItem
+                                  key={methodId}
+                                  onSelect={() => {
+                                    onAddMethod(methodId);
+                                    setMethodSearchOpen(false);
+                                  }}
+                                >
+                                  {subCategory || '(General)'}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          ))}
                         </CommandList>
                       </Command>
                     </PopoverContent>
