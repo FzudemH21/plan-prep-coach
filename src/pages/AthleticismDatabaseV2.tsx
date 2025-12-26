@@ -13,12 +13,6 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -72,22 +66,6 @@ export default function AthleticismDatabaseV2() {
     );
   }, [data.parameters, searchTerm]);
 
-  // Get display info for a parameter
-  const getParameterDisplayInfo = (parameter: ParameterV2) => {
-    const interactions = getInteractionsForParameter(parameter.id);
-    const methods = getMethodsForParameter(parameter.id);
-
-    const interactingParameterNames = interactions
-      .map((i) => {
-        const p = data.parameters.find((x) => x.id === i.interactingParameterId);
-        return p?.name || '';
-      })
-      .filter(Boolean);
-
-    const methodNames = methods.map((m) => m.methodId);
-
-    return { interactingParameterNames, methodNames };
-  };
 
   const handleAddParameter = (parameterData: {
     name: string;
@@ -237,17 +215,15 @@ export default function AthleticismDatabaseV2() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[15%]">Category</TableHead>
-                  <TableHead className="w-[25%]">Parameter</TableHead>
-                  <TableHead className="w-[25%]">Interacting Parameters</TableHead>
-                  <TableHead className="w-[25%]">Associated Methods</TableHead>
-                  <TableHead className="w-[10%] text-right">Actions</TableHead>
+                  <TableHead className="w-[20%]">Category</TableHead>
+                  <TableHead className="w-[50%]">Parameter</TableHead>
+                  <TableHead className="w-[30%] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredParameters.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={3} className="text-center py-12 text-muted-foreground">
                       {searchTerm
                         ? 'No parameters match your search.'
                         : 'No parameters yet. Click "Add Parameter" to create one.'}
@@ -255,7 +231,6 @@ export default function AthleticismDatabaseV2() {
                   </TableRow>
                 ) : (
                   filteredParameters.map((parameter) => {
-                    const { interactingParameterNames, methodNames } = getParameterDisplayInfo(parameter);
                     const categoryLabel = PARAMETER_CATEGORIES.find((c) => c.value === parameter.category)?.label || parameter.category;
 
                     return (
@@ -278,74 +253,6 @@ export default function AthleticismDatabaseV2() {
                               </span>
                             )}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          {interactingParameterNames.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {interactingParameterNames.slice(0, 3).map((name, i) => (
-                                <Badge key={i} variant="outline" className="text-[10px] px-1.5 py-0">
-                                  {name}
-                                </Badge>
-                              ))}
-                              {interactingParameterNames.length > 3 && (
-                                <TooltipProvider delayDuration={0}>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <button type="button" className="inline-flex" aria-label="Show all interacting parameters">
-                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 cursor-pointer">
-                                          +{interactingParameterNames.length - 3} more
-                                        </Badge>
-                                      </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top" className="max-w-[300px] z-[100]">
-                                      <div className="text-xs space-y-0.5">
-                                        <div className="font-medium mb-1">All Interacting Parameters:</div>
-                                        {interactingParameterNames.map((name, i) => (
-                                          <div key={i}>• {name}</div>
-                                        ))}
-                                      </div>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground text-sm">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {methodNames.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {methodNames.slice(0, 2).map((name, i) => (
-                                <Badge key={i} variant="secondary" className="text-[10px] px-1.5 py-0">
-                                  {name}
-                                </Badge>
-                              ))}
-                              {methodNames.length > 2 && (
-                                <TooltipProvider delayDuration={0}>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <button type="button" className="inline-flex" aria-label="Show all methods">
-                                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 cursor-pointer">
-                                          +{methodNames.length - 2} more
-                                        </Badge>
-                                      </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top" className="max-w-[300px] z-[100]">
-                                      <div className="text-xs space-y-0.5">
-                                        <div className="font-medium mb-1">All Methods:</div>
-                                        {methodNames.map((name, i) => (
-                                          <div key={i}>• {name}</div>
-                                        ))}
-                                      </div>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground text-sm">—</span>
-                          )}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
