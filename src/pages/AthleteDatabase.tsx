@@ -81,6 +81,13 @@ export default function AthleteDatabase() {
           getAthletesByGroup={athleteData.getAthletesByGroup}
           getAthletesWithoutGroup={athleteData.getAthletesWithoutGroup}
           onCreateAthlete={() => handleCreateAthlete()}
+          onDeleteAthlete={(athleteId) => {
+            athleteData.deleteAthlete(athleteId);
+            if (selectedAthleteId === athleteId) {
+              setSelectedAthleteId(null);
+              setIsNewAthlete(false);
+            }
+          }}
         />
       </div>
 
