@@ -746,6 +746,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   // State for create parameter dialog
   const [isCreateParameterDialogOpen, setIsCreateParameterDialogOpen] = useState(false);
   const [pendingGoalAfterParameterCreation, setPendingGoalAfterParameterCreation] = useState(false);
+  const [shouldReopenSubGoalDialog, setShouldReopenSubGoalDialog] = useState(false);
 
   // Handler for creating a new parameter from the goal dialog
   const handleCreateParameter = (paramData: {
@@ -844,6 +845,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   // Handler to open parameter creation dialog for adding new parameter as sub-goal
   const handleOpenCreateParameterForSubGoal = (parentGoalId: string | undefined) => {
     setCreateParameterForGoalId(parentGoalId || null);
+    setAddSubGoalForParent(parentGoalId); // Remember the parent for re-opening
+    setShouldReopenSubGoalDialog(true);
     setIsCreateParameterDialogOpen(true);
   };
 
@@ -1924,7 +1927,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           editEvent={editingEvent}
           athleticismParameters={parametersDataV2.parameters}
           athletePerformanceParams={athletePerformanceParams}
-          testMethodOptions={testMethodOptions}
           smartGoals={smartGoals}
           defaultParentGoalId={addSubGoalForParent}
           defaultCategory={addEventMode ? "event" : undefined}
@@ -1934,7 +1936,14 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         {/* Create Parameter Dialog for Sub-Goals */}
         <AddParameterDialogV2
           open={isCreateParameterDialogOpen}
-          onOpenChange={setIsCreateParameterDialogOpen}
+          onOpenChange={(open) => {
+            setIsCreateParameterDialogOpen(open);
+            // If closing without saving and we came from sub-goal dialog, reopen it
+            if (!open && shouldReopenSubGoalDialog) {
+              setShouldReopenSubGoalDialog(false);
+              setIsAddSubGoalDialogOpen(true);
+            }
+          }}
           allParameters={parametersDataV2.parameters}
           toolboxEntries={toolboxData.entries}
           onAdd={handleParameterCreatedAsSubGoal}

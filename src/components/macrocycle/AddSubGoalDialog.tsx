@@ -26,13 +26,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Check, ChevronsUpDown, Target, CalendarIcon, Pencil, Plus } from "lucide-react";
+import { Check, ChevronsUpDown, Target, CalendarIcon, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SubGoal, Event, SmartGoal } from "@/types/training";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ParameterV2 } from "@/types/parametersV2";
 import { AthletePerformanceParameter } from "@/types/athlete";
-import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
+
 
 type ItemCategory = "subgoal" | "event";
 
@@ -49,7 +49,6 @@ interface AddSubGoalDialogProps {
   athleticismParameters: ParameterV2[];
   // Athlete's current performance values
   athletePerformanceParams?: AthletePerformanceParameter[];
-  testMethodOptions: string[];
   smartGoals: SmartGoal[];
   defaultParentGoalId?: string;
   defaultCategory?: ItemCategory;
@@ -69,7 +68,6 @@ export function AddSubGoalDialog({
   editEvent,
   athleticismParameters,
   athletePerformanceParams,
-  testMethodOptions,
   smartGoals,
   defaultParentGoalId,
   defaultCategory,
@@ -82,12 +80,9 @@ export function AddSubGoalDialog({
   const [comboboxOpen, setComboboxOpen] = useState(false);
   const [selectedParameterId, setSelectedParameterId] = useState<string | null>(null);
   const [description, setDescription] = useState("");
-  const [isCustomMode, setIsCustomMode] = useState(false);
-  const [customName, setCustomName] = useState("");
   const [comments, setComments] = useState("");
   
   // Sub-goal specific state
-  const [testMethod, setTestMethod] = useState("");
   const [preTestValue, setPreTestValue] = useState<number | "">("");
   const [goalValue, setGoalValue] = useState<number | "">("");
   const [unit, setUnit] = useState("");
@@ -112,7 +107,6 @@ export function AddSubGoalDialog({
   useEffect(() => {
     if (editSubGoal) {
       setDescription(editSubGoal.description);
-      setTestMethod(editSubGoal.testMethod);
       setPreTestValue(editSubGoal.preTestValue);
       setGoalValue(editSubGoal.goalValue);
       setUnit(editSubGoal.unit);
@@ -138,10 +132,7 @@ export function AddSubGoalDialog({
       setComboboxOpen(false);
       setSelectedParameterId(null);
       setDescription("");
-      setIsCustomMode(false);
-      setCustomName("");
       setComments("");
-      setTestMethod("");
       setPreTestValue("");
       setGoalValue("");
       setUnit("");
@@ -214,8 +205,6 @@ export function AddSubGoalDialog({
     setSelectedParameterId(param.id);
     setDescription(param.name);
     setUnit(param.unit);
-    setIsCustomMode(false);
-    setCustomName("");
     
     // Auto-fill pre-test value if athlete has recorded values for this parameter
     if (param.latestValue && param.hasAthleteValue) {
@@ -230,25 +219,12 @@ export function AddSubGoalDialog({
     setComboboxOpen(false);
   };
 
-  const handleEnterCustomMode = () => {
-    setIsCustomMode(true);
-    setSelectedParameterId(null);
-    setDescription("");
-    setPreTestValue("");
-    setGoalValue("");
-    setUnit("");
-    setComboboxOpen(false);
-  };
-
   const resetForm = () => {
     setCategory(defaultCategory || "subgoal");
     setComboboxOpen(false);
     setSelectedParameterId(null);
     setDescription("");
-    setIsCustomMode(false);
-    setCustomName("");
     setComments("");
-    setTestMethod("");
     setPreTestValue("");
     setGoalValue("");
     setUnit("");
@@ -258,7 +234,7 @@ export function AddSubGoalDialog({
 
   const handleSave = () => {
     if (category === "subgoal") {
-      const goalDescription = isCustomMode ? customName : description;
+      const goalDescription = description;
       
       if (!goalDescription && !editSubGoal) return;
 
@@ -267,7 +243,7 @@ export function AddSubGoalDialog({
           ...editSubGoal,
           parentGoalId: parentGoalId || undefined,
           description: goalDescription || editSubGoal.description,
-          testMethod,
+          testMethod: '',
           preTestValue: typeof preTestValue === "number" ? preTestValue : 0,
           goalValue: typeof goalValue === "number" ? goalValue : 0,
           unit,
@@ -278,7 +254,7 @@ export function AddSubGoalDialog({
         onAddSubGoal({
           parentGoalId: parentGoalId || undefined,
           description: goalDescription,
-          testMethod,
+          testMethod: '',
           preTestValue: typeof preTestValue === "number" ? preTestValue : 0,
           goalValue: typeof goalValue === "number" ? goalValue : 0,
           unit,
@@ -316,7 +292,7 @@ export function AddSubGoalDialog({
   };
 
   const isValid = category === "subgoal" 
-    ? (isCustomMode ? customName : description) || editSubGoal
+    ? description || editSubGoal
     : eventName.trim();
 
   // Determine if we should hide category selector (when opened with defaultParentGoalId, it's always a sub-goal, or editing)
@@ -347,32 +323,9 @@ export function AddSubGoalDialog({
 
           {category === "subgoal" ? (
             <>
-              {/* Parent Goal Selector */}
-              {smartGoals.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Related Primary Goal (optional)</Label>
-                  <Select
-                    value={parentGoalId || "none"}
-                    onValueChange={(val) => setParentGoalId(val === "none" ? undefined : val)}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select primary goal..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None (Standalone sub-goal)</SelectItem>
-                      {smartGoals.map((goal) => (
-                        <SelectItem key={goal.id} value={goal.id}>
-                          {goal.description} ({goal.baselineValue} → {goal.desiredValue} {goal.unit})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              
-              {/* Sub-Goal Parameter / Description Selector */}
+              {/* Parameter Description Selector */}
               <div className="space-y-2">
-                <Label>Sub-Goal Description</Label>
+                <Label>Parameter Description</Label>
                 <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -381,15 +334,10 @@ export function AddSubGoalDialog({
                       aria-expanded={comboboxOpen}
                       className="w-full justify-between"
                     >
-                      {isCustomMode ? (
-                        <span className="flex items-center gap-2">
-                          <Pencil className="h-4 w-4" />
-                          Custom: {customName || "..."}
-                        </span>
-                      ) : description ? (
+                      {description ? (
                         <span className="truncate">{description}</span>
                       ) : (
-                        "Select or create a sub-goal..."
+                        "Select or create a parameter..."
                       )}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -459,52 +407,26 @@ export function AddSubGoalDialog({
                           </>
                         )}
                         
-                        <CommandSeparator />
-                        <CommandGroup>
-                          <CommandItem onSelect={handleEnterCustomMode}>
-                            <Pencil className="mr-2 h-4 w-4" />
-                            Create custom sub-goal...
-                          </CommandItem>
-                          {onCreateNewParameter && (
-                            <CommandItem 
-                              onSelect={() => {
-                                onOpenChange(false);
-                                onCreateNewParameter(parentGoalId);
-                              }}
-                            >
-                              <Plus className="mr-2 h-4 w-4" />
-                              Create new parameter in database...
-                            </CommandItem>
-                          )}
-                        </CommandGroup>
+                        {onCreateNewParameter && (
+                          <>
+                            <CommandSeparator />
+                            <CommandGroup>
+                              <CommandItem 
+                                onSelect={() => {
+                                  onOpenChange(false);
+                                  onCreateNewParameter(parentGoalId);
+                                }}
+                              >
+                                <Plus className="mr-2 h-4 w-4" />
+                                Create New Parameter
+                              </CommandItem>
+                            </CommandGroup>
+                          </>
+                        )}
                       </CommandList>
                     </Command>
                   </PopoverContent>
                 </Popover>
-              </div>
-
-              {/* Custom Name (if custom mode) */}
-              {isCustomMode && (
-                <div className="space-y-2">
-                  <Label htmlFor="customName">Sub-Goal Name</Label>
-                  <Input
-                    id="customName"
-                    value={customName}
-                    onChange={(e) => setCustomName(e.target.value)}
-                    placeholder="e.g., Improve reactive strength"
-                  />
-                </div>
-              )}
-
-              {/* Test Method */}
-              <div className="space-y-2">
-                <Label>Test Method</Label>
-                <SearchableDropdown
-                  value={testMethod}
-                  onChange={setTestMethod}
-                  options={testMethodOptions}
-                  placeholder="Select or type test method..."
-                />
               </div>
 
               {/* Pre-Test Value, Goal Value, Percent Change */}
