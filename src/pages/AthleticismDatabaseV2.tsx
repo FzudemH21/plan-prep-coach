@@ -292,9 +292,11 @@ export default function AthleticismDatabaseV2() {
                                 <TooltipProvider delayDuration={0}>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 cursor-pointer">
-                                        +{interactingGoalNames.length - 3} more
-                                      </Badge>
+                                      <button type="button" className="inline-flex" aria-label="Show all interacting goals">
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 cursor-pointer">
+                                          +{interactingGoalNames.length - 3} more
+                                        </Badge>
+                                      </button>
                                     </TooltipTrigger>
                                     <TooltipContent side="top" className="max-w-[300px] z-[100]">
                                       <div className="text-xs space-y-0.5">
@@ -324,9 +326,11 @@ export default function AthleticismDatabaseV2() {
                                 <TooltipProvider delayDuration={0}>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 cursor-pointer">
-                                        +{methodNames.length - 2} more
-                                      </Badge>
+                                      <button type="button" className="inline-flex" aria-label="Show all methods">
+                                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 cursor-pointer">
+                                          +{methodNames.length - 2} more
+                                        </Badge>
+                                      </button>
                                     </TooltipTrigger>
                                     <TooltipContent side="top" className="max-w-[300px] z-[100]">
                                       <div className="text-xs space-y-0.5">
