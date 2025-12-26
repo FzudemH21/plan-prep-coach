@@ -53,6 +53,7 @@ interface AthleteGroupSidebarProps {
   onAssignAthleteToGroup: (athleteId: string, groupId: string) => void;
   getAthletesByGroup: (groupId: string) => Athlete[];
   getAthletesWithoutGroup: () => Athlete[];
+  onCreateAthlete: () => void;
 }
 
 export function AthleteGroupSidebar({
@@ -67,6 +68,7 @@ export function AthleteGroupSidebar({
   onAssignAthleteToGroup,
   getAthletesByGroup,
   getAthletesWithoutGroup,
+  onCreateAthlete,
 }: AthleteGroupSidebarProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -114,9 +116,14 @@ export function AthleteGroupSidebar({
           <Users className="h-4 w-4" />
           Athletes
         </h2>
-        <Button variant="ghost" size="icon" onClick={() => setShowCreateGroup(true)}>
-          <FolderPlus className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" onClick={onCreateAthlete} title="Create Athlete">
+            <UserPlus className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => setShowCreateGroup(true)} title="Create Group">
+            <FolderPlus className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       <ScrollArea className="flex-1">
