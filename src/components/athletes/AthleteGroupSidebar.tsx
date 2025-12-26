@@ -54,6 +54,7 @@ interface AthleteGroupSidebarProps {
   getAthletesByGroup: (groupId: string) => Athlete[];
   getAthletesWithoutGroup: () => Athlete[];
   onCreateAthlete: () => void;
+  onDeleteAthlete: (athleteId: string) => void;
 }
 
 export function AthleteGroupSidebar({
@@ -69,6 +70,7 @@ export function AthleteGroupSidebar({
   getAthletesByGroup,
   getAthletesWithoutGroup,
   onCreateAthlete,
+  onDeleteAthlete,
 }: AthleteGroupSidebarProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -238,6 +240,13 @@ export function AthleteGroupSidebar({
                                     Already in all groups
                                   </DropdownMenuItem>
                                 )}
+                                <DropdownMenuItem
+                                  onClick={() => onDeleteAthlete(athlete.id)}
+                                  className="text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete Athlete
+                                </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
@@ -268,14 +277,14 @@ export function AthleteGroupSidebar({
                     <User className="h-3 w-3" />
                     <span className="truncate">{getAthleteDisplayName(athlete)}</span>
                   </Button>
-                  {groups.length > 0 && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
-                          <MoreHorizontal className="h-3 w-3" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
+                        <MoreHorizontal className="h-3 w-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {groups.length > 0 && (
                         <DropdownMenuSub>
                           <DropdownMenuSubTrigger>
                             <UserPlus className="h-4 w-4 mr-2" />
@@ -292,9 +301,16 @@ export function AthleteGroupSidebar({
                             ))}
                           </DropdownMenuSubContent>
                         </DropdownMenuSub>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
+                      )}
+                      <DropdownMenuItem
+                        onClick={() => onDeleteAthlete(athlete.id)}
+                        className="text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Athlete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               ))}
             </div>
