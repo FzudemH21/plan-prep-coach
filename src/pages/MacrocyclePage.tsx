@@ -2204,8 +2204,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                             {method.associations.map((assoc, idx) => (
                               <div key={idx} className="flex items-start gap-2 text-sm">
                                 <Badge 
-                                  variant={assoc.isPrimaryGoal ? "default" : "secondary"}
-                                  className="shrink-0"
+                                  variant={assoc.isPrimaryGoal ? "default" : "outline"}
+                                  className={cn(
+                                    "shrink-0",
+                                    !assoc.isPrimaryGoal && "bg-muted text-foreground"
+                                  )}
                                 >
                                   {assoc.parameterName}
                                   {assoc.isPrimaryGoal && " (Primary)"}
@@ -2259,7 +2262,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                           <div className="space-y-1.5">
                             {method.associations.map((assoc, idx) => (
                               <div key={idx} className="flex items-start gap-2 text-sm">
-                                <Badge variant="secondary" className="shrink-0">
+                                <Badge variant="outline" className="shrink-0 bg-muted text-foreground">
                                   {assoc.parameterName}
                                 </Badge>
                                 {assoc.goalDescription && (
