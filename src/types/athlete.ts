@@ -38,7 +38,10 @@ export const getAthleteDisplayName = (athlete: Athlete): string => {
   return parts.join(' ') || 'Unnamed Athlete';
 };
 
-export interface ParameterDefinition {
+// ============ BIOMETRICS (Health Metrics) ============
+// For trackable health metrics like Height, Weight, Resting HR, etc.
+
+export interface BiometricDefinition {
   id: string;
   name: string;
   type: ParameterType;
@@ -52,18 +55,43 @@ export interface ParameterValue {
   recordedAt: string;
 }
 
-export interface AthleteParameter {
+export interface AthleteBiometric {
   id: string;
   athleteId: string;
-  parameterDefinitionId: string;
+  biometricDefinitionId: string;
+  /** @deprecated Use biometricDefinitionId instead */
+  parameterDefinitionId?: string; // Legacy alias for backward compatibility
   values: ParameterValue[];
 }
 
-// Default trackable metrics
-export const DEFAULT_PARAMETERS: Omit<ParameterDefinition, 'id' | 'createdAt'>[] = [
+// ============ PERFORMANCE PARAMETERS ============
+// For training goals linked to Athleticism Database (ParameterV2)
+
+export interface AthletePerformanceParameter {
+  id: string;
+  athleteId: string;
+  athleticismParameterId: string; // Links to ParameterV2 in Athleticism Database
+  values: ParameterValue[];
+}
+
+// ============ LEGACY ALIASES (for backward compatibility) ============
+// These are kept for backward compatibility with existing code
+
+/** @deprecated Use BiometricDefinition instead */
+export type ParameterDefinition = BiometricDefinition;
+
+/** @deprecated Use AthleteBiometric instead */
+export type AthleteParameter = AthleteBiometric;
+
+// Default biometrics (health metrics)
+export const DEFAULT_BIOMETRICS: Omit<BiometricDefinition, 'id' | 'createdAt'>[] = [
   { name: 'Height', type: 'quantitative', unit: 'cm' },
   { name: 'Weight', type: 'quantitative', unit: 'kg' },
 ];
+
+// Legacy alias
+/** @deprecated Use DEFAULT_BIOMETRICS instead */
+export const DEFAULT_PARAMETERS = DEFAULT_BIOMETRICS;
 
 export const ACTIVITY_LEVEL_LABELS: Record<DailyActivityLevel, string> = {
   sedentary: 'Sedentary (little or no exercise)',
