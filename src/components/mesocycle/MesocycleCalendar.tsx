@@ -5,19 +5,36 @@ import { Mesocycle } from "@/types/training";
 import { DayPicker, DayProps } from "react-day-picker";
 import { cn } from "@/lib/utils";
 import { addDays, format, isWithinInterval, startOfDay } from "date-fns";
+import { Trophy, CalendarDays } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
+interface SubGoal {
+  testDates?: string[];
+  testMethod?: string;
+  description?: string;
+}
+
+interface Event {
+  eventDates?: string[];
+  name?: string;
+}
 
 interface MesocycleCalendarProps {
   mesocycles: Mesocycle[];
   startDate?: Date;
   showFullPlan?: boolean;
   totalWeeks?: number;
+  subGoals?: SubGoal[];
+  events?: Event[];
 }
 
 export default function MesocycleCalendar({ 
   mesocycles, 
   startDate = new Date(), 
   showFullPlan = false, 
-  totalWeeks = 0 
+  totalWeeks = 0,
+  subGoals = [],
+  events = []
 }: MesocycleCalendarProps) {
   // Calculate dates for all mesocycles and their microcycles
   const calculateMesocycleDates = () => {
@@ -107,10 +124,30 @@ export default function MesocycleCalendar({
     return trainingWeeks;
   };
 
+  // Get tests for a specific date
+  const getTestsForDate = (date: Date): string[] => {
+    if (!subGoals || subGoals.length === 0) return [];
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return subGoals
+      .filter(sg => sg.testDates?.some(td => td.startsWith(dateStr)))
+      .map(sg => sg.testMethod || sg.description || 'Test');
+  };
+
+  // Get events for a specific date
+  const getEventsForDate = (date: Date): string[] => {
+    if (!events || events.length === 0) return [];
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return events
+      .filter(e => e.eventDates?.some(ed => ed.startsWith(dateStr)))
+      .map(e => e.name || 'Event');
+  };
+
   // Custom day component
   const CustomDay = ({ date, ...props }: DayProps) => {
     const mesocycle = getMesocycleForDate(date);
     const microcycle = mesocycle ? getMicrocycleForDate(date, mesocycle) : null;
+    const testsOnDate = getTestsForDate(date);
+    const eventsOnDate = getEventsForDate(date);
     
     return (
       <div 
@@ -121,8 +158,43 @@ export default function MesocycleCalendar({
             : "bg-background border-border text-foreground"
         )}
       >
-        <div className="text-xs font-medium">
-          {format(date, 'd')}
+        <div className="flex justify-between items-start">
+          <div className="text-xs font-medium">
+            {format(date, 'd')}
+          </div>
+          {/* Test/Event indicators */}
+          {(testsOnDate.length > 0 || eventsOnDate.length > 0) && (
+            <div className="flex gap-0.5">
+              {testsOnDate.length > 0 && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Trophy className="h-3 w-3 text-amber-400" />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs">Tests: {testsOnDate.join(', ')}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              {eventsOnDate.length > 0 && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <CalendarDays className="h-3 w-3 text-orange-400" />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs">Events: {eventsOnDate.join(', ')}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
+          )}
         </div>
         {mesocycle && (
           <div className="absolute inset-x-0 bottom-0 p-1">
@@ -160,8 +232,8 @@ export default function MesocycleCalendar({
       <CardContent className="space-y-6">
         {/* Legend */}
         <div className="space-y-2">
-          <h4 className="text-sm font-medium">Mesocycle Legend</h4>
-          <div className="flex flex-wrap gap-2">
+          <h4 className="text-sm font-medium">Legend</h4>
+          <div className="flex flex-wrap gap-3 items-center">
             {mesocyclesWithDates.map((meso, index) => (
               <Badge 
                 key={meso.id}
@@ -171,6 +243,15 @@ export default function MesocycleCalendar({
                 {meso.name} ({meso.duration}w)
               </Badge>
             ))}
+            <div className="h-4 w-px bg-border" />
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Trophy className="h-3 w-3 text-amber-400" />
+              <span>Test Day</span>
+            </div>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <CalendarDays className="h-3 w-3 text-orange-400" />
+              <span>Event Day</span>
+            </div>
           </div>
         </div>
 

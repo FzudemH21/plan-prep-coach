@@ -772,6 +772,8 @@ export default function MesocyclePage() {
               startDate={planStartDate}
               showFullPlan={true}
               totalWeeks={totalWeeks}
+              subGoals={macrocycleData?.subGoals}
+              events={macrocycleData?.events}
             />
           </>
         )}
