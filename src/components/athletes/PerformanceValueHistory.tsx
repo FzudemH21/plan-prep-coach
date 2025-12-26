@@ -83,17 +83,12 @@ export function PerformanceValueHistory({
 
     // Get all athletes in the same groups as the current athlete
     const groupAthletes = allAthletes.filter(
-      (a) =>
-        a.id !== currentAthlete.id &&
-        a.groupIds.some((gId) => currentAthlete.groupIds.includes(gId))
+      (a) => a.groupIds.some((gId) => currentAthlete.groupIds.includes(gId))
     );
 
     // Get all athletes of the same sex
     const sameSexAthletes = allAthletes.filter(
-      (a) =>
-        a.id !== currentAthlete.id &&
-        currentAthlete.sex &&
-        a.sex === currentAthlete.sex
+      (a) => currentAthlete.sex && a.sex === currentAthlete.sex
     );
 
     // Helper to get the latest value for an athlete's performance parameter
