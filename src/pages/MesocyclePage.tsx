@@ -960,7 +960,10 @@ export default function MesocyclePage() {
   }, [macrocycleData, manuallyAddedMethods]);
 
   const groupMethodsByToolboxCategory = useMemo(() => {
-    const methods = getMethodsForAllocatedSubGoals;
+    // Filter to only valid string methods
+    const methods = getMethodsForAllocatedSubGoals.filter(
+      (m): m is string => typeof m === 'string' && m.trim() !== ''
+    );
     const grouped: Record<string, Record<string, string[]>> = {};
     
     methods.forEach(method => {
