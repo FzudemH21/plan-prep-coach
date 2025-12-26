@@ -27,12 +27,14 @@ import {
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  Archive,
   ChevronDown,
   ChevronRight,
   FolderPlus,
   MoreHorizontal,
   Pencil,
   Plus,
+  RotateCcw,
   Trash2,
   User,
   UserPlus,
@@ -44,6 +46,7 @@ import { Athlete, AthleteGroup, getAthleteDisplayName } from '@/types/athlete';
 interface AthleteGroupSidebarProps {
   groups: AthleteGroup[];
   athletes: Athlete[];
+  archivedAthletes: Athlete[];
   selectedAthleteId: string | null;
   onSelectAthlete: (athleteId: string) => void;
   onCreateGroup: (name: string) => void;
@@ -55,11 +58,14 @@ interface AthleteGroupSidebarProps {
   getAthletesWithoutGroup: () => Athlete[];
   onCreateAthlete: () => void;
   onDeleteAthlete: (athleteId: string) => void;
+  onArchiveAthlete: (athleteId: string) => void;
+  onUnarchiveAthlete: (athleteId: string) => void;
 }
 
 export function AthleteGroupSidebar({
   groups,
   athletes,
+  archivedAthletes,
   selectedAthleteId,
   onSelectAthlete,
   onCreateGroup,
@@ -71,12 +77,15 @@ export function AthleteGroupSidebar({
   getAthletesWithoutGroup,
   onCreateAthlete,
   onDeleteAthlete,
+  onArchiveAthlete,
+  onUnarchiveAthlete,
 }: AthleteGroupSidebarProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [editingGroup, setEditingGroup] = useState<AthleteGroup | null>(null);
   const [editName, setEditName] = useState('');
+  const [isArchiveExpanded, setIsArchiveExpanded] = useState(false);
 
   const ungroupedAthletes = getAthletesWithoutGroup();
 
@@ -241,6 +250,12 @@ export function AthleteGroupSidebar({
                                   </DropdownMenuItem>
                                 )}
                                 <DropdownMenuItem
+                                  onClick={() => onArchiveAthlete(athlete.id)}
+                                >
+                                  <Archive className="h-4 w-4 mr-2" />
+                                  Archive Athlete
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
                                   onClick={() => onDeleteAthlete(athlete.id)}
                                   className="text-destructive"
                                 >
@@ -303,6 +318,12 @@ export function AthleteGroupSidebar({
                         </DropdownMenuSub>
                       )}
                       <DropdownMenuItem
+                        onClick={() => onArchiveAthlete(athlete.id)}
+                      >
+                        <Archive className="h-4 w-4 mr-2" />
+                        Archive Athlete
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
                         onClick={() => onDeleteAthlete(athlete.id)}
                         className="text-destructive"
                       >
@@ -316,7 +337,82 @@ export function AthleteGroupSidebar({
             </div>
           )}
 
-          {groups.length === 0 && ungroupedAthletes.length === 0 && (
+          {/* Archive Section */}
+          <div className="pt-3 border-t mt-3">
+            <Collapsible
+              open={isArchiveExpanded}
+              onOpenChange={setIsArchiveExpanded}
+            >
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start gap-2 h-9 text-muted-foreground hover:text-foreground"
+                >
+                  {isArchiveExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                  <Archive className="h-4 w-4" />
+                  <span>Archive</span>
+                  <span className="ml-auto text-xs">
+                    ({archivedAthletes.length})
+                  </span>
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="ml-6 space-y-1 mt-1">
+                  {archivedAthletes.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-2 px-2">
+                      No archived athletes
+                    </p>
+                  ) : (
+                    archivedAthletes.map((athlete) => (
+                      <div key={athlete.id} className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className={cn(
+                            'flex-1 justify-start gap-2 h-8 text-muted-foreground',
+                            selectedAthleteId === athlete.id && 'bg-accent text-accent-foreground'
+                          )}
+                          onClick={() => onSelectAthlete(athlete.id)}
+                        >
+                          <User className="h-3 w-3" />
+                          <span className="truncate">{getAthleteDisplayName(athlete)}</span>
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
+                              <MoreHorizontal className="h-3 w-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => onUnarchiveAthlete(athlete.id)}
+                            >
+                              <RotateCcw className="h-4 w-4 mr-2" />
+                              Restore Athlete
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => onDeleteAthlete(athlete.id)}
+                              className="text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete Permanently
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
+
+          {groups.length === 0 && ungroupedAthletes.length === 0 && archivedAthletes.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               <p className="text-sm">No athletes yet</p>
               <p className="text-xs mt-1">Create a group to get started</p>
