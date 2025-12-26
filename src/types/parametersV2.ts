@@ -1,5 +1,8 @@
 export type ParameterCategory = 'strength' | 'speed' | 'power' | 'endurance' | 'mobility' | 'technique' | 'body_composition' | 'other';
 
+export type InteractionDirection = 'contributes_to' | 'improved_by';
+export type InteractionStrength = 'strong' | 'moderate' | 'weak';
+
 export interface ParameterV2 {
   id: string;
   name: string;                    // "1RM Front Squat", "100m Sprint Time"
@@ -10,8 +13,13 @@ export interface ParameterV2 {
 
 export interface ParameterInteraction {
   id: string;
-  parameterId: string;             // The primary parameter
-  interactingParameterId: string;  // The parameter that interacts with it
+  sourceParameterId: string;       // The parameter that contributes/influences
+  targetParameterId: string;       // The parameter being improved
+  direction: InteractionDirection; // 'contributes_to' or 'improved_by'
+  strength?: InteractionStrength;  // Optional intensity: 'strong', 'moderate', 'weak'
+  // Legacy fields for migration (optional, will be removed after migration)
+  parameterId?: string;
+  interactingParameterId?: string;
 }
 
 export interface ParameterMethodV2 {
@@ -37,4 +45,10 @@ export const PARAMETER_CATEGORIES: { value: ParameterCategory; label: string }[]
   { value: 'technique', label: 'Technique' },
   { value: 'body_composition', label: 'Body Composition' },
   { value: 'other', label: 'Other' },
+];
+
+export const INTERACTION_STRENGTHS: { value: InteractionStrength; label: string; icon: string }[] = [
+  { value: 'strong', label: 'Strong', icon: '↑↑' },
+  { value: 'moderate', label: 'Moderate', icon: '↑' },
+  { value: 'weak', label: 'Weak', icon: '→' },
 ];

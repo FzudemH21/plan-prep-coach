@@ -12,8 +12,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { Plus, X } from 'lucide-react';
-import { ParameterV2, PARAMETER_CATEGORIES } from '@/types/parametersV2';
+import { Plus, X, ArrowUp, ArrowRight, ChevronDown } from 'lucide-react';
+import { ParameterV2, PARAMETER_CATEGORIES, INTERACTION_STRENGTHS, InteractionDirection, InteractionStrength } from '@/types/parametersV2';
 import { ToolboxEntry } from '@/types/toolbox';
 import {
   Command,
@@ -28,6 +28,19 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+interface PendingInteraction {
+  targetParameterId: string;
+  direction: InteractionDirection;
+  strength: InteractionStrength;
+}
 
 interface PendingMethod {
   methodId: string;
@@ -43,7 +56,7 @@ interface AddParameterDialogV2Props {
     name: string;
     unit?: string;
     category?: string;
-    interactions: string[];
+    interactions: PendingInteraction[];
     methods: PendingMethod[];
   }) => void;
 }
@@ -58,12 +71,22 @@ export function AddParameterDialogV2({
   const [name, setName] = useState('');
   const [unit, setUnit] = useState('');
   const [category, setCategory] = useState('');
-  const [pendingInteractions, setPendingInteractions] = useState<string[]>([]);
+  
+  // Separate pending interactions for each section
+  const [pendingContributesTo, setPendingContributesTo] = useState<PendingInteraction[]>([]);
+  const [pendingImprovedBy, setPendingImprovedBy] = useState<PendingInteraction[]>([]);
   const [pendingMethods, setPendingMethods] = useState<PendingMethod[]>([]);
-  const [parameterSearchOpen, setParameterSearchOpen] = useState(false);
+  
+  // Popover states
+  const [contributesToSearchOpen, setContributesToSearchOpen] = useState(false);
+  const [improvedBySearchOpen, setImprovedBySearchOpen] = useState(false);
   const [methodSearchOpen, setMethodSearchOpen] = useState(false);
   const [unitSearchOpen, setUnitSearchOpen] = useState(false);
   const [categorySearchOpen, setCategorySearchOpen] = useState(false);
+  
+  // Strength selection for new interactions
+  const [newContributesToStrength, setNewContributesToStrength] = useState<InteractionStrength>('moderate');
+  const [newImprovedByStrength, setNewImprovedByStrength] = useState<InteractionStrength>('moderate');
   
   // State for editing method rationale
   const [editingRationale, setEditingRationale] = useState<string | null>(null);
@@ -74,9 +97,16 @@ export function AddParameterDialogV2({
     'kg/bw', '%1RM', 'W', 'W/kg', 'bpm', 'kcal', 'RPE', 'RiR'
   ];
 
-  // Get available parameters (exclude already selected)
-  const availableParameters = allParameters.filter(
-    (p) => !pendingInteractions.includes(p.id)
+  // Get available parameters for "Contributes To"
+  const contributesToTargetIds = pendingContributesTo.map((i) => i.targetParameterId);
+  const availableContributesToParameters = allParameters.filter(
+    (p) => !contributesToTargetIds.includes(p.id)
+  );
+  
+  // Get available parameters for "Improved By"
+  const improvedBySourceIds = pendingImprovedBy.map((i) => i.targetParameterId);
+  const availableImprovedByParameters = allParameters.filter(
+    (p) => !improvedBySourceIds.includes(p.id)
   );
 
   // Get unique methods from toolbox
@@ -99,13 +129,30 @@ export function AddParameterDialogV2({
     (m) => !addedMethodIds.includes(m)
   );
 
-  const handleAddInteraction = (parameterId: string) => {
-    setPendingInteractions([...pendingInteractions, parameterId]);
-    setParameterSearchOpen(false);
+  const handleAddContributesTo = (targetParameterId: string) => {
+    setPendingContributesTo([
+      ...pendingContributesTo,
+      { targetParameterId, direction: 'contributes_to', strength: newContributesToStrength }
+    ]);
+    setContributesToSearchOpen(false);
+    setNewContributesToStrength('moderate');
   };
 
-  const handleRemoveInteraction = (parameterId: string) => {
-    setPendingInteractions(pendingInteractions.filter((id) => id !== parameterId));
+  const handleRemoveContributesTo = (targetParameterId: string) => {
+    setPendingContributesTo(pendingContributesTo.filter((i) => i.targetParameterId !== targetParameterId));
+  };
+
+  const handleAddImprovedBy = (sourceParameterId: string) => {
+    setPendingImprovedBy([
+      ...pendingImprovedBy,
+      { targetParameterId: sourceParameterId, direction: 'improved_by', strength: newImprovedByStrength }
+    ]);
+    setImprovedBySearchOpen(false);
+    setNewImprovedByStrength('moderate');
+  };
+
+  const handleRemoveImprovedBy = (sourceParameterId: string) => {
+    setPendingImprovedBy(pendingImprovedBy.filter((i) => i.targetParameterId !== sourceParameterId));
   };
 
   const handleAddMethod = (methodId: string) => {
@@ -140,32 +187,49 @@ export function AddParameterDialogV2({
   const handleSubmit = () => {
     if (!name.trim()) return;
 
+    // Combine both types of interactions
+    const allInteractions: PendingInteraction[] = [
+      ...pendingContributesTo,
+      ...pendingImprovedBy,
+    ];
+
     onAdd({
       name: name.trim(),
       unit: unit || undefined,
       category: category || undefined,
-      interactions: pendingInteractions,
+      interactions: allInteractions,
       methods: pendingMethods,
     });
 
     // Reset form
-    setName('');
-    setUnit('');
-    setCategory('');
-    setPendingInteractions([]);
-    setPendingMethods([]);
-    onOpenChange(false);
+    handleClose();
   };
 
   const handleClose = () => {
     setName('');
     setUnit('');
     setCategory('');
-    setPendingInteractions([]);
+    setPendingContributesTo([]);
+    setPendingImprovedBy([]);
     setPendingMethods([]);
     setEditingRationale(null);
     setRationaleValue('');
+    setNewContributesToStrength('moderate');
+    setNewImprovedByStrength('moderate');
     onOpenChange(false);
+  };
+
+  const getStrengthIcon = (strength?: InteractionStrength) => {
+    switch (strength) {
+      case 'strong':
+        return <span className="text-xs font-bold">↑↑</span>;
+      case 'moderate':
+        return <ArrowUp className="h-3 w-3" />;
+      case 'weak':
+        return <ArrowRight className="h-3 w-3" />;
+      default:
+        return <ArrowUp className="h-3 w-3" />;
+    }
   };
 
   return (
@@ -202,10 +266,10 @@ export function AddParameterDialogV2({
                       className="w-full justify-between font-normal"
                     >
                       {unit || "Select unit..."}
-                      <span className="ml-2 h-4 w-4 shrink-0 opacity-50">▼</span>
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-48 p-0" align="start">
+                  <PopoverContent className="w-48 p-0 bg-popover" align="start">
                     <Command>
                       <CommandInput 
                         placeholder="Search or type..." 
@@ -254,10 +318,10 @@ export function AddParameterDialogV2({
                       className="w-full justify-between font-normal"
                     >
                       {PARAMETER_CATEGORIES.find((c) => c.value === category)?.label || category || "Select category..."}
-                      <span className="ml-2 h-4 w-4 shrink-0 opacity-50">▼</span>
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-48 p-0" align="start">
+                  <PopoverContent className="w-48 p-0 bg-popover" align="start">
                     <Command>
                       <CommandInput 
                         placeholder="Search or type..." 
@@ -302,39 +366,58 @@ export function AddParameterDialogV2({
 
             <Separator />
 
-            {/* Interacting Parameters */}
+            {/* Contributes To Section */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                  Interacting Parameters
-                </h3>
-                <Popover open={parameterSearchOpen} onOpenChange={setParameterSearchOpen}>
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                    Contributes To
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    This parameter helps improve these parameters
+                  </p>
+                </div>
+                <Popover open={contributesToSearchOpen} onOpenChange={setContributesToSearchOpen}>
                   <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={availableParameters.length === 0}
-                    >
+                    <Button variant="outline" size="sm" disabled={availableContributesToParameters.length === 0}>
                       <Plus className="h-4 w-4 mr-1" />
                       Add
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-64 p-0" align="end">
+                  <PopoverContent className="w-72 p-0 bg-popover" align="end">
+                    <div className="p-3 border-b">
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs">Strength:</Label>
+                        <Select
+                          value={newContributesToStrength}
+                          onValueChange={(v) => setNewContributesToStrength(v as InteractionStrength)}
+                        >
+                          <SelectTrigger className="h-7 w-28 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {INTERACTION_STRENGTHS.map((s) => (
+                              <SelectItem key={s.value} value={s.value}>
+                                {s.icon} {s.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
                     <Command>
                       <CommandInput placeholder="Search parameters..." />
                       <CommandList>
                         <CommandEmpty>No parameters found.</CommandEmpty>
                         <CommandGroup>
-                          {availableParameters.map((p) => (
+                          {availableContributesToParameters.map((p) => (
                             <CommandItem
                               key={p.id}
-                              onSelect={() => handleAddInteraction(p.id)}
+                              onSelect={() => handleAddContributesTo(p.id)}
                             >
                               {p.name}
                               {p.unit && (
-                                <span className="text-muted-foreground ml-1">
-                                  ({p.unit})
-                                </span>
+                                <span className="text-muted-foreground ml-1">({p.unit})</span>
                               )}
                             </CommandItem>
                           ))}
@@ -345,21 +428,22 @@ export function AddParameterDialogV2({
                 </Popover>
               </div>
 
-              {pendingInteractions.length > 0 ? (
+              {pendingContributesTo.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                  {pendingInteractions.map((parameterId) => {
-                    const parameter = allParameters.find((p) => p.id === parameterId);
-                    if (!parameter) return null;
+                  {pendingContributesTo.map((interaction) => {
+                    const targetParameter = allParameters.find((p) => p.id === interaction.targetParameterId);
+                    if (!targetParameter) return null;
                     return (
                       <Badge
-                        key={parameterId}
+                        key={interaction.targetParameterId}
                         variant="secondary"
                         className="flex items-center gap-1 py-1"
                       >
-                        {parameter.name}
+                        <span className="mr-1">{getStrengthIcon(interaction.strength)}</span>
+                        {targetParameter.name}
                         <button
                           type="button"
-                          onClick={() => handleRemoveInteraction(parameterId)}
+                          onClick={() => handleRemoveContributesTo(interaction.targetParameterId)}
                           className="ml-1 hover:text-destructive"
                         >
                           <X className="h-3 w-3" />
@@ -370,8 +454,102 @@ export function AddParameterDialogV2({
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground italic">
-                  No interacting parameters selected. Add parameters that influence or are
-                  influenced by this parameter.
+                  No parameters selected yet.
+                </p>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Improved By Section */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                    Improved By
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    These parameters help improve this one (potential sub-goals)
+                  </p>
+                </div>
+                <Popover open={improvedBySearchOpen} onOpenChange={setImprovedBySearchOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" disabled={availableImprovedByParameters.length === 0}>
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-72 p-0 bg-popover" align="end">
+                    <div className="p-3 border-b">
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs">Strength:</Label>
+                        <Select
+                          value={newImprovedByStrength}
+                          onValueChange={(v) => setNewImprovedByStrength(v as InteractionStrength)}
+                        >
+                          <SelectTrigger className="h-7 w-28 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {INTERACTION_STRENGTHS.map((s) => (
+                              <SelectItem key={s.value} value={s.value}>
+                                {s.icon} {s.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <Command>
+                      <CommandInput placeholder="Search parameters..." />
+                      <CommandList>
+                        <CommandEmpty>No parameters found.</CommandEmpty>
+                        <CommandGroup>
+                          {availableImprovedByParameters.map((p) => (
+                            <CommandItem
+                              key={p.id}
+                              onSelect={() => handleAddImprovedBy(p.id)}
+                            >
+                              {p.name}
+                              {p.unit && (
+                                <span className="text-muted-foreground ml-1">({p.unit})</span>
+                              )}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {pendingImprovedBy.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {pendingImprovedBy.map((interaction) => {
+                    const sourceParameter = allParameters.find((p) => p.id === interaction.targetParameterId);
+                    if (!sourceParameter) return null;
+                    return (
+                      <Badge
+                        key={interaction.targetParameterId}
+                        variant="outline"
+                        className="flex items-center gap-1 py-1 bg-primary/5"
+                      >
+                        <span className="mr-1">{getStrengthIcon(interaction.strength)}</span>
+                        {sourceParameter.name}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImprovedBy(interaction.targetParameterId)}
+                          className="ml-1 hover:text-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">
+                  No parameters selected yet.
                 </p>
               )}
             </div>
@@ -395,7 +573,7 @@ export function AddParameterDialogV2({
                       Add Method
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-80 p-0" align="end">
+                  <PopoverContent className="w-80 p-0 bg-popover" align="end">
                     <Command>
                       <CommandInput placeholder="Search methods..." />
                       <CommandList>
