@@ -955,7 +955,15 @@ export default function MesocyclePage() {
   const getMethodsForAllocatedSubGoals = useMemo(() => {
     if (!macrocycleData) return [];
 
-    // Collect all allocated sub-goals across mesocycles (strings like "Overarching - Sub-goal")
+    // New approach: Use directly selected methods from macrocycle if available
+    if (macrocycleData.selectedMethods && Array.isArray(macrocycleData.selectedMethods) && macrocycleData.selectedMethods.length > 0) {
+      const methodsSet = new Set<string>(macrocycleData.selectedMethods);
+      // Add manually added methods
+      manuallyAddedMethods.forEach(method => methodsSet.add(method));
+      return Array.from(methodsSet);
+    }
+
+    // Legacy approach: Collect all allocated sub-goals across mesocycles (strings like "Overarching - Sub-goal")
     const allocated = new Set<string>();
     mesocycles.forEach(meso => meso.allocatedSubGoals?.forEach(sg => allocated.add(sg)));
 
