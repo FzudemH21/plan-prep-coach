@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { SmartGoal, SubGoal, TrainableQuality, Event, PlanDuration } from "@/types/training";
-import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2, FileText, Check, ChevronsUpDown, ChevronDown, Pencil } from "lucide-react";
+import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2, FileText, Check, ChevronsUpDown, ChevronDown, Pencil, Link } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { 
   getUniqueQualities, 
@@ -40,7 +40,7 @@ export default function MacrocyclePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { data: athleticismData } = useAthleticismData();
-  const { data: parametersDataV2, addParameter: addAthleticismParameter } = useParametersDataV2();
+  const { data: parametersDataV2, addParameter: addAthleticismParameter, addInteraction: addParameterInteraction } = useParametersDataV2();
   const { data: toolboxData } = useToolboxData();
   const { athletes, groups, getAthletePerformanceParameters, addPerformanceParameter, getAthleteBiometrics, biometricDefinitions } = useAthletes();
   const [athleteDropdownOpen, setAthleteDropdownOpen] = useState(false);
@@ -74,12 +74,63 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [addEventMode, setAddEventMode] = useState(false);
 
-  // Group sub-goals by parent goal
+  // State for parameter creation from sub-goal dialog (links to a parent SMART goal)
+  const [createParameterForGoalId, setCreateParameterForGoalId] = useState<string | null>(null);
+
+  // Derive sub-goals from SMART goal parameter relationships
+  const derivedSubGoals = useMemo(() => {
+    const derived: SubGoal[] = [];
+    
+    smartGoals.forEach(goal => {
+      // Only process goals that are linked to a parameter
+      if (!goal.linkedParameterId) return;
+      
+      // Get all parameters that "contribute to" this goal's parameter
+      const contributingInteractions = parametersDataV2.interactions.filter(
+        i => i.targetParameterId === goal.linkedParameterId && i.direction === 'contributes_to'
+      );
+      
+      contributingInteractions.forEach(interaction => {
+        const sourceParam = parametersDataV2.parameters.find(
+          p => p.id === interaction.sourceParameterId
+        );
+        
+        if (sourceParam) {
+          // Check if already exists as a user-created sub-goal (by parameterLinkedId)
+          const alreadyExists = subGoals.some(
+            sg => sg.parameterLinkedId === sourceParam.id && sg.parentGoalId === goal.id
+          );
+          
+          if (!alreadyExists) {
+            derived.push({
+              id: `derived-${goal.id}-${sourceParam.id}`,
+              parentGoalId: goal.id,
+              description: sourceParam.name,
+              testMethod: '',
+              preTestValue: 0,
+              goalValue: 0,
+              unit: sourceParam.unit || '',
+              percentChange: 0,
+              testDates: [],
+              parameterLinkedId: sourceParam.id,
+              isDerived: true,
+              interactionStrength: interaction.strength,
+            });
+          }
+        }
+      });
+    });
+    
+    return derived;
+  }, [smartGoals, parametersDataV2.interactions, parametersDataV2.parameters, subGoals]);
+
+  // Group sub-goals by parent goal (including derived ones)
   const subGoalsByParent = useMemo(() => {
+    const allSubGoals = [...subGoals, ...derivedSubGoals];
     const grouped: Record<string, SubGoal[]> = {};
     const unlinked: SubGoal[] = [];
     
-    subGoals.forEach(sg => {
+    allSubGoals.forEach(sg => {
       if (sg.parentGoalId) {
         if (!grouped[sg.parentGoalId]) grouped[sg.parentGoalId] = [];
         grouped[sg.parentGoalId].push(sg);
@@ -89,7 +140,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     });
     
     return { grouped, unlinked };
-  }, [subGoals]);
+  }, [subGoals, derivedSubGoals]);
 
   // Group athletes alphabetically by their groups
   const groupedAthletes = useMemo(() => {
@@ -756,6 +807,76 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     toast({ title: 'Sub-Goal Updated', description: `Updated "${subGoal.testMethod || subGoal.description}"` });
   };
 
+  // Handler to "promote" a derived sub-goal to a user-managed one (for editing)
+  const handlePromoteDerivedSubGoal = (derivedSubGoal: SubGoal) => {
+    // Create a new user-managed sub-goal from the derived one
+    const promotedSubGoal: SubGoal = {
+      ...derivedSubGoal,
+      id: `subgoal-${Date.now()}`, // New ID for user-managed sub-goal
+      isDerived: false, // No longer derived
+    };
+    setSubGoals(prev => [...prev, promotedSubGoal]);
+    // Open edit dialog with the new sub-goal
+    setEditingSubGoal(promotedSubGoal);
+    setIsAddSubGoalDialogOpen(true);
+  };
+
+  // Handler to open parameter creation dialog for adding new parameter as sub-goal
+  const handleOpenCreateParameterForSubGoal = (parentGoalId: string | undefined) => {
+    setCreateParameterForGoalId(parentGoalId || null);
+    setIsCreateParameterDialogOpen(true);
+  };
+
+  // Handler for when a new parameter is created via the parameter dialog
+  const handleParameterCreatedAsSubGoal = (paramData: {
+    name: string;
+    unit?: string;
+    category?: string;
+    contributesTo?: Array<{ parameterId: string; strength?: 'strong' | 'moderate' | 'weak' }>;
+    improvedBy?: Array<{ parameterId: string; strength?: 'strong' | 'moderate' | 'weak' }>;
+    methods?: Array<{ methodId: string; rationale?: string }>;
+  }) => {
+    // Create the parameter in the database
+    const newParam = addAthleticismParameter({
+      name: paramData.name,
+      unit: paramData.unit,
+      category: paramData.category,
+    });
+    
+    // If there's a parent goal and it's linked to a parameter, create an interaction
+    if (createParameterForGoalId) {
+      const parentGoal = smartGoals.find(g => g.id === createParameterForGoalId);
+      if (parentGoal?.linkedParameterId) {
+        // This new parameter contributes_to the parent goal's parameter
+        addParameterInteraction(newParam.id, parentGoal.linkedParameterId, 'contributes_to', 'moderate');
+      }
+    }
+    
+    // Create a sub-goal for this parameter
+    const newSubGoal: SubGoal = {
+      id: `subgoal-${Date.now()}`,
+      parentGoalId: createParameterForGoalId || undefined,
+      description: paramData.name,
+      testMethod: '',
+      preTestValue: 0,
+      goalValue: 0,
+      unit: paramData.unit || '',
+      percentChange: 0,
+      testDates: [],
+      parameterLinkedId: newParam.id,
+    };
+    setSubGoals(prev => [...prev, newSubGoal]);
+    
+    // Open edit dialog for the new sub-goal to set test values
+    setEditingSubGoal(newSubGoal);
+    setIsAddSubGoalDialogOpen(true);
+    
+    toast({
+      title: 'Parameter Created',
+      description: `Created "${paramData.name}" and added as sub-goal.`,
+    });
+  };
+
   // Handlers for Events
   const handleAddEvent = (event: Omit<Event, 'id'>) => {
     const newEvent: Event = { ...event, id: `event-${Date.now()}` };
@@ -1279,21 +1400,46 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                                     }}
                                   >
                                     <div className="flex items-center gap-2">
-                                      <Badge variant="outline" className="text-xs shrink-0">Test</Badge>
+                                      <Badge 
+                                        variant={subGoal.isDerived ? "secondary" : "outline"} 
+                                        className={cn("text-xs shrink-0", subGoal.isDerived && "border-blue-500/50 bg-blue-500/10 text-blue-600")}
+                                      >
+                                        {subGoal.isDerived ? (
+                                          <span className="flex items-center gap-1">
+                                            <Link className="h-3 w-3" />
+                                            Linked
+                                          </span>
+                                        ) : (
+                                          "Test"
+                                        )}
+                                      </Badge>
+                                      {subGoal.interactionStrength && (
+                                        <Badge variant="outline" className="text-xs shrink-0">
+                                          {subGoal.interactionStrength === 'strong' ? '↑↑' : subGoal.interactionStrength === 'moderate' ? '↑' : '→'}
+                                        </Badge>
+                                      )}
                                       <span className="font-medium text-sm truncate">
                                         {subGoal.testMethod || subGoal.description || "Unnamed"}
                                       </span>
                                     </div>
                                     <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                      <span className="text-xs">
-                                        {subGoal.preTestValue || 0} {subGoal.unit} → {subGoal.goalValue || 0} {subGoal.unit}
-                                      </span>
-                                      <Badge 
-                                        variant={subGoal.percentChange && subGoal.percentChange > 0 ? "default" : "secondary"}
-                                        className="text-xs"
-                                      >
-                                        {subGoal.percentChange ? `${subGoal.percentChange > 0 ? "+" : ""}${subGoal.percentChange.toFixed(1)}%` : "0%"}
-                                      </Badge>
+                                      {subGoal.isDerived ? (
+                                        <span className="text-xs text-muted-foreground italic">
+                                          Click edit to set test values
+                                        </span>
+                                      ) : (
+                                        <>
+                                          <span className="text-xs">
+                                            {subGoal.preTestValue || 0} {subGoal.unit} → {subGoal.goalValue || 0} {subGoal.unit}
+                                          </span>
+                                          <Badge 
+                                            variant={subGoal.percentChange && subGoal.percentChange > 0 ? "default" : "secondary"}
+                                            className="text-xs"
+                                          >
+                                            {subGoal.percentChange ? `${subGoal.percentChange > 0 ? "+" : ""}${subGoal.percentChange.toFixed(1)}%` : "0%"}
+                                          </Badge>
+                                        </>
+                                      )}
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-1 shrink-0">
@@ -1303,8 +1449,13 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                                       className="h-6 w-6"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        setEditingSubGoal(subGoal);
-                                        setIsAddSubGoalDialogOpen(true);
+                                        if (subGoal.isDerived) {
+                                          // Promote derived sub-goal before editing
+                                          handlePromoteDerivedSubGoal(subGoal);
+                                        } else {
+                                          setEditingSubGoal(subGoal);
+                                          setIsAddSubGoalDialogOpen(true);
+                                        }
                                       }}
                                     >
                                       <Pencil className="h-3 w-3" />
@@ -1317,14 +1468,16 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                                     >
                                       <ChevronDown className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")} />
                                     </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6"
-                                      onClick={() => handleRemoveSubGoal(subGoal.id)}
-                                    >
-                                      <X className="h-3 w-3" />
-                                    </Button>
+                                    {!subGoal.isDerived && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6"
+                                        onClick={() => handleRemoveSubGoal(subGoal.id)}
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </Button>
+                                    )}
                                   </div>
                                 </div>
                                 
@@ -1835,6 +1988,16 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           smartGoals={smartGoals}
           defaultParentGoalId={addSubGoalForParent}
           defaultCategory={addEventMode ? "event" : undefined}
+          onCreateNewParameter={handleOpenCreateParameterForSubGoal}
+        />
+
+        {/* Create Parameter Dialog for Sub-Goals */}
+        <AddParameterDialogV2
+          open={isCreateParameterDialogOpen}
+          onOpenChange={setIsCreateParameterDialogOpen}
+          allParameters={parametersDataV2.parameters}
+          toolboxEntries={toolboxData.entries}
+          onAdd={handleParameterCreatedAsSubGoal}
         />
       </CardContent>
     </Card>

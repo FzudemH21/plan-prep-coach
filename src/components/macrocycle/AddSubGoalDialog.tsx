@@ -62,6 +62,7 @@ interface AddSubGoalDialogProps {
   smartGoals: SmartGoal[];
   defaultParentGoalId?: string;
   defaultCategory?: ItemCategory;
+  onCreateNewParameter?: (parentGoalId: string | undefined) => void;
 }
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -82,6 +83,7 @@ export function AddSubGoalDialog({
   smartGoals,
   defaultParentGoalId,
   defaultCategory,
+  onCreateNewParameter,
 }: AddSubGoalDialogProps) {
   // Category state
   const [category, setCategory] = useState<ItemCategory>(defaultCategory || "subgoal");
@@ -514,6 +516,17 @@ export function AddSubGoalDialog({
                             <Pencil className="mr-2 h-4 w-4" />
                             Create custom sub-goal...
                           </CommandItem>
+                          {onCreateNewParameter && (
+                            <CommandItem 
+                              onSelect={() => {
+                                onOpenChange(false);
+                                onCreateNewParameter(parentGoalId);
+                              }}
+                            >
+                              <Target className="mr-2 h-4 w-4" />
+                              Create new parameter in database...
+                            </CommandItem>
+                          )}
                         </CommandGroup>
                       </CommandList>
                     </Command>

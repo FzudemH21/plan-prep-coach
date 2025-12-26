@@ -61,6 +61,10 @@ export interface SubGoal {
   percentChange: number;
   testDates: string[];
   comments?: string;
+  // New fields for parameter linking and derived sub-goals
+  parameterLinkedId?: string;        // Link to Athleticism Database parameter (ParameterV2.id)
+  isDerived?: boolean;               // Auto-generated from "contributes_to" relationships
+  interactionStrength?: 'strong' | 'moderate' | 'weak';  // Strength of the relationship
 }
 
 export interface Event {
