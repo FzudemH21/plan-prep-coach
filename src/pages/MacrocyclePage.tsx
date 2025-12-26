@@ -81,6 +81,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const derivedSubGoals = useMemo(() => {
     const derived: SubGoal[] = [];
     
+    // Get the selected athlete's performance parameters
+    const athletePerformanceParams = selectedAthleteId 
+      ? getAthletePerformanceParameters(selectedAthleteId) 
+      : [];
+    
     smartGoals.forEach(goal => {
       // Only process goals that are linked to a parameter
       if (!goal.linkedParameterId) return;
@@ -102,12 +107,30 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           );
           
           if (!alreadyExists) {
+            // Look up athlete's current value for this parameter
+            const athleteParam = athletePerformanceParams.find(
+              pp => pp.athleticismParameterId === sourceParam.id
+            );
+            
+            // Get the latest recorded value (if any)
+            let preTestValue = 0;
+            if (athleteParam && athleteParam.values.length > 0) {
+              // Sort by recordedAt descending and get the most recent
+              const sortedValues = [...athleteParam.values].sort(
+                (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+              );
+              const latestValue = parseFloat(sortedValues[0].value);
+              if (!isNaN(latestValue)) {
+                preTestValue = latestValue;
+              }
+            }
+            
             derived.push({
               id: `derived-${goal.id}-${sourceParam.id}`,
               parentGoalId: goal.id,
               description: sourceParam.name,
               testMethod: '',
-              preTestValue: 0,
+              preTestValue,
               goalValue: 0,
               unit: sourceParam.unit || '',
               percentChange: 0,
@@ -122,7 +145,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     });
     
     return derived;
-  }, [smartGoals, parametersDataV2.interactions, parametersDataV2.parameters, subGoals]);
+  }, [smartGoals, parametersDataV2.interactions, parametersDataV2.parameters, subGoals, selectedAthleteId, getAthletePerformanceParameters]);
 
   // Group sub-goals by parent goal (including derived ones)
   const subGoalsByParent = useMemo(() => {
