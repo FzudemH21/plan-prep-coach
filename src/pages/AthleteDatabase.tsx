@@ -26,6 +26,7 @@ export default function AthleteDatabase() {
       occupation: null,
       dailyActivityLevel: null,
       groupIds: groupId ? [groupId] : [],
+      isArchived: false,
     });
     setSelectedAthleteId(athlete.id);
     setIsNewAthlete(true);
@@ -71,6 +72,7 @@ export default function AthleteDatabase() {
         <AthleteGroupSidebar
           groups={athleteData.groups}
           athletes={athleteData.athletes}
+          archivedAthletes={athleteData.getArchivedAthletes()}
           selectedAthleteId={selectedAthleteId}
           onSelectAthlete={handleSelectAthlete}
           onCreateGroup={athleteData.createGroup}
@@ -87,6 +89,16 @@ export default function AthleteDatabase() {
               setSelectedAthleteId(null);
               setIsNewAthlete(false);
             }
+          }}
+          onArchiveAthlete={(athleteId) => {
+            athleteData.archiveAthlete(athleteId);
+            if (selectedAthleteId === athleteId) {
+              setSelectedAthleteId(null);
+              setIsNewAthlete(false);
+            }
+          }}
+          onUnarchiveAthlete={(athleteId) => {
+            athleteData.unarchiveAthlete(athleteId);
           }}
         />
       </div>

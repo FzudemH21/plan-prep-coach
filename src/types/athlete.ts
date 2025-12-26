@@ -28,6 +28,7 @@ export interface Athlete {
   occupation: string | null;
   dailyActivityLevel: DailyActivityLevel | null;
   groupIds: string[];
+  isArchived: boolean;
   createdAt: string;
   updatedAt: string;
 }

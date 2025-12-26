@@ -132,6 +132,7 @@ export function useAthletes() {
     const newAthlete: Athlete = {
       ...athlete,
       id: athleteId,
+      isArchived: athlete.isArchived ?? false,
       createdAt: now,
       updatedAt: now,
     };
@@ -405,13 +406,42 @@ export function useAthletes() {
     });
   }, [setData]);
 
+  // ============ ARCHIVE FUNCTIONS ============
+  const archiveAthlete = useCallback((id: string) => {
+    setData((prev) => {
+      const migrated = migrateData(prev);
+      return {
+        ...migrated,
+        athletes: migrated.athletes.map((a) =>
+          a.id === id ? { ...a, isArchived: true, updatedAt: new Date().toISOString() } : a
+        ),
+      };
+    });
+  }, [setData]);
+
+  const unarchiveAthlete = useCallback((id: string) => {
+    setData((prev) => {
+      const migrated = migrateData(prev);
+      return {
+        ...migrated,
+        athletes: migrated.athletes.map((a) =>
+          a.id === id ? { ...a, isArchived: false, updatedAt: new Date().toISOString() } : a
+        ),
+      };
+    });
+  }, [setData]);
+
+  const getArchivedAthletes = useCallback(() => {
+    return data.athletes.filter((a) => a.isArchived === true);
+  }, [data.athletes]);
+
   // ============ HELPER FUNCTIONS ============
   const getAthletesByGroup = useCallback((groupId: string) => {
-    return data.athletes.filter((a) => a.groupIds.includes(groupId));
+    return data.athletes.filter((a) => a.groupIds.includes(groupId) && !a.isArchived);
   }, [data.athletes]);
 
   const getAthletesWithoutGroup = useCallback(() => {
-    return data.athletes.filter((a) => a.groupIds.length === 0);
+    return data.athletes.filter((a) => a.groupIds.length === 0 && !a.isArchived);
   }, [data.athletes]);
 
   const getAthleteBiometrics = useCallback((athleteId: string) => {
@@ -490,6 +520,9 @@ export function useAthletes() {
     getAthlete,
     getAthletesByGroup,
     getAthletesWithoutGroup,
+    archiveAthlete,
+    unarchiveAthlete,
+    getArchivedAthletes,
 
     // Biometric definition operations
     createBiometricDefinition,
