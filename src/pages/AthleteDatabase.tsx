@@ -80,6 +80,7 @@ export default function AthleteDatabase() {
           onAssignAthleteToGroup={handleAssignAthleteToGroup}
           getAthletesByGroup={athleteData.getAthletesByGroup}
           getAthletesWithoutGroup={athleteData.getAthletesWithoutGroup}
+          onCreateAthlete={() => handleCreateAthlete()}
         />
       </div>
 
