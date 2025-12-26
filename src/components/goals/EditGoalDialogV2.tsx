@@ -446,7 +446,7 @@ export function EditGoalDialogV2({
                             const isSingleMethod = methods.length === 1 && methods[0].subCategory === '';
                             
                             if (isSingleMethod) {
-                              // Render as a single clickable item with prominent styling
+                              // Render as a single clickable item with styling matching group headings
                               return (
                                 <CommandItem
                                   key={category}
@@ -454,7 +454,7 @@ export function EditGoalDialogV2({
                                     onAddMethod(methods[0].methodId);
                                     setMethodSearchOpen(false);
                                   }}
-                                  className="font-semibold"
+                                  className="font-semibold text-sm px-2 py-1.5"
                                 >
                                   {category}
                                 </CommandItem>
