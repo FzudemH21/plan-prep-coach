@@ -45,6 +45,7 @@ import { ParameterV2 } from '@/types/parametersV2';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { ParameterValueHistory } from './ParameterValueHistory';
+import { PerformanceValueHistory } from './PerformanceValueHistory';
 
 interface ParameterSectionProps {
   athlete: Athlete;
@@ -637,6 +638,21 @@ export function ParameterSection({ athlete, athleteData, allAthletes, allAthlete
           onDeleteValue={(valueId) => athleteData.deleteBiometricValue(showBiometricHistory.id, valueId)}
           allAthletes={allAthletes}
           allAthleteParameters={allAthleteParameters}
+          currentAthlete={athlete}
+        />
+      )}
+
+      {/* ============ PERFORMANCE HISTORY DIALOG ============ */}
+      {showPerformanceHistory && getAthleticismParameter(showPerformanceHistory) && (
+        <PerformanceValueHistory
+          open={!!showPerformanceHistory}
+          onOpenChange={() => setShowPerformanceHistory(null)}
+          performanceParameter={showPerformanceHistory}
+          athleticismParameter={getAthleticismParameter(showPerformanceHistory)!}
+          onAddValue={(value) => athleteData.addPerformanceParameterValue(showPerformanceHistory.id, value)}
+          onDeleteValue={(valueId) => athleteData.deletePerformanceParameterValue(showPerformanceHistory.id, valueId)}
+          allAthletes={allAthletes}
+          allPerformanceParameters={athleteData.athletePerformanceParameters}
           currentAthlete={athlete}
         />
       )}
