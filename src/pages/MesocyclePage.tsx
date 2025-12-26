@@ -41,7 +41,8 @@ import { IntensityLevel } from "@/types/training";
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
 
 // Helper function for string normalization - robust canonicalization
-const normalizeForComparison = (str: string): string => {
+const normalizeForComparison = (str: unknown): string => {
+  if (typeof str !== 'string') return '';
   return str
     .toLowerCase()
     .normalize('NFD')
