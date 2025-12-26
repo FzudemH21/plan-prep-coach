@@ -441,21 +441,48 @@ export function EditGoalDialogV2({
                         <CommandInput placeholder="Search methods..." />
                         <CommandList className="max-h-64">
                           <CommandEmpty>No methods found.</CommandEmpty>
-                          {Array.from(groupedMethods.entries()).map(([category, methods]) => (
-                            <CommandGroup key={category} heading={category}>
-                              {methods.map(({ methodId, subCategory }) => (
+                          {Array.from(groupedMethods.entries()).map(([category, methods]) => {
+                            // Check if this category has only one method with no subcategory
+                            const isSingleMethod = methods.length === 1 && methods[0].subCategory === '';
+                            
+                            if (isSingleMethod) {
+                              // Render as a single clickable item with prominent styling
+                              return (
                                 <CommandItem
-                                  key={methodId}
+                                  key={category}
                                   onSelect={() => {
-                                    onAddMethod(methodId);
+                                    onAddMethod(methods[0].methodId);
                                     setMethodSearchOpen(false);
                                   }}
+                                  className="font-semibold"
                                 >
-                                  {subCategory || '(General)'}
+                                  {category}
                                 </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          ))}
+                              );
+                            }
+                            
+                            // Render as a group with heading and subcategory items
+                            return (
+                              <CommandGroup 
+                                key={category} 
+                                heading={category}
+                                className="[&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-foreground [&_[cmdk-group-heading]]:text-sm"
+                              >
+                                {methods.map(({ methodId, subCategory }) => (
+                                  <CommandItem
+                                    key={methodId}
+                                    onSelect={() => {
+                                      onAddMethod(methodId);
+                                      setMethodSearchOpen(false);
+                                    }}
+                                    className="pl-6 text-muted-foreground"
+                                  >
+                                    {subCategory}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            );
+                          })}
                         </CommandList>
                       </Command>
                     </PopoverContent>
