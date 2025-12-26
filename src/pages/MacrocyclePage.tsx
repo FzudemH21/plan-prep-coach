@@ -15,7 +15,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { SmartGoal, SubGoal, TrainableQuality, Event, PlanDuration } from "@/types/training";
-import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2, FileText, Check, ChevronsUpDown, ChevronDown, Pencil, Link, Link2 } from "lucide-react";
+import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2, FileText, Check, ChevronsUpDown, ChevronDown, Pencil, Link, Link2, CheckSquare } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { 
   getUniqueQualities, 
@@ -76,6 +77,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
 
   // State for parameter creation from sub-goal dialog (links to a parent SMART goal)
   const [createParameterForGoalId, setCreateParameterForGoalId] = useState<string | null>(null);
+
+  // State for selected methods in Training Methods overview
+  const [selectedMethods, setSelectedMethods] = useState<Set<string>>(new Set());
 
   // Derive sub-goals from SMART goal parameter relationships
   const derivedSubGoals = useMemo(() => {
@@ -268,6 +272,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         setMethodsByQuality(data.methodsByQuality || {});
         setSelectedTest(data.selectedTest || null);
         setSelectedEvent(data.selectedEvent || null);
+        
+        // Load selected methods if saved
+        if (data.selectedMethods && Array.isArray(data.selectedMethods)) {
+          setSelectedMethods(new Set(data.selectedMethods));
+        }
       } catch (error) {
         console.error('Error loading saved macrocycle data:', error);
       }
@@ -306,17 +315,37 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       methodsByQuality,
       selectedTest,
       selectedEvent,
+      selectedMethods: Array.from(selectedMethods),
       lastUpdated: new Date().toISOString()
     };
     localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
-  }, [planName, selectedAthleteId, planDuration, smartGoals, smartGoal, subGoals, events, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest, selectedEvent]);
+  }, [planName, selectedAthleteId, planDuration, smartGoals, smartGoal, subGoals, events, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest, selectedEvent, selectedMethods]);
 
   // Save step whenever it changes (step persistence)
   useEffect(() => {
     localStorage.setItem('macrocycleStep', currentStep.toString());
   }, [currentStep]);
 
-  // Helper function to normalize strings for comparison
+  // Auto-select methods linked to primary goals (only on initial load or when goals change significantly)
+  useEffect(() => {
+    // Only auto-select if selectedMethods is empty (initial state)
+    if (selectedMethods.size > 0) return;
+    
+    const primaryGoalMethods = new Set<string>();
+    smartGoals.forEach(goal => {
+      if (goal.linkedParameterId) {
+        const methods = parametersDataV2.parameterMethods.filter(
+          pm => pm.parameterId === goal.linkedParameterId
+        );
+        methods.forEach(m => primaryGoalMethods.add(m.methodId));
+      }
+    });
+    
+    if (primaryGoalMethods.size > 0) {
+      setSelectedMethods(primaryGoalMethods);
+    }
+  }, [smartGoals, parametersDataV2.parameterMethods]);
+
   const normalizeForComparison = (str: string): string => {
     return str.toLowerCase()
       .replace(/–/g, '-')  // Replace em dash with regular dash
@@ -2008,181 +2037,258 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     return hierarchy;
   };
 
-  const renderTrainingMethodsForm = () => {
-    const hierarchy = getMethodsHierarchyByGoal();
+  // Build a flat list of all methods with their parameter associations
+  type MethodAssociation = {
+    parameterId: string;
+    parameterName: string;
+    isPrimaryGoal: boolean;
+    goalDescription?: string;
+    rationale?: string;
+  };
+
+  type MethodWithAssociations = {
+    methodId: string;
+    associations: MethodAssociation[];
+  };
+
+  const getAllMethodsWithAssociations = (): MethodWithAssociations[] => {
+    const methodMap = new Map<string, MethodAssociation[]>();
     
-    // Build method usage map for duplicate detection
-    const methodUsageMap = new Map<string, { context: string; goalId: string; subGoalId?: string }[]>();
+    // Helper to get parameter name
+    const getParameterName = (parameterId: string): string => {
+      const param = parametersDataV2.parameters.find(p => p.id === parameterId);
+      return param?.name || parameterId;
+    };
     
-    hierarchy.forEach(item => {
-      // Track direct methods
-      item.directMethods.forEach(m => {
-        const existing = methodUsageMap.get(m.methodId) || [];
-        methodUsageMap.set(m.methodId, [...existing, { 
-          context: `Primary Goal: ${item.goal.description}`,
-          goalId: item.goal.id
-        }]);
-      });
-      // Track sub-goal methods
-      item.subGoalMethods.forEach(sg => {
-        sg.methods.forEach(m => {
-          const existing = methodUsageMap.get(m.methodId) || [];
-          methodUsageMap.set(m.methodId, [...existing, { 
-            context: `Sub-Goal: ${sg.subGoal.description}`,
-            goalId: item.goal.id,
-            subGoalId: sg.subGoal.id
-          }]);
-        });
-      });
+    // Get all primary goal parameter IDs
+    const primaryGoalParameterIds = new Set(
+      smartGoals.filter(g => g.linkedParameterId).map(g => g.linkedParameterId!)
+    );
+    
+    // Get all sub-goal parameter IDs with their parent goal info
+    const allSubGoals = [...subGoals, ...derivedSubGoals];
+    const subGoalToParentGoal = new Map<string, SmartGoal>();
+    allSubGoals.forEach(sg => {
+      const parentGoal = smartGoals.find(g => g.id === sg.parentGoalId);
+      if (sg.parameterLinkedId && parentGoal) {
+        subGoalToParentGoal.set(sg.parameterLinkedId, parentGoal);
+      }
     });
     
-    // Helper to get other usages of a method
-    const getOtherUsages = (methodId: string, currentGoalId: string, currentSubGoalId?: string) => {
-      const allUsages = methodUsageMap.get(methodId) || [];
-      return allUsages.filter(u => {
-        if (currentSubGoalId) {
-          // We're in a sub-goal context, filter out this exact sub-goal
-          return u.subGoalId !== currentSubGoalId;
-        } else {
-          // We're in a primary goal context, filter out this goal's direct methods
-          return u.goalId !== currentGoalId || u.subGoalId !== undefined;
-        }
-      });
-    };
+    // Process all parameter methods
+    parametersDataV2.parameterMethods.forEach(pm => {
+      const existing = methodMap.get(pm.methodId) || [];
+      const parameterName = getParameterName(pm.parameterId);
+      
+      // Check if this is a primary goal
+      const isPrimaryGoal = primaryGoalParameterIds.has(pm.parameterId);
+      const primaryGoal = smartGoals.find(g => g.linkedParameterId === pm.parameterId);
+      
+      // Check if this is a sub-goal
+      const parentGoal = subGoalToParentGoal.get(pm.parameterId);
+      
+      // Only include methods that are related to our goals
+      if (isPrimaryGoal || parentGoal) {
+        existing.push({
+          parameterId: pm.parameterId,
+          parameterName,
+          isPrimaryGoal,
+          goalDescription: isPrimaryGoal ? primaryGoal?.description : parentGoal?.description,
+          rationale: pm.rationale,
+        });
+        methodMap.set(pm.methodId, existing);
+      }
+    });
+    
+    // Convert to array
+    return Array.from(methodMap.entries()).map(([methodId, associations]) => ({
+      methodId,
+      associations,
+    }));
+  };
+
+  const toggleMethodSelection = (methodId: string, checked: boolean) => {
+    setSelectedMethods(prev => {
+      const newSet = new Set(prev);
+      if (checked) {
+        newSet.add(methodId);
+      } else {
+        newSet.delete(methodId);
+      }
+      return newSet;
+    });
+  };
+
+  const renderTrainingMethodsForm = () => {
+    const allMethods = getAllMethodsWithAssociations();
+    const hasAnyMethods = allMethods.length > 0;
+    
+    // Separate methods into primary-goal-linked and other methods
+    const primaryMethods = allMethods.filter(m => 
+      m.associations.some(a => a.isPrimaryGoal)
+    );
+    const otherMethods = allMethods.filter(m => 
+      !m.associations.some(a => a.isPrimaryGoal)
+    );
     
     return (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
-            <Target className="h-5 w-5" />
-            <span>Training Methods Overview</span>
+            <CheckSquare className="h-5 w-5" />
+            <span>Select Training Methods</span>
           </CardTitle>
           <CardDescription>
-            Hierarchical overview of training methods organized by primary goals, showing the rationale for each method.
+            Select the methods to include in your training plan. Methods linked to primary goals are selected by default.
+            Each method shows the parameters it's linked to and the rationale for each.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {hierarchy.length > 0 ? (
-            <div className="space-y-8">
-              {hierarchy.map((item) => (
-                <div key={item.goal.id} className="space-y-4">
-                  {/* Primary Goal Header */}
-                  <div className="p-4 bg-primary/10 border border-primary/20 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Target className="h-5 w-5 text-primary" />
-                      <span className="font-semibold text-lg">Primary Goal: {item.goal.description}</span>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      Baseline: {item.goal.baselineValue} {item.goal.unit} → Target: {item.goal.desiredValue} {item.goal.unit}
-                      {item.goal.percentChange !== 0 && (
-                        <span className="ml-2">
-                          ({item.goal.percentChange > 0 ? '+' : ''}{item.goal.percentChange.toFixed(1)}%)
-                        </span>
-                      )}
-                    </div>
-                  </div>
+          {hasAnyMethods ? (
+            <div className="space-y-6">
+              {/* Selection Summary */}
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <span className="text-sm text-muted-foreground">
+                  {selectedMethods.size} of {allMethods.length} methods selected
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedMethods(new Set(allMethods.map(m => m.methodId)))}
+                  >
+                    Select All
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedMethods(new Set())}
+                  >
+                    Clear All
+                  </Button>
+                </div>
+              </div>
 
-                  {/* Direct Methods for Primary Goal */}
-                  {item.directMethods.length > 0 && (
-                    <div className="ml-4 space-y-2">
-                      <Label className="text-sm font-medium text-muted-foreground">
-                        Methods directly linked to this goal:
-                      </Label>
-                      <div className="space-y-2">
-                        {item.directMethods.map((method, idx) => {
-                          const otherUsages = getOtherUsages(method.methodId, item.goal.id);
-                          return (
-                            <div key={idx} className="p-3 border rounded-md bg-background">
-                              <div className="flex items-start gap-2">
-                                <div className="w-1 h-full bg-primary rounded-full" />
-                                <div className="flex-1">
-                                  <div className="flex items-center justify-between">
-                                    <div className="font-medium text-sm">{method.methodId}</div>
-                                    {otherUsages.length > 0 && (
-                                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                        <Link2 className="h-3 w-3" />
-                                        <span>Also linked to: {otherUsages.map(u => u.context).join(', ')}</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                  {method.rationale && (
-                                    <div className="text-sm text-muted-foreground mt-1">
-                                      <span className="font-medium">Rationale:</span> {method.rationale}
-                                    </div>
-                                  )}
-                                </div>
+              {/* Primary Goal Methods */}
+              {primaryMethods.length > 0 && (
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium flex items-center gap-2">
+                    <Target className="h-4 w-4 text-primary" />
+                    Methods Linked to Primary Goals
+                  </Label>
+                  <div className="space-y-2">
+                    {primaryMethods.map(method => (
+                      <div 
+                        key={method.methodId} 
+                        className={cn(
+                          "flex items-start gap-3 p-4 border rounded-lg transition-colors",
+                          selectedMethods.has(method.methodId) 
+                            ? "bg-primary/5 border-primary/30" 
+                            : "bg-background hover:bg-muted/50"
+                        )}
+                      >
+                        <Checkbox 
+                          id={method.methodId}
+                          checked={selectedMethods.has(method.methodId)}
+                          onCheckedChange={(checked) => toggleMethodSelection(method.methodId, !!checked)}
+                          className="mt-1"
+                        />
+                        <div className="flex-1 space-y-2">
+                          <label 
+                            htmlFor={method.methodId}
+                            className="font-medium text-sm cursor-pointer"
+                          >
+                            {method.methodId}
+                          </label>
+                          <div className="space-y-1.5">
+                            {method.associations.map((assoc, idx) => (
+                              <div key={idx} className="flex items-start gap-2 text-sm">
+                                <Badge 
+                                  variant={assoc.isPrimaryGoal ? "default" : "secondary"}
+                                  className="shrink-0"
+                                >
+                                  {assoc.parameterName}
+                                  {assoc.isPrimaryGoal && " (Primary)"}
+                                </Badge>
+                                {assoc.rationale && (
+                                  <span className="text-muted-foreground italic">
+                                    "{assoc.rationale}"
+                                  </span>
+                                )}
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Sub-Goals & Their Methods */}
-                  {item.subGoalMethods.length > 0 && (
-                    <div className="ml-4 space-y-3">
-                      <Label className="text-sm font-medium text-muted-foreground">
-                        Sub-Goals & Their Methods:
-                      </Label>
-                      {item.subGoalMethods.map((sgItem) => (
-                        <div key={sgItem.subGoal.id} className="border rounded-lg p-3 bg-muted/20">
-                          {/* Sub-goal header */}
-                          <div className="flex items-center gap-2 text-sm mb-3">
-                            <Badge variant="secondary" className="font-medium">
-                              {sgItem.subGoal.description}
-                              {sgItem.subGoal.interactionStrength && (
-                                <span className="ml-1 opacity-70">
-                                  ({sgItem.subGoal.interactionStrength})
-                                </span>
-                              )}
-                            </Badge>
-                            <span className="text-muted-foreground text-xs">→ contributes to {item.goal.description}</span>
-                          </div>
-                          
-                          {/* Methods for this sub-goal */}
-                          <div className="space-y-2 ml-2">
-                            {sgItem.methods.map((method, idx) => {
-                              const otherUsages = getOtherUsages(method.methodId, item.goal.id, sgItem.subGoal.id);
-                              return (
-                                <div key={idx} className="p-3 border rounded-md bg-background">
-                                  <div className="flex items-start gap-2">
-                                    <div className="w-1 h-full bg-secondary rounded-full" />
-                                    <div className="flex-1">
-                                      <div className="flex items-center justify-between flex-wrap gap-2">
-                                        <div className="font-medium text-sm">{method.methodId}</div>
-                                        {otherUsages.length > 0 && (
-                                          <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-                                            <Link2 className="h-3 w-3" />
-                                            <span>Also linked to: {otherUsages.map(u => u.context).join(', ')}</span>
-                                          </div>
-                                        )}
-                                      </div>
-                                      {method.rationale && (
-                                        <div className="text-sm text-muted-foreground mt-1">
-                                          <span className="font-medium">Rationale:</span> {method.rationale}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
+                            ))}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
+              )}
+
+              {/* Other Methods (Sub-goal linked) */}
+              {otherMethods.length > 0 && (
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium flex items-center gap-2">
+                    <Link2 className="h-4 w-4 text-muted-foreground" />
+                    Methods Linked to Sub-Goals
+                  </Label>
+                  <div className="space-y-2">
+                    {otherMethods.map(method => (
+                      <div 
+                        key={method.methodId} 
+                        className={cn(
+                          "flex items-start gap-3 p-4 border rounded-lg transition-colors",
+                          selectedMethods.has(method.methodId) 
+                            ? "bg-secondary/20 border-secondary/50" 
+                            : "bg-background hover:bg-muted/50"
+                        )}
+                      >
+                        <Checkbox 
+                          id={method.methodId}
+                          checked={selectedMethods.has(method.methodId)}
+                          onCheckedChange={(checked) => toggleMethodSelection(method.methodId, !!checked)}
+                          className="mt-1"
+                        />
+                        <div className="flex-1 space-y-2">
+                          <label 
+                            htmlFor={method.methodId}
+                            className="font-medium text-sm cursor-pointer"
+                          >
+                            {method.methodId}
+                          </label>
+                          <div className="space-y-1.5">
+                            {method.associations.map((assoc, idx) => (
+                              <div key={idx} className="flex items-start gap-2 text-sm">
+                                <Badge variant="secondary" className="shrink-0">
+                                  {assoc.parameterName}
+                                </Badge>
+                                {assoc.goalDescription && (
+                                  <span className="text-xs text-muted-foreground">
+                                    → contributes to {assoc.goalDescription}
+                                  </span>
+                                )}
+                                {assoc.rationale && (
+                                  <span className="text-muted-foreground italic ml-1">
+                                    "{assoc.rationale}"
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-12 text-muted-foreground space-y-2">
-              <Target className="h-12 w-12 mx-auto opacity-30" />
+              <CheckSquare className="h-12 w-12 mx-auto opacity-30" />
               <p className="font-medium">No training methods configured yet</p>
               <p className="text-sm">
                 Link parameters to your primary goals and add training methods in the Athleticism Database 
-                to see them organized here.
+                to see them here.
               </p>
             </div>
           )}
@@ -2225,6 +2331,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         methodsByQuality,
         selectedTest,
         selectedEvent,
+        selectedMethods: Array.from(selectedMethods),
         completedAt: new Date().toISOString()
       };
       localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
