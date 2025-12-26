@@ -260,6 +260,7 @@ export default function MesocycleCalendar({
           <div className="w-full overflow-x-auto">
             <DayPicker
               mode="range"
+              showOutsideDays={false}
               selected={{
                 from: startDate,
                 to: endDate
