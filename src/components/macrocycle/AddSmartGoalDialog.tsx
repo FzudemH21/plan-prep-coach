@@ -216,7 +216,7 @@ export function AddSmartGoalDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Target className="h-5 w-5" />
@@ -240,12 +240,12 @@ export function AddSmartGoalDialog({
                   className="w-full justify-between"
                 >
                   {isCustomMode ? (
-                    <span className="flex items-center gap-2">
-                      <Pencil className="h-4 w-4" />
-                      Custom goal: {customGoalName || "..."}
+                    <span className="flex items-center gap-2 min-w-0">
+                      <Pencil className="h-4 w-4 shrink-0" />
+                      <span className="truncate">Custom goal: {customGoalName || "..."}</span>
                     </span>
                   ) : selectedParameterId ? (
-                    description
+                    <span className="truncate">{description}</span>
                   ) : (
                     "Select a parameter or create custom..."
                   )}
