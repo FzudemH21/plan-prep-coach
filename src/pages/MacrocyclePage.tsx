@@ -1952,79 +1952,64 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     </Card>
   );
 
-  const renderTrainableQualitiesForm = () => (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <Target className="h-5 w-5" />
-          <span>Trainable Qualities</span>
-        </CardTitle>
-        <CardDescription>
-          Identify the qualities that need to be developed to achieve your sub-goals.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="space-y-6">
-          {subGoals.map((subGoal) => {
-            const subGoalQualities = qualitiesBySubGoal[subGoal.id] || { label: subGoal.description, list: [] };
-            const recommendedQualities = getQualitiesForSubGoalFromDB(subGoal.description);
-            const availableQualities = recommendedQualities.filter(q => !subGoalQualities.list.includes(q));
-            
-            return (
-              <div key={subGoal.id} className="p-4 border rounded-lg space-y-4">
-                <div className="space-y-3">
-                  <Label className="font-medium text-base">{subGoal.description || "Sub-Goal"}</Label>
-                  
-                  {/* Selected qualities */}
-                  <div className="space-y-2">
-                    {subGoalQualities.list.map((quality) => (
-                      <div key={quality} className="flex items-center justify-between p-2 bg-muted rounded-md">
-                        <span className="text-sm">{quality}</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeQualityFromSubGoal(subGoal.id, quality)}
-                          className="h-6 w-6 p-0 hover:bg-destructive hover:text-destructive-foreground"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {/* Add quality dropdown */}
-                  <div className="space-y-2">
-                    <Label className="text-sm text-muted-foreground">Add Quality</Label>
-                     <SearchableDropdown
-                       value=""
-                       onChange={(value) => {
-                         if (value) {
-                           addQualityToSubGoal(subGoal.id, value);
-                         }
-                       }}
-                       options={[...availableQualities, ...getUniqueQualities()]}
-                       placeholder="Select or type to add quality..."
-                       allowCustomInput={true}
-                       className="bg-background"
-                     />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        
-        {subGoals.length === 0 && (
-          <div className="text-center py-8 text-muted-foreground">
-            <p>No sub-goals selected. Please go back to Step 3 to add sub-goals.</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
+  // Get methods for a parameter from the parameters database
+  const getMethodsForParameter = (parameterId: string) => {
+    return parametersDataV2.parameterMethods.filter(pm => pm.parameterId === parameterId);
+  };
+
+  // Build hierarchical data: Primary Goals -> Methods with rationale
+  const getMethodsHierarchyByGoal = () => {
+    const hierarchy: Array<{
+      goal: SmartGoal;
+      directMethods: Array<{
+        methodId: string;
+        rationale?: string;
+      }>;
+      subGoalMethods: Array<{
+        subGoal: SubGoal;
+        methods: Array<{
+          methodId: string;
+          rationale?: string;
+        }>;
+      }>;
+    }> = [];
+
+    smartGoals.forEach(goal => {
+      if (!goal.linkedParameterId) return;
+
+      // Get methods that directly improve this goal's parameter
+      const directMethods = getMethodsForParameter(goal.linkedParameterId);
+
+      // Get sub-goals for this primary goal and their methods
+      const allSubGoals = [...subGoals, ...derivedSubGoals].filter(
+        sg => sg.parentGoalId === goal.id
+      );
+
+      const subGoalMethods = allSubGoals
+        .filter(sg => sg.parameterLinkedId)
+        .map(sg => ({
+          subGoal: sg,
+          methods: getMethodsForParameter(sg.parameterLinkedId!)
+        }))
+        .filter(item => item.methods.length > 0);
+
+      if (directMethods.length > 0 || subGoalMethods.length > 0) {
+        hierarchy.push({
+          goal,
+          directMethods: directMethods.map(m => ({
+            methodId: m.methodId,
+            rationale: m.rationale
+          })),
+          subGoalMethods
+        });
+      }
+    });
+
+    return hierarchy;
+  };
 
   const renderTrainingMethodsForm = () => {
-    const methodsWithData = getMethodsWithSubGoalsAndQualities();
+    const hierarchy = getMethodsHierarchyByGoal();
     
     return (
       <Card>
@@ -2034,52 +2019,114 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
             <span>Training Methods Overview</span>
           </CardTitle>
           <CardDescription>
-            Overview of selected training methods with the sub-goals and qualities they address, including loading recommendations.
+            Hierarchical overview of training methods organized by primary goals, showing the rationale for each method.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="space-y-6">
-            {methodsWithData.map((methodData, index) => (
-              <div key={index} className="p-4 border rounded-lg space-y-4">
-                {/* Method header */}
-                <div className="space-y-2">
-                  <Label className="font-medium text-lg flex items-center space-x-2">
-                    <Target className="h-4 w-4" />
-                    <span>{methodData.method}</span>
-                  </Label>
-                </div>
-                
-                {/* Sub-goals and qualities this method addresses */}
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium text-muted-foreground">
-                    This method addresses the following sub-goals and qualities:
-                  </Label>
-                  
-                  <div className="space-y-3">
-                    {methodData.qualitiesWithRecommendations.map((item, itemIndex) => (
-                      <div key={itemIndex} className="p-3 bg-muted/50 rounded-md space-y-2">
-                        <div className="text-sm">
-                          <span className="font-medium">Sub-Goal:</span> {item.subGoal}
-                        </div>
-                        <div className="text-sm">
-                          <span className="font-medium">Quality:</span> {item.quality}
-                        </div>
-                        {item.recommendations && (
-                          <div className="text-sm text-muted-foreground">
-                            <span className="font-medium">Loading Recommendations:</span> {item.recommendations}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+          {hierarchy.length > 0 ? (
+            <div className="space-y-8">
+              {hierarchy.map((item) => (
+                <div key={item.goal.id} className="space-y-4">
+                  {/* Primary Goal Header */}
+                  <div className="p-4 bg-primary/10 border border-primary/20 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Target className="h-5 w-5 text-primary" />
+                      <span className="font-semibold text-lg">Primary Goal: {item.goal.description}</span>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Baseline: {item.goal.baselineValue} {item.goal.unit} → Target: {item.goal.desiredValue} {item.goal.unit}
+                      {item.goal.percentChange !== 0 && (
+                        <span className="ml-2">
+                          ({item.goal.percentChange > 0 ? '+' : ''}{item.goal.percentChange.toFixed(1)}%)
+                        </span>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Direct Methods for Primary Goal */}
+                  {item.directMethods.length > 0 && (
+                    <div className="ml-4 space-y-2">
+                      <Label className="text-sm font-medium text-muted-foreground">
+                        Methods directly improving this goal:
+                      </Label>
+                      <div className="space-y-2">
+                        {item.directMethods.map((method, idx) => (
+                          <div key={idx} className="p-3 border rounded-md bg-background">
+                            <div className="flex items-start gap-2">
+                              <div className="w-1 h-full bg-primary rounded-full" />
+                              <div className="flex-1">
+                                <div className="font-medium text-sm">{method.methodId}</div>
+                                {method.rationale && (
+                                  <div className="text-sm text-muted-foreground mt-1">
+                                    <span className="font-medium">Rationale:</span> {method.rationale}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Methods via Sub-Goals */}
+                  {item.subGoalMethods.length > 0 && (
+                    <div className="ml-4 space-y-3">
+                      <Label className="text-sm font-medium text-muted-foreground">
+                        Methods improving sub-goals (which contribute to primary goal):
+                      </Label>
+                      {item.subGoalMethods.map((sgItem) => (
+                        <div key={sgItem.subGoal.id} className="space-y-2">
+                          {/* Sub-goal indicator */}
+                          <div className="flex items-center gap-2 text-sm">
+                            <div className="w-4 h-px bg-muted-foreground" />
+                            <Badge variant="secondary" className="font-normal">
+                              {sgItem.subGoal.description}
+                              {sgItem.subGoal.interactionStrength && (
+                                <span className="ml-1 opacity-70">
+                                  ({sgItem.subGoal.interactionStrength})
+                                </span>
+                              )}
+                            </Badge>
+                            <span className="text-muted-foreground">→ contributes to primary goal</span>
+                          </div>
+                          
+                          {/* Methods for this sub-goal */}
+                          <div className="ml-6 space-y-2">
+                            {sgItem.methods.map((method, idx) => (
+                              <div key={idx} className="p-3 border rounded-md bg-muted/30">
+                                <div className="flex items-start gap-2">
+                                  <div className="w-1 h-full bg-secondary rounded-full" />
+                                  <div className="flex-1">
+                                    <div className="font-medium text-sm">{method.methodId}</div>
+                                    {method.rationale && (
+                                      <div className="text-sm text-muted-foreground mt-1">
+                                        <span className="font-medium">Rationale:</span> {method.rationale}
+                                      </div>
+                                    )}
+                                    <div className="text-xs text-muted-foreground mt-1 italic">
+                                      Improves {sgItem.subGoal.description} → {item.goal.description}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
-          </div>
-          
-          {methodsWithData.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>No training methods selected. Please go back to Step 4 to select trainable qualities and methods.</p>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-muted-foreground space-y-2">
+              <Target className="h-12 w-12 mx-auto opacity-30" />
+              <p className="font-medium">No training methods configured yet</p>
+              <p className="text-sm">
+                Link parameters to your primary goals and add training methods in the Athleticism Database 
+                to see them organized here.
+              </p>
             </div>
           )}
         </CardContent>
@@ -2090,7 +2137,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const stepTitles = [
     "Plan Setup & Goals",
     "Sub-Goals & Testing",
-    "Trainable Qualities",
     "Training Methods"
   ];
 
@@ -2164,15 +2210,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           {renderSubGoalsForm()}
         </div>
 
-        {/* Step 3: Trainable Qualities */}
-        <div id="qualities" className="space-y-4">
-          <h2 className="text-2xl font-semibold border-b pb-2">3. Trainable Qualities</h2>
-          {renderTrainableQualitiesForm()}
-        </div>
-
-        {/* Step 4: Training Methods */}
+        {/* Step 3: Training Methods */}
         <div id="methods" className="space-y-4">
-          <h2 className="text-2xl font-semibold border-b pb-2">4. Training Methods</h2>
+          <h2 className="text-2xl font-semibold border-b pb-2">3. Training Methods</h2>
           {renderTrainingMethodsForm()}
         </div>
       </div>
@@ -2231,8 +2271,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       <div className="space-y-6">
         {currentStep === 1 && renderPlanAndGoalSetup()}
         {currentStep === 2 && renderSubGoalsForm()}
-        {currentStep === 3 && renderTrainableQualitiesForm()}
-        {currentStep === 4 && renderTrainingMethodsForm()}
+        {currentStep === 3 && renderTrainingMethodsForm()}
       </div>
 
       {/* Navigation */}
