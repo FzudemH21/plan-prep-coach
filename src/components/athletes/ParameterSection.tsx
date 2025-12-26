@@ -281,7 +281,7 @@ export function ParameterSection({ athlete, athleteData, allAthletes, allAthlete
         <CardHeader className="flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">
             <Activity className="h-5 w-5 text-muted-foreground" />
-            <CardTitle className="text-lg">Biometrics</CardTitle>
+            <CardTitle className="text-lg">Other Metrics</CardTitle>
           </div>
           <Button variant="outline" size="sm" onClick={() => setShowAddBiometric(true)}>
             <Plus className="h-4 w-4 mr-1" />
@@ -291,7 +291,7 @@ export function ParameterSection({ athlete, athleteData, allAthletes, allAthlete
         <CardContent>
           {athleteBiometrics.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">
-              No biometrics tracked. Add health metrics like Resting Heart Rate, Blood Pressure, etc.
+              No other metrics tracked. Add health metrics like Resting Heart Rate, Blood Pressure, etc.
             </p>
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">

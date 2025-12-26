@@ -25,17 +25,18 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Check, ChevronsUpDown, Target, Pencil } from "lucide-react";
+import { Check, ChevronsUpDown, Target, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SmartGoal } from "@/types/training";
-import { AthleteParameter, ParameterDefinition } from "@/types/athlete";
+import { AthletePerformanceParameter } from "@/types/athlete";
+import { ParameterV2 } from "@/types/parametersV2";
 
-interface AthleteParameterWithDetails {
+interface ParameterOptionItem {
   id: string;
-  definitionId: string;
+  athleticismParameterId: string;
   name: string;
   unit: string;
-  type: string;
+  category?: string;
   latestValue: string | null;
   isFromAthlete: boolean;
 }
@@ -46,8 +47,9 @@ interface AddSmartGoalDialogProps {
   onAddGoal: (goal: Omit<SmartGoal, 'id'>) => void;
   onEditGoal?: (goal: SmartGoal) => void;
   editGoal?: SmartGoal | null;
-  athleteParameters: AthleteParameter[];
-  parameterDefinitions: ParameterDefinition[];
+  athletePerformanceParams: AthletePerformanceParameter[];
+  athleticismParameters: ParameterV2[];
+  onOpenCreateParameter?: () => void;
 }
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -58,17 +60,16 @@ export function AddSmartGoalDialog({
   onAddGoal,
   onEditGoal,
   editGoal,
-  athleteParameters,
-  parameterDefinitions,
+  athletePerformanceParams,
+  athleticismParameters,
+  onOpenCreateParameter,
 }: AddSmartGoalDialogProps) {
   const [comboboxOpen, setComboboxOpen] = useState(false);
   const [selectedParameterId, setSelectedParameterId] = useState<string | null>(null);
-  const [customGoalName, setCustomGoalName] = useState("");
   const [description, setDescription] = useState("");
   const [baselineValue, setBaselineValue] = useState<number | "">("");
   const [desiredValue, setDesiredValue] = useState<number | "">("");
   const [unit, setUnit] = useState("");
-  const [isCustomMode, setIsCustomMode] = useState(false);
 
   // Pre-fill form when editing
   useEffect(() => {
@@ -78,10 +79,6 @@ export function AddSmartGoalDialog({
       setDesiredValue(editGoal.desiredValue);
       setUnit(editGoal.unit);
       setSelectedParameterId(editGoal.linkedParameterId || null);
-      setIsCustomMode(!editGoal.linkedParameterId);
-      if (!editGoal.linkedParameterId) {
-        setCustomGoalName(editGoal.description);
-      }
     }
   }, [editGoal]);
 
@@ -89,52 +86,52 @@ export function AddSmartGoalDialog({
   useEffect(() => {
     if (!open) {
       setSelectedParameterId(null);
-      setCustomGoalName("");
       setDescription("");
       setBaselineValue("");
       setDesiredValue("");
       setUnit("");
-      setIsCustomMode(false);
     }
   }, [open]);
 
-  // Get athlete's parameters with their details
-  const athleteParamsWithDetails = useMemo((): AthleteParameterWithDetails[] => {
-    return athleteParameters.map((ap) => {
-      const definition = parameterDefinitions.find(
-        (pd) => pd.id === ap.parameterDefinitionId
-      );
-      const latestValue =
-        ap.values.length > 0 ? ap.values[ap.values.length - 1].value : null;
+  // Get athlete's performance parameters with their details
+  const athleteParamsWithDetails = useMemo((): ParameterOptionItem[] => {
+    return athletePerformanceParams.map((pp) => {
+      const param = athleticismParameters.find(p => p.id === pp.athleticismParameterId);
+      const latestValue = pp.values.length > 0 
+        ? pp.values.reduce((latest, v) => 
+            new Date(v.recordedAt) > new Date(latest.recordedAt) ? v : latest
+          ).value 
+        : null;
+      
       return {
-        id: ap.id,
-        definitionId: definition?.id || "",
-        name: definition?.name || "Unknown",
-        unit: definition?.unit || "",
-        type: definition?.type || "text",
+        id: pp.id,
+        athleticismParameterId: pp.athleticismParameterId,
+        name: param?.name || "Unknown",
+        unit: param?.unit || "",
+        category: param?.category,
         latestValue,
         isFromAthlete: true,
       };
     }).sort((a, b) => a.name.localeCompare(b.name));
-  }, [athleteParameters, parameterDefinitions]);
+  }, [athletePerformanceParams, athleticismParameters]);
 
-  // Get all OTHER parameter definitions (not assigned to this athlete)
-  const otherParameters = useMemo((): AthleteParameterWithDetails[] => {
-    const athleteDefIds = new Set(athleteParameters.map(ap => ap.parameterDefinitionId));
+  // Get all OTHER athleticism parameters (not assigned to this athlete)
+  const otherParameters = useMemo((): ParameterOptionItem[] => {
+    const athleteParamIds = new Set(athletePerformanceParams.map(pp => pp.athleticismParameterId));
     
-    return parameterDefinitions
-      .filter(pd => !athleteDefIds.has(pd.id))
-      .map(pd => ({
-        id: `def-${pd.id}`,
-        definitionId: pd.id,
-        name: pd.name,
-        unit: pd.unit || "",
-        type: pd.type,
+    return athleticismParameters
+      .filter(p => !athleteParamIds.has(p.id))
+      .map(p => ({
+        id: `param-${p.id}`,
+        athleticismParameterId: p.id,
+        name: p.name,
+        unit: p.unit || "",
+        category: p.category,
         latestValue: null,
         isFromAthlete: false,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [athleteParameters, parameterDefinitions]);
+  }, [athletePerformanceParams, athleticismParameters]);
 
   // Calculate percent change
   const percentChange = useMemo(() => {
@@ -144,12 +141,10 @@ export function AddSmartGoalDialog({
     return 0;
   }, [baselineValue, desiredValue]);
 
-  const handleSelectParameter = (param: AthleteParameterWithDetails) => {
-    setSelectedParameterId(param.id);
+  const handleSelectParameter = (param: ParameterOptionItem) => {
+    setSelectedParameterId(param.athleticismParameterId);
     setDescription(param.name);
     setUnit(param.unit);
-    setIsCustomMode(false);
-    setCustomGoalName("");
     
     // Auto-fill baseline if value exists (only for athlete's parameters)
     if (param.latestValue && param.isFromAthlete) {
@@ -164,27 +159,21 @@ export function AddSmartGoalDialog({
     setComboboxOpen(false);
   };
 
-  const handleEnterCustomMode = () => {
-    setIsCustomMode(true);
-    setSelectedParameterId(null);
-    setDescription("");
-    setBaselineValue("");
-    setDesiredValue("");
-    setUnit("");
+  const handleCreateNewParameter = () => {
     setComboboxOpen(false);
+    onOpenChange(false);
+    onOpenCreateParameter?.();
   };
 
   const handleSave = () => {
-    const goalDescription = isCustomMode ? customGoalName : description;
-    
-    if (!goalDescription || baselineValue === "" || desiredValue === "") {
+    if (!description || baselineValue === "" || desiredValue === "") {
       return;
     }
 
     if (editGoal && onEditGoal) {
       onEditGoal({
         ...editGoal,
-        description: goalDescription,
+        description,
         baselineValue: typeof baselineValue === "number" ? baselineValue : 0,
         desiredValue: typeof desiredValue === "number" ? desiredValue : 0,
         unit,
@@ -193,7 +182,7 @@ export function AddSmartGoalDialog({
       });
     } else {
       onAddGoal({
-        description: goalDescription,
+        description,
         baselineValue: typeof baselineValue === "number" ? baselineValue : 0,
         desiredValue: typeof desiredValue === "number" ? desiredValue : 0,
         unit,
@@ -210,9 +199,7 @@ export function AddSmartGoalDialog({
     onOpenChange(false);
   };
 
-  const isValid = (isCustomMode ? customGoalName : description) && 
-    baselineValue !== "" && 
-    desiredValue !== "";
+  const isValid = description && baselineValue !== "" && desiredValue !== "";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -223,14 +210,14 @@ export function AddSmartGoalDialog({
             {editGoal ? "Edit SMART Goal" : "Add SMART Goal"}
           </DialogTitle>
           <DialogDescription>
-            Select an existing parameter or create a custom goal.
+            Select a performance parameter to track as a goal.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Parameter / Goal Selector */}
+          {/* Parameter Selector */}
           <div className="space-y-2">
-            <Label>Goal / Parameter</Label>
+            <Label>Parameter</Label>
             <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -239,15 +226,10 @@ export function AddSmartGoalDialog({
                   aria-expanded={comboboxOpen}
                   className="w-full justify-between"
                 >
-                  {isCustomMode ? (
-                    <span className="flex items-center gap-2 min-w-0">
-                      <Pencil className="h-4 w-4 shrink-0" />
-                      <span className="truncate">Custom goal: {customGoalName || "..."}</span>
-                    </span>
-                  ) : selectedParameterId ? (
+                  {selectedParameterId ? (
                     <span className="truncate">{description}</span>
                   ) : (
-                    "Select a parameter or create custom..."
+                    "Select a parameter..."
                   )}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
@@ -258,7 +240,7 @@ export function AddSmartGoalDialog({
                   <CommandList>
                     <CommandEmpty>No parameters found.</CommandEmpty>
                     
-                    {/* Athlete's Parameters */}
+                    {/* Athlete's Performance Parameters */}
                     {athleteParamsWithDetails.length > 0 && (
                       <CommandGroup heading="Athlete Parameters">
                         {athleteParamsWithDetails.map((param) => (
@@ -270,11 +252,11 @@ export function AddSmartGoalDialog({
                             <Check
                               className={cn(
                                 "mr-2 h-4 w-4",
-                                selectedParameterId === param.id ? "opacity-100" : "opacity-0"
+                                selectedParameterId === param.athleticismParameterId ? "opacity-100" : "opacity-0"
                               )}
                             />
-                            <div className="flex-1">
-                              <span>{param.name}</span>
+                            <div className="flex-1 min-w-0">
+                              <span className="truncate">{param.name}</span>
                               {param.latestValue && (
                                 <span className="ml-2 text-muted-foreground text-sm">
                                   (current: {param.latestValue} {param.unit})
@@ -286,7 +268,7 @@ export function AddSmartGoalDialog({
                       </CommandGroup>
                     )}
                     
-                    {/* All Other Parameters */}
+                    {/* All Other Athleticism Parameters */}
                     {otherParameters.length > 0 && (
                       <>
                         <CommandSeparator />
@@ -300,11 +282,11 @@ export function AddSmartGoalDialog({
                               <Check
                                 className={cn(
                                   "mr-2 h-4 w-4",
-                                  selectedParameterId === param.id ? "opacity-100" : "opacity-0"
+                                  selectedParameterId === param.athleticismParameterId ? "opacity-100" : "opacity-0"
                                 )}
                               />
-                              <div className="flex-1">
-                                <span>{param.name}</span>
+                              <div className="flex-1 min-w-0">
+                                <span className="truncate">{param.name}</span>
                                 {param.unit && (
                                   <span className="ml-2 text-muted-foreground text-sm">
                                     ({param.unit})
@@ -317,55 +299,37 @@ export function AddSmartGoalDialog({
                       </>
                     )}
                     
-                    <CommandSeparator />
-                    <CommandGroup>
-                      <CommandItem onSelect={handleEnterCustomMode}>
-                        <Pencil className="mr-2 h-4 w-4" />
-                        Create custom goal...
-                      </CommandItem>
-                    </CommandGroup>
+                    {/* Create New Parameter Option */}
+                    {onOpenCreateParameter && (
+                      <>
+                        <CommandSeparator />
+                        <CommandGroup>
+                          <CommandItem onSelect={handleCreateNewParameter}>
+                            <Plus className="mr-2 h-4 w-4" />
+                            Create new parameter...
+                          </CommandItem>
+                        </CommandGroup>
+                      </>
+                    )}
                   </CommandList>
                 </Command>
               </PopoverContent>
             </Popover>
           </div>
 
-          {/* Custom Goal Name (if custom mode) */}
-          {isCustomMode && (
-            <div className="space-y-2">
-              <Label htmlFor="customGoalName">Goal Name</Label>
-              <Input
-                id="customGoalName"
-                value={customGoalName}
-                onChange={(e) => setCustomGoalName(e.target.value)}
-                placeholder="e.g., 100m Sprint Time"
-              />
-            </div>
-          )}
-
           {/* Baseline & Target Values */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="baseline">Baseline Value</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="baseline"
-                  type="number"
-                  step="0.01"
-                  value={baselineValue}
-                  onChange={(e) => setBaselineValue(e.target.value ? parseFloat(e.target.value) : "")}
-                  placeholder="10.9"
-                  className="flex-1"
-                />
-                {isCustomMode && (
-                  <Input
-                    value={unit}
-                    onChange={(e) => setUnit(e.target.value)}
-                    placeholder="unit"
-                    className="w-20"
-                  />
-                )}
-              </div>
+              <Input
+                id="baseline"
+                type="number"
+                step="0.01"
+                value={baselineValue}
+                onChange={(e) => setBaselineValue(e.target.value ? parseFloat(e.target.value) : "")}
+                placeholder="Current value"
+                className="flex-1"
+              />
             </div>
 
             <div className="space-y-2">
@@ -376,13 +340,13 @@ export function AddSmartGoalDialog({
                 step="0.01"
                 value={desiredValue}
                 onChange={(e) => setDesiredValue(e.target.value ? parseFloat(e.target.value) : "")}
-                placeholder="10.5"
+                placeholder="Goal value"
               />
             </div>
           </div>
 
           {/* Unit display and percent change */}
-          {!isCustomMode && unit && (
+          {unit && (
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Unit: {unit}</span>
               {percentChange !== 0 && (
@@ -393,7 +357,7 @@ export function AddSmartGoalDialog({
             </div>
           )}
 
-          {isCustomMode && percentChange !== 0 && (
+          {!unit && percentChange !== 0 && (
             <div className="flex justify-end">
               <Badge variant={percentChange < 0 ? "destructive" : "default"}>
                 {percentChange > 0 ? "+" : ""}{percentChange.toFixed(1)}%
