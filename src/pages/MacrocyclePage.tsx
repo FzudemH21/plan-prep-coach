@@ -30,9 +30,16 @@ import { format, parseISO, addDays } from "date-fns";
 import { useAthletes } from "@/hooks/useAthletes";
 import { getAthleteDisplayName, Athlete } from "@/types/athlete";
 import { cn } from "@/lib/utils";
-import { AddSmartGoalDialog, AddSubGoalDialog } from "@/components/macrocycle";
+import { AddSmartGoalDialog, AddSubGoalDialog, AddAdditionalMethodDialog } from "@/components/macrocycle";
 import { AddParameterDialogV2 } from "@/components/goals/AddParameterDialogV2";
 import { useToolboxData } from "@/hooks/useToolboxData";
+import { AlertTriangle } from "lucide-react";
+
+// Type for manually added methods with rationale
+interface ManuallyAddedMethod {
+  methodId: string;
+  rationale?: string;
+}
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -80,6 +87,13 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
 
   // State for selected methods in Training Methods overview
   const [selectedMethods, setSelectedMethods] = useState<Set<string>>(new Set());
+
+  // State for manually added methods with rationale
+  const [manuallyAddedMethods, setManuallyAddedMethods] = useState<ManuallyAddedMethod[]>([]);
+  const [isAddMethodDialogOpen, setIsAddMethodDialogOpen] = useState(false);
+  const [editingMethodRationale, setEditingMethodRationale] = useState<string | null>(null);
+  const [editingRationaleValue, setEditingRationaleValue] = useState("");
+  const [showMissingRationaleWarning, setShowMissingRationaleWarning] = useState(false);
 
   // Derive sub-goals from SMART goal parameter relationships
   const derivedSubGoals = useMemo(() => {
@@ -277,6 +291,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         if (data.selectedMethods && Array.isArray(data.selectedMethods)) {
           setSelectedMethods(new Set(data.selectedMethods));
         }
+        
+        // Load manually added methods with rationale
+        if (data.manuallyAddedMethods && Array.isArray(data.manuallyAddedMethods)) {
+          setManuallyAddedMethods(data.manuallyAddedMethods);
+        }
       } catch (error) {
         console.error('Error loading saved macrocycle data:', error);
       }
@@ -316,10 +335,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       selectedTest,
       selectedEvent,
       selectedMethods: Array.from(selectedMethods),
+      manuallyAddedMethods, // Save manually added methods
       lastUpdated: new Date().toISOString()
     };
     localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
-  }, [planName, selectedAthleteId, planDuration, smartGoals, smartGoal, subGoals, events, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest, selectedEvent, selectedMethods]);
+  }, [planName, selectedAthleteId, planDuration, smartGoals, smartGoal, subGoals, events, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest, selectedEvent, selectedMethods, manuallyAddedMethods]);
 
   // Save step whenever it changes (step persistence)
   useEffect(() => {
@@ -2119,6 +2139,50 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     });
   };
 
+  // Get all methods that are already shown (linked to goals)
+  const getLinkedMethodIds = (): Set<string> => {
+    const allMethods = getAllMethodsWithAssociations();
+    return new Set(allMethods.map(m => m.methodId));
+  };
+
+  // Handle adding a manually added method
+  const handleAddManualMethod = (method: { methodId: string; rationale: string }) => {
+    setManuallyAddedMethods(prev => [...prev, method]);
+    // Also select it
+    setSelectedMethods(prev => new Set([...prev, method.methodId]));
+    toast({
+      title: "Method Added",
+      description: `${method.methodId} has been added to your training plan.`
+    });
+  };
+
+  // Handle removing a manually added method
+  const handleRemoveManualMethod = (methodId: string) => {
+    setManuallyAddedMethods(prev => prev.filter(m => m.methodId !== methodId));
+    // Also deselect it
+    setSelectedMethods(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(methodId);
+      return newSet;
+    });
+  };
+
+  // Handle updating rationale for a manually added method
+  const handleUpdateMethodRationale = (methodId: string, newRationale: string) => {
+    setManuallyAddedMethods(prev => 
+      prev.map(m => m.methodId === methodId ? { ...m, rationale: newRationale } : m)
+    );
+    setEditingMethodRationale(null);
+    setEditingRationaleValue("");
+  };
+
+  // Get methods without rationale for warning
+  const getMethodsWithoutRationale = (): string[] => {
+    return manuallyAddedMethods
+      .filter(m => !m.rationale?.trim())
+      .map(m => m.methodId);
+  };
+
   const renderTrainingMethodsForm = () => {
     const allMethods = getAllMethodsWithAssociations();
     const hasAnyMethods = allMethods.length > 0;
@@ -2284,17 +2348,216 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                   </div>
                 </div>
               )}
+
+              {/* Additional Training Methods Section */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <Plus className="h-4 w-4 text-muted-foreground" />
+                  Additional Training Methods
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Add any other training methods not linked to your goals. Provide a rationale for each.
+                </p>
+                
+                {/* Add Method Button */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsAddMethodDialogOpen(true)}
+                  className="w-full"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Training Method
+                </Button>
+
+                {/* List of manually added methods */}
+                {manuallyAddedMethods.length > 0 && (
+                  <div className="space-y-2">
+                    {manuallyAddedMethods.map(method => (
+                      <div 
+                        key={method.methodId} 
+                        className={cn(
+                          "flex items-start gap-3 p-4 border rounded-lg transition-colors",
+                          selectedMethods.has(method.methodId) 
+                            ? "bg-accent/20 border-accent/50" 
+                            : "bg-background hover:bg-muted/50"
+                        )}
+                      >
+                        <Checkbox 
+                          id={`manual-${method.methodId}`}
+                          checked={selectedMethods.has(method.methodId)}
+                          onCheckedChange={(checked) => toggleMethodSelection(method.methodId, !!checked)}
+                          className="mt-1"
+                        />
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label 
+                              htmlFor={`manual-${method.methodId}`}
+                              className="font-medium text-sm cursor-pointer"
+                            >
+                              {method.methodId}
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-xs">
+                                Manually Added
+                              </Badge>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => handleRemoveManualMethod(method.methodId)}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          {/* Rationale section */}
+                          {editingMethodRationale === method.methodId ? (
+                            <div className="space-y-2">
+                              <Textarea
+                                value={editingRationaleValue}
+                                onChange={(e) => setEditingRationaleValue(e.target.value)}
+                                placeholder="Why are you including this method?"
+                                className="min-h-[60px] text-sm"
+                                autoFocus
+                              />
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleUpdateMethodRationale(method.methodId, editingRationaleValue)}
+                                >
+                                  Save
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setEditingMethodRationale(null);
+                                    setEditingRationaleValue("");
+                                  }}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-start gap-2">
+                              {method.rationale ? (
+                                <p className="text-sm text-muted-foreground italic flex-1">
+                                  "{method.rationale}"
+                                </p>
+                              ) : (
+                                <p className="text-sm text-yellow-600 dark:text-yellow-500 flex items-center gap-1 flex-1">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  No rationale provided
+                                </p>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 text-xs"
+                                onClick={() => {
+                                  setEditingMethodRationale(method.methodId);
+                                  setEditingRationaleValue(method.rationale || "");
+                                }}
+                              >
+                                <Pencil className="h-3 w-3 mr-1" />
+                                {method.rationale ? "Edit" : "Add Rationale"}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
-            <div className="text-center py-12 text-muted-foreground space-y-2">
-              <CheckSquare className="h-12 w-12 mx-auto opacity-30" />
-              <p className="font-medium">No training methods configured yet</p>
-              <p className="text-sm">
-                Link parameters to your primary goals and add training methods in the Athleticism Database 
-                to see them here.
-              </p>
+            <div className="space-y-6">
+              {/* Empty state but still show Add Method option */}
+              <div className="text-center py-8 text-muted-foreground space-y-2">
+                <CheckSquare className="h-12 w-12 mx-auto opacity-30" />
+                <p className="font-medium">No goal-linked methods yet</p>
+                <p className="text-sm">
+                  Link parameters to your primary goals and add training methods in the Athleticism Database.
+                </p>
+              </div>
+              
+              {/* Still allow adding additional methods */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <Plus className="h-4 w-4 text-muted-foreground" />
+                  Additional Training Methods
+                </Label>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsAddMethodDialogOpen(true)}
+                  className="w-full"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Training Method
+                </Button>
+
+                {/* List of manually added methods */}
+                {manuallyAddedMethods.length > 0 && (
+                  <div className="space-y-2">
+                    {manuallyAddedMethods.map(method => (
+                      <div 
+                        key={method.methodId} 
+                        className={cn(
+                          "flex items-start gap-3 p-4 border rounded-lg transition-colors bg-accent/20 border-accent/50"
+                        )}
+                      >
+                        <Checkbox 
+                          id={`manual-empty-${method.methodId}`}
+                          checked={selectedMethods.has(method.methodId)}
+                          onCheckedChange={(checked) => toggleMethodSelection(method.methodId, !!checked)}
+                          className="mt-1"
+                        />
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label 
+                              htmlFor={`manual-empty-${method.methodId}`}
+                              className="font-medium text-sm cursor-pointer"
+                            >
+                              {method.methodId}
+                            </label>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => handleRemoveManualMethod(method.methodId)}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          {method.rationale ? (
+                            <p className="text-sm text-muted-foreground italic">"{method.rationale}"</p>
+                          ) : (
+                            <p className="text-sm text-yellow-600 dark:text-yellow-500 flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" />
+                              No rationale provided
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
+
+          {/* Add Method Dialog */}
+          <AddAdditionalMethodDialog
+            open={isAddMethodDialogOpen}
+            onOpenChange={setIsAddMethodDialogOpen}
+            onAdd={handleAddManualMethod}
+            excludedMethods={new Set([...getLinkedMethodIds(), ...manuallyAddedMethods.map(m => m.methodId)])}
+          />
         </CardContent>
       </Card>
     );
@@ -2322,6 +2585,13 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     }
 
     if (currentStep === totalSteps) {
+      // Check for methods without rationale
+      const methodsWithoutRationale = getMethodsWithoutRationale();
+      if (methodsWithoutRationale.length > 0 && !showMissingRationaleWarning) {
+        setShowMissingRationaleWarning(true);
+        return;
+      }
+      
       // Save macrocycle data to localStorage before navigation
       const macrocycleData = {
         planName,
@@ -2335,9 +2605,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         selectedTest,
         selectedEvent,
         selectedMethods: Array.from(selectedMethods),
+        manuallyAddedMethods,
         completedAt: new Date().toISOString()
       };
       localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
+      setShowMissingRationaleWarning(false);
       navigate('/mesocycle');
     } else {
       setCurrentStep(Math.min(totalSteps, currentStep + 1));
@@ -2391,7 +2663,60 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     return renderMacroView();
   }
 
+  // Methods without rationale for warning dialog
+  const methodsWithoutRationale = getMethodsWithoutRationale();
+
   return (
+    <>
+      {/* Warning Dialog for Missing Rationales */}
+      <AlertDialog open={showMissingRationaleWarning} onOpenChange={setShowMissingRationaleWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-yellow-500" />
+              Missing Rationales
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>The following manually added methods have no rationale specified:</p>
+              <ul className="list-disc list-inside space-y-1 mt-2">
+                {methodsWithoutRationale.map(methodId => (
+                  <li key={methodId} className="text-sm">{methodId}</li>
+                ))}
+              </ul>
+              <p className="mt-2">Would you like to add rationales or continue anyway?</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowMissingRationaleWarning(false)}>
+              Add Rationales
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              // Force proceed
+              const macrocycleData = {
+                planName,
+                selectedAthleteId,
+                smartGoal,
+                subGoals,
+                events,
+                qualities,
+                qualitiesBySubGoal,
+                methodsByQuality,
+                selectedTest,
+                selectedEvent,
+                selectedMethods: Array.from(selectedMethods),
+                manuallyAddedMethods,
+                completedAt: new Date().toISOString()
+              };
+              localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
+              setShowMissingRationaleWarning(false);
+              navigate('/mesocycle');
+            }}>
+              Continue Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    
     <div className="w-full max-w-none space-y-6">
       {/* Progress Header */}
       <div className="space-y-4">
@@ -2456,5 +2781,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         </Button>
       </div>
     </div>
+    </>
   );
 }
