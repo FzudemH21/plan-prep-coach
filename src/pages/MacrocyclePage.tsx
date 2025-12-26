@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { SmartGoal, SubGoal, TrainableQuality, Event, PlanDuration } from "@/types/training";
-import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2, FileText, Check, ChevronsUpDown, ChevronDown, Pencil, Link } from "lucide-react";
+import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2, FileText, Check, ChevronsUpDown, ChevronDown, Pencil, Link, Link2 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { 
   getUniqueQualities, 
@@ -734,7 +734,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     });
   };
 
-  const totalSteps = 4;
+  const totalSteps = 3;
   const progress = (currentStep / totalSteps) * 100;
 
   const selectedAthlete = selectedAthleteId ? athletes.find(a => a.id === selectedAthleteId) : null;
@@ -2011,6 +2011,45 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const renderTrainingMethodsForm = () => {
     const hierarchy = getMethodsHierarchyByGoal();
     
+    // Build method usage map for duplicate detection
+    const methodUsageMap = new Map<string, { context: string; goalId: string; subGoalId?: string }[]>();
+    
+    hierarchy.forEach(item => {
+      // Track direct methods
+      item.directMethods.forEach(m => {
+        const existing = methodUsageMap.get(m.methodId) || [];
+        methodUsageMap.set(m.methodId, [...existing, { 
+          context: `Primary Goal: ${item.goal.description}`,
+          goalId: item.goal.id
+        }]);
+      });
+      // Track sub-goal methods
+      item.subGoalMethods.forEach(sg => {
+        sg.methods.forEach(m => {
+          const existing = methodUsageMap.get(m.methodId) || [];
+          methodUsageMap.set(m.methodId, [...existing, { 
+            context: `Sub-Goal: ${sg.subGoal.description}`,
+            goalId: item.goal.id,
+            subGoalId: sg.subGoal.id
+          }]);
+        });
+      });
+    });
+    
+    // Helper to get other usages of a method
+    const getOtherUsages = (methodId: string, currentGoalId: string, currentSubGoalId?: string) => {
+      const allUsages = methodUsageMap.get(methodId) || [];
+      return allUsages.filter(u => {
+        if (currentSubGoalId) {
+          // We're in a sub-goal context, filter out this exact sub-goal
+          return u.subGoalId !== currentSubGoalId;
+        } else {
+          // We're in a primary goal context, filter out this goal's direct methods
+          return u.goalId !== currentGoalId || u.subGoalId !== undefined;
+        }
+      });
+    };
+    
     return (
       <Card>
         <CardHeader>
@@ -2047,40 +2086,50 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                   {item.directMethods.length > 0 && (
                     <div className="ml-4 space-y-2">
                       <Label className="text-sm font-medium text-muted-foreground">
-                        Methods directly improving this goal:
+                        Methods directly linked to this goal:
                       </Label>
                       <div className="space-y-2">
-                        {item.directMethods.map((method, idx) => (
-                          <div key={idx} className="p-3 border rounded-md bg-background">
-                            <div className="flex items-start gap-2">
-                              <div className="w-1 h-full bg-primary rounded-full" />
-                              <div className="flex-1">
-                                <div className="font-medium text-sm">{method.methodId}</div>
-                                {method.rationale && (
-                                  <div className="text-sm text-muted-foreground mt-1">
-                                    <span className="font-medium">Rationale:</span> {method.rationale}
+                        {item.directMethods.map((method, idx) => {
+                          const otherUsages = getOtherUsages(method.methodId, item.goal.id);
+                          return (
+                            <div key={idx} className="p-3 border rounded-md bg-background">
+                              <div className="flex items-start gap-2">
+                                <div className="w-1 h-full bg-primary rounded-full" />
+                                <div className="flex-1">
+                                  <div className="flex items-center justify-between">
+                                    <div className="font-medium text-sm">{method.methodId}</div>
+                                    {otherUsages.length > 0 && (
+                                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                        <Link2 className="h-3 w-3" />
+                                        <span>Also linked to: {otherUsages.map(u => u.context).join(', ')}</span>
+                                      </div>
+                                    )}
                                   </div>
-                                )}
+                                  {method.rationale && (
+                                    <div className="text-sm text-muted-foreground mt-1">
+                                      <span className="font-medium">Rationale:</span> {method.rationale}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
 
-                  {/* Methods via Sub-Goals */}
+                  {/* Sub-Goals & Their Methods */}
                   {item.subGoalMethods.length > 0 && (
                     <div className="ml-4 space-y-3">
                       <Label className="text-sm font-medium text-muted-foreground">
-                        Methods improving sub-goals (which contribute to primary goal):
+                        Sub-Goals & Their Methods:
                       </Label>
                       {item.subGoalMethods.map((sgItem) => (
-                        <div key={sgItem.subGoal.id} className="space-y-2">
-                          {/* Sub-goal indicator */}
-                          <div className="flex items-center gap-2 text-sm">
-                            <div className="w-4 h-px bg-muted-foreground" />
-                            <Badge variant="secondary" className="font-normal">
+                        <div key={sgItem.subGoal.id} className="border rounded-lg p-3 bg-muted/20">
+                          {/* Sub-goal header */}
+                          <div className="flex items-center gap-2 text-sm mb-3">
+                            <Badge variant="secondary" className="font-medium">
                               {sgItem.subGoal.description}
                               {sgItem.subGoal.interactionStrength && (
                                 <span className="ml-1 opacity-70">
@@ -2088,29 +2137,37 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                                 </span>
                               )}
                             </Badge>
-                            <span className="text-muted-foreground">→ contributes to primary goal</span>
+                            <span className="text-muted-foreground text-xs">→ contributes to {item.goal.description}</span>
                           </div>
                           
                           {/* Methods for this sub-goal */}
-                          <div className="ml-6 space-y-2">
-                            {sgItem.methods.map((method, idx) => (
-                              <div key={idx} className="p-3 border rounded-md bg-muted/30">
-                                <div className="flex items-start gap-2">
-                                  <div className="w-1 h-full bg-secondary rounded-full" />
-                                  <div className="flex-1">
-                                    <div className="font-medium text-sm">{method.methodId}</div>
-                                    {method.rationale && (
-                                      <div className="text-sm text-muted-foreground mt-1">
-                                        <span className="font-medium">Rationale:</span> {method.rationale}
+                          <div className="space-y-2 ml-2">
+                            {sgItem.methods.map((method, idx) => {
+                              const otherUsages = getOtherUsages(method.methodId, item.goal.id, sgItem.subGoal.id);
+                              return (
+                                <div key={idx} className="p-3 border rounded-md bg-background">
+                                  <div className="flex items-start gap-2">
+                                    <div className="w-1 h-full bg-secondary rounded-full" />
+                                    <div className="flex-1">
+                                      <div className="flex items-center justify-between flex-wrap gap-2">
+                                        <div className="font-medium text-sm">{method.methodId}</div>
+                                        {otherUsages.length > 0 && (
+                                          <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                                            <Link2 className="h-3 w-3" />
+                                            <span>Also linked to: {otherUsages.map(u => u.context).join(', ')}</span>
+                                          </div>
+                                        )}
                                       </div>
-                                    )}
-                                    <div className="text-xs text-muted-foreground mt-1 italic">
-                                      Improves {sgItem.subGoal.description} → {item.goal.description}
+                                      {method.rationale && (
+                                        <div className="text-sm text-muted-foreground mt-1">
+                                          <span className="font-medium">Rationale:</span> {method.rationale}
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       ))}
