@@ -143,7 +143,13 @@ export default function MesocycleCalendar({
   };
 
   // Custom day component
-  const CustomDay = ({ date, ...props }: DayProps) => {
+  const CustomDay = ({ date, displayMonth }: DayProps) => {
+    // Hide outside days (days from adjacent months) - check if date's month matches displayMonth
+    const isOutsideDay = date.getMonth() !== displayMonth.getMonth();
+    if (isOutsideDay) {
+      return <div className="w-full h-16" />;
+    }
+
     const mesocycle = getMesocycleForDate(date);
     const microcycle = mesocycle ? getMicrocycleForDate(date, mesocycle) : null;
     const testsOnDate = getTestsForDate(date);
@@ -162,36 +168,32 @@ export default function MesocycleCalendar({
           <div className="text-xs font-medium">
             {format(date, 'd')}
           </div>
-          {/* Test/Event indicators */}
+          {/* Test/Event indicators - black circle with white icon */}
           {(testsOnDate.length > 0 || eventsOnDate.length > 0) && (
             <div className="flex gap-0.5">
               {testsOnDate.length > 0 && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span>
-                        <Trophy className="h-3 w-3 text-amber-400" />
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="text-xs">Tests: {testsOnDate.join(', ')}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="flex items-center justify-center h-4 w-4 bg-black rounded-full">
+                      <Trophy className="h-2.5 w-2.5 text-white" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">Tests: {testsOnDate.join(', ')}</p>
+                  </TooltipContent>
+                </Tooltip>
               )}
               {eventsOnDate.length > 0 && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span>
-                        <CalendarDays className="h-3 w-3 text-orange-400" />
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="text-xs">Events: {eventsOnDate.join(', ')}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="flex items-center justify-center h-4 w-4 bg-black rounded-full">
+                      <CalendarDays className="h-2.5 w-2.5 text-white" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">Events: {eventsOnDate.join(', ')}</p>
+                  </TooltipContent>
+                </Tooltip>
               )}
             </div>
           )}
@@ -244,12 +246,16 @@ export default function MesocycleCalendar({
               </Badge>
             ))}
             <div className="h-4 w-px bg-border" />
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Trophy className="h-3 w-3 text-amber-400" />
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="flex items-center justify-center h-4 w-4 bg-black rounded-full">
+                <Trophy className="h-2.5 w-2.5 text-white" />
+              </span>
               <span>Test Day</span>
             </div>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <CalendarDays className="h-3 w-3 text-orange-400" />
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="flex items-center justify-center h-4 w-4 bg-black rounded-full">
+                <CalendarDays className="h-2.5 w-2.5 text-white" />
+              </span>
               <span>Event Day</span>
             </div>
           </div>
