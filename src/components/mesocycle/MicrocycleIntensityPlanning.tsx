@@ -103,7 +103,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
       </div>
       
       <div className="text-sm text-muted-foreground">
-        Click on any column to adjust the intensity for that microcycle. These intensities are reflected from Step 1 and will be used in Step 3 for daily planning.
+        Click on any column to adjust the intensity for that microcycle. These intensities will be used in Step 2 for daily planning.
       </div>
     </div>
   );

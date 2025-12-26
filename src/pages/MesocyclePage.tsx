@@ -95,7 +95,7 @@ export default function MesocyclePage() {
   const { dragState, startDrag, endDrag, addToSelection, clearSelection, fillCells } = useDragFill();
   const { toast } = useToast();
 
-  const totalSteps = 6;
+  const totalSteps = 5;
 
   // Navigation component for top and bottom
   const NavigationButtons = () => (
@@ -720,30 +720,6 @@ export default function MesocyclePage() {
                                   className="w-16"
                                 />
                               </div>
-                              <div className="flex items-center space-x-2">
-                                <Label className="text-sm">Intensity:</Label>
-                                <Select
-                                  value={micro.intensity}
-                                  onValueChange={(value: Intensity) => updateMicrocycle(index, microIndex, 'intensity', value)}
-                                >
-                                  <SelectTrigger className="w-32">
-                                    <div className="flex items-center space-x-2">
-                                      <div className={`w-2 h-2 rounded ${getIntensityColor(micro.intensity)}`}></div>
-                                      <SelectValue />
-                                    </div>
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {intensityLevels.map((level) => (
-                                      <SelectItem key={level} value={level}>
-                                        <div className="flex items-center space-x-2">
-                                          <div className={`w-2 h-2 rounded ${getIntensityColor(level)}`}></div>
-                                          <span className="capitalize text-xs">{level.replace("-", " ")}</span>
-                                        </div>
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
                               <Button
                                 size="sm"
                                 variant="destructive"
@@ -766,15 +742,17 @@ export default function MesocyclePage() {
               </div>
             </div>
 
-            {/* Full Training Plan Calendar Visualization */}
-            <MesocycleCalendar 
-              mesocycles={mesocycles as any} 
-              startDate={planStartDate}
-              showFullPlan={true}
-              totalWeeks={totalWeeks}
-              subGoals={macrocycleData?.subGoals}
-              events={macrocycleData?.events}
-            />
+            {/* Microcycle Intensity Planning Chart */}
+            <div className="mt-6">
+              <h4 className="font-semibold mb-4">Microcycle Intensity Configuration</h4>
+              <MicrocycleIntensityPlanning 
+                mesocycles={mesocycles}
+                intensityLevels={intensityLevels}
+                getIntensityColor={getIntensityColor}
+                onMicrocycleIntensityChange={handleMicrocycleIntensityChange}
+                onCopyMesocycle={copyMesocycleIntensity}
+              />
+            </div>
           </>
         )}
       </CardContent>
@@ -917,28 +895,6 @@ export default function MesocyclePage() {
     });
   };
 
-  const renderIntensitySetup = () => (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <Target className="h-5 w-5" />
-          <span>Step 2: Microcycle Intensity Configuration</span>
-        </CardTitle>
-        <CardDescription>
-          Configure the training intensity for each microcycle within your mesocycles. Click on any column to adjust the intensity.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <MicrocycleIntensityPlanning 
-          mesocycles={mesocycles}
-          intensityLevels={intensityLevels}
-          getIntensityColor={getIntensityColor}
-          onMicrocycleIntensityChange={handleMicrocycleIntensityChange}
-          onCopyMesocycle={copyMesocycleIntensity}
-        />
-      </CardContent>
-    </Card>
-  );
 
 
   // Helper functions for sub-goal and method management
@@ -2206,7 +2162,7 @@ export default function MesocyclePage() {
             <div className="space-y-1.5">
               <CardTitle className="flex items-center space-x-2">
                 <Settings className="h-5 w-5" />
-                <span>Step 5: Method Periodization</span>
+                <span>Step 4: Method Periodization</span>
               </CardTitle>
               <CardDescription>
                 Configure loading parameters for each training method across all mesocycles and microcycles.
@@ -2227,7 +2183,7 @@ export default function MesocyclePage() {
           {allMethods.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-muted-foreground mb-2">No training methods allocated.</p>
-              <p className="text-sm text-muted-foreground">Please allocate sub-goals to mesocycles in step 3 first.</p>
+              <p className="text-sm text-muted-foreground">Please allocate sub-goals to mesocycles in step 2 first.</p>
             </div>
           ) : (
             <>
@@ -2799,7 +2755,7 @@ export default function MesocyclePage() {
             <div className="space-y-1.5">
               <CardTitle className="flex items-center space-x-2">
                 <Target className="h-5 w-5" />
-                <span>Step 6: Exercise Selection</span>
+                <span>Step 5: Exercise Selection</span>
               </CardTitle>
               <CardDescription>
                 Select specific exercises for each training method across your mesocycles and microcycles.
@@ -3475,7 +3431,7 @@ export default function MesocyclePage() {
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
           <CalendarDays className="h-5 w-5" />
-          <span>Step 3: Daily Training Intensity Planning</span>
+          <span>Step 2: Daily Training Intensity Planning</span>
         </CardTitle>
         <CardDescription>
           Set the training intensity for each training day across all mesocycles and microcycles.
@@ -3683,7 +3639,6 @@ export default function MesocyclePage() {
 
   const stepTitles = [
     "Mesocycle Setup",
-    "Intensity Configuration",
     "Daily Training Intensity Planning", 
     "Sub-Goal Allocation",
     "Method Periodization",
@@ -3719,17 +3674,16 @@ export default function MesocyclePage() {
         <div className="space-y-8">
           {renderTrainingPlanOverview()}
           {currentStep === 1 && renderMesocycleSetup()}
-          {currentStep === 2 && renderIntensitySetup()}
-          {currentStep === 3 && renderDailyIntensityPlanning()}
-          {currentStep === 4 && renderQualityAllocation()}
-          {currentStep === 5 && renderMethodPeriodization()}
-          {currentStep === 6 && renderExerciseSelection()}
+          {currentStep === 2 && renderDailyIntensityPlanning()}
+          {currentStep === 3 && renderQualityAllocation()}
+          {currentStep === 4 && renderMethodPeriodization()}
+          {currentStep === 5 && renderExerciseSelection()}
         </div>
 
         <NavigationButtons />
         
         {/* Keyboard Shortcuts Panel - only show on Method Periodization step */}
-        {currentStep === 5 && <KeyboardShortcutsPanel />}
+        {currentStep === 4 && <KeyboardShortcutsPanel />}
         
         {/* Add Method Dialog */}
         <AddMethodDialog
