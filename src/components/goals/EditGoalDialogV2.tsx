@@ -466,7 +466,7 @@ export function EditGoalDialogV2({
                               <CommandGroup 
                                 key={category} 
                                 heading={category}
-                                className="[&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-foreground [&_[cmdk-group-heading]]:text-sm"
+                                className="[&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-foreground [&_[cmdk-group-heading]]:text-sm [&_[cmdk-group-heading]]:px-2"
                               >
                                 {methods.map(({ methodId, subCategory }) => (
                                   <CommandItem
