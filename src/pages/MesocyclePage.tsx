@@ -949,13 +949,25 @@ export default function MesocyclePage() {
       });
     }
 
-    // Add manually added methods from macrocycle data
+    // Add manually added methods from macrocycle data (can be objects with methodId or strings)
     if (macrocycleData.manuallyAddedMethods && Array.isArray(macrocycleData.manuallyAddedMethods)) {
-      macrocycleData.manuallyAddedMethods.forEach((method: string) => methodsSet.add(method));
+      macrocycleData.manuallyAddedMethods.forEach((method: any) => {
+        if (typeof method === 'string') {
+          methodsSet.add(method);
+        } else if (method && typeof method === 'object' && method.methodId) {
+          methodsSet.add(method.methodId);
+        }
+      });
     }
 
-    // Add locally manually added methods
-    manuallyAddedMethods.forEach(method => methodsSet.add(method));
+    // Add locally manually added methods (also can be objects or strings)
+    manuallyAddedMethods.forEach((method: any) => {
+      if (typeof method === 'string') {
+        methodsSet.add(method);
+      } else if (method && typeof method === 'object' && method.methodId) {
+        methodsSet.add(method.methodId);
+      }
+    });
 
     return Array.from(methodsSet);
   }, [macrocycleData, manuallyAddedMethods]);
