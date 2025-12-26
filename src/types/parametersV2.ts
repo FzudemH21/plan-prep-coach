@@ -1,6 +1,6 @@
-export type GoalCategory = 'strength' | 'speed' | 'power' | 'endurance' | 'mobility' | 'technique' | 'body_composition' | 'other';
+export type ParameterCategory = 'strength' | 'speed' | 'power' | 'endurance' | 'mobility' | 'technique' | 'body_composition' | 'other';
 
-export interface GoalV2 {
+export interface ParameterV2 {
   id: string;
   name: string;                    // "1RM Front Squat", "100m Sprint Time"
   unit?: string;                   // "kg", "s", "cm", etc.
@@ -8,28 +8,27 @@ export interface GoalV2 {
   createdAt: string;
 }
 
-export interface GoalInteraction {
+export interface ParameterInteraction {
   id: string;
-  goalId: string;                  // The primary goal
-  interactingGoalId: string;       // The goal that interacts with it
+  parameterId: string;             // The primary parameter
+  interactingParameterId: string;  // The parameter that interacts with it
 }
 
-export interface GoalMethodV2 {
+export interface ParameterMethodV2 {
   id: string;
-  goalId: string;
+  parameterId: string;
   methodId: string;                // "Sprinting - Acceleration" format from Toolbox
-  loadingRecommendations: Record<string, string | number>;  // Parameter values
   rationale?: string;              // The "why" - optional explanation
 }
 
-export interface GoalsDatabaseV2 {
-  goals: GoalV2[];
-  interactions: GoalInteraction[];
-  goalMethods: GoalMethodV2[];
+export interface ParametersDatabaseV2 {
+  parameters: ParameterV2[];
+  interactions: ParameterInteraction[];
+  parameterMethods: ParameterMethodV2[];
   lastUpdated: string;
 }
 
-export const GOAL_CATEGORIES: { value: GoalCategory; label: string }[] = [
+export const PARAMETER_CATEGORIES: { value: ParameterCategory; label: string }[] = [
   { value: 'strength', label: 'Strength' },
   { value: 'speed', label: 'Speed' },
   { value: 'power', label: 'Power' },

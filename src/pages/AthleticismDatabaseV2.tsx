@@ -29,12 +29,12 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ArrowLeft, Plus, Search, Edit2, Trash2, Download, Upload } from 'lucide-react';
-import { useGoalsDataV2 } from '@/hooks/useGoalsDataV2';
+import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useToast } from '@/hooks/use-toast';
-import { GoalV2, GoalInteraction, GoalMethodV2, GOAL_CATEGORIES } from '@/types/goalsV2';
-import { AddGoalDialogV2 } from '@/components/goals/AddGoalDialogV2';
-import { EditGoalDialogV2 } from '@/components/goals/EditGoalDialogV2';
+import { ParameterV2, ParameterInteraction, ParameterMethodV2, PARAMETER_CATEGORIES } from '@/types/parametersV2';
+import { AddParameterDialogV2 } from '@/components/goals/AddParameterDialogV2';
+import { EditParameterDialogV2 } from '@/components/goals/EditParameterDialogV2';
 
 export default function AthleticismDatabaseV2() {
   const navigate = useNavigate();
@@ -42,99 +42,98 @@ export default function AthleticismDatabaseV2() {
   const {
     data,
     isLoading,
-    updateGoal,
-    deleteGoal,
+    updateParameter,
+    deleteParameter,
     addInteraction,
     removeInteraction,
-    getInteractionsForGoal,
-    addGoalMethod,
-    updateGoalMethod,
-    removeGoalMethod,
-    getMethodsForGoal,
+    getInteractionsForParameter,
+    addParameterMethod,
+    updateParameterMethod,
+    removeParameterMethod,
+    getMethodsForParameter,
     saveData,
-  } = useGoalsDataV2();
+  } = useParametersDataV2();
   const { data: toolboxData } = useToolboxData();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [editingGoal, setEditingGoal] = useState<GoalV2 | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<GoalV2 | null>(null);
+  const [editingParameter, setEditingParameter] = useState<ParameterV2 | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<ParameterV2 | null>(null);
 
-  // Filter goals by search term
-  const filteredGoals = useMemo(() => {
-    if (!searchTerm) return data.goals;
+  // Filter parameters by search term
+  const filteredParameters = useMemo(() => {
+    if (!searchTerm) return data.parameters;
     const lower = searchTerm.toLowerCase();
-    return data.goals.filter(
-      (g) =>
-        g.name.toLowerCase().includes(lower) ||
-        g.category?.toLowerCase().includes(lower) ||
-        g.unit?.toLowerCase().includes(lower)
+    return data.parameters.filter(
+      (p) =>
+        p.name.toLowerCase().includes(lower) ||
+        p.category?.toLowerCase().includes(lower) ||
+        p.unit?.toLowerCase().includes(lower)
     );
-  }, [data.goals, searchTerm]);
+  }, [data.parameters, searchTerm]);
 
-  // Get display info for a goal
-  const getGoalDisplayInfo = (goal: GoalV2) => {
-    const interactions = getInteractionsForGoal(goal.id);
-    const methods = getMethodsForGoal(goal.id);
+  // Get display info for a parameter
+  const getParameterDisplayInfo = (parameter: ParameterV2) => {
+    const interactions = getInteractionsForParameter(parameter.id);
+    const methods = getMethodsForParameter(parameter.id);
 
-    const interactingGoalNames = interactions
+    const interactingParameterNames = interactions
       .map((i) => {
-        const g = data.goals.find((x) => x.id === i.interactingGoalId);
-        return g?.name || '';
+        const p = data.parameters.find((x) => x.id === i.interactingParameterId);
+        return p?.name || '';
       })
       .filter(Boolean);
 
     const methodNames = methods.map((m) => m.methodId);
 
-    return { interactingGoalNames, methodNames };
+    return { interactingParameterNames, methodNames };
   };
 
-  const handleAddGoal = (goalData: {
+  const handleAddParameter = (parameterData: {
     name: string;
     unit?: string;
     category?: string;
     interactions: string[];
-    methods: { methodId: string; loadingRecommendations: Record<string, string | number>; rationale?: string }[];
+    methods: { methodId: string; rationale?: string }[];
   }) => {
     // Create all data atomically to avoid stale closure issues
-    const newGoalId = Date.now().toString();
-    const newGoal: GoalV2 = {
-      id: newGoalId,
-      name: goalData.name,
-      unit: goalData.unit,
-      category: goalData.category,
+    const newParameterId = Date.now().toString();
+    const newParameter: ParameterV2 = {
+      id: newParameterId,
+      name: parameterData.name,
+      unit: parameterData.unit,
+      category: parameterData.category,
       createdAt: new Date().toISOString(),
     };
 
-    const newInteractions: GoalInteraction[] = goalData.interactions.map((interactingGoalId, idx) => ({
+    const newInteractions: ParameterInteraction[] = parameterData.interactions.map((interactingParameterId, idx) => ({
       id: (Date.now() + idx + 1).toString(),
-      goalId: newGoalId,
-      interactingGoalId,
+      parameterId: newParameterId,
+      interactingParameterId,
     }));
 
-    const newMethods: GoalMethodV2[] = goalData.methods.map((method, idx) => ({
-      id: (Date.now() + goalData.interactions.length + idx + 1).toString(),
-      goalId: newGoalId,
+    const newMethods: ParameterMethodV2[] = parameterData.methods.map((method, idx) => ({
+      id: (Date.now() + parameterData.interactions.length + idx + 1).toString(),
+      parameterId: newParameterId,
       methodId: method.methodId,
-      loadingRecommendations: method.loadingRecommendations,
       rationale: method.rationale,
     }));
 
     // Single atomic save to prevent stale closure overwrites
     saveData({
       ...data,
-      goals: [...data.goals, newGoal],
+      parameters: [...data.parameters, newParameter],
       interactions: [...data.interactions, ...newInteractions],
-      goalMethods: [...data.goalMethods, ...newMethods],
+      parameterMethods: [...data.parameterMethods, ...newMethods],
     });
 
-    toast({ title: 'Goal added', description: `"${goalData.name}" has been created.` });
+    toast({ title: 'Parameter added', description: `"${parameterData.name}" has been created.` });
   };
 
-  const handleDeleteGoal = () => {
+  const handleDeleteParameter = () => {
     if (deleteConfirm) {
-      deleteGoal(deleteConfirm.id);
-      toast({ title: 'Goal deleted', description: `"${deleteConfirm.name}" has been removed.` });
+      deleteParameter(deleteConfirm.id);
+      toast({ title: 'Parameter deleted', description: `"${deleteConfirm.name}" has been removed.` });
       setDeleteConfirm(null);
     }
   };
@@ -145,7 +144,7 @@ export default function AthleticismDatabaseV2() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'athleticism-database-v2.json';
+    a.download = 'parameters-database-v2.json';
     a.click();
     URL.revokeObjectURL(url);
     toast({ title: 'Export complete', description: 'Database exported as JSON.' });
@@ -161,8 +160,8 @@ export default function AthleticismDatabaseV2() {
         const text = await file.text();
         try {
           const imported = JSON.parse(text);
-          if (imported.goals && imported.interactions && imported.goalMethods) {
-            localStorage.setItem('goals-database-v2', text);
+          if (imported.parameters && imported.interactions && imported.parameterMethods) {
+            localStorage.setItem('parameters-database-v2', text);
             window.location.reload();
           } else {
             throw new Error('Invalid format');
@@ -195,7 +194,7 @@ export default function AthleticismDatabaseV2() {
             <div>
               <h1 className="text-xl font-semibold">Athleticism Database (v2)</h1>
               <p className="text-sm text-muted-foreground">
-                Unified goals with interactions and training methods
+                Unified parameters with interactions and training methods
               </p>
             </div>
           </div>
@@ -208,7 +207,7 @@ export default function AthleticismDatabaseV2() {
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search goals..."
+              placeholder="Search parameters..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9"
@@ -225,7 +224,7 @@ export default function AthleticismDatabaseV2() {
             </Button>
             <Button size="sm" onClick={() => setShowAddDialog(true)}>
               <Plus className="h-4 w-4 mr-1" />
-              Add Goal
+              Add Parameter
             </Button>
           </div>
         </div>
@@ -239,28 +238,28 @@ export default function AthleticismDatabaseV2() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[15%]">Category</TableHead>
-                  <TableHead className="w-[25%]">Goal</TableHead>
-                  <TableHead className="w-[25%]">Interacting Goals</TableHead>
+                  <TableHead className="w-[25%]">Parameter</TableHead>
+                  <TableHead className="w-[25%]">Interacting Parameters</TableHead>
                   <TableHead className="w-[25%]">Associated Methods</TableHead>
                   <TableHead className="w-[10%] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredGoals.length === 0 ? (
+                {filteredParameters.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
                       {searchTerm
-                        ? 'No goals match your search.'
-                        : 'No goals yet. Click "Add Goal" to create one.'}
+                        ? 'No parameters match your search.'
+                        : 'No parameters yet. Click "Add Parameter" to create one.'}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredGoals.map((goal) => {
-                    const { interactingGoalNames, methodNames } = getGoalDisplayInfo(goal);
-                    const categoryLabel = GOAL_CATEGORIES.find((c) => c.value === goal.category)?.label || goal.category;
+                  filteredParameters.map((parameter) => {
+                    const { interactingParameterNames, methodNames } = getParameterDisplayInfo(parameter);
+                    const categoryLabel = PARAMETER_CATEGORIES.find((c) => c.value === parameter.category)?.label || parameter.category;
 
                     return (
-                      <TableRow key={goal.id}>
+                      <TableRow key={parameter.id}>
                         <TableCell>
                           {categoryLabel ? (
                             <Badge variant="secondary" className="text-xs">
@@ -272,36 +271,36 @@ export default function AthleticismDatabaseV2() {
                         </TableCell>
                         <TableCell>
                           <div className="font-medium">
-                            {goal.name}
-                            {goal.unit && (
+                            {parameter.name}
+                            {parameter.unit && (
                               <span className="font-normal text-muted-foreground ml-1">
-                                ({goal.unit})
+                                ({parameter.unit})
                               </span>
                             )}
                           </div>
                         </TableCell>
                         <TableCell>
-                          {interactingGoalNames.length > 0 ? (
+                          {interactingParameterNames.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
-                              {interactingGoalNames.slice(0, 3).map((name, i) => (
+                              {interactingParameterNames.slice(0, 3).map((name, i) => (
                                 <Badge key={i} variant="outline" className="text-[10px] px-1.5 py-0">
                                   {name}
                                 </Badge>
                               ))}
-                              {interactingGoalNames.length > 3 && (
+                              {interactingParameterNames.length > 3 && (
                                 <TooltipProvider delayDuration={0}>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <button type="button" className="inline-flex" aria-label="Show all interacting goals">
+                                      <button type="button" className="inline-flex" aria-label="Show all interacting parameters">
                                         <Badge variant="outline" className="text-[10px] px-1.5 py-0 cursor-pointer">
-                                          +{interactingGoalNames.length - 3} more
+                                          +{interactingParameterNames.length - 3} more
                                         </Badge>
                                       </button>
                                     </TooltipTrigger>
                                     <TooltipContent side="top" className="max-w-[300px] z-[100]">
                                       <div className="text-xs space-y-0.5">
-                                        <div className="font-medium mb-1">All Interacting Goals:</div>
-                                        {interactingGoalNames.map((name, i) => (
+                                        <div className="font-medium mb-1">All Interacting Parameters:</div>
+                                        {interactingParameterNames.map((name, i) => (
                                           <div key={i}>• {name}</div>
                                         ))}
                                       </div>
@@ -354,7 +353,7 @@ export default function AthleticismDatabaseV2() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
-                              onClick={() => setEditingGoal(goal)}
+                              onClick={() => setEditingParameter(parameter)}
                             >
                               <Edit2 className="h-4 w-4" />
                             </Button>
@@ -362,7 +361,7 @@ export default function AthleticismDatabaseV2() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-destructive hover:text-destructive"
-                              onClick={() => setDeleteConfirm(goal)}
+                              onClick={() => setDeleteConfirm(parameter)}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -379,30 +378,30 @@ export default function AthleticismDatabaseV2() {
       </div>
 
       {/* Add Dialog */}
-      <AddGoalDialogV2
+      <AddParameterDialogV2
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
-        allGoals={data.goals}
+        allParameters={data.parameters}
         toolboxEntries={toolboxData.entries}
-        onAdd={handleAddGoal}
+        onAdd={handleAddParameter}
       />
 
       {/* Edit Dialog */}
-      {editingGoal && (
-        <EditGoalDialogV2
-          open={!!editingGoal}
-          onOpenChange={(open) => !open && setEditingGoal(null)}
-          goal={editingGoal}
-          allGoals={data.goals}
+      {editingParameter && (
+        <EditParameterDialogV2
+          open={!!editingParameter}
+          onOpenChange={(open) => !open && setEditingParameter(null)}
+          parameter={editingParameter}
+          allParameters={data.parameters}
           allInteractions={data.interactions}
-          allGoalMethods={data.goalMethods}
+          allParameterMethods={data.parameterMethods}
           toolboxEntries={toolboxData.entries}
-          onUpdateGoal={(updates) => updateGoal(editingGoal.id, updates)}
-          onAddInteraction={(interactingGoalId) => addInteraction(editingGoal.id, interactingGoalId)}
+          onUpdateParameter={(updates) => updateParameter(editingParameter.id, updates)}
+          onAddInteraction={(interactingParameterId) => addInteraction(editingParameter.id, interactingParameterId)}
           onRemoveInteraction={removeInteraction}
-          onAddMethod={(methodId) => addGoalMethod(editingGoal.id, methodId)}
-          onUpdateMethod={updateGoalMethod}
-          onRemoveMethod={removeGoalMethod}
+          onAddMethod={(methodId) => addParameterMethod(editingParameter.id, methodId)}
+          onUpdateMethod={updateParameterMethod}
+          onRemoveMethod={removeParameterMethod}
         />
       )}
 
@@ -410,7 +409,7 @@ export default function AthleticismDatabaseV2() {
       <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Goal</AlertDialogTitle>
+            <AlertDialogTitle>Delete Parameter</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete "{deleteConfirm?.name}"? This will also remove all
               associated interactions and methods. This action cannot be undone.
@@ -418,7 +417,7 @@ export default function AthleticismDatabaseV2() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteGoal} className="bg-destructive text-destructive-foreground">
+            <AlertDialogAction onClick={handleDeleteParameter} className="bg-destructive text-destructive-foreground">
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
