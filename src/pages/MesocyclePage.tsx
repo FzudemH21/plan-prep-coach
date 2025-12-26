@@ -463,20 +463,6 @@ export default function MesocyclePage() {
                 })()}
               </div>
             </div>
-            <div className="space-y-1 md:col-span-2">
-              <Label className="text-sm font-medium text-muted-foreground">Available Methods</Label>
-              {getMethodsForAllocatedSubGoals.length > 0 ? (
-                <div className="flex flex-wrap gap-1">
-                  {getMethodsForAllocatedSubGoals.map((method, index) => (
-                    <Badge key={index} variant="outline" className="text-xs">
-                      {method}
-                    </Badge>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No methods selected in Macrocycle Planning Step 3</p>
-              )}
-            </div>
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">No macrocycle data found. Please complete the macrocycle planning first.</p>
