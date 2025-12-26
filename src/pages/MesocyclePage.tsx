@@ -446,11 +446,20 @@ export default function MesocyclePage() {
             <div className="space-y-1 md:col-span-2">
               <Label className="text-sm font-medium text-muted-foreground">Sub-goals</Label>
               <div className="flex flex-wrap gap-1">
-                {macrocycleData.subGoals?.map((subGoal: any, index: number) => (
-                  <Badge key={index} variant="secondary" className="text-xs">
-                    {subGoal.description || subGoal.name || subGoal.id || 'Unknown Sub-goal'}
-                  </Badge>
-                ))}
+                {(() => {
+                  const uniqueSubGoals = new Map<string, any>();
+                  (macrocycleData.subGoals || []).forEach((sg: any) => {
+                    const desc = sg.description || sg.name || sg.id || '';
+                    if (desc && desc.trim() !== '' && !uniqueSubGoals.has(desc)) {
+                      uniqueSubGoals.set(desc, sg);
+                    }
+                  });
+                  return Array.from(uniqueSubGoals.values()).map((subGoal: any, index: number) => (
+                    <Badge key={index} variant="secondary" className="text-xs">
+                      {subGoal.description || subGoal.name || subGoal.id || 'Unknown Sub-goal'}
+                    </Badge>
+                  ));
+                })()}
               </div>
             </div>
             <div className="space-y-1 md:col-span-2">
