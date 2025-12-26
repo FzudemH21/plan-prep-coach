@@ -12,8 +12,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { Plus, X } from 'lucide-react';
-import { ParameterV2, ParameterInteraction, ParameterMethodV2, PARAMETER_CATEGORIES } from '@/types/parametersV2';
+import { Plus, X, ArrowUp, ArrowRight, ChevronDown } from 'lucide-react';
+import { ParameterV2, ParameterInteraction, ParameterMethodV2, PARAMETER_CATEGORIES, INTERACTION_STRENGTHS, InteractionDirection, InteractionStrength } from '@/types/parametersV2';
 import { ToolboxEntry } from '@/types/toolbox';
 import {
   Command,
@@ -28,6 +28,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface EditParameterDialogV2Props {
   open: boolean;
@@ -38,7 +45,8 @@ interface EditParameterDialogV2Props {
   allParameterMethods: ParameterMethodV2[];
   toolboxEntries: ToolboxEntry[];
   onUpdateParameter: (updates: Partial<ParameterV2>) => void;
-  onAddInteraction: (interactingParameterId: string) => void;
+  onAddInteraction: (sourceId: string, targetId: string, direction: InteractionDirection, strength: InteractionStrength) => void;
+  onUpdateInteraction: (id: string, updates: Partial<ParameterInteraction>) => void;
   onRemoveInteraction: (id: string) => void;
   onAddMethod: (methodId: string) => void;
   onUpdateMethod: (id: string, updates: Partial<ParameterMethodV2>) => void;
@@ -60,6 +68,7 @@ export function EditParameterDialogV2({
   toolboxEntries,
   onUpdateParameter,
   onAddInteraction,
+  onUpdateInteraction,
   onRemoveInteraction,
   onAddMethod,
   onUpdateMethod,
@@ -68,20 +77,34 @@ export function EditParameterDialogV2({
   const [name, setName] = useState(parameter.name);
   const [unit, setUnit] = useState(parameter.unit || '');
   const [category, setCategory] = useState(parameter.category || '');
-  const [parameterSearchOpen, setParameterSearchOpen] = useState(false);
+  
+  // Popover states
+  const [contributesToSearchOpen, setContributesToSearchOpen] = useState(false);
+  const [improvedBySearchOpen, setImprovedBySearchOpen] = useState(false);
   const [methodSearchOpen, setMethodSearchOpen] = useState(false);
   const [unitSearchOpen, setUnitSearchOpen] = useState(false);
   const [categorySearchOpen, setCategorySearchOpen] = useState(false);
+  
+  // Strength selection for new interactions
+  const [newContributesToStrength, setNewContributesToStrength] = useState<InteractionStrength>('moderate');
+  const [newImprovedByStrength, setNewImprovedByStrength] = useState<InteractionStrength>('moderate');
   
   // State for editing method rationale
   const [editingRationale, setEditingRationale] = useState<string | null>(null);
   const [rationaleValue, setRationaleValue] = useState('');
 
-  // Filter interactions and methods for this parameter
-  const interactions = useMemo(() => 
-    allInteractions.filter((i) => i.parameterId === parameter.id),
+  // Get interactions where this parameter is the SOURCE (contributes to others)
+  const contributesToInteractions = useMemo(() => 
+    allInteractions.filter((i) => i.sourceParameterId === parameter.id && i.direction === 'contributes_to'),
     [allInteractions, parameter.id]
   );
+  
+  // Get interactions where this parameter is the TARGET (improved by others)
+  const improvedByInteractions = useMemo(() => 
+    allInteractions.filter((i) => i.targetParameterId === parameter.id && i.direction === 'contributes_to'),
+    [allInteractions, parameter.id]
+  );
+  
   const parameterMethods = useMemo(() => 
     allParameterMethods.filter((m) => m.parameterId === parameter.id),
     [allParameterMethods, parameter.id]
@@ -93,10 +116,16 @@ export function EditParameterDialogV2({
     setCategory(parameter.category || '');
   }, [parameter]);
 
-  // Get available parameters for interaction (exclude self and already linked)
-  const interactingParameterIds = interactions.map((i) => i.interactingParameterId);
-  const availableParameters = allParameters.filter(
-    (p) => p.id !== parameter.id && !interactingParameterIds.includes(p.id)
+  // Get available parameters for "Contributes To" (exclude self and already linked as target)
+  const contributesToTargetIds = contributesToInteractions.map((i) => i.targetParameterId);
+  const availableContributesToParameters = allParameters.filter(
+    (p) => p.id !== parameter.id && !contributesToTargetIds.includes(p.id)
+  );
+  
+  // Get available parameters for "Improved By" (exclude self and already linked as source)
+  const improvedBySourceIds = improvedByInteractions.map((i) => i.sourceParameterId);
+  const availableImprovedByParameters = allParameters.filter(
+    (p) => p.id !== parameter.id && !improvedBySourceIds.includes(p.id)
   );
 
   // Get unique methods from toolbox with structured data
@@ -138,7 +167,6 @@ export function EditParameterDialogV2({
       }
     });
     
-    // Sort groups alphabetically and sort items within each group
     const sortedGroups = new Map<string, { methodId: string; subCategory: string }[]>();
     Array.from(groups.keys()).sort().forEach((category) => {
       const items = groups.get(category)!;
@@ -157,6 +185,18 @@ export function EditParameterDialogV2({
     });
   };
 
+  const handleAddContributesTo = (targetParameterId: string) => {
+    onAddInteraction(parameter.id, targetParameterId, 'contributes_to', newContributesToStrength);
+    setContributesToSearchOpen(false);
+    setNewContributesToStrength('moderate');
+  };
+
+  const handleAddImprovedBy = (sourceParameterId: string) => {
+    onAddInteraction(sourceParameterId, parameter.id, 'contributes_to', newImprovedByStrength);
+    setImprovedBySearchOpen(false);
+    setNewImprovedByStrength('moderate');
+  };
+
   const handleStartEditRationale = (methodId: string, currentRationale: string) => {
     setEditingRationale(methodId);
     setRationaleValue(currentRationale || '');
@@ -166,6 +206,22 @@ export function EditParameterDialogV2({
     onUpdateMethod(methodDbId, { rationale: rationaleValue });
     setEditingRationale(null);
     setRationaleValue('');
+  };
+
+  const getStrengthIcon = (strength?: InteractionStrength) => {
+    const strengthInfo = INTERACTION_STRENGTHS.find((s) => s.value === strength);
+    if (!strengthInfo) return <ArrowUp className="h-3 w-3" />;
+    
+    switch (strength) {
+      case 'strong':
+        return <span className="text-xs font-bold">↑↑</span>;
+      case 'moderate':
+        return <ArrowUp className="h-3 w-3" />;
+      case 'weak':
+        return <ArrowRight className="h-3 w-3" />;
+      default:
+        return <ArrowUp className="h-3 w-3" />;
+    }
   };
 
   return (
@@ -205,10 +261,10 @@ export function EditParameterDialogV2({
                           className="w-full justify-between font-normal"
                         >
                           {unit || "Select unit..."}
-                          <span className="ml-2 h-4 w-4 shrink-0 opacity-50">▼</span>
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-48 p-0" align="start">
+                      <PopoverContent className="w-48 p-0 bg-popover" align="start">
                         <Command>
                           <CommandInput 
                             placeholder="Search or type..." 
@@ -261,10 +317,10 @@ export function EditParameterDialogV2({
                           className="w-full justify-between font-normal"
                         >
                           {PARAMETER_CATEGORIES.find((c) => c.value === category)?.label || category || "Select category..."}
-                          <span className="ml-2 h-4 w-4 shrink-0 opacity-50">▼</span>
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-48 p-0" align="start">
+                      <PopoverContent className="w-48 p-0 bg-popover" align="start">
                         <Command>
                           <CommandInput 
                             placeholder="Search or type..." 
@@ -315,32 +371,54 @@ export function EditParameterDialogV2({
 
             <Separator />
 
-            {/* Interacting Parameters */}
+            {/* Contributes To Section */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                  Interacting Parameters
-                </h3>
-                <Popover open={parameterSearchOpen} onOpenChange={setParameterSearchOpen}>
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                    Contributes To
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    This parameter helps improve these parameters
+                  </p>
+                </div>
+                <Popover open={contributesToSearchOpen} onOpenChange={setContributesToSearchOpen}>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" disabled={availableParameters.length === 0}>
+                    <Button variant="outline" size="sm" disabled={availableContributesToParameters.length === 0}>
                       <Plus className="h-4 w-4 mr-1" />
                       Add
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-64 p-0" align="end">
+                  <PopoverContent className="w-72 p-0 bg-popover" align="end">
+                    <div className="p-3 border-b">
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs">Strength:</Label>
+                        <Select
+                          value={newContributesToStrength}
+                          onValueChange={(v) => setNewContributesToStrength(v as InteractionStrength)}
+                        >
+                          <SelectTrigger className="h-7 w-28 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {INTERACTION_STRENGTHS.map((s) => (
+                              <SelectItem key={s.value} value={s.value}>
+                                {s.icon} {s.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
                     <Command>
                       <CommandInput placeholder="Search parameters..." />
                       <CommandList>
                         <CommandEmpty>No parameters found.</CommandEmpty>
                         <CommandGroup>
-                          {availableParameters.map((p) => (
+                          {availableContributesToParameters.map((p) => (
                             <CommandItem
                               key={p.id}
-                              onSelect={() => {
-                                onAddInteraction(p.id);
-                                setParameterSearchOpen(false);
-                              }}
+                              onSelect={() => handleAddContributesTo(p.id)}
                             >
                               {p.name}
                               {p.unit && (
@@ -355,18 +433,34 @@ export function EditParameterDialogV2({
                 </Popover>
               </div>
 
-              {interactions.length > 0 ? (
+              {contributesToInteractions.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                  {interactions.map((interaction) => {
-                    const linkedParameter = allParameters.find((p) => p.id === interaction.interactingParameterId);
-                    if (!linkedParameter) return null;
+                  {contributesToInteractions.map((interaction) => {
+                    const targetParameter = allParameters.find((p) => p.id === interaction.targetParameterId);
+                    if (!targetParameter) return null;
                     return (
                       <Badge
                         key={interaction.id}
                         variant="secondary"
-                        className="flex items-center gap-1 py-1"
+                        className="flex items-center gap-1 py-1 pr-1"
                       >
-                        {linkedParameter.name}
+                        <span className="mr-1">{getStrengthIcon(interaction.strength)}</span>
+                        {targetParameter.name}
+                        <Select
+                          value={interaction.strength || 'moderate'}
+                          onValueChange={(v) => onUpdateInteraction(interaction.id, { strength: v as InteractionStrength })}
+                        >
+                          <SelectTrigger className="h-5 w-5 border-0 bg-transparent p-0 [&>svg]:hidden">
+                            <ChevronDown className="h-3 w-3 opacity-50" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {INTERACTION_STRENGTHS.map((s) => (
+                              <SelectItem key={s.value} value={s.value}>
+                                {s.icon} {s.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <button
                           onClick={() => onRemoveInteraction(interaction.id)}
                           className="ml-1 hover:text-destructive"
@@ -379,7 +473,116 @@ export function EditParameterDialogV2({
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground italic">
-                  No interacting parameters added yet.
+                  No parameters linked yet.
+                </p>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Improved By Section */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                    Improved By
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    These parameters help improve this one (potential sub-goals)
+                  </p>
+                </div>
+                <Popover open={improvedBySearchOpen} onOpenChange={setImprovedBySearchOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" disabled={availableImprovedByParameters.length === 0}>
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-72 p-0 bg-popover" align="end">
+                    <div className="p-3 border-b">
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs">Strength:</Label>
+                        <Select
+                          value={newImprovedByStrength}
+                          onValueChange={(v) => setNewImprovedByStrength(v as InteractionStrength)}
+                        >
+                          <SelectTrigger className="h-7 w-28 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {INTERACTION_STRENGTHS.map((s) => (
+                              <SelectItem key={s.value} value={s.value}>
+                                {s.icon} {s.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <Command>
+                      <CommandInput placeholder="Search parameters..." />
+                      <CommandList>
+                        <CommandEmpty>No parameters found.</CommandEmpty>
+                        <CommandGroup>
+                          {availableImprovedByParameters.map((p) => (
+                            <CommandItem
+                              key={p.id}
+                              onSelect={() => handleAddImprovedBy(p.id)}
+                            >
+                              {p.name}
+                              {p.unit && (
+                                <span className="text-muted-foreground ml-1">({p.unit})</span>
+                              )}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {improvedByInteractions.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {improvedByInteractions.map((interaction) => {
+                    const sourceParameter = allParameters.find((p) => p.id === interaction.sourceParameterId);
+                    if (!sourceParameter) return null;
+                    return (
+                      <Badge
+                        key={interaction.id}
+                        variant="outline"
+                        className="flex items-center gap-1 py-1 pr-1 bg-primary/5"
+                      >
+                        <span className="mr-1">{getStrengthIcon(interaction.strength)}</span>
+                        {sourceParameter.name}
+                        <Select
+                          value={interaction.strength || 'moderate'}
+                          onValueChange={(v) => onUpdateInteraction(interaction.id, { strength: v as InteractionStrength })}
+                        >
+                          <SelectTrigger className="h-5 w-5 border-0 bg-transparent p-0 [&>svg]:hidden">
+                            <ChevronDown className="h-3 w-3 opacity-50" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {INTERACTION_STRENGTHS.map((s) => (
+                              <SelectItem key={s.value} value={s.value}>
+                                {s.icon} {s.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <button
+                          onClick={() => onRemoveInteraction(interaction.id)}
+                          className="ml-1 hover:text-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">
+                  No parameters linked yet.
                 </p>
               )}
             </div>
@@ -399,7 +602,7 @@ export function EditParameterDialogV2({
                       Add Method
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-80 p-0" align="end">
+                  <PopoverContent className="w-80 p-0 bg-popover" align="end">
                     <Command>
                       <CommandInput placeholder="Search methods..." />
                       <CommandList className="max-h-64">

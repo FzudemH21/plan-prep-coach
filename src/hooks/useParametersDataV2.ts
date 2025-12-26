@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ParametersDatabaseV2, ParameterV2, ParameterInteraction, ParameterMethodV2 } from '@/types/parametersV2';
+import { ParametersDatabaseV2, ParameterV2, ParameterInteraction, ParameterMethodV2, InteractionDirection, InteractionStrength } from '@/types/parametersV2';
 
 const STORAGE_KEY = 'parameters-database-v2';
 const OLD_STORAGE_KEY = 'goals-database-v2';
@@ -23,17 +23,42 @@ function migrateFromGoals(oldData: any): ParametersDatabaseV2 {
     })),
     interactions: (oldData.interactions || []).map((i: any) => ({
       id: i.id,
-      parameterId: i.goalId,
-      interactingParameterId: i.interactingGoalId,
+      sourceParameterId: i.goalId,
+      targetParameterId: i.interactingGoalId,
+      direction: 'contributes_to' as InteractionDirection,
+      strength: 'moderate' as InteractionStrength,
     })),
     parameterMethods: (oldData.goalMethods || []).map((m: any) => ({
       id: m.id,
       parameterId: m.goalId,
       methodId: m.methodId,
       rationale: m.rationale,
-      // Note: loadingRecommendations is intentionally dropped
     })),
     lastUpdated: oldData.lastUpdated || new Date().toISOString(),
+  };
+}
+
+// Migration function to convert old bidirectional interactions to new directional format
+function migrateToDirectionalInteractions(data: ParametersDatabaseV2): ParametersDatabaseV2 {
+  const migratedInteractions = data.interactions.map((i: any) => {
+    // If already migrated (has sourceParameterId), return as is
+    if (i.sourceParameterId && i.targetParameterId && i.direction) {
+      return i;
+    }
+    
+    // Migrate from old format
+    return {
+      id: i.id,
+      sourceParameterId: i.parameterId || i.sourceParameterId,
+      targetParameterId: i.interactingParameterId || i.targetParameterId,
+      direction: i.direction || ('contributes_to' as InteractionDirection),
+      strength: i.strength || ('moderate' as InteractionStrength),
+    };
+  });
+
+  return {
+    ...data,
+    interactions: migratedInteractions,
   };
 }
 
@@ -67,7 +92,11 @@ export function useParametersDataV2() {
     
     if (stored) {
       try {
-        const parsed = JSON.parse(stored);
+        let parsed = JSON.parse(stored);
+        // Migrate to directional interactions if needed
+        parsed = migrateToDirectionalInteractions(parsed);
+        // Save migrated data
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
         setData(parsed);
       } catch (error) {
         console.error('Failed to parse stored parameters data:', error);
@@ -111,7 +140,7 @@ export function useParametersDataV2() {
     // Also delete related interactions and methods
     const newParameters = data.parameters.filter((p) => p.id !== id);
     const newInteractions = data.interactions.filter(
-      (i) => i.parameterId !== id && i.interactingParameterId !== id
+      (i) => i.sourceParameterId !== id && i.targetParameterId !== id
     );
     const newParameterMethods = data.parameterMethods.filter((m) => m.parameterId !== id);
     saveData({
@@ -122,18 +151,27 @@ export function useParametersDataV2() {
     });
   };
 
-  // Interaction CRUD
-  const addInteraction = (parameterId: string, interactingParameterId: string) => {
-    // Prevent duplicates
+  // Interaction CRUD - Updated for directional interactions
+  const addInteraction = (
+    sourceParameterId: string,
+    targetParameterId: string,
+    direction: InteractionDirection = 'contributes_to',
+    strength: InteractionStrength = 'moderate'
+  ) => {
+    // Prevent duplicates (same source->target with same direction)
     const exists = data.interactions.some(
-      (i) => i.parameterId === parameterId && i.interactingParameterId === interactingParameterId
+      (i) => i.sourceParameterId === sourceParameterId && 
+             i.targetParameterId === targetParameterId &&
+             i.direction === direction
     );
     if (exists) return;
 
     const newInteraction: ParameterInteraction = {
       id: Date.now().toString(),
-      parameterId,
-      interactingParameterId,
+      sourceParameterId,
+      targetParameterId,
+      direction,
+      strength,
     };
     saveData({
       ...data,
@@ -141,13 +179,37 @@ export function useParametersDataV2() {
     });
   };
 
+  const updateInteraction = (id: string, updates: Partial<ParameterInteraction>) => {
+    const newInteractions = data.interactions.map((i) =>
+      i.id === id ? { ...i, ...updates } : i
+    );
+    saveData({ ...data, interactions: newInteractions });
+  };
+
   const removeInteraction = (id: string) => {
     const newInteractions = data.interactions.filter((i) => i.id !== id);
     saveData({ ...data, interactions: newInteractions });
   };
 
+  // Get parameters that THIS parameter contributes to (this parameter helps improve these)
+  const getContributesToParameters = (sourceParameterId: string) => {
+    return data.interactions.filter(
+      (i) => i.sourceParameterId === sourceParameterId && i.direction === 'contributes_to'
+    );
+  };
+
+  // Get parameters that help improve THIS parameter (these contribute to this)
+  const getImprovedByParameters = (targetParameterId: string) => {
+    return data.interactions.filter(
+      (i) => i.targetParameterId === targetParameterId && i.direction === 'contributes_to'
+    );
+  };
+
+  // Legacy method for backwards compatibility
   const getInteractionsForParameter = (parameterId: string) => {
-    return data.interactions.filter((i) => i.parameterId === parameterId);
+    return data.interactions.filter(
+      (i) => i.sourceParameterId === parameterId || i.targetParameterId === parameterId
+    );
   };
 
   // Parameter Method CRUD
@@ -199,8 +261,11 @@ export function useParametersDataV2() {
     deleteParameter,
     // Interaction operations
     addInteraction,
+    updateInteraction,
     removeInteraction,
     getInteractionsForParameter,
+    getContributesToParameters,
+    getImprovedByParameters,
     // Method operations
     addParameterMethod,
     updateParameterMethod,
