@@ -1982,7 +1982,21 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     "Training Methods"
   ];
 
+  const canProceedFromStep1 = (): boolean => {
+    return planName.trim().length > 0 && selectedAthleteId !== null;
+  };
+
   const handleNext = () => {
+    // Validate Step 1 before proceeding
+    if (currentStep === 1 && !canProceedFromStep1()) {
+      toast({
+        title: "Required Fields Missing",
+        description: "Please enter a plan name and select an athlete before continuing.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (currentStep === totalSteps) {
       // Save macrocycle data to localStorage before navigation
       const macrocycleData = {
