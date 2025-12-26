@@ -18,19 +18,19 @@ interface PlanningStep {
 }
 
 const PLANNING_STEPS: PlanningStep[] = [
-  { id: 1, label: "Athlete Information", page: "macrocycle", pageStep: 1 },
-  { id: 2, label: "SMART Goal", page: "macrocycle", pageStep: 2 },
-  { id: 3, label: "Sub-goals & Events", page: "macrocycle", pageStep: 3 },
-  { id: 4, label: "Trainable Qualities", page: "macrocycle", pageStep: 4 },
-  { id: 5, label: "Training Methods", page: "macrocycle", pageStep: 5 },
-  { id: 6, label: "Mesocycle Setup", page: "mesocycle", pageStep: 1 },
-  { id: 7, label: "Intensity Configuration", page: "mesocycle", pageStep: 2 },
-  { id: 8, label: "Daily Intensity Planning", page: "mesocycle", pageStep: 3 },
-  { id: 9, label: "Sub-Goal Allocation", page: "mesocycle", pageStep: 4 },
-  { id: 10, label: "Method Periodization", page: "mesocycle", pageStep: 5 },
-  { id: 11, label: "Exercise Selection", page: "mesocycle", pageStep: 6 },
-  { id: 12, label: "Exercise Distribution", page: "microcycle", pageStep: 1 },
-  { id: 13, label: "Training Calendar", page: "microcycle", pageStep: 2 },
+  // Macrocycle Planning (3 steps)
+  { id: 1, label: "Plan Setup & Goals", page: "macrocycle", pageStep: 1 },
+  { id: 2, label: "Sub-Goals & Testing", page: "macrocycle", pageStep: 2 },
+  { id: 3, label: "Training Methods", page: "macrocycle", pageStep: 3 },
+  // Mesocycle Planning (5 steps)
+  { id: 4, label: "Mesocycle Setup", page: "mesocycle", pageStep: 1 },
+  { id: 5, label: "Daily Training Intensity Planning", page: "mesocycle", pageStep: 2 },
+  { id: 6, label: "Sub-Goal Allocation", page: "mesocycle", pageStep: 3 },
+  { id: 7, label: "Method Periodization", page: "mesocycle", pageStep: 4 },
+  { id: 8, label: "Exercise Selection", page: "mesocycle", pageStep: 5 },
+  // Microcycle Planning (2 steps)
+  { id: 9, label: "Exercise Distribution", page: "microcycle", pageStep: 1 },
+  { id: 10, label: "Training Calendar", page: "microcycle", pageStep: 2 },
 ];
 
 interface PlanningNavigationMenuProps {
