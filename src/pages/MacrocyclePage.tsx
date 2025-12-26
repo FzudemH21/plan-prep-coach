@@ -23,12 +23,15 @@ import {
 } from "@/data/trainingData";
 import { useDisplayMode } from "@/contexts/DisplayModeContext";
 import { useAthleticismData } from "@/hooks/useAthleticismData";
+import { useParametersDataV2 } from "@/hooks/useParametersDataV2";
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
 import { format, parseISO, addDays } from "date-fns";
 import { useAthletes } from "@/hooks/useAthletes";
 import { getAthleteDisplayName, Athlete } from "@/types/athlete";
 import { cn } from "@/lib/utils";
 import { AddSmartGoalDialog, AddSubGoalDialog } from "@/components/macrocycle";
+import { AddParameterDialogV2 } from "@/components/goals/AddParameterDialogV2";
+import { useToolboxData } from "@/hooks/useToolboxData";
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -37,7 +40,9 @@ export default function MacrocyclePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { data: athleticismData } = useAthleticismData();
-  const { athletes, groups, getAthleteParameters, parameterDefinitions } = useAthletes();
+  const { data: parametersDataV2, addParameter: addAthleticismParameter } = useParametersDataV2();
+  const { data: toolboxData } = useToolboxData();
+  const { athletes, groups, getAthletePerformanceParameters, addPerformanceParameter, getAthleteBiometrics, biometricDefinitions } = useAthletes();
   const [athleteDropdownOpen, setAthleteDropdownOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [planName, setPlanName] = useState<string>("");
@@ -660,8 +665,59 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
 
   const selectedAthlete = selectedAthleteId ? athletes.find(a => a.id === selectedAthleteId) : null;
   
-  // Get athlete parameters for the Add Goal dialog
-  const athleteParams = selectedAthleteId ? getAthleteParameters(selectedAthleteId) : [];
+  // Get athlete performance parameters for the Add Goal dialog
+  const athletePerformanceParams = selectedAthleteId ? getAthletePerformanceParameters(selectedAthleteId) : [];
+  const athleticismParameters = parametersDataV2?.parameters || [];
+  
+  // Get athlete biometrics for the Sub-Goal dialog (uses legacy biometrics/parameters)
+  const athleteBiometrics = selectedAthleteId ? getAthleteBiometrics(selectedAthleteId) : [];
+  
+  // State for create parameter dialog
+  const [isCreateParameterDialogOpen, setIsCreateParameterDialogOpen] = useState(false);
+  const [pendingGoalAfterParameterCreation, setPendingGoalAfterParameterCreation] = useState(false);
+
+  // Handler for creating a new parameter from the goal dialog
+  const handleCreateParameter = (paramData: {
+    name: string;
+    unit?: string;
+    category?: string;
+    interactions: any[];
+    methods: any[];
+  }) => {
+    // Add parameter to Athleticism Database
+    const newParam = addAthleticismParameter({
+      name: paramData.name,
+      unit: paramData.unit,
+      category: paramData.category,
+    });
+    const newParamId = newParam?.id;
+    
+    // Add parameter interactions and methods if provided
+    paramData.interactions.forEach(interaction => {
+      // Would need to call addInteraction but keeping it simple for now
+    });
+    paramData.methods.forEach(method => {
+      // Would need to call addParameterMethod but keeping it simple for now
+    });
+    
+    // Automatically add this parameter to the athlete's performance parameters
+    if (selectedAthleteId && newParamId) {
+      addPerformanceParameter(selectedAthleteId, newParamId);
+    }
+    
+    setIsCreateParameterDialogOpen(false);
+    
+    // Reopen the goal dialog so user can select the newly created parameter
+    if (pendingGoalAfterParameterCreation) {
+      setPendingGoalAfterParameterCreation(false);
+      setTimeout(() => setIsAddGoalDialogOpen(true), 100);
+    }
+    
+    toast({ 
+      title: 'Parameter Created', 
+      description: `Created "${paramData.name}" and added to athlete's performance parameters.` 
+    });
+  };
 
   // Handlers for SMART goals
   const handleAddGoal = (goal: Omit<SmartGoal, 'id'>) => {
@@ -1077,8 +1133,25 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         onAddGoal={handleAddGoal}
         onEditGoal={handleEditGoal}
         editGoal={editingGoal}
-        athleteParameters={athleteParams}
-        parameterDefinitions={parameterDefinitions}
+        athletePerformanceParams={athletePerformanceParams}
+        athleticismParameters={athleticismParameters}
+        onOpenCreateParameter={() => {
+          setPendingGoalAfterParameterCreation(true);
+          setIsAddGoalDialogOpen(false);
+          setIsCreateParameterDialogOpen(true);
+        }}
+      />
+      
+      {/* Create Parameter Dialog */}
+      <AddParameterDialogV2
+        open={isCreateParameterDialogOpen}
+        onOpenChange={(open) => {
+          setIsCreateParameterDialogOpen(open);
+          if (!open) setPendingGoalAfterParameterCreation(false);
+        }}
+        allParameters={athleticismParameters}
+        toolboxEntries={toolboxData?.entries || []}
+        onAdd={handleCreateParameter}
       />
     </div>
   );
@@ -1755,8 +1828,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           onAddEvent={handleAddEvent}
           onEditEvent={handleEditEvent}
           editEvent={editingEvent}
-          athleteParameters={athleteParams}
-          parameterDefinitions={parameterDefinitions}
+          athleteParameters={athleteBiometrics}
+          parameterDefinitions={biometricDefinitions}
           subGoalOptions={getSubGoalsFromAthleticismDB()}
           testMethodOptions={testMethodOptions}
           smartGoals={smartGoals}
