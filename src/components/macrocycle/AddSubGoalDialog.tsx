@@ -12,7 +12,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Command,
   CommandEmpty,
@@ -27,24 +26,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Check, ChevronsUpDown, Target, CalendarIcon, Pencil } from "lucide-react";
+import { Check, ChevronsUpDown, Target, CalendarIcon, Pencil, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SubGoal, Event, SmartGoal } from "@/types/training";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AthleteParameter, ParameterDefinition } from "@/types/athlete";
+import { ParameterV2 } from "@/types/parametersV2";
+import { AthletePerformanceParameter } from "@/types/athlete";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 
 type ItemCategory = "subgoal" | "event";
-
-interface ParameterWithDetails {
-  id: string;
-  definitionId: string;
-  name: string;
-  unit: string;
-  type: string;
-  latestValue: string | null;
-  isFromAthlete: boolean;
-}
 
 interface AddSubGoalDialogProps {
   open: boolean;
@@ -55,9 +45,10 @@ interface AddSubGoalDialogProps {
   onAddEvent: (event: Omit<Event, 'id'>) => void;
   onEditEvent?: (event: Event) => void;
   editEvent?: Event | null;
-  athleteParameters: AthleteParameter[];
-  parameterDefinitions: ParameterDefinition[];
-  subGoalOptions: string[];
+  // Athleticism Database parameters
+  athleticismParameters: ParameterV2[];
+  // Athlete's current performance values
+  athletePerformanceParams?: AthletePerformanceParameter[];
   testMethodOptions: string[];
   smartGoals: SmartGoal[];
   defaultParentGoalId?: string;
@@ -76,9 +67,8 @@ export function AddSubGoalDialog({
   onAddEvent,
   onEditEvent,
   editEvent,
-  athleteParameters,
-  parameterDefinitions,
-  subGoalOptions,
+  athleticismParameters,
+  athletePerformanceParams,
   testMethodOptions,
   smartGoals,
   defaultParentGoalId,
@@ -160,43 +150,57 @@ export function AddSubGoalDialog({
     }
   }, [open, defaultParentGoalId, defaultCategory]);
 
-  // Get athlete's parameters with their details
-  const athleteParamsWithDetails = useMemo((): ParameterWithDetails[] => {
-    return athleteParameters.map((ap) => {
-      const definition = parameterDefinitions.find(
-        (pd) => pd.id === ap.parameterDefinitionId
-      );
-      const latestValue =
-        ap.values.length > 0 ? ap.values[ap.values.length - 1].value : null;
-      return {
-        id: ap.id,
-        definitionId: definition?.id || "",
-        name: definition?.name || "Unknown",
-        unit: definition?.unit || "",
-        type: definition?.type || "text",
-        latestValue,
-        isFromAthlete: true,
-      };
-    }).sort((a, b) => a.name.localeCompare(b.name));
-  }, [athleteParameters, parameterDefinitions]);
+  // Get parameters with athlete's current values
+  interface ParameterWithValue {
+    id: string;
+    name: string;
+    unit: string;
+    latestValue: string | null;
+    hasAthleteValue: boolean;
+  }
 
-  // Get all OTHER parameter definitions (not assigned to this athlete)
-  const otherParameters = useMemo((): ParameterWithDetails[] => {
-    const athleteDefIds = new Set(athleteParameters.map(ap => ap.parameterDefinitionId));
+  // Parameters that the athlete has recorded values for
+  const athleteParamsWithDetails = useMemo((): ParameterWithValue[] => {
+    if (!athletePerformanceParams || athletePerformanceParams.length === 0) return [];
     
-    return parameterDefinitions
-      .filter(pd => !athleteDefIds.has(pd.id))
-      .map(pd => ({
-        id: `def-${pd.id}`,
-        definitionId: pd.id,
-        name: pd.name,
-        unit: pd.unit || "",
-        type: pd.type,
+    return athletePerformanceParams
+      .map((pp) => {
+        const param = athleticismParameters.find((p) => p.id === pp.athleticismParameterId);
+        if (!param) return null;
+        
+        const latestValue = pp.values.length > 0 
+          ? pp.values[pp.values.length - 1].value 
+          : null;
+        
+        return {
+          id: param.id,
+          name: param.name,
+          unit: param.unit || "",
+          latestValue,
+          hasAthleteValue: true,
+        };
+      })
+      .filter((p): p is ParameterWithValue => p !== null)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [athletePerformanceParams, athleticismParameters]);
+
+  // All other parameters from the Athleticism Database
+  const otherParameters = useMemo((): ParameterWithValue[] => {
+    const athleteParamIds = new Set(
+      athletePerformanceParams?.map((pp) => pp.athleticismParameterId) || []
+    );
+    
+    return athleticismParameters
+      .filter((p) => !athleteParamIds.has(p.id))
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        unit: p.unit || "",
         latestValue: null,
-        isFromAthlete: false,
+        hasAthleteValue: false,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [athleteParameters, parameterDefinitions]);
+  }, [athletePerformanceParams, athleticismParameters]);
 
   // Calculate percent change
   const percentChange = useMemo(() => {
@@ -206,15 +210,15 @@ export function AddSubGoalDialog({
     return 0;
   }, [preTestValue, goalValue]);
 
-  const handleSelectParameter = (param: ParameterWithDetails) => {
+  const handleSelectParameter = (param: ParameterWithValue) => {
     setSelectedParameterId(param.id);
     setDescription(param.name);
     setUnit(param.unit);
     setIsCustomMode(false);
     setCustomName("");
     
-    // Auto-fill pre-test value if available (only for athlete's parameters)
-    if (param.latestValue && param.isFromAthlete) {
+    // Auto-fill pre-test value if athlete has recorded values for this parameter
+    if (param.latestValue && param.hasAthleteValue) {
       const numValue = parseFloat(param.latestValue);
       if (!isNaN(numValue)) {
         setPreTestValue(numValue);
@@ -223,13 +227,6 @@ export function AddSubGoalDialog({
       setPreTestValue("");
     }
     setGoalValue("");
-    setComboboxOpen(false);
-  };
-
-  const handleSelectFromSubGoalOptions = (value: string) => {
-    setDescription(value);
-    setIsCustomMode(false);
-    setSelectedParameterId(null);
     setComboboxOpen(false);
   };
 
@@ -347,30 +344,6 @@ export function AddSubGoalDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Category Selector - only show when not adding under a parent goal */}
-          {!hideCategorySelector && (
-            <div className="space-y-2">
-              <Label>Category</Label>
-              <RadioGroup
-                value={category}
-                onValueChange={(val) => setCategory(val as ItemCategory)}
-                className="flex gap-4"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="subgoal" id="cat-subgoal" />
-                  <Label htmlFor="cat-subgoal" className="font-normal cursor-pointer">
-                    Sub-Goal / Test
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="event" id="cat-event" />
-                  <Label htmlFor="cat-event" className="font-normal cursor-pointer">
-                    Other Event
-                  </Label>
-                </div>
-              </RadioGroup>
-            </div>
-          )}
 
           {category === "subgoal" ? (
             <>
@@ -486,30 +459,6 @@ export function AddSubGoalDialog({
                           </>
                         )}
                         
-                        {/* Sub-Goal Options from Database */}
-                        {subGoalOptions.length > 0 && (
-                          <>
-                            <CommandSeparator />
-                            <CommandGroup heading="Training Goals">
-                              {subGoalOptions.slice(0, 20).map((option) => (
-                                <CommandItem
-                                  key={option}
-                                  value={`goal-${option}`}
-                                  onSelect={() => handleSelectFromSubGoalOptions(option)}
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      description === option && !selectedParameterId ? "opacity-100" : "opacity-0"
-                                    )}
-                                  />
-                                  <span className="truncate">{option}</span>
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </>
-                        )}
-                        
                         <CommandSeparator />
                         <CommandGroup>
                           <CommandItem onSelect={handleEnterCustomMode}>
@@ -523,7 +472,7 @@ export function AddSubGoalDialog({
                                 onCreateNewParameter(parentGoalId);
                               }}
                             >
-                              <Target className="mr-2 h-4 w-4" />
+                              <Plus className="mr-2 h-4 w-4" />
                               Create new parameter in database...
                             </CommandItem>
                           )}

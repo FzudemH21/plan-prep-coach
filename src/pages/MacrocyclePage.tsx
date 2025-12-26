@@ -720,9 +720,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const athletePerformanceParams = selectedAthleteId ? getAthletePerformanceParameters(selectedAthleteId) : [];
   const athleticismParameters = parametersDataV2?.parameters || [];
   
-  // Get athlete biometrics for the Sub-Goal dialog (uses legacy biometrics/parameters)
-  const athleteBiometrics = selectedAthleteId ? getAthleteBiometrics(selectedAthleteId) : [];
-  
   // State for create parameter dialog
   const [isCreateParameterDialogOpen, setIsCreateParameterDialogOpen] = useState(false);
   const [pendingGoalAfterParameterCreation, setPendingGoalAfterParameterCreation] = useState(false);
@@ -1517,116 +1514,17 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                 );
               })}
               
-              {/* Unlinked Sub-Goals and Events Section */}
-              {(subGoalsByParent.unlinked.length > 0 || events.length > 0) && (
+              {/* Events Section */}
+              {events.length > 0 && (
                 <div className="border rounded-lg overflow-hidden">
                   <div className="p-3 bg-muted/20">
                     <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium text-sm">Unlinked Items</span>
+                      <CalendarIcon className="h-4 w-4 text-orange-500" />
+                      <span className="font-medium text-sm">Events</span>
                     </div>
                   </div>
                   
                   <div className="divide-y">
-                    {/* Unlinked Sub-Goals */}
-                    {subGoalsByParent.unlinked.map((subGoal) => {
-                      const isExpanded = expandedSubGoals.has(subGoal.id);
-                      const toggleExpand = (e: React.MouseEvent) => {
-                        e.stopPropagation();
-                        setExpandedSubGoals(prev => {
-                          const next = new Set(prev);
-                          if (next.has(subGoal.id)) {
-                            next.delete(subGoal.id);
-                          } else {
-                            next.add(subGoal.id);
-                          }
-                          return next;
-                        });
-                      };
-                      
-                      return (
-                        <div 
-                          key={subGoal.id} 
-                          className={cn(
-                            "p-3 transition-colors",
-                            selectedTest === subGoal.id ? "ring-2 ring-inset ring-primary bg-primary/5" : "hover:bg-muted/50"
-                          )}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div 
-                              className="flex-1 cursor-pointer min-w-0"
-                              onClick={() => {
-                                setSelectedTest(selectedTest === subGoal.id ? null : subGoal.id);
-                                setSelectedEvent(null);
-                              }}
-                            >
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-xs shrink-0">Test</Badge>
-                                <span className="font-medium text-sm truncate">
-                                  {subGoal.testMethod || subGoal.description || "Unnamed"}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                <span className="text-xs">
-                                  {subGoal.preTestValue || 0} {subGoal.unit} → {subGoal.goalValue || 0} {subGoal.unit}
-                                </span>
-                                <Badge 
-                                  variant={subGoal.percentChange && subGoal.percentChange > 0 ? "default" : "secondary"}
-                                  className="text-xs"
-                                >
-                                  {subGoal.percentChange ? `${subGoal.percentChange > 0 ? "+" : ""}${subGoal.percentChange.toFixed(1)}%` : "0%"}
-                                </Badge>
-                              </div>
-                            </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setEditingSubGoal(subGoal);
-                                  setIsAddSubGoalDialogOpen(true);
-                                }}
-                              >
-                                <Pencil className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={toggleExpand}
-                              >
-                                <ChevronDown className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")} />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={() => handleRemoveSubGoal(subGoal.id)}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                          
-                          <Collapsible open={isExpanded}>
-                            <CollapsibleContent>
-                              <div className="mt-2 pt-2 border-t text-xs text-muted-foreground space-y-1">
-                                {subGoal.description && (
-                                  <p>{subGoal.description}</p>
-                                )}
-                                {subGoal.testDates && subGoal.testDates.length > 0 && (
-                                  <p>📅 {subGoal.testDates.map(d => format(parseISO(d), 'd MMM yyyy')).join(', ')}</p>
-                                )}
-                              </div>
-                            </CollapsibleContent>
-                          </Collapsible>
-                        </div>
-                      );
-                    })}
-                    
-                    {/* Events */}
                     {events.map((event) => {
                       const isExpanded = expandedSubGoals.has(event.id);
                       const toggleExpand = (e: React.MouseEvent) => {
@@ -1698,6 +1596,20 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                   </div>
                 </div>
               )}
+              
+              {/* Add Event Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => {
+                  setAddEventMode(true);
+                  setIsAddSubGoalDialogOpen(true);
+                }}
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add Event
+              </Button>
               
               {/* Empty state when there are primary goals but no sub-goals */}
               {smartGoals.length > 0 && subGoals.length === 0 && events.length === 0 && (
@@ -1899,9 +1811,15 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                                     <div key={`test-${index}`} className="text-xs">
                                       <div className="font-medium flex items-center gap-1">
                                         <span className="text-primary">📋</span>
-                                        {test.testMethod || "Test"}
+                                        {test.testMethod || test.description || "Test"}
                                       </div>
-                                      <div className="text-muted-foreground">{test.description}</div>
+                                      {test.goalValue && test.unit ? (
+                                        <div className="text-muted-foreground">
+                                          Target: {test.goalValue} {test.unit}
+                                        </div>
+                                      ) : test.description && (
+                                        <div className="text-muted-foreground">{test.description}</div>
+                                      )}
                                     </div>
                                   ))}
                                   {scheduledEvents.map((event, index) => (
@@ -1981,9 +1899,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           onAddEvent={handleAddEvent}
           onEditEvent={handleEditEvent}
           editEvent={editingEvent}
-          athleteParameters={athleteBiometrics}
-          parameterDefinitions={biometricDefinitions}
-          subGoalOptions={getSubGoalsFromAthleticismDB()}
+          athleticismParameters={parametersDataV2.parameters}
+          athletePerformanceParams={athletePerformanceParams}
           testMethodOptions={testMethodOptions}
           smartGoals={smartGoals}
           defaultParentGoalId={addSubGoalForParent}
