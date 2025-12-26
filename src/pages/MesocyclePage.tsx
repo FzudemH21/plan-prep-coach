@@ -464,7 +464,17 @@ export default function MesocyclePage() {
             </div>
             <div className="space-y-1 md:col-span-2">
               <Label className="text-sm font-medium text-muted-foreground">Available Methods</Label>
-              <p className="text-sm text-muted-foreground">{getMethodsForAllocatedSubGoals.length} unique methods from selected sub-goals</p>
+              {getMethodsForAllocatedSubGoals.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {getMethodsForAllocatedSubGoals.map((method, index) => (
+                    <Badge key={index} variant="outline" className="text-xs">
+                      {method}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No methods selected in Macrocycle Planning Step 3</p>
+              )}
             </div>
           </div>
         ) : (
@@ -922,47 +932,32 @@ export default function MesocyclePage() {
   const getMethodsForAllocatedSubGoals = useMemo(() => {
     if (!macrocycleData) return [];
 
-    // New approach: Use directly selected methods from macrocycle if available
-    if (macrocycleData.selectedMethods && Array.isArray(macrocycleData.selectedMethods) && macrocycleData.selectedMethods.length > 0) {
-      const methodsSet = new Set<string>(macrocycleData.selectedMethods);
-      // Add manually added methods
-      manuallyAddedMethods.forEach(method => methodsSet.add(method));
-      return Array.from(methodsSet);
-    }
-
-    // Legacy approach: Collect all allocated sub-goals across mesocycles (strings like "Overarching - Sub-goal")
-    const allocated = new Set<string>();
-    mesocycles.forEach(meso => meso.allocatedSubGoals?.forEach(sg => allocated.add(sg)));
-
     const methodsSet = new Set<string>();
 
-    allocated.forEach(formattedSubGoal => {
-      // Find matching sub-goal in macrocycleData by comparing the full formatted description
-      const macroSubGoal = macrocycleData.subGoals?.find((sg: any) => {
-        const sgDesc = sg.description || sg.name || sg.id || sg;
-        return normalizeForComparison(sgDesc) === normalizeForComparison(formattedSubGoal);
+    // Primary approach: Use directly selected methods from macrocycle if available
+    if (macrocycleData.selectedMethods && Array.isArray(macrocycleData.selectedMethods)) {
+      macrocycleData.selectedMethods.forEach((method: string) => methodsSet.add(method));
+    }
+
+    // Also check methodsByQuality for methods selected through the quality-based flow
+    if (macrocycleData.methodsByQuality && typeof macrocycleData.methodsByQuality === 'object') {
+      Object.values(macrocycleData.methodsByQuality).forEach((entry: any) => {
+        if (entry?.list && Array.isArray(entry.list)) {
+          entry.list.forEach((method: string) => methodsSet.add(method));
+        }
       });
+    }
 
-      if (!macroSubGoal) return;
+    // Add manually added methods from macrocycle data
+    if (macrocycleData.manuallyAddedMethods && Array.isArray(macrocycleData.manuallyAddedMethods)) {
+      macrocycleData.manuallyAddedMethods.forEach((method: string) => methodsSet.add(method));
+    }
 
-      // Get qualities for this sub-goal (structure: { label, list })
-      const qEntry = macrocycleData.qualitiesBySubGoal?.[macroSubGoal.id];
-      const qualityNames: string[] = qEntry?.list || [];
-
-      // For each quality, pull selected methods from methodsByQuality (structure: { subGoalLabel, qualityName, list })
-      qualityNames.forEach((qName: string) => {
-        const qualityId = `${macroSubGoal.id}::${qName}`;
-        const mEntry = macrocycleData.methodsByQuality?.[qualityId];
-        const methodNames: string[] = mEntry?.list || [];
-        methodNames.forEach(m => methodsSet.add(m));
-      });
-    });
-
-    // Add manually added methods
+    // Add locally manually added methods
     manuallyAddedMethods.forEach(method => methodsSet.add(method));
 
     return Array.from(methodsSet);
-  }, [mesocycles, macrocycleData, manuallyAddedMethods]);
+  }, [macrocycleData, manuallyAddedMethods]);
 
   const groupMethodsByToolboxCategory = useMemo(() => {
     const methods = getMethodsForAllocatedSubGoals;
