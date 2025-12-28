@@ -2411,7 +2411,7 @@ export default function MesocyclePage() {
           {allMethods.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-muted-foreground mb-2">No training methods allocated.</p>
-              <p className="text-sm text-muted-foreground">Please allocate sub-goals to mesocycles in step 2 first.</p>
+              <p className="text-sm text-muted-foreground">Please allocate methods to mesocycles in step 3 first.</p>
             </div>
           ) : (
             <>
@@ -2606,11 +2606,33 @@ export default function MesocyclePage() {
                                             }}>
                                               <div className="sticky left-0 z-40 p-3 font-medium text-sm border-r bg-background rounded-tl shadow-md">
                                                 <div className="flex items-center justify-between group pr-16 relative">
-                                                  <div className="flex items-center gap-2">
+                                                   <div className="flex items-center gap-2 flex-wrap">
                                                     {categoryName && <span className="text-xs text-muted-foreground">↳</span>}
                                                     <div className="line-clamp-3" title={fullMethodName}>
                                                       {categoryName ? `${baseMethodName} - ${categoryName}` : baseMethodName}
                                                     </div>
+                                                    {/* Allocation indicators */}
+                                                    {!categoryName && (
+                                                      <div className="flex gap-0.5 ml-1">
+                                                        {mesocycles.map((meso) => {
+                                                          const isAlloc = isMethodAllocatedToMesocycle(fullMethodName, meso.id);
+                                                          return (
+                                                            <TooltipProvider key={meso.id}>
+                                                              <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                  <div 
+                                                                    className={`w-2 h-2 rounded-full ${isAlloc ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+                                                                  />
+                                                                </TooltipTrigger>
+                                                                <TooltipContent>
+                                                                  <p className="text-xs">{meso.name}: {isAlloc ? 'Allocated' : 'Not allocated'}</p>
+                                                                </TooltipContent>
+                                                              </Tooltip>
+                                                            </TooltipProvider>
+                                                          );
+                                                        })}
+                                                      </div>
+                                                    )}
                                                     {/* Warning badge if no frequency parameter */}
                                                     {!hasValidFrequencyParameter(baseMethodName) && (
                                                       <TooltipProvider>
@@ -2751,63 +2773,63 @@ export default function MesocyclePage() {
                                                              const isDragSource = dragState.sourceCell === cellId;
                                                              const isInSelection = dragState.selectedCells.has(cellId);
                                                              
-                                                             return (
-                                                               <div 
-                                                                 key={sessionIndex}
-                                                                 className={`p-1 border-l flex-1 ${!isAllocated ? 'bg-gray-100/50 opacity-50' : ''}`}
-                                                                 style={{ minWidth: '120px' }}
-                                                                 data-drag-cell={cellId}
-                                                                 data-allocated={isAllocated ? 'true' : 'false'}
-                                                               >
-                                                                 <ParameterContextMenu
-                                                                   cellId={cellId}
-                                                                   value={currentValue}
-                                                                   onFillRight={handleFillRight}
-                                                                   onFillRow={handleFillRow}
-                                                                   disabled={!isAllocated || !currentValue}
-                                                                 >
-                                                                   {param.isQuantitative ? (
-                                                                     <QuantitativeParameterInput
-                                                                       value={isAllocated ? currentValue.toString() : ''}
-                                                                       onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, value, sessionIndex)}
-                                                                       unit={param.options?.[0] || ''}
-                                                                       onUnitChange={(unit) => {
-                                                                         // For now, we don't change units dynamically
-                                                                       }}
-                                                                       units={param.options || []}
-                                                                       placeholder=""
-                                                                       cellId={cellId}
-                                                                       onDragStart={handleDragStart}
-                                                                       onDragEnd={handleDragEnd}
-                                                                       isDragSource={isDragSource}
-                                                                       isInDragSelection={isInSelection}
-                                                                       isEnabled={isAllocated}
-                                                                     />
-                                                                   ) : param.isQualitative ? (
-                                                                     <QualitativeParameterInput
-                                                                       value={isAllocated ? currentValue.toString() : ''}
-                                                                       onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, value, sessionIndex)}
-                                                                       options={param.options || []}
-                                                                       placeholder=""
-                                                                       cellId={cellId}
-                                                                       onDragStart={handleDragStart}
-                                                                       onDragEnd={handleDragEnd}
-                                                                       isDragSource={isDragSource}
-                                                                       isInDragSelection={isInSelection}
-                                                                       isEnabled={isAllocated}
-                                                                     />
-                                                                    ) : (
-                                                                      <DebouncedTextInput
-                                                                        value={isAllocated ? currentValue.toString() : ''}
-                                                                        onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, param.type === 'number' ? Number(value) : value, sessionIndex)}
-                                                                        className={!isAllocated ? 'cursor-not-allowed' : ''}
-                                                                        placeholder=""
-                                                                        disabled={!isAllocated}
-                                                                      />
-                                                                    )}
-                                                                 </ParameterContextMenu>
-                                                               </div>
-                                                             );
+                                                              return (
+                                                                <div 
+                                                                  key={sessionIndex}
+                                                                  className={`p-1 border-l flex-1 ${!isAllocated ? 'bg-muted/20' : ''}`}
+                                                                  style={{ minWidth: '120px' }}
+                                                                  data-drag-cell={cellId}
+                                                                  data-allocated={isAllocated ? 'true' : 'false'}
+                                                                >
+                                                                  {isAllocated ? (
+                                                                    <ParameterContextMenu
+                                                                      cellId={cellId}
+                                                                      value={currentValue}
+                                                                      onFillRight={handleFillRight}
+                                                                      onFillRow={handleFillRow}
+                                                                      disabled={!currentValue}
+                                                                    >
+                                                                      {param.isQuantitative ? (
+                                                                        <QuantitativeParameterInput
+                                                                          value={currentValue.toString()}
+                                                                          onValueChange={(value) => updateParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, value, sessionIndex)}
+                                                                          unit={param.options?.[0] || ''}
+                                                                          onUnitChange={(unit) => {}}
+                                                                          units={param.options || []}
+                                                                          placeholder=""
+                                                                          cellId={cellId}
+                                                                          onDragStart={handleDragStart}
+                                                                          onDragEnd={handleDragEnd}
+                                                                          isDragSource={isDragSource}
+                                                                          isInDragSelection={isInSelection}
+                                                                          isEnabled={true}
+                                                                        />
+                                                                      ) : param.isQualitative ? (
+                                                                        <QualitativeParameterInput
+                                                                          value={currentValue.toString()}
+                                                                          onValueChange={(value) => updateParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, value, sessionIndex)}
+                                                                          options={param.options || []}
+                                                                          placeholder=""
+                                                                          cellId={cellId}
+                                                                          onDragStart={handleDragStart}
+                                                                          onDragEnd={handleDragEnd}
+                                                                          isDragSource={isDragSource}
+                                                                          isInDragSelection={isInSelection}
+                                                                          isEnabled={true}
+                                                                        />
+                                                                      ) : (
+                                                                        <DebouncedTextInput
+                                                                          value={currentValue.toString()}
+                                                                          onValueChange={(value) => updateParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, param.type === 'number' ? Number(value) : value, sessionIndex)}
+                                                                          placeholder=""
+                                                                        />
+                                                                      )}
+                                                                    </ParameterContextMenu>
+                                                                  ) : (
+                                                                    <div className="h-full flex items-center justify-center text-muted-foreground text-xs">—</div>
+                                                                  )}
+                                                                </div>
+                                                              );
                                                            })}
                                                          </div>
                                                        );
@@ -2817,62 +2839,62 @@ export default function MesocyclePage() {
                                                        const isDragSource = dragState.sourceCell === cellId;
                                                        const isInSelection = dragState.selectedCells.has(cellId);
                                                        
-                                                         return (
-                                                           <div 
-                                                             key={`${meso.id}-${microcycleIndex}-${param.name}`} 
-                                                             className={`p-1 border-l ${!isAllocated ? 'bg-gray-100/50 opacity-50' : ''}`}
-                                                             data-drag-cell={cellId}
-                                                             data-allocated={isAllocated ? 'true' : 'false'}
-                                                           >
-                                                           <ParameterContextMenu
-                                                             cellId={cellId}
-                                                             value={currentValue}
-                                                             onFillRight={handleFillRight}
-                                                             onFillRow={handleFillRow}
-                                                             disabled={!isAllocated || !currentValue}
-                                                           >
-                                                             {param.isQuantitative ? (
-                                                               <QuantitativeParameterInput
-                                                                 value={isAllocated ? currentValue.toString() : ''}
-                                                                 onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, value, 0)}
-                                                                unit={param.options?.[0] || ''}
-                                                                onUnitChange={(unit) => {
-                                                                  // For now, we don't change units dynamically
-                                                                }}
-                                                                units={param.options || []}
-                                                                placeholder=""
+                                                          return (
+                                                            <div 
+                                                              key={`${meso.id}-${microcycleIndex}-${param.name}`} 
+                                                              className={`p-1 border-l ${!isAllocated ? 'bg-muted/20' : ''}`}
+                                                              data-drag-cell={cellId}
+                                                              data-allocated={isAllocated ? 'true' : 'false'}
+                                                            >
+                                                            {isAllocated ? (
+                                                              <ParameterContextMenu
                                                                 cellId={cellId}
-                                                                onDragStart={handleDragStart}
-                                                                onDragEnd={handleDragEnd}
-                                                                isDragSource={isDragSource}
-                                                                isInDragSelection={isInSelection}
-                                                                isEnabled={isAllocated}
-                                                              />
-                                                            ) : param.isQualitative ? (
-                                                              <QualitativeParameterInput
-                                                                value={isAllocated ? currentValue.toString() : ''}
-                                                                onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, value, 0)}
-                                                                options={param.options || []}
-                                                                placeholder=""
-                                                                cellId={cellId}
-                                                                onDragStart={handleDragStart}
-                                                                onDragEnd={handleDragEnd}
-                                                                isDragSource={isDragSource}
-                                                                isInDragSelection={isInSelection}
-                                                                isEnabled={isAllocated}
-                                                              />
-                                                             ) : (
-                                                               <DebouncedTextInput
-                                                                 value={isAllocated ? currentValue.toString() : ''}
-                                                                 onValueChange={(value) => isAllocated && updateParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, param.type === 'number' ? Number(value) : value, 0)}
-                                                                 className={!isAllocated ? 'cursor-not-allowed' : ''}
-                                                                 placeholder=""
-                                                                 disabled={!isAllocated}
-                                                               />
-                                                             )}
-                                                          </ParameterContextMenu>
-                                                        </div>
-                                                      );
+                                                                value={currentValue}
+                                                                onFillRight={handleFillRight}
+                                                                onFillRow={handleFillRow}
+                                                                disabled={!currentValue}
+                                                              >
+                                                                {param.isQuantitative ? (
+                                                                  <QuantitativeParameterInput
+                                                                    value={currentValue.toString()}
+                                                                    onValueChange={(value) => updateParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, value, 0)}
+                                                                    unit={param.options?.[0] || ''}
+                                                                    onUnitChange={(unit) => {}}
+                                                                    units={param.options || []}
+                                                                    placeholder=""
+                                                                    cellId={cellId}
+                                                                    onDragStart={handleDragStart}
+                                                                    onDragEnd={handleDragEnd}
+                                                                    isDragSource={isDragSource}
+                                                                    isInDragSelection={isInSelection}
+                                                                    isEnabled={true}
+                                                                  />
+                                                                ) : param.isQualitative ? (
+                                                                  <QualitativeParameterInput
+                                                                    value={currentValue.toString()}
+                                                                    onValueChange={(value) => updateParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, value, 0)}
+                                                                    options={param.options || []}
+                                                                    placeholder=""
+                                                                    cellId={cellId}
+                                                                    onDragStart={handleDragStart}
+                                                                    onDragEnd={handleDragEnd}
+                                                                    isDragSource={isDragSource}
+                                                                    isInDragSelection={isInSelection}
+                                                                    isEnabled={true}
+                                                                  />
+                                                                ) : (
+                                                                  <DebouncedTextInput
+                                                                    value={currentValue.toString()}
+                                                                    onValueChange={(value) => updateParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, param.type === 'number' ? Number(value) : value, 0)}
+                                                                    placeholder=""
+                                                                  />
+                                                                )}
+                                                              </ParameterContextMenu>
+                                                            ) : (
+                                                              <div className="h-full flex items-center justify-center text-muted-foreground text-xs">—</div>
+                                                            )}
+                                                         </div>
+                                                       );
                                                     }
                                                   }).flat()
                                                 )}
