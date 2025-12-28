@@ -1346,21 +1346,61 @@ export default function MesocyclePage() {
                       <div className="text-xs text-muted-foreground mb-2">
                         {format(meso.startDate, 'MMM d')} - {format(meso.endDate, 'MMM d')}
                       </div>
-                      {/* Tests and Events */}
-                      {(tests.length > 0 || events.length > 0) && (
-                        <div className="space-y-1">
-                          {tests.map((test, idx) => (
-                            <Badge key={`test-${idx}`} variant="outline" className="text-xs bg-blue-500/10 border-blue-500/30">
-                              📋 {test.name}
-                            </Badge>
-                          ))}
-                          {events.map((event, idx) => (
-                            <Badge key={`event-${idx}`} variant="outline" className="text-xs bg-amber-500/10 border-amber-500/30">
-                              🏆 {event.name}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
+                      {/* Tests and Events - Grouped by name with count */}
+                      {(tests.length > 0 || events.length > 0) && (() => {
+                        // Group tests by name
+                        const groupedTests = tests.reduce((acc, test) => {
+                          if (!acc[test.name]) acc[test.name] = [];
+                          acc[test.name].push(test.date);
+                          return acc;
+                        }, {} as Record<string, Date[]>);
+                        
+                        // Group events by name
+                        const groupedEvents = events.reduce((acc, event) => {
+                          if (!acc[event.name]) acc[event.name] = [];
+                          acc[event.name].push(event.date);
+                          return acc;
+                        }, {} as Record<string, Date[]>);
+                        
+                        return (
+                          <div className="space-y-1">
+                            {Object.entries(groupedTests).map(([name, dates]) => (
+                              <TooltipProvider key={`test-${name}`}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge variant="outline" className="text-xs bg-blue-500/10 border-blue-500/30 cursor-help">
+                                      📋 {name}{dates.length > 1 ? ` ×${dates.length}` : ''}
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p className="font-medium">{name}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {dates.sort((a, b) => a.getTime() - b.getTime()).map(d => format(d, 'MMM d')).join(', ')}
+                                    </p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ))}
+                            {Object.entries(groupedEvents).map(([name, dates]) => (
+                              <TooltipProvider key={`event-${name}`}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge variant="outline" className="text-xs bg-amber-500/10 border-amber-500/30 cursor-help">
+                                      🏆 {name}{dates.length > 1 ? ` ×${dates.length}` : ''}
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p className="font-medium">{name}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {dates.sort((a, b) => a.getTime() - b.getTime()).map(d => format(d, 'MMM d')).join(', ')}
+                                    </p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })}
