@@ -2324,8 +2324,29 @@ export default function MesocyclePage() {
   }, [mesocycles, parameterValues, globalMicrocycleSplitStates, methodParametersMap]);
 
   const renderMethodPeriodization = () => {
-    const allMethods = getMethodsForAllocatedSubGoals;
-    const groupedMethods = groupMethodsByToolboxCategory;
+    // Only show methods that are allocated to at least one mesocycle in Step 3
+    const allMethods = getMethodsForAllocatedSubGoals.filter(method => {
+      const allocatedMesocycles = methodAllocations[method] || [];
+      return allocatedMesocycles.length > 0;
+    });
+    
+    // Filter grouped methods to only include allocated methods (nested structure: category -> subcategory -> methods)
+    const groupedMethods: Record<string, Record<string, string[]>> = {};
+    Object.entries(groupMethodsByToolboxCategory).forEach(([category, subCategories]) => {
+      const filteredSubCategories: Record<string, string[]> = {};
+      Object.entries(subCategories).forEach(([subCategory, methods]) => {
+        const allocatedMethods = methods.filter(method => {
+          const allocatedMesocycles = methodAllocations[method] || [];
+          return allocatedMesocycles.length > 0;
+        });
+        if (allocatedMethods.length > 0) {
+          filteredSubCategories[subCategory] = allocatedMethods;
+        }
+      });
+      if (Object.keys(filteredSubCategories).length > 0) {
+        groupedMethods[category] = filteredSubCategories;
+      }
+    });
     
     // Helper function to get mesocycle overview data
     const getMesocycleOverview = (mesocycle: ExtendedMesocycle) => {
