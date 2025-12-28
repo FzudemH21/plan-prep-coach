@@ -2632,28 +2632,6 @@ export default function MesocyclePage() {
                                                     <div className="line-clamp-3" title={fullMethodName}>
                                                       {categoryName ? `${baseMethodName} - ${categoryName}` : baseMethodName}
                                                     </div>
-                                                    {/* Allocation indicators */}
-                                                    {!categoryName && (
-                                                      <div className="flex gap-0.5 ml-1">
-                                                        {mesocycles.map((meso) => {
-                                                          const isAlloc = isMethodAllocatedToMesocycle(fullMethodName, meso.id);
-                                                          return (
-                                                            <TooltipProvider key={meso.id}>
-                                                              <Tooltip>
-                                                                <TooltipTrigger asChild>
-                                                                  <div 
-                                                                    className={`w-2 h-2 rounded-full ${isAlloc ? 'bg-primary' : 'bg-muted-foreground/30'}`}
-                                                                  />
-                                                                </TooltipTrigger>
-                                                                <TooltipContent>
-                                                                  <p className="text-xs">{meso.name}: {isAlloc ? 'Allocated' : 'Not allocated'}</p>
-                                                                </TooltipContent>
-                                                              </Tooltip>
-                                                            </TooltipProvider>
-                                                          );
-                                                        })}
-                                                      </div>
-                                                    )}
                                                     {/* Warning badge if no frequency parameter */}
                                                     {!hasValidFrequencyParameter(baseMethodName) && (
                                                       <TooltipProvider>
