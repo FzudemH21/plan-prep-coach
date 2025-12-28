@@ -1515,73 +1515,86 @@ export default function MesocyclePage() {
                       <span className="font-semibold text-sm text-primary">{category}</span>
                     </div>
                     
-                    {/* Methods in this category */}
-                    {Object.entries(subCategories).flatMap(([subCategory, methods]) =>
-                      methods.map((method) => {
-                        const allocation = methodAllocations[method] || [];
-                        const allMesosAllocated = mesocycles.every(m => allocation.includes(m.id));
+                    {/* Subcategories in this category */}
+                    {Object.entries(subCategories).map(([subCategory, methods]) => (
+                      <div key={subCategory}>
+                        {/* Subcategory Header */}
+                        <div className="bg-muted/20 px-3 py-1.5 border-b pl-6">
+                          <span className="font-medium text-xs text-muted-foreground">{subCategory}</span>
+                        </div>
                         
-                        return (
-                          <div 
-                            key={method} 
-                            className="grid border-b hover:bg-muted/20 transition-colors"
-                            style={{
-                              gridTemplateColumns: `300px repeat(${visibleMesocycles.length}, minmax(180px, 1fr))`
-                            }}
-                          >
-                            <div className="p-3 border-r flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={allMesosAllocated}
-                                onChange={() => {
-                                  // Toggle all mesocycles for this method
-                                  if (allMesosAllocated) {
-                                    setMethodAllocations(prev => ({
-                                      ...prev,
-                                      [method]: []
-                                    }));
-                                  } else {
-                                    setMethodAllocations(prev => ({
-                                      ...prev,
-                                      [method]: mesocycles.map(m => m.id)
-                                    }));
-                                  }
-                                }}
-                                className="h-4 w-4 rounded border-gray-300"
-                              />
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className="text-sm truncate cursor-help">{method}</span>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="right" className="max-w-md">
-                                    <p>{method}</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </div>
-                            
-                            {visibleMesocycles.map((meso) => {
-                              const isAllocated = allocation.includes(meso.id);
+                        {/* Methods in this subcategory */}
+                        {methods.map((method) => {
+                          const allocation = methodAllocations[method] || [];
+                          const allMesosAllocated = mesocycles.every(m => allocation.includes(m.id));
+                          
+                          // Extract display name by removing category and subcategory prefix if present
+                          const displayName = method.includes(' - ') 
+                            ? method.split(' - ').slice(1).join(' - ') 
+                            : method;
+                          
+                          return (
+                            <div 
+                              key={method} 
+                              className="grid border-b hover:bg-muted/20 transition-colors"
+                              style={{
+                                gridTemplateColumns: `300px repeat(${visibleMesocycles.length}, minmax(180px, 1fr))`
+                              }}
+                            >
+                              <div className="p-3 border-r flex items-center gap-2 pl-8">
+                                <input
+                                  type="checkbox"
+                                  checked={allMesosAllocated}
+                                  onChange={() => {
+                                    // Toggle all mesocycles for this method
+                                    if (allMesosAllocated) {
+                                      setMethodAllocations(prev => ({
+                                        ...prev,
+                                        [method]: []
+                                      }));
+                                    } else {
+                                      setMethodAllocations(prev => ({
+                                        ...prev,
+                                        [method]: mesocycles.map(m => m.id)
+                                      }));
+                                    }
+                                  }}
+                                  className="h-4 w-4 rounded border-gray-300"
+                                />
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="text-sm truncate cursor-help">{displayName}</span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="right" className="max-w-md">
+                                      <p>{method}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
                               
-                              return (
-                                <div 
-                                  key={meso.id} 
-                                  className="p-3 flex items-center justify-center border-r last:border-r-0"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={isAllocated}
-                                    onChange={() => toggleMethodAllocation(method, meso.id)}
-                                    className="h-5 w-5 rounded border-gray-300 cursor-pointer"
-                                  />
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })
-                    )}
+                              {visibleMesocycles.map((meso) => {
+                                const isAllocated = allocation.includes(meso.id);
+                                
+                                return (
+                                  <div 
+                                    key={meso.id} 
+                                    className="p-3 flex items-center justify-center border-r last:border-r-0"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isAllocated}
+                                      onChange={() => toggleMethodAllocation(method, meso.id)}
+                                      className="h-5 w-5 rounded border-gray-300 cursor-pointer"
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
