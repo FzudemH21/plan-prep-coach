@@ -1025,35 +1025,18 @@ export default function MesocyclePage() {
     const grouped: Record<string, Record<string, string[]>> = {};
     
     methods.forEach(method => {
-      // Try to match method with toolbox categories
-      // For now, use simple heuristics - this could be enhanced with better mapping
       let category = 'General Training';
       let subCategory = 'General';
       
-      if (method.toLowerCase().includes('sprint')) {
-        category = 'Sprinting';
-        if (method.toLowerCase().includes('acceleration')) subCategory = 'Acceleration';
-        else if (method.toLowerCase().includes('resisted')) subCategory = 'Resisted Sprinting';
-        else if (method.toLowerCase().includes('top speed')) subCategory = 'Top Speed';
-        else subCategory = 'General';
-      } else if (method.toLowerCase().includes('resistance') || method.toLowerCase().includes('strength')) {
-        if (method.toLowerCase().includes('lower body')) {
-          category = 'Lower Body Resistance Training';
-          if (method.toLowerCase().includes('strength')) subCategory = 'Strength';
-          else if (method.toLowerCase().includes('power')) subCategory = 'Power';
-          else subCategory = 'General';
-        } else if (method.toLowerCase().includes('upper body')) {
-          category = 'Upper Body Resistance Training';
-          subCategory = 'General';
-        } else {
-          category = 'Resistance Training';
-          subCategory = 'General';
-        }
-      } else if (method.toLowerCase().includes('jump') || method.toLowerCase().includes('plyometric')) {
-        category = 'Plyometrics';
-        if (method.toLowerCase().includes('intensive')) subCategory = 'Intensive Jumps';
-        else if (method.toLowerCase().includes('extensive')) subCategory = 'Extensive Jumps';
-        else subCategory = 'General';
+      // Parse "Category - SubCategory" format directly from the method name
+      if (method.includes(' - ')) {
+        const parts = method.split(' - ');
+        category = parts[0];
+        subCategory = parts.slice(1).join(' - ');
+      } else {
+        // Fallback for methods without the standard format
+        category = method;
+        subCategory = method;
       }
       
       if (!grouped[category]) grouped[category] = {};
@@ -1515,86 +1498,73 @@ export default function MesocyclePage() {
                       <span className="font-semibold text-sm text-primary">{category}</span>
                     </div>
                     
-                    {/* Subcategories in this category */}
-                    {Object.entries(subCategories).map(([subCategory, methods]) => (
-                      <div key={subCategory}>
-                        {/* Subcategory Header */}
-                        <div className="bg-muted/20 px-3 py-1.5 border-b pl-6">
-                          <span className="font-medium text-xs text-muted-foreground">{subCategory}</span>
-                        </div>
+                    {/* Methods (subcategories) in this category */}
+                    {Object.entries(subCategories).map(([subCategory, methods]) => 
+                      methods.map((method) => {
+                        const allocation = methodAllocations[method] || [];
+                        const allMesosAllocated = mesocycles.every(m => allocation.includes(m.id));
                         
-                        {/* Methods in this subcategory */}
-                        {methods.map((method) => {
-                          const allocation = methodAllocations[method] || [];
-                          const allMesosAllocated = mesocycles.every(m => allocation.includes(m.id));
-                          
-                          // Extract display name by removing category and subcategory prefix if present
-                          const displayName = method.includes(' - ') 
-                            ? method.split(' - ').slice(1).join(' - ') 
-                            : method;
-                          
-                          return (
-                            <div 
-                              key={method} 
-                              className="grid border-b hover:bg-muted/20 transition-colors"
-                              style={{
-                                gridTemplateColumns: `300px repeat(${visibleMesocycles.length}, minmax(180px, 1fr))`
-                              }}
-                            >
-                              <div className="p-3 border-r flex items-center gap-2 pl-8">
-                                <input
-                                  type="checkbox"
-                                  checked={allMesosAllocated}
-                                  onChange={() => {
-                                    // Toggle all mesocycles for this method
-                                    if (allMesosAllocated) {
-                                      setMethodAllocations(prev => ({
-                                        ...prev,
-                                        [method]: []
-                                      }));
-                                    } else {
-                                      setMethodAllocations(prev => ({
-                                        ...prev,
-                                        [method]: mesocycles.map(m => m.id)
-                                      }));
-                                    }
-                                  }}
-                                  className="h-4 w-4 rounded border-gray-300"
-                                />
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <span className="text-sm truncate cursor-help">{displayName}</span>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="right" className="max-w-md">
-                                      <p>{method}</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              </div>
-                              
-                              {visibleMesocycles.map((meso) => {
-                                const isAllocated = allocation.includes(meso.id);
-                                
-                                return (
-                                  <div 
-                                    key={meso.id} 
-                                    className="p-3 flex items-center justify-center border-r last:border-r-0"
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={isAllocated}
-                                      onChange={() => toggleMethodAllocation(method, meso.id)}
-                                      className="h-5 w-5 rounded border-gray-300 cursor-pointer"
-                                    />
-                                  </div>
-                                );
-                              })}
+                        return (
+                          <div 
+                            key={method} 
+                            className="grid border-b hover:bg-muted/20 transition-colors"
+                            style={{
+                              gridTemplateColumns: `300px repeat(${visibleMesocycles.length}, minmax(180px, 1fr))`
+                            }}
+                          >
+                            <div className="p-3 border-r flex items-center gap-2 pl-6">
+                              <input
+                                type="checkbox"
+                                checked={allMesosAllocated}
+                                onChange={() => {
+                                  // Toggle all mesocycles for this method
+                                  if (allMesosAllocated) {
+                                    setMethodAllocations(prev => ({
+                                      ...prev,
+                                      [method]: []
+                                    }));
+                                  } else {
+                                    setMethodAllocations(prev => ({
+                                      ...prev,
+                                      [method]: mesocycles.map(m => m.id)
+                                    }));
+                                  }
+                                }}
+                                className="h-4 w-4 rounded border-gray-300"
+                              />
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="text-sm truncate cursor-help">{subCategory}</span>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="right" className="max-w-md">
+                                    <p>{method}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             </div>
-                          );
-                        })}
-                      </div>
-                    ))}
+                            
+                            {visibleMesocycles.map((meso) => {
+                              const isAllocated = allocation.includes(meso.id);
+                              
+                              return (
+                                <div 
+                                  key={meso.id} 
+                                  className="p-3 flex items-center justify-center border-r last:border-r-0"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isAllocated}
+                                    onChange={() => toggleMethodAllocation(method, meso.id)}
+                                    className="h-5 w-5 rounded border-gray-300 cursor-pointer"
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 ))}
               </div>
