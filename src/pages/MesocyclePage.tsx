@@ -2431,8 +2431,8 @@ export default function MesocyclePage() {
         <CardContent>
           {allMethods.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-muted-foreground mb-2">No training methods allocated.</p>
-              <p className="text-sm text-muted-foreground">Please allocate methods to mesocycles in step 3 first.</p>
+              <p className="text-muted-foreground mb-2">No training methods allocated yet.</p>
+              <p className="text-sm text-muted-foreground">Allocate methods in step 3, or manually add methods below.</p>
             </div>
           ) : (
             <>
@@ -2913,54 +2913,54 @@ export default function MesocyclePage() {
                     </div>
                   </div>
                </div>
-
-              {/* Add Method Section */}
-             <div className="mt-4 pt-4 border-t">
-               <div className="flex items-center justify-between">
-                 <div className="space-y-1">
-                   <h4 className="font-medium">Manual Method Selection</h4>
-                   <p className="text-sm text-muted-foreground">
-                     Add training methods from the toolbox that are not covered by your selected sub-goals.
-                   </p>
-                 </div>
-                 <Button 
-                   onClick={() => setIsAddMethodDialogOpen(true)}
-                   variant="outline"
-                   className="shrink-0"
-                 >
-                   Add Method
-                 </Button>
-               </div>
-               
-               {/* Show manually added methods */}
-               {manuallyAddedMethods.length > 0 && (
-                 <div className="mt-3 space-y-2">
-                   <Label className="text-sm font-medium">Manually Added Methods:</Label>
-                   <div className="flex flex-wrap gap-2">
-                     {manuallyAddedMethods.map((method) => (
-                       <Badge 
-                         key={method} 
-                         variant="secondary"
-                         className="flex items-center gap-1"
-                       >
-                         <span className="text-xs">Manual:</span>
-                         {method}
-                         <Button
-                           variant="ghost"
-                           size="sm"
-                           className="h-4 w-4 p-0 ml-1"
-                           onClick={() => handleRemoveMethod(method)}
-                         >
-                           ×
-                         </Button>
-                       </Badge>
-                     ))}
-                   </div>
-                 </div>
-               )}
-              </div>
             </>
           )}
+
+          {/* Add Method Section - Always visible */}
+          <div className="mt-4 pt-4 border-t">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <h4 className="font-medium">Manual Method Selection</h4>
+                <p className="text-sm text-muted-foreground">
+                  Add training methods from the toolbox that are not covered by your selected sub-goals.
+                </p>
+              </div>
+              <Button 
+                onClick={() => setIsAddMethodDialogOpen(true)}
+                variant="outline"
+                className="shrink-0"
+              >
+                Add Method
+              </Button>
+            </div>
+            
+            {/* Show manually added methods */}
+            {manuallyAddedMethods.length > 0 && (
+              <div className="mt-3 space-y-2">
+                <Label className="text-sm font-medium">Manually Added Methods:</Label>
+                <div className="flex flex-wrap gap-2">
+                  {manuallyAddedMethods.map((method) => (
+                    <Badge 
+                      key={method} 
+                      variant="secondary"
+                      className="flex items-center gap-1"
+                    >
+                      <span className="text-xs">Manual:</span>
+                      {method}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-4 w-4 p-0 ml-1"
+                        onClick={() => handleRemoveMethod(method)}
+                      >
+                        ×
+                      </Button>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
            </CardContent>
        </Card>
