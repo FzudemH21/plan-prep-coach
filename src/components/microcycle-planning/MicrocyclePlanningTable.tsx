@@ -1092,9 +1092,7 @@ const updateCellData = (
           <CardTitle>Microcycle Exercise Planning</CardTitle>
         </CardHeader>
         <CardContent>
-        <div className="overflow-x-auto">
-          <div className="min-w-full">
-            <Table className="min-w-[1200px]">
+            <Table className="min-w-[1200px]" containerClassName="overflow-x-auto">
             <TableHeader>
               {/* First row - Mesocycle headers (only when there are split mesocycles) */}
               {hasSplitMesocycles && (
@@ -1683,8 +1681,6 @@ const updateCellData = (
               ))}
             </TableBody>
             </Table>
-          </div>
-        </div>
       </CardContent>
     </Card>
 
