@@ -8,7 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, ArrowRight, Settings, SplitSquareHorizontal, Columns } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Settings, SplitSquareHorizontal, Columns, MessageSquare } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import MesocycleCalendar from '@/components/mesocycle/MesocycleCalendar';
 import MicrocycleIntensityPlanning from '@/components/mesocycle/MicrocycleIntensityPlanning';
 import IntensityColumn from '@/components/mesocycle/IntensityColumn';
@@ -94,6 +96,11 @@ export default function MesocyclePage() {
   const [mesocycleCopyDialogOpen, setMesocycleCopyDialogOpen] = useState(false);
   const [targetMesocycleForIntensityCopy, setTargetMesocycleForIntensityCopy] = useState<{mesocycleId: string, microcycleStructure: Array<{id: string, duration: number}>} | null>(null);
   const [mpTableKey, setMpTableKey] = useState(0);
+  
+  // Coach notes state for mesocycle characterization
+  const [mesocycleNotes, setMesocycleNotes] = useState<Record<string, string>>({});
+  const [notesDialogOpen, setNotesDialogOpen] = useState(false);
+  const [selectedMesocycleForNotes, setSelectedMesocycleForNotes] = useState<ExtendedMesocycle | null>(null);
   
   // Step 2 (Daily Intensity Planning) mesocycle navigation state
   const [currentMesocycleIndexDailyPlanning, setCurrentMesocycleIndexDailyPlanning] = useState(0);
@@ -407,6 +414,25 @@ export default function MesocyclePage() {
   useEffect(() => {
     localStorage.setItem('mesocycleStep', currentStep.toString());
   }, [currentStep]);
+
+  // Load mesocycle notes from localStorage on mount
+  useEffect(() => {
+    const savedNotes = localStorage.getItem('mesocycleNotes');
+    if (savedNotes) {
+      try {
+        setMesocycleNotes(JSON.parse(savedNotes));
+      } catch (e) {
+        console.error('Failed to load mesocycle notes:', e);
+      }
+    }
+  }, []);
+
+  // Save mesocycle notes to localStorage
+  useEffect(() => {
+    if (Object.keys(mesocycleNotes).length > 0) {
+      localStorage.setItem('mesocycleNotes', JSON.stringify(mesocycleNotes));
+    }
+  }, [mesocycleNotes]);
 
   const intensityLevels: IntensityLevel[] = ["off", "deload", "easy", "easy-moderate", "moderate", "moderate-hard", "hard", "extremely-hard"];
 
@@ -1292,16 +1318,17 @@ export default function MesocyclePage() {
     });
 
     return (
-      <Card>
+      <>
+        <Card>
         <CardHeader>
           <div className="flex items-start justify-between">
             <div>
               <CardTitle className="flex items-center space-x-2">
                 <Settings className="h-5 w-5" />
-                <span>Method Allocation</span>
+                <span>Mesocycle Characterization</span>
               </CardTitle>
               <CardDescription>
-                Assign training methods to each mesocycle. Methods will only appear in mesocycles where they are allocated.
+                Define each mesocycle's purpose and assign training methods. Click the notes icon to add coach notes.
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
@@ -1345,6 +1372,26 @@ export default function MesocyclePage() {
                       <div className="flex items-center justify-center gap-2 mb-1">
                         <div className={`w-3 h-3 rounded ${getIntensityColor(meso.intensity)}`}></div>
                         <span className="font-medium text-sm">{meso.name}</span>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 p-0"
+                                onClick={() => {
+                                  setSelectedMesocycleForNotes(meso);
+                                  setNotesDialogOpen(true);
+                                }}
+                              >
+                                <MessageSquare className={`h-3.5 w-3.5 ${mesocycleNotes[meso.id] ? 'text-primary fill-primary/20' : 'text-muted-foreground'}`} />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{mesocycleNotes[meso.id] ? 'Edit coach notes' : 'Add coach notes'}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                       <div className="text-xs text-muted-foreground mb-2">
                         {format(meso.startDate, 'MMM d')} - {format(meso.endDate, 'MMM d')}
@@ -1504,6 +1551,40 @@ export default function MesocyclePage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Coach Notes Dialog */}
+      <Dialog open={notesDialogOpen} onOpenChange={setNotesDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Coach Notes - {selectedMesocycleForNotes?.name}</DialogTitle>
+            <DialogDescription>
+              {selectedMesocycleForNotes && (
+                <>
+                  {format(selectedMesocycleForNotes.startDate, 'MMM d')} - {format(selectedMesocycleForNotes.endDate, 'MMM d')} | 
+                  Intensity: <span className="capitalize">{selectedMesocycleForNotes.intensity.replace('-', ' ')}</span>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            placeholder="Add notes about training focus, adaptations, special considerations, tapering strategies..."
+            value={selectedMesocycleForNotes ? (mesocycleNotes[selectedMesocycleForNotes.id] || '') : ''}
+            onChange={(e) => {
+              if (selectedMesocycleForNotes) {
+                setMesocycleNotes(prev => ({
+                  ...prev,
+                  [selectedMesocycleForNotes.id]: e.target.value
+                }));
+              }
+            }}
+            className="min-h-[150px]"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNotesDialogOpen(false)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      </>
     );
   };
 
