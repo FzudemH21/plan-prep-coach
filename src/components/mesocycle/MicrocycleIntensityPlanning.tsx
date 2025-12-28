@@ -10,6 +10,8 @@ import { Copy } from 'lucide-react';
 
 interface MicrocycleIntensityPlanningProps {
   mesocycles: ExtendedMesocycle[];
+  allMesocycles?: ExtendedMesocycle[];
+  currentMesocycleIndex?: number;
   intensityLevels: IntensityLevel[];
   getIntensityColor: (intensity: IntensityLevel) => string;
   onMicrocycleIntensityChange: (mesocycleId: string, microcycleId: string, intensity: IntensityLevel) => void;
@@ -18,11 +20,20 @@ interface MicrocycleIntensityPlanningProps {
 
 const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = ({
   mesocycles,
+  allMesocycles,
+  currentMesocycleIndex,
   intensityLevels,
   getIntensityColor,
   onMicrocycleIntensityChange,
   onCopyMesocycle
 }) => {
+  // Determine if we're in single-mesocycle navigation mode
+  const isSingleMesocycleMode = allMesocycles && currentMesocycleIndex !== undefined;
+  const displayedMesocycle = mesocycles[0];
+  
+  // In single mesocycle mode, show copy button if this is not the first mesocycle
+  const showCopyButton = isSingleMesocycleMode && currentMesocycleIndex > 0 && onCopyMesocycle;
+  
   return (
     <div className="space-y-4">
       {/* Horizontal scrollable grid */}
@@ -35,7 +46,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                 <div className="text-sm font-semibold text-center py-2">Microcycle Intensity</div>
               </div>
               <div className="flex flex-nowrap">
-                {mesocycles.map((meso, mesoIndex) => {
+                {mesocycles.map((meso) => {
                   const width = meso.microcycles.length * 80; // 80px per microcycle
                   return meso.microcycles.length > 0 ? (
                     <div 
@@ -44,7 +55,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                       style={{ width: `${width}px` }}
                     >
                       {meso.name}
-                      {mesoIndex > 0 && onCopyMesocycle && (
+                      {showCopyButton && (
                         <Button
                           size="sm"
                           variant="secondary"

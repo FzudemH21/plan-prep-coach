@@ -95,6 +95,9 @@ export default function MesocyclePage() {
   const [targetMesocycleForIntensityCopy, setTargetMesocycleForIntensityCopy] = useState<{mesocycleId: string, microcycleStructure: Array<{id: string, duration: number}>} | null>(null);
   const [mpTableKey, setMpTableKey] = useState(0);
   
+  // Step 2 mesocycle navigation state
+  const [currentMesocycleIndexStep2, setCurrentMesocycleIndexStep2] = useState(0);
+  
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
   const { dragState, startDrag, endDrag, addToSelection, clearSelection, fillCells } = useDragFill();
@@ -767,8 +770,46 @@ export default function MesocyclePage() {
             {/* Microcycle Intensity Planning Chart */}
             <div className="mt-6">
               <h4 className="font-semibold mb-4">Microcycle Intensity Configuration</h4>
+              
+              {/* Mesocycle Navigation */}
+              <div className="flex items-center justify-between mb-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setCurrentMesocycleIndexStep2(Math.max(0, currentMesocycleIndexStep2 - 1))}
+                  disabled={currentMesocycleIndexStep2 === 0}
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Previous
+                </Button>
+                
+                <div className="flex items-center gap-2 flex-wrap justify-center">
+                  {mesocycles.map((meso, index) => (
+                    <Button
+                      key={meso.id}
+                      variant={index === currentMesocycleIndexStep2 ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentMesocycleIndexStep2(index)}
+                      className="min-w-[80px]"
+                    >
+                      {meso.name}
+                    </Button>
+                  ))}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  onClick={() => setCurrentMesocycleIndexStep2(Math.min(mesocycles.length - 1, currentMesocycleIndexStep2 + 1))}
+                  disabled={currentMesocycleIndexStep2 === mesocycles.length - 1}
+                >
+                  Next
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+              
               <MicrocycleIntensityPlanning 
-                mesocycles={mesocycles}
+                mesocycles={[mesocycles[currentMesocycleIndexStep2]]}
+                allMesocycles={mesocycles}
+                currentMesocycleIndex={currentMesocycleIndexStep2}
                 intensityLevels={intensityLevels}
                 getIntensityColor={getIntensityColor}
                 onMicrocycleIntensityChange={handleMicrocycleIntensityChange}
