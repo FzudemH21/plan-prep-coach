@@ -74,6 +74,10 @@ export default function MesocyclePage() {
   const [methodToDelete, setMethodToDelete] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [categorySplitStates, setCategorySplitStates] = useState<Record<string, boolean>>({});
+  
+  // Method allocation state - tracks which methods are allocated to which mesocycles
+  // Key: methodName, Value: array of mesocycleIds
+  const [methodAllocations, setMethodAllocations] = useState<Record<string, string[]>>({});
   const [isClearParametersDialogOpen, setIsClearParametersDialogOpen] = useState(false);
   const [isClearAllExercisesDialogOpen, setIsClearAllExercisesDialogOpen] = useState(false);
   
@@ -313,6 +317,27 @@ export default function MesocyclePage() {
       localStorage.setItem('categorySplitStates', JSON.stringify(categorySplitStates));
     }
   }, [categorySplitStates]);
+
+  // Load method allocations from localStorage on mount
+  useEffect(() => {
+    const savedMethodAllocations = localStorage.getItem('methodAllocations');
+    if (savedMethodAllocations) {
+      try {
+        const parsed = JSON.parse(savedMethodAllocations);
+        setMethodAllocations(parsed);
+        console.log('DEBUG: Loaded method allocations:', parsed);
+      } catch (e) {
+        console.error('Failed to load method allocations:', e);
+      }
+    }
+  }, []);
+
+  // Save method allocations to localStorage
+  useEffect(() => {
+    if (Object.keys(methodAllocations).length > 0) {
+      localStorage.setItem('methodAllocations', JSON.stringify(methodAllocations));
+    }
+  }, [methodAllocations]);
 
   // Load training days from localStorage on mount
   useEffect(() => {
@@ -1128,125 +1153,312 @@ export default function MesocyclePage() {
     return parameters;
   };
 
-  const renderQualityAllocation = () => {
-    const handleSubGoalDragStart = (e: React.DragEvent, subGoal: string) => {
-      e.dataTransfer.setData('text/plain', subGoal);
-    };
+  // Helper function to get tests and events scheduled within a mesocycle's date range
+  const getTestsAndEventsForMesocycle = useCallback((mesocycle: ExtendedMesocycle) => {
+    const tests: Array<{ name: string; date: Date }> = [];
+    const events: Array<{ name: string; date: Date }> = [];
+    
+    if (!macrocycleData) return { tests, events };
+    
+    const mesoStart = mesocycle.startDate;
+    const mesoEnd = mesocycle.endDate;
+    
+    // Get tests from sub-goals
+    if (macrocycleData.subGoals && Array.isArray(macrocycleData.subGoals)) {
+      macrocycleData.subGoals.forEach((subGoal: any) => {
+        if (subGoal.testDates && Array.isArray(subGoal.testDates)) {
+          subGoal.testDates.forEach((testDate: string) => {
+            const date = new Date(testDate);
+            if (date >= mesoStart && date <= mesoEnd) {
+              tests.push({
+                name: subGoal.test || subGoal.description || 'Test',
+                date
+              });
+            }
+          });
+        }
+      });
+    }
+    
+    // Get events
+    if (macrocycleData.events && Array.isArray(macrocycleData.events)) {
+      macrocycleData.events.forEach((event: any) => {
+        if (event.eventDates && Array.isArray(event.eventDates)) {
+          event.eventDates.forEach((eventDate: string) => {
+            const date = new Date(eventDate);
+            if (date >= mesoStart && date <= mesoEnd) {
+              events.push({
+                name: event.name || 'Event',
+                date
+              });
+            }
+          });
+        } else if (event.date) {
+          const date = new Date(event.date);
+          if (date >= mesoStart && date <= mesoEnd) {
+            events.push({
+              name: event.name || 'Event',
+              date
+            });
+          }
+        }
+      });
+    }
+    
+    return { tests, events };
+  }, [macrocycleData]);
 
-    const handleDragOver = (e: React.DragEvent) => {
-      e.preventDefault();
-    };
+  // Toggle method allocation for a specific mesocycle
+  const toggleMethodAllocation = useCallback((methodName: string, mesocycleId: string) => {
+    setMethodAllocations(prev => {
+      const current = prev[methodName] || [];
+      const isCurrentlyAllocated = current.includes(mesocycleId);
+      
+      if (isCurrentlyAllocated) {
+        return {
+          ...prev,
+          [methodName]: current.filter(id => id !== mesocycleId)
+        };
+      } else {
+        return {
+          ...prev,
+          [methodName]: [...current, mesocycleId]
+        };
+      }
+    });
+  }, []);
 
-    const handleDrop = (e: React.DragEvent, mesocycleId: string) => {
-      e.preventDefault();
-      const subGoal = e.dataTransfer.getData('text/plain');
-      
-      const mesocycleIndex = mesocycles.findIndex(m => m.id === mesocycleId);
-      if (mesocycleIndex === -1) return;
-      
-      const currentSubGoals = mesocycles[mesocycleIndex].allocatedSubGoals || [];
-      const subGoalExists = currentSubGoals.includes(subGoal);
-      
-      if (subGoalExists) return; // Prevent duplicates
-      
-      // Add sub-goal to mesocycle with proper immutable update
-      const updated = mesocycles.map((meso, idx) => 
-        idx === mesocycleIndex 
-          ? { ...meso, allocatedSubGoals: [...currentSubGoals, subGoal] }
-          : meso
-      );
-      setMesocycles(updated);
-      console.log('DEBUG: Added sub-goal to mesocycle:', { mesocycleId, subGoal, allocatedSubGoals: updated[mesocycleIndex].allocatedSubGoals });
-    };
+  // Bulk assign all methods to all mesocycles
+  const bulkAssignAllMethods = useCallback(() => {
+    const allMethods = getMethodsForAllocatedSubGoals;
+    const allMesocycleIds = mesocycles.map(m => m.id);
+    
+    const newAllocations: Record<string, string[]> = {};
+    allMethods.forEach(method => {
+      newAllocations[method] = [...allMesocycleIds];
+    });
+    
+    setMethodAllocations(newAllocations);
+    toast({
+      title: "Methods allocated",
+      description: `All ${allMethods.length} methods assigned to all ${mesocycles.length} mesocycles`
+    });
+  }, [getMethodsForAllocatedSubGoals, mesocycles, toast]);
 
-    const removeSubGoalFromMesocycle = (mesocycleId: string, subGoal: string) => {
-      const mesocycleIndex = mesocycles.findIndex(m => m.id === mesocycleId);
-      if (mesocycleIndex === -1) return;
-      
-      // Proper immutable update
-      const updated = mesocycles.map((meso, idx) => 
-        idx === mesocycleIndex 
-          ? { ...meso, allocatedSubGoals: (meso.allocatedSubGoals || []).filter(sg => sg !== subGoal) }
-          : meso
-      );
-      setMesocycles(updated);
-      console.log('DEBUG: Removed sub-goal from mesocycle:', { mesocycleId, subGoal, allocatedSubGoals: updated[mesocycleIndex].allocatedSubGoals });
-    };
+  // Clear all method allocations
+  const clearAllMethodAllocations = useCallback(() => {
+    const allMethods = getMethodsForAllocatedSubGoals;
+    
+    const newAllocations: Record<string, string[]> = {};
+    allMethods.forEach(method => {
+      newAllocations[method] = [];
+    });
+    
+    setMethodAllocations(newAllocations);
+    toast({
+      title: "Allocations cleared",
+      description: "All method allocations have been cleared"
+    });
+  }, [getMethodsForAllocatedSubGoals, toast]);
+
+  // Auto-initialize method allocations when methods or mesocycles change
+  useEffect(() => {
+    const allMethods = getMethodsForAllocatedSubGoals;
+    const allMesocycleIds = mesocycles.map(m => m.id);
+    
+    // Only auto-initialize if there are methods and mesocycles, but no allocations yet
+    if (allMethods.length > 0 && allMesocycleIds.length > 0 && Object.keys(methodAllocations).length === 0) {
+      // Default: assign all methods to all mesocycles
+      const initialAllocations: Record<string, string[]> = {};
+      allMethods.forEach(method => {
+        initialAllocations[method] = [...allMesocycleIds];
+      });
+      setMethodAllocations(initialAllocations);
+      console.log('DEBUG: Auto-initialized method allocations:', initialAllocations);
+    }
+  }, [getMethodsForAllocatedSubGoals, mesocycles]);
+
+  const renderMethodAllocation = () => {
+    const allMethods = getMethodsForAllocatedSubGoals;
+    const groupedMethods = groupMethodsByToolboxCategory;
+    
+    // Check if all methods are allocated to all mesocycles
+    const allAllocated = allMethods.length > 0 && allMethods.every(method => {
+      const allocation = methodAllocations[method] || [];
+      return mesocycles.every(meso => allocation.includes(meso.id));
+    });
 
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <GripVertical className="h-5 w-5" />
-            <span>Sub-Goal Allocation</span>
-          </CardTitle>
-          <CardDescription>
-            Drag and drop sub-goals to assign them to specific mesocycles. Each sub-goal can be assigned to multiple mesocycles.
-          </CardDescription>
+          <div className="flex items-start justify-between">
+            <div>
+              <CardTitle className="flex items-center space-x-2">
+                <Settings className="h-5 w-5" />
+                <span>Method Allocation</span>
+              </CardTitle>
+              <CardDescription>
+                Assign training methods to each mesocycle. Methods will only appear in mesocycles where they are allocated.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={allAllocated ? "outline" : "default"}
+                size="sm"
+                onClick={bulkAssignAllMethods}
+              >
+                Assign All
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={clearAllMethodAllocations}
+              >
+                Clear All
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
-              <Label className="text-sm font-medium mb-2 block">Available Sub-Goals</Label>
-              <div className="space-y-2 p-4 border rounded-lg bg-muted/50 max-h-96 overflow-y-auto">
-                {getSubGoalsFromAthleticismDB.map((subGoal) => (
-                  <div
-                    key={subGoal}
-                    draggable
-                    onDragStart={(e) => handleSubGoalDragStart(e, subGoal)}
-                    className="p-3 bg-background border rounded cursor-grab hover:shadow-md transition-shadow"
-                    title={subGoal}
-                  >
-                    <div className="text-sm font-medium">
-                      {subGoal}
-                    </div>
-                  </div>
-                ))}
-              </div>
+          {allMethods.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground mb-2">No training methods available.</p>
+              <p className="text-sm text-muted-foreground">Please select training methods in the Macrocycle Planning step first.</p>
             </div>
-
-            <div>
-              <Label className="text-sm font-medium mb-2 block">Mesocycle Sub-Goal Assignments</Label>
-              <div className="space-y-3">
-                {mesocycles.map((meso) => (
-                  <div
-                    key={meso.id}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, meso.id)}
-                    className="p-4 border rounded-lg bg-background min-h-24 transition-colors hover:bg-muted/50"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center space-x-2">
+          ) : (
+            <div className="border rounded-lg overflow-hidden">
+              {/* Header Row */}
+              <div className="grid bg-muted/50 border-b" style={{
+                gridTemplateColumns: `300px repeat(${mesocycles.length}, 1fr)`
+              }}>
+                <div className="p-3 font-medium border-r">
+                  Training Methods
+                </div>
+                {mesocycles.map((meso) => {
+                  const { tests, events } = getTestsAndEventsForMesocycle(meso);
+                  
+                  return (
+                    <div key={meso.id} className="p-3 text-center border-r last:border-r-0">
+                      <div className="flex items-center justify-center gap-2 mb-1">
                         <div className={`w-3 h-3 rounded ${getIntensityColor(meso.intensity)}`}></div>
                         <span className="font-medium text-sm">{meso.name}</span>
                       </div>
-                    </div>
-                    <div className="space-y-2">
-                      {(!meso.allocatedSubGoals || meso.allocatedSubGoals.length === 0) ? (
-                        <p className="text-xs text-muted-foreground">Drop sub-goals here</p>
-                      ) : (
-                        meso.allocatedSubGoals?.map((subGoal: string, index: number) => (
-                          <div key={index} className="bg-primary/10 rounded p-2">
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <div className="text-sm font-medium">{subGoal}</div>
-                              </div>
-                              <button
-                                onClick={() => removeSubGoalFromMesocycle(meso.id, subGoal)}
-                                className="text-destructive hover:text-destructive/80 text-sm ml-2 shrink-0"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          </div>
-                        ))
+                      <div className="text-xs text-muted-foreground mb-2">
+                        {format(meso.startDate, 'MMM d')} - {format(meso.endDate, 'MMM d')}
+                      </div>
+                      {/* Tests and Events */}
+                      {(tests.length > 0 || events.length > 0) && (
+                        <div className="space-y-1">
+                          {tests.map((test, idx) => (
+                            <Badge key={`test-${idx}`} variant="outline" className="text-xs bg-blue-500/10 border-blue-500/30">
+                              📋 {test.name}
+                            </Badge>
+                          ))}
+                          {events.map((event, idx) => (
+                            <Badge key={`event-${idx}`} variant="outline" className="text-xs bg-amber-500/10 border-amber-500/30">
+                              🏆 {event.name}
+                            </Badge>
+                          ))}
+                        </div>
                       )}
                     </div>
+                  );
+                })}
+              </div>
+
+              {/* Method Rows grouped by category */}
+              <div className="max-h-[500px] overflow-y-auto">
+                {Object.entries(groupedMethods).map(([category, subCategories]) => (
+                  <div key={category}>
+                    {/* Category Header */}
+                    <div className="bg-muted/30 px-3 py-2 border-b border-t">
+                      <span className="font-semibold text-sm text-primary">{category}</span>
+                    </div>
+                    
+                    {/* Methods in this category */}
+                    {Object.entries(subCategories).flatMap(([subCategory, methods]) =>
+                      methods.map((method) => {
+                        const allocation = methodAllocations[method] || [];
+                        const allMesosAllocated = mesocycles.every(m => allocation.includes(m.id));
+                        
+                        return (
+                          <div 
+                            key={method} 
+                            className="grid border-b hover:bg-muted/20 transition-colors"
+                            style={{
+                              gridTemplateColumns: `300px repeat(${mesocycles.length}, 1fr)`
+                            }}
+                          >
+                            <div className="p-3 border-r flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={allMesosAllocated}
+                                onChange={() => {
+                                  // Toggle all mesocycles for this method
+                                  if (allMesosAllocated) {
+                                    setMethodAllocations(prev => ({
+                                      ...prev,
+                                      [method]: []
+                                    }));
+                                  } else {
+                                    setMethodAllocations(prev => ({
+                                      ...prev,
+                                      [method]: mesocycles.map(m => m.id)
+                                    }));
+                                  }
+                                }}
+                                className="h-4 w-4 rounded border-gray-300"
+                              />
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="text-sm truncate cursor-help">{method}</span>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="right" className="max-w-md">
+                                    <p>{method}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </div>
+                            
+                            {mesocycles.map((meso) => {
+                              const isAllocated = allocation.includes(meso.id);
+                              
+                              return (
+                                <div 
+                                  key={meso.id} 
+                                  className="p-3 flex items-center justify-center border-r last:border-r-0"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isAllocated}
+                                    onChange={() => toggleMethodAllocation(method, meso.id)}
+                                    className="h-5 w-5 rounded border-gray-300 cursor-pointer"
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 ))}
               </div>
             </div>
-          </div>
+          )}
+          
+          {/* Summary */}
+          {allMethods.length > 0 && (
+            <div className="flex items-center justify-between text-sm text-muted-foreground border-t pt-4">
+              <span>
+                {allMethods.length} methods available
+              </span>
+              <span>
+                {allMethods.filter(m => (methodAllocations[m] || []).length > 0).length} methods allocated to at least one mesocycle
+              </span>
+            </div>
+          )}
         </CardContent>
       </Card>
     );
@@ -1311,37 +1523,16 @@ export default function MesocyclePage() {
     // Handle both base method name and category-suffixed names
     const baseMethodName = getBaseMethodName(methodName);
     
-    // Check if this is a manually added method - if so, it's allocated to ALL mesocycles
-    if (manuallyAddedMethods.includes(baseMethodName)) {
-      return true;
+    // Use direct method allocations if available
+    const allocation = methodAllocations[baseMethodName];
+    if (allocation !== undefined) {
+      return allocation.includes(mesocycleId);
     }
     
-    const mesocycle = mesocycles.find(m => m.id === mesocycleId);
-    if (!mesocycle || !mesocycle.allocatedSubGoals || !macrocycleData) return false;
-    
-    // Check if any of the sub-goals allocated to this mesocycle include this method
-    return mesocycle.allocatedSubGoals.some((formattedSubGoal: string) => {
-      // Match by full formatted string ("Overarching - Sub-goal")
-      const macroSubGoal = macrocycleData.subGoals?.find((sg: any) => {
-        const sgDesc = sg.description || sg.name || sg.id || sg;
-        return normalizeForComparison(sgDesc) === normalizeForComparison(formattedSubGoal);
-      });
-      
-      if (!macroSubGoal) return false;
-      
-      // Qualities for this sub-goal
-      const qEntry = macrocycleData.qualitiesBySubGoal?.[macroSubGoal.id];
-      const qualityNames: string[] = qEntry?.list || [];
-      
-      // If any quality maps to this method, it's allocated
-      return qualityNames.some((qName: string) => {
-        const qualityId = `${macroSubGoal.id}::${qName}`;
-        const mEntry = macrocycleData.methodsByQuality?.[qualityId];
-        const methodNames: string[] = mEntry?.list || [];
-        return methodNames.includes(baseMethodName);
-      });
-    });
-  }, [mesocycles, macrocycleData, manuallyAddedMethods]);
+    // Fallback: if no allocations defined yet, default to allocated (for backward compatibility)
+    // This ensures methods show up until user explicitly manages allocations
+    return true;
+  }, [methodAllocations]);
 
   // Helper function to get cell-specific frequency from user input
   const getCellFrequency = (mesocycleId: string, microcycleIndex: number, methodName: string) => {
@@ -3637,7 +3828,7 @@ export default function MesocyclePage() {
   const stepTitles = [
     "Mesocycle Setup",
     "Daily Training Intensity Planning", 
-    "Sub-Goal Allocation",
+    "Method Allocation",
     "Method Periodization",
     "Exercise Selection"
   ];
@@ -3672,7 +3863,7 @@ export default function MesocyclePage() {
           {renderTrainingPlanOverview()}
           {currentStep === 1 && renderMesocycleSetup()}
           {currentStep === 2 && renderDailyIntensityPlanning()}
-          {currentStep === 3 && renderQualityAllocation()}
+          {currentStep === 3 && renderMethodAllocation()}
           {currentStep === 4 && renderMethodPeriodization()}
           {currentStep === 5 && renderExerciseSelection()}
         </div>
