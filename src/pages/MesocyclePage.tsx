@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, ArrowRight, Settings, SplitSquareHorizontal, Columns, MessageSquare } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Settings, SplitSquareHorizontal, Columns, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import MesocycleCalendar from '@/components/mesocycle/MesocycleCalendar';
@@ -105,6 +105,10 @@ export default function MesocyclePage() {
   
   // Step 2 (Daily Intensity Planning) mesocycle navigation state
   const [currentMesocycleIndexDailyPlanning, setCurrentMesocycleIndexDailyPlanning] = useState(0);
+  
+  // Step 3 mesocycle carousel navigation state
+  const [mesocycleViewOffset, setMesocycleViewOffset] = useState(0);
+  const MAX_VISIBLE_MESOCYCLES = 4;
   
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
@@ -1308,6 +1312,22 @@ export default function MesocyclePage() {
     }
   }, [getMethodsForAllocatedSubGoals, mesocycles]);
 
+  // Carousel navigation computed values for Step 3
+  const visibleMesocycles = useMemo(() => {
+    return mesocycles.slice(mesocycleViewOffset, mesocycleViewOffset + MAX_VISIBLE_MESOCYCLES);
+  }, [mesocycles, mesocycleViewOffset, MAX_VISIBLE_MESOCYCLES]);
+  
+  const hasMoreMesocycles = mesocycles.length > MAX_VISIBLE_MESOCYCLES;
+  const canGoBackMesocycle = mesocycleViewOffset > 0;
+  const canGoForwardMesocycle = mesocycleViewOffset + MAX_VISIBLE_MESOCYCLES < mesocycles.length;
+
+  // Reset mesocycle offset if mesocycles are removed
+  useEffect(() => {
+    if (mesocycleViewOffset >= mesocycles.length && mesocycles.length > 0) {
+      setMesocycleViewOffset(Math.max(0, mesocycles.length - MAX_VISIBLE_MESOCYCLES));
+    }
+  }, [mesocycles.length, mesocycleViewOffset]);
+
   const renderMethodAllocation = () => {
     const allMethods = getMethodsForAllocatedSubGoals;
     const groupedMethods = groupMethodsByToolboxCategory;
@@ -1358,14 +1378,43 @@ export default function MesocyclePage() {
             </div>
           ) : (
             <div className="border rounded-lg overflow-hidden">
+              {/* Carousel Navigation */}
+              {hasMoreMesocycles && (
+                <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setMesocycleViewOffset(prev => Math.max(0, prev - 1))}
+                    disabled={!canGoBackMesocycle}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Previous
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    Mesocycles {mesocycleViewOffset + 1}-{Math.min(mesocycleViewOffset + MAX_VISIBLE_MESOCYCLES, mesocycles.length)} of {mesocycles.length}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setMesocycleViewOffset(prev => 
+                      Math.min(mesocycles.length - MAX_VISIBLE_MESOCYCLES, prev + 1)
+                    )}
+                    disabled={!canGoForwardMesocycle}
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+              )}
+              
               {/* Header Row */}
               <div className="grid bg-muted/50 border-b" style={{
-                gridTemplateColumns: `300px repeat(${mesocycles.length}, 1fr)`
+                gridTemplateColumns: `300px repeat(${visibleMesocycles.length}, minmax(180px, 1fr))`
               }}>
                 <div className="p-3 font-medium border-r">
                   Training Methods
                 </div>
-                {mesocycles.map((meso) => {
+                {visibleMesocycles.map((meso) => {
                   const { tests, events } = getTestsAndEventsForMesocycle(meso);
                   
                   return (
@@ -1477,7 +1526,7 @@ export default function MesocyclePage() {
                             key={method} 
                             className="grid border-b hover:bg-muted/20 transition-colors"
                             style={{
-                              gridTemplateColumns: `300px repeat(${mesocycles.length}, 1fr)`
+                              gridTemplateColumns: `300px repeat(${visibleMesocycles.length}, minmax(180px, 1fr))`
                             }}
                           >
                             <div className="p-3 border-r flex items-center gap-2">
@@ -1512,7 +1561,7 @@ export default function MesocyclePage() {
                               </TooltipProvider>
                             </div>
                             
-                            {mesocycles.map((meso) => {
+                            {visibleMesocycles.map((meso) => {
                               const isAllocated = allocation.includes(meso.id);
                               
                               return (
