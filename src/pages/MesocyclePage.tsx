@@ -95,8 +95,8 @@ export default function MesocyclePage() {
   const [targetMesocycleForIntensityCopy, setTargetMesocycleForIntensityCopy] = useState<{mesocycleId: string, microcycleStructure: Array<{id: string, duration: number}>} | null>(null);
   const [mpTableKey, setMpTableKey] = useState(0);
   
-  // Step 2 mesocycle navigation state
-  const [currentMesocycleIndexStep2, setCurrentMesocycleIndexStep2] = useState(0);
+  // Step 2 (Daily Intensity Planning) mesocycle navigation state
+  const [currentMesocycleIndexDailyPlanning, setCurrentMesocycleIndexDailyPlanning] = useState(0);
   
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
@@ -770,46 +770,8 @@ export default function MesocyclePage() {
             {/* Microcycle Intensity Planning Chart */}
             <div className="mt-6">
               <h4 className="font-semibold mb-4">Microcycle Intensity Configuration</h4>
-              
-              {/* Mesocycle Navigation */}
-              <div className="flex items-center justify-between mb-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setCurrentMesocycleIndexStep2(Math.max(0, currentMesocycleIndexStep2 - 1))}
-                  disabled={currentMesocycleIndexStep2 === 0}
-                >
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  Previous
-                </Button>
-                
-                <div className="flex items-center gap-2 flex-wrap justify-center">
-                  {mesocycles.map((meso, index) => (
-                    <Button
-                      key={meso.id}
-                      variant={index === currentMesocycleIndexStep2 ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setCurrentMesocycleIndexStep2(index)}
-                      className="min-w-[80px]"
-                    >
-                      {meso.name}
-                    </Button>
-                  ))}
-                </div>
-                
-                <Button
-                  variant="outline"
-                  onClick={() => setCurrentMesocycleIndexStep2(Math.min(mesocycles.length - 1, currentMesocycleIndexStep2 + 1))}
-                  disabled={currentMesocycleIndexStep2 === mesocycles.length - 1}
-                >
-                  Next
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
-              
               <MicrocycleIntensityPlanning 
-                mesocycles={[mesocycles[currentMesocycleIndexStep2]]}
-                allMesocycles={mesocycles}
-                currentMesocycleIndex={currentMesocycleIndexStep2}
+                mesocycles={mesocycles}
                 intensityLevels={intensityLevels}
                 getIntensityColor={getIntensityColor}
                 onMicrocycleIntensityChange={handleMicrocycleIntensityChange}
@@ -3716,103 +3678,144 @@ export default function MesocyclePage() {
     });
   };
 
-  const renderDailyIntensityPlanning = () => (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <CalendarDays className="h-5 w-5" />
-          <span>Step 2: Daily Training Intensity Planning</span>
-        </CardTitle>
-        <CardDescription>
-          Set the training intensity for each training day across all mesocycles and microcycles.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {/* Legend */}
-          <div className="flex flex-wrap gap-4 p-4 bg-muted/30 rounded-lg">
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-muted-foreground/20 rounded"></div>
-              <span className="text-xs">Test Day</span>
+  const renderDailyIntensityPlanning = () => {
+    // Get the current mesocycle for navigation
+    const currentMeso = mesocycles[currentMesocycleIndexDailyPlanning];
+    
+    // Filter training days for the current mesocycle only
+    const currentMesoTrainingDays = trainingDays.filter(day => day.mesocycleId === currentMeso?.id);
+    
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <CalendarDays className="h-5 w-5" />
+            <span>Step 2: Daily Training Intensity Planning</span>
+          </CardTitle>
+          <CardDescription>
+            Set the training intensity for each training day across all mesocycles and microcycles.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {/* Legend */}
+            <div className="flex flex-wrap gap-4 p-4 bg-muted/30 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <div className="w-4 h-4 bg-muted-foreground/20 rounded"></div>
+                <span className="text-xs">Test Day</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-4 h-4 bg-destructive/30 rounded"></div>
+                <span className="text-xs">Event Day</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-4 h-4 bg-primary rounded"></div>
+                <span className="text-xs">Training Day</span>
+              </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-destructive/30 rounded"></div>
-              <span className="text-xs">Event Day</span>
+            
+            {/* Mesocycle Navigation */}
+            <div className="flex items-center justify-between">
+              <Button
+                variant="outline"
+                onClick={() => setCurrentMesocycleIndexDailyPlanning(Math.max(0, currentMesocycleIndexDailyPlanning - 1))}
+                disabled={currentMesocycleIndexDailyPlanning === 0}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Previous
+              </Button>
+              
+              <div className="flex items-center gap-2 flex-wrap justify-center">
+                {mesocycles.map((meso, index) => (
+                  <Button
+                    key={meso.id}
+                    variant={index === currentMesocycleIndexDailyPlanning ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentMesocycleIndexDailyPlanning(index)}
+                    className="min-w-[80px]"
+                  >
+                    {meso.name}
+                  </Button>
+                ))}
+              </div>
+              
+              <Button
+                variant="outline"
+                onClick={() => setCurrentMesocycleIndexDailyPlanning(Math.min(mesocycles.length - 1, currentMesocycleIndexDailyPlanning + 1))}
+                disabled={currentMesocycleIndexDailyPlanning === mesocycles.length - 1}
+              >
+                Next
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
             </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-primary rounded"></div>
-              <span className="text-xs">Training Day</span>
-            </div>
-          </div>
-          
-          {/* Horizontal scrollable grid */}
-          <div className="w-full min-w-0 border rounded-lg">
-            <div className="force-scrollbar-x overflow-x-auto overflow-y-visible" style={{ scrollbarWidth: 'thin' }}>
-              <div className="w-max p-4">
-                {/* Mesocycle Headers */}
-                <div className="flex mb-4 flex-nowrap">
-                  <div className="sticky left-0 bg-background z-20 w-[150px] shrink-0">
-                    <div className="text-sm font-semibold text-center py-2">Daily Intensity</div>
-                  </div>
-                  <div className="flex flex-nowrap">
-                    {mesocycles.map((meso, mesoIndex) => {
-                      const width = meso.microcycles.reduce((acc, micro) => acc + micro.duration * 80, 0);
-                      return meso.microcycles.length > 0 ? (
-                        <div 
-                          key={meso.id}
-                          className={`relative text-center border-r-2 font-semibold border-r-slate-400 ${getIntensityColor(meso.intensity)} py-2 shrink-0`}
-                          style={{ width: `${width}px` }}
-                        >
-                          {meso.name}
-                          
-                          {/* Button container */}
-                          <div className="absolute top-1 right-1 flex gap-1">
-                            {/* Copy button - only for mesocycles after the first */}
-                            {mesoIndex > 0 && (
+            
+            {/* Horizontal scrollable grid */}
+            <div className="w-full min-w-0 border rounded-lg">
+              <div className="force-scrollbar-x overflow-x-auto overflow-y-visible" style={{ scrollbarWidth: 'thin' }}>
+                <div className="w-max p-4">
+                  {/* Mesocycle Headers - Only show current mesocycle */}
+                  <div className="flex mb-4 flex-nowrap">
+                    <div className="sticky left-0 bg-background z-20 w-[150px] shrink-0">
+                      <div className="text-sm font-semibold text-center py-2">Daily Intensity</div>
+                    </div>
+                    <div className="flex flex-nowrap">
+                      {currentMeso && (() => {
+                        const width = currentMeso.microcycles.reduce((acc, micro) => acc + micro.duration * 80, 0);
+                        return currentMeso.microcycles.length > 0 ? (
+                          <div 
+                            key={currentMeso.id}
+                            className={`relative text-center border-r-2 font-semibold border-r-slate-400 ${getIntensityColor(currentMeso.intensity)} py-2 shrink-0`}
+                            style={{ width: `${width}px` }}
+                          >
+                            {currentMeso.name}
+                            
+                            {/* Button container */}
+                            <div className="absolute top-1 right-1 flex gap-1">
+                              {/* Copy button - only if not the first mesocycle */}
+                              {currentMesocycleIndexDailyPlanning > 0 && (
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    copyMesocycleDailyIntensity(currentMeso.id);
+                                  }}
+                                  className="h-6 w-6 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"
+                                  title="Copy daily intensity pattern from previous mesocycle"
+                                >
+                                  <Copy className="h-3 w-3 text-gray-800" />
+                                </Button>
+                              )}
+                              
+                              {/* Clear button - for all mesocycles */}
                               <Button
                                 size="sm"
                                 variant="secondary"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  copyMesocycleDailyIntensity(meso.id);
+                                  clearMesocycleDailyIntensity(currentMeso.id);
                                 }}
                                 className="h-6 w-6 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"
-                                title="Copy daily intensity pattern from previous mesocycle"
+                                title={`Clear all daily intensities for ${currentMeso.name}`}
                               >
-                                <Copy className="h-3 w-3 text-gray-800" />
+                                <Trash2 className="h-3 w-3 text-gray-800" />
                               </Button>
-                            )}
-                            
-                            {/* Clear button - for all mesocycles */}
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                clearMesocycleDailyIntensity(meso.id);
-                              }}
-                              className="h-6 w-6 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"
-                              title={`Clear all daily intensities for ${meso.name}`}
-                            >
-                              <Trash2 className="h-3 w-3 text-gray-800" />
-                            </Button>
+                            </div>
                           </div>
-                        </div>
-                      ) : null;
-                    })}
+                        ) : null;
+                      })()}
+                    </div>
                   </div>
-                </div>
 
-                {/* Microcycle Names Row */}
-                <div className="flex mb-2 flex-nowrap">
-                  <div className="sticky left-0 bg-background z-20 w-[150px] shrink-0">
-                    {/* Empty space to align with intensity scale */}
-                  </div>
-                  <div className="flex flex-nowrap">
-                    {mesocycles.map((meso, mesoIndex) => 
-                      meso.microcycles.map((micro, microIndex) => {
+                  {/* Microcycle Names Row - Only show current mesocycle's microcycles */}
+                  <div className="flex mb-2 flex-nowrap">
+                    <div className="sticky left-0 bg-background z-20 w-[150px] shrink-0">
+                      {/* Empty space to align with intensity scale */}
+                    </div>
+                    <div className="flex flex-nowrap">
+                      {currentMeso && currentMeso.microcycles.map((micro, microIndex) => {
                         const width = micro.duration * 80; // 80px per day
-                        const isLastMicro = microIndex === meso.microcycles.length - 1;
+                        const isLastMicro = microIndex === currentMeso.microcycles.length - 1;
                         
                         // Check if we can copy - fixed logic to check across mesocycles
                         let canCopy = false;
@@ -3820,14 +3823,14 @@ export default function MesocyclePage() {
                         
                         if (microIndex > 0) {
                           // Has previous microcycle in same mesocycle
-                          const prevMicro = meso.microcycles[microIndex - 1];
+                          const prevMicro = currentMeso.microcycles[microIndex - 1];
                           if (prevMicro.duration === micro.duration) {
                             canCopy = true;
                             copySourceName = prevMicro.name;
                           }
-                        } else if (mesoIndex > 0) {
+                        } else if (currentMesocycleIndexDailyPlanning > 0) {
                           // First microcycle of this mesocycle, but not first mesocycle overall
-                          const prevMeso = mesocycles[mesoIndex - 1];
+                          const prevMeso = mesocycles[currentMesocycleIndexDailyPlanning - 1];
                           const lastMicroOfPrevMeso = prevMeso.microcycles[prevMeso.microcycles.length - 1];
                           if (lastMicroOfPrevMeso && lastMicroOfPrevMeso.duration === micro.duration) {
                             canCopy = true;
@@ -3853,7 +3856,7 @@ export default function MesocyclePage() {
                                   variant="secondary"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    copyMicrocycleDailyIntensity(meso.id, micro.id);
+                                    copyMicrocycleDailyIntensity(currentMeso.id, micro.id);
                                   }}
                                   className="h-5 w-5 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"
                                   title={`Copy intensity pattern from ${copySourceName}`}
@@ -3868,7 +3871,7 @@ export default function MesocyclePage() {
                                 variant="secondary"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  clearMicrocycleDailyIntensity(meso.id, micro.id);
+                                  clearMicrocycleDailyIntensity(currentMeso.id, micro.id);
                                 }}
                                 className="h-5 w-5 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"
                                 title={`Clear all daily intensities for ${micro.name}`}
@@ -3878,54 +3881,55 @@ export default function MesocyclePage() {
                             </div>
                           </div>
                         );
-                      })
-                    )}
-                  </div>
-                </div>
-
-                {/* Column Chart */}
-                <div className="flex items-end flex-nowrap">
-                  {/* Intensity Scale - Sticky */}
-                  <div className="sticky left-0 z-30 bg-background shrink-0">
-                    <IntensityScale
-                      intensityLevels={intensityLevels}
-                      getIntensityColor={getIntensityColor}
-                    />
-                  </div>
-
-                  {/* Day Columns */}
-                  <TooltipProvider>
-                    <div className="flex items-end flex-nowrap">
-                      {trainingDays.map((day, index) => {
-                        const dayIntensity = dailyIntensityData.find(di => di.date === day.date)?.intensity || "moderate";
-                        const isLastDayOfMicro = index === trainingDays.length - 1 || 
-                          (index < trainingDays.length - 1 && trainingDays[index + 1].microcycleId !== day.microcycleId);
-                        
-                        return (
-                          <IntensityColumn
-                            key={day.date}
-                            day={day}
-                            intensity={dayIntensity}
-                            onIntensityChange={handleIntensityClick}
-                            tooltipContent={getTooltipContent(day)}
-                            isLastDayOfMicrocycle={isLastDayOfMicro}
-                            isLastDayOfMesocycle={isLastDayOfMesocycle(index)}
-                            intensityLevels={intensityLevels}
-                            getIntensityColor={getIntensityColor}
-                          />
-                        );
                       })}
                     </div>
-                  </TooltipProvider>
+                  </div>
+
+                  {/* Column Chart */}
+                  <div className="flex items-end flex-nowrap">
+                    {/* Intensity Scale - Sticky */}
+                    <div className="sticky left-0 z-30 bg-background shrink-0">
+                      <IntensityScale
+                        intensityLevels={intensityLevels}
+                        getIntensityColor={getIntensityColor}
+                      />
+                    </div>
+
+                    {/* Day Columns - Only show current mesocycle's days */}
+                    <TooltipProvider>
+                      <div className="flex items-end flex-nowrap">
+                        {currentMesoTrainingDays.map((day, index) => {
+                          const dayIntensity = dailyIntensityData.find(di => di.date === day.date)?.intensity || "moderate";
+                          const isLastDayOfMicro = index === currentMesoTrainingDays.length - 1 || 
+                            (index < currentMesoTrainingDays.length - 1 && currentMesoTrainingDays[index + 1].microcycleId !== day.microcycleId);
+                          const isLastDayOfMeso = index === currentMesoTrainingDays.length - 1;
+                          
+                          return (
+                            <IntensityColumn
+                              key={day.date}
+                              day={day}
+                              intensity={dayIntensity}
+                              onIntensityChange={handleIntensityClick}
+                              tooltipContent={getTooltipContent(day)}
+                              isLastDayOfMicrocycle={isLastDayOfMicro}
+                              isLastDayOfMesocycle={isLastDayOfMeso}
+                              intensityLevels={intensityLevels}
+                              getIntensityColor={getIntensityColor}
+                            />
+                          );
+                        })}
+                      </div>
+                    </TooltipProvider>
+                  </div>
                 </div>
               </div>
             </div>
+            
           </div>
-          
-        </div>
-      </CardContent>
-    </Card>
-  );
+        </CardContent>
+      </Card>
+    );
+  };
 
   const stepTitles = [
     "Mesocycle Setup",
