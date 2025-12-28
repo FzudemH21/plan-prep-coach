@@ -1553,38 +1553,6 @@ export default function MesocyclePage() {
         </CardContent>
       </Card>
 
-      {/* Coach Notes Dialog */}
-      <Dialog open={notesDialogOpen} onOpenChange={setNotesDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Coach Notes - {selectedMesocycleForNotes?.name}</DialogTitle>
-            <DialogDescription>
-              {selectedMesocycleForNotes && (
-                <>
-                  {format(selectedMesocycleForNotes.startDate, 'MMM d')} - {format(selectedMesocycleForNotes.endDate, 'MMM d')} | 
-                  Intensity: <span className="capitalize">{selectedMesocycleForNotes.intensity.replace('-', ' ')}</span>
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <Textarea
-            placeholder="Add notes about training focus, adaptations, special considerations, tapering strategies..."
-            value={selectedMesocycleForNotes ? (mesocycleNotes[selectedMesocycleForNotes.id] || '') : ''}
-            onChange={(e) => {
-              if (selectedMesocycleForNotes) {
-                setMesocycleNotes(prev => ({
-                  ...prev,
-                  [selectedMesocycleForNotes.id]: e.target.value
-                }));
-              }
-            }}
-            className="min-h-[150px]"
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setNotesDialogOpen(false)}>Done</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
       </>
     );
   };
@@ -4085,6 +4053,39 @@ export default function MesocyclePage() {
           currentMesocycles={mesocycles}
           onCopy={handleCrossMesocycleIntensityCopy}
         />
+        
+        {/* Coach Notes Dialog - Available for both Step 3 and Step 4 */}
+        <Dialog open={notesDialogOpen} onOpenChange={setNotesDialogOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Coach Notes - {selectedMesocycleForNotes?.name}</DialogTitle>
+              <DialogDescription>
+                {selectedMesocycleForNotes && (
+                  <>
+                    {format(selectedMesocycleForNotes.startDate, 'MMM d')} - {format(selectedMesocycleForNotes.endDate, 'MMM d')} | 
+                    Intensity: <span className="capitalize">{selectedMesocycleForNotes.intensity.replace('-', ' ')}</span>
+                  </>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <Textarea
+              placeholder="Add notes about training focus, adaptations, special considerations, tapering strategies..."
+              value={selectedMesocycleForNotes ? (mesocycleNotes[selectedMesocycleForNotes.id] || '') : ''}
+              onChange={(e) => {
+                if (selectedMesocycleForNotes) {
+                  setMesocycleNotes(prev => ({
+                    ...prev,
+                    [selectedMesocycleForNotes.id]: e.target.value
+                  }));
+                }
+              }}
+              className="min-h-[150px]"
+            />
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setNotesDialogOpen(false)}>Done</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
     </div>
   );
 };
