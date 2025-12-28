@@ -3,7 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ChevronDown, ChevronRight, ChevronLeft, Link, Unlink, Trash2 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { ChevronDown, ChevronRight, ChevronLeft, Link, Unlink, Trash2, ArrowLeft, ArrowRight, Columns } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { useToolboxData } from '@/hooks/useToolboxData';
@@ -61,6 +63,11 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], para
   }, [planningState, onExerciseSelectionChange]);
 
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  
+  // Mesocycle navigation state for single + comparison view
+  const [currentMesocycleIndex, setCurrentMesocycleIndex] = useState(0);
+  const [showComparison, setShowComparison] = useState(false);
+  
   const [copyDialogState, setCopyDialogState] = useState<{
     isOpen: boolean;
     methodId: string;
@@ -408,11 +415,31 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], para
     });
   };
 
+  // Filter mesocycles based on navigation state
+  const visibleMesocycles = useMemo(() => {
+    if (mesocycles.length === 0) return [];
+    
+    const startIndex = Math.min(currentMesocycleIndex, mesocycles.length - 1);
+    
+    if (showComparison && startIndex < mesocycles.length - 1) {
+      return [mesocycles[startIndex], mesocycles[startIndex + 1]];
+    }
+    
+    return [mesocycles[startIndex]];
+  }, [mesocycles, currentMesocycleIndex, showComparison]);
+
+  // Navigation helpers
+  const canNavigatePrevious = currentMesocycleIndex > 0;
+  const canNavigateNext = showComparison 
+    ? currentMesocycleIndex < mesocycles.length - 2 
+    : currentMesocycleIndex < mesocycles.length - 1;
+  const hasNextMesocycle = currentMesocycleIndex < mesocycles.length - 1;
+
   // Generate column structure for table headers
   const columnStructure = useMemo(() => {
     const hasSplit = Object.values(planningState.splitStates).some(isSplit => isSplit);
     
-    return mesocycles.map(meso => {
+    return visibleMesocycles.map(meso => {
       const isSplit = planningState.splitStates[meso.id] || false;
       
       // If no mesocycles are split, show all mesocycles as columns
@@ -519,7 +546,7 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], para
 
       return columns;
     }).flat();
-  }, [mesocycles, planningState]);
+  }, [visibleMesocycles, planningState]);
 
 // Get intensity-based color for mesocycles and microcycles
 const getIntensityColor = (intensity: string, isLight: boolean = false, isGroup: boolean = false) => {
@@ -550,7 +577,7 @@ const mesocycleHeaders = useMemo(() => {
     colorClass: string;
   }> = [];
 
-  for (const meso of mesocycles) {
+  for (const meso of visibleMesocycles) {
     const isSplit = planningState.splitStates[meso.id] || false;
     let colSpan = 1;
     
@@ -589,7 +616,7 @@ const mesocycleHeaders = useMemo(() => {
   }
 
   return headers;
-}, [mesocycles, planningState]);
+}, [visibleMesocycles, planningState]);
 
   // Check if any mesocycle is split (determines if we need two header rows)
   const hasSplitMesocycles = Object.values(planningState.splitStates).some(isSplit => isSplit);
@@ -1089,7 +1116,65 @@ const updateCellData = (
     <>
       <Card className="w-full">
         <CardHeader>
-          <CardTitle>Microcycle Exercise Planning</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Microcycle Exercise Planning</CardTitle>
+            
+            {/* Mesocycle Navigation Controls */}
+            <div className="flex items-center gap-4">
+              {/* Navigation Buttons */}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentMesocycleIndex(prev => Math.max(0, prev - 1))}
+                  disabled={!canNavigatePrevious}
+                >
+                  <ArrowLeft className="h-4 w-4 mr-1" />
+                  Previous
+                </Button>
+                
+                <span className="text-sm text-muted-foreground px-2">
+                  {showComparison && mesocycles.length > 1 ? (
+                    <>
+                      {mesocycles[currentMesocycleIndex]?.name} & {mesocycles[currentMesocycleIndex + 1]?.name}
+                    </>
+                  ) : (
+                    <>
+                      {mesocycles[currentMesocycleIndex]?.name} ({currentMesocycleIndex + 1}/{mesocycles.length})
+                    </>
+                  )}
+                </span>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentMesocycleIndex(prev => Math.min(
+                    showComparison ? mesocycles.length - 2 : mesocycles.length - 1, 
+                    prev + 1
+                  ))}
+                  disabled={!canNavigateNext}
+                >
+                  Next
+                  <ArrowRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+              
+              {/* Comparison Toggle */}
+              {hasNextMesocycle && (
+                <div className="flex items-center gap-2 border-l pl-4">
+                  <Switch
+                    id="comparison-toggle"
+                    checked={showComparison}
+                    onCheckedChange={setShowComparison}
+                  />
+                  <Label htmlFor="comparison-toggle" className="text-sm flex items-center gap-1">
+                    <Columns className="h-4 w-4" />
+                    Compare with next
+                  </Label>
+                </div>
+              )}
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
             <Table className="min-w-[1200px]" containerClassName="overflow-x-auto">
