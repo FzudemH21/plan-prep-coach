@@ -1,4 +1,5 @@
 import { MicrocyclePlanningTable } from '@/components/microcycle-planning';
+import { cn } from '@/lib/utils';
 import React, { useState, useEffect, useMemo, useCallback, useTransition } from 'react';
 import { AddMethodDialog } from '@/components/ui/add-method-dialog';
 import { MethodDeleteDialog } from '@/components/shared/MethodDeleteDialog';
@@ -2572,77 +2573,61 @@ export default function MesocyclePage() {
                           ))}
                        </div>
 
-                         {/* Level 2: Sub-goals and Qualities */}
+                          {/* Level 2: Description */}
                           <div className="grid gap-1" style={{
                             gridTemplateColumns: generateHeaderGridTemplate()
                           }}>
                             <div className="sticky left-0 z-[60] p-2 bg-background border-l border-r text-xs shadow-md">
-                              Focus Areas
+                              Description
                             </div>
-                           {mesocycles.map((meso) => {
-                             const overview = getMesocycleOverview(meso);
-                             return (
+                           {mesocycles.map((meso) => (
                                <div 
-                                 key={`${meso.id}-overview`} 
-                                 className="p-2 bg-muted/30 border-l border-r text-xs space-y-2"
+                                 key={`${meso.id}-description`} 
+                                 className="p-2 bg-muted/30 border-l border-r text-xs"
                                  style={{ 
                                    gridColumn: `span ${meso.microcycles?.length || 0}` 
                                  }}
                                >
-                                 {overview.subGoals.length > 0 ? (
-                                   <div className="space-y-1">
-                                     <span className="font-medium text-muted-foreground">Sub-Goals:</span>
-                                      <ul className="space-y-1">
-                                        {overview.subGoals.map((subGoal) => {
-                                          const methodsWithRecs = getMethodsWithRecommendationsForSubGoal(subGoal);
-                                          
-                                          return (
-                                            <li key={subGoal} className="text-xs">
-                                              <Popover>
-                                                <PopoverTrigger
-                                                  className="flex items-start gap-1 text-left hover:text-primary transition-colors cursor-pointer w-full"
-                                                >
-                                                  <span className="text-primary">•</span>
-                                                  <span className="text-foreground leading-tight">{subGoal}</span>
-                                                </PopoverTrigger>
-                                                <PopoverContent 
-                                                  className="w-[800px] max-w-[95vw] z-[100]" 
-                                                  align="start"
-                                                  side="bottom"
-                                                  sideOffset={5}
-                                                >
-                                                  <div className="space-y-2">
-                                                    <h4 className="font-semibold text-sm text-foreground">{subGoal}</h4>
-                                                    {methodsWithRecs.length > 0 ? (
-                                                      <div className="space-y-2">
-                                                        {methodsWithRecs.map(({ method, recommendations }) => (
-                                                          <div key={method} className="text-xs border-l-2 border-primary/30 pl-3">
-                                                            <div className="font-medium text-primary mb-1">{method}</div>
-                                                            <div className="text-muted-foreground leading-relaxed">
-                                                              {formatLoadingRecommendations(recommendations)}
-                                                            </div>
-                                                          </div>
-                                                        ))}
-                                                      </div>
-                                                    ) : (
-                                                      <div className="text-xs text-muted-foreground italic">
-                                                        No methods available for this sub-goal
-                                                      </div>
-                                                    )}
-                                                  </div>
-                                                </PopoverContent>
-                                              </Popover>
-                                            </li>
-                                          );
-                                        })}
-                                      </ul>
+                                 <div className="flex items-start gap-2">
+                                   <div className="flex-1 min-h-[40px]">
+                                     {mesocycleNotes[meso.id] ? (
+                                       <p className="text-foreground whitespace-pre-wrap leading-relaxed">
+                                         {mesocycleNotes[meso.id]}
+                                       </p>
+                                     ) : (
+                                       <span className="text-muted-foreground italic">
+                                         No description added
+                                       </span>
+                                     )}
                                    </div>
-                                 ) : (
-                                   <span className="text-muted-foreground italic">No sub-goals allocated</span>
-                                 )}
+                                   <TooltipProvider>
+                                     <Tooltip>
+                                       <TooltipTrigger asChild>
+                                         <Button
+                                           variant="ghost"
+                                           size="icon"
+                                           className="h-6 w-6 shrink-0"
+                                           onClick={() => {
+                                             setSelectedMesocycleForNotes(meso);
+                                             setNotesDialogOpen(true);
+                                           }}
+                                         >
+                                           <MessageSquare className={cn(
+                                             "h-3.5 w-3.5",
+                                             mesocycleNotes[meso.id] 
+                                               ? "text-primary fill-primary/20" 
+                                               : "text-muted-foreground"
+                                           )} />
+                                         </Button>
+                                       </TooltipTrigger>
+                                       <TooltipContent>
+                                         {mesocycleNotes[meso.id] ? 'Edit description' : 'Add description'}
+                                       </TooltipContent>
+                                     </Tooltip>
+                                   </TooltipProvider>
+                                 </div>
                               </div>
-                            );
-                          })}
+                            ))}
                        </div>
 
                          {/* Level 3: Microcycle Headers with Intensity Colors */}
