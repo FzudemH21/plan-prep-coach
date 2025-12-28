@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { ChevronDown, ChevronRight, ChevronLeft, Link, Unlink, Trash2, ArrowLeft, ArrowRight, Columns } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronLeft, Link, Unlink, Trash2, ArrowLeft, ArrowRight, Columns, Copy } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { useToolboxData } from '@/hooks/useToolboxData';
@@ -1112,6 +1112,52 @@ const updateCellData = (
     });
   }, [planningState.cellData, clearMicrocycleDialogState.microcycleName, toast]);
 
+  // Copy exercises from previous mesocycle
+  const handleCopyFromPreviousMesocycle = useCallback((targetMesocycleId: string) => {
+    const globalTargetIndex = mesocycles.findIndex(m => m.id === targetMesocycleId);
+    
+    if (globalTargetIndex <= 0) {
+      toast({
+        title: "Cannot copy",
+        description: "This is the first mesocycle - no previous mesocycle to copy from.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const sourceMesocycle = mesocycles[globalTargetIndex - 1];
+    const targetMesocycle = mesocycles[globalTargetIndex];
+    const newCellData = { ...planningState.cellData };
+    let copiedCount = 0;
+    
+    // Copy all exercise selections from source to target
+    Object.entries(planningState.cellData).forEach(([cellId, cellData]) => {
+      if (cellData.mesocycleId === sourceMesocycle.id && cellData.exercises.length > 0) {
+        // Create corresponding cell for target mesocycle
+        const targetCellId = cellId.replace(sourceMesocycle.id, targetMesocycleId);
+        newCellData[targetCellId] = {
+          ...cellData,
+          mesocycleId: targetMesocycleId,
+          microcycleId: cellData.microcycleId 
+            ? cellData.microcycleId.replace(sourceMesocycle.id, targetMesocycleId) 
+            : undefined,
+          exercises: cellData.exercises.map(ex => ({ ...ex }))
+        };
+        copiedCount++;
+      }
+    });
+    
+    setPlanningState(prev => ({
+      ...prev,
+      cellData: newCellData
+    }));
+    
+    toast({
+      title: "Exercises copied",
+      description: `Copied ${copiedCount} exercise selection${copiedCount !== 1 ? 's' : ''} from ${sourceMesocycle.name} to ${targetMesocycle.name}.`
+    });
+  }, [mesocycles, planningState.cellData, toast]);
+
   return (
     <>
       <Card className="w-full">
@@ -1197,32 +1243,41 @@ const updateCellData = (
                         )}
                       >
                         <div className="flex flex-col items-center gap-2 py-2 w-full">
-                          <div className="flex items-center gap-2 w-full justify-center">
-                            <span>{header.mesocycleName}</span>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setClearMesocycleDialogState({
-                                  isOpen: true,
-                                  mesocycleId: header.mesocycleId,
-                                  mesocycleName: header.mesocycleName
-                                })}
-                                className="h-6 px-2 text-foreground hover:bg-destructive/10"
-                              >
-                                <Trash2 className="h-3 w-3 mr-1" />
-                                Clear
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => toggleMesocycleSplit(header.mesocycleId)}
-                                className="h-6 px-2 text-foreground hover:bg-black/10"
-                              >
-                                <ChevronLeft className="h-3 w-3 mr-1" />
-                                Collapse
-                              </Button>
-                            </div>
+                          <span className="font-semibold">{header.mesocycleName}</span>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleCopyFromPreviousMesocycle(header.mesocycleId)}
+                              disabled={mesocycles.findIndex(m => m.id === header.mesocycleId) === 0}
+                              className="h-6 px-2 text-foreground hover:bg-primary/10 disabled:opacity-50"
+                              title="Copy exercises from previous mesocycle"
+                            >
+                              <Copy className="h-3 w-3 mr-1" />
+                              Copy
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setClearMesocycleDialogState({
+                                isOpen: true,
+                                mesocycleId: header.mesocycleId,
+                                mesocycleName: header.mesocycleName
+                              })}
+                              className="h-6 px-2 text-foreground hover:bg-destructive/10"
+                            >
+                              <Trash2 className="h-3 w-3 mr-1" />
+                              Clear
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => toggleMesocycleSplit(header.mesocycleId)}
+                              className="h-6 px-2 text-foreground hover:bg-muted"
+                            >
+                              <ChevronLeft className="h-3 w-3 mr-1" />
+                              Collapse
+                            </Button>
                           </div>
                           
                           {/* Sub-goals display for split mesocycles */}
@@ -1473,9 +1528,20 @@ const updateCellData = (
                             </div>
                           )}
                           {column.type === 'mesocycle' && !hasSplitMesocycles && (
-                            <div className="flex items-center gap-2 w-full">
+                            <div className="flex flex-col items-center gap-2 w-full">
                               <span className="font-medium">{column.mesocycleName}</span>
-                              <div className="flex items-center gap-1 ml-auto">
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleCopyFromPreviousMesocycle(column.mesocycleId)}
+                                  disabled={mesocycles.findIndex(m => m.id === column.mesocycleId) === 0}
+                                  className="h-6 px-2 text-foreground hover:bg-primary/10 disabled:opacity-50"
+                                  title="Copy exercises from previous mesocycle"
+                                >
+                                  <Copy className="h-3 w-3 mr-1" />
+                                  Copy
+                                </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"
