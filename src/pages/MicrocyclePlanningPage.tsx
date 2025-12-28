@@ -2974,7 +2974,7 @@ export default function MicrocyclePlanningPage() {
       </Button>
       
       <div className="flex-1 overflow-x-auto min-w-0">
-        <div className="flex items-center gap-2 py-1">
+        <div className="flex items-center justify-center gap-2 py-1">
           {mesocycles.map((meso, index) => (
             <Button
               key={meso.id}
