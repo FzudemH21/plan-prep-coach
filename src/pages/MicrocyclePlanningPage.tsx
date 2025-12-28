@@ -2962,21 +2962,40 @@ export default function MicrocyclePlanningPage() {
   );
 
   const renderMesocycleNavigation = () => (
-    <div className="flex items-center justify-between">
+    <div className="flex items-center gap-4 mb-4">
       <Button
         variant="outline"
         onClick={() => setCurrentMesocycleIndex(Math.max(0, currentMesocycleIndex - 1))}
         disabled={currentMesocycleIndex === 0}
+        className="shrink-0"
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
-        Previous Mesocycle
+        Previous
       </Button>
+      
+      <div className="flex-1 overflow-x-auto min-w-0">
+        <div className="flex items-center gap-2 py-1">
+          {mesocycles.map((meso, index) => (
+            <Button
+              key={meso.id}
+              variant={index === currentMesocycleIndex ? "default" : "outline"}
+              size="sm"
+              onClick={() => setCurrentMesocycleIndex(index)}
+              className="min-w-[80px] shrink-0"
+            >
+              {meso.name}
+            </Button>
+          ))}
+        </div>
+      </div>
+      
       <Button
         variant="outline"
         onClick={() => setCurrentMesocycleIndex(Math.min(mesocycles.length - 1, currentMesocycleIndex + 1))}
         disabled={currentMesocycleIndex === mesocycles.length - 1}
+        className="shrink-0"
       >
-        Next Mesocycle
+        Next
         <ArrowRight className="ml-2 h-4 w-4" />
       </Button>
     </div>
@@ -3040,7 +3059,7 @@ export default function MicrocyclePlanningPage() {
 
       {renderTrainingPlanOverview()}
       
-      {currentStep === 1 && mesocycles.length > 1 && renderMesocycleNavigation()}
+      {currentStep === 1 && renderMesocycleNavigation()}
       
       {currentStep === 1 && renderExerciseDistribution()}
       

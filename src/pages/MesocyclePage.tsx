@@ -3715,34 +3715,38 @@ export default function MesocyclePage() {
             </div>
             
             {/* Mesocycle Navigation */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
               <Button
                 variant="outline"
                 onClick={() => setCurrentMesocycleIndexDailyPlanning(Math.max(0, currentMesocycleIndexDailyPlanning - 1))}
                 disabled={currentMesocycleIndexDailyPlanning === 0}
+                className="shrink-0"
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Previous
               </Button>
               
-              <div className="flex items-center gap-2 flex-wrap justify-center">
-                {mesocycles.map((meso, index) => (
-                  <Button
-                    key={meso.id}
-                    variant={index === currentMesocycleIndexDailyPlanning ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCurrentMesocycleIndexDailyPlanning(index)}
-                    className="min-w-[80px]"
-                  >
-                    {meso.name}
-                  </Button>
-                ))}
+              <div className="flex-1 overflow-x-auto min-w-0">
+                <div className="flex items-center gap-2 py-1">
+                  {mesocycles.map((meso, index) => (
+                    <Button
+                      key={meso.id}
+                      variant={index === currentMesocycleIndexDailyPlanning ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentMesocycleIndexDailyPlanning(index)}
+                      className="min-w-[80px] shrink-0"
+                    >
+                      {meso.name}
+                    </Button>
+                  ))}
+                </div>
               </div>
               
               <Button
                 variant="outline"
                 onClick={() => setCurrentMesocycleIndexDailyPlanning(Math.min(mesocycles.length - 1, currentMesocycleIndexDailyPlanning + 1))}
                 disabled={currentMesocycleIndexDailyPlanning === mesocycles.length - 1}
+                className="shrink-0"
               >
                 Next
                 <ArrowRight className="ml-2 h-4 w-4" />
