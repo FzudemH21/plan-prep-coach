@@ -1223,12 +1223,12 @@ const updateCellData = (
           </div>
         </CardHeader>
         <CardContent>
-            <Table className="min-w-[1200px]" containerClassName="overflow-x-auto">
+            <Table className="min-w-[1200px]" containerClassName="relative isolate overflow-x-auto">
             <TableHeader>
               {/* First row - Mesocycle headers (only when there are split mesocycles) */}
               {hasSplitMesocycles && (
                 <TableRow>
-                  <TableHead className="w-64 sticky left-0 top-0 bg-card z-20 border-r-2 border-border">
+                  <TableHead className="w-64 sticky left-0 top-0 bg-card z-40 border-r-2 border-border">
                     Method
                   </TableHead>
                   {mesocycleHeaders.map((header) => {
@@ -1339,7 +1339,7 @@ const updateCellData = (
               
               {/* Second row - Individual columns */}
               <TableRow>
-                  <TableHead className="w-64 sticky left-0 top-0 bg-card z-20 border-r-2 border-border">
+                  <TableHead className="w-64 sticky left-0 top-0 bg-card z-40 border-r-2 border-border">
                     {!hasSplitMesocycles ? "Method" : null}
                   </TableHead>
                 {columnStructure.map((column, index) => {
@@ -1645,7 +1645,7 @@ const updateCellData = (
                   <TableRow className="bg-muted hover:bg-muted/80">
                     <TableCell 
                       colSpan={1} 
-                      className="sticky left-0 bg-muted z-20 border-r-2 border-border py-3"
+                      className="sticky left-0 bg-muted z-30 border-r-2 border-border py-3"
                     >
                       <Button
                         variant="ghost"
@@ -1677,7 +1677,7 @@ const updateCellData = (
                       {method.categories.length === 0 ? (
                         // If no exercise categories, render one row for the method itself
                         <TableRow key={`${method.id}-main`}>
-                          <TableCell className="sticky left-0 bg-background z-15 border-r-2 border-border w-64 pl-8 py-3">
+                          <TableCell className="sticky left-0 bg-background z-30 border-r-2 border-border w-64 pl-8 py-3">
                             <div className="font-medium text-foreground">{method.name}</div>
                           </TableCell>
                           {columnStructure.map((column) => {
@@ -1742,7 +1742,7 @@ const updateCellData = (
                         // Render exercise category rows with method name spanning
                           <> 
                           <TableRow key={`${method.id}-header`}>
-                            <TableCell className="sticky left-0 bg-background z-15 border-r-2 border-border w-64 pl-8 py-3">
+                            <TableCell className="sticky left-0 bg-background z-30 border-r-2 border-border w-64 pl-8 py-3">
                               <div className="font-medium text-foreground">{method.name}</div>
                             </TableCell>
                             {columnStructure.map((column) => {
@@ -1765,7 +1765,7 @@ const updateCellData = (
                           </TableRow>
                           {method.categories.map((categoryName) => (
                             <TableRow key={`${method.id}-${categoryName}`}>
-                              <TableCell className="sticky left-0 bg-background z-15 border-r-2 border-border w-64 pl-12 py-3">
+                              <TableCell className="sticky left-0 bg-background z-30 border-r-2 border-border w-64 pl-12 py-3">
                                 <div className="text-sm text-muted-foreground">{categoryName}</div>
                               </TableCell>
                               {columnStructure.map((column) => {
