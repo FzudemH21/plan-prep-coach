@@ -2677,12 +2677,12 @@ export default function MesocyclePage() {
                               className="grid gap-1 border-b bg-muted/10"
                               style={{ gridTemplateColumns: generateHeaderGridTemplate() }}
                             >
-                              <div className="sticky left-0 z-40 p-3 bg-muted/10">
+                              <div className="sticky left-0 z-50 p-3 bg-muted/10 shadow-md">
                                 <h4 className="text-lg font-semibold text-primary">{category}</h4>
                               </div>
                               {mesocycles.map((meso) => 
                                 (meso.microcycles || []).map((_, microcycleIndex) => (
-                                  <div key={`${meso.id}-${microcycleIndex}-cat-spacer`} className="border-l" />
+                                  <div key={`${meso.id}-${microcycleIndex}-cat-spacer`} className="border-l relative z-0" />
                                 ))
                               )}
                             </div>
@@ -2695,12 +2695,12 @@ export default function MesocyclePage() {
                                   className="grid gap-1"
                                   style={{ gridTemplateColumns: generateHeaderGridTemplate() }}
                                 >
-                                  <div className="sticky left-0 z-40 p-2 pl-6 bg-background">
+                                  <div className="sticky left-0 z-50 p-2 pl-6 bg-background shadow-md">
                                     <h5 className="text-md font-medium text-muted-foreground">{subCategory}</h5>
                                   </div>
                                   {mesocycles.map((meso) => 
                                     (meso.microcycles || []).map((_, microcycleIndex) => (
-                                      <div key={`${meso.id}-${microcycleIndex}-subcat-spacer`} className="border-l" />
+                                      <div key={`${meso.id}-${microcycleIndex}-subcat-spacer`} className="border-l relative z-0" />
                                     ))
                                   )}
                                 </div>
@@ -2728,7 +2728,7 @@ export default function MesocyclePage() {
                                            <div className="grid gap-1 bg-muted/20" style={{ 
                                               gridTemplateColumns: calculateGridTemplate(baseMethodName)
                                             }}>
-                                              <div className="sticky left-0 z-40 p-3 font-medium text-sm border-r bg-background rounded-tl shadow-md">
+                                              <div className="sticky left-0 z-50 p-3 font-medium text-sm border-r bg-background rounded-tl shadow-md">
                                                 <div className="flex items-center justify-between group pr-16 relative">
                                                    <div className="flex items-center gap-2 flex-wrap">
                                                     {categoryName && <span className="text-xs text-muted-foreground">↳</span>}
@@ -2792,9 +2792,9 @@ export default function MesocyclePage() {
                                                const hasFrequencyParam = hasValidFrequencyParameter(baseMethodName);
                                                
                                                return (
-                                                 <div 
-                                                   key={`${meso.id}-${microcycleIndex}`} 
-                                                   className={`p-2 text-xs text-center font-medium border-l ${intensityBg(microcycle.intensity)} ${!isAllocated ? 'opacity-50' : ''} ${!hasFrequencyParam ? 'border-2 border-destructive/50' : ''} flex flex-col items-center gap-1`}
+                                                  <div 
+                                                    key={`${meso.id}-${microcycleIndex}`} 
+                                                    className={`relative z-10 p-2 text-xs text-center font-medium border-l ${intensityBg(microcycle.intensity)} ${!isAllocated ? 'opacity-50' : ''} ${!hasFrequencyParam ? 'border-2 border-destructive/50' : ''} flex flex-col items-center gap-1`}
                                                  >
                                                    {/* Show warning icon if no frequency parameter */}
                                                    {!hasFrequencyParam && (
@@ -2841,7 +2841,7 @@ export default function MesocyclePage() {
                                                   <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
                                                     gridTemplateColumns: calculateGridTemplate(baseMethodName)
                                                   }}>
-                                                 <div className="sticky left-0 z-40 p-2 text-xs text-muted-foreground bg-background border-r flex items-center justify-between shadow-md">
+                                                 <div className="sticky left-0 z-50 p-2 text-xs text-muted-foreground bg-background border-r flex items-center justify-between shadow-md">
                                                    <div className="flex items-center">
                                                      <span className="ml-4 font-medium">{param.name}</span>
                                                      {param.isQuantitative && param.options && param.options.length > 0 && (
@@ -2868,7 +2868,7 @@ export default function MesocyclePage() {
                                                       
                                                       if (isSplit && !isFrequency) {
                                                        return (
-                                                         <div key={`${meso.id}-${microcycleIndex}`} className="flex">
+                                                         <div key={`${meso.id}-${microcycleIndex}`} className="flex relative z-10">
                                                            {Array.from({ length: sessionsCount }, (_, sessionIndex) => {
                                                              const currentValue = getParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, sessionIndex);
                                                              const cellId = `${meso.id}::${microcycleIndex}::${fullMethodName}::${sessionIndex}::${param.name}`;
@@ -2878,7 +2878,7 @@ export default function MesocyclePage() {
                                                               return (
                                                                 <div 
                                                                   key={sessionIndex}
-                                                                  className={`p-1 border-l flex-1 ${!isAllocated ? 'bg-muted/20' : ''}`}
+                                                                  className={`relative z-10 p-1 border-l flex-1 ${!isAllocated ? 'bg-muted/20' : ''}`}
                                                                   style={{ minWidth: '120px' }}
                                                                   data-drag-cell={cellId}
                                                                   data-allocated={isAllocated ? 'true' : 'false'}
@@ -2942,9 +2942,9 @@ export default function MesocyclePage() {
                                                        const isInSelection = dragState.selectedCells.has(cellId);
                                                        
                                                           return (
-                                                            <div 
+                                                             <div 
                                                               key={`${meso.id}-${microcycleIndex}-${param.name}`} 
-                                                              className={`p-1 border-l ${!isAllocated ? 'bg-muted/20' : ''}`}
+                                                               className={`relative z-10 p-1 border-l ${!isAllocated ? 'bg-muted/20' : ''}`}
                                                               data-drag-cell={cellId}
                                                               data-allocated={isAllocated ? 'true' : 'false'}
                                                             >
