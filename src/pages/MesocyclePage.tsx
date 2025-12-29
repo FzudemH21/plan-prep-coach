@@ -1361,6 +1361,7 @@ export default function MesocyclePage() {
             </div>
           ) : (
             <div className="border rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
               {/* Carousel Navigation */}
               {hasMoreMesocycles && (
                 <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b">
@@ -1394,7 +1395,7 @@ export default function MesocyclePage() {
               <div className="grid bg-muted/50 border-b" style={{
                 gridTemplateColumns: `300px repeat(${visibleMesocycles.length}, minmax(180px, 1fr))`
               }}>
-                <div className="p-3 font-medium border-r">
+                <div className="p-3 font-medium border-r sticky left-0 bg-muted/50 z-10">
                   Training Methods
                 </div>
                 {visibleMesocycles.map((meso) => {
@@ -1494,8 +1495,18 @@ export default function MesocyclePage() {
                 {Object.entries(groupedMethods).map(([category, subCategories]) => (
                   <div key={category}>
                     {/* Category Header */}
-                    <div className="bg-muted/30 px-3 py-2 border-b border-t">
-                      <span className="font-semibold text-sm text-primary">{category}</span>
+                    <div 
+                      className="grid bg-muted/30 border-b border-t"
+                      style={{
+                        gridTemplateColumns: `300px repeat(${visibleMesocycles.length}, minmax(180px, 1fr))`
+                      }}
+                    >
+                      <div className="px-3 py-2 sticky left-0 bg-muted/30 z-10">
+                        <span className="font-semibold text-sm text-primary">{category}</span>
+                      </div>
+                      {visibleMesocycles.map((meso) => (
+                        <div key={meso.id} className="border-r last:border-r-0" />
+                      ))}
                     </div>
                     
                     {/* Methods (subcategories) in this category */}
@@ -1507,12 +1518,12 @@ export default function MesocyclePage() {
                         return (
                           <div 
                             key={method} 
-                            className="grid border-b hover:bg-muted/20 transition-colors"
+                            className="grid border-b group hover:bg-muted/20 transition-colors"
                             style={{
                               gridTemplateColumns: `300px repeat(${visibleMesocycles.length}, minmax(180px, 1fr))`
                             }}
                           >
-                            <div className="p-3 border-r flex items-center gap-2 pl-6">
+                            <div className="p-3 border-r flex items-center gap-2 pl-6 sticky left-0 bg-background z-10 group-hover:bg-muted/20">
                               <input
                                 type="checkbox"
                                 checked={allMesosAllocated}
@@ -1567,6 +1578,7 @@ export default function MesocyclePage() {
                     )}
                   </div>
                 ))}
+              </div>
               </div>
             </div>
           )}
