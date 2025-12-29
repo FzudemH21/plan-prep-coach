@@ -2672,16 +2672,38 @@ export default function MesocyclePage() {
                       <div className="p-4 space-y-6">
                         {Object.entries(groupedMethods).map(([category, subCategories]) => (
                           <div key={category} className="space-y-4">
-                            {/* Category Header */}
-                            <div className="border-b pb-2">
-                              <h4 className="text-lg font-semibold text-primary">{category}</h4>
+                            {/* Category Header - sticky left column */}
+                            <div 
+                              className="grid gap-1 border-b bg-muted/10"
+                              style={{ gridTemplateColumns: generateHeaderGridTemplate() }}
+                            >
+                              <div className="sticky left-0 z-40 p-3 bg-muted/10">
+                                <h4 className="text-lg font-semibold text-primary">{category}</h4>
+                              </div>
+                              {mesocycles.map((meso) => 
+                                (meso.microcycles || []).map((_, microcycleIndex) => (
+                                  <div key={`${meso.id}-${microcycleIndex}-cat-spacer`} className="border-l" />
+                                ))
+                              )}
                             </div>
                             
                             {/* Sub-categories and Methods */}
                             {Object.entries(subCategories).map(([subCategory, methods]) => (
                               <div key={subCategory} className="space-y-2">
-                                {/* Sub-category Header */}
-                                <h5 className="text-md font-medium text-muted-foreground">{subCategory}</h5>
+                                {/* Sub-category Header - sticky left column */}
+                                <div 
+                                  className="grid gap-1"
+                                  style={{ gridTemplateColumns: generateHeaderGridTemplate() }}
+                                >
+                                  <div className="sticky left-0 z-40 p-2 pl-6 bg-background">
+                                    <h5 className="text-md font-medium text-muted-foreground">{subCategory}</h5>
+                                  </div>
+                                  {mesocycles.map((meso) => 
+                                    (meso.microcycles || []).map((_, microcycleIndex) => (
+                                      <div key={`${meso.id}-${microcycleIndex}-subcat-spacer`} className="border-l" />
+                                    ))
+                                  )}
+                                </div>
                                 
                                 {/* Methods in this sub-category */}
                                 {methods.map((method: string) => {
