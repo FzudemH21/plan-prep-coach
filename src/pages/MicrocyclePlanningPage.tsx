@@ -2920,7 +2920,7 @@ export default function MicrocyclePlanningPage() {
       <Button 
         onClick={() => {
           if (currentStep <= 1) {
-            localStorage.setItem('mesocycleStep', '6');
+            localStorage.setItem('mesocycleStep', '5');
             navigate('/mesocycle');
           } else {
             setCurrentStep(Math.max(1, currentStep - 1));
