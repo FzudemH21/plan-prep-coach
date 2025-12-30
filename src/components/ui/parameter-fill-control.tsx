@@ -224,29 +224,17 @@ export function ParameterFillControl({
 
           <Separator />
 
-          {/* Fill Buttons */}
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleFill(true)}
-              disabled={!canFill}
-              className="h-8 text-xs"
-            >
-              <Copy className="h-3 w-3 mr-1" />
-              Empty Only
-            </Button>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => handleFill(false)}
-              disabled={!canFill}
-              className="h-8 text-xs"
-            >
-              <Copy className="h-3 w-3 mr-1" />
-              Fill All Cells
-            </Button>
-          </div>
+          {/* Fill Button */}
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => handleFill(false)}
+            disabled={!canFill}
+            className="h-8 text-xs w-full"
+          >
+            <Copy className="h-3 w-3 mr-1" />
+            Fill Selected
+          </Button>
         </div>
       </PopoverContent>
     </Popover>
