@@ -2287,16 +2287,16 @@ export default function MesocyclePage() {
       for (let i = 0; i < (mesocycle.microcycles?.length || 0); i++) {
         // Check if this microcycle is split into multiple sessions
         const isSplit = isMicrocycleSplit(mesocycle.id, i);
-        const sessionsCount = getCellSessions(mesocycle.id, i, methodName);
         
-        if (isSplit && sessionsCount > 1) {
-          // Fill ALL sessions when microcycle is split
-          for (let sessionIdx = 0; sessionIdx < sessionsCount; sessionIdx++) {
-            const currentValue = getParameterValue(mesocycle.id, i, methodName, parameterName, sessionIdx);
-            if (!fillEmptyOnly || !currentValue) {
-              updateParameterValue(mesocycle.id, i, methodName, parameterName, value, sessionIdx);
-            }
-            // Also update unit if provided
+        if (isSplit) {
+          // When microcycle is split, fill ALL sessions based on frequency
+          // Use getCellFrequency directly to get the method's frequency, default to at least 1
+          const frequency = getCellFrequency(mesocycle.id, i, methodName);
+          const sessionsToFill = Math.max(frequency, 1);
+          
+          for (let sessionIdx = 0; sessionIdx < sessionsToFill; sessionIdx++) {
+            // When explicitly using fill dialog on split microcycle, fill all sessions
+            updateParameterValue(mesocycle.id, i, methodName, parameterName, value, sessionIdx);
             if (unit !== undefined) {
               updateParameterValue(mesocycle.id, i, methodName, `${parameterName}_unit`, unit, sessionIdx);
             }
@@ -2307,14 +2307,13 @@ export default function MesocyclePage() {
           if (!fillEmptyOnly || !currentValue) {
             updateParameterValue(mesocycle.id, i, methodName, parameterName, value, 0);
           }
-          // Also update unit if provided
           if (unit !== undefined) {
             updateParameterValue(mesocycle.id, i, methodName, `${parameterName}_unit`, unit, 0);
           }
         }
       }
     });
-  }, [mesocycles, getParameterValue, updateParameterValue, isMethodAllocatedToMesocycle, isMicrocycleSplit, getCellSessions]);
+  }, [mesocycles, getParameterValue, updateParameterValue, isMethodAllocatedToMesocycle, isMicrocycleSplit, getCellFrequency]);
 
   // Global keyboard shortcuts for drag-fill UX
   useEffect(() => {
