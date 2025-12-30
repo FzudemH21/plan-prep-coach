@@ -2814,7 +2814,7 @@ export default function MesocyclePage() {
                              return (
                                <React.Fragment key={`${meso.id}-header-group`}>
                                  {hasGap && (
-                                   <div className="flex items-center justify-center bg-gradient-to-r from-muted/40 via-muted/60 to-muted/40 rounded-t-lg">
+                                   <div className="flex items-center justify-center bg-gradient-to-r from-muted/40 via-muted/60 to-muted/40 rounded-t-lg border-l border-r border-muted-foreground/30">
                                      <span className="text-muted-foreground text-xs">...</span>
                                    </div>
                                  )}
@@ -2850,7 +2850,7 @@ export default function MesocyclePage() {
                                 return (
                                   <React.Fragment key={`${meso.id}-description-group`}>
                                     {hasGap && (
-                                      <div className="bg-gradient-to-b from-muted/40 via-muted/60 to-muted/40" />
+                                      <div className="bg-gradient-to-b from-muted/40 via-muted/60 to-muted/40 border-l border-r border-muted-foreground/30" />
                                     )}
                                     <div 
                                       key={`${meso.id}-description`} 
@@ -2915,7 +2915,7 @@ export default function MesocyclePage() {
                              return (
                                <React.Fragment key={`${meso.id}-micros`}>
                                  {hasGap && (
-                                   <div className="bg-gradient-to-b from-muted/40 via-muted/60 to-muted/40 rounded-b-lg" />
+                                   <div className="bg-gradient-to-b from-muted/40 via-muted/60 to-muted/40 rounded-b-lg border-l border-r border-muted-foreground/30" />
                                  )}
                                  {(meso.microcycles || []).map((microcycle, microcycleIndex) => {
                                    const intensity = microcycle.intensity || meso.intensity;
@@ -3073,9 +3073,9 @@ export default function MesocyclePage() {
                                               const hasGap = hasMesocycleGap(meso.id);
                                               return (
                                                 <React.Fragment key={`${meso.id}-method-cells`}>
-                                                  {hasGap && (
-                                                    <div className="bg-gradient-to-b from-muted/40 via-muted/60 to-muted/40" />
-                                                  )}
+                                                   {hasGap && (
+                                                     <div className="bg-gradient-to-b from-muted/40 via-muted/60 to-muted/40 border-l border-r border-muted-foreground/30" />
+                                                   )}
                                                   {(meso.microcycles || []).map((microcycle, microcycleIndex) => {
                                                 const isAllocated = isMethodAllocatedToMesocycle(fullMethodName, meso.id);
                                                 const frequency = getCellFrequency(meso.id, microcycleIndex, fullMethodName);
@@ -3158,7 +3158,7 @@ export default function MesocyclePage() {
                                                     return (
                                                       <React.Fragment key={`${meso.id}-param-cells`}>
                                                         {hasGap && (
-                                                          <div className="bg-gradient-to-b from-muted/40 via-muted/60 to-muted/40" />
+                                                          <div className="bg-gradient-to-b from-muted/40 via-muted/60 to-muted/40 border-l border-r border-muted-foreground/30" />
                                                         )}
                                                         {(meso.microcycles || []).map((microcycle, microcycleIndex) => {
                                                         const isAllocated = isMethodAllocatedToMesocycle(fullMethodName, meso.id);
