@@ -1,6 +1,8 @@
 import React from 'react';
 import { IntensityLevel } from '@/types/training';
 import { Microcycle } from '@/features/planner/types';
+import { Trophy, CalendarDays } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface MicrocycleIntensityColumnProps {
   microcycle: Microcycle;
@@ -10,6 +12,8 @@ interface MicrocycleIntensityColumnProps {
   isLastMicrocycleOfMesocycle: boolean;
   intensityLevels: IntensityLevel[];
   getIntensityColor: (intensity: IntensityLevel) => string;
+  hasTests?: boolean;
+  hasEvents?: boolean;
 }
 
 const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
@@ -19,7 +23,9 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
   onIntensityChange,
   isLastMicrocycleOfMesocycle,
   intensityLevels,
-  getIntensityColor
+  getIntensityColor,
+  hasTests = false,
+  hasEvents = false
 }) => {
   const chartHeight = 200; // Fixed chart area height
   
@@ -95,6 +101,31 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
     <div className={`flex flex-col w-20 shrink-0 box-border ${getBorderClasses()}`}>
       {/* Microcycle header */}
       <div className="relative h-16 text-center text-xs rounded w-full mb-2 flex flex-col items-center justify-center bg-primary/10">
+        {/* Event/Test indicators in top-right corner */}
+        {(hasTests || hasEvents) && (
+          <div className="absolute top-1 right-1 flex gap-0.5">
+            {hasTests && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="flex items-center justify-center h-4 w-4 bg-black rounded-full">
+                    <Trophy className="h-2.5 w-2.5 text-white" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Test scheduled this week</TooltipContent>
+              </Tooltip>
+            )}
+            {hasEvents && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="flex items-center justify-center h-4 w-4 bg-black rounded-full">
+                    <CalendarDays className="h-2.5 w-2.5 text-white" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Event scheduled this week</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        )}
         <div className="font-medium">{microcycle.name}</div>
         <div className="text-xs">{microcycle.duration}d</div>
       </div>
