@@ -2823,7 +2823,7 @@ export default function MesocyclePage() {
                                     const isIndented = categoryName !== null;
                                     
                                     return (
-                                      <div key={fullMethodName} className={`border rounded-lg bg-card shadow-sm ${isIndented ? 'ml-4 border-l-4 border-primary/30' : ''}`}>
+                                      <div key={fullMethodName} className={`border rounded-lg bg-card shadow-sm ${isIndented ? 'border-l-4 border-l-primary/50' : ''}`}>
                                            {/* Method/Category name header */}
                                            <div className="grid gap-1 bg-muted/20" style={{ 
                                               gridTemplateColumns: calculateGridTemplate(baseMethodName)
@@ -2867,30 +2867,40 @@ export default function MesocyclePage() {
                                                     )}
                                                   </div>
                                                  <div className="absolute right-0 top-1/2 -translate-y-1/2 flex gap-1">
-                                                   {/* Split/Unsplit button - only show for base method or first category */}
-                                                   {hasCategoriesAvailable && (!categoryName || categoryName === categories[0]) && (
+                                                   {/* Split button - only show for base method when not split */}
+                                                   {hasCategoriesAvailable && !categoryName && !isCategorySplit && (
                                                      <Button
                                                        variant="ghost"
                                                        size="sm"
                                                        className="h-6 w-6 p-0 text-primary hover:text-primary/80 hover:bg-primary/10"
                                                        onClick={() => toggleCategorySplit(baseMethodName)}
-                                                       title={isCategorySplit ? "Merge categories" : "Split by exercise category"}
+                                                       title="Split by exercise category"
                                                      >
-                                                       {isCategorySplit ? <Columns className="h-4 w-4" /> : <SplitSquareHorizontal className="h-4 w-4" />}
+                                                       <SplitSquareHorizontal className="h-4 w-4" />
                                                      </Button>
                                                    )}
-                                                   {/* Delete button - only for base method or first category */}
-                                                   {(!categoryName || categoryName === categories[0]) && (
+                                                   {/* Merge button - show on ALL exercise category rows */}
+                                                   {categoryName && (
                                                      <Button
                                                        variant="ghost"
                                                        size="sm"
-                                                       className="h-6 w-6 p-0 text-destructive hover:text-destructive/80 hover:bg-destructive/10"
-                                                       onClick={() => handleDeleteMethod(baseMethodName)}
-                                                       title="Delete method"
+                                                       className="h-6 w-6 p-0 text-primary hover:text-primary/80 hover:bg-primary/10"
+                                                       onClick={() => toggleCategorySplit(baseMethodName)}
+                                                       title="Merge categories back together"
                                                      >
-                                                       <Trash2 className="h-4 w-4" />
+                                                       <Columns className="h-4 w-4" />
                                                      </Button>
                                                    )}
+                                                   {/* Delete button - show on all rows */}
+                                                   <Button
+                                                     variant="ghost"
+                                                     size="sm"
+                                                     className="h-6 w-6 p-0 text-destructive hover:text-destructive/80 hover:bg-destructive/10"
+                                                     onClick={() => handleDeleteMethod(baseMethodName)}
+                                                     title="Delete method"
+                                                   >
+                                                     <Trash2 className="h-4 w-4" />
+                                                   </Button>
                                                  </div>
                                                </div>
                                              </div>
