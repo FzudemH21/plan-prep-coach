@@ -2838,13 +2838,13 @@ export default function MesocyclePage() {
                                                       <ChevronDown 
                                                         className={cn(
                                                           "h-4 w-4 transition-transform text-muted-foreground",
-                                                          collapsedMethods.has(fullMethodName) && "-rotate-90"
+                                                          (collapsedMethods.has(fullMethodName) || (categoryName && collapsedMethods.has(method))) && "-rotate-90"
                                                         )} 
                                                       />
                                                     </button>
                                                     {categoryName && <span className="text-xs text-muted-foreground">↳</span>}
                                     <div className="line-clamp-3 text-md font-medium text-foreground" title={fullMethodName}>
-                                      {subCategory}
+                                      {categoryName ? `${subCategory}-${categoryName}` : subCategory}
                                     </div>
                                                     {/* Warning badge if no frequency parameter */}
                                                     {!hasValidFrequencyParameter(baseMethodName) && (
@@ -2946,7 +2946,7 @@ export default function MesocyclePage() {
                                         </div>
                                       
                                        {/* Parameter sub-rows */}
-                                       {parameters.length > 0 && !collapsedMethods.has(fullMethodName) && (
+                                       {parameters.length > 0 && !collapsedMethods.has(fullMethodName) && !(categoryName && collapsedMethods.has(method)) && (
                                          <div className="divide-y">
                                              {parameters.map((param) => (
                                                   <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
