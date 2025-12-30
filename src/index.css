@@ -212,3 +212,14 @@ All colors MUST be HSL.
   z-index: 9999 !important;
   pointer-events: auto !important;
 }
+
+/* Hide number input spinners for cleaner compact layout */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
