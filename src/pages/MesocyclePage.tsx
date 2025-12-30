@@ -2753,14 +2753,20 @@ export default function MesocyclePage() {
                      >
                        Single
                      </Button>
-                     <Button
-                       variant={viewMode === 'pair' ? "default" : "ghost"}
-                       size="sm"
-                       onClick={() => setViewMode('pair')}
-                       className="h-7 px-2"
-                     >
-                       Pair
-                     </Button>
+                      <Button
+                        variant={viewMode === 'pair' ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => {
+                          // Adjust selection when at last mesocycle to show a complete pair
+                          if (selectedMesocycleIndex >= mesocycles.length - 1 && mesocycles.length >= 2) {
+                            setSelectedMesocycleIndex(mesocycles.length - 2);
+                          }
+                          setViewMode('pair');
+                        }}
+                        className="h-7 px-2"
+                      >
+                        Pair
+                      </Button>
                      <Button
                        variant={viewMode === 'all' ? "default" : "ghost"}
                        size="sm"
