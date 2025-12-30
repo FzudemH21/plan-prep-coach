@@ -2718,7 +2718,7 @@ export default function MesocyclePage() {
                                                 <div className="flex items-center justify-between group pr-16 relative">
                                                    <div className="flex items-center gap-2 flex-wrap">
                                                     {categoryName && <span className="text-xs text-muted-foreground">↳</span>}
-                                    <div className="line-clamp-3 text-md font-medium text-muted-foreground" title={fullMethodName}>
+                                    <div className="line-clamp-3 text-md font-medium text-foreground" title={fullMethodName}>
                                       {subCategory}
                                     </div>
                                                     {/* Warning badge if no frequency parameter */}
