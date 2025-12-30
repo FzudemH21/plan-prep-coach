@@ -2103,7 +2103,7 @@ export default function MesocyclePage() {
   // Helper function to generate dynamic header grid template using global widths
   const generateHeaderGridTemplate = useCallback((visibleMesos?: ExtendedMesocycle[]) => {
     const mesosToUse = visibleMesos || mesocycles;
-    const widths: string[] = [];
+    const widths = ['300px'];
     mesosToUse.forEach((meso, index) => {
       // Add gap column if there's a gap before this mesocycle
       if (hasMesocycleGap(meso.id)) {
@@ -2869,7 +2869,7 @@ export default function MesocyclePage() {
                            <div className="grid gap-1" style={{
                              gridTemplateColumns: generateHeaderGridTemplate(getVisibleMesocyclesForPeriodization())
                            }}>
-                            
+                            <div />
                            {getVisibleMesocyclesForPeriodization().map((meso) => {
                              const hasGap = hasMesocycleGap(meso.id);
                              return (
@@ -2903,7 +2903,7 @@ export default function MesocyclePage() {
                           <div className="grid gap-1" style={{
                             gridTemplateColumns: generateHeaderGridTemplate(getVisibleMesocyclesForPeriodization())
                           }}>
-                             
+                             <div />
                            {getVisibleMesocyclesForPeriodization().map((meso) => {
                                 const hasGap = hasMesocycleGap(meso.id);
                                 return (
@@ -2966,7 +2966,7 @@ export default function MesocyclePage() {
                           <div className="grid gap-1" style={{
                             gridTemplateColumns: generateHeaderGridTemplate(getVisibleMesocyclesForPeriodization())
                           }}>
-                            
+                            <div />
                            {getVisibleMesocyclesForPeriodization().map((meso) => {
                              const hasGap = hasMesocycleGap(meso.id);
                              return (
