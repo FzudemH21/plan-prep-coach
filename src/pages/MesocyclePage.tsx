@@ -671,9 +671,23 @@ export default function MesocyclePage() {
             type="number"
             min="1"
             max="12"
-            value={mesocycles.length || 3}
+            value={mesocycles.length === 0 ? '' : mesocycles.length}
             onChange={(e) => {
-              const count = parseInt(e.target.value);
+              const inputValue = e.target.value;
+              
+              // Allow empty input (user is typing)
+              if (inputValue === '') {
+                setMesocycles([]);
+                return;
+              }
+              
+              const count = parseInt(inputValue);
+              
+              // Validate the parsed number
+              if (isNaN(count) || count < 1 || count > 12) {
+                return;
+              }
+              
               const newMesocycles: ExtendedMesocycle[] = Array.from({ length: count }, (_, i) => {
                 // Calculate microcycles for each mesocycle
                 const isLastMesocycle = i === count - 1;
