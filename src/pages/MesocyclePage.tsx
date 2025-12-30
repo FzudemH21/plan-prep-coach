@@ -2775,7 +2775,7 @@ export default function MesocyclePage() {
                     <div className="h-6 w-px bg-border shrink-0" />
                     
                     {/* Individual mesocycle toggles */}
-                    <div className="flex-1 flex items-center gap-2 overflow-x-auto py-1">
+                    <div className="flex-1 flex items-center gap-2 overflow-x-auto py-1 pl-1">
                       {mesocycles.map((meso) => {
                         const isVisible = visibleMesocycleIds.has(meso.id);
                         
@@ -2959,7 +2959,7 @@ export default function MesocyclePage() {
                               </div>
                               {/* Single filler element spanning all microcycle columns - no moving borders */}
                               <div 
-                                className="bg-muted" 
+                                className="bg-muted border-r" 
                                 style={{ gridColumn: '2 / -1' }}
                               />
                             </div>
