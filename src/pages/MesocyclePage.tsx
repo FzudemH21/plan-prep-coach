@@ -111,6 +111,10 @@ export default function MesocyclePage() {
   const [mesocycleViewOffset, setMesocycleViewOffset] = useState(0);
   const MAX_VISIBLE_MESOCYCLES = 4;
   
+  // Step 4 (Method Periodization) paired mesocycle navigation state
+  const [visibleMesocyclePairIndex, setVisibleMesocyclePairIndex] = useState(0);
+  const [showAllMesocycles, setShowAllMesocycles] = useState(false);
+  
   // Method category order state for Step 3/4 drag reordering
   const [methodCategoryOrder, setMethodCategoryOrder] = useState<string[]>(() => {
     const saved = localStorage.getItem('methodCategoryOrder');
@@ -1992,10 +1996,23 @@ export default function MesocyclePage() {
     return maxFrequency > 1 ? maxFrequency * 120 : 180;
   }, [mesocycles, getMethodsForAllocatedSubGoals, isMethodAllocatedToMesocycle, getCellFrequency, isMicrocycleSplit]);
 
+  // Get mesocycles for paired view (overlapping: 1&2, 2&3, 3&4, etc.)
+  const getVisibleMesocyclesForPeriodization = useCallback(() => {
+    if (showAllMesocycles) return mesocycles;
+    if (mesocycles.length <= 2) return mesocycles;
+    
+    const startIndex = visibleMesocyclePairIndex;
+    const endIndex = Math.min(startIndex + 2, mesocycles.length);
+    return mesocycles.slice(startIndex, endIndex);
+  }, [mesocycles, showAllMesocycles, visibleMesocyclePairIndex]);
+
+  const maxPairIndex = Math.max(0, mesocycles.length - 2);
+
   // Helper function to generate dynamic header grid template using global widths
-  const generateHeaderGridTemplate = useCallback(() => {
+  const generateHeaderGridTemplate = useCallback((visibleMesos?: ExtendedMesocycle[]) => {
+    const mesosToUse = visibleMesos || mesocycles;
     const widths = ['300px']; // Fixed left column
-    mesocycles.forEach((meso) => {
+    mesosToUse.forEach((meso) => {
       (meso.microcycles || []).forEach((_, microcycleIndex) => {
         const width = getGlobalMicrocycleWidth(meso.id, microcycleIndex);
         widths.push(`${width}px`);
@@ -2005,16 +2022,17 @@ export default function MesocyclePage() {
   }, [mesocycles, getGlobalMicrocycleWidth]);
 
   // Helper function to calculate grid template for dynamic widths using global calculation
-  const calculateGridTemplate = (methodName: string) => {
+  const calculateGridTemplate = useCallback((methodName: string, visibleMesos?: ExtendedMesocycle[]) => {
+    const mesosToUse = visibleMesos || mesocycles;
     const widths = ['300px']; // Fixed left column
-    mesocycles.forEach((meso) => {
+    mesosToUse.forEach((meso) => {
       (meso.microcycles || []).forEach((_, microcycleIndex) => {
         const width = getGlobalMicrocycleWidth(meso.id, microcycleIndex);
         widths.push(`${width}px`);
       });
     });
     return widths.join(' ');
-  };
+  }, [mesocycles, getGlobalMicrocycleWidth]);
 
   // Helper function to check if a method has a valid frequency parameter
   const hasValidFrequencyParameter = useCallback((methodName: string): boolean => {
@@ -2678,18 +2696,82 @@ export default function MesocyclePage() {
               
               <div className="space-y-3">
                <h3 className="text-lg font-semibold">Method Periodization</h3>
-                 <div className="w-full border rounded-lg overflow-auto" style={{height: 'calc(100vh - 280px)', scrollbarWidth: 'thin'}}>
+               
+               {/* Mesocycle Navigation Bar */}
+               {mesocycles.length > 2 && (
+                 <div className="flex items-center gap-4 mb-2">
+                   <Button
+                     variant="outline"
+                     size="sm"
+                     onClick={() => setVisibleMesocyclePairIndex(Math.max(0, visibleMesocyclePairIndex - 1))}
+                     disabled={showAllMesocycles || visibleMesocyclePairIndex === 0}
+                     className="shrink-0"
+                   >
+                     <ChevronLeft className="mr-1 h-4 w-4" />
+                     Previous
+                   </Button>
+                   
+                   <div className="flex-1 flex items-center justify-center gap-2 overflow-x-auto py-1">
+                     {mesocycles.map((meso, index) => {
+                       const isVisible = showAllMesocycles || 
+                         (index >= visibleMesocyclePairIndex && index < visibleMesocyclePairIndex + 2);
+                       
+                       return (
+                         <Button
+                           key={meso.id}
+                           variant={isVisible ? "default" : "outline"}
+                           size="sm"
+                           onClick={() => {
+                             if (!showAllMesocycles) {
+                               setVisibleMesocyclePairIndex(Math.min(index, maxPairIndex));
+                             }
+                           }}
+                           className={cn(
+                             "min-w-[80px] shrink-0",
+                             isVisible ? "ring-2 ring-primary" : "opacity-60"
+                           )}
+                         >
+                           {meso.name}
+                         </Button>
+                       );
+                     })}
+                   </div>
+                   
+                   <div className="flex items-center gap-2 shrink-0">
+                     <Button
+                       variant={showAllMesocycles ? "default" : "outline"}
+                       size="sm"
+                       onClick={() => setShowAllMesocycles(!showAllMesocycles)}
+                     >
+                       {showAllMesocycles ? "Pair View" : "View All"}
+                     </Button>
+                     
+                     <Button
+                       variant="outline"
+                       size="sm"
+                       onClick={() => setVisibleMesocyclePairIndex(Math.min(maxPairIndex, visibleMesocyclePairIndex + 1))}
+                       disabled={showAllMesocycles || visibleMesocyclePairIndex >= maxPairIndex}
+                       className="shrink-0"
+                     >
+                       Next
+                       <ChevronRight className="ml-1 h-4 w-4" />
+                     </Button>
+                   </div>
+                 </div>
+               )}
+               
+                 <div className="w-full border rounded-lg overflow-auto" style={{height: 'calc(100vh - 340px)', scrollbarWidth: 'thin'}}>
                    <div className="min-w-max relative">
                      {/* Multi-Level Sticky Headers */}
                      <div className="sticky top-0 z-[90] bg-background border-b space-y-1 shadow-sm">
                          {/* Level 1: Mesocycle Group Headers */}
                            <div className="grid gap-1" style={{
-                             gridTemplateColumns: generateHeaderGridTemplate()
+                             gridTemplateColumns: generateHeaderGridTemplate(getVisibleMesocyclesForPeriodization())
                            }}>
                            <div className="sticky left-0 z-[60] p-2 bg-background font-medium text-sm border rounded-t-lg shadow-md border-r">
                              Training Methods
                            </div>
-                          {mesocycles.map((meso) => (
+                          {getVisibleMesocyclesForPeriodization().map((meso) => (
                             <div 
                               key={`${meso.id}-header`} 
                               className={`p-2 font-medium text-sm border rounded-t-lg text-center ${intensityBg(meso.intensity)}`}
@@ -2707,12 +2789,12 @@ export default function MesocyclePage() {
 
                           {/* Level 2: Description */}
                           <div className="grid gap-1" style={{
-                            gridTemplateColumns: generateHeaderGridTemplate()
+                            gridTemplateColumns: generateHeaderGridTemplate(getVisibleMesocyclesForPeriodization())
                           }}>
                             <div className="sticky left-0 z-[60] p-2 bg-background border-l border-r text-xs shadow-md">
                               Description
                             </div>
-                           {mesocycles.map((meso) => (
+                           {getVisibleMesocyclesForPeriodization().map((meso) => (
                                <div 
                                  key={`${meso.id}-description`} 
                                  className="p-2 bg-muted/30 border-l border-r text-xs"
@@ -2764,12 +2846,12 @@ export default function MesocyclePage() {
 
                          {/* Level 3: Microcycle Headers with Intensity Colors */}
                           <div className="grid gap-1" style={{
-                            gridTemplateColumns: generateHeaderGridTemplate()
+                            gridTemplateColumns: generateHeaderGridTemplate(getVisibleMesocyclesForPeriodization())
                           }}>
                            <div className="sticky left-0 z-[60] p-2 bg-background font-medium text-xs border rounded-b-lg shadow-md border-r">
                              Parameters
                            </div>
-                          {mesocycles.map((meso) => 
+                          {getVisibleMesocyclesForPeriodization().map((meso) =>
                             (meso.microcycles || []).map((microcycle, microcycleIndex) => {
                               const intensity = microcycle.intensity || meso.intensity;
                               
@@ -2795,7 +2877,7 @@ export default function MesocyclePage() {
                             {/* Category Header - sticky left column */}
                             <div 
                               className="grid gap-0 border-b cursor-pointer"
-                              style={{ gridTemplateColumns: generateHeaderGridTemplate() }}
+                              style={{ gridTemplateColumns: generateHeaderGridTemplate(getVisibleMesocyclesForPeriodization()) }}
                               onClick={() => toggleCategoryCollapse(category)}
                             >
                               <div className="sticky left-0 z-[80] p-3 bg-muted border-r overflow-hidden shadow-md">
@@ -2841,7 +2923,7 @@ export default function MesocyclePage() {
                                       <div key={fullMethodName} className={`border rounded-lg bg-card shadow-sm ${isIndented ? 'border-l-4 border-l-primary/50' : ''}`}>
                                            {/* Method/Category name header */}
                                            <div className="grid gap-1 bg-muted/20" style={{ 
-                                              gridTemplateColumns: calculateGridTemplate(baseMethodName)
+                                              gridTemplateColumns: calculateGridTemplate(baseMethodName, getVisibleMesocyclesForPeriodization())
                                             }}>
                                               <div className="sticky left-0 z-50 p-3 border-r bg-background rounded-tl shadow-md">
                                                 <div className="flex items-center justify-between group pr-16 relative">
@@ -2919,7 +3001,7 @@ export default function MesocyclePage() {
                                                  </div>
                                                </div>
                                              </div>
-                                           {mesocycles.map((meso) => 
+                                           {getVisibleMesocyclesForPeriodization().map((meso) =>
                                              (meso.microcycles || []).map((microcycle, microcycleIndex) => {
                                                const isAllocated = isMethodAllocatedToMesocycle(fullMethodName, meso.id);
                                                const frequency = getCellFrequency(meso.id, microcycleIndex, fullMethodName);
@@ -2975,7 +3057,7 @@ export default function MesocyclePage() {
                                          <div className="divide-y">
                                              {parameters.map((param) => (
                                                   <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
-                                                    gridTemplateColumns: calculateGridTemplate(baseMethodName)
+                                                    gridTemplateColumns: calculateGridTemplate(baseMethodName, getVisibleMesocyclesForPeriodization())
                                                   }}>
                                                  <div className="sticky left-0 z-50 p-2 text-xs text-muted-foreground bg-background border-r flex items-center justify-between shadow-md">
                                                    <div className="flex items-center">
@@ -2995,7 +3077,7 @@ export default function MesocyclePage() {
                                                      disabled={!mesocycles.some(meso => isMethodAllocatedToMesocycle(fullMethodName, meso.id))}
                                                    />
                                                  </div>
-                                                  {mesocycles.map((meso) =>
+                                                  {getVisibleMesocyclesForPeriodization().map((meso) =>
                                                     (meso.microcycles || []).map((microcycle, microcycleIndex) => {
                                                        const isAllocated = isMethodAllocatedToMesocycle(fullMethodName, meso.id);
                                                         const isSplit = isMicrocycleSplit(meso.id, microcycleIndex);
