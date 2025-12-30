@@ -2869,9 +2869,7 @@ export default function MesocyclePage() {
                            <div className="grid gap-1" style={{
                              gridTemplateColumns: generateHeaderGridTemplate(getVisibleMesocyclesForPeriodization())
                            }}>
-                           <div className="sticky left-0 z-[60] p-2 bg-background font-medium text-sm border rounded-t-lg shadow-md border-r">
-                             Training Methods
-                           </div>
+                            <div className="sticky left-0 z-[60] p-2 bg-background border rounded-t-lg shadow-md border-r" />
                            {getVisibleMesocyclesForPeriodization().map((meso) => {
                              const hasGap = hasMesocycleGap(meso.id);
                              return (
@@ -2905,9 +2903,7 @@ export default function MesocyclePage() {
                           <div className="grid gap-1" style={{
                             gridTemplateColumns: generateHeaderGridTemplate(getVisibleMesocyclesForPeriodization())
                           }}>
-                            <div className="sticky left-0 z-[60] p-2 bg-background border-l border-r text-xs shadow-md">
-                              Description
-                            </div>
+                             <div className="sticky left-0 z-[60] p-2 bg-background border-l border-r shadow-md" />
                            {getVisibleMesocyclesForPeriodization().map((meso) => {
                                 const hasGap = hasMesocycleGap(meso.id);
                                 return (
@@ -2970,9 +2966,7 @@ export default function MesocyclePage() {
                           <div className="grid gap-1" style={{
                             gridTemplateColumns: generateHeaderGridTemplate(getVisibleMesocyclesForPeriodization())
                           }}>
-                           <div className="sticky left-0 z-[60] p-2 bg-background font-medium text-xs border rounded-b-lg shadow-md border-r">
-                             Parameters
-                           </div>
+                            <div className="sticky left-0 z-[60] p-2 bg-background border rounded-b-lg shadow-md border-r" />
                            {getVisibleMesocyclesForPeriodization().map((meso) => {
                              const hasGap = hasMesocycleGap(meso.id);
                              return (
