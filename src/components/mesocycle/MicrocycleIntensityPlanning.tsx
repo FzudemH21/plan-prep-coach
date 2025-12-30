@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { IntensityLevel } from '@/types/training';
 import IntensityScale from './IntensityScale';
@@ -6,7 +6,18 @@ import MicrocycleIntensityColumn from './MicrocycleIntensityColumn';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Copy } from 'lucide-react';
+import { addDays } from 'date-fns';
 
+interface SubGoal {
+  testDates?: string[];
+  description?: string;
+  testMethod?: string;
+}
+
+interface Event {
+  eventDates?: string[];
+  name?: string;
+}
 
 interface MicrocycleIntensityPlanningProps {
   mesocycles: ExtendedMesocycle[];
@@ -14,6 +25,9 @@ interface MicrocycleIntensityPlanningProps {
   getIntensityColor: (intensity: IntensityLevel) => string;
   onMicrocycleIntensityChange: (mesocycleId: string, microcycleId: string, intensity: IntensityLevel) => void;
   onCopyMesocycle?: (mesocycleId: string) => void;
+  subGoals?: SubGoal[];
+  events?: Event[];
+  planStartDate?: Date;
 }
 
 const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = ({
@@ -21,8 +35,47 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
   intensityLevels,
   getIntensityColor,
   onMicrocycleIntensityChange,
-  onCopyMesocycle
+  onCopyMesocycle,
+  subGoals = [],
+  events = [],
+  planStartDate
 }) => {
+  // Calculate microcycle date ranges
+  const microcycleDates = useMemo(() => {
+    const dates = new Map<string, { start: Date; end: Date }>();
+    let currentDate = planStartDate || new Date();
+    
+    mesocycles.forEach(meso => {
+      meso.microcycles.forEach(micro => {
+        const startDate = new Date(currentDate);
+        const endDate = addDays(currentDate, micro.duration - 1);
+        dates.set(micro.id, { start: startDate, end: endDate });
+        currentDate = addDays(endDate, 1);
+      });
+    });
+    
+    return dates;
+  }, [mesocycles, planStartDate]);
+
+  // Check if there are tests in a given date range
+  const hasTestsInRange = (start: Date, end: Date): boolean => {
+    return subGoals.some(sg => 
+      sg.testDates?.some(td => {
+        const testDate = new Date(td);
+        return testDate >= start && testDate <= end;
+      })
+    );
+  };
+
+  // Check if there are events in a given date range
+  const hasEventsInRange = (start: Date, end: Date): boolean => {
+    return events.some(e => 
+      e.eventDates?.some(ed => {
+        const eventDate = new Date(ed);
+        return eventDate >= start && eventDate <= end;
+      })
+    );
+  };
   
   return (
     <div className="space-y-4">
@@ -81,6 +134,9 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                   {mesocycles.map((meso) => {
                     return meso.microcycles.map((micro, microIndex) => {
                       const isLastMicrocycle = microIndex === meso.microcycles.length - 1;
+                      const dateRange = microcycleDates.get(micro.id);
+                      const hasTests = dateRange ? hasTestsInRange(dateRange.start, dateRange.end) : false;
+                      const hasEvents = dateRange ? hasEventsInRange(dateRange.start, dateRange.end) : false;
                       
                       return (
                         <MicrocycleIntensityColumn
@@ -92,6 +148,8 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                           isLastMicrocycleOfMesocycle={isLastMicrocycle}
                           intensityLevels={intensityLevels}
                           getIntensityColor={getIntensityColor}
+                          hasTests={hasTests}
+                          hasEvents={hasEvents}
                         />
                       );
                     });

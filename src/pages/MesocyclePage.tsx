@@ -902,6 +902,9 @@ export default function MesocyclePage() {
                 getIntensityColor={getIntensityColor}
                 onMicrocycleIntensityChange={handleMicrocycleIntensityChange}
                 onCopyMesocycle={copyMesocycleIntensity}
+                subGoals={macrocycleData?.subGoals}
+                events={macrocycleData?.events}
+                planStartDate={planStartDate}
               />
             </div>
           </>
