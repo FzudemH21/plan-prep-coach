@@ -2674,17 +2674,17 @@ export default function MesocyclePage() {
                           <div key={category} className="space-y-4">
                             {/* Category Header - sticky left column */}
                             <div 
-                              className="grid gap-1 border-b bg-muted/10"
+                              className="grid gap-0 border-b"
                               style={{ gridTemplateColumns: generateHeaderGridTemplate() }}
                             >
-                              <div className="sticky left-0 z-50 p-3 bg-muted/10 shadow-md">
+                              <div className="sticky left-0 z-[80] p-3 bg-muted border-r overflow-hidden shadow-md">
                                 <h4 className="text-lg font-semibold text-primary">{category}</h4>
                               </div>
-                              {mesocycles.map((meso) => 
-                                (meso.microcycles || []).map((_, microcycleIndex) => (
-                                  <div key={`${meso.id}-${microcycleIndex}-cat-spacer`} className="border-l relative z-0" />
-                                ))
-                              )}
+                              {/* Single filler element spanning all microcycle columns - no moving borders */}
+                              <div 
+                                className="bg-muted" 
+                                style={{ gridColumn: '2 / -1' }}
+                              />
                             </div>
                             
                             {/* Sub-categories and Methods */}
