@@ -130,16 +130,18 @@ export default function MesocyclePage() {
   const [resources, setResources] = useState<Array<{
     id: string;
     name: string;
+    displayName: string;
     type: string;
     size: number;
     uploadedAt: Date;
     url: string;
   }>>([]);
   
-  const handleAddResources = useCallback((files: File[]) => {
-    const newResources = files.map(file => ({
+  const handleAddResources = useCallback((files: { file: File; displayName: string }[]) => {
+    const newResources = files.map(({ file, displayName }) => ({
       id: crypto.randomUUID(),
       name: file.name,
+      displayName: displayName || file.name,
       type: file.type,
       size: file.size,
       uploadedAt: new Date(),
@@ -156,6 +158,12 @@ export default function MesocyclePage() {
       }
       return prev.filter(r => r.id !== id);
     });
+  }, []);
+
+  const handleRenameResource = useCallback((id: string, displayName: string) => {
+    setResources(prev => prev.map(r => 
+      r.id === id ? { ...r, displayName } : r
+    ));
   }, []);
   
   const toggleCategoryCollapse = (category: string) => {
@@ -4514,6 +4522,7 @@ export default function MesocyclePage() {
           resources={resources}
           onAddResources={handleAddResources}
           onDeleteResource={handleDeleteResource}
+          onRenameResource={handleRenameResource}
         />
     </div>
   );
