@@ -2289,6 +2289,10 @@ export default function MesocyclePage() {
         if (!fillEmptyOnly || !currentValue) {
           updateParameterValue(mesocycle.id, i, methodName, parameterName, value, sessionIndex);
         }
+        // Also update unit if provided
+        if (unit !== undefined) {
+          updateParameterValue(mesocycle.id, i, methodName, `${parameterName}_unit`, unit, sessionIndex);
+        }
       }
     });
   }, [mesocycles, getParameterValue, updateParameterValue, isMethodAllocatedToMesocycle]);
@@ -3262,8 +3266,8 @@ export default function MesocyclePage() {
                                                                         <QuantitativeParameterInput
                                                                           value={currentValue.toString()}
                                                                           onValueChange={(value) => updateParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, value, sessionIndex)}
-                                                                          unit={param.options?.[0] || ''}
-                                                                          onUnitChange={(unit) => {}}
+                                                                          unit={getParameterValue(meso.id, microcycleIndex, fullMethodName, `${param.name}_unit`, sessionIndex)?.toString() || param.options?.[0] || ''}
+                                                                          onUnitChange={(unit) => updateParameterValue(meso.id, microcycleIndex, fullMethodName, `${param.name}_unit`, unit, sessionIndex)}
                                                                           units={param.options || []}
                                                                           placeholder=""
                                                                           cellId={cellId}
@@ -3327,8 +3331,8 @@ export default function MesocyclePage() {
                                                                   <QuantitativeParameterInput
                                                                     value={currentValue.toString()}
                                                                     onValueChange={(value) => updateParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, value, 0)}
-                                                                    unit={param.options?.[0] || ''}
-                                                                    onUnitChange={(unit) => {}}
+                                                                    unit={getParameterValue(meso.id, microcycleIndex, fullMethodName, `${param.name}_unit`, 0)?.toString() || param.options?.[0] || ''}
+                                                                    onUnitChange={(unit) => updateParameterValue(meso.id, microcycleIndex, fullMethodName, `${param.name}_unit`, unit, 0)}
                                                                     units={param.options || []}
                                                                     placeholder=""
                                                                     cellId={cellId}
