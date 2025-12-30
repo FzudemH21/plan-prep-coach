@@ -9,7 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, ArrowRight, Settings, SplitSquareHorizontal, Columns, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Settings, SplitSquareHorizontal, Columns, MessageSquare, ChevronLeft, ChevronRight, GripVertical as GripVerticalIcon } from 'lucide-react';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import MesocycleCalendar from '@/components/mesocycle/MesocycleCalendar';
@@ -109,6 +110,12 @@ export default function MesocyclePage() {
   // Step 3 mesocycle carousel navigation state
   const [mesocycleViewOffset, setMesocycleViewOffset] = useState(0);
   const MAX_VISIBLE_MESOCYCLES = 4;
+  
+  // Method category order state for Step 3/4 drag reordering
+  const [methodCategoryOrder, setMethodCategoryOrder] = useState<string[]>(() => {
+    const saved = localStorage.getItem('methodCategoryOrder');
+    return saved ? JSON.parse(saved) : [];
+  });
   
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
@@ -1048,6 +1055,49 @@ export default function MesocyclePage() {
     return grouped;
   }, [getMethodsForAllocatedSubGoals, manuallyAddedMethods]);
 
+  // Ordered grouped methods based on user-defined category order
+  const orderedGroupedMethods = useMemo(() => {
+    const grouped = groupMethodsByToolboxCategory;
+    const categoryKeys = Object.keys(grouped);
+    
+    if (methodCategoryOrder.length > 0) {
+      const ordered: Record<string, Record<string, string[]>> = {};
+      
+      // First add categories in the saved order
+      methodCategoryOrder.forEach(cat => {
+        if (grouped[cat]) ordered[cat] = grouped[cat];
+      });
+      
+      // Then add any new categories that weren't in the saved order
+      categoryKeys.forEach(cat => {
+        if (!ordered[cat]) ordered[cat] = grouped[cat];
+      });
+      
+      return ordered;
+    }
+    
+    return grouped;
+  }, [groupMethodsByToolboxCategory, methodCategoryOrder]);
+
+  // Save method category order to localStorage
+  useEffect(() => {
+    if (methodCategoryOrder.length > 0) {
+      localStorage.setItem('methodCategoryOrder', JSON.stringify(methodCategoryOrder));
+    }
+  }, [methodCategoryOrder]);
+
+  // Handle category reorder from drag-and-drop
+  const handleCategoryReorder = useCallback((result: DropResult) => {
+    if (!result.destination) return;
+    
+    const categories = Object.keys(orderedGroupedMethods);
+    const newCategories = Array.from(categories);
+    const [reorderedItem] = newCategories.splice(result.source.index, 1);
+    newCategories.splice(result.destination.index, 0, reorderedItem);
+    
+    setMethodCategoryOrder(newCategories);
+  }, [orderedGroupedMethods]);
+
   // Helper function to get methods with loading recommendations for a specific sub-goal
   const getMethodsWithRecommendationsForSubGoal = useMemo(() => {
     return (subGoal: string) => {
@@ -1313,6 +1363,7 @@ export default function MesocyclePage() {
 
   const renderMethodAllocation = () => {
     const allMethods = getMethodsForAllocatedSubGoals;
+    // Use orderedGroupedMethods to respect drag-and-drop order
     const groupedMethods = groupMethodsByToolboxCategory;
     
     // Check if all methods are allocated to all mesocycles
@@ -1490,95 +1541,120 @@ export default function MesocyclePage() {
                 })}
               </div>
 
-              {/* Method Rows grouped by category */}
-              <div className="max-h-[500px] overflow-y-auto">
-                {Object.entries(groupedMethods).map(([category, subCategories]) => (
-                  <div key={category}>
-                    {/* Category Header */}
+              {/* Method Rows grouped by category - with drag-and-drop reordering */}
+              <DragDropContext onDragEnd={handleCategoryReorder}>
+                <Droppable droppableId="method-categories">
+                  {(provided) => (
                     <div 
-                      className="grid bg-muted/30 border-b border-t"
-                      style={{
-                        gridTemplateColumns: `300px repeat(${visibleMesocycles.length}, minmax(180px, 1fr))`
-                      }}
+                      className="max-h-[500px] overflow-y-auto"
+                      {...provided.droppableProps}
+                      ref={provided.innerRef}
                     >
-                      <div className="px-3 py-2 sticky left-0 bg-muted/30 z-10">
-                        <span className="font-semibold text-sm text-primary">{category}</span>
-                      </div>
-                      {visibleMesocycles.map((meso) => (
-                        <div key={meso.id} className="border-r last:border-r-0" />
-                      ))}
-                    </div>
-                    
-                    {/* Methods (subcategories) in this category */}
-                    {Object.entries(subCategories).map(([subCategory, methods]) => 
-                      methods.map((method) => {
-                        const allocation = methodAllocations[method] || [];
-                        const allMesosAllocated = mesocycles.every(m => allocation.includes(m.id));
-                        
-                        return (
-                          <div 
-                            key={method} 
-                            className="grid border-b group hover:bg-muted/20 transition-colors"
-                            style={{
-                              gridTemplateColumns: `300px repeat(${visibleMesocycles.length}, minmax(180px, 1fr))`
-                            }}
-                          >
-                            <div className="p-3 border-r flex items-center gap-2 pl-6 sticky left-0 bg-background z-10 group-hover:bg-muted/20">
-                              <input
-                                type="checkbox"
-                                checked={allMesosAllocated}
-                                onChange={() => {
-                                  // Toggle all mesocycles for this method
-                                  if (allMesosAllocated) {
-                                    setMethodAllocations(prev => ({
-                                      ...prev,
-                                      [method]: []
-                                    }));
-                                  } else {
-                                    setMethodAllocations(prev => ({
-                                      ...prev,
-                                      [method]: mesocycles.map(m => m.id)
-                                    }));
-                                  }
+                      {Object.entries(orderedGroupedMethods).map(([category, subCategories], categoryIndex) => (
+                        <Draggable key={category} draggableId={category} index={categoryIndex}>
+                          {(provided, snapshot) => (
+                            <div 
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              className={snapshot.isDragging ? 'shadow-lg bg-background rounded' : ''}
+                            >
+                              {/* Category Header */}
+                              <div 
+                                className="grid bg-muted/30 border-b border-t"
+                                style={{
+                                  gridTemplateColumns: `300px repeat(${visibleMesocycles.length}, minmax(180px, 1fr))`
                                 }}
-                                className="h-4 w-4 rounded border-gray-300"
-                              />
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className="text-sm truncate cursor-help">{subCategory}</span>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="right" className="max-w-md">
-                                    <p>{method}</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </div>
-                            
-                            {visibleMesocycles.map((meso) => {
-                              const isAllocated = allocation.includes(meso.id);
-                              
-                              return (
-                                <div 
-                                  key={meso.id} 
-                                  className="p-3 flex items-center justify-center border-r last:border-r-0"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={isAllocated}
-                                    onChange={() => toggleMethodAllocation(method, meso.id)}
-                                    className="h-5 w-5 rounded border-gray-300 cursor-pointer"
-                                  />
+                              >
+                                <div className="px-3 py-2 sticky left-0 bg-muted/30 z-10 flex items-center gap-2">
+                                  <div
+                                    {...provided.dragHandleProps}
+                                    className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-muted rounded"
+                                  >
+                                    <GripVerticalIcon className="h-4 w-4 text-muted-foreground" />
+                                  </div>
+                                  <span className="font-semibold text-sm text-primary">{category}</span>
                                 </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                ))}
-              </div>
+                                {visibleMesocycles.map((meso) => (
+                                  <div key={meso.id} className="border-r last:border-r-0" />
+                                ))}
+                              </div>
+                              
+                              {/* Methods (subcategories) in this category */}
+                              {Object.entries(subCategories).map(([subCategory, methods]) => 
+                                methods.map((method) => {
+                                  const allocation = methodAllocations[method] || [];
+                                  const allMesosAllocated = mesocycles.every(m => allocation.includes(m.id));
+                                  
+                                  return (
+                                    <div 
+                                      key={method} 
+                                      className="grid border-b group hover:bg-muted/20 transition-colors"
+                                      style={{
+                                        gridTemplateColumns: `300px repeat(${visibleMesocycles.length}, minmax(180px, 1fr))`
+                                      }}
+                                    >
+                                      <div className="p-3 border-r flex items-center gap-2 pl-10 sticky left-0 bg-background z-10 group-hover:bg-muted/20">
+                                        <input
+                                          type="checkbox"
+                                          checked={allMesosAllocated}
+                                          onChange={() => {
+                                            // Toggle all mesocycles for this method
+                                            if (allMesosAllocated) {
+                                              setMethodAllocations(prev => ({
+                                                ...prev,
+                                                [method]: []
+                                              }));
+                                            } else {
+                                              setMethodAllocations(prev => ({
+                                                ...prev,
+                                                [method]: mesocycles.map(m => m.id)
+                                              }));
+                                            }
+                                          }}
+                                          className="h-4 w-4 rounded border-gray-300"
+                                        />
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <span className="text-sm truncate cursor-help">{subCategory}</span>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="right" className="max-w-md">
+                                              <p>{method}</p>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      </div>
+                                      
+                                      {visibleMesocycles.map((meso) => {
+                                        const isAllocated = allocation.includes(meso.id);
+                                        
+                                        return (
+                                          <div 
+                                            key={meso.id} 
+                                            className="p-3 flex items-center justify-center border-r last:border-r-0"
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={isAllocated}
+                                              onChange={() => toggleMethodAllocation(method, meso.id)}
+                                              className="h-5 w-5 rounded border-gray-300 cursor-pointer"
+                                            />
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </DragDropContext>
               </div>
             </div>
           )}
@@ -2428,8 +2504,9 @@ export default function MesocyclePage() {
     });
     
     // Filter grouped methods to only include allocated methods (nested structure: category -> subcategory -> methods)
+    // Use orderedGroupedMethods to respect the order set in Step 3
     const groupedMethods: Record<string, Record<string, string[]>> = {};
-    Object.entries(groupMethodsByToolboxCategory).forEach(([category, subCategories]) => {
+    Object.entries(orderedGroupedMethods).forEach(([category, subCategories]) => {
       const filteredSubCategories: Record<string, string[]> = {};
       Object.entries(subCategories).forEach(([subCategory, methods]) => {
         const allocatedMethods = methods.filter(method => {
