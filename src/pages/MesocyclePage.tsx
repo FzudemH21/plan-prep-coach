@@ -111,9 +111,9 @@ export default function MesocyclePage() {
   const [mesocycleViewOffset, setMesocycleViewOffset] = useState(0);
   const MAX_VISIBLE_MESOCYCLES = 4;
   
-  // Step 4 (Method Periodization) paired mesocycle navigation state
-  const [visibleMesocyclePairIndex, setVisibleMesocyclePairIndex] = useState(0);
-  const [showAllMesocycles, setShowAllMesocycles] = useState(false);
+  // Step 4 (Method Periodization) mesocycle navigation state
+  const [viewMode, setViewMode] = useState<'single' | 'pair' | 'all'>('pair');
+  const [selectedMesocycleIndex, setSelectedMesocycleIndex] = useState(0);
   
   // Method category order state for Step 3/4 drag reordering
   const [methodCategoryOrder, setMethodCategoryOrder] = useState<string[]>(() => {
@@ -1996,17 +1996,23 @@ export default function MesocyclePage() {
     return maxFrequency > 1 ? maxFrequency * 120 : 180;
   }, [mesocycles, getMethodsForAllocatedSubGoals, isMethodAllocatedToMesocycle, getCellFrequency, isMicrocycleSplit]);
 
-  // Get mesocycles for paired view (overlapping: 1&2, 2&3, 3&4, etc.)
+  // Get visible mesocycles based on view mode (single, pair, all)
   const getVisibleMesocyclesForPeriodization = useCallback(() => {
-    if (showAllMesocycles) return mesocycles;
-    if (mesocycles.length <= 2) return mesocycles;
+    if (viewMode === 'all') return mesocycles;
+    if (mesocycles.length === 0) return [];
     
-    const startIndex = visibleMesocyclePairIndex;
-    const endIndex = Math.min(startIndex + 2, mesocycles.length);
-    return mesocycles.slice(startIndex, endIndex);
-  }, [mesocycles, showAllMesocycles, visibleMesocyclePairIndex]);
+    if (viewMode === 'single') {
+      const safeIndex = Math.min(selectedMesocycleIndex, mesocycles.length - 1);
+      return [mesocycles[safeIndex]];
+    }
+    
+    // Pair mode: selected + next (if exists)
+    const safeIndex = Math.min(selectedMesocycleIndex, mesocycles.length - 1);
+    const endIndex = Math.min(safeIndex + 2, mesocycles.length);
+    return mesocycles.slice(safeIndex, endIndex);
+  }, [mesocycles, viewMode, selectedMesocycleIndex]);
 
-  const maxPairIndex = Math.max(0, mesocycles.length - 2);
+  const maxIndex = mesocycles.length - 1;
 
   // Helper function to generate dynamic header grid template using global widths
   const generateHeaderGridTemplate = useCallback((visibleMesos?: ExtendedMesocycle[]) => {
@@ -2698,13 +2704,13 @@ export default function MesocyclePage() {
                <h3 className="text-lg font-semibold">Method Periodization</h3>
                
                {/* Mesocycle Navigation Bar */}
-               {mesocycles.length > 2 && (
-                 <div className="flex items-center gap-4 mb-2">
+               {mesocycles.length > 1 && (
+                 <div className="flex items-center gap-3 mb-2">
                    <Button
                      variant="outline"
                      size="sm"
-                     onClick={() => setVisibleMesocyclePairIndex(Math.max(0, visibleMesocyclePairIndex - 1))}
-                     disabled={showAllMesocycles || visibleMesocyclePairIndex === 0}
+                     onClick={() => setSelectedMesocycleIndex(Math.max(0, selectedMesocycleIndex - 1))}
+                     disabled={viewMode === 'all' || selectedMesocycleIndex === 0}
                      className="shrink-0"
                    >
                      <ChevronLeft className="mr-1 h-4 w-4" />
@@ -2713,8 +2719,9 @@ export default function MesocyclePage() {
                    
                    <div className="flex-1 flex items-center justify-center gap-2 overflow-x-auto py-1">
                      {mesocycles.map((meso, index) => {
-                       const isVisible = showAllMesocycles || 
-                         (index >= visibleMesocyclePairIndex && index < visibleMesocyclePairIndex + 2);
+                       const isVisible = viewMode === 'all' || 
+                         (viewMode === 'single' && index === selectedMesocycleIndex) ||
+                         (viewMode === 'pair' && index >= selectedMesocycleIndex && index < selectedMesocycleIndex + 2);
                        
                        return (
                          <Button
@@ -2722,8 +2729,8 @@ export default function MesocyclePage() {
                            variant={isVisible ? "default" : "outline"}
                            size="sm"
                            onClick={() => {
-                             if (!showAllMesocycles) {
-                               setVisibleMesocyclePairIndex(Math.min(index, maxPairIndex));
+                             if (viewMode !== 'all') {
+                               setSelectedMesocycleIndex(index);
                              }
                            }}
                            className={cn(
@@ -2737,26 +2744,43 @@ export default function MesocyclePage() {
                      })}
                    </div>
                    
-                   <div className="flex items-center gap-2 shrink-0">
+                   <div className="flex items-center gap-1 shrink-0 border rounded-md p-0.5">
                      <Button
-                       variant={showAllMesocycles ? "default" : "outline"}
+                       variant={viewMode === 'single' ? "default" : "ghost"}
                        size="sm"
-                       onClick={() => setShowAllMesocycles(!showAllMesocycles)}
+                       onClick={() => setViewMode('single')}
+                       className="h-7 px-2"
                      >
-                       {showAllMesocycles ? "Pair View" : "View All"}
+                       Single
                      </Button>
-                     
                      <Button
-                       variant="outline"
+                       variant={viewMode === 'pair' ? "default" : "ghost"}
                        size="sm"
-                       onClick={() => setVisibleMesocyclePairIndex(Math.min(maxPairIndex, visibleMesocyclePairIndex + 1))}
-                       disabled={showAllMesocycles || visibleMesocyclePairIndex >= maxPairIndex}
-                       className="shrink-0"
+                       onClick={() => setViewMode('pair')}
+                       className="h-7 px-2"
                      >
-                       Next
-                       <ChevronRight className="ml-1 h-4 w-4" />
+                       Pair
+                     </Button>
+                     <Button
+                       variant={viewMode === 'all' ? "default" : "ghost"}
+                       size="sm"
+                       onClick={() => setViewMode('all')}
+                       className="h-7 px-2"
+                     >
+                       All
                      </Button>
                    </div>
+                   
+                   <Button
+                     variant="outline"
+                     size="sm"
+                     onClick={() => setSelectedMesocycleIndex(Math.min(maxIndex, selectedMesocycleIndex + 1))}
+                     disabled={viewMode === 'all' || selectedMesocycleIndex >= maxIndex}
+                     className="shrink-0"
+                   >
+                     Next
+                     <ChevronRight className="ml-1 h-4 w-4" />
+                   </Button>
                  </div>
                )}
                
