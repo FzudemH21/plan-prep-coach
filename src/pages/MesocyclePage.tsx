@@ -38,7 +38,8 @@ import { CrossMesocycleCopyDialog } from "@/components/ui/cross-mesocycle-copy-d
 import { CrossMesocycleMicrocycleCopyDialog } from "@/components/ui/cross-mesocycle-microcycle-copy-dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy, AlertCircle } from "lucide-react";
+import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy, AlertCircle, FolderOpen } from "lucide-react";
+import { ResourcesDialog } from "@/components/mesocycle/ResourcesDialog";
 import { format, addWeeks, differenceInWeeks, addDays } from "date-fns";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 import { IntensityLevel } from "@/types/training";
@@ -123,6 +124,39 @@ export default function MesocyclePage() {
   // Collapse/expand state for Step 4 (Method Periodization)
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [collapsedMethods, setCollapsedMethods] = useState<Set<string>>(new Set());
+  
+  // Resources state for Step 4
+  const [isResourcesDialogOpen, setIsResourcesDialogOpen] = useState(false);
+  const [resources, setResources] = useState<Array<{
+    id: string;
+    name: string;
+    type: string;
+    size: number;
+    uploadedAt: Date;
+    url: string;
+  }>>([]);
+  
+  const handleAddResources = useCallback((files: File[]) => {
+    const newResources = files.map(file => ({
+      id: crypto.randomUUID(),
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      uploadedAt: new Date(),
+      url: URL.createObjectURL(file),
+    }));
+    setResources(prev => [...prev, ...newResources]);
+  }, []);
+  
+  const handleDeleteResource = useCallback((id: string) => {
+    setResources(prev => {
+      const resource = prev.find(r => r.id === id);
+      if (resource) {
+        URL.revokeObjectURL(resource.url);
+      }
+      return prev.filter(r => r.id !== id);
+    });
+  }, []);
   
   const toggleCategoryCollapse = (category: string) => {
     setCollapsedCategories(prev => {
@@ -2710,15 +2744,31 @@ export default function MesocyclePage() {
                 Configure loading parameters for each training method across all mesocycles and microcycles.
               </CardDescription>
             </div>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setIsClearParametersDialogOpen(true)}
-              className="shrink-0"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Clear All Parameters
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsResourcesDialogOpen(true)}
+                className="shrink-0"
+              >
+                <FolderOpen className="h-4 w-4 mr-2" />
+                Resources
+                {resources.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5">
+                    {resources.length}
+                  </Badge>
+                )}
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setIsClearParametersDialogOpen(true)}
+                className="shrink-0"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Clear All Parameters
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -4456,6 +4506,15 @@ export default function MesocyclePage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        
+        {/* Resources Dialog for Step 4 */}
+        <ResourcesDialog
+          open={isResourcesDialogOpen}
+          onOpenChange={setIsResourcesDialogOpen}
+          resources={resources}
+          onAddResources={handleAddResources}
+          onDeleteResource={handleDeleteResource}
+        />
     </div>
   );
 };
