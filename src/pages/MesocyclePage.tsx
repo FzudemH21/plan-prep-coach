@@ -2862,7 +2862,7 @@ export default function MesocyclePage() {
                )}
                
                  <div className="w-full border rounded-lg overflow-auto" style={{height: 'calc(100vh - 340px)', scrollbarWidth: 'thin'}}>
-                   <div className="min-w-max relative">
+                   <div className="w-fit relative">
                      {/* Multi-Level Sticky Headers */}
                      <div className="sticky top-0 z-[90] bg-background border-b space-y-1 shadow-sm">
                          {/* Level 1: Mesocycle Group Headers */}
@@ -3040,10 +3040,9 @@ export default function MesocyclePage() {
                                     return (
                                       <div key={fullMethodName} className={`border rounded-lg bg-card shadow-sm ${isIndented ? 'border-l-4 border-l-primary/50' : ''}`}>
                                            {/* Method/Category name header */}
-                                           <div className="grid gap-1 w-full relative" style={{ 
-                                               gridTemplateColumns: calculateGridTemplate(baseMethodName, getVisibleMesocyclesForPeriodization()),
-                                               minWidth: '100%'
-                                             }}>
+                                           <div className="grid gap-1 w-fit relative" style={{ 
+                                                gridTemplateColumns: calculateGridTemplate(baseMethodName, getVisibleMesocyclesForPeriodization())
+                                              }}>
                                               <div className="sticky left-0 z-50 p-3 border-r bg-background rounded-tl shadow-md">
                                                 <div className="flex items-center justify-between group pr-16 relative">
                                                    <div className="flex items-center gap-2 flex-wrap">
@@ -3182,9 +3181,9 @@ export default function MesocyclePage() {
                                        {parameters.length > 0 && !collapsedMethods.has(fullMethodName) && !(categoryName && collapsedMethods.has(method)) && (
                                          <div className="divide-y">
                                              {parameters.map((param) => (
-                                                  <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
-                                                    gridTemplateColumns: calculateGridTemplate(baseMethodName, getVisibleMesocyclesForPeriodization())
-                                                  }}>
+                                                  <div key={param.name} className="grid gap-1 w-fit hover:bg-muted/5" style={{ 
+                                                     gridTemplateColumns: calculateGridTemplate(baseMethodName, getVisibleMesocyclesForPeriodization())
+                                                   }}>
                                                  <div className="sticky left-0 z-50 p-2 text-xs text-muted-foreground bg-background border-r flex items-center justify-between shadow-md">
                                                    <div className="flex items-center">
                                                      <span className="ml-4 font-medium">{param.name}</span>
