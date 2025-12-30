@@ -666,12 +666,14 @@ export default function MesocyclePage() {
         )}
         <div className="space-y-2">
           <Label htmlFor="numMesocycles">Number of Mesocycles</Label>
-          <Input
-            id="numMesocycles"
-            type="number"
-            min="1"
-            max="12"
-            value={mesocycles.length === 0 ? '' : mesocycles.length}
+            <Input
+              id="numMesocycles"
+              type="number"
+              min="1"
+              max="12"
+              placeholder=""
+              autoComplete="off"
+              value={mesocycles.length === 0 ? '' : mesocycles.length}
             onChange={(e) => {
               const inputValue = e.target.value;
               
@@ -719,7 +721,6 @@ export default function MesocyclePage() {
               });
               setMesocycles(newMesocycles);
             }}
-            placeholder="3"
           />
         </div>
 
