@@ -91,7 +91,7 @@ export function SearchableDropdown({
           </span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-full p-0 bg-background border shadow-md z-[250]" style={{ width: "var(--radix-popover-trigger-width)" }}>
+      <PopoverContent className="p-0 bg-background border shadow-md z-[250]" style={{ minWidth: "var(--radix-popover-trigger-width)", width: "auto", maxWidth: "300px" }} align="start">
         <Command>
           <div className="flex items-center border-b px-3">
             <CommandInput
