@@ -2988,10 +2988,15 @@ export default function MesocyclePage() {
                                     return (
                                       <div key={fullMethodName} className={`border rounded-lg bg-card shadow-sm ${isIndented ? 'border-l-4 border-l-primary/50' : ''}`}>
                                            {/* Method/Category name header */}
-                                           <div className="grid gap-0 bg-muted/20 w-full" style={{ 
+                                           <div className="grid gap-1 w-full relative" style={{ 
                                                gridTemplateColumns: calculateGridTemplate(baseMethodName, getVisibleMesocyclesForPeriodization()),
                                                minWidth: '100%'
                                              }}>
+                                              {/* Background overlay for gray strip extending to the end */}
+                                              <div 
+                                                className="absolute inset-y-0 right-0 bg-muted/20 pointer-events-none rounded-tr" 
+                                                style={{ left: '304px' }} 
+                                              />
                                               <div className="sticky left-0 z-50 p-3 border-r bg-background rounded-tl shadow-md">
                                                 <div className="flex items-center justify-between group pr-16 relative">
                                                    <div className="flex items-center gap-2 flex-wrap">
