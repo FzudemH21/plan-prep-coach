@@ -2019,6 +2019,24 @@ export default function MesocyclePage() {
     return fullIndex - prevFullIndex > 1;
   }, [mesocycles, getVisibleMesocyclesForPeriodization]);
 
+  // Check if this mesocycle is followed by a gap (next visible mesocycle is not adjacent)
+  const isBeforeGap = useCallback((mesoId: string) => {
+    const visibleMesos = getVisibleMesocyclesForPeriodization();
+    const currentVisibleIndex = visibleMesos.findIndex(m => m.id === mesoId);
+    
+    // If this is the last visible mesocycle, no gap after it
+    if (currentVisibleIndex === -1 || currentVisibleIndex === visibleMesos.length - 1) {
+      return false;
+    }
+    
+    const nextVisibleMeso = visibleMesos[currentVisibleIndex + 1];
+    const currentFullIndex = mesocycles.findIndex(m => m.id === mesoId);
+    const nextFullIndex = mesocycles.findIndex(m => m.id === nextVisibleMeso.id);
+    
+    // If there's more than 1 position difference, there's a gap after this mesocycle
+    return nextFullIndex - currentFullIndex > 1;
+  }, [mesocycles, getVisibleMesocyclesForPeriodization]);
+
   // Toggle mesocycle visibility
   const toggleMesocycleVisibility = useCallback((mesoId: string) => {
     setVisibleMesocycleIds(prev => {
@@ -2919,9 +2937,11 @@ export default function MesocyclePage() {
                                  )}
                                  {(meso.microcycles || []).map((microcycle, microcycleIndex) => {
                                    const intensity = microcycle.intensity || meso.intensity;
+                                   const isLastMicrocycle = microcycleIndex === (meso.microcycles?.length || 1) - 1;
+                                   const needsRightBorder = isLastMicrocycle && isBeforeGap(meso.id);
                                    
                                    return (
-                                     <div key={`${meso.id}-micro-${microcycleIndex}`} className={`text-center border rounded-b ${intensityBg(intensity)}`}>
+                                     <div key={`${meso.id}-micro-${microcycleIndex}`} className={`text-center border rounded-b ${intensityBg(intensity)} ${needsRightBorder ? 'border-r border-muted-foreground/30' : ''}`}>
                                        <div className="text-xs p-1 font-medium">
                                          {microcycle.name || `Mic${microcycleIndex + 1}`}
                                        </div>
@@ -3082,11 +3102,13 @@ export default function MesocyclePage() {
                                                 const isSplit = isMicrocycleSplit(meso.id, microcycleIndex);
                                                 const sessionsCount = getCellSessions(meso.id, microcycleIndex, fullMethodName);
                                                 const hasFrequencyParam = hasValidFrequencyParameter(baseMethodName);
+                                                const isLastMicrocycle = microcycleIndex === (meso.microcycles?.length || 1) - 1;
+                                                const needsRightBorder = isLastMicrocycle && isBeforeGap(meso.id);
                                                 
                                                 return (
                                                   <div 
                                                     key={`${meso.id}-${microcycleIndex}`} 
-                                                    className={`relative z-10 p-2 text-xs text-center font-medium border-l ${intensityBg(microcycle.intensity)} ${!isAllocated ? 'opacity-50' : ''} ${!hasFrequencyParam ? 'border-2 border-destructive/50' : ''} flex flex-col items-center gap-1`}
+                                                    className={`relative z-10 p-2 text-xs text-center font-medium border-l ${intensityBg(microcycle.intensity)} ${!isAllocated ? 'opacity-50' : ''} ${!hasFrequencyParam ? 'border-2 border-destructive/50' : ''} ${needsRightBorder ? 'border-r border-muted-foreground/30' : ''} flex flex-col items-center gap-1`}
                                                  >
                                                    {/* Show warning icon if no frequency parameter */}
                                                    {!hasFrequencyParam && (
@@ -3165,10 +3187,12 @@ export default function MesocyclePage() {
                                                          const isSplit = isMicrocycleSplit(meso.id, microcycleIndex);
                                                          const sessionsCount = getCellSessions(meso.id, microcycleIndex, fullMethodName);
                                                         const isFrequency = isFrequencyParameter(param.name, fullMethodName);
+                                                        const isLastMicrocycle = microcycleIndex === (meso.microcycles?.length || 1) - 1;
+                                                        const needsRightBorder = isLastMicrocycle && isBeforeGap(meso.id);
                                                       
                                                       if (isSplit && !isFrequency) {
                                                        return (
-                                                         <div key={`${meso.id}-${microcycleIndex}`} className="flex relative z-10">
+                                                         <div key={`${meso.id}-${microcycleIndex}`} className={`flex relative z-10 ${needsRightBorder ? 'border-r border-muted-foreground/30' : ''}`}>
                                                            {Array.from({ length: sessionsCount }, (_, sessionIndex) => {
                                                              const currentValue = getParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, sessionIndex);
                                                              const cellId = `${meso.id}::${microcycleIndex}::${fullMethodName}::${sessionIndex}::${param.name}`;
@@ -3242,12 +3266,12 @@ export default function MesocyclePage() {
                                                        const isInSelection = dragState.selectedCells.has(cellId);
                                                        
                                                           return (
-                                                             <div 
-                                                              key={`${meso.id}-${microcycleIndex}-${param.name}`} 
-                                                               className={`relative z-10 p-1 border-l ${!isAllocated ? 'bg-muted/20' : ''}`}
-                                                              data-drag-cell={cellId}
-                                                              data-allocated={isAllocated ? 'true' : 'false'}
-                                                            >
+                                                              <div 
+                                                               key={`${meso.id}-${microcycleIndex}-${param.name}`} 
+                                                                className={`relative z-10 p-1 border-l ${!isAllocated ? 'bg-muted/20' : ''} ${needsRightBorder ? 'border-r border-muted-foreground/30' : ''}`}
+                                                               data-drag-cell={cellId}
+                                                               data-allocated={isAllocated ? 'true' : 'false'}
+                                                             >
                                                             {isAllocated ? (
                                                               <ParameterContextMenu
                                                                 cellId={cellId}
