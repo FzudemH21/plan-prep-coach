@@ -205,85 +205,9 @@ export const ResourcesDialog: React.FC<ResourcesDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Pending Files Section */}
-        {pendingFiles.length > 0 && (
-          <div className="border rounded-lg p-4 bg-muted/30">
-            <h4 className="text-sm font-medium mb-3">Name Your Files</h4>
-            <div className="space-y-3">
-              {pendingFiles.map((pf) => (
-                <div key={pf.id} className="flex items-center gap-3">
-                  {getFileIcon(pf.file.type)}
-                  <div className="flex-1 min-w-0">
-                    <Input
-                      value={pf.displayName}
-                      onChange={(e) => handlePendingNameChange(pf.id, e.target.value)}
-                      placeholder="Enter display name"
-                      className="h-8"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {pf.file.name} • {formatFileSize(pf.file.size)}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 shrink-0"
-                    onClick={() => handleRemovePending(pf.id)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-end gap-2 mt-4">
-              <Button variant="outline" size="sm" onClick={handleCancelPending}>
-                Cancel
-              </Button>
-              <Button size="sm" onClick={handleConfirmAdd}>
-                Add {pendingFiles.length} File{pendingFiles.length > 1 ? 's' : ''}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Drag and Drop Zone - only show when no pending files */}
-        {pendingFiles.length === 0 && (
-          <div
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            className={cn(
-              "border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer",
-              isDragging
-                ? "border-primary bg-primary/5"
-                : "border-muted-foreground/25 hover:border-muted-foreground/50"
-            )}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              onChange={handleFileSelect}
-              className="hidden"
-              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.svg"
-            />
-            <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-            <p className="text-sm font-medium">
-              {isDragging ? "Drop files here" : "Drag and drop files here"}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              or click to browse
-            </p>
-            <p className="text-xs text-muted-foreground mt-3">
-              Supported: PDF, Word, Excel, PowerPoint, Images
-            </p>
-          </div>
-        )}
-
-        {/* File List */}
+        {/* File List - Shown first for quick access */}
         {resources.length > 0 && (
-          <div className="mt-4">
+          <div>
             <h4 className="text-sm font-medium mb-2">Uploaded Files ({resources.length})</h4>
             <ScrollArea className="h-[200px] rounded-md border">
               <div className="p-2 space-y-2">
@@ -380,6 +304,82 @@ export const ResourcesDialog: React.FC<ResourcesDialogProps> = ({
                 ))}
               </div>
             </ScrollArea>
+          </div>
+        )}
+
+        {/* Drag and Drop Zone */}
+        {pendingFiles.length === 0 && (
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={cn(
+              "border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer",
+              isDragging
+                ? "border-primary bg-primary/5"
+                : "border-muted-foreground/25 hover:border-muted-foreground/50"
+            )}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileSelect}
+              className="hidden"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.svg"
+            />
+            <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+            <p className="text-sm font-medium">
+              {isDragging ? "Drop files here" : "Drag and drop files here"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              or click to browse
+            </p>
+            <p className="text-xs text-muted-foreground mt-3">
+              Supported: PDF, Word, Excel, PowerPoint, Images
+            </p>
+          </div>
+        )}
+
+        {/* Pending Files Section - appears after selecting files */}
+        {pendingFiles.length > 0 && (
+          <div className="border rounded-lg p-4 bg-muted/30">
+            <h4 className="text-sm font-medium mb-3">Name Your Files</h4>
+            <div className="space-y-3">
+              {pendingFiles.map((pf) => (
+                <div key={pf.id} className="flex items-center gap-3">
+                  {getFileIcon(pf.file.type)}
+                  <div className="flex-1 min-w-0">
+                    <Input
+                      value={pf.displayName}
+                      onChange={(e) => handlePendingNameChange(pf.id, e.target.value)}
+                      placeholder="Enter display name"
+                      className="h-8"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {pf.file.name} • {formatFileSize(pf.file.size)}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    onClick={() => handleRemovePending(pf.id)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" size="sm" onClick={handleCancelPending}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleConfirmAdd}>
+                Add {pendingFiles.length} File{pendingFiles.length > 1 ? 's' : ''}
+              </Button>
+            </div>
           </div>
         )}
 
