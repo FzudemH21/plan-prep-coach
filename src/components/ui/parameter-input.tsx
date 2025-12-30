@@ -126,7 +126,7 @@ export const QuantitativeParameterInput = React.memo(function QuantitativeParame
       />
       {hasMeaningfulUnits && (
         <Select value={unit} onValueChange={onUnitChange}>
-          <SelectTrigger className="w-16 min-w-0 h-8 text-xs">
+          <SelectTrigger className="w-14 min-w-0 h-8 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="z-50 bg-background border">

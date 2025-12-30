@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Check, ChevronDown } from "lucide-react";
+import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SearchableDropdownProps {
@@ -81,7 +81,7 @@ export function SearchableDropdown({
           aria-expanded={open}
           className={cn("w-full justify-between text-left font-normal", className)}
         >
-          <span className="truncate">
+          <span className="truncate flex-1">
             {multiple 
               ? Array.isArray(value) && value.length > 0
                 ? `${value.length} selected`
@@ -89,7 +89,6 @@ export function SearchableDropdown({
               : value || placeholder
             }
           </span>
-          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-full p-0 bg-background border shadow-md z-[250]" style={{ width: "var(--radix-popover-trigger-width)" }}>
