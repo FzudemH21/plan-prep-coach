@@ -117,6 +117,34 @@ export default function MesocyclePage() {
     return saved ? JSON.parse(saved) : [];
   });
   
+  // Collapse/expand state for Step 4 (Method Periodization)
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const [collapsedMethods, setCollapsedMethods] = useState<Set<string>>(new Set());
+  
+  const toggleCategoryCollapse = (category: string) => {
+    setCollapsedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+      return next;
+    });
+  };
+  
+  const toggleMethodCollapse = (methodName: string) => {
+    setCollapsedMethods(prev => {
+      const next = new Set(prev);
+      if (next.has(methodName)) {
+        next.delete(methodName);
+      } else {
+        next.add(methodName);
+      }
+      return next;
+    });
+  };
+  
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
   const { dragState, startDrag, endDrag, addToSelection, clearSelection, fillCells } = useDragFill();
@@ -2751,11 +2779,20 @@ export default function MesocyclePage() {
                           <div key={category} className="space-y-4">
                             {/* Category Header - sticky left column */}
                             <div 
-                              className="grid gap-0 border-b"
+                              className="grid gap-0 border-b cursor-pointer"
                               style={{ gridTemplateColumns: generateHeaderGridTemplate() }}
+                              onClick={() => toggleCategoryCollapse(category)}
                             >
                               <div className="sticky left-0 z-[80] p-3 bg-muted border-r overflow-hidden shadow-md">
-                                <h4 className="text-lg font-semibold text-primary">{category}</h4>
+                                <div className="flex items-center gap-2">
+                                  <ChevronDown 
+                                    className={cn(
+                                      "h-4 w-4 transition-transform text-primary",
+                                      collapsedCategories.has(category) && "-rotate-90"
+                                    )} 
+                                  />
+                                  <h4 className="text-lg font-semibold text-primary">{category}</h4>
+                                </div>
                               </div>
                               {/* Single filler element spanning all microcycle columns - no moving borders */}
                               <div 
@@ -2765,7 +2802,7 @@ export default function MesocyclePage() {
                             </div>
                             
                             {/* Sub-categories and Methods */}
-                            {Object.entries(subCategories).map(([subCategory, methods]) => (
+                            {!collapsedCategories.has(category) && Object.entries(subCategories).map(([subCategory, methods]) => (
                               <div key={subCategory} className="space-y-2">
 
                                 {/* Methods in this sub-category */}
@@ -2786,7 +2823,7 @@ export default function MesocyclePage() {
                                     const isIndented = categoryName !== null;
                                     
                                     return (
-                                       <div key={fullMethodName} className={`border rounded-lg bg-card shadow-sm ${isIndented ? 'ml-4 border-l-4 border-primary/30' : ''}`}>
+                                      <div key={fullMethodName} className={`border rounded-lg bg-card shadow-sm ${isIndented ? 'ml-4 border-l-4 border-primary/30' : ''}`}>
                                            {/* Method/Category name header */}
                                            <div className="grid gap-1 bg-muted/20" style={{ 
                                               gridTemplateColumns: calculateGridTemplate(baseMethodName)
@@ -2794,6 +2831,17 @@ export default function MesocyclePage() {
                                               <div className="sticky left-0 z-50 p-3 border-r bg-background rounded-tl shadow-md">
                                                 <div className="flex items-center justify-between group pr-16 relative">
                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                    <button 
+                                                      onClick={(e) => { e.stopPropagation(); toggleMethodCollapse(fullMethodName); }}
+                                                      className="p-0.5 hover:bg-muted-foreground/20 rounded"
+                                                    >
+                                                      <ChevronDown 
+                                                        className={cn(
+                                                          "h-4 w-4 transition-transform text-muted-foreground",
+                                                          collapsedMethods.has(fullMethodName) && "-rotate-90"
+                                                        )} 
+                                                      />
+                                                    </button>
                                                     {categoryName && <span className="text-xs text-muted-foreground">↳</span>}
                                     <div className="line-clamp-3 text-md font-medium text-foreground" title={fullMethodName}>
                                       {subCategory}
@@ -2898,7 +2946,7 @@ export default function MesocyclePage() {
                                         </div>
                                       
                                        {/* Parameter sub-rows */}
-                                       {parameters.length > 0 && (
+                                       {parameters.length > 0 && !collapsedMethods.has(fullMethodName) && (
                                          <div className="divide-y">
                                              {parameters.map((param) => (
                                                   <div key={param.name} className="grid gap-1 hover:bg-muted/5" style={{ 
