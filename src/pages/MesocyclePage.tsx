@@ -2263,34 +2263,35 @@ export default function MesocyclePage() {
     });
   }, [mesocycles, getParameterValue, updateParameterValue]);
 
-  const handleRowFill = useCallback((methodName: string, parameterName: string, value: string | number, allMesocycles = false, fillEmptyOnly = false, sessionIndex: number = 0) => {
-    const targetMesocycles = mesocycles.filter(mesocycle => 
+  const handleRowFill = useCallback((
+    methodName: string, 
+    parameterName: string, 
+    value: string | number, 
+    unit?: string,
+    selectedMesocycleIds?: string[],
+    fillEmptyOnly: boolean = false,
+    sessionIndex: number = 0
+  ) => {
+    // Determine which mesocycles to fill
+    let targetMesocycles = mesocycles.filter(mesocycle => 
       isMethodAllocatedToMesocycle(methodName, mesocycle.id)
     );
+    
+    // If specific mesocycles selected, filter to only those
+    if (selectedMesocycleIds && selectedMesocycleIds.length > 0) {
+      targetMesocycles = targetMesocycles.filter(m => selectedMesocycleIds.includes(m.id));
+    }
 
-    if (!allMesocycles) {
-      // Fill only first mesocycle that has this method
-      const firstMesocycle = targetMesocycles[0];
-      if (firstMesocycle) {
-        for (let i = 0; i < (firstMesocycle.microcycles?.length || 0); i++) {
-          const currentValue = getParameterValue(firstMesocycle.id, i, methodName, parameterName, sessionIndex);
-          if (!fillEmptyOnly || !currentValue) {
-            updateParameterValue(firstMesocycle.id, i, methodName, parameterName, value, sessionIndex);
-          }
+    // Fill the selected mesocycles
+    targetMesocycles.forEach(mesocycle => {
+      for (let i = 0; i < (mesocycle.microcycles?.length || 0); i++) {
+        const currentValue = getParameterValue(mesocycle.id, i, methodName, parameterName, sessionIndex);
+        if (!fillEmptyOnly || !currentValue) {
+          updateParameterValue(mesocycle.id, i, methodName, parameterName, value, sessionIndex);
         }
       }
-    } else {
-      // Fill all mesocycles
-      targetMesocycles.forEach(mesocycle => {
-        for (let i = 0; i < (mesocycle.microcycles?.length || 0); i++) {
-          const currentValue = getParameterValue(mesocycle.id, i, methodName, parameterName, sessionIndex);
-          if (!fillEmptyOnly || !currentValue) {
-            updateParameterValue(mesocycle.id, i, methodName, parameterName, value, sessionIndex);
-          }
-        }
-      });
-    }
-  }, [mesocycles, getParameterValue, updateParameterValue]);
+    });
+  }, [mesocycles, getParameterValue, updateParameterValue, isMethodAllocatedToMesocycle]);
 
   // Global keyboard shortcuts for drag-fill UX
   useEffect(() => {
@@ -3204,15 +3205,21 @@ export default function MesocyclePage() {
                                                      )}
                                                    </div>
                                                    <ParameterFillControl
-                                                     methodName={fullMethodName}
-                                                     parameterName={param.name}
-                                                     parameterType={param.isQuantitative ? 'quantitative' : 'qualitative'}
-                                                     parameterOptions={param.options}
-                                                     onFillRow={(value, allMesocycles, fillEmptyOnly) => 
-                                                       handleRowFill(fullMethodName, param.name, value, allMesocycles, fillEmptyOnly, 0)
-                                                     }
-                                                     disabled={!mesocycles.some(meso => isMethodAllocatedToMesocycle(fullMethodName, meso.id))}
-                                                   />
+                                                      methodName={fullMethodName}
+                                                      parameterName={param.name}
+                                                      parameterType={param.isQuantitative ? 'quantitative' : 'qualitative'}
+                                                      parameterOptions={param.options}
+                                                      parameterUnits={param.isQuantitative ? param.options : undefined}
+                                                      mesocycles={mesocycles.map(m => ({
+                                                        id: m.id,
+                                                        name: m.name || `Mesocycle ${mesocycles.indexOf(m) + 1}`,
+                                                        isAllocated: isMethodAllocatedToMesocycle(fullMethodName, m.id)
+                                                      }))}
+                                                      onFillRow={(value, unit, selectedMesocycleIds, fillEmptyOnly) => 
+                                                        handleRowFill(fullMethodName, param.name, value, unit, selectedMesocycleIds, fillEmptyOnly ?? false, 0)
+                                                      }
+                                                      disabled={!mesocycles.some(meso => isMethodAllocatedToMesocycle(fullMethodName, meso.id))}
+                                                    />
                                                  </div>
                                                   {getVisibleMesocyclesForPeriodization().map((meso) => {
                                                     const hasGap = hasMesocycleGap(meso.id);
