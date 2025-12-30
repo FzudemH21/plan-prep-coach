@@ -2988,7 +2988,7 @@ export default function MesocyclePage() {
                                     return (
                                       <div key={fullMethodName} className={`border rounded-lg bg-card shadow-sm ${isIndented ? 'border-l-4 border-l-primary/50' : ''}`}>
                                            {/* Method/Category name header */}
-                                           <div className="grid gap-1 bg-muted/20 w-full" style={{ 
+                                           <div className="grid gap-0 bg-muted/20 w-full" style={{ 
                                                gridTemplateColumns: calculateGridTemplate(baseMethodName, getVisibleMesocyclesForPeriodization()),
                                                minWidth: '100%'
                                              }}>
