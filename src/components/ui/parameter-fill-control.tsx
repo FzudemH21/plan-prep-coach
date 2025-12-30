@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import { SearchableDropdown } from '@/components/ui/searchable-dropdown';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Copy, Settings2 } from 'lucide-react';
+import { Copy, Settings2, X } from 'lucide-react';
 
 export interface MesocycleOption {
   id: string;
@@ -105,6 +105,13 @@ export function ParameterFillControl({
     onFillRow(value, unit, Array.from(selectedMesocycleIds), fillEmptyOnly);
     setIsOpen(false);
     setFillValue('');
+  };
+
+  const handleClear = () => {
+    if (selectedMesocycleIds.size === 0) return;
+    // Pass empty string to clear values (unit remains as is)
+    onFillRow('', undefined, Array.from(selectedMesocycleIds), false);
+    setIsOpen(false);
   };
 
   if (disabled) {
@@ -224,17 +231,29 @@ export function ParameterFillControl({
 
           <Separator />
 
-          {/* Fill Button */}
-          <Button
-            variant="default"
-            size="sm"
-            onClick={() => handleFill(false)}
-            disabled={!canFill}
-            className="h-8 text-xs w-full"
-          >
-            <Copy className="h-3 w-3 mr-1" />
-            Fill Selected
-          </Button>
+          {/* Action Buttons */}
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClear}
+              disabled={selectedMesocycleIds.size === 0}
+              className="h-8 text-xs"
+            >
+              <X className="h-3 w-3 mr-1" />
+              Clear Selected
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => handleFill(false)}
+              disabled={!canFill}
+              className="h-8 text-xs"
+            >
+              <Copy className="h-3 w-3 mr-1" />
+              Fill Selected
+            </Button>
+          </div>
         </div>
       </PopoverContent>
     </Popover>
