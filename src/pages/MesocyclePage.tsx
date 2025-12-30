@@ -2062,27 +2062,35 @@ export default function MesocyclePage() {
   const generateHeaderGridTemplate = useCallback((visibleMesos?: ExtendedMesocycle[]) => {
     const mesosToUse = visibleMesos || mesocycles;
     const widths = ['300px']; // Fixed left column
-    mesosToUse.forEach((meso) => {
+    mesosToUse.forEach((meso, index) => {
+      // Add gap column if there's a gap before this mesocycle
+      if (hasMesocycleGap(meso.id)) {
+        widths.push('24px'); // Gap indicator column
+      }
       (meso.microcycles || []).forEach((_, microcycleIndex) => {
         const width = getGlobalMicrocycleWidth(meso.id, microcycleIndex);
         widths.push(`${width}px`);
       });
     });
     return widths.join(' ');
-  }, [mesocycles, getGlobalMicrocycleWidth]);
+  }, [mesocycles, getGlobalMicrocycleWidth, hasMesocycleGap]);
 
   // Helper function to calculate grid template for dynamic widths using global calculation
   const calculateGridTemplate = useCallback((methodName: string, visibleMesos?: ExtendedMesocycle[]) => {
     const mesosToUse = visibleMesos || mesocycles;
     const widths = ['300px']; // Fixed left column
     mesosToUse.forEach((meso) => {
+      // Add gap column if there's a gap before this mesocycle
+      if (hasMesocycleGap(meso.id)) {
+        widths.push('24px'); // Gap indicator column
+      }
       (meso.microcycles || []).forEach((_, microcycleIndex) => {
         const width = getGlobalMicrocycleWidth(meso.id, microcycleIndex);
         widths.push(`${width}px`);
       });
     });
     return widths.join(' ');
-  }, [mesocycles, getGlobalMicrocycleWidth]);
+  }, [mesocycles, getGlobalMicrocycleWidth, hasMesocycleGap]);
 
   // Helper function to check if a method has a valid frequency parameter
   const hasValidFrequencyParameter = useCallback((methodName: string): boolean => {
@@ -2749,42 +2757,45 @@ export default function MesocyclePage() {
                
                {/* Mesocycle Toggle Bar */}
                {mesocycles.length > 1 && (
-                 <div className="flex items-center gap-3 mb-2 flex-wrap">
-                   <span className="text-sm text-muted-foreground shrink-0">Show:</span>
-                   
-                   <div className="flex-1 flex items-center gap-2 overflow-x-auto py-1">
-                     {mesocycles.map((meso) => {
-                       const isVisible = visibleMesocycleIds.has(meso.id);
-                       
-                       return (
-                         <Button
-                           key={meso.id}
-                           variant={isVisible ? "default" : "outline"}
-                           size="sm"
-                           onClick={() => toggleMesocycleVisibility(meso.id)}
-                           className={cn(
-                             "min-w-[80px] shrink-0 transition-all",
-                             isVisible ? "ring-2 ring-primary shadow-sm" : "opacity-60 hover:opacity-100"
-                           )}
-                         >
-                           {meso.name}
-                         </Button>
-                       );
-                     })}
-                   </div>
-                   
-                   <div className="flex items-center gap-1 shrink-0">
-                     <Button
-                       variant="outline"
-                       size="sm"
-                       onClick={selectAllMesocycles}
-                       disabled={visibleMesocycleIds.size === mesocycles.length}
-                       className="h-7 px-2 text-xs"
-                     >
-                       All
-                     </Button>
-                   </div>
-                 </div>
+                  <div className="flex items-center gap-3 mb-2 flex-wrap">
+                    <span className="text-sm text-muted-foreground shrink-0">Show:</span>
+                    
+                    {/* All button first */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={selectAllMesocycles}
+                      disabled={visibleMesocycleIds.size === mesocycles.length}
+                      className="h-7 px-3 text-xs shrink-0"
+                    >
+                      All
+                    </Button>
+                    
+                    {/* Separator */}
+                    <div className="h-6 w-px bg-border shrink-0" />
+                    
+                    {/* Individual mesocycle toggles */}
+                    <div className="flex-1 flex items-center gap-2 overflow-x-auto py-1">
+                      {mesocycles.map((meso) => {
+                        const isVisible = visibleMesocycleIds.has(meso.id);
+                        
+                        return (
+                          <Button
+                            key={meso.id}
+                            variant={isVisible ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => toggleMesocycleVisibility(meso.id)}
+                            className={cn(
+                              "min-w-[80px] shrink-0 transition-all",
+                              isVisible ? "ring-2 ring-primary shadow-sm" : "opacity-60 hover:opacity-100"
+                            )}
+                          >
+                            {meso.name}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
                )}
                
                  <div className="w-full border rounded-lg overflow-auto" style={{height: 'calc(100vh - 340px)', scrollbarWidth: 'thin'}}>
@@ -2798,28 +2809,33 @@ export default function MesocyclePage() {
                            <div className="sticky left-0 z-[60] p-2 bg-background font-medium text-sm border rounded-t-lg shadow-md border-r">
                              Training Methods
                            </div>
-                          {getVisibleMesocyclesForPeriodization().map((meso) => {
-                            const hasGap = hasMesocycleGap(meso.id);
-                            return (
-                              <div 
-                                key={`${meso.id}-header`} 
-                                className={cn(
-                                  "p-2 font-medium text-sm border rounded-t-lg text-center",
-                                  intensityBg(meso.intensity),
-                                  hasGap && "border-l-4 border-l-orange-500 border-dashed"
-                                )}
-                                style={{ 
-                                  gridColumn: `span ${meso.microcycles?.length || 0}` 
-                                }}
-                              >
-                                <div className="flex items-center justify-center space-x-2">
-                                  {hasGap && <span className="text-orange-500 text-xs font-bold">⋯</span>}
-                                  <div className={`w-2 h-2 rounded-full bg-white/80`}></div>
-                                  <span>{meso.name}</span>
-                                </div>
-                              </div>
-                            );
-                          })}
+                           {getVisibleMesocyclesForPeriodization().map((meso) => {
+                             const hasGap = hasMesocycleGap(meso.id);
+                             return (
+                               <React.Fragment key={`${meso.id}-header-group`}>
+                                 {hasGap && (
+                                   <div className="flex items-center justify-center bg-gradient-to-r from-muted/40 via-muted/60 to-muted/40 rounded-t-lg">
+                                     <span className="text-muted-foreground text-xs">...</span>
+                                   </div>
+                                 )}
+                                 <div 
+                                   key={`${meso.id}-header`} 
+                                   className={cn(
+                                     "p-2 font-medium text-sm border rounded-t-lg text-center",
+                                     intensityBg(meso.intensity)
+                                   )}
+                                   style={{ 
+                                     gridColumn: `span ${meso.microcycles?.length || 0}` 
+                                   }}
+                                 >
+                                   <div className="flex items-center justify-center space-x-2">
+                                     <div className={`w-2 h-2 rounded-full bg-white/80`}></div>
+                                     <span>{meso.name}</span>
+                                   </div>
+                                 </div>
+                               </React.Fragment>
+                             );
+                           })}
                        </div>
 
                           {/* Level 2: Description */}
@@ -2830,59 +2846,61 @@ export default function MesocyclePage() {
                               Description
                             </div>
                            {getVisibleMesocyclesForPeriodization().map((meso) => {
-                               const hasGap = hasMesocycleGap(meso.id);
-                               return (
-                                <div 
-                                  key={`${meso.id}-description`} 
-                                  className={cn(
-                                    "p-2 bg-muted/30 border-l border-r text-xs",
-                                    hasGap && "border-l-4 border-l-orange-500 border-dashed"
-                                  )}
-                                  style={{ 
-                                    gridColumn: `span ${meso.microcycles?.length || 0}` 
-                                  }}
-                                >
-                                 <div className="flex items-start gap-2">
-                                   <div className="flex-1 min-h-[40px]">
-                                     {mesocycleNotes[meso.id] ? (
-                                       <p className="text-foreground whitespace-pre-wrap leading-relaxed">
-                                         {mesocycleNotes[meso.id]}
-                                       </p>
-                                     ) : (
-                                       <span className="text-muted-foreground italic">
-                                         No description added
-                                       </span>
-                                     )}
-                                   </div>
-                                   <TooltipProvider>
-                                     <Tooltip>
-                                       <TooltipTrigger asChild>
-                                         <Button
-                                           variant="ghost"
-                                           size="icon"
-                                           className="h-6 w-6 shrink-0"
-                                           onClick={() => {
-                                             setSelectedMesocycleForNotes(meso);
-                                             setNotesDialogOpen(true);
-                                           }}
-                                         >
-                                           <MessageSquare className={cn(
-                                             "h-3.5 w-3.5",
-                                             mesocycleNotes[meso.id] 
-                                               ? "text-primary fill-primary/20" 
-                                               : "text-muted-foreground"
-                                           )} />
-                                         </Button>
-                                       </TooltipTrigger>
-                                       <TooltipContent>
-                                         {mesocycleNotes[meso.id] ? 'Edit description' : 'Add description'}
-                                       </TooltipContent>
-                                     </Tooltip>
-                                   </TooltipProvider>
-                                 </div>
-                              </div>
+                                const hasGap = hasMesocycleGap(meso.id);
+                                return (
+                                  <React.Fragment key={`${meso.id}-description-group`}>
+                                    {hasGap && (
+                                      <div className="bg-gradient-to-b from-muted/40 via-muted/60 to-muted/40" />
+                                    )}
+                                    <div 
+                                      key={`${meso.id}-description`} 
+                                      className="p-2 bg-muted/30 border-l border-r text-xs"
+                                      style={{ 
+                                        gridColumn: `span ${meso.microcycles?.length || 0}` 
+                                      }}
+                                    >
+                                      <div className="flex items-start gap-2">
+                                        <div className="flex-1 min-h-[40px]">
+                                          {mesocycleNotes[meso.id] ? (
+                                            <p className="text-foreground whitespace-pre-wrap leading-relaxed">
+                                              {mesocycleNotes[meso.id]}
+                                            </p>
+                                          ) : (
+                                            <span className="text-muted-foreground italic">
+                                              No description added
+                                            </span>
+                                          )}
+                                        </div>
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6 shrink-0"
+                                                onClick={() => {
+                                                  setSelectedMesocycleForNotes(meso);
+                                                  setNotesDialogOpen(true);
+                                                }}
+                                              >
+                                                <MessageSquare className={cn(
+                                                  "h-3.5 w-3.5",
+                                                  mesocycleNotes[meso.id] 
+                                                    ? "text-primary fill-primary/20" 
+                                                    : "text-muted-foreground"
+                                                )} />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                              {mesocycleNotes[meso.id] ? 'Edit description' : 'Add description'}
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      </div>
+                                    </div>
+                                  </React.Fragment>
                                 );
-                             })}
+                              })}
                        </div>
 
                          {/* Level 3: Microcycle Headers with Intensity Colors */}
@@ -2892,22 +2910,30 @@ export default function MesocyclePage() {
                            <div className="sticky left-0 z-[60] p-2 bg-background font-medium text-xs border rounded-b-lg shadow-md border-r">
                              Parameters
                            </div>
-                          {getVisibleMesocyclesForPeriodization().map((meso) =>
-                            (meso.microcycles || []).map((microcycle, microcycleIndex) => {
-                              const intensity = microcycle.intensity || meso.intensity;
-                              
-                              return (
-                                <div key={`${meso.id}-micro-${microcycleIndex}`} className={`text-center border rounded-b ${intensityBg(intensity)}`}>
-                                  <div className="text-xs p-1 font-medium">
-                                    {microcycle.name || `Mic${microcycleIndex + 1}`}
-                                  </div>
-                                  <div className="text-xs px-1 py-0.5 opacity-80 border-t">
-                                    {microcycle.duration} days
-                                  </div>
-                                </div>
-                              );
-                            })
-                          )}
+                           {getVisibleMesocyclesForPeriodization().map((meso) => {
+                             const hasGap = hasMesocycleGap(meso.id);
+                             return (
+                               <React.Fragment key={`${meso.id}-micros`}>
+                                 {hasGap && (
+                                   <div className="bg-gradient-to-b from-muted/40 via-muted/60 to-muted/40 rounded-b-lg" />
+                                 )}
+                                 {(meso.microcycles || []).map((microcycle, microcycleIndex) => {
+                                   const intensity = microcycle.intensity || meso.intensity;
+                                   
+                                   return (
+                                     <div key={`${meso.id}-micro-${microcycleIndex}`} className={`text-center border rounded-b ${intensityBg(intensity)}`}>
+                                       <div className="text-xs p-1 font-medium">
+                                         {microcycle.name || `Mic${microcycleIndex + 1}`}
+                                       </div>
+                                       <div className="text-xs px-1 py-0.5 opacity-80 border-t">
+                                         {microcycle.duration} days
+                                       </div>
+                                     </div>
+                                   );
+                                 })}
+                               </React.Fragment>
+                             );
+                           })}
                         </div>
                      </div>
 
@@ -2963,9 +2989,10 @@ export default function MesocyclePage() {
                                     return (
                                       <div key={fullMethodName} className={`border rounded-lg bg-card shadow-sm ${isIndented ? 'border-l-4 border-l-primary/50' : ''}`}>
                                            {/* Method/Category name header */}
-                                           <div className="grid gap-1 bg-muted/20 min-w-full" style={{ 
-                                              gridTemplateColumns: calculateGridTemplate(baseMethodName, getVisibleMesocyclesForPeriodization())
-                                            }}>
+                                           <div className="grid gap-1 bg-muted/20 w-full" style={{ 
+                                               gridTemplateColumns: calculateGridTemplate(baseMethodName, getVisibleMesocyclesForPeriodization()),
+                                               minWidth: '100%'
+                                             }}>
                                               <div className="sticky left-0 z-50 p-3 border-r bg-background rounded-tl shadow-md">
                                                 <div className="flex items-center justify-between group pr-16 relative">
                                                    <div className="flex items-center gap-2 flex-wrap">
@@ -3042,15 +3069,21 @@ export default function MesocyclePage() {
                                                  </div>
                                                </div>
                                              </div>
-                                           {getVisibleMesocyclesForPeriodization().map((meso) =>
-                                             (meso.microcycles || []).map((microcycle, microcycleIndex) => {
-                                               const isAllocated = isMethodAllocatedToMesocycle(fullMethodName, meso.id);
-                                               const frequency = getCellFrequency(meso.id, microcycleIndex, fullMethodName);
-                                               const isSplit = isMicrocycleSplit(meso.id, microcycleIndex);
-                                               const sessionsCount = getCellSessions(meso.id, microcycleIndex, fullMethodName);
-                                               const hasFrequencyParam = hasValidFrequencyParameter(baseMethodName);
-                                               
-                                               return (
+                                           {getVisibleMesocyclesForPeriodization().map((meso) => {
+                                              const hasGap = hasMesocycleGap(meso.id);
+                                              return (
+                                                <React.Fragment key={`${meso.id}-method-cells`}>
+                                                  {hasGap && (
+                                                    <div className="bg-gradient-to-b from-muted/40 via-muted/60 to-muted/40" />
+                                                  )}
+                                                  {(meso.microcycles || []).map((microcycle, microcycleIndex) => {
+                                                const isAllocated = isMethodAllocatedToMesocycle(fullMethodName, meso.id);
+                                                const frequency = getCellFrequency(meso.id, microcycleIndex, fullMethodName);
+                                                const isSplit = isMicrocycleSplit(meso.id, microcycleIndex);
+                                                const sessionsCount = getCellSessions(meso.id, microcycleIndex, fullMethodName);
+                                                const hasFrequencyParam = hasValidFrequencyParameter(baseMethodName);
+                                                
+                                                return (
                                                   <div 
                                                     key={`${meso.id}-${microcycleIndex}`} 
                                                     className={`relative z-10 p-2 text-xs text-center font-medium border-l ${intensityBg(microcycle.intensity)} ${!isAllocated ? 'opacity-50' : ''} ${!hasFrequencyParam ? 'border-2 border-destructive/50' : ''} flex flex-col items-center gap-1`}
@@ -3088,10 +3121,12 @@ export default function MesocyclePage() {
                                                     </div>
                                                   )}
                                                 </div>
-                                              );
-                                            })
-                                          )}
-                                        </div>
+                                               );
+                                             })}
+                                               </React.Fragment>
+                                             );
+                                           })}
+                                         </div>
                                       
                                        {/* Parameter sub-rows */}
                                        {parameters.length > 0 && !collapsedMethods.has(fullMethodName) && !(categoryName && collapsedMethods.has(method)) && (
@@ -3118,12 +3153,18 @@ export default function MesocyclePage() {
                                                      disabled={!mesocycles.some(meso => isMethodAllocatedToMesocycle(fullMethodName, meso.id))}
                                                    />
                                                  </div>
-                                                  {getVisibleMesocyclesForPeriodization().map((meso) =>
-                                                    (meso.microcycles || []).map((microcycle, microcycleIndex) => {
-                                                       const isAllocated = isMethodAllocatedToMesocycle(fullMethodName, meso.id);
-                                                        const isSplit = isMicrocycleSplit(meso.id, microcycleIndex);
-                                                        const sessionsCount = getCellSessions(meso.id, microcycleIndex, fullMethodName);
-                                                       const isFrequency = isFrequencyParameter(param.name, fullMethodName);
+                                                  {getVisibleMesocyclesForPeriodization().map((meso) => {
+                                                    const hasGap = hasMesocycleGap(meso.id);
+                                                    return (
+                                                      <React.Fragment key={`${meso.id}-param-cells`}>
+                                                        {hasGap && (
+                                                          <div className="bg-gradient-to-b from-muted/40 via-muted/60 to-muted/40" />
+                                                        )}
+                                                        {(meso.microcycles || []).map((microcycle, microcycleIndex) => {
+                                                        const isAllocated = isMethodAllocatedToMesocycle(fullMethodName, meso.id);
+                                                         const isSplit = isMicrocycleSplit(meso.id, microcycleIndex);
+                                                         const sessionsCount = getCellSessions(meso.id, microcycleIndex, fullMethodName);
+                                                        const isFrequency = isFrequencyParameter(param.name, fullMethodName);
                                                       
                                                       if (isSplit && !isFrequency) {
                                                        return (
@@ -3257,10 +3298,12 @@ export default function MesocyclePage() {
                                                          </div>
                                                        );
                                                     }
-                                                  }).flat()
-                                                )}
-                                              </div>
-                                            ))}
+                                                   })}
+                                                      </React.Fragment>
+                                                    );
+                                                  })}
+                                               </div>
+                                             ))}
                                          </div>
                                        )}
                                     </div>
