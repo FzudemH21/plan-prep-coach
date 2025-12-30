@@ -2669,7 +2669,7 @@ export default function MesocyclePage() {
                      </div>
 
                       {/* Method Categories */}
-                      <div className="p-4 space-y-6">
+                      <div className="py-4 space-y-6">
                         {Object.entries(groupedMethods).map(([category, subCategories]) => (
                           <div key={category} className="space-y-4">
                             {/* Category Header - sticky left column */}
