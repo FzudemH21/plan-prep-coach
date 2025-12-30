@@ -2103,7 +2103,7 @@ export default function MesocyclePage() {
   // Helper function to generate dynamic header grid template using global widths
   const generateHeaderGridTemplate = useCallback((visibleMesos?: ExtendedMesocycle[]) => {
     const mesosToUse = visibleMesos || mesocycles;
-    const widths = ['300px']; // Fixed left column
+    const widths: string[] = [];
     mesosToUse.forEach((meso, index) => {
       // Add gap column if there's a gap before this mesocycle
       if (hasMesocycleGap(meso.id)) {
@@ -2869,7 +2869,7 @@ export default function MesocyclePage() {
                            <div className="grid gap-1" style={{
                              gridTemplateColumns: generateHeaderGridTemplate(getVisibleMesocyclesForPeriodization())
                            }}>
-                            <div className="sticky left-0 z-[60] p-2 bg-background border rounded-t-lg shadow-md border-r" />
+                            
                            {getVisibleMesocyclesForPeriodization().map((meso) => {
                              const hasGap = hasMesocycleGap(meso.id);
                              return (
@@ -2903,7 +2903,7 @@ export default function MesocyclePage() {
                           <div className="grid gap-1" style={{
                             gridTemplateColumns: generateHeaderGridTemplate(getVisibleMesocyclesForPeriodization())
                           }}>
-                             <div className="sticky left-0 z-[60] p-2 bg-background border-l border-r shadow-md" />
+                             
                            {getVisibleMesocyclesForPeriodization().map((meso) => {
                                 const hasGap = hasMesocycleGap(meso.id);
                                 return (
@@ -2966,7 +2966,7 @@ export default function MesocyclePage() {
                           <div className="grid gap-1" style={{
                             gridTemplateColumns: generateHeaderGridTemplate(getVisibleMesocyclesForPeriodization())
                           }}>
-                            <div className="sticky left-0 z-[60] p-2 bg-background border rounded-b-lg shadow-md border-r" />
+                            
                            {getVisibleMesocyclesForPeriodization().map((meso) => {
                              const hasGap = hasMesocycleGap(meso.id);
                              return (
@@ -3014,11 +3014,6 @@ export default function MesocyclePage() {
                                   <h4 className="text-lg font-semibold text-primary">{category}</h4>
                                 </div>
                               </div>
-                              {/* Single filler element spanning all microcycle columns - no moving borders */}
-                              <div 
-                                className="bg-muted border-r" 
-                                style={{ gridColumn: '2 / -1' }}
-                              />
                             </div>
                             
                             {/* Sub-categories and Methods */}
@@ -3049,11 +3044,6 @@ export default function MesocyclePage() {
                                                gridTemplateColumns: calculateGridTemplate(baseMethodName, getVisibleMesocyclesForPeriodization()),
                                                minWidth: '100%'
                                              }}>
-                                              {/* Background overlay for gray strip extending to the end */}
-                                              <div 
-                                                className="absolute inset-y-0 right-0 bg-muted/20 pointer-events-none rounded-tr" 
-                                                style={{ left: '304px' }} 
-                                              />
                                               <div className="sticky left-0 z-50 p-3 border-r bg-background rounded-tl shadow-md">
                                                 <div className="flex items-center justify-between group pr-16 relative">
                                                    <div className="flex items-center gap-2 flex-wrap">
