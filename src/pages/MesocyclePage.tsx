@@ -2690,21 +2690,7 @@ export default function MesocyclePage() {
                             {/* Sub-categories and Methods */}
                             {Object.entries(subCategories).map(([subCategory, methods]) => (
                               <div key={subCategory} className="space-y-2">
-                                {/* Sub-category Header - sticky left column */}
-                                <div 
-                                  className="grid gap-1"
-                                  style={{ gridTemplateColumns: generateHeaderGridTemplate() }}
-                                >
-                                  <div className="sticky left-0 z-50 p-2 pl-6 bg-background shadow-md">
-                                    <h5 className="text-md font-medium text-muted-foreground">{subCategory}</h5>
-                                  </div>
-                                  {mesocycles.map((meso) => 
-                                    (meso.microcycles || []).map((_, microcycleIndex) => (
-                                      <div key={`${meso.id}-${microcycleIndex}-subcat-spacer`} className="border-l relative z-0" />
-                                    ))
-                                  )}
-                                </div>
-                                
+
                                 {/* Methods in this sub-category */}
                                 {methods.map((method: string) => {
                                   const parameters = methodParametersMap[method] || [];
@@ -2728,13 +2714,13 @@ export default function MesocyclePage() {
                                            <div className="grid gap-1 bg-muted/20" style={{ 
                                               gridTemplateColumns: calculateGridTemplate(baseMethodName)
                                             }}>
-                                              <div className="sticky left-0 z-50 p-3 font-medium text-sm border-r bg-background rounded-tl shadow-md">
+                                              <div className="sticky left-0 z-50 p-3 border-r bg-background rounded-tl shadow-md">
                                                 <div className="flex items-center justify-between group pr-16 relative">
                                                    <div className="flex items-center gap-2 flex-wrap">
                                                     {categoryName && <span className="text-xs text-muted-foreground">↳</span>}
-                                                    <div className="line-clamp-3" title={fullMethodName}>
-                                                      {categoryName ? `${baseMethodName} - ${categoryName}` : baseMethodName}
-                                                    </div>
+                                    <div className="line-clamp-3 text-md font-medium text-muted-foreground" title={fullMethodName}>
+                                      {subCategory}
+                                    </div>
                                                     {/* Warning badge if no frequency parameter */}
                                                     {!hasValidFrequencyParameter(baseMethodName) && (
                                                       <TooltipProvider>
