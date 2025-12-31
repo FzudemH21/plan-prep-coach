@@ -6,7 +6,7 @@ import MicrocycleIntensityColumn from './MicrocycleIntensityColumn';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Copy } from 'lucide-react';
-import { addDays, format } from 'date-fns';
+import { addDays, differenceInDays, format } from 'date-fns';
 
 interface SubGoal {
   testDates?: string[];
@@ -142,7 +142,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                     >
                       <div>{meso.name}</div>
                       <div className="text-xs font-normal text-muted-foreground">
-                        {format(meso.startDate, 'MMM d')} - {format(meso.endDate, 'MMM d')} ({meso.duration}d)
+                        {format(meso.startDate, 'MMM d')} - {format(meso.endDate, 'MMM d')} ({differenceInDays(meso.endDate, meso.startDate) + 1}d)
                       </div>
                       {mesoIndex > 0 && onCopyMesocycle && (
                         <Button
