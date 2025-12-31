@@ -168,30 +168,44 @@ export default function MesocycleCalendar({
           <div className="text-xs font-medium">
             {format(date, 'd')}
           </div>
-          {/* Test/Event indicators - black circle with white icon */}
+          {/* Test/Event indicators - gray badge with black outline */}
           {(testsOnDate.length > 0 || eventsOnDate.length > 0) && (
             <div className="flex gap-0.5">
               {testsOnDate.length > 0 && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="flex items-center justify-center h-4 w-4 bg-black rounded-full">
-                      <Trophy className="h-2.5 w-2.5 text-white" />
-                    </span>
+                    <div className="cursor-pointer">
+                      <Badge variant="secondary" className="h-4 px-1 text-xs">
+                        <Trophy className="h-2.5 w-2.5" />
+                      </Badge>
+                    </div>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="text-xs">Tests: {testsOnDate.join(', ')}</p>
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-semibold">Tests:</p>
+                      {testsOnDate.map((test, idx) => (
+                        <div key={idx} className="text-xs text-muted-foreground">• {test}</div>
+                      ))}
+                    </div>
                   </TooltipContent>
                 </Tooltip>
               )}
               {eventsOnDate.length > 0 && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="flex items-center justify-center h-4 w-4 bg-black rounded-full">
-                      <CalendarDays className="h-2.5 w-2.5 text-white" />
-                    </span>
+                    <div className="cursor-pointer">
+                      <Badge variant="secondary" className="h-4 px-1 text-xs">
+                        <CalendarDays className="h-2.5 w-2.5" />
+                      </Badge>
+                    </div>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="text-xs">Events: {eventsOnDate.join(', ')}</p>
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-semibold">Events:</p>
+                      {eventsOnDate.map((event, idx) => (
+                        <div key={idx} className="text-xs text-muted-foreground">• {event}</div>
+                      ))}
+                    </div>
                   </TooltipContent>
                 </Tooltip>
               )}
@@ -247,15 +261,15 @@ export default function MesocycleCalendar({
             ))}
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="flex items-center justify-center h-4 w-4 bg-black rounded-full">
-                <Trophy className="h-2.5 w-2.5 text-white" />
-              </span>
+              <Badge variant="secondary" className="h-4 px-1 text-xs">
+                <Trophy className="h-2.5 w-2.5" />
+              </Badge>
               <span>Test Day</span>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="flex items-center justify-center h-4 w-4 bg-black rounded-full">
-                <CalendarDays className="h-2.5 w-2.5 text-white" />
-              </span>
+              <Badge variant="secondary" className="h-4 px-1 text-xs">
+                <CalendarDays className="h-2.5 w-2.5" />
+              </Badge>
               <span>Event Day</span>
             </div>
           </div>

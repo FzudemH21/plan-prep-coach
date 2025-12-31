@@ -12,11 +12,23 @@ interface SubGoal {
   testDates?: string[];
   description?: string;
   testMethod?: string;
+  goal?: string;
 }
 
 interface Event {
   eventDates?: string[];
   name?: string;
+}
+
+interface TestDetail {
+  name: string;
+  goal?: string;
+  dates: Date[];
+}
+
+interface EventDetail {
+  name: string;
+  dates: Date[];
 }
 
 interface MicrocycleIntensityPlanningProps {
@@ -57,38 +69,55 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
     return dates;
   }, [mesocycles, planStartDate]);
 
-  // Get tests in date range with their names and count
-  const getTestsInRange = (start: Date, end: Date): { name: string; count: number }[] => {
-    const testCounts = new Map<string, number>();
+  // Get tests in date range with their names and individual dates
+  const getTestsInRange = (start: Date, end: Date): TestDetail[] => {
+    const testMap = new Map<string, { goal?: string; dates: Date[] }>();
     
     subGoals.forEach(sg => {
       const testName = sg.testMethod || sg.description || 'Test';
       sg.testDates?.forEach(td => {
         const testDate = new Date(td);
         if (testDate >= start && testDate <= end) {
-          testCounts.set(testName, (testCounts.get(testName) || 0) + 1);
+          const existing = testMap.get(testName);
+          if (existing) {
+            existing.dates.push(testDate);
+          } else {
+            testMap.set(testName, { goal: sg.goal, dates: [testDate] });
+          }
         }
       });
     });
     
-    return Array.from(testCounts.entries()).map(([name, count]) => ({ name, count }));
+    return Array.from(testMap.entries()).map(([name, data]) => ({ 
+      name, 
+      goal: data.goal,
+      dates: data.dates.sort((a, b) => a.getTime() - b.getTime())
+    }));
   };
 
-  // Get events in date range with their names and count
-  const getEventsInRange = (start: Date, end: Date): { name: string; count: number }[] => {
-    const eventCounts = new Map<string, number>();
+  // Get events in date range with their names and individual dates
+  const getEventsInRange = (start: Date, end: Date): EventDetail[] => {
+    const eventMap = new Map<string, Date[]>();
     
     events.forEach(e => {
       const eventName = e.name || 'Event';
       e.eventDates?.forEach(ed => {
         const eventDate = new Date(ed);
         if (eventDate >= start && eventDate <= end) {
-          eventCounts.set(eventName, (eventCounts.get(eventName) || 0) + 1);
+          const existing = eventMap.get(eventName);
+          if (existing) {
+            existing.push(eventDate);
+          } else {
+            eventMap.set(eventName, [eventDate]);
+          }
         }
       });
     });
     
-    return Array.from(eventCounts.entries()).map(([name, count]) => ({ name, count }));
+    return Array.from(eventMap.entries()).map(([name, dates]) => ({ 
+      name, 
+      dates: dates.sort((a, b) => a.getTime() - b.getTime())
+    }));
   };
   
   return (
