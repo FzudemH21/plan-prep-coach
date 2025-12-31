@@ -4408,10 +4408,22 @@ export default function MesocyclePage() {
                             className="relative text-center border border-border rounded-md font-semibold bg-primary/10 py-3 shrink-0"
                             style={{ width: `${width}px` }}
                           >
-                            {/* Mesocycle Name Row with Rounded Square Indicator */}
+                            {/* Mesocycle Name Row with Rounded Square Indicator and Clear Button */}
                             <div className="flex items-center justify-center gap-2">
                               <div className={`w-3 h-3 rounded-sm ${getIntensityColor(currentMeso.intensity)}`} />
                               <span>{currentMeso.name}</span>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  clearMesocycleDailyIntensity(currentMeso.id);
+                                }}
+                                className="h-5 w-5 p-0 hover:bg-muted"
+                                title={`Clear all daily intensities for ${currentMeso.name}`}
+                              >
+                                <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                              </Button>
                             </div>
                             
                             {/* Date Range with Duration */}
@@ -4421,10 +4433,9 @@ export default function MesocyclePage() {
                               </div>
                             )}
                             
-                            {/* Button container */}
-                            <div className="absolute top-1 right-1 flex gap-1">
-                              {/* Copy button - only if not the first mesocycle */}
-                              {currentMesocycleIndexDailyPlanning > 0 && (
+                            {/* Copy button - only if not the first mesocycle */}
+                            {currentMesocycleIndexDailyPlanning > 0 && (
+                              <div className="absolute top-1 right-1">
                                 <Button
                                   size="sm"
                                   variant="secondary"
@@ -4437,22 +4448,8 @@ export default function MesocyclePage() {
                                 >
                                   <Copy className="h-3 w-3 text-gray-800" />
                                 </Button>
-                              )}
-                              
-                              {/* Clear button - for all mesocycles */}
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  clearMesocycleDailyIntensity(currentMeso.id);
-                                }}
-                                className="h-6 w-6 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"
-                                title={`Clear all daily intensities for ${currentMeso.name}`}
-                              >
-                                <Trash2 className="h-3 w-3 text-gray-800" />
-                              </Button>
-                            </div>
+                              </div>
+                            )}
                           </div>
                         ) : null;
                       })()}
