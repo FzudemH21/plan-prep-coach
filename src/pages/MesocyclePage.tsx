@@ -40,7 +40,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy, AlertCircle, FolderOpen, Trophy } from "lucide-react";
 import { ResourcesDialog } from "@/components/mesocycle/ResourcesDialog";
-import { format, addWeeks, differenceInWeeks, addDays } from "date-fns";
+import { format, addWeeks, differenceInWeeks, addDays, differenceInDays } from "date-fns";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 import { IntensityLevel } from "@/types/training";
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
@@ -4405,10 +4405,22 @@ export default function MesocyclePage() {
                         return currentMeso.microcycles.length > 0 ? (
                           <div 
                             key={currentMeso.id}
-                            className={`relative text-center border-r-2 font-semibold border-r-slate-400 ${getIntensityColor(currentMeso.intensity)} py-2 shrink-0`}
+                            className="relative text-center border-r-2 font-semibold border-r-slate-400 bg-muted/50 py-3 shrink-0"
                             style={{ width: `${width}px` }}
                           >
-                            {currentMeso.name}
+                            {/* Mesocycle Name Row with Rounded Square Indicator and Notes Icon */}
+                            <div className="flex items-center justify-center gap-2">
+                              <div className={`w-3 h-3 rounded-sm ${getIntensityColor(currentMeso.intensity)}`} />
+                              <span>{currentMeso.name}</span>
+                              <MessageSquare className="h-3 w-3 text-muted-foreground" />
+                            </div>
+                            
+                            {/* Date Range with Duration */}
+                            {currentMeso.startDate && currentMeso.endDate && (
+                              <div className="text-xs font-normal text-muted-foreground">
+                                {format(new Date(currentMeso.startDate), 'MMM d')} - {format(new Date(currentMeso.endDate), 'MMM d')} ({differenceInDays(new Date(currentMeso.endDate), new Date(currentMeso.startDate)) + 1}d)
+                              </div>
+                            )}
                             
                             {/* Button container */}
                             <div className="absolute top-1 right-1 flex gap-1">
