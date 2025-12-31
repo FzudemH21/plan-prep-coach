@@ -4408,11 +4408,10 @@ export default function MesocyclePage() {
                             className="relative text-center border border-border rounded-md font-semibold bg-primary/10 py-3 shrink-0"
                             style={{ width: `${width}px` }}
                           >
-                            {/* Mesocycle Name Row with Rounded Square Indicator and Notes Icon */}
+                            {/* Mesocycle Name Row with Rounded Square Indicator */}
                             <div className="flex items-center justify-center gap-2">
                               <div className={`w-3 h-3 rounded-sm ${getIntensityColor(currentMeso.intensity)}`} />
                               <span>{currentMeso.name}</span>
-                              <MessageSquare className="h-3 w-3 text-muted-foreground" />
                             </div>
                             
                             {/* Date Range with Duration */}
@@ -4494,7 +4493,7 @@ export default function MesocyclePage() {
                         return (
                           <div 
                             key={micro.id}
-                            className="relative text-center text-sm py-1 px-2 shrink-0 bg-primary/10 border border-border rounded-md"
+                            className="relative text-center text-sm font-semibold py-1 px-2 shrink-0 bg-primary/10 border border-border rounded-md"
                             style={{ width: `${width}px` }}
                           >
                             <div className="flex items-center justify-center gap-1">
