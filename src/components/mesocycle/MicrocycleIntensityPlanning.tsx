@@ -5,7 +5,7 @@ import IntensityScale from './IntensityScale';
 import MicrocycleIntensityColumn from './MicrocycleIntensityColumn';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { Copy, MessageSquare, Trophy, CalendarDays } from 'lucide-react';
+import { Copy, MessageSquare } from 'lucide-react';
 import { addDays, differenceInDays, format } from 'date-fns';
 
 interface SubGoal {
@@ -120,34 +120,6 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
     }));
   };
 
-  // Track which mesocycles have tests or events
-  const mesoHasTests = useMemo(() => {
-    const result = new Set<string>();
-    mesocycles.forEach(meso => {
-      meso.microcycles.forEach(micro => {
-        const dateRange = microcycleDates.get(micro.id);
-        if (dateRange) {
-          const tests = getTestsInRange(dateRange.start, dateRange.end);
-          if (tests.length > 0) result.add(meso.id);
-        }
-      });
-    });
-    return result;
-  }, [mesocycles, microcycleDates, subGoals]);
-
-  const mesoHasEvents = useMemo(() => {
-    const result = new Set<string>();
-    mesocycles.forEach(meso => {
-      meso.microcycles.forEach(micro => {
-        const dateRange = microcycleDates.get(micro.id);
-        if (dateRange) {
-          const eventList = getEventsInRange(dateRange.start, dateRange.end);
-          if (eventList.length > 0) result.add(meso.id);
-        }
-      });
-    });
-    return result;
-  }, [mesocycles, microcycleDates, events]);
   
   return (
     <div className="space-y-4">
@@ -176,22 +148,10 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                         <MessageSquare className="h-3 w-3 text-muted-foreground" />
                       </div>
                       
-                      {/* Date Range */}
+                      {/* Date Range with Duration */}
                       {meso.startDate && meso.endDate && (
                         <div className="text-xs font-normal text-muted-foreground">
-                          {format(new Date(meso.startDate), 'MMM d')} - {format(new Date(meso.endDate), 'MMM d')}
-                        </div>
-                      )}
-                      
-                      {/* Test and Event Indicators */}
-                      {(mesoHasTests.has(meso.id) || mesoHasEvents.has(meso.id)) && (
-                        <div className="flex items-center justify-center gap-2 mt-1">
-                          {mesoHasTests.has(meso.id) && (
-                            <Trophy className="h-3 w-3 text-muted-foreground" />
-                          )}
-                          {mesoHasEvents.has(meso.id) && (
-                            <CalendarDays className="h-3 w-3 text-muted-foreground" />
-                          )}
+                          {format(new Date(meso.startDate), 'MMM d')} - {format(new Date(meso.endDate), 'MMM d')} ({differenceInDays(new Date(meso.endDate), new Date(meso.startDate)) + 1}d)
                         </div>
                       )}
                       
