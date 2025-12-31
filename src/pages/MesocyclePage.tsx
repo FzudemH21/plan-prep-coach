@@ -4494,12 +4494,13 @@ export default function MesocyclePage() {
                         return (
                           <div 
                             key={micro.id}
-                            className={`relative text-center text-sm py-1 px-2 shrink-0 ${getIntensityColor(micro.intensity)} ${
+                            className={`relative text-center text-sm py-1 px-2 shrink-0 bg-muted/50 ${
                               isLastMicro ? 'border-r-2 border-r-slate-400' : 'border-r border-border'
                             }`}
                             style={{ width: `${width}px` }}
                           >
                             <div className="flex items-center justify-center gap-1">
+                              <div className={`w-3 h-3 rounded-sm ${getIntensityColor(micro.intensity)}`} />
                               <span>{micro.name}</span>
                               
                               {/* Copy button */}
