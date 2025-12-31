@@ -193,6 +193,8 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                           getIntensityColor={getIntensityColor}
                           testDetails={testDetails}
                           eventDetails={eventDetails}
+                          startDate={dateRange?.start}
+                          endDate={dateRange?.end}
                         />
                       );
                     });

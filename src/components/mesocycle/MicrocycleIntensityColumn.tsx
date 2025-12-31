@@ -27,6 +27,8 @@ interface MicrocycleIntensityColumnProps {
   getIntensityColor: (intensity: IntensityLevel) => string;
   testDetails?: TestDetail[];
   eventDetails?: EventDetail[];
+  startDate?: Date;
+  endDate?: Date;
 }
 
 const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
@@ -38,7 +40,9 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
   intensityLevels,
   getIntensityColor,
   testDetails = [],
-  eventDetails = []
+  eventDetails = [],
+  startDate,
+  endDate
 }) => {
   const chartHeight = 200; // Fixed chart area height
   
@@ -112,11 +116,25 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
 
   return (
     <div className={`flex flex-col w-20 shrink-0 box-border ${getBorderClasses()}`}>
-      {/* Microcycle header */}
-      <div className="relative h-20 text-center text-xs rounded w-full mb-2 flex flex-col items-center justify-center bg-primary/10">
-      {/* Event/Test indicators in top-right corner */}
+      {/* Microcycle header - matching Mesocycle Characterization style */}
+      <div className="h-20 text-center text-xs rounded w-full mb-2 flex flex-col items-center justify-center bg-primary/10 p-1">
+        {/* Microcycle name */}
+        <div className="font-medium">{microcycle.name}</div>
+        
+        {/* Date range with duration */}
+        <div className="text-[10px] text-muted-foreground">
+          {startDate && endDate ? (
+            <>
+              {format(startDate, 'MMM d')} - {format(endDate, 'MMM d')} ({microcycle.duration}d)
+            </>
+          ) : (
+            `${microcycle.duration}d`
+          )}
+        </div>
+        
+        {/* Tests and Events - Centered below date */}
         {(testDetails.length > 0 || eventDetails.length > 0) && (
-          <div className="absolute top-1 right-1 flex gap-0.5">
+          <div className="flex items-center justify-center gap-1 mt-1">
             {testDetails.length > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -167,8 +185,6 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
             )}
           </div>
         )}
-        <div className="font-medium">{microcycle.name}</div>
-        <div className="text-xs">{microcycle.duration}d</div>
       </div>
       
       {/* Fixed Chart container with grid */}
