@@ -141,9 +141,11 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                       style={{ width: `${width}px` }}
                     >
                       <div>{meso.name}</div>
-                      <div className="text-xs font-normal text-muted-foreground">
-                        {format(meso.startDate, 'MMM d')} - {format(meso.endDate, 'MMM d')} ({differenceInDays(meso.endDate, meso.startDate) + 1}d)
-                      </div>
+                      {meso.startDate && meso.endDate && (
+                        <div className="text-xs font-normal text-muted-foreground">
+                          {format(new Date(meso.startDate), 'MMM d')} - {format(new Date(meso.endDate), 'MMM d')} ({differenceInDays(new Date(meso.endDate), new Date(meso.startDate)) + 1}d)
+                        </div>
+                      )}
                       {mesoIndex > 0 && onCopyMesocycle && (
                         <Button
                           size="sm"
