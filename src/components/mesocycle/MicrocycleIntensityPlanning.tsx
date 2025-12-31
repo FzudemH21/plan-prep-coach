@@ -6,7 +6,7 @@ import MicrocycleIntensityColumn from './MicrocycleIntensityColumn';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Copy } from 'lucide-react';
-import { addDays } from 'date-fns';
+import { addDays, format } from 'date-fns';
 
 interface SubGoal {
   testDates?: string[];
@@ -129,7 +129,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
             {/* Mesocycle Headers */}
             <div className="flex mb-4">
               <div className="sticky left-0 bg-background z-20 w-[150px] shrink-0">
-                <div className="text-sm font-semibold text-center py-2">Microcycle Intensity</div>
+                <div className="text-sm font-semibold text-center py-4">Microcycle Intensity</div>
               </div>
               <div className="flex flex-nowrap">
                 {mesocycles.map((meso, mesoIndex) => {
@@ -137,10 +137,13 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                   return meso.microcycles.length > 0 ? (
                     <div 
                       key={meso.id}
-                      className={`relative text-center border-r-2 font-semibold border-r-slate-400 ${getIntensityColor(meso.intensity)} py-2 shrink-0`}
+                      className={`relative text-center border-r-2 font-semibold border-r-slate-400 ${getIntensityColor(meso.intensity)} py-3 shrink-0`}
                       style={{ width: `${width}px` }}
                     >
-                      {meso.name}
+                      <div>{meso.name}</div>
+                      <div className="text-xs font-normal text-muted-foreground">
+                        {format(meso.startDate, 'MMM d')} - {format(meso.endDate, 'MMM d')} ({meso.duration}d)
+                      </div>
                       {mesoIndex > 0 && onCopyMesocycle && (
                         <Button
                           size="sm"
