@@ -12,8 +12,8 @@ interface MicrocycleIntensityColumnProps {
   isLastMicrocycleOfMesocycle: boolean;
   intensityLevels: IntensityLevel[];
   getIntensityColor: (intensity: IntensityLevel) => string;
-  hasTests?: boolean;
-  hasEvents?: boolean;
+  testDetails?: { name: string; count: number }[];
+  eventDetails?: { name: string; count: number }[];
 }
 
 const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
@@ -24,8 +24,8 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
   isLastMicrocycleOfMesocycle,
   intensityLevels,
   getIntensityColor,
-  hasTests = false,
-  hasEvents = false
+  testDetails = [],
+  eventDetails = []
 }) => {
   const chartHeight = 200; // Fixed chart area height
   
@@ -100,28 +100,44 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
   return (
     <div className={`flex flex-col w-20 shrink-0 box-border ${getBorderClasses()}`}>
       {/* Microcycle header */}
-      <div className="relative h-16 text-center text-xs rounded w-full mb-2 flex flex-col items-center justify-center bg-primary/10">
+      <div className="relative h-20 text-center text-xs rounded w-full mb-2 flex flex-col items-center justify-center bg-primary/10">
         {/* Event/Test indicators in top-right corner */}
-        {(hasTests || hasEvents) && (
+        {(testDetails.length > 0 || eventDetails.length > 0) && (
           <div className="absolute top-1 right-1 flex gap-0.5">
-            {hasTests && (
+            {testDetails.length > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="flex items-center justify-center h-4 w-4 bg-black rounded-full">
                     <Trophy className="h-2.5 w-2.5 text-white" />
                   </span>
                 </TooltipTrigger>
-                <TooltipContent>Test scheduled this week</TooltipContent>
+                <TooltipContent>
+                  <div className="flex flex-col gap-0.5">
+                    {testDetails.map((test, i) => (
+                      <div key={i}>
+                        Test: {test.name}{test.count > 1 ? ` x${test.count}` : ''}
+                      </div>
+                    ))}
+                  </div>
+                </TooltipContent>
               </Tooltip>
             )}
-            {hasEvents && (
+            {eventDetails.length > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="flex items-center justify-center h-4 w-4 bg-black rounded-full">
                     <CalendarDays className="h-2.5 w-2.5 text-white" />
                   </span>
                 </TooltipTrigger>
-                <TooltipContent>Event scheduled this week</TooltipContent>
+                <TooltipContent>
+                  <div className="flex flex-col gap-0.5">
+                    {eventDetails.map((event, i) => (
+                      <div key={i}>
+                        Event: {event.name}{event.count > 1 ? ` x${event.count}` : ''}
+                      </div>
+                    ))}
+                  </div>
+                </TooltipContent>
               </Tooltip>
             )}
           </div>
