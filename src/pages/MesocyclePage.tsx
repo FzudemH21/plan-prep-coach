@@ -4405,7 +4405,7 @@ export default function MesocyclePage() {
                         return currentMeso.microcycles.length > 0 ? (
                           <div 
                             key={currentMeso.id}
-                            className="relative text-center border-r-2 font-semibold border-r-slate-400 bg-muted/50 py-3 shrink-0"
+                            className="relative text-center border border-black font-semibold bg-muted/50 py-3 shrink-0"
                             style={{ width: `${width}px` }}
                           >
                             {/* Mesocycle Name Row with Rounded Square Indicator and Notes Icon */}
@@ -4494,9 +4494,7 @@ export default function MesocyclePage() {
                         return (
                           <div 
                             key={micro.id}
-                            className={`relative text-center text-sm py-1 px-2 shrink-0 bg-muted/50 ${
-                              isLastMicro ? 'border-r-2 border-r-slate-400' : 'border-r border-border'
-                            }`}
+                            className="relative text-center text-sm py-1 px-2 shrink-0 bg-muted/50 border border-black"
                             style={{ width: `${width}px` }}
                           >
                             <div className="flex items-center justify-center gap-1">
