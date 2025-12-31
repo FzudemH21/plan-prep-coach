@@ -57,24 +57,38 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
     return dates;
   }, [mesocycles, planStartDate]);
 
-  // Check if there are tests in a given date range
-  const hasTestsInRange = (start: Date, end: Date): boolean => {
-    return subGoals.some(sg => 
-      sg.testDates?.some(td => {
+  // Get tests in date range with their names and count
+  const getTestsInRange = (start: Date, end: Date): { name: string; count: number }[] => {
+    const testCounts = new Map<string, number>();
+    
+    subGoals.forEach(sg => {
+      const testName = sg.testMethod || sg.description || 'Test';
+      sg.testDates?.forEach(td => {
         const testDate = new Date(td);
-        return testDate >= start && testDate <= end;
-      })
-    );
+        if (testDate >= start && testDate <= end) {
+          testCounts.set(testName, (testCounts.get(testName) || 0) + 1);
+        }
+      });
+    });
+    
+    return Array.from(testCounts.entries()).map(([name, count]) => ({ name, count }));
   };
 
-  // Check if there are events in a given date range
-  const hasEventsInRange = (start: Date, end: Date): boolean => {
-    return events.some(e => 
-      e.eventDates?.some(ed => {
+  // Get events in date range with their names and count
+  const getEventsInRange = (start: Date, end: Date): { name: string; count: number }[] => {
+    const eventCounts = new Map<string, number>();
+    
+    events.forEach(e => {
+      const eventName = e.name || 'Event';
+      e.eventDates?.forEach(ed => {
         const eventDate = new Date(ed);
-        return eventDate >= start && eventDate <= end;
-      })
-    );
+        if (eventDate >= start && eventDate <= end) {
+          eventCounts.set(eventName, (eventCounts.get(eventName) || 0) + 1);
+        }
+      });
+    });
+    
+    return Array.from(eventCounts.entries()).map(([name, count]) => ({ name, count }));
   };
   
   return (
@@ -133,10 +147,10 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                 <div className="flex items-end flex-nowrap">
                   {mesocycles.map((meso) => {
                     return meso.microcycles.map((micro, microIndex) => {
-                      const isLastMicrocycle = microIndex === meso.microcycles.length - 1;
+                    const isLastMicrocycle = microIndex === meso.microcycles.length - 1;
                       const dateRange = microcycleDates.get(micro.id);
-                      const hasTests = dateRange ? hasTestsInRange(dateRange.start, dateRange.end) : false;
-                      const hasEvents = dateRange ? hasEventsInRange(dateRange.start, dateRange.end) : false;
+                      const testDetails = dateRange ? getTestsInRange(dateRange.start, dateRange.end) : [];
+                      const eventDetails = dateRange ? getEventsInRange(dateRange.start, dateRange.end) : [];
                       
                       return (
                         <MicrocycleIntensityColumn
@@ -148,8 +162,8 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                           isLastMicrocycleOfMesocycle={isLastMicrocycle}
                           intensityLevels={intensityLevels}
                           getIntensityColor={getIntensityColor}
-                          hasTests={hasTests}
-                          hasEvents={hasEvents}
+                          testDetails={testDetails}
+                          eventDetails={eventDetails}
                         />
                       );
                     });

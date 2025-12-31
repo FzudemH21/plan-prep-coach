@@ -38,7 +38,7 @@ import { CrossMesocycleCopyDialog } from "@/components/ui/cross-mesocycle-copy-d
 import { CrossMesocycleMicrocycleCopyDialog } from "@/components/ui/cross-mesocycle-microcycle-copy-dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy, AlertCircle, FolderOpen } from "lucide-react";
+import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy, AlertCircle, FolderOpen, Trophy } from "lucide-react";
 import { ResourcesDialog } from "@/components/mesocycle/ResourcesDialog";
 import { format, addWeeks, differenceInWeeks, addDays } from "date-fns";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
@@ -609,6 +609,57 @@ export default function MesocyclePage() {
       </CardContent>
     </Card>
   );
+
+  // Calculate microcycle date ranges for event/test checking
+  const calculateMicrocycleDates = useMemo(() => {
+    let currentDate = new Date(planStartDate);
+    const microcycleDates: Map<string, { start: Date; end: Date }> = new Map();
+    
+    mesocycles.forEach(meso => {
+      (meso.microcycles || []).forEach(micro => {
+        const startDate = new Date(currentDate);
+        const endDate = addDays(currentDate, micro.duration - 1);
+        microcycleDates.set(micro.id, { start: startDate, end: endDate });
+        currentDate = addDays(endDate, 1);
+      });
+    });
+    
+    return microcycleDates;
+  }, [mesocycles, planStartDate]);
+
+  // Get tests in date range with their names and count
+  const getTestsInRange = (start: Date, end: Date): { name: string; count: number }[] => {
+    const testCounts = new Map<string, number>();
+    
+    macrocycleData?.subGoals?.forEach((sg: any) => {
+      const testName = sg.testMethod || sg.description || 'Test';
+      sg.testDates?.forEach((td: string) => {
+        const testDate = new Date(td);
+        if (testDate >= start && testDate <= end) {
+          testCounts.set(testName, (testCounts.get(testName) || 0) + 1);
+        }
+      });
+    });
+    
+    return Array.from(testCounts.entries()).map(([name, count]) => ({ name, count }));
+  };
+
+  // Get events in date range with their names and count
+  const getEventsInRange = (start: Date, end: Date): { name: string; count: number }[] => {
+    const eventCounts = new Map<string, number>();
+    
+    macrocycleData?.events?.forEach((e: any) => {
+      const eventName = e.name || 'Event';
+      e.eventDates?.forEach((ed: string) => {
+        const eventDate = new Date(ed);
+        if (eventDate >= start && eventDate <= end) {
+          eventCounts.set(eventName, (eventCounts.get(eventName) || 0) + 1);
+        }
+      });
+    });
+    
+    return Array.from(eventCounts.entries()).map(([name, count]) => ({ name, count }));
+  };
 
   // Calculate total mesocycle days from microcycles
   const totalMesocycleDays = mesocycles.reduce((sum, meso) => 
@@ -2996,18 +3047,67 @@ export default function MesocyclePage() {
                                    <div className="bg-gradient-to-b from-muted/40 via-muted/60 to-muted/40 rounded-b-lg border-l border-r border-muted-foreground/30" />
                                  )}
                                  {(meso.microcycles || []).map((microcycle, microcycleIndex) => {
-                                   const intensity = microcycle.intensity || meso.intensity;
-                                   return (
-                                     <div key={`${meso.id}-micro-${microcycleIndex}`} className={`text-center border rounded-b ${intensityBg(intensity)}`}>
-                                       <div className="text-xs p-1 font-medium">
-                                         {microcycle.name || `Mic${microcycleIndex + 1}`}
-                                       </div>
-                                       <div className="text-xs px-1 py-0.5 opacity-80 border-t">
-                                         {microcycle.duration} days
-                                       </div>
-                                     </div>
-                                   );
-                                 })}
+                                    const intensity = microcycle.intensity || meso.intensity;
+                                    const dateRange = calculateMicrocycleDates.get(microcycle.id);
+                                    const testDetails = dateRange ? getTestsInRange(dateRange.start, dateRange.end) : [];
+                                    const eventDetails = dateRange ? getEventsInRange(dateRange.start, dateRange.end) : [];
+                                    
+                                    return (
+                                      <div key={`${meso.id}-micro-${microcycleIndex}`} className={`relative text-center border rounded-b ${intensityBg(intensity)}`}>
+                                        {/* Event/Test indicators */}
+                                        {(testDetails.length > 0 || eventDetails.length > 0) && (
+                                          <div className="absolute top-0.5 right-0.5 flex gap-0.5">
+                                            {testDetails.length > 0 && (
+                                              <TooltipProvider>
+                                                <Tooltip>
+                                                  <TooltipTrigger asChild>
+                                                    <span className="flex items-center justify-center h-4 w-4 bg-black rounded-full">
+                                                      <Trophy className="h-2.5 w-2.5 text-white" />
+                                                    </span>
+                                                  </TooltipTrigger>
+                                                  <TooltipContent>
+                                                    <div className="flex flex-col gap-0.5">
+                                                      {testDetails.map((test, i) => (
+                                                        <div key={i}>
+                                                          Test: {test.name}{test.count > 1 ? ` x${test.count}` : ''}
+                                                        </div>
+                                                      ))}
+                                                    </div>
+                                                  </TooltipContent>
+                                                </Tooltip>
+                                              </TooltipProvider>
+                                            )}
+                                            {eventDetails.length > 0 && (
+                                              <TooltipProvider>
+                                                <Tooltip>
+                                                  <TooltipTrigger asChild>
+                                                    <span className="flex items-center justify-center h-4 w-4 bg-black rounded-full">
+                                                      <CalendarDays className="h-2.5 w-2.5 text-white" />
+                                                    </span>
+                                                  </TooltipTrigger>
+                                                  <TooltipContent>
+                                                    <div className="flex flex-col gap-0.5">
+                                                      {eventDetails.map((event, i) => (
+                                                        <div key={i}>
+                                                          Event: {event.name}{event.count > 1 ? ` x${event.count}` : ''}
+                                                        </div>
+                                                      ))}
+                                                    </div>
+                                                  </TooltipContent>
+                                                </Tooltip>
+                                              </TooltipProvider>
+                                            )}
+                                          </div>
+                                        )}
+                                        <div className="text-xs p-1 font-medium">
+                                          {microcycle.name || `Mic${microcycleIndex + 1}`}
+                                        </div>
+                                        <div className="text-xs px-1 py-0.5 opacity-80 border-t">
+                                          {microcycle.duration} days
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
                                </React.Fragment>
                              );
                            })}
