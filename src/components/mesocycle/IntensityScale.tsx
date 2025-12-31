@@ -27,7 +27,7 @@ const IntensityScale: React.FC<IntensityScaleProps> = ({
   return (
     <div className="w-[150px] flex flex-col items-end bg-background">
       {/* Scale header - spacer to align with day headers */}
-      <div className="text-xs p-1 mb-2 h-16 flex items-end justify-end">
+      <div className="text-xs p-1 mb-2 h-20 flex items-end justify-end">
         <span className="font-medium text-muted-foreground">Intensity</span>
       </div>
       
