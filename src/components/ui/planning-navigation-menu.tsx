@@ -25,7 +25,7 @@ const PLANNING_STEPS: PlanningStep[] = [
   // Mesocycle Planning (5 steps)
   { id: 4, label: "Mesocycle Setup", page: "mesocycle", pageStep: 1 },
   { id: 5, label: "Daily Training Intensity Planning", page: "mesocycle", pageStep: 2 },
-  { id: 6, label: "Method Allocation", page: "mesocycle", pageStep: 3 },
+  { id: 6, label: "Mesocycle Characterization", page: "mesocycle", pageStep: 3 },
   { id: 7, label: "Method Periodization", page: "mesocycle", pageStep: 4 },
   { id: 8, label: "Exercise Selection", page: "mesocycle", pageStep: 5 },
   // Microcycle Planning (2 steps)

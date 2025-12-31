@@ -627,38 +627,67 @@ export default function MesocyclePage() {
     return microcycleDates;
   }, [mesocycles, planStartDate]);
 
-  // Get tests in date range with their names and count
-  const getTestsInRange = (start: Date, end: Date): { name: string; count: number }[] => {
-    const testCounts = new Map<string, number>();
+  // Interface for test/event details with dates
+  interface TestDetail {
+    name: string;
+    goal?: string;
+    dates: Date[];
+  }
+  
+  interface EventDetail {
+    name: string;
+    dates: Date[];
+  }
+
+  // Get tests in date range with their names and individual dates
+  const getTestsInRange = (start: Date, end: Date): TestDetail[] => {
+    const testMap = new Map<string, { goal?: string; dates: Date[] }>();
     
     macrocycleData?.subGoals?.forEach((sg: any) => {
       const testName = sg.testMethod || sg.description || 'Test';
       sg.testDates?.forEach((td: string) => {
         const testDate = new Date(td);
         if (testDate >= start && testDate <= end) {
-          testCounts.set(testName, (testCounts.get(testName) || 0) + 1);
+          const existing = testMap.get(testName);
+          if (existing) {
+            existing.dates.push(testDate);
+          } else {
+            testMap.set(testName, { goal: sg.goal, dates: [testDate] });
+          }
         }
       });
     });
     
-    return Array.from(testCounts.entries()).map(([name, count]) => ({ name, count }));
+    return Array.from(testMap.entries()).map(([name, data]) => ({ 
+      name, 
+      goal: data.goal,
+      dates: data.dates.sort((a, b) => a.getTime() - b.getTime())
+    }));
   };
 
-  // Get events in date range with their names and count
-  const getEventsInRange = (start: Date, end: Date): { name: string; count: number }[] => {
-    const eventCounts = new Map<string, number>();
+  // Get events in date range with their names and individual dates
+  const getEventsInRange = (start: Date, end: Date): EventDetail[] => {
+    const eventMap = new Map<string, Date[]>();
     
     macrocycleData?.events?.forEach((e: any) => {
       const eventName = e.name || 'Event';
       e.eventDates?.forEach((ed: string) => {
         const eventDate = new Date(ed);
         if (eventDate >= start && eventDate <= end) {
-          eventCounts.set(eventName, (eventCounts.get(eventName) || 0) + 1);
+          const existing = eventMap.get(eventName);
+          if (existing) {
+            existing.push(eventDate);
+          } else {
+            eventMap.set(eventName, [eventDate]);
+          }
         }
       });
     });
     
-    return Array.from(eventCounts.entries()).map(([name, count]) => ({ name, count }));
+    return Array.from(eventMap.entries()).map(([name, dates]) => ({ 
+      name, 
+      dates: dates.sort((a, b) => a.getTime() - b.getTime())
+    }));
   };
 
   // Calculate total mesocycle days from microcycles
@@ -1364,7 +1393,7 @@ export default function MesocyclePage() {
 
   // Helper function to get tests and events scheduled within a mesocycle's date range
   const getTestsAndEventsForMesocycle = useCallback((mesocycle: ExtendedMesocycle) => {
-    const tests: Array<{ name: string; date: Date }> = [];
+    const tests: Array<{ name: string; date: Date; goal?: string }> = [];
     const events: Array<{ name: string; date: Date }> = [];
     
     if (!macrocycleData) return { tests, events };
@@ -1381,7 +1410,8 @@ export default function MesocyclePage() {
             if (date >= mesoStart && date <= mesoEnd) {
               tests.push({
                 name: subGoal.test || subGoal.description || 'Test',
-                date
+                date,
+                goal: subGoal.goal
               });
             }
           });
@@ -1595,7 +1625,7 @@ export default function MesocyclePage() {
                   const { tests, events } = getTestsAndEventsForMesocycle(meso);
                   
                   return (
-                    <div key={meso.id} className="p-3 text-center border-r last:border-r-0">
+                    <div key={meso.id} className="relative p-3 text-center border-r last:border-r-0">
                       <div className="flex items-center justify-center gap-2 mb-1">
                         <div className={`w-3 h-3 rounded ${getIntensityColor(meso.intensity)}`}></div>
                         <span className="font-medium text-sm">{meso.name}</span>
@@ -1623,14 +1653,14 @@ export default function MesocyclePage() {
                       <div className="text-xs text-muted-foreground mb-2">
                         {format(meso.startDate, 'MMM d')} - {format(meso.endDate, 'MMM d')}
                       </div>
-                      {/* Tests and Events - Grouped by name with count */}
+                      {/* Tests and Events - Icons in top-right corner */}
                       {(tests.length > 0 || events.length > 0) && (() => {
                         // Group tests by name
                         const groupedTests = tests.reduce((acc, test) => {
-                          if (!acc[test.name]) acc[test.name] = [];
-                          acc[test.name].push(test.date);
+                          if (!acc[test.name]) acc[test.name] = { goal: test.goal, dates: [] };
+                          acc[test.name].dates.push(test.date);
                           return acc;
-                        }, {} as Record<string, Date[]>);
+                        }, {} as Record<string, { goal?: string; dates: Date[] }>);
                         
                         // Group events by name
                         const groupedEvents = events.reduce((acc, event) => {
@@ -1640,41 +1670,59 @@ export default function MesocyclePage() {
                         }, {} as Record<string, Date[]>);
                         
                         return (
-                          <div className="space-y-1">
-                            {Object.entries(groupedTests).map(([name, dates]) => (
-                              <TooltipProvider key={`test-${name}`}>
+                          <div className="absolute top-1 right-1 flex gap-0.5">
+                            {Object.keys(groupedTests).length > 0 && (
+                              <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <Badge variant="outline" className="text-xs bg-blue-500/10 border-blue-500/30 cursor-help">
-                                      📋 {name}{dates.length > 1 ? ` ×${dates.length}` : ''}
-                                    </Badge>
+                                    <div className="cursor-pointer">
+                                      <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                                        <Trophy className="h-3 w-3" />
+                                      </Badge>
+                                    </div>
                                   </TooltipTrigger>
                                   <TooltipContent>
-                                    <p className="font-medium">{name}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {dates.sort((a, b) => a.getTime() - b.getTime()).map(d => format(d, 'MMM d')).join(', ')}
-                                    </p>
+                                    <div className="space-y-1">
+                                      <p className="text-xs font-semibold">Tests:</p>
+                                      {Object.entries(groupedTests).map(([name, data]) => (
+                                        <div key={name} className="text-xs text-muted-foreground">
+                                          <div>• {data.goal ? `${data.goal}: ` : ''}{name}</div>
+                                          <div className="pl-2 text-[10px]">
+                                            {data.dates.sort((a, b) => a.getTime() - b.getTime()).map(d => format(d, 'MMM d')).join(', ')}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
-                            ))}
-                            {Object.entries(groupedEvents).map(([name, dates]) => (
-                              <TooltipProvider key={`event-${name}`}>
+                            )}
+                            {Object.keys(groupedEvents).length > 0 && (
+                              <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <Badge variant="outline" className="text-xs bg-amber-500/10 border-amber-500/30 cursor-help">
-                                      🏆 {name}{dates.length > 1 ? ` ×${dates.length}` : ''}
-                                    </Badge>
+                                    <div className="cursor-pointer">
+                                      <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                                        <CalendarDays className="h-3 w-3" />
+                                      </Badge>
+                                    </div>
                                   </TooltipTrigger>
                                   <TooltipContent>
-                                    <p className="font-medium">{name}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {dates.sort((a, b) => a.getTime() - b.getTime()).map(d => format(d, 'MMM d')).join(', ')}
-                                    </p>
+                                    <div className="space-y-1">
+                                      <p className="text-xs font-semibold">Events:</p>
+                                      {Object.entries(groupedEvents).map(([name, dates]) => (
+                                        <div key={name} className="text-xs text-muted-foreground">
+                                          <div>• {name}</div>
+                                          <div className="pl-2 text-[10px]">
+                                            {dates.sort((a, b) => a.getTime() - b.getTime()).map(d => format(d, 'MMM d')).join(', ')}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
-                            ))}
+                            )}
                           </div>
                         );
                       })()}
@@ -3061,15 +3109,21 @@ export default function MesocyclePage() {
                                               <TooltipProvider>
                                                 <Tooltip>
                                                   <TooltipTrigger asChild>
-                                                    <span className="flex items-center justify-center h-4 w-4 bg-black rounded-full">
-                                                      <Trophy className="h-2.5 w-2.5 text-white" />
-                                                    </span>
+                                                    <div className="cursor-pointer">
+                                                      <Badge variant="secondary" className="h-4 px-1 text-xs">
+                                                        <Trophy className="h-2.5 w-2.5" />
+                                                      </Badge>
+                                                    </div>
                                                   </TooltipTrigger>
                                                   <TooltipContent>
-                                                    <div className="flex flex-col gap-0.5">
+                                                    <div className="space-y-1">
+                                                      <p className="text-xs font-semibold">Tests:</p>
                                                       {testDetails.map((test, i) => (
-                                                        <div key={i}>
-                                                          Test: {test.name}{test.count > 1 ? ` x${test.count}` : ''}
+                                                        <div key={i} className="text-xs text-muted-foreground">
+                                                          <div>• {test.goal ? `${test.goal}: ` : ''}{test.name}</div>
+                                                          <div className="pl-2 text-[10px]">
+                                                            {test.dates.map(d => format(d, 'MMM d')).join(', ')}
+                                                          </div>
                                                         </div>
                                                       ))}
                                                     </div>
@@ -3081,15 +3135,21 @@ export default function MesocyclePage() {
                                               <TooltipProvider>
                                                 <Tooltip>
                                                   <TooltipTrigger asChild>
-                                                    <span className="flex items-center justify-center h-4 w-4 bg-black rounded-full">
-                                                      <CalendarDays className="h-2.5 w-2.5 text-white" />
-                                                    </span>
+                                                    <div className="cursor-pointer">
+                                                      <Badge variant="secondary" className="h-4 px-1 text-xs">
+                                                        <CalendarDays className="h-2.5 w-2.5" />
+                                                      </Badge>
+                                                    </div>
                                                   </TooltipTrigger>
                                                   <TooltipContent>
-                                                    <div className="flex flex-col gap-0.5">
+                                                    <div className="space-y-1">
+                                                      <p className="text-xs font-semibold">Events:</p>
                                                       {eventDetails.map((event, i) => (
-                                                        <div key={i}>
-                                                          Event: {event.name}{event.count > 1 ? ` x${event.count}` : ''}
+                                                        <div key={i} className="text-xs text-muted-foreground">
+                                                          <div>• {event.name}</div>
+                                                          <div className="pl-2 text-[10px]">
+                                                            {event.dates.map(d => format(d, 'MMM d')).join(', ')}
+                                                          </div>
                                                         </div>
                                                       ))}
                                                     </div>
@@ -4515,7 +4575,7 @@ export default function MesocyclePage() {
   const stepTitles = [
     "Mesocycle Setup",
     "Daily Training Intensity Planning", 
-    "Method Allocation",
+    "Mesocycle Characterization",
     "Method Periodization",
     "Exercise Selection"
   ];
