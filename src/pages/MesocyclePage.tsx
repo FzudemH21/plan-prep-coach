@@ -1625,7 +1625,7 @@ export default function MesocyclePage() {
                   const { tests, events } = getTestsAndEventsForMesocycle(meso);
                   
                   return (
-                    <div key={meso.id} className="relative p-3 text-center border-r last:border-r-0">
+                    <div key={meso.id} className="p-3 text-center border-r last:border-r-0">
                       <div className="flex items-center justify-center gap-2 mb-1">
                         <div className={`w-3 h-3 rounded ${getIntensityColor(meso.intensity)}`}></div>
                         <span className="font-medium text-sm">{meso.name}</span>
@@ -1650,10 +1650,10 @@ export default function MesocyclePage() {
                           </Tooltip>
                         </TooltipProvider>
                       </div>
-                      <div className="text-xs text-muted-foreground mb-2">
+                      <div className="text-xs text-muted-foreground">
                         {format(meso.startDate, 'MMM d')} - {format(meso.endDate, 'MMM d')}
                       </div>
-                      {/* Tests and Events - Icons in top-right corner */}
+                      {/* Tests and Events - Centered below date */}
                       {(tests.length > 0 || events.length > 0) && (() => {
                         // Group tests by name
                         const groupedTests = tests.reduce((acc, test) => {
@@ -1670,7 +1670,7 @@ export default function MesocyclePage() {
                         }, {} as Record<string, Date[]>);
                         
                         return (
-                          <div className="absolute top-1 right-1 flex gap-0.5">
+                          <div className="flex items-center justify-center gap-1 mt-1">
                             {Object.keys(groupedTests).length > 0 && (
                               <TooltipProvider>
                                 <Tooltip>
@@ -2989,7 +2989,7 @@ export default function MesocyclePage() {
                            <div className="grid gap-1" style={{
                              gridTemplateColumns: generateHeaderGridTemplate(getVisibleMesocyclesForPeriodization())
                            }}>
-                            <div />
+                            <div className="sticky left-0 z-[95] bg-background" />
                            {getVisibleMesocyclesForPeriodization().map((meso) => {
                              const hasGap = hasMesocycleGap(meso.id);
                              return (
@@ -3023,7 +3023,7 @@ export default function MesocyclePage() {
                           <div className="grid gap-1" style={{
                             gridTemplateColumns: generateHeaderGridTemplate(getVisibleMesocyclesForPeriodization())
                           }}>
-                             <div />
+                             <div className="sticky left-0 z-[95] bg-background" />
                            {getVisibleMesocyclesForPeriodization().map((meso) => {
                                 const hasGap = hasMesocycleGap(meso.id);
                                 return (
@@ -3086,7 +3086,7 @@ export default function MesocyclePage() {
                           <div className="grid gap-1" style={{
                             gridTemplateColumns: generateHeaderGridTemplate(getVisibleMesocyclesForPeriodization())
                           }}>
-                            <div />
+                            <div className="sticky left-0 z-[95] bg-background" />
                            {getVisibleMesocyclesForPeriodization().map((meso) => {
                              const hasGap = hasMesocycleGap(meso.id);
                              return (
