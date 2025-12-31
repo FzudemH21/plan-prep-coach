@@ -5,7 +5,7 @@ import IntensityScale from './IntensityScale';
 import MicrocycleIntensityColumn from './MicrocycleIntensityColumn';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { Copy } from 'lucide-react';
+import { Copy, MessageSquare, Trophy, CalendarDays } from 'lucide-react';
 import { addDays, differenceInDays, format } from 'date-fns';
 
 interface SubGoal {
@@ -119,6 +119,35 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
       dates: dates.sort((a, b) => a.getTime() - b.getTime())
     }));
   };
+
+  // Track which mesocycles have tests or events
+  const mesoHasTests = useMemo(() => {
+    const result = new Set<string>();
+    mesocycles.forEach(meso => {
+      meso.microcycles.forEach(micro => {
+        const dateRange = microcycleDates.get(micro.id);
+        if (dateRange) {
+          const tests = getTestsInRange(dateRange.start, dateRange.end);
+          if (tests.length > 0) result.add(meso.id);
+        }
+      });
+    });
+    return result;
+  }, [mesocycles, microcycleDates, subGoals]);
+
+  const mesoHasEvents = useMemo(() => {
+    const result = new Set<string>();
+    mesocycles.forEach(meso => {
+      meso.microcycles.forEach(micro => {
+        const dateRange = microcycleDates.get(micro.id);
+        if (dateRange) {
+          const eventList = getEventsInRange(dateRange.start, dateRange.end);
+          if (eventList.length > 0) result.add(meso.id);
+        }
+      });
+    });
+    return result;
+  }, [mesocycles, microcycleDates, events]);
   
   return (
     <div className="space-y-4">
@@ -137,15 +166,36 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                   return meso.microcycles.length > 0 ? (
                     <div 
                       key={meso.id}
-                      className={`relative text-center border-r-2 font-semibold border-r-slate-400 ${getIntensityColor(meso.intensity)} py-3 shrink-0`}
+                      className="relative text-center border-r-2 font-semibold border-r-slate-400 bg-muted/50 py-3 shrink-0"
                       style={{ width: `${width}px` }}
                     >
-                      <div>{meso.name}</div>
+                      {/* Mesocycle Name Row with Rounded Square Indicator and Notes Icon */}
+                      <div className="flex items-center justify-center gap-2">
+                        <div className={`w-3 h-3 rounded-sm ${getIntensityColor(meso.intensity)}`} />
+                        <span>{meso.name}</span>
+                        <MessageSquare className="h-3 w-3 text-muted-foreground" />
+                      </div>
+                      
+                      {/* Date Range */}
                       {meso.startDate && meso.endDate && (
                         <div className="text-xs font-normal text-muted-foreground">
-                          {format(new Date(meso.startDate), 'MMM d')} - {format(new Date(meso.endDate), 'MMM d')} ({differenceInDays(new Date(meso.endDate), new Date(meso.startDate)) + 1}d)
+                          {format(new Date(meso.startDate), 'MMM d')} - {format(new Date(meso.endDate), 'MMM d')}
                         </div>
                       )}
+                      
+                      {/* Test and Event Indicators */}
+                      {(mesoHasTests.has(meso.id) || mesoHasEvents.has(meso.id)) && (
+                        <div className="flex items-center justify-center gap-2 mt-1">
+                          {mesoHasTests.has(meso.id) && (
+                            <Trophy className="h-3 w-3 text-muted-foreground" />
+                          )}
+                          {mesoHasEvents.has(meso.id) && (
+                            <CalendarDays className="h-3 w-3 text-muted-foreground" />
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Copy Button */}
                       {mesoIndex > 0 && onCopyMesocycle && (
                         <Button
                           size="sm"
