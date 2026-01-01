@@ -134,7 +134,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
               </div>
               <div className="flex flex-nowrap">
                 {mesocycles.map((meso, mesoIndex) => {
-                  const width = meso.microcycles.length * 80; // 80px per microcycle
+                  const width = meso.microcycles.length * 120; // 120px per microcycle
                   return meso.microcycles.length > 0 ? (
                     <div 
                       key={meso.id}

@@ -115,11 +115,11 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
   };
 
   return (
-    <div className={`flex flex-col w-20 shrink-0 box-border ${getBorderClasses()}`}>
+    <div className={`flex flex-col w-[120px] shrink-0 box-border ${getBorderClasses()}`}>
       {/* Microcycle header - matching Mesocycle Characterization style */}
       <div className="h-20 text-center text-xs rounded w-full mb-2 flex flex-col items-center justify-center bg-primary/10 p-1">
         {/* Microcycle name */}
-        <div className="font-medium">{microcycle.name}</div>
+        <div className="font-medium truncate w-full px-1" title={microcycle.name}>{microcycle.name}</div>
         
         {/* Date range with duration */}
         <div className="text-[10px] text-muted-foreground">
@@ -213,7 +213,7 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
       </div>
       
       {/* Fixed Intensity label - prevent width changes */}
-      <div className="text-xs mt-2 text-center capitalize font-medium w-20 whitespace-nowrap overflow-hidden text-ellipsis">
+      <div className="text-xs mt-2 text-center capitalize font-medium w-[120px] whitespace-nowrap overflow-hidden text-ellipsis">
         {intensity.replace('-', ' ')}
       </div>
     </div>
