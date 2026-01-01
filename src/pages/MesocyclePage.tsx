@@ -4500,7 +4500,7 @@ export default function MesocyclePage() {
                     </div>
                     <div className="flex flex-nowrap">
                       {currentMeso && currentMeso.microcycles.map((micro, microIndex) => {
-                        const width = micro.duration * 80; // 80px per day
+                        const width = micro.duration * 100; // 100px per day for better readability
                         const isLastMicro = microIndex === currentMeso.microcycles.length - 1;
                         
                         // Check if we can copy - fixed logic to check across mesocycles
