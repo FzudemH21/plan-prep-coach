@@ -4408,10 +4408,47 @@ export default function MesocyclePage() {
                             className="relative text-center border border-border rounded-md font-semibold bg-primary/10 py-3 shrink-0"
                             style={{ width: `${width}px` }}
                           >
-                            {/* Mesocycle Name Row with Rounded Square Indicator and Clear Button */}
+                            {/* Mesocycle Name Row with Clickable Intensity Badge */}
                             <div className="flex items-center justify-center gap-2">
-                              <div className={`w-3 h-3 rounded-sm ${getIntensityColor(currentMeso.intensity)}`} />
                               <span>{currentMeso.name}</span>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className={cn(
+                                      "text-xs font-medium px-2 py-0.5 h-auto hover:opacity-80 rounded",
+                                      getIntensityColor(currentMeso.intensity)
+                                    )}
+                                  >
+                                    {currentMeso.intensity.replace(/-/g, ' ').toUpperCase()}
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-56 p-2 bg-popover" align="center">
+                                  <div className="space-y-1">
+                                    <div className="text-sm font-medium mb-2">Change Mesocycle Intensity</div>
+                                    {intensityLevels.map((level) => (
+                                      <Button
+                                        key={level}
+                                        variant="ghost"
+                                        size="sm"
+                                        className={cn(
+                                          "w-full justify-start text-xs",
+                                          level === currentMeso.intensity && "bg-accent"
+                                        )}
+                                        onClick={() => {
+                                          const updated = [...mesocycles];
+                                          updated[currentMesocycleIndexDailyPlanning].intensity = level;
+                                          setMesocycles(updated);
+                                        }}
+                                      >
+                                        <span className={cn("inline-block w-3 h-3 rounded-full mr-2", getIntensityColor(level))} />
+                                        {level.replace(/-/g, ' ')}
+                                      </Button>
+                                    ))}
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -4494,8 +4531,45 @@ export default function MesocyclePage() {
                             style={{ width: `${width}px` }}
                           >
                             <div className="flex items-center justify-center gap-1">
-                              <div className={`w-3 h-3 rounded-sm ${getIntensityColor(micro.intensity)}`} />
                               <span>{micro.name}</span>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className={cn(
+                                      "text-xs font-medium px-1.5 py-0.5 h-auto hover:opacity-80 rounded",
+                                      getIntensityColor(micro.intensity)
+                                    )}
+                                  >
+                                    {micro.intensity.replace(/-/g, ' ').toUpperCase()}
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-56 p-2 bg-popover" align="center">
+                                  <div className="space-y-1">
+                                    <div className="text-sm font-medium mb-2">Change Microcycle Intensity</div>
+                                    {intensityLevels.map((level) => (
+                                      <Button
+                                        key={level}
+                                        variant="ghost"
+                                        size="sm"
+                                        className={cn(
+                                          "w-full justify-start text-xs",
+                                          level === micro.intensity && "bg-accent"
+                                        )}
+                                        onClick={() => {
+                                          const updated = [...mesocycles];
+                                          updated[currentMesocycleIndexDailyPlanning].microcycles[microIndex].intensity = level;
+                                          setMesocycles(updated);
+                                        }}
+                                      >
+                                        <span className={cn("inline-block w-3 h-3 rounded-full mr-2", getIntensityColor(level))} />
+                                        {level.replace(/-/g, ' ')}
+                                      </Button>
+                                    ))}
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
                               
                               {/* Copy button */}
                               {canCopy && (
