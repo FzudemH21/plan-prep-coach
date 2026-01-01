@@ -172,7 +172,7 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
   );
 
   const columnElement = (
-    <div className={`flex flex-col w-20 shrink-0 box-border ${getBorderClasses()}`}>
+    <div className={`flex flex-col w-[100px] shrink-0 box-border ${getBorderClasses()}`}>
       {/* Day header */}
       {dayHeader}
       
@@ -205,7 +205,7 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
       </div>
       
       {/* Fixed Intensity label - prevent width changes */}
-      <div className="text-xs mt-2 text-center capitalize font-medium w-20 whitespace-nowrap overflow-hidden text-ellipsis">
+      <div className="text-xs mt-2 text-center capitalize font-medium w-[100px] whitespace-nowrap overflow-hidden text-ellipsis">
         {intensity.replace('-', ' ')}
       </div>
     </div>
