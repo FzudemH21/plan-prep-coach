@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, ArrowRight, Settings, SplitSquareHorizontal, Columns, MessageSquare, ChevronLeft, ChevronRight, GripVertical as GripVerticalIcon } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Settings, SplitSquareHorizontal, Columns, MessageSquare, ChevronLeft, ChevronRight, GripVertical as GripVerticalIcon, SlidersHorizontal } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -23,6 +23,7 @@ import { DailyIntensity, TrainingDay } from '@/types/daily-intensity';
 import { useAthleticismData } from '@/hooks/useAthleticismData';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useDragFill } from '@/hooks/useDragFill';
+import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { QuantitativeParameterInput, QualitativeParameterInput } from '@/components/ui/parameter-input';
 import { DebouncedTextInput } from '@/components/ui/debounced-input';
 import { KeyboardShortcutsPanel } from '@/components/ui/keyboard-shortcuts-panel';
@@ -44,6 +45,8 @@ import { format, addWeeks, differenceInWeeks, addDays, differenceInDays } from "
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 import { IntensityLevel } from "@/types/training";
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
 
 // Helper function for string normalization - robust canonicalization
 const normalizeForComparison = (str: unknown): string => {
@@ -125,6 +128,12 @@ export default function MesocyclePage() {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [collapsedMethods, setCollapsedMethods] = useState<Set<string>>(new Set());
   
+  // Method parameter visibility overrides for Step 4
+  // Key: methodName (or fullMethodName with category), Value: { parameterName: boolean }
+  const [methodParameterVisibility, setMethodParameterVisibility] = useState<
+    Record<string, Record<string, boolean>>
+  >({});
+  
   // Resources state for Step 4
   const [isResourcesDialogOpen, setIsResourcesDialogOpen] = useState(false);
   const [resources, setResources] = useState<Array<{
@@ -192,6 +201,7 @@ export default function MesocyclePage() {
   
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
+  const { data: parametersDataV2 } = useParametersDataV2();
   const { dragState, startDrag, endDrag, addToSelection, clearSelection, fillCells } = useDragFill();
   const { toast } = useToast();
 
@@ -518,6 +528,90 @@ export default function MesocyclePage() {
       localStorage.setItem('mesocycleNotes', JSON.stringify(mesocycleNotes));
     }
   }, [mesocycleNotes]);
+
+  // Load method parameter visibility from localStorage on mount
+  useEffect(() => {
+    const savedVisibility = localStorage.getItem('methodParameterVisibility');
+    if (savedVisibility) {
+      try {
+        setMethodParameterVisibility(JSON.parse(savedVisibility));
+      } catch (e) {
+        console.error('Failed to load method parameter visibility:', e);
+      }
+    }
+  }, []);
+
+  // Save method parameter visibility to localStorage
+  useEffect(() => {
+    if (Object.keys(methodParameterVisibility).length > 0) {
+      localStorage.setItem('methodParameterVisibility', JSON.stringify(methodParameterVisibility));
+    }
+  }, [methodParameterVisibility]);
+
+  // Helper function to check if a parameter is visible for a method
+  const isParameterVisibleForMethod = (
+    methodName: string, 
+    paramName: string, 
+    defaultVisible: boolean = true
+  ): boolean => {
+    const methodOverrides = methodParameterVisibility[methodName];
+    if (methodOverrides && paramName in methodOverrides) {
+      return methodOverrides[paramName];
+    }
+    return defaultVisible;
+  };
+
+  // Toggle parameter visibility for a method
+  const toggleParameterVisibility = (methodName: string, paramName: string, visible: boolean) => {
+    setMethodParameterVisibility(prev => ({
+      ...prev,
+      [methodName]: {
+        ...prev[methodName],
+        [paramName]: visible
+      }
+    }));
+  };
+
+  // Show all parameters for a method
+  const showAllParametersForMethod = (methodName: string, parameters: { name: string }[]) => {
+    const allVisible = parameters.reduce((acc, param) => {
+      acc[param.name] = true;
+      return acc;
+    }, {} as Record<string, boolean>);
+    setMethodParameterVisibility(prev => ({
+      ...prev,
+      [methodName]: allVisible
+    }));
+  };
+
+  // Reset parameter visibility for a method (remove all overrides)
+  const resetParameterVisibilityForMethod = (methodName: string) => {
+    setMethodParameterVisibility(prev => {
+      const { [methodName]: _, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  // Get rationale for a method based on selected goals
+  const getMethodRationale = (methodName: string): { rationale: string; parameterName: string }[] => {
+    if (!parametersDataV2?.parameterMethods) return [];
+    
+    // Get all parameter-method associations that match this method and have rationale
+    const methodAssociations = parametersDataV2.parameterMethods.filter(
+      pm => pm.methodId === methodName && pm.rationale
+    );
+    
+    // For each association, find the parameter name
+    return methodAssociations
+      .map(pm => {
+        const param = parametersDataV2.parameters.find(p => p.id === pm.parameterId);
+        return {
+          rationale: pm.rationale || '',
+          parameterName: param?.name || 'Unknown'
+        };
+      })
+      .filter(item => item.rationale);
+  };
 
   const intensityLevels: IntensityLevel[] = ["off", "deload", "easy", "easy-moderate", "moderate", "moderate-hard", "hard", "extremely-hard"];
 
@@ -3297,6 +3391,90 @@ export default function MesocyclePage() {
                                                    >
                                                      <Trash2 className="h-4 w-4" />
                                                    </Button>
+                                                   {/* Edit button with parameter visibility and rationale */}
+                                                   <Popover>
+                                                     <PopoverTrigger asChild>
+                                                       <Button
+                                                         variant="ghost"
+                                                         size="sm"
+                                                         className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground hover:bg-muted"
+                                                         title="Edit parameter visibility and view rationale"
+                                                       >
+                                                         <SlidersHorizontal className="h-4 w-4" />
+                                                       </Button>
+                                                     </PopoverTrigger>
+                                                     <PopoverContent className="w-80 p-3" align="start" side="bottom">
+                                                       <div className="space-y-3">
+                                                         {/* Parameter Visibility Section */}
+                                                         <div className="space-y-2">
+                                                           <h4 className="text-sm font-medium">Visible Parameters</h4>
+                                                           <ScrollArea className="max-h-40">
+                                                             <div className="space-y-1">
+                                                               {parameters.map(param => {
+                                                                 const isVisible = isParameterVisibleForMethod(fullMethodName, param.name, true);
+                                                                 return (
+                                                                   <div key={param.name} className="flex items-center gap-2 py-1">
+                                                                     <Checkbox 
+                                                                       id={`visibility-${fullMethodName}-${param.name}`}
+                                                                       checked={isVisible}
+                                                                       onCheckedChange={(checked) => toggleParameterVisibility(fullMethodName, param.name, !!checked)}
+                                                                     />
+                                                                     <Label 
+                                                                       htmlFor={`visibility-${fullMethodName}-${param.name}`}
+                                                                       className="text-xs cursor-pointer"
+                                                                     >
+                                                                       {param.name}
+                                                                     </Label>
+                                                                   </div>
+                                                                 );
+                                                               })}
+                                                             </div>
+                                                           </ScrollArea>
+                                                           <div className="flex gap-2 pt-1">
+                                                             <Button 
+                                                               size="sm" 
+                                                               variant="outline" 
+                                                               className="text-xs h-7"
+                                                               onClick={() => showAllParametersForMethod(fullMethodName, parameters)}
+                                                             >
+                                                               Show All
+                                                             </Button>
+                                                             <Button 
+                                                               size="sm" 
+                                                               variant="outline"
+                                                               className="text-xs h-7"
+                                                               onClick={() => resetParameterVisibilityForMethod(fullMethodName)}
+                                                             >
+                                                               Reset
+                                                             </Button>
+                                                           </div>
+                                                         </div>
+                                                         
+                                                         <Separator />
+                                                         
+                                                         {/* Rationale Section */}
+                                                         <div className="space-y-2">
+                                                           <h4 className="text-sm font-medium">Why This Method?</h4>
+                                                           {(() => {
+                                                             const rationales = getMethodRationale(baseMethodName);
+                                                             if (rationales.length === 0) {
+                                                               return (
+                                                                 <p className="text-xs text-muted-foreground italic">
+                                                                   No rationale specified. Add rationale in the Athleticism Database when linking methods to parameters.
+                                                                 </p>
+                                                               );
+                                                             }
+                                                             return rationales.map(({ rationale, parameterName }, idx) => (
+                                                               <div key={idx} className="text-xs p-2 bg-muted rounded-md">
+                                                                 <span className="font-medium text-primary">{parameterName}:</span>
+                                                                 <p className="mt-1 text-muted-foreground">{rationale}</p>
+                                                               </div>
+                                                             ));
+                                                           })()}
+                                                         </div>
+                                                       </div>
+                                                     </PopoverContent>
+                                                   </Popover>
                                                  </div>
                                                </div>
                                              </div>
@@ -3361,7 +3539,7 @@ export default function MesocyclePage() {
                                        {/* Parameter sub-rows */}
                                        {parameters.length > 0 && !collapsedMethods.has(fullMethodName) && !(categoryName && collapsedMethods.has(method)) && (
                                          <div className="divide-y">
-                                             {parameters.map((param) => (
+                                             {parameters.filter((param) => isParameterVisibleForMethod(fullMethodName, param.name, true)).map((param) => (
                                                   <div key={param.name} className="grid gap-1 w-fit hover:bg-muted/5" style={{ 
                                                      gridTemplateColumns: calculateGridTemplate(baseMethodName, getVisibleMesocyclesForPeriodization())
                                                    }}>
