@@ -114,27 +114,32 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
     return borderClasses;
   };
 
+  const hasIcons = testDetails.length > 0 || eventDetails.length > 0;
+
   return (
     <div className={`flex flex-col w-[120px] shrink-0 box-border ${getBorderClasses()}`}>
       {/* Microcycle header - matching Mesocycle Characterization style */}
-      <div className="h-20 text-center text-xs rounded w-full mb-2 flex flex-col items-center justify-center bg-primary/10 p-1">
-        {/* Microcycle name */}
-        <div className="font-medium truncate w-full px-1" title={microcycle.name}>{microcycle.name}</div>
-        
-        {/* Date range with duration */}
-        <div className="text-[10px] text-muted-foreground">
-          {startDate && endDate ? (
-            <>
-              {format(startDate, 'MMM d')} - {format(endDate, 'MMM d')} ({microcycle.duration}d)
-            </>
-          ) : (
-            `${microcycle.duration}d`
-          )}
+      <div className="h-24 text-center text-xs rounded w-full mb-2 flex flex-col bg-primary/10 p-1">
+        {/* Content wrapper - vertically centered */}
+        <div className="flex-1 flex flex-col items-center justify-center">
+          {/* Microcycle name */}
+          <div className="font-medium truncate w-full px-1" title={microcycle.name}>{microcycle.name}</div>
+          
+          {/* Date range with duration */}
+          <div className="text-[10px] text-muted-foreground">
+            {startDate && endDate ? (
+              <>
+                {format(startDate, 'MMM d')} - {format(endDate, 'MMM d')} ({microcycle.duration}d)
+              </>
+            ) : (
+              `${microcycle.duration}d`
+            )}
+          </div>
         </div>
         
-        {/* Tests and Events - Centered below date */}
-        {(testDetails.length > 0 || eventDetails.length > 0) && (
-          <div className="flex items-center justify-center gap-1 mt-1">
+        {/* Icons row - always at bottom when present */}
+        {hasIcons && (
+          <div className="flex items-center justify-center gap-1 pt-1 border-t border-border/30 mt-auto">
             {testDetails.length > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>

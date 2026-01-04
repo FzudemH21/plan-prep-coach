@@ -3408,28 +3408,28 @@ export default function MesocyclePage() {
                                                          {/* Parameter Visibility Section */}
                                                          <div className="space-y-2">
                                                            <h4 className="text-sm font-medium">Visible Parameters</h4>
-                                                           <ScrollArea className="max-h-40">
-                                                             <div className="space-y-1">
-                                                               {parameters.map(param => {
-                                                                 const isVisible = isParameterVisibleForMethod(fullMethodName, param.name, true);
-                                                                 return (
-                                                                   <div key={param.name} className="flex items-center gap-2 py-1">
-                                                                     <Checkbox 
-                                                                       id={`visibility-${fullMethodName}-${param.name}`}
-                                                                       checked={isVisible}
-                                                                       onCheckedChange={(checked) => toggleParameterVisibility(fullMethodName, param.name, !!checked)}
-                                                                     />
-                                                                     <Label 
-                                                                       htmlFor={`visibility-${fullMethodName}-${param.name}`}
-                                                                       className="text-xs cursor-pointer"
-                                                                     >
-                                                                       {param.name}
-                                                                     </Label>
-                                                                   </div>
-                                                                 );
-                                                               })}
-                                                             </div>
-                                                           </ScrollArea>
+                                                            <ScrollArea className="h-48">
+                                                              <div className="space-y-1 pr-3">
+                                                                {parameters.map(param => {
+                                                                  const isVisible = isParameterVisibleForMethod(fullMethodName, param.name, true);
+                                                                  return (
+                                                                    <div key={param.name} className="flex items-center gap-2 py-1">
+                                                                      <Checkbox 
+                                                                        id={`visibility-${fullMethodName}-${param.name}`}
+                                                                        checked={isVisible}
+                                                                        onCheckedChange={(checked) => toggleParameterVisibility(fullMethodName, param.name, !!checked)}
+                                                                      />
+                                                                      <Label 
+                                                                        htmlFor={`visibility-${fullMethodName}-${param.name}`}
+                                                                        className="text-xs cursor-pointer"
+                                                                      >
+                                                                        {param.name}
+                                                                      </Label>
+                                                                    </div>
+                                                                  );
+                                                                })}
+                                                              </div>
+                                                            </ScrollArea>
                                                            <div className="flex gap-2 pt-1">
                                                              <Button 
                                                                size="sm" 
