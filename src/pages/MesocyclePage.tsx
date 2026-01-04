@@ -3195,10 +3195,16 @@ export default function MesocyclePage() {
                                     const eventDetails = dateRange ? getEventsInRange(dateRange.start, dateRange.end) : [];
                                     
                                     return (
-                                      <div key={`${meso.id}-micro-${microcycleIndex}`} className={`relative text-center border rounded-b ${intensityBg(intensity)}`}>
-                                        {/* Event/Test indicators */}
+                                      <div key={`${meso.id}-micro-${microcycleIndex}`} className={`text-center border rounded-b ${intensityBg(intensity)}`}>
+                                        <div className="text-xs p-1 font-medium">
+                                          {microcycle.name || `Mic${microcycleIndex + 1}`}
+                                        </div>
+                                        <div className="text-xs px-1 py-0.5 opacity-80 border-t">
+                                          {microcycle.duration} days
+                                        </div>
+                                        {/* Event/Test indicators - centered below */}
                                         {(testDetails.length > 0 || eventDetails.length > 0) && (
-                                          <div className="absolute top-0.5 right-0.5 flex gap-0.5">
+                                          <div className="flex items-center justify-center gap-1 py-0.5 border-t border-border/30">
                                             {testDetails.length > 0 && (
                                               <TooltipProvider>
                                                 <Tooltip>
@@ -3253,12 +3259,6 @@ export default function MesocyclePage() {
                                             )}
                                           </div>
                                         )}
-                                        <div className="text-xs p-1 font-medium">
-                                          {microcycle.name || `Mic${microcycleIndex + 1}`}
-                                        </div>
-                                        <div className="text-xs px-1 py-0.5 opacity-80 border-t">
-                                          {microcycle.duration} days
-                                        </div>
                                       </div>
                                     );
                                   })}
