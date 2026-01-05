@@ -568,6 +568,26 @@ const getIntensityColor = (intensity: string, isLight: boolean = false, isGroup:
   };
   return colors[intensity] || 'bg-muted text-muted-foreground';
 };
+
+// Get intensity badge styling for display-only badges
+const getIntensityBadgeColor = (intensity: string): string => {
+  const colors: Record<string, string> = {
+    'off': 'bg-intensity-off text-foreground',
+    'deload': 'bg-intensity-deload text-foreground',
+    'easy': 'bg-intensity-easy text-foreground',
+    'easy-moderate': 'bg-intensity-easy-moderate text-foreground',
+    'moderate': 'bg-intensity-moderate text-foreground',
+    'moderate-hard': 'bg-intensity-moderate-hard text-foreground',
+    'hard': 'bg-intensity-hard text-foreground',
+    'extremely-hard': 'bg-intensity-extremely-hard text-foreground',
+  };
+  return colors[intensity] || 'bg-muted text-muted-foreground';
+};
+
+// Format intensity for display
+const formatIntensityLabel = (intensity: string): string => {
+  return intensity.replace(/-/g, ' ').toUpperCase();
+};
   // Create mesocycle header structure for two-row headers
 const mesocycleHeaders = useMemo(() => {
   const headers: Array<{
@@ -1392,120 +1412,132 @@ const updateCellData = (
                        <div className="flex flex-col items-center gap-2 py-2">
                          {/* Title line: show microcycle/group names; only show mesocycle name here when no split headers are shown */}
                          {column.type === 'microcycle' && (
-                           <div className="flex items-center gap-2 w-full justify-center">
-                             <Popover>
-                               <PopoverTrigger className="font-medium hover:text-primary transition-colors cursor-pointer">
-                                 {column.microcycleName}
-                               </PopoverTrigger>
-                             <PopoverContent 
-                               className="w-[800px] max-w-[95vw] z-[100]" 
-                               align="start"
-                               side="bottom"
-                               sideOffset={5}
-                             >
-                               <div className="space-y-3">
-                                 <h4 className="font-semibold text-sm text-foreground">
-                                   {column.mesocycleName} - {column.microcycleName}
-                                 </h4>
-                                 <p className="text-xs text-muted-foreground">
-                                   Method Periodization Parameters
-                                 </p>
-                                 {(() => {
-                                   const microcycleIndex = mesocycles
-                                     .find(m => m.id === column.mesocycleId)
-                                     ?.microcycles.findIndex(mc => mc.id === column.microcycleId);
-                                   
-                                   if (microcycleIndex === undefined || microcycleIndex === -1) {
-                                     return (
-                                       <div className="text-xs text-muted-foreground italic">
-                                         No parameter data available
-                                       </div>
-                                     );
-                                   }
-                                   
-                                   const methodsData = getMicrocycleParameters(column.mesocycleId, microcycleIndex);
-                                   
-                                   if (methodsData.length === 0) {
-                                     return (
-                                       <div className="text-xs text-muted-foreground italic">
-                                         No parameters configured for this microcycle
-                                       </div>
-                                     );
-                                   }
-                                   
-                                   return (
-                                     <div className="space-y-3">
-                                       {methodsData.map(({ methodName, parameters, hasMultipleSessions }) => (
-                                         <div key={methodName} className="border-l-2 border-primary/30 pl-3">
-                                           <div className="font-medium text-primary mb-2 text-sm">
-                                             {methodName}
-                                           </div>
-                                           
-                                           {hasMultipleSessions ? (
-                                             // Group by session
-                                             (() => {
-                                               const sessionGroups = parameters.reduce((acc, param) => {
-                                                 const sessionIdx = param.sessionIndex ?? 0;
-                                                 if (!acc[sessionIdx]) acc[sessionIdx] = [];
-                                                 acc[sessionIdx].push(param);
-                                                 return acc;
-                                               }, {} as Record<number, typeof parameters>);
-                                               
-                                               return Object.entries(sessionGroups).map(([sessionIdx, params]) => (
-                                                 <div key={sessionIdx} className="mb-2">
-                                                   <div className="text-xs font-medium text-muted-foreground mb-1">
-                                                     Session {parseInt(sessionIdx) + 1}:
-                                                   </div>
-                                                   <div className="text-xs text-foreground/90 leading-relaxed">
-                                                     {params.map((param, idx) => (
-                                                       <span key={param.name}>
-                                                         {idx > 0 && ', '}
-                                                         <span className="font-medium">{param.name}</span>
-                                                         {': '}
-                                                         {param.value}
-                                                         {param.unit && ` ${param.unit}`}
-                                                       </span>
-                                                     ))}
-                                                   </div>
-                                                 </div>
-                                               ));
-                                             })()
-                                           ) : (
-                                             // Single session view
-                                             <div className="text-xs text-foreground/90 leading-relaxed">
-                                               {parameters.map((param, idx) => (
-                                                 <span key={param.name}>
-                                                   {idx > 0 && ', '}
-                                                   <span className="font-medium">{param.name}</span>
-                                                   {': '}
-                                                   {param.value}
-                                                   {param.unit && ` ${param.unit}`}
-                                                 </span>
-                                               ))}
-                                             </div>
-                                           )}
+                           <div className="flex flex-col items-center gap-1 w-full">
+                             <div className="flex items-center gap-2 justify-center">
+                               <Popover>
+                                 <PopoverTrigger className="font-medium hover:text-primary transition-colors cursor-pointer">
+                                   {column.microcycleName}
+                                 </PopoverTrigger>
+                               <PopoverContent 
+                                 className="w-[800px] max-w-[95vw] z-[100]" 
+                                 align="start"
+                                 side="bottom"
+                                 sideOffset={5}
+                               >
+                                 <div className="space-y-3">
+                                   <h4 className="font-semibold text-sm text-foreground">
+                                     {column.mesocycleName} - {column.microcycleName}
+                                   </h4>
+                                   <p className="text-xs text-muted-foreground">
+                                     Method Periodization Parameters
+                                   </p>
+                                   {(() => {
+                                     const microcycleIndex = mesocycles
+                                       .find(m => m.id === column.mesocycleId)
+                                       ?.microcycles.findIndex(mc => mc.id === column.microcycleId);
+                                     
+                                     if (microcycleIndex === undefined || microcycleIndex === -1) {
+                                       return (
+                                         <div className="text-xs text-muted-foreground italic">
+                                           No parameter data available
                                          </div>
-                                       ))}
-                                     </div>
-                                   );
-                                 })()}
-                               </div>
-                              </PopoverContent>
-                            </Popover>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setClearMicrocycleDialogState({
-                                isOpen: true,
-                                mesocycleId: column.mesocycleId,
-                                mesocycleName: column.mesocycleName,
-                                microcycleIds: [column.microcycleId],
-                                microcycleName: column.microcycleName
-                              })}
-                              className="h-6 px-2 text-foreground hover:bg-destructive/10"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                                       );
+                                     }
+                                     
+                                     const methodsData = getMicrocycleParameters(column.mesocycleId, microcycleIndex);
+                                     
+                                     if (methodsData.length === 0) {
+                                       return (
+                                         <div className="text-xs text-muted-foreground italic">
+                                           No parameters configured for this microcycle
+                                         </div>
+                                       );
+                                     }
+                                     
+                                     return (
+                                       <div className="space-y-3">
+                                         {methodsData.map(({ methodName, parameters, hasMultipleSessions }) => (
+                                           <div key={methodName} className="border-l-2 border-primary/30 pl-3">
+                                             <div className="font-medium text-primary mb-2 text-sm">
+                                               {methodName}
+                                             </div>
+                                             
+                                             {hasMultipleSessions ? (
+                                               // Group by session
+                                               (() => {
+                                                 const sessionGroups = parameters.reduce((acc, param) => {
+                                                   const sessionIdx = param.sessionIndex ?? 0;
+                                                   if (!acc[sessionIdx]) acc[sessionIdx] = [];
+                                                   acc[sessionIdx].push(param);
+                                                   return acc;
+                                                 }, {} as Record<number, typeof parameters>);
+                                                 
+                                                 return Object.entries(sessionGroups).map(([sessionIdx, params]) => (
+                                                   <div key={sessionIdx} className="mb-2">
+                                                     <div className="text-xs font-medium text-muted-foreground mb-1">
+                                                       Session {parseInt(sessionIdx) + 1}:
+                                                     </div>
+                                                     <div className="text-xs text-foreground/90 leading-relaxed">
+                                                       {params.map((param, idx) => (
+                                                         <span key={param.name}>
+                                                           {idx > 0 && ', '}
+                                                           <span className="font-medium">{param.name}</span>
+                                                           {': '}
+                                                           {param.value}
+                                                           {param.unit && ` ${param.unit}`}
+                                                         </span>
+                                                       ))}
+                                                     </div>
+                                                   </div>
+                                                 ));
+                                               })()
+                                             ) : (
+                                               // Single session view
+                                               <div className="text-xs text-foreground/90 leading-relaxed">
+                                                 {parameters.map((param, idx) => (
+                                                   <span key={param.name}>
+                                                     {idx > 0 && ', '}
+                                                     <span className="font-medium">{param.name}</span>
+                                                     {': '}
+                                                     {param.value}
+                                                     {param.unit && ` ${param.unit}`}
+                                                   </span>
+                                                 ))}
+                                               </div>
+                                             )}
+                                           </div>
+                                         ))}
+                                       </div>
+                                     );
+                                   })()}
+                                 </div>
+                                </PopoverContent>
+                              </Popover>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setClearMicrocycleDialogState({
+                                  isOpen: true,
+                                  mesocycleId: column.mesocycleId,
+                                  mesocycleName: column.mesocycleName,
+                                  microcycleIds: [column.microcycleId],
+                                  microcycleName: column.microcycleName
+                                })}
+                                className="h-6 px-2 text-foreground hover:bg-destructive/10"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                            {/* Intensity Badge */}
+                            {(() => {
+                              const microcycle = mesocycles.find(m => m.id === column.mesocycleId)?.microcycles.find(mc => mc.id === column.microcycleId);
+                              const badgeIntensity = microcycle?.intensity || 'moderate';
+                              return (
+                                <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded", getIntensityBadgeColor(badgeIntensity))}>
+                                  {formatIntensityLabel(badgeIntensity)}
+                                </span>
+                              );
+                            })()}
                           </div>
                           )}
                           {column.type === 'microcycle-group' && (
@@ -1530,6 +1562,15 @@ const updateCellData = (
                           {column.type === 'mesocycle' && !hasSplitMesocycles && (
                             <div className="flex flex-col items-center gap-2 w-full">
                               <span className="font-medium">{column.mesocycleName}</span>
+                              {/* Intensity Badge */}
+                              {(() => {
+                                const mesoIntensity = mesocycle?.intensity || 'moderate';
+                                return (
+                                  <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded", getIntensityBadgeColor(mesoIntensity))}>
+                                    {formatIntensityLabel(mesoIntensity)}
+                                  </span>
+                                );
+                              })()}
                               <div className="flex items-center gap-1">
                                 <Button
                                   variant="ghost"
@@ -1693,28 +1734,11 @@ const updateCellData = (
                               );
                             }
                             
-                            const mesocycle = mesocycles.find(m => m.id === column.mesocycleId);
-                            let intensity = mesocycle?.intensity || 'moderate';
-                            let isLight = false;
-                            let isGroup = false;
-                            
-                            // For individual microcycles, use their specific intensity
-                            if (column.type === 'microcycle' && mesocycle) {
-                              const microcycle = mesocycle.microcycles.find(m => m.id === column.microcycleId);
-                              if (microcycle) {
-                                intensity = microcycle.intensity;
-                                isLight = true; // Make microcycles lighter than mesocycles
-                              }
-                            } else if (column.type === 'microcycle-group') {
-                              isGroup = true; // Use neutral color for groups
-                            }
-                            
-                            const colorClass = getIntensityColor(intensity, isLight, isGroup);
                             
                             return (
                               <TableCell 
                                 key={`${method.id}-main-${column.id}`} 
-                                className={cn("p-2 border-r border-border", colorClass)}
+                                className="p-2 border-r border-border bg-background"
                               >
                                  <ExerciseSelectionCell
                                    cellData={getCellData(method.id, undefined, column.id)}
@@ -1779,27 +1803,11 @@ const updateCellData = (
                                   );
                                 }
 
-                                const mesocycle = mesocycles.find(m => m.id === column.mesocycleId);
-                                let intensity = mesocycle?.intensity || 'moderate';
-                                let isLight = false;
-                                let isGroup = false;
-
-                                if (column.type === 'microcycle' && mesocycle) {
-                                  const microcycle = mesocycle.microcycles.find(m => m.id === column.microcycleId);
-                                  if (microcycle) {
-                                    intensity = microcycle.intensity;
-                                    isLight = true;
-                                  }
-                                } else if (column.type === 'microcycle-group') {
-                                  isGroup = true;
-                                }
-
-                                const colorClass = getIntensityColor(intensity, isLight, isGroup);
 
                                 return (
                                   <TableCell
                                     key={`${method.id}-${categoryName}-${column.id}`}
-                                    className={cn("p-2 border-r border-border", colorClass)}
+                                    className="p-2 border-r border-border bg-background"
                                   >
                                     <ExerciseSelectionCell
                                       cellData={getCellData(method.id, categoryName, column.id)}
