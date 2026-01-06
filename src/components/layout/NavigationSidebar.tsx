@@ -37,11 +37,19 @@ interface NavItem {
   icon: React.ElementType;
 }
 
+interface NavSubGroup {
+  title: string;
+  icon: React.ElementType;
+  key: string;
+  items: NavItem[];
+}
+
 interface NavGroup {
   title: string;
   icon: React.ElementType;
   path?: string;
   items: NavItem[];
+  subGroups?: NavSubGroup[];
   defaultOpen?: boolean;
 }
 
@@ -53,6 +61,7 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     athletes: true,
     templates: true,
+    exerciseLibraries: false,
   });
 
   const createSlug = (name: string): string => {
@@ -72,16 +81,25 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
   };
 
   const isActive = (path: string) => location.pathname === path;
-  const isInGroup = (items: NavItem[]) => items.some(item => isActive(item.path));
 
-  // Build dynamic library items
-  const libraryItems: NavItem[] = libraries
-    .filter(lib => lib.type === 'custom')
-    .map(lib => ({
-      title: lib.name,
-      path: `/templates/libraries/${createSlug(lib.name)}`,
-      icon: Dumbbell
-    }));
+  const isInGroup = (items: NavItem[], subGroups?: NavSubGroup[]) => {
+    const itemsActive = items.some(item => isActive(item.path));
+    const subGroupsActive = subGroups?.some(sg => sg.items.some(item => isActive(item.path))) ?? false;
+    return itemsActive || subGroupsActive;
+  };
+
+  // Build ALL library items (built-in + custom)
+  const exerciseLibraryItems: NavItem[] = [
+    { title: "Resistance Training", path: "/templates/libraries/resistancetraining", icon: Dumbbell },
+    { title: "Plyometrics", path: "/templates/libraries/plyometrics", icon: Zap },
+    ...libraries
+      .filter(lib => lib.type === 'custom')
+      .map(lib => ({
+        title: lib.name,
+        path: `/templates/libraries/${createSlug(lib.name)}`,
+        icon: Library
+      }))
+  ];
 
   const athletesGroup: NavGroup = {
     title: "Athletes",
@@ -99,18 +117,24 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
       { title: "Athleticism Database", path: "/templates/athleticism", icon: Activity },
       { title: "Athleticism Database (v2)", path: "/templates/athleticism-v2", icon: Activity },
       { title: "Training Toolbox", path: "/templates/toolbox", icon: Wrench },
-      { title: "Resistance Training", path: "/templates/libraries/resistancetraining", icon: Dumbbell },
-      { title: "Plyometrics", path: "/templates/libraries/plyometrics", icon: Zap },
-      ...libraryItems,
+    ],
+    subGroups: [
+      {
+        title: "Exercise Libraries",
+        icon: Library,
+        key: "exerciseLibraries",
+        items: exerciseLibraryItems
+      }
     ]
   };
 
-  const renderNavItem = (item: NavItem) => (
+  const renderNavItem = (item: NavItem, extraIndent: boolean = false) => (
     <Button
       key={item.path}
       variant="ghost"
       className={cn(
-        "w-full justify-start pl-8 h-9",
+        "w-full justify-start h-9",
+        extraIndent ? "pl-12" : "pl-8",
         isActive(item.path) && "bg-accent text-accent-foreground font-medium"
       )}
       onClick={() => handleNavigate(item.path)}
@@ -120,9 +144,49 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
     </Button>
   );
 
+  const renderNavSubGroup = (subGroup: NavSubGroup) => {
+    const isOpen = openGroups[subGroup.key] ?? false;
+    const hasActiveChild = subGroup.items.some(item => isActive(item.path));
+
+    return (
+      <Collapsible key={subGroup.key} open={isOpen || hasActiveChild}>
+        <div className="flex items-center w-full h-9 rounded-md pl-4">
+          <Button
+            variant="ghost"
+            className="flex-1 justify-start h-9 px-4"
+            onClick={() => toggleGroup(subGroup.key)}
+          >
+            <subGroup.icon className="h-4 w-4 mr-2" />
+            {subGroup.title}
+          </Button>
+          <CollapsibleTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 w-9 p-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleGroup(subGroup.key);
+              }}
+            >
+              {isOpen || hasActiveChild ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </Button>
+          </CollapsibleTrigger>
+        </div>
+        <CollapsibleContent className="space-y-1">
+          {subGroup.items.map((item) => renderNavItem(item, true))}
+        </CollapsibleContent>
+      </Collapsible>
+    );
+  };
+
   const renderNavGroup = (group: NavGroup, key: string) => {
     const isOpen = openGroups[key] ?? false;
-    const hasActiveChild = isInGroup(group.items);
+    const hasActiveChild = isInGroup(group.items, group.subGroups);
     const isHeaderActive = group.path && isActive(group.path);
 
     return (
@@ -166,7 +230,8 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
           </CollapsibleTrigger>
         </div>
         <CollapsibleContent className="space-y-1">
-          {group.items.map(renderNavItem)}
+          {group.items.map((item) => renderNavItem(item))}
+          {group.subGroups?.map((subGroup) => renderNavSubGroup(subGroup))}
         </CollapsibleContent>
       </Collapsible>
     );
