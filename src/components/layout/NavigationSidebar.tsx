@@ -92,8 +92,8 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
   const exerciseLibraryItems: NavItem[] = [
     { title: "Resistance Training", path: "/templates/libraries/resistancetraining", icon: Dumbbell },
     { title: "Plyometrics", path: "/templates/libraries/plyometrics", icon: Zap },
-    ...libraries
-      .filter(lib => lib.type === 'custom')
+  ...libraries
+    .filter(lib => !lib.isBuiltIn)
       .map(lib => ({
         title: lib.name,
         path: `/templates/libraries/${createSlug(lib.name)}`,
