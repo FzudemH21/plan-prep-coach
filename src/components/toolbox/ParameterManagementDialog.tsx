@@ -5,6 +5,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogPortal,
+  DialogOverlay,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -325,7 +327,9 @@ export function ParameterManagementDialog({
 
       {/* Edit Parameter Dialog */}
       <Dialog open={!!editingParameter} onOpenChange={(open) => !open && setEditingParameter(null)}>
-        <DialogContent>
+        <DialogPortal>
+          <DialogOverlay className="z-[150]" />
+          <DialogContent className="z-[160]">
           <DialogHeader>
             <DialogTitle>Edit Parameter</DialogTitle>
           </DialogHeader>
@@ -361,99 +365,6 @@ export function ParameterManagementDialog({
                     <SelectItem value="quantitative">Quantitative</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="isFrequencyParameter"
-                    checked={editingParameter.isFrequencyParameter || false}
-                    disabled={editingParameter.parameterType !== 'quantitative' || editingParameter.isSetParameter}
-                    onChange={(e) => {
-                      setEditingParameter({
-                        ...editingParameter,
-                        isFrequencyParameter: e.target.checked,
-                        // Frequency parameters should never show in grid
-                        showInGridByDefault: e.target.checked ? false : editingParameter.showInGridByDefault
-                      });
-                    }}
-                    className="h-4 w-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                  <Label 
-                    htmlFor="isFrequencyParameter" 
-                    className={`text-sm font-medium ${editingParameter.parameterType !== 'quantitative' || editingParameter.isSetParameter ? 'text-muted-foreground' : ''}`}
-                  >
-                    Training Frequency Parameter
-                  </Label>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {editingParameter.isSetParameter
-                    ? 'Cannot be both frequency and set parameter'
-                    : editingParameter.parameterType === 'quantitative' 
-                      ? 'Mark this parameter as the training frequency indicator (sessions per microcycle/week)'
-                      : 'Only quantitative parameters can be used as frequency indicators'}
-                </p>
-              </div>
-
-              <div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="isSetParameter"
-                    checked={editingParameter.isSetParameter || false}
-                    disabled={editingParameter.parameterType !== 'quantitative' || editingParameter.isFrequencyParameter}
-                    onChange={(e) => {
-                      setEditingParameter({
-                        ...editingParameter,
-                        isSetParameter: e.target.checked
-                      });
-                    }}
-                    className="h-4 w-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                  <Label 
-                    htmlFor="isSetParameter" 
-                    className={`text-sm font-medium ${editingParameter.parameterType !== 'quantitative' || editingParameter.isFrequencyParameter ? 'text-muted-foreground' : ''}`}
-                  >
-                    Set Parameter
-                  </Label>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {editingParameter.isFrequencyParameter
-                    ? 'Cannot be both set and frequency parameter'
-                    : editingParameter.parameterType === 'quantitative' 
-                      ? 'Mark this parameter as the set parameter (determines number of rows in exercise detail view)'
-                      : 'Only quantitative parameters can be used as set parameters'}
-                </p>
-              </div>
-
-              <div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="showInGridByDefault"
-                    checked={editingParameter.showInGridByDefault ?? true}
-                    disabled={editingParameter.isFrequencyParameter || editingParameter.isSetParameter}
-                    onChange={(e) => {
-                      setEditingParameter({
-                        ...editingParameter,
-                        showInGridByDefault: e.target.checked
-                      });
-                    }}
-                    className="h-4 w-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                  <Label 
-                    htmlFor="showInGridByDefault" 
-                    className={`text-sm font-medium ${editingParameter.isFrequencyParameter || editingParameter.isSetParameter ? 'text-muted-foreground' : ''}`}
-                  >
-                    Show in parameter grid by default
-                  </Label>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {editingParameter.isFrequencyParameter || editingParameter.isSetParameter
-                    ? 'Structural parameters (frequency/set) cannot be toggled for grid visibility'
-                    : 'When disabled, this parameter will be shown as a label badge on the exercise instead of in the set grid. Users can still toggle visibility in workout views.'}
-                </p>
               </div>
 
               {editingParameter.parameterType === 'quantitative' ? (
@@ -561,6 +472,99 @@ export function ParameterManagementDialog({
                 </div>
               )}
 
+              <div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="isFrequencyParameter"
+                    checked={editingParameter.isFrequencyParameter || false}
+                    disabled={editingParameter.parameterType !== 'quantitative' || editingParameter.isSetParameter}
+                    onChange={(e) => {
+                      setEditingParameter({
+                        ...editingParameter,
+                        isFrequencyParameter: e.target.checked,
+                        // Frequency parameters should never show in grid
+                        showInGridByDefault: e.target.checked ? false : editingParameter.showInGridByDefault
+                      });
+                    }}
+                    className="h-4 w-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <Label 
+                    htmlFor="isFrequencyParameter" 
+                    className={`text-sm font-medium ${editingParameter.parameterType !== 'quantitative' || editingParameter.isSetParameter ? 'text-muted-foreground' : ''}`}
+                  >
+                    Training Frequency Parameter
+                  </Label>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {editingParameter.isSetParameter
+                    ? 'Cannot be both frequency and set parameter'
+                    : editingParameter.parameterType === 'quantitative' 
+                      ? 'Mark this parameter as the training frequency indicator (sessions per microcycle/week)'
+                      : 'Only quantitative parameters can be used as frequency indicators'}
+                </p>
+              </div>
+
+              <div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="isSetParameter"
+                    checked={editingParameter.isSetParameter || false}
+                    disabled={editingParameter.parameterType !== 'quantitative' || editingParameter.isFrequencyParameter}
+                    onChange={(e) => {
+                      setEditingParameter({
+                        ...editingParameter,
+                        isSetParameter: e.target.checked
+                      });
+                    }}
+                    className="h-4 w-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <Label 
+                    htmlFor="isSetParameter" 
+                    className={`text-sm font-medium ${editingParameter.parameterType !== 'quantitative' || editingParameter.isFrequencyParameter ? 'text-muted-foreground' : ''}`}
+                  >
+                    Set Parameter
+                  </Label>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {editingParameter.isFrequencyParameter
+                    ? 'Cannot be both set and frequency parameter'
+                    : editingParameter.parameterType === 'quantitative' 
+                      ? 'Mark this parameter as the set parameter (determines number of rows in exercise detail view)'
+                      : 'Only quantitative parameters can be used as set parameters'}
+                </p>
+              </div>
+
+              <div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="showInGridByDefault"
+                    checked={editingParameter.showInGridByDefault ?? true}
+                    disabled={editingParameter.isFrequencyParameter || editingParameter.isSetParameter}
+                    onChange={(e) => {
+                      setEditingParameter({
+                        ...editingParameter,
+                        showInGridByDefault: e.target.checked
+                      });
+                    }}
+                    className="h-4 w-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <Label 
+                    htmlFor="showInGridByDefault" 
+                    className={`text-sm font-medium ${editingParameter.isFrequencyParameter || editingParameter.isSetParameter ? 'text-muted-foreground' : ''}`}
+                  >
+                    Show in parameter grid by default
+                  </Label>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {editingParameter.isFrequencyParameter || editingParameter.isSetParameter
+                    ? 'Structural parameters (frequency/set) cannot be toggled for grid visibility'
+                    : 'When disabled, this parameter will be shown as a label badge on the exercise instead of in the set grid. Users can still toggle visibility in workout views.'}
+                </p>
+              </div>
+
               <div className="flex justify-between">
                 <Button
                   variant="destructive"
@@ -582,7 +586,8 @@ export function ParameterManagementDialog({
               </div>
             </div>
           )}
-        </DialogContent>
+          </DialogContent>
+        </DialogPortal>
       </Dialog>
 
       {/* Add Parameter Dialog */}
