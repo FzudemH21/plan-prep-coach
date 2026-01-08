@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { format, isToday } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -122,6 +122,7 @@ export function TrainingDayCell({
   const [isHovering, setIsHovering] = useState(false);
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
   const [combinedDialogOpen, setCombinedDialogOpen] = useState(false);
+  const lastDragEndTime = useRef<number>(0);
   const hasTraining = day.sessions.length > 0;
   const isTestDay = day.trainingDay?.isTestDay;
   const isEventDay = day.trainingDay?.isEventDay;
@@ -345,13 +346,23 @@ export function TrainingDayCell({
                     draggableId={`session-${session.id}`}
                     index={idx}
                   >
-                    {(provided, snapshot) => (
+                    {(provided, snapshot) => {
+                      // Track when drag ends
+                      if (!snapshot.isDragging && snapshot.draggingOver === null) {
+                        lastDragEndTime.current = Date.now();
+                      }
+                      
+                      return (
                       <div
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                         style={provided.draggableProps.style}
                         onClick={(e) => {
                           e.stopPropagation();
+                          // Ignore clicks within 200ms of drag ending
+                          if (Date.now() - lastDragEndTime.current < 200) {
+                            return;
+                          }
                           onSessionClick?.(day.dateString, session.sessionIndex, session.exercises);
                         }}
                         className={cn(
@@ -467,7 +478,8 @@ export function TrainingDayCell({
                           {session.exercises.length} {session.exercises.length === 1 ? 'exercise' : 'exercises'}
                         </p>
                       </div>
-                    )}
+                      );
+                    }}
                   </Draggable>
                 ))}
                 {provided.placeholder}
