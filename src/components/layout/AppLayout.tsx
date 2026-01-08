@@ -1,11 +1,8 @@
 import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Bot, FileText, Settings, Menu } from "lucide-react";
-import { DisplayMode } from "@/types/training";
-import { useDisplayMode } from "@/contexts/DisplayModeContext";
 import { NavigationSidebar } from "./NavigationSidebar";
 
 interface AppLayoutProps {
@@ -13,24 +10,8 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const { displayMode, setDisplayMode } = useDisplayMode();
   const [showAIAgent, setShowAIAgent] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
-
-  const getModeColor = (mode: DisplayMode) => {
-    switch (mode) {
-      case "step-by-step":
-        return "bg-blue-500 text-white";
-      case "macro":
-        return "bg-green-500 text-white";
-      case "meso":
-        return "bg-yellow-500 text-white";
-      case "micro":
-        return "bg-red-500 text-white";
-      default:
-        return "bg-gray-500 text-white";
-    }
-  };
 
   return (
     <div className="min-h-screen w-full bg-background overflow-x-hidden">
@@ -54,30 +35,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </Badge>
           </div>
 
-          <div className="flex items-center space-x-4">
-            {/* Display Mode Selector */}
-            <div className="flex items-center space-x-2">
-              <span className="text-sm font-medium text-muted-foreground">
-                View Mode:
-              </span>
-              <Select value={displayMode} onValueChange={(value: DisplayMode) => setDisplayMode(value)}>
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="step-by-step">Step-by-Step</SelectItem>
-                  <SelectItem value="macro">Macro View</SelectItem>
-                  <SelectItem value="meso">Meso View</SelectItem>
-                  <SelectItem value="micro">Micro View</SelectItem>
-                </SelectContent>
-              </Select>
-              <Badge className={getModeColor(displayMode)}>
-                {displayMode.charAt(0).toUpperCase() + displayMode.slice(1)}
-              </Badge>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2">
               <Button
                 variant={showAIAgent ? "default" : "outline"}
                 size="sm"
@@ -92,10 +50,9 @@ export function AppLayout({ children }: AppLayoutProps) {
                 Export
               </Button>
 
-              <Button variant="outline" size="sm">
-                <Settings className="h-4 w-4" />
-              </Button>
-            </div>
+            <Button variant="outline" size="sm">
+              <Settings className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </header>
@@ -140,16 +97,6 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Navigation Sidebar */}
       <NavigationSidebar open={navOpen} onOpenChange={setNavOpen} />
-
-      {/* Display Mode Context Banner */}
-      <div className="fixed bottom-4 right-4">
-        <Badge className={`${getModeColor(displayMode)} px-3 py-1`}>
-          {displayMode === "step-by-step" && "🚶 Step-by-Step Mode"}
-          {displayMode === "macro" && "🏗️ Macro Planning"}
-          {displayMode === "meso" && "📅 Mesocycle Focus"}
-          {displayMode === "micro" && "🔍 Microcycle Detail"}
-        </Badge>
-      </div>
     </div>
   );
 }
