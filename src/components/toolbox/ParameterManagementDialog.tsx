@@ -241,6 +241,10 @@ export function ParameterManagementDialog({
 
   const exerciseCategories = parameters[0]?.exerciseCategories || [];
 
+  // Check if another parameter already has frequency/set flags
+  const existingFrequencyParameterId = parameters.find(p => p.isFrequencyParameter)?.id;
+  const existingSetParameterId = parameters.find(p => p.isSetParameter)?.id;
+
   return (
     <>
       {/* Main Parameter Management Dialog */}
@@ -291,6 +295,7 @@ export function ParameterManagementDialog({
                   parameters={parameters}
                   onReorder={handleReorderParameters}
                   onEditParameter={handleEditParameter}
+                  onDeleteParameter={handleDeleteParameter}
                 />
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
@@ -478,7 +483,11 @@ export function ParameterManagementDialog({
                     type="checkbox"
                     id="isFrequencyParameter"
                     checked={editingParameter.isFrequencyParameter || false}
-                    disabled={editingParameter.parameterType !== 'quantitative' || editingParameter.isSetParameter}
+                    disabled={
+                      editingParameter.parameterType !== 'quantitative' || 
+                      editingParameter.isSetParameter ||
+                      (!!existingFrequencyParameterId && existingFrequencyParameterId !== editingParameter.id)
+                    }
                     onChange={(e) => {
                       setEditingParameter({
                         ...editingParameter,
@@ -491,17 +500,24 @@ export function ParameterManagementDialog({
                   />
                   <Label 
                     htmlFor="isFrequencyParameter" 
-                    className={`text-sm font-medium ${editingParameter.parameterType !== 'quantitative' || editingParameter.isSetParameter ? 'text-muted-foreground' : ''}`}
+                    className={`text-sm font-medium ${
+                      editingParameter.parameterType !== 'quantitative' || 
+                      editingParameter.isSetParameter ||
+                      (existingFrequencyParameterId && existingFrequencyParameterId !== editingParameter.id)
+                        ? 'text-muted-foreground' : ''
+                    }`}
                   >
                     Training Frequency Parameter
                   </Label>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {editingParameter.isSetParameter
-                    ? 'Cannot be both frequency and set parameter'
-                    : editingParameter.parameterType === 'quantitative' 
-                      ? 'Mark this parameter as the training frequency indicator (sessions per microcycle/week)'
-                      : 'Only quantitative parameters can be used as frequency indicators'}
+                  {existingFrequencyParameterId && existingFrequencyParameterId !== editingParameter.id
+                    ? 'Another parameter is already marked as the Training Frequency parameter'
+                    : editingParameter.isSetParameter
+                      ? 'Cannot be both frequency and set parameter'
+                      : editingParameter.parameterType === 'quantitative' 
+                        ? 'Mark this parameter as the training frequency indicator (sessions per microcycle/week)'
+                        : 'Only quantitative parameters can be used as frequency indicators'}
                 </p>
               </div>
 
@@ -511,7 +527,11 @@ export function ParameterManagementDialog({
                     type="checkbox"
                     id="isSetParameter"
                     checked={editingParameter.isSetParameter || false}
-                    disabled={editingParameter.parameterType !== 'quantitative' || editingParameter.isFrequencyParameter}
+                    disabled={
+                      editingParameter.parameterType !== 'quantitative' || 
+                      editingParameter.isFrequencyParameter ||
+                      (!!existingSetParameterId && existingSetParameterId !== editingParameter.id)
+                    }
                     onChange={(e) => {
                       setEditingParameter({
                         ...editingParameter,
@@ -522,17 +542,24 @@ export function ParameterManagementDialog({
                   />
                   <Label 
                     htmlFor="isSetParameter" 
-                    className={`text-sm font-medium ${editingParameter.parameterType !== 'quantitative' || editingParameter.isFrequencyParameter ? 'text-muted-foreground' : ''}`}
+                    className={`text-sm font-medium ${
+                      editingParameter.parameterType !== 'quantitative' || 
+                      editingParameter.isFrequencyParameter ||
+                      (existingSetParameterId && existingSetParameterId !== editingParameter.id)
+                        ? 'text-muted-foreground' : ''
+                    }`}
                   >
                     Set Parameter
                   </Label>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {editingParameter.isFrequencyParameter
-                    ? 'Cannot be both set and frequency parameter'
-                    : editingParameter.parameterType === 'quantitative' 
-                      ? 'Mark this parameter as the set parameter (determines number of rows in exercise detail view)'
-                      : 'Only quantitative parameters can be used as set parameters'}
+                  {existingSetParameterId && existingSetParameterId !== editingParameter.id
+                    ? 'Another parameter is already marked as the Set parameter'
+                    : editingParameter.isFrequencyParameter
+                      ? 'Cannot be both set and frequency parameter'
+                      : editingParameter.parameterType === 'quantitative' 
+                        ? 'Mark this parameter as the set parameter (determines number of rows in exercise detail view)'
+                        : 'Only quantitative parameters can be used as set parameters'}
                 </p>
               </div>
 
@@ -635,7 +662,11 @@ export function ParameterManagementDialog({
                   type="checkbox"
                   id="newIsFrequencyParameter"
                   checked={newParameter.isFrequencyParameter || false}
-                  disabled={newParameter.parameterType !== 'quantitative' || newParameter.isSetParameter}
+                  disabled={
+                    newParameter.parameterType !== 'quantitative' || 
+                    newParameter.isSetParameter ||
+                    !!existingFrequencyParameterId
+                  }
                   onChange={(e) => {
                     setNewParameter({
                       ...newParameter,
@@ -648,17 +679,24 @@ export function ParameterManagementDialog({
                 />
                 <Label 
                   htmlFor="newIsFrequencyParameter" 
-                  className={`text-sm font-medium ${newParameter.parameterType !== 'quantitative' || newParameter.isSetParameter ? 'text-muted-foreground' : ''}`}
+                  className={`text-sm font-medium ${
+                    newParameter.parameterType !== 'quantitative' || 
+                    newParameter.isSetParameter ||
+                    existingFrequencyParameterId
+                      ? 'text-muted-foreground' : ''
+                  }`}
                 >
                   Training Frequency Parameter
                 </Label>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                {newParameter.isSetParameter
-                  ? 'Cannot be both frequency and set parameter'
-                  : newParameter.parameterType === 'quantitative' 
-                    ? 'Mark this parameter as the training frequency indicator (sessions per microcycle/week)'
-                    : 'Only quantitative parameters can be used as frequency indicators'}
+                {existingFrequencyParameterId
+                  ? 'Another parameter is already marked as the Training Frequency parameter'
+                  : newParameter.isSetParameter
+                    ? 'Cannot be both frequency and set parameter'
+                    : newParameter.parameterType === 'quantitative' 
+                      ? 'Mark this parameter as the training frequency indicator (sessions per microcycle/week)'
+                      : 'Only quantitative parameters can be used as frequency indicators'}
               </p>
             </div>
 
@@ -668,7 +706,11 @@ export function ParameterManagementDialog({
                   type="checkbox"
                   id="newIsSetParameter"
                   checked={newParameter.isSetParameter || false}
-                  disabled={newParameter.parameterType !== 'quantitative' || newParameter.isFrequencyParameter}
+                  disabled={
+                    newParameter.parameterType !== 'quantitative' || 
+                    newParameter.isFrequencyParameter ||
+                    !!existingSetParameterId
+                  }
                   onChange={(e) => {
                     setNewParameter({
                       ...newParameter,
@@ -679,17 +721,24 @@ export function ParameterManagementDialog({
                 />
                 <Label 
                   htmlFor="newIsSetParameter" 
-                  className={`text-sm font-medium ${newParameter.parameterType !== 'quantitative' || newParameter.isFrequencyParameter ? 'text-muted-foreground' : ''}`}
+                  className={`text-sm font-medium ${
+                    newParameter.parameterType !== 'quantitative' || 
+                    newParameter.isFrequencyParameter ||
+                    existingSetParameterId
+                      ? 'text-muted-foreground' : ''
+                  }`}
                 >
                   Set Parameter
                 </Label>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                {newParameter.isFrequencyParameter
-                  ? 'Cannot be both set and frequency parameter'
-                  : newParameter.parameterType === 'quantitative' 
-                    ? 'Mark this parameter as the set parameter (determines number of rows in exercise detail view)'
-                    : 'Only quantitative parameters can be used as set parameters'}
+                {existingSetParameterId
+                  ? 'Another parameter is already marked as the Set parameter'
+                  : newParameter.isFrequencyParameter
+                    ? 'Cannot be both set and frequency parameter'
+                    : newParameter.parameterType === 'quantitative' 
+                      ? 'Mark this parameter as the set parameter (determines number of rows in exercise detail view)'
+                      : 'Only quantitative parameters can be used as set parameters'}
               </p>
             </div>
 
