@@ -14,6 +14,10 @@ export interface ToolboxEntry {
   isSetParameter?: boolean;
   // Whether to show this parameter in the grid by default (defaults to true)
   showInGridByDefault?: boolean;
+  // Calculated parameter support
+  isCalculated?: boolean;           // Flag to mark as calculated
+  formula?: string;                 // Formula expression, e.g., "Sets * Ground Contacts"
+  sourceParameterIds?: string[];    // IDs of parameters used in the formula
 }
 
 export interface ToolboxDatabase {

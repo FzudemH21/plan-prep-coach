@@ -2,7 +2,9 @@ import React from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { GripVertical, Edit2, Trash2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { GripVertical, Edit2, Trash2, Calculator } from 'lucide-react';
 import { ToolboxEntry } from '@/types/toolbox';
 
 interface DraggableParameterListProps {
@@ -48,13 +50,36 @@ export function DraggableParameterList({ parameters, onReorder, onEditParameter,
                             <GripVertical className="h-4 w-4 text-muted-foreground" />
                           </div>
                           <div className="flex-1">
-                            <div className="font-medium">{parameter.parameterName}</div>
+                            <div className="font-medium flex items-center gap-2">
+                              {parameter.parameterName}
+                              {parameter.isCalculated && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Badge variant="secondary" className="gap-1 text-xs">
+                                        <Calculator className="h-3 w-3" />
+                                        fx
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p className="font-mono text-xs">{parameter.formula || 'No formula defined'}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                            </div>
                             <div className="text-sm text-muted-foreground">
-                              {parameter.parameterType}
-                              {parameter.options && parameter.options.length > 0 && (
-                                <span className="ml-2">
-                                  Options: {parameter.options.join(', ')}
-                                </span>
+                              {parameter.isCalculated ? (
+                                <span className="italic">Calculated: {parameter.formula}</span>
+                              ) : (
+                                <>
+                                  {parameter.parameterType}
+                                  {parameter.options && parameter.options.length > 0 && (
+                                    <span className="ml-2">
+                                      Options: {parameter.options.join(', ')}
+                                    </span>
+                                  )}
+                                </>
                               )}
                             </div>
                           </div>

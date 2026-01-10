@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -13,11 +13,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Plus } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Plus, Calculator, AlertCircle } from 'lucide-react';
 import { ToolboxEntry } from '@/types/toolbox';
 import { DraggableParameterList } from './DraggableParameterList';
 import { DraggableExerciseCategoryList } from './DraggableExerciseCategoryList';
 import { QuantitativeParameterInput, QualitativeParameterInput } from '@/components/ui/parameter-input';
+import { validateFormula, extractParameterNames } from '@/utils/formulaEvaluator';
 
 // Predefined units for quantitative parameters
 const PREDEFINED_UNITS = [
@@ -74,6 +76,9 @@ export function ParameterManagementDialog({
     isFrequencyParameter: false,
     isSetParameter: false,
     showInGridByDefault: true,
+    isCalculated: false,
+    formula: '',
+    sourceParameterIds: [] as string[],
   });
   const [newExerciseCategory, setNewExerciseCategory] = useState('');
 
@@ -121,10 +126,13 @@ export function ParameterManagementDialog({
       subCategory,
       parameterName: newParameter.parameterName,
       parameterType: newParameter.parameterType,
-      options: newParameter.options,
-      isFrequencyParameter: newParameter.isFrequencyParameter,
-      isSetParameter: newParameter.isSetParameter,
+      options: newParameter.isCalculated ? [] : newParameter.options,
+      isFrequencyParameter: newParameter.isCalculated ? false : newParameter.isFrequencyParameter,
+      isSetParameter: newParameter.isCalculated ? false : newParameter.isSetParameter,
       showInGridByDefault: newParameter.showInGridByDefault,
+      isCalculated: newParameter.isCalculated,
+      formula: newParameter.isCalculated ? newParameter.formula : undefined,
+      sourceParameterIds: newParameter.isCalculated ? newParameter.sourceParameterIds : undefined,
     };
 
     let updatedParameters = [...parameters, parameter];
@@ -155,6 +163,9 @@ export function ParameterManagementDialog({
       isFrequencyParameter: false,
       isSetParameter: false,
       showInGridByDefault: true,
+      isCalculated: false,
+      formula: '',
+      sourceParameterIds: [],
     });
     setShowAddDialog(false);
   };
@@ -244,6 +255,33 @@ export function ParameterManagementDialog({
   // Check if another parameter already has frequency/set flags
   const existingFrequencyParameterId = parameters.find(p => p.isFrequencyParameter)?.id;
   const existingSetParameterId = parameters.find(p => p.isSetParameter)?.id;
+
+  // Get available quantitative parameters for formula building (excluding calculated params and current param being edited)
+  const availableSourceParameters = useMemo(() => {
+    return parameters.filter(p => 
+      p.parameterType === 'quantitative' && 
+      !p.isCalculated &&
+      p.id !== editingParameter?.id
+    );
+  }, [parameters, editingParameter?.id]);
+
+  // Validate formula for editing parameter
+  const editingFormulaValidation = useMemo(() => {
+    if (!editingParameter?.isCalculated || !editingParameter?.formula) {
+      return { valid: true };
+    }
+    const availableNames = availableSourceParameters.map(p => p.parameterName);
+    return validateFormula(editingParameter.formula, availableNames);
+  }, [editingParameter?.isCalculated, editingParameter?.formula, availableSourceParameters]);
+
+  // Validate formula for new parameter
+  const newFormulaValidation = useMemo(() => {
+    if (!newParameter.isCalculated || !newParameter.formula) {
+      return { valid: true };
+    }
+    const availableNames = availableSourceParameters.map(p => p.parameterName);
+    return validateFormula(newParameter.formula, availableNames);
+  }, [newParameter.isCalculated, newParameter.formula, availableSourceParameters]);
 
   return (
     <>
@@ -372,62 +410,104 @@ export function ParameterManagementDialog({
                 </Select>
               </div>
 
-              {editingParameter.parameterType === 'quantitative' ? (
-                <div>
-                  <Label>Units</Label>
-                  <div className="space-y-3">
-                    <Select
-                      value=""
-                      onValueChange={(value) => {
-                        if (value && !(editingParameter.options || []).includes(value)) {
-                          addOption(value);
-                        }
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a unit..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PREDEFINED_UNITS.filter(u => !(editingParameter.options || []).includes(u.value)).map((unit) => (
-                          <SelectItem key={unit.value} value={unit.value}>
-                            {unit.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    
+              {/* Units/Options section - only show when NOT calculated */}
+              {!editingParameter.isCalculated && (
+                <>
+                  {editingParameter.parameterType === 'quantitative' ? (
                     <div>
-                      <Label className="text-xs text-muted-foreground">Add custom field</Label>
-                      <div className="flex gap-2 mt-1">
-                        <Input
-                          placeholder="Custom unit..."
-                          id="edit-custom-unit-input"
-                          onKeyPress={(e) => {
-                            if (e.key === 'Enter') {
-                              addOption(e.currentTarget.value);
-                              e.currentTarget.value = '';
-                            }
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          onClick={() => {
-                            const input = document.getElementById('edit-custom-unit-input') as HTMLInputElement;
-                            if (input?.value) {
-                              addOption(input.value);
-                              input.value = '';
+                      <Label>Units</Label>
+                      <div className="space-y-3">
+                        <Select
+                          value=""
+                          onValueChange={(value) => {
+                            if (value && !(editingParameter.options || []).includes(value)) {
+                              addOption(value);
                             }
                           }}
                         >
-                          Add
-                        </Button>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a unit..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PREDEFINED_UNITS.filter(u => !(editingParameter.options || []).includes(u.value)).map((unit) => (
+                              <SelectItem key={unit.value} value={unit.value}>
+                                {unit.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Add custom field</Label>
+                          <div className="flex gap-2 mt-1">
+                            <Input
+                              placeholder="Custom unit..."
+                              id="edit-custom-unit-input"
+                              onKeyPress={(e) => {
+                                if (e.key === 'Enter') {
+                                  addOption(e.currentTarget.value);
+                                  e.currentTarget.value = '';
+                                }
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              onClick={() => {
+                                const input = document.getElementById('edit-custom-unit-input') as HTMLInputElement;
+                                if (input?.value) {
+                                  addOption(input.value);
+                                  input.value = '';
+                                }
+                              }}
+                            >
+                              Add
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        {(editingParameter.options || []).length > 0 && (
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Selected units</Label>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                              {(editingParameter.options || []).map((option) => (
+                                <Badge key={option} variant="secondary" className="cursor-pointer" onClick={() => removeOption(option)}>
+                                  {option} ×
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
-                    
-                    {(editingParameter.options || []).length > 0 && (
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Selected units</Label>
-                        <div className="flex flex-wrap gap-2 mt-1">
+                  ) : (
+                    <div>
+                      <Label>Options</Label>
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="Add option"
+                            id="edit-qualitative-option-input"
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') {
+                                addOption(e.currentTarget.value);
+                                e.currentTarget.value = '';
+                              }
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            onClick={() => {
+                              const input = document.getElementById('edit-qualitative-option-input') as HTMLInputElement;
+                              if (input?.value) {
+                                addOption(input.value);
+                                input.value = '';
+                              }
+                            }}
+                          >
+                            Add
+                          </Button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
                           {(editingParameter.options || []).map((option) => (
                             <Badge key={option} variant="secondary" className="cursor-pointer" onClick={() => removeOption(option)}>
                               {option} ×
@@ -435,46 +515,9 @@ export function ParameterManagementDialog({
                           ))}
                         </div>
                       </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <Label>Options</Label>
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="Add option"
-                        id="edit-qualitative-option-input"
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') {
-                            addOption(e.currentTarget.value);
-                            e.currentTarget.value = '';
-                          }
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        onClick={() => {
-                          const input = document.getElementById('edit-qualitative-option-input') as HTMLInputElement;
-                          if (input?.value) {
-                            addOption(input.value);
-                            input.value = '';
-                          }
-                        }}
-                      >
-                        Add
-                      </Button>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {(editingParameter.options || []).map((option) => (
-                        <Badge key={option} variant="secondary" className="cursor-pointer" onClick={() => removeOption(option)}>
-                          {option} ×
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                  )}
+                </>
               )}
 
               <div>
@@ -591,6 +634,123 @@ export function ParameterManagementDialog({
                     : 'When disabled, this parameter will be shown as a label badge on the exercise instead of in the set grid. Users can still toggle visibility in workout views.'}
                 </p>
               </div>
+
+              {/* Calculated Parameter Section */}
+              {editingParameter.parameterType === 'quantitative' && (
+                <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="editIsCalculated"
+                      checked={editingParameter.isCalculated || false}
+                      disabled={editingParameter.isFrequencyParameter || editingParameter.isSetParameter}
+                      onChange={(e) => {
+                        setEditingParameter({
+                          ...editingParameter,
+                          isCalculated: e.target.checked,
+                          // Clear frequency/set flags if becoming calculated
+                          isFrequencyParameter: e.target.checked ? false : editingParameter.isFrequencyParameter,
+                          isSetParameter: e.target.checked ? false : editingParameter.isSetParameter,
+                          formula: e.target.checked ? editingParameter.formula || '' : undefined,
+                          sourceParameterIds: e.target.checked ? editingParameter.sourceParameterIds || [] : undefined,
+                        });
+                      }}
+                      className="h-4 w-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    <Label 
+                      htmlFor="editIsCalculated" 
+                      className={`text-sm font-medium flex items-center gap-2 ${
+                        editingParameter.isFrequencyParameter || editingParameter.isSetParameter
+                          ? 'text-muted-foreground' : ''
+                      }`}
+                    >
+                      <Calculator className="h-4 w-4" />
+                      This is a calculated parameter
+                    </Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {editingParameter.isFrequencyParameter || editingParameter.isSetParameter
+                      ? 'Frequency and Set parameters cannot be calculated'
+                      : 'Calculated parameters derive their value from a formula using other parameters'}
+                  </p>
+
+                  {editingParameter.isCalculated && (
+                    <div className="space-y-4 pt-2">
+                      <div>
+                        <Label className="text-sm">Available Parameters</Label>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {availableSourceParameters.length > 0 ? (
+                            availableSourceParameters.map((p) => (
+                              <Badge 
+                                key={p.id} 
+                                variant="outline" 
+                                className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
+                                onClick={() => {
+                                  const currentFormula = editingParameter.formula || '';
+                                  const newFormula = currentFormula 
+                                    ? `${currentFormula} ${p.parameterName}` 
+                                    : p.parameterName;
+                                  setEditingParameter({
+                                    ...editingParameter,
+                                    formula: newFormula,
+                                    sourceParameterIds: [...new Set([...(editingParameter.sourceParameterIds || []), p.id])]
+                                  });
+                                }}
+                              >
+                                {p.parameterName}
+                              </Badge>
+                            ))
+                          ) : (
+                            <p className="text-xs text-muted-foreground italic">
+                              No quantitative parameters available. Add other quantitative parameters first.
+                            </p>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Click to add to formula. Use: + - * / ( )
+                        </p>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="editFormula">Formula</Label>
+                        <Input
+                          id="editFormula"
+                          value={editingParameter.formula || ''}
+                          onChange={(e) => {
+                            const formula = e.target.value;
+                            const referencedNames = extractParameterNames(formula);
+                            const referencedIds = availableSourceParameters
+                              .filter(p => referencedNames.includes(p.parameterName))
+                              .map(p => p.id);
+                            setEditingParameter({
+                              ...editingParameter,
+                              formula,
+                              sourceParameterIds: referencedIds
+                            });
+                          }}
+                          placeholder="e.g., Sets * Reps"
+                          className="font-mono"
+                        />
+                        {!editingFormulaValidation.valid && editingParameter.formula && (
+                          <div className="flex items-center gap-1 mt-1 text-destructive text-xs">
+                            <AlertCircle className="h-3 w-3" />
+                            {editingFormulaValidation.error}
+                          </div>
+                        )}
+                      </div>
+
+                      {editingParameter.formula && editingFormulaValidation.valid && (
+                        <div className="bg-muted rounded p-2">
+                          <Label className="text-xs text-muted-foreground">Preview</Label>
+                          <p className="font-mono text-sm">
+                            {editingParameter.parameterName} = {editingParameter.formula}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex justify-between">
                 <Button
@@ -771,62 +931,221 @@ export function ParameterManagementDialog({
               </p>
             </div>
 
-            {newParameter.parameterType === 'quantitative' ? (
-              <div>
-                <Label>Units</Label>
-                <div className="space-y-3">
-                  <Select
-                    value=""
-                    onValueChange={(value) => {
-                      if (value && !newParameter.options.includes(value)) {
-                        addNewParameterOption(value);
-                      }
+            {/* Calculated Parameter Section */}
+            {newParameter.parameterType === 'quantitative' && (
+              <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="newIsCalculated"
+                    checked={newParameter.isCalculated}
+                    disabled={newParameter.isFrequencyParameter || newParameter.isSetParameter}
+                    onChange={(e) => {
+                      setNewParameter({
+                        ...newParameter,
+                        isCalculated: e.target.checked,
+                        // Clear frequency/set flags if becoming calculated
+                        isFrequencyParameter: e.target.checked ? false : newParameter.isFrequencyParameter,
+                        isSetParameter: e.target.checked ? false : newParameter.isSetParameter,
+                        formula: e.target.checked ? newParameter.formula : '',
+                        sourceParameterIds: e.target.checked ? newParameter.sourceParameterIds : [],
+                      });
                     }}
+                    className="h-4 w-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <Label 
+                    htmlFor="newIsCalculated" 
+                    className={`text-sm font-medium flex items-center gap-2 ${
+                      newParameter.isFrequencyParameter || newParameter.isSetParameter
+                        ? 'text-muted-foreground' : ''
+                    }`}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a unit..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PREDEFINED_UNITS.filter(u => !newParameter.options.includes(u.value)).map((unit) => (
-                        <SelectItem key={unit.value} value={unit.value}>
-                          {unit.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Add custom field</Label>
-                    <div className="flex gap-2 mt-1">
+                    <Calculator className="h-4 w-4" />
+                    This is a calculated parameter
+                  </Label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {newParameter.isFrequencyParameter || newParameter.isSetParameter
+                    ? 'Frequency and Set parameters cannot be calculated'
+                    : 'Calculated parameters derive their value from a formula using other parameters'}
+                </p>
+
+                {newParameter.isCalculated && (
+                  <div className="space-y-4 pt-2">
+                    <div>
+                      <Label className="text-sm">Available Parameters</Label>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {availableSourceParameters.length > 0 ? (
+                          availableSourceParameters.map((p) => (
+                            <Badge 
+                              key={p.id} 
+                              variant="outline" 
+                              className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
+                              onClick={() => {
+                                const currentFormula = newParameter.formula;
+                                const newFormula = currentFormula 
+                                  ? `${currentFormula} ${p.parameterName}` 
+                                  : p.parameterName;
+                                setNewParameter({
+                                  ...newParameter,
+                                  formula: newFormula,
+                                  sourceParameterIds: [...new Set([...newParameter.sourceParameterIds, p.id])]
+                                });
+                              }}
+                            >
+                              {p.parameterName}
+                            </Badge>
+                          ))
+                        ) : (
+                          <p className="text-xs text-muted-foreground italic">
+                            No quantitative parameters available. Add other quantitative parameters first.
+                          </p>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Click to add to formula. Use: + - * / ( )
+                      </p>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="newFormula">Formula</Label>
                       <Input
-                        placeholder="Custom unit..."
-                        id="add-custom-unit-input"
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') {
-                            addNewParameterOption(e.currentTarget.value);
-                            e.currentTarget.value = '';
-                          }
+                        id="newFormula"
+                        value={newParameter.formula}
+                        onChange={(e) => {
+                          const formula = e.target.value;
+                          const referencedNames = extractParameterNames(formula);
+                          const referencedIds = availableSourceParameters
+                            .filter(p => referencedNames.includes(p.parameterName))
+                            .map(p => p.id);
+                          setNewParameter({
+                            ...newParameter,
+                            formula,
+                            sourceParameterIds: referencedIds
+                          });
                         }}
+                        placeholder="e.g., Sets * Reps"
+                        className="font-mono"
                       />
-                      <Button
-                        type="button"
-                        onClick={() => {
-                          const input = document.getElementById('add-custom-unit-input') as HTMLInputElement;
-                          if (input?.value) {
-                            addNewParameterOption(input.value);
-                            input.value = '';
+                      {!newFormulaValidation.valid && newParameter.formula && (
+                        <div className="flex items-center gap-1 mt-1 text-destructive text-xs">
+                          <AlertCircle className="h-3 w-3" />
+                          {newFormulaValidation.error}
+                        </div>
+                      )}
+                    </div>
+
+                    {newParameter.formula && newFormulaValidation.valid && (
+                      <div className="bg-muted rounded p-2">
+                        <Label className="text-xs text-muted-foreground">Preview</Label>
+                        <p className="font-mono text-sm">
+                          {newParameter.parameterName || 'Parameter'} = {newParameter.formula}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Units/Options section - only show when NOT calculated */}
+            {!newParameter.isCalculated && (
+              <>
+                {newParameter.parameterType === 'quantitative' ? (
+                  <div>
+                    <Label>Units</Label>
+                    <div className="space-y-3">
+                      <Select
+                        value=""
+                        onValueChange={(value) => {
+                          if (value && !newParameter.options.includes(value)) {
+                            addNewParameterOption(value);
                           }
                         }}
                       >
-                        Add
-                      </Button>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a unit..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PREDEFINED_UNITS.filter(u => !newParameter.options.includes(u.value)).map((unit) => (
+                            <SelectItem key={unit.value} value={unit.value}>
+                              {unit.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Add custom field</Label>
+                        <div className="flex gap-2 mt-1">
+                          <Input
+                            placeholder="Custom unit..."
+                            id="add-custom-unit-input"
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') {
+                                addNewParameterOption(e.currentTarget.value);
+                                e.currentTarget.value = '';
+                              }
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            onClick={() => {
+                              const input = document.getElementById('add-custom-unit-input') as HTMLInputElement;
+                              if (input?.value) {
+                                addNewParameterOption(input.value);
+                                input.value = '';
+                              }
+                            }}
+                          >
+                            Add
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      {newParameter.options.length > 0 && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Selected units</Label>
+                          <div className="flex flex-wrap gap-2 mt-1">
+                            {newParameter.options.map((option) => (
+                              <Badge key={option} variant="secondary" className="cursor-pointer" onClick={() => removeNewParameterOption(option)}>
+                                {option} ×
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  
-                  {newParameter.options.length > 0 && (
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Selected units</Label>
-                      <div className="flex flex-wrap gap-2 mt-1">
+                ) : (
+                  <div>
+                    <Label>Options</Label>
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Add option"
+                          id="add-qualitative-option-input"
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                              addNewParameterOption(e.currentTarget.value);
+                              e.currentTarget.value = '';
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            const input = document.getElementById('add-qualitative-option-input') as HTMLInputElement;
+                            if (input?.value) {
+                              addNewParameterOption(input.value);
+                              input.value = '';
+                            }
+                          }}
+                        >
+                          Add
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
                         {newParameter.options.map((option) => (
                           <Badge key={option} variant="secondary" className="cursor-pointer" onClick={() => removeNewParameterOption(option)}>
                             {option} ×
@@ -834,46 +1153,9 @@ export function ParameterManagementDialog({
                         ))}
                       </div>
                     </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div>
-                <Label>Options</Label>
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Add option"
-                      id="add-qualitative-option-input"
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          addNewParameterOption(e.currentTarget.value);
-                          e.currentTarget.value = '';
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      onClick={() => {
-                        const input = document.getElementById('add-qualitative-option-input') as HTMLInputElement;
-                        if (input?.value) {
-                          addNewParameterOption(input.value);
-                          input.value = '';
-                        }
-                      }}
-                    >
-                      Add
-                    </Button>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {newParameter.options.map((option) => (
-                      <Badge key={option} variant="secondary" className="cursor-pointer" onClick={() => removeNewParameterOption(option)}>
-                        {option} ×
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              </div>
+                )}
+              </>
             )}
 
             <div className="flex justify-end space-x-2">
