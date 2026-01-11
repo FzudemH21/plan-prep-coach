@@ -1954,6 +1954,52 @@ export default function MesocyclePage() {
               </span>
             </div>
           )}
+          
+          {/* Manual Method Selection */}
+          <div className="border rounded-lg p-4 bg-muted/20 mt-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="space-y-1">
+                <h4 className="font-medium">Manual Method Selection</h4>
+                <p className="text-sm text-muted-foreground">
+                  Add training methods from the toolbox that are not covered by your selected sub-goals.
+                </p>
+              </div>
+              <Button 
+                onClick={() => setIsAddMethodDialogOpen(true)}
+                variant="outline"
+                className="shrink-0"
+              >
+                Add Method
+              </Button>
+            </div>
+            
+            {/* Show manually added methods */}
+            {manuallyAddedMethods.length > 0 && (
+              <div className="mt-3 space-y-2">
+                <Label className="text-sm font-medium">Manually Added Methods:</Label>
+                <div className="flex flex-wrap gap-2">
+                  {manuallyAddedMethods.map((method) => (
+                    <Badge 
+                      key={method} 
+                      variant="secondary"
+                      className="flex items-center gap-1"
+                    >
+                      <span className="text-xs">Manual:</span>
+                      {method}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-4 w-4 p-0 ml-1"
+                        onClick={() => handleRemoveMethod(method)}
+                      >
+                        ×
+                      </Button>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -2569,15 +2615,33 @@ export default function MesocyclePage() {
 
   // Manual method management functions
   const handleAddMethod = useCallback((method: string) => {
+    // Add to manually added methods list
     const newManualMethods = [...manuallyAddedMethods, method];
     setManuallyAddedMethods(newManualMethods);
     localStorage.setItem('manuallyAddedMethods', JSON.stringify(newManualMethods));
-  }, [manuallyAddedMethods]);
+    
+    // Auto-allocate to all mesocycles so it appears in the allocation grid immediately
+    const allMesocycleIds = mesocycles.map(m => m.id);
+    setMethodAllocations(prev => {
+      const updated = { ...prev, [method]: allMesocycleIds };
+      localStorage.setItem('methodAllocations', JSON.stringify(updated));
+      return updated;
+    });
+  }, [manuallyAddedMethods, mesocycles]);
 
   const handleRemoveMethod = useCallback((method: string) => {
+    // Remove from manually added methods
     const newManualMethods = manuallyAddedMethods.filter(m => m !== method);
     setManuallyAddedMethods(newManualMethods);
     localStorage.setItem('manuallyAddedMethods', JSON.stringify(newManualMethods));
+    
+    // Also remove from allocations
+    setMethodAllocations(prev => {
+      const updated = { ...prev };
+      delete updated[method];
+      localStorage.setItem('methodAllocations', JSON.stringify(updated));
+      return updated;
+    });
   }, [manuallyAddedMethods]);
 
   // Method classification helpers
@@ -3734,51 +3798,6 @@ export default function MesocyclePage() {
             </>
           )}
 
-          {/* Add Method Section - Always visible */}
-          <div className="mt-4 pt-4 border-t">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <h4 className="font-medium">Manual Method Selection</h4>
-                <p className="text-sm text-muted-foreground">
-                  Add training methods from the toolbox that are not covered by your selected sub-goals.
-                </p>
-              </div>
-              <Button 
-                onClick={() => setIsAddMethodDialogOpen(true)}
-                variant="outline"
-                className="shrink-0"
-              >
-                Add Method
-              </Button>
-            </div>
-            
-            {/* Show manually added methods */}
-            {manuallyAddedMethods.length > 0 && (
-              <div className="mt-3 space-y-2">
-                <Label className="text-sm font-medium">Manually Added Methods:</Label>
-                <div className="flex flex-wrap gap-2">
-                  {manuallyAddedMethods.map((method) => (
-                    <Badge 
-                      key={method} 
-                      variant="secondary"
-                      className="flex items-center gap-1"
-                    >
-                      <span className="text-xs">Manual:</span>
-                      {method}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-4 w-4 p-0 ml-1"
-                        onClick={() => handleRemoveMethod(method)}
-                      >
-                        ×
-                      </Button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
 
            </CardContent>
        </Card>
