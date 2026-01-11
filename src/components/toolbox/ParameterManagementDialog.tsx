@@ -718,7 +718,7 @@ export function ParameterManagementDialog({
                           value={editingParameter.formula || ''}
                           onChange={(e) => {
                             const formula = e.target.value;
-                            const referencedNames = extractParameterNames(formula);
+                            const referencedNames = extractParameterNames(formula, availableSourceParameters.map(p => p.parameterName));
                             const referencedIds = availableSourceParameters
                               .filter(p => referencedNames.includes(p.parameterName))
                               .map(p => p.id);
@@ -1014,7 +1014,7 @@ export function ParameterManagementDialog({
                         value={newParameter.formula}
                         onChange={(e) => {
                           const formula = e.target.value;
-                          const referencedNames = extractParameterNames(formula);
+                          const referencedNames = extractParameterNames(formula, availableSourceParameters.map(p => p.parameterName));
                           const referencedIds = availableSourceParameters
                             .filter(p => referencedNames.includes(p.parameterName))
                             .map(p => p.id);
