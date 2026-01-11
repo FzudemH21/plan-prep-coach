@@ -13,25 +13,33 @@ export interface FormulaValidationResult {
 }
 
 /**
- * Extract parameter names from a formula string
- * Parameters are identified as words that aren't numbers or operators
+ * Escape special regex characters in a string
  */
-export function extractParameterNames(formula: string): string[] {
+export function escapeRegExp(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Extract parameter names from a formula string by matching against known parameters
+ * This properly handles multi-word parameter names like "Rep Distance"
+ */
+export function extractParameterNames(formula: string, availableParameters: string[]): string[] {
   if (!formula.trim()) return [];
   
-  // Remove operators and parentheses, then split by whitespace
-  const tokens = formula
-    .replace(/[+\-*/()]/g, ' ')
-    .split(/\s+/)
-    .filter(token => token.trim() !== '');
+  const foundParams: string[] = [];
   
-  // Filter out pure numbers
-  const paramNames = tokens.filter(token => {
-    return isNaN(Number(token)) && token.trim() !== '';
-  });
+  // Sort by length (longest first) to match multi-word params before single words
+  const sortedParams = [...availableParameters].sort((a, b) => b.length - a.length);
   
-  // Return unique parameter names
-  return [...new Set(paramNames)];
+  for (const paramName of sortedParams) {
+    // Check if parameter name exists in formula using word boundaries
+    const regex = new RegExp(`\\b${escapeRegExp(paramName)}\\b`, 'gi');
+    if (regex.test(formula)) {
+      foundParams.push(paramName);
+    }
+  }
+  
+  return foundParams;
 }
 
 /**
@@ -45,7 +53,7 @@ export function validateFormula(
     return { valid: false, error: 'Formula cannot be empty' };
   }
   
-  // Check for only allowed characters
+  // Check for only allowed characters (letters, numbers, spaces, operators, parentheses, hyphens for param names)
   const allowedPattern = /^[\w\s+\-*/().]+$/;
   if (!allowedPattern.test(formula)) {
     return { valid: false, error: 'Formula contains invalid characters' };
@@ -64,12 +72,22 @@ export function validateFormula(
     return { valid: false, error: 'Unbalanced parentheses' };
   }
   
-  // Extract and validate parameter references
-  const referencedParams = extractParameterNames(formula);
-  for (const param of referencedParams) {
-    if (!availableParameters.includes(param)) {
-      return { valid: false, error: `Unknown parameter: "${param}"` };
-    }
+  // Extract parameters that match known names
+  const referencedParams = extractParameterNames(formula, availableParameters);
+  
+  // Create a version of formula with known params removed to check for leftovers
+  let remaining = formula;
+  const sortedParams = [...availableParameters].sort((a, b) => b.length - a.length);
+  for (const param of sortedParams) {
+    remaining = remaining.replace(new RegExp(`\\b${escapeRegExp(param)}\\b`, 'gi'), '');
+  }
+  
+  // Remove operators, parentheses, numbers, decimal points, and whitespace
+  remaining = remaining.replace(/[+\-*/().\s\d]/g, '').trim();
+  
+  // If anything remains, it's an unknown token
+  if (remaining.length > 0) {
+    return { valid: false, error: `Unknown token in formula: "${remaining}"` };
   }
   
   if (referencedParams.length === 0) {
@@ -127,12 +145,6 @@ export function evaluateFormula(
   }
 }
 
-/**
- * Escape special regex characters in a string
- */
-function escapeRegExp(string: string): string {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 /**
  * Format a formula for display, showing the calculation with actual values
