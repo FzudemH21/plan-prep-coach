@@ -1,5 +1,6 @@
 import { MicrocyclePlanningTable } from '@/components/microcycle-planning';
 import { cn } from '@/lib/utils';
+import { evaluateFormula } from '@/utils/formulaEvaluator';
 import React, { useState, useEffect, useMemo, useCallback, useTransition } from 'react';
 import { AddMethodDialog } from '@/components/ui/add-method-dialog';
 import { MethodDeleteDialog } from '@/components/shared/MethodDeleteDialog';
@@ -2715,6 +2716,8 @@ export default function MesocyclePage() {
       options: string[];
       isQuantitative: boolean;
       isQualitative: boolean;
+      isCalculated?: boolean;
+      formula?: string;
     }>> = {};
 
     if (!toolboxData.entries) return map;
@@ -2735,12 +2738,41 @@ export default function MesocyclePage() {
         type: entry.parameterType === 'quantitative' ? 'number' : 'text',
         options: entry.options,
         isQuantitative: entry.parameterType === 'quantitative',
-        isQualitative: entry.parameterType === 'qualitative'
+        isQualitative: entry.parameterType === 'qualitative',
+        isCalculated: entry.isCalculated,
+        formula: entry.formula
       }));
     });
 
     return map;
   }, [toolboxData.entries, getMethodsForAllocatedSubGoals]);
+
+  // Helper function to compute calculated parameter values
+  const computeCalculatedValue = useCallback((
+    mesocycleId: string,
+    microcycleIndex: number,
+    methodName: string,
+    formula: string,
+    siblingParameters: Array<{ name: string; isCalculated?: boolean }>,
+    sessionIndex: number = 0
+  ): number | null => {
+    const context: Record<string, number> = {};
+    
+    // Get values from all non-calculated sibling parameters
+    siblingParameters.forEach(param => {
+      if (param.isCalculated) return; // Skip other calculated params
+      
+      const value = getParameterValue(mesocycleId, microcycleIndex, methodName, param.name, sessionIndex);
+      if (value !== undefined && value !== null && value !== '') {
+        const numValue = parseFloat(value.toString());
+        if (!isNaN(numValue)) {
+          context[param.name] = numValue;
+        }
+      }
+    });
+    
+    return evaluateFormula(formula, context);
+  }, [getParameterValue]);
 
   // Get parameter information for a specific cell in exercise selection table
   const getParametersForCell = useCallback((
@@ -3661,6 +3693,31 @@ export default function MesocyclePage() {
                                                                   data-allocated={isAllocated ? 'true' : 'false'}
                                                                 >
                                                                   {isAllocated ? (
+                                                                    param.isCalculated && param.formula ? (
+                                                                      // Calculated parameter - show computed value (read-only)
+                                                                      <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                          <div className="flex items-center justify-center h-full bg-muted/40 rounded px-2 py-1 min-h-[32px]">
+                                                                            <span className="text-sm font-medium text-muted-foreground italic">
+                                                                              {(() => {
+                                                                                const calculatedValue = computeCalculatedValue(
+                                                                                  meso.id,
+                                                                                  microcycleIndex,
+                                                                                  fullMethodName,
+                                                                                  param.formula!,
+                                                                                  parameters,
+                                                                                  sessionIndex
+                                                                                );
+                                                                                return calculatedValue !== null ? calculatedValue : '—';
+                                                                              })()}
+                                                                            </span>
+                                                                          </div>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent side="top">
+                                                                          <p className="text-xs">Formula: {param.formula}</p>
+                                                                        </TooltipContent>
+                                                                      </Tooltip>
+                                                                    ) : (
                                                                     <ParameterContextMenu
                                                                       cellId={cellId}
                                                                       value={currentValue}
@@ -3704,6 +3761,7 @@ export default function MesocyclePage() {
                                                                         />
                                                                       )}
                                                                     </ParameterContextMenu>
+                                                                    )
                                                                   ) : (
                                                                     <div className="h-full flex items-center justify-center text-muted-foreground text-xs">—</div>
                                                                   )}
@@ -3726,6 +3784,31 @@ export default function MesocyclePage() {
                                                                data-allocated={isAllocated ? 'true' : 'false'}
                                                              >
                                                             {isAllocated ? (
+                                                              param.isCalculated && param.formula ? (
+                                                                // Calculated parameter - show computed value (read-only)
+                                                                <Tooltip>
+                                                                  <TooltipTrigger asChild>
+                                                                    <div className="flex items-center justify-center h-full bg-muted/40 rounded px-2 py-1 min-h-[32px]">
+                                                                      <span className="text-sm font-medium text-muted-foreground italic">
+                                                                        {(() => {
+                                                                          const calculatedValue = computeCalculatedValue(
+                                                                            meso.id,
+                                                                            microcycleIndex,
+                                                                            fullMethodName,
+                                                                            param.formula!,
+                                                                            parameters,
+                                                                            0
+                                                                          );
+                                                                          return calculatedValue !== null ? calculatedValue : '—';
+                                                                        })()}
+                                                                      </span>
+                                                                    </div>
+                                                                  </TooltipTrigger>
+                                                                  <TooltipContent side="top">
+                                                                    <p className="text-xs">Formula: {param.formula}</p>
+                                                                  </TooltipContent>
+                                                                </Tooltip>
+                                                              ) : (
                                                               <ParameterContextMenu
                                                                 cellId={cellId}
                                                                 value={currentValue}
@@ -3769,6 +3852,7 @@ export default function MesocyclePage() {
                                                                   />
                                                                 )}
                                                               </ParameterContextMenu>
+                                                              )
                                                             ) : (
                                                               <div className="h-full flex items-center justify-center text-muted-foreground text-xs">—</div>
                                                             )}
