@@ -15,6 +15,10 @@ interface LegacyToolboxEntry {
   isFrequencyParameter?: boolean;
   isSetParameter?: boolean;
   showInGridByDefault?: boolean;
+  // Calculated parameter fields
+  isCalculated?: boolean;
+  formula?: string;
+  sourceParameterIds?: string[];
 }
 
 // Migration function to parse legacy bracket notation and consolidate to parameterName
@@ -31,7 +35,10 @@ function migrateLegacyEntry(entry: LegacyToolboxEntry): ToolboxEntry {
       exerciseCategories: entry.exerciseCategories || [],
       isFrequencyParameter: entry.isFrequencyParameter,
       isSetParameter: entry.isSetParameter,
-      showInGridByDefault: entry.showInGridByDefault ?? true
+      showInGridByDefault: entry.showInGridByDefault ?? true,
+      isCalculated: entry.isCalculated,
+      formula: entry.formula,
+      sourceParameterIds: entry.sourceParameterIds
     };
   }
 
@@ -63,7 +70,10 @@ function migrateLegacyEntry(entry: LegacyToolboxEntry): ToolboxEntry {
       exerciseCategories: entry.exerciseCategories || [],
       isFrequencyParameter: entry.isFrequencyParameter,
       isSetParameter: entry.isSetParameter,
-      showInGridByDefault: entry.showInGridByDefault ?? true
+      showInGridByDefault: entry.showInGridByDefault ?? true,
+      isCalculated: entry.isCalculated,
+      formula: entry.formula,
+      sourceParameterIds: entry.sourceParameterIds
     };
   } else {
     // No brackets - treat as qualitative with empty options
@@ -77,7 +87,10 @@ function migrateLegacyEntry(entry: LegacyToolboxEntry): ToolboxEntry {
       exerciseCategories: entry.exerciseCategories || [],
       isFrequencyParameter: entry.isFrequencyParameter,
       isSetParameter: entry.isSetParameter,
-      showInGridByDefault: entry.showInGridByDefault ?? true
+      showInGridByDefault: entry.showInGridByDefault ?? true,
+      isCalculated: entry.isCalculated,
+      formula: entry.formula,
+      sourceParameterIds: entry.sourceParameterIds
     };
   }
 }
