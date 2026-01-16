@@ -12,6 +12,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info, Copy, ChevronDown, Columns, ChevronRight, X, Trash2, Trophy, Calendar } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
+import { useAthletes } from '@/hooks/useAthletes';
+import { getAthleteDisplayName } from '@/types/athlete';
+import { TrainingPlanOverview } from '@/components/shared/TrainingPlanOverview';
 import { ExtendedMesocycle, Microcycle } from '@/features/planner/types';
 import { TrainingDay } from '@/types/daily-intensity';
 import { CellData, ExerciseSelection, SessionSection, SupersetMapping, ExerciseDistribution } from '@/types/microcycle-planning';
@@ -61,6 +64,11 @@ export default function MicrocyclePlanningPage() {
   const [splitStates, setSplitStates] = useState<Record<string, boolean>>({});
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
+  const { athletes } = useAthletes();
+  
+  // Resolve athlete name from selectedAthleteId
+  const selectedAthlete = athletes.find(a => a.id === macrocycleData?.selectedAthleteId);
+  const athleteName = selectedAthlete ? getAthleteDisplayName(selectedAthlete) : undefined;
   const [clearMesocycleDialogOpen, setClearMesocycleDialogOpen] = useState(false);
   const [clearMicrocycleDialog, setClearMicrocycleDialog] = useState<{
     isOpen: boolean;
@@ -2943,23 +2951,31 @@ export default function MicrocyclePlanningPage() {
     </div>
   );
 
-  const renderTrainingPlanOverview = () => (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <Target className="h-5 w-5" />
-          <span>Training Plan Overview</span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-2 text-sm">
-          <p><strong>Goal:</strong> {macrocycleData?.smartGoal?.goal || 'Not set'}</p>
-          <p><strong>Total Mesocycles:</strong> {mesocycles.length}</p>
-          <p><strong>Current Mesocycle:</strong> {currentMesocycle?.name || 'N/A'}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
+  const renderTrainingPlanOverview = () => {
+    const primaryGoal = macrocycleData?.smartGoal?.description || 
+                        macrocycleData?.smartGoal?.goal ||
+                        macrocycleData?.smartGoal?.specific;
+    
+    const startDate = macrocycleData?.planDuration?.startDate || macrocycleData?.smartGoal?.startDate;
+    const endDate = macrocycleData?.planDuration?.endDate || macrocycleData?.smartGoal?.endDate;
+    
+    return (
+      <TrainingPlanOverview
+        athleteName={athleteName}
+        planName={macrocycleData?.planName}
+        startDate={startDate}
+        endDate={endDate}
+        totalWeeks={macrocycleData?.planDuration?.totalWeeks || macrocycleData?.smartGoal?.totalWeeks}
+        totalDays={macrocycleData?.planDuration?.totalDays}
+        totalMesocycles={mesocycles.length}
+        primaryGoal={primaryGoal}
+        subGoals={(macrocycleData?.subGoals || []).map((sg: any) => ({
+          id: sg.id,
+          description: sg.description || sg.name || 'Unknown'
+        }))}
+      />
+    );
+  };
 
   const renderMesocycleNavigation = () => (
     <div className="flex items-center gap-4 mb-4">

@@ -2,6 +2,9 @@ import { MicrocyclePlanningTable } from '@/components/microcycle-planning';
 import { cn } from '@/lib/utils';
 import { evaluateFormula } from '@/utils/formulaEvaluator';
 import React, { useState, useEffect, useMemo, useCallback, useTransition } from 'react';
+import { useAthletes } from '@/hooks/useAthletes';
+import { getAthleteDisplayName } from '@/types/athlete';
+import { TrainingPlanOverview } from '@/components/shared/TrainingPlanOverview';
 import { AddMethodDialog } from '@/components/ui/add-method-dialog';
 import { MethodDeleteDialog } from '@/components/shared/MethodDeleteDialog';
 import { useToast } from '@/hooks/use-toast';
@@ -205,6 +208,11 @@ export default function MesocyclePage() {
   const { data: parametersDataV2 } = useParametersDataV2();
   const { dragState, startDrag, endDrag, addToSelection, clearSelection, fillCells } = useDragFill();
   const { toast } = useToast();
+  const { athletes } = useAthletes();
+  
+  // Resolve athlete name from selectedAthleteId
+  const selectedAthlete = athletes.find(a => a.id === macrocycleData?.selectedAthleteId);
+  const athleteName = selectedAthlete ? getAthleteDisplayName(selectedAthlete) : undefined;
 
   const totalSteps = 5;
 
@@ -630,80 +638,33 @@ export default function MesocyclePage() {
     return colors[intensity] || "bg-muted text-muted-foreground";
   };
 
-  const renderTrainingPlanOverview = () => (
-    <Card className="mb-6">
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <Info className="h-5 w-5" />
-          <span>Training Plan Overview</span>
-        </CardTitle>
-        <CardDescription>
-          Summary of your macrocycle plan and training timeline.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {macrocycleData ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="space-y-1">
-              <Label className="text-sm font-medium text-muted-foreground">Goal</Label>
-              <p className="text-sm font-medium">
-                {(() => {
-                  // Better goal display priority
-                  const goal = macrocycleData.smartGoal?.description || 
-                              macrocycleData.smartGoal?.specific || 
-                              macrocycleData.smartGoal?.measurable || 
-                              macrocycleData.smartGoal?.realistic;
-                  return goal && goal.trim() !== "" ? goal : "Not specified";
-                })()}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-sm font-medium text-muted-foreground">Total Duration</Label>
-              <p className="text-sm font-medium">
-                {macrocycleData.smartGoal?.startDate && macrocycleData.smartGoal?.endDate ? 
-                  `${totalWeeks} weeks (${Math.ceil((planEndDate.getTime() - planStartDate.getTime()) / (1000 * 60 * 60 * 24))} days)` : 
-                  "-"
-                }
-              </p>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-sm font-medium text-muted-foreground">Start Date</Label>
-              <p className="text-sm font-medium">
-                {macrocycleData.smartGoal?.startDate ? format(planStartDate, 'MMM dd, yyyy') : "-"}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-sm font-medium text-muted-foreground">End Date</Label>
-              <p className="text-sm font-medium">
-                {macrocycleData.smartGoal?.endDate ? format(planEndDate, 'MMM dd, yyyy') : "-"}
-              </p>
-            </div>
-            <div className="space-y-1 md:col-span-2">
-              <Label className="text-sm font-medium text-muted-foreground">Sub-goals</Label>
-              <div className="flex flex-wrap gap-1">
-                {(() => {
-                  const uniqueSubGoals = new Map<string, any>();
-                  (macrocycleData.subGoals || []).forEach((sg: any) => {
-                    const desc = sg.description || sg.name || sg.id || '';
-                    if (desc && desc.trim() !== '' && !uniqueSubGoals.has(desc)) {
-                      uniqueSubGoals.set(desc, sg);
-                    }
-                  });
-                  return Array.from(uniqueSubGoals.values()).map((subGoal: any, index: number) => (
-                    <Badge key={index} variant="secondary" className="text-xs">
-                      {subGoal.description || subGoal.name || subGoal.id || 'Unknown Sub-goal'}
-                    </Badge>
-                  ));
-                })()}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">No macrocycle data found. Please complete the macrocycle planning first.</p>
-        )}
-      </CardContent>
-    </Card>
-  );
+  const renderTrainingPlanOverview = () => {
+    const primaryGoal = macrocycleData?.smartGoal?.description || 
+                        macrocycleData?.smartGoal?.specific || 
+                        macrocycleData?.smartGoal?.measurable || 
+                        macrocycleData?.smartGoal?.realistic;
+    
+    const totalDays = macrocycleData?.smartGoal?.startDate && macrocycleData?.smartGoal?.endDate
+      ? Math.ceil((planEndDate.getTime() - planStartDate.getTime()) / (1000 * 60 * 60 * 24))
+      : undefined;
+    
+    return (
+      <TrainingPlanOverview
+        athleteName={athleteName}
+        planName={macrocycleData?.planName}
+        startDate={planStartDate}
+        endDate={planEndDate}
+        totalWeeks={totalWeeks}
+        totalDays={totalDays}
+        totalMesocycles={mesocycles.length}
+        primaryGoal={primaryGoal}
+        subGoals={(macrocycleData?.subGoals || []).map((sg: any) => ({
+          id: sg.id,
+          description: sg.description || sg.name || 'Unknown'
+        }))}
+      />
+    );
+  };
 
   // Calculate microcycle date ranges for event/test checking
   const calculateMicrocycleDates = useMemo(() => {
