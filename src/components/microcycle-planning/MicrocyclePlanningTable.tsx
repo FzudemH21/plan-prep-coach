@@ -1186,64 +1186,35 @@ const updateCellData = (
             <CardTitle>Microcycle Exercise Planning</CardTitle>
             
             {/* Mesocycle Navigation Controls */}
-            <div className="flex items-center gap-4">
-              {/* Previous Button */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentMesocycleIndex(prev => Math.max(0, prev - 1))}
-                disabled={!canNavigatePrevious}
-                className="shrink-0"
-              >
-                <ArrowLeft className="h-4 w-4 mr-1" />
-                Previous
-              </Button>
-              
-              {/* Mesocycle Buttons */}
-              <div className="flex-1 overflow-x-auto min-w-0">
-                <div className="flex items-center justify-center gap-2 py-1">
-                  {mesocycles.map((meso, index) => {
-                    const isSelected = index === currentMesocycleIndex;
-                    const isComparedWith = showComparison && index === currentMesocycleIndex + 1;
-                    const isDisabledForComparison = showComparison && index === mesocycles.length - 1;
-                    
-                    return (
-                      <Button
-                        key={meso.id}
-                        variant={isSelected ? "default" : isComparedWith ? "secondary" : "outline"}
-                        size="sm"
-                        onClick={() => setCurrentMesocycleIndex(index)}
-                        disabled={isDisabledForComparison}
-                        className={cn(
-                          "min-w-[100px] shrink-0",
-                          isComparedWith && "ring-2 ring-primary/30"
-                        )}
-                      >
-                        {meso.name}
-                      </Button>
-                    );
-                  })}
-                </div>
+            <div className="flex items-center justify-between gap-4">
+              {/* Mesocycle Buttons - Centered */}
+              <div className="flex-1 flex items-center justify-center gap-2">
+                {mesocycles.map((meso, index) => {
+                  const isSelected = index === currentMesocycleIndex;
+                  const isComparedWith = showComparison && index === currentMesocycleIndex + 1;
+                  const isDisabledForComparison = showComparison && index === mesocycles.length - 1;
+                  
+                  return (
+                    <Button
+                      key={meso.id}
+                      variant={isSelected ? "default" : isComparedWith ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentMesocycleIndex(index)}
+                      disabled={isDisabledForComparison}
+                      className={cn(
+                        "min-w-[100px]",
+                        isComparedWith && "ring-2 ring-primary/30"
+                      )}
+                    >
+                      {meso.name}
+                    </Button>
+                  );
+                })}
               </div>
-              
-              {/* Next Button */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentMesocycleIndex(prev => Math.min(
-                  showComparison ? mesocycles.length - 2 : mesocycles.length - 1, 
-                  prev + 1
-                ))}
-                disabled={!canNavigateNext}
-                className="shrink-0"
-              >
-                Next
-                <ArrowRight className="h-4 w-4 ml-1" />
-              </Button>
               
               {/* Comparison Toggle */}
               {hasNextMesocycle && (
-                <div className="flex items-center gap-2 border-l pl-4">
+                <div className="flex items-center gap-2 shrink-0">
                   <Switch
                     id="comparison-toggle"
                     checked={showComparison}
