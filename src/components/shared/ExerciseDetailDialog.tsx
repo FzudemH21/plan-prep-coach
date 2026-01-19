@@ -15,7 +15,7 @@ import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Play, Video, ExternalLink, Link2 } from 'lucide-react';
-import { useCustomLibraries, CustomLibrary, CustomExercise, LibraryColumn } from '@/hooks/useCustomLibraries';
+import { useCustomLibraries, CustomLibrary, CustomExercise, LibraryColumn } from '@/contexts/CustomLibrariesContext';
 
 interface ExerciseDetailDialogProps {
   isOpen: boolean;

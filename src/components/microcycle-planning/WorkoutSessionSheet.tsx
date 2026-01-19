@@ -20,6 +20,8 @@ import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
 import { MethodSelectionDialog } from './MethodSelectionDialog';
 import { CombinedTestEventDialog } from './CombinedTestEventDialog';
 import { ParameterVisibilityPopover, ParameterVisibilityOverrides } from './ParameterVisibilityPopover';
+import { ExerciseDetailDialog } from '@/components/shared/ExerciseDetailDialog';
+import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { format } from 'date-fns';
 import { getParametersForMethod } from '@/data/methodParameters';
@@ -155,6 +157,7 @@ export function WorkoutSessionSheet({
   microcycleDates,
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
+  const { libraries, updateExerciseInLibrary } = useCustomLibraries();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [sidebarCollapsedSections, setSidebarCollapsedSections] = useState<Record<string, boolean>>({});
@@ -171,6 +174,9 @@ export function WorkoutSessionSheet({
   const [isTestEventDialogOpen, setIsTestEventDialogOpen] = useState(false);
   const [testsEventsExpanded, setTestsEventsExpanded] = useState(true);
   const [sectionToDelete, setSectionToDelete] = useState<string | null>(null);
+  
+  // Exercise detail dialog state
+  const [detailExercise, setDetailExercise] = useState<WorkoutExercise | null>(null);
 
   // Parameter visibility overrides (loaded from localStorage, saved on save)
   const [parameterVisibilityOverrides, setParameterVisibilityOverrides] = useState<ParameterVisibilityOverrides>(() => {
@@ -1350,6 +1356,45 @@ export function WorkoutSessionSheet({
     });
   };
 
+  // Exercise detail dialog handlers
+  const handleOpenExerciseDetail = (exercise: WorkoutExercise) => {
+    setDetailExercise(exercise);
+  };
+
+  const handleSaveExerciseToLibrary = (updatedData: {
+    name: string;
+    videoUrl: string;
+    description: string;
+    data: Record<string, any>;
+  }) => {
+    if (!detailExercise) return;
+    
+    // Find which library contains this exercise
+    for (const lib of libraries) {
+      const exercise = lib.exercises.find(e => e.id === detailExercise.exerciseId);
+      if (exercise) {
+        // Find the name column (usually the first column)
+        const nameColumn = lib.columns.find(c => c.name.toLowerCase() === 'name' || c.name.toLowerCase() === 'exercise name') || lib.columns[0];
+        
+        updateExerciseInLibrary(lib.id, detailExercise.exerciseId, {
+          videoUrl: updatedData.videoUrl || undefined,
+          description: updatedData.description || undefined,
+          data: {
+            ...updatedData.data,
+            ...(nameColumn ? { [nameColumn.id]: updatedData.name } : {})
+          }
+        });
+        toast({
+          title: "Exercise updated",
+          description: `${updatedData.name} has been updated in the library`,
+        });
+        break;
+      }
+    }
+    
+    setDetailExercise(null);
+  };
+
   const handleScrollToExercise = (exerciseId: string) => {
     const element = document.getElementById(`exercise-${exerciseId}`);
     element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2014,6 +2059,7 @@ export function WorkoutSessionSheet({
                                 }}
                                 onAutoCalculateWeightChange={handleAutoCalculateWeightChange}
                                 onAutoCalculateTargetHRChange={handleAutoCalculateTargetHRChange}
+                                onOpenExerciseDetail={handleOpenExerciseDetail}
                               />
                             </div>
                           )}
@@ -2139,6 +2185,18 @@ export function WorkoutSessionSheet({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Exercise Detail Dialog */}
+      {detailExercise && (
+        <ExerciseDetailDialog
+          isOpen={!!detailExercise}
+          onClose={() => setDetailExercise(null)}
+          exerciseId={detailExercise.exerciseId}
+          exerciseName={detailExercise.exerciseName}
+          mode="edit"
+          onSave={handleSaveExerciseToLibrary}
+        />
+      )}
     </Dialog>
   );
 }
