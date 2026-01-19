@@ -259,10 +259,9 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
             onValueChange={(value) => handleCellEdit(exercise.id, column.id, value)}
           >
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue placeholder="Select..." />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Select...</SelectItem>
               {column.options.map(option => (
                 <SelectItem key={option} value={option}>{option}</SelectItem>
               ))}
