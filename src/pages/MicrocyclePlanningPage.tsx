@@ -2978,18 +2978,22 @@ export default function MicrocyclePlanningPage() {
   };
 
   const renderMesocycleNavigation = () => (
-    <div className="flex items-center justify-center gap-2 mb-4">
-      {mesocycles.map((meso, index) => (
-        <Button
-          key={meso.id}
-          variant={index === currentMesocycleIndex ? "default" : "outline"}
-          size="sm"
-          onClick={() => setCurrentMesocycleIndex(index)}
-          className="min-w-[100px]"
-        >
-          {meso.name}
-        </Button>
-      ))}
+    <div className="flex items-center justify-center mb-4">
+      <div className="overflow-x-auto scrollbar-thin max-w-full">
+        <div className="flex items-center justify-center gap-2 px-2">
+          {mesocycles.map((meso, index) => (
+            <Button
+              key={meso.id}
+              variant={index === currentMesocycleIndex ? "default" : "outline"}
+              size="sm"
+              onClick={() => setCurrentMesocycleIndex(index)}
+              className="min-w-[100px] shrink-0"
+            >
+              {meso.name}
+            </Button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 

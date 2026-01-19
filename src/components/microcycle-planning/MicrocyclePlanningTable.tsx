@@ -1181,14 +1181,14 @@ const updateCellData = (
   return (
     <>
       <Card className="w-full">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Microcycle Exercise Planning</CardTitle>
-            
-            {/* Mesocycle Navigation Controls */}
-            <div className="flex items-center justify-between gap-4">
-              {/* Mesocycle Buttons - Centered */}
-              <div className="flex-1 flex items-center justify-center gap-2">
+        <CardHeader className="space-y-4">
+          <CardTitle>Microcycle Exercise Planning</CardTitle>
+          
+          {/* Mesocycle Navigation - Separate Row for Centering */}
+          <div className="relative flex items-center justify-center">
+            {/* Scrollable container for mesocycle buttons */}
+            <div className="overflow-x-auto scrollbar-thin max-w-[calc(100%-220px)] flex items-center justify-center">
+              <div className="flex items-center gap-2 px-2">
                 {mesocycles.map((meso, index) => {
                   const isSelected = index === currentMesocycleIndex;
                   const isComparedWith = showComparison && index === currentMesocycleIndex + 1;
@@ -1202,7 +1202,7 @@ const updateCellData = (
                       onClick={() => setCurrentMesocycleIndex(index)}
                       disabled={isDisabledForComparison}
                       className={cn(
-                        "min-w-[100px]",
+                        "min-w-[100px] shrink-0",
                         isComparedWith && "ring-2 ring-primary/30"
                       )}
                     >
@@ -1211,22 +1211,22 @@ const updateCellData = (
                   );
                 })}
               </div>
-              
-              {/* Comparison Toggle */}
-              {hasNextMesocycle && (
-                <div className="flex items-center gap-2 shrink-0">
-                  <Switch
-                    id="comparison-toggle"
-                    checked={showComparison}
-                    onCheckedChange={setShowComparison}
-                  />
-                  <Label htmlFor="comparison-toggle" className="text-sm flex items-center gap-1">
-                    <Columns className="h-4 w-4" />
-                    Compare with next
-                  </Label>
-                </div>
-              )}
             </div>
+            
+            {/* Comparison Toggle - Positioned on right */}
+            {hasNextMesocycle && (
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-2 bg-card pl-4">
+                <Switch
+                  id="comparison-toggle"
+                  checked={showComparison}
+                  onCheckedChange={setShowComparison}
+                />
+                <Label htmlFor="comparison-toggle" className="text-sm flex items-center gap-1">
+                  <Columns className="h-4 w-4" />
+                  Compare with next
+                </Label>
+              </div>
+            )}
           </div>
         </CardHeader>
         <CardContent>
