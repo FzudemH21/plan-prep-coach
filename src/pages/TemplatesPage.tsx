@@ -49,17 +49,7 @@ export default function TemplatesPage() {
   };
 
   const getLibraryRoute = (library: CustomLibrary) => {
-    if (library.isBuiltIn) {
-      switch (library.id) {
-        case 'resistance-training':
-          return '/templates/libraries/resistancetraining';
-        case 'plyometrics':
-          return '/templates/libraries/plyometrics';
-        default:
-          return `/templates/libraries/${createSlug(library.name)}`;
-      }
-    }
-    return `/templates/libraries/${createSlug(library.name)}`;
+    return `/templates/libraries/${library.id}`;
   };
 
   const getLibraryIcon = (library: CustomLibrary) => {
