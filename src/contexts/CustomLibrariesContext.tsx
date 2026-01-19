@@ -1,7 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { completeExerciseDatabase } from '@/data/exerciseDataComplete';
-import { completePlyometricsDatabase } from '@/data/plyometricsData';
 
 export interface LibraryColumn {
   id: string;
@@ -21,7 +19,6 @@ export interface CustomLibrary {
   exercises: CustomExercise[];
   createdAt: string;
   lastUpdated: string;
-  isBuiltIn?: boolean;
 }
 
 export interface CustomExercise {
@@ -42,7 +39,7 @@ interface CustomLibrariesContextType {
   data: CustomLibraryData;
   isLoading: boolean;
   libraries: CustomLibrary[];
-  addLibrary: (library: Omit<CustomLibrary, 'id' | 'exercises' | 'createdAt' | 'lastUpdated' | 'isBuiltIn'>) => CustomLibrary;
+  addLibrary: (library: Omit<CustomLibrary, 'id' | 'exercises' | 'createdAt' | 'lastUpdated'>) => CustomLibrary;
   editLibrary: (libraryId: string, updates: Partial<Pick<CustomLibrary, 'name' | 'description'>>) => void;
   deleteLibrary: (libraryId: string) => void;
   addExerciseToLibrary: (libraryId: string, exercise: Omit<CustomExercise, 'id'>) => CustomExercise;
@@ -58,58 +55,10 @@ const CustomLibrariesContext = createContext<CustomLibrariesContextType | undefi
 
 const STORAGE_KEY = 'custom_libraries';
 
-const BUILT_IN_LIBRARIES: CustomLibrary[] = [
-  {
-    id: 'resistance-training',
-    name: 'Resistance Exercise Library',
-    type: 'Resistance Training',
-    description: 'Comprehensive database of resistance training exercises',
-    columns: [
-      { id: 'übungsname', name: 'Exercise Name', type: 'text', required: false },
-      { id: 'akzentuierteKörperregion', name: 'Accentuated Body Region', type: 'select', required: false, options: ['Unterkörper', 'Oberkörper', 'Ganzkörper'] },
-      { id: 'dominantesBewegungsmuster', name: 'Dominant Movement Pattern', type: 'select', required: false, options: ['Squat', 'Hinge', 'Push', 'Pull', 'Carry', 'Lunge', '-'] },
-      { id: 'forcesActingOnSpine', name: 'Forces Acting on Spine', type: 'select', required: false, options: ['Compression', 'Shear', 'Shear/Compression', 'Shear/Rotation', 'Rotation', '-'] },
-      { id: 'übungsausführung', name: 'Exercise Execution', type: 'select', required: false, options: ['dynamisch', 'isometrisch', 'ballistisch'] },
-      { id: 'trunkTrainingFramework', name: 'Trunk Training Framework', type: 'text', required: false },
-      { id: 'mainMovementPlane', name: 'Main Movement Plane', type: 'select', required: false, options: ['Sagittal', 'Frontal', 'Transverse'] },
-      { id: 'level', name: 'Level', type: 'text', required: false },
-      { id: 'artDesWiderstandes', name: 'Type of Resistance', type: 'select', required: false, options: ['Körpergewicht', 'Kurzhantel', 'Langhantel', 'Kettlebell', 'Sonstiges', 'Safety Squat Bar'] },
-      { id: 'stand', name: 'Stance', type: 'select', required: false, options: ['bilateral', 'unilateral', 'x'] },
-      { id: 'variationen', name: 'Variations', type: 'textarea', required: false }
-    ],
-    exercises: [],
-    createdAt: '2024-01-01T00:00:00.000Z',
-    lastUpdated: new Date().toISOString(),
-    isBuiltIn: true
-  },
-  {
-    id: 'plyometrics',
-    name: 'Plyometrics Library',
-    type: 'Plyometrics',
-    description: 'Collection of plyometric and explosive movement exercises',
-    columns: [
-      { id: 'übung', name: 'Exercise', type: 'text', required: false },
-      { id: 'intensität', name: 'Intensity', type: 'select', required: false, options: ['Low', 'Medium', 'High', 'Very High'] },
-      { id: 'tier', name: 'Tier', type: 'select', required: false, options: ['1', '2', '3', '4', '5'] },
-      { id: 'dauerDVZ', name: 'Duration DVZ', type: 'select', required: false, options: ['<250ms', '250-500ms', '>500ms'] },
-      { id: 'fokusrichtung', name: 'Focus Direction', type: 'select', required: false, options: ['Horizontal', 'Vertical', 'Lateral', 'Multi'] },
-      { id: 'bewegungsart', name: 'Movement Type', type: 'select', required: false, options: ['Jump', 'Hop', 'Bound', 'Drop'] },
-      { id: 'modus', name: 'Mode', type: 'select', required: false, options: ['Bilateral', 'Unilateral', 'Alternating'] },
-      { id: 'emphasis', name: 'Emphasis', type: 'text', required: false },
-      { id: 'übungsgruppe', name: 'Exercise Group', type: 'select', required: false, options: ['Basic', 'Intermediate', 'Advanced', 'Elite'] },
-      { id: 'kommentar', name: 'Comment', type: 'textarea', required: false }
-    ],
-    exercises: [],
-    createdAt: '2024-01-01T00:00:00.000Z',
-    lastUpdated: new Date().toISOString(),
-    isBuiltIn: true
-  }
-];
-
 const DEFAULT_DATA: CustomLibraryData = {
-  libraries: [...BUILT_IN_LIBRARIES],
+  libraries: [],
   lastUpdated: new Date().toISOString(),
-  version: '2.1.0'
+  version: '3.0.0'
 };
 
 export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -124,55 +73,17 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
       if (saved) {
         const parsed = JSON.parse(saved);
         
-        // Force migration if version is outdated or libraries are empty
-        const currentVersion = '2.1.0'; // Updated to force re-migration
-        const shouldMigrate = !parsed.version || parsed.version < currentVersion ||
-                             parsed.libraries.some((lib: CustomLibrary) => lib.isBuiltIn && lib.exercises.length === 0);
-        
-        if (shouldMigrate) {
-          console.log('Triggering data migration due to version update or empty built-in libraries');
-          const migratedData = migrateStaticData();
-          
-          // Preserve any custom libraries from existing data
-          const customLibraries = parsed.libraries?.filter((lib: CustomLibrary) => !lib.isBuiltIn) || [];
-          const finalData = {
-            ...migratedData,
-            libraries: [...migratedData.libraries, ...customLibraries],
-            version: currentVersion
-          };
-          
-          setData(finalData);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(finalData));
+        // If version is outdated, start fresh (removes old built-in libraries)
+        if (!parsed.version || parsed.version < '3.0.0') {
+          console.log('Upgrading to version 3.0.0 - starting with clean slate');
+          setData(DEFAULT_DATA);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_DATA));
         } else {
-          // Ensure built-in libraries are always present and up-to-date
-          const existingBuiltIns = parsed.libraries.filter((lib: CustomLibrary) => lib.isBuiltIn);
-          const nonBuiltIns = parsed.libraries.filter((lib: CustomLibrary) => !lib.isBuiltIn);
-          
-          // Always use the latest built-in library definitions
-          const updatedBuiltIns = BUILT_IN_LIBRARIES.map(builtInLib => {
-            const existing = existingBuiltIns.find((lib: CustomLibrary) => lib.id === builtInLib.id);
-            if (existing && existing.exercises && existing.exercises.length > 0) {
-              // Keep existing exercises but update columns structure
-              return {
-                ...builtInLib,
-                exercises: existing.exercises,
-                lastUpdated: existing.lastUpdated
-              };
-            }
-            return builtInLib;
-          });
-          
-          setData({
-            ...parsed,
-            libraries: [...updatedBuiltIns, ...nonBuiltIns]
-          });
+          setData(parsed);
         }
       } else {
-        // First time - migrate data from static files
-        const migratedData = migrateStaticData();
-const finalData = { ...migratedData, version: '2.1.0' };
-        setData(finalData);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(finalData));
+        // First time - use empty default
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_DATA));
       }
     } catch (error) {
       console.error('Error loading custom libraries:', error);
@@ -181,74 +92,11 @@ const finalData = { ...migratedData, version: '2.1.0' };
         description: "Failed to load custom libraries",
         variant: "destructive"
       });
-      const migratedData = migrateStaticData();
-      const finalData = { ...migratedData, version: '2.1.0' };
-      setData(finalData);
+      setData(DEFAULT_DATA);
     } finally {
       setIsLoading(false);
     }
   }, [toast]);
-
-  const migrateStaticData = (): CustomLibraryData => {
-    const migratedBuiltIns = BUILT_IN_LIBRARIES.map(lib => {
-      if (lib.id === 'resistance-training') {
-        try {
-          const exercises: CustomExercise[] = (completeExerciseDatabase.exercises || []).map((ex: any, index: number) => ({
-            id: ex.id || `exercise-${index}`,
-            data: {
-              übungsname: ex.übungsname || '',
-              akzentuierteKörperregion: ex.akzentuierteKörperregion || '',
-              dominantesBewegungsmuster: ex.dominantesBewegungsmuster || '',
-              forcesActingOnSpine: ex.forcesActingOnSpine || '',
-              übungsausführung: ex.übungsausführung || '',
-              trunkTrainingFramework: ex.trunkTrainingFramework || '',
-              mainMovementPlane: ex.mainMovementPlane || '',
-              level: ex.level || '',
-              artDesWiderstandes: ex.artDesWiderstandes || '',
-              stand: ex.stand || '',
-              variationen: ex.variationen || ''
-            }
-          }));
-          return { ...lib, exercises };
-        } catch (error) {
-          console.error('Error migrating resistance training data:', error);
-          return lib;
-        }
-      }
-
-      if (lib.id === 'plyometrics') {
-        try {
-          const exercises: CustomExercise[] = (completePlyometricsDatabase.exercises || []).map((ex: any, index: number) => ({
-            id: ex.id || `plyometrics-${index}`,
-            data: {
-              übung: ex.übung || '',
-              intensität: ex.intensität || '',
-              tier: ex.tier || '',
-              dauerDVZ: ex.dauerDVZ || '',
-              fokusrichtung: ex.fokusrichtung || '',
-              bewegungsart: ex.bewegungsart || '',
-              modus: ex.modus || '',
-              emphasis: ex.emphasis || '',
-              übungsgruppe: ex.übungsgruppe || '',
-              kommentar: ex.kommentar || ''
-            }
-          }));
-          return { ...lib, exercises };
-        } catch (error) {
-          console.error('Error migrating plyometrics data:', error);
-          return lib;
-        }
-      }
-
-      return lib;
-    });
-
-    return {
-      libraries: migratedBuiltIns,
-      lastUpdated: new Date().toISOString(),
-      version: '2.1.0'
-    };
-  };
 
   const saveData = (newData: CustomLibraryData) => {
     try {
@@ -265,7 +113,7 @@ const finalData = { ...migratedData, version: '2.1.0' };
     }
   };
 
-  const addLibrary = (library: Omit<CustomLibrary, 'id' | 'exercises' | 'createdAt' | 'lastUpdated' | 'isBuiltIn'>) => {
+  const addLibrary = (library: Omit<CustomLibrary, 'id' | 'exercises' | 'createdAt' | 'lastUpdated'>) => {
     // Create URL-safe ID from library name
     const createSlug = (name: string): string => {
       return name
@@ -295,8 +143,7 @@ const finalData = { ...migratedData, version: '2.1.0' };
       ],
       exercises: [],
       createdAt: new Date().toISOString(),
-      lastUpdated: new Date().toISOString(),
-      isBuiltIn: false
+      lastUpdated: new Date().toISOString()
     };
 
     const newData: CustomLibraryData = {

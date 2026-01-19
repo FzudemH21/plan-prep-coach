@@ -88,18 +88,12 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
     return itemsActive || subGroupsActive;
   };
 
-  // Build ALL library items (built-in + custom)
-  const exerciseLibraryItems: NavItem[] = [
-    { title: "Resistance Training", path: "/templates/libraries/resistancetraining", icon: Dumbbell },
-    { title: "Plyometrics", path: "/templates/libraries/plyometrics", icon: Zap },
-  ...libraries
-    .filter(lib => !lib.isBuiltIn)
-      .map(lib => ({
-        title: lib.name,
-        path: `/templates/libraries/${createSlug(lib.name)}`,
-        icon: Library
-      }))
-  ];
+  // Build library items from user-created libraries
+  const exerciseLibraryItems: NavItem[] = libraries.map(lib => ({
+    title: lib.name,
+    path: `/templates/libraries/${lib.id}`,
+    icon: Library
+  }));
 
   const athletesGroup: NavGroup = {
     title: "Athletes",
