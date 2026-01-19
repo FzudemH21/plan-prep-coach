@@ -27,6 +27,9 @@ export interface CustomLibrary {
 export interface CustomExercise {
   id: string;
   data: Record<string, any>;
+  // Special fields (not columns) - every exercise can have these
+  videoUrl?: string;          // YouTube or video link
+  description?: string;       // Exercise execution description
 }
 
 export interface CustomLibraryData {
@@ -62,7 +65,7 @@ const BUILT_IN_LIBRARIES: CustomLibrary[] = [
     type: 'Resistance Training',
     description: 'Comprehensive database of resistance training exercises',
     columns: [
-      { id: 'übungsname', name: 'Exercise Name', type: 'text', required: true },
+      { id: 'übungsname', name: 'Exercise Name', type: 'text', required: false },
       { id: 'akzentuierteKörperregion', name: 'Accentuated Body Region', type: 'select', required: false, options: ['Unterkörper', 'Oberkörper', 'Ganzkörper'] },
       { id: 'dominantesBewegungsmuster', name: 'Dominant Movement Pattern', type: 'select', required: false, options: ['Squat', 'Hinge', 'Push', 'Pull', 'Carry', 'Lunge', '-'] },
       { id: 'forcesActingOnSpine', name: 'Forces Acting on Spine', type: 'select', required: false, options: ['Compression', 'Shear', 'Shear/Compression', 'Shear/Rotation', 'Rotation', '-'] },
@@ -85,7 +88,7 @@ const BUILT_IN_LIBRARIES: CustomLibrary[] = [
     type: 'Plyometrics',
     description: 'Collection of plyometric and explosive movement exercises',
     columns: [
-      { id: 'übung', name: 'Exercise', type: 'text', required: true },
+      { id: 'übung', name: 'Exercise', type: 'text', required: false },
       { id: 'intensität', name: 'Intensity', type: 'select', required: false, options: ['Low', 'Medium', 'High', 'Very High'] },
       { id: 'tier', name: 'Tier', type: 'select', required: false, options: ['1', '2', '3', '4', '5'] },
       { id: 'dauerDVZ', name: 'Duration DVZ', type: 'select', required: false, options: ['<250ms', '250-500ms', '>500ms'] },

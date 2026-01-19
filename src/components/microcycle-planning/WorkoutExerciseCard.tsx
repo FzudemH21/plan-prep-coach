@@ -42,6 +42,8 @@ interface WorkoutExerciseCardProps {
   // Collapse state
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  // Exercise detail dialog
+  onOpenDetail?: () => void;
 }
 
 export function WorkoutExerciseCard({
@@ -68,6 +70,7 @@ export function WorkoutExerciseCard({
   onAutoCalculateTargetHRChange,
   isCollapsed = false,
   onToggleCollapse,
+  onOpenDetail,
 }: WorkoutExerciseCardProps) {
   // Get parameters: FIRST derive from exercise.parameters (from method periodization), THEN fallback to static dictionary
   const methodParams = (() => {
@@ -249,7 +252,12 @@ export function WorkoutExerciseCard({
           {/* Exercise Header */}
           <div className="flex items-start justify-between">
             <div>
-              <h4 className="font-medium">{exercise.exerciseName}</h4>
+              <h4 
+                className={`font-medium ${onOpenDetail ? 'text-primary hover:underline cursor-pointer' : ''}`}
+                onClick={() => onOpenDetail?.()}
+              >
+                {exercise.exerciseName}
+              </h4>
               {!isCollapsed && (
                 <p className="text-sm text-muted-foreground">
                   {exercise.methodId} {exercise.categoryName && `• ${exercise.categoryName}`}

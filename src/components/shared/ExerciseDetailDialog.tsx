@@ -1,0 +1,333 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import { Play, Video, ExternalLink, Link2 } from 'lucide-react';
+import { useCustomLibraries, CustomLibrary, CustomExercise } from '@/hooks/useCustomLibraries';
+
+interface ExerciseDetailDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  // Exercise identification
+  exerciseId: string;
+  exerciseName: string;
+  libraryId?: string;
+  // For workout views (read-only mode)
+  readOnly?: boolean;
+  // Pre-fetched data (optional - if not provided, will lookup from libraries)
+  exerciseData?: Record<string, any>;
+  videoUrl?: string;
+  description?: string;
+  // For library view (editable mode)
+  onVideoUrlChange?: (url: string) => void;
+  onDescriptionChange?: (description: string) => void;
+}
+
+// Extract YouTube video ID from various URL formats
+const extractYouTubeId = (url: string): string | null => {
+  if (!url) return null;
+  
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\s?]+)/,
+    /^([a-zA-Z0-9_-]{11})$/, // Just the ID
+  ];
+  
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  
+  return null;
+};
+
+// Get YouTube thumbnail URL
+const getYouTubeThumbnail = (videoId: string): string => {
+  return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+};
+
+export function ExerciseDetailDialog({
+  isOpen,
+  onClose,
+  exerciseId,
+  exerciseName,
+  libraryId,
+  readOnly = false,
+  exerciseData: propExerciseData,
+  videoUrl: propVideoUrl,
+  description: propDescription,
+  onVideoUrlChange,
+  onDescriptionChange,
+}: ExerciseDetailDialogProps) {
+  const { libraries, updateExerciseInLibrary } = useCustomLibraries();
+  
+  // Local state for editing
+  const [localVideoUrl, setLocalVideoUrl] = useState('');
+  const [localDescription, setLocalDescription] = useState('');
+  const [showVideoEmbed, setShowVideoEmbed] = useState(false);
+  
+  // Find exercise in libraries if not provided
+  const foundExercise = React.useMemo(() => {
+    if (propExerciseData) return null; // Use provided data
+    
+    // Search by exerciseId across all libraries
+    for (const library of libraries) {
+      const exercise = library.exercises.find(ex => ex.id === exerciseId);
+      if (exercise) {
+        return { library, exercise };
+      }
+    }
+    
+    // If libraryId is provided, search specifically in that library
+    if (libraryId) {
+      const library = libraries.find(lib => lib.id === libraryId);
+      if (library) {
+        const exercise = library.exercises.find(ex => ex.id === exerciseId);
+        if (exercise) {
+          return { library, exercise };
+        }
+      }
+    }
+    
+    return null;
+  }, [libraries, exerciseId, libraryId, propExerciseData]);
+  
+  // Get actual data to display
+  const exerciseData = propExerciseData || foundExercise?.exercise?.data || {};
+  const videoUrl = propVideoUrl ?? foundExercise?.exercise?.videoUrl ?? '';
+  const description = propDescription ?? foundExercise?.exercise?.description ?? '';
+  const library = foundExercise?.library;
+  
+  // Sync local state when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      setLocalVideoUrl(videoUrl);
+      setLocalDescription(description);
+      setShowVideoEmbed(false);
+    }
+  }, [isOpen, videoUrl, description]);
+  
+  // Handle save for library view
+  const handleSave = () => {
+    if (readOnly) {
+      onClose();
+      return;
+    }
+    
+    // If we have callback handlers, use them
+    if (onVideoUrlChange && localVideoUrl !== videoUrl) {
+      onVideoUrlChange(localVideoUrl);
+    }
+    if (onDescriptionChange && localDescription !== description) {
+      onDescriptionChange(localDescription);
+    }
+    
+    // If we found the exercise in a library, update it directly
+    if (foundExercise && library) {
+      updateExerciseInLibrary(library.id, exerciseId, {
+        videoUrl: localVideoUrl || undefined,
+        description: localDescription || undefined,
+      });
+    }
+    
+    onClose();
+  };
+  
+  const youtubeId = extractYouTubeId(localVideoUrl || videoUrl);
+  const thumbnailUrl = youtubeId ? getYouTubeThumbnail(youtubeId) : null;
+  
+  // Get columns from library for proper display names
+  const columns = library?.columns || [];
+  
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="text-xl">{exerciseName}</DialogTitle>
+        </DialogHeader>
+        
+        <ScrollArea className="flex-1 pr-4">
+          <div className="space-y-6">
+            {/* Video Section */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Video className="h-4 w-4" />
+                Video
+              </h3>
+              
+              {readOnly ? (
+                // Read-only view
+                thumbnailUrl ? (
+                  <div className="relative group">
+                    <div 
+                      className="relative cursor-pointer rounded-lg overflow-hidden border bg-muted"
+                      onClick={() => setShowVideoEmbed(!showVideoEmbed)}
+                    >
+                      {showVideoEmbed ? (
+                        <iframe
+                          width="100%"
+                          height="315"
+                          src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1`}
+                          title="YouTube video player"
+                          frameBorder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          className="aspect-video"
+                        />
+                      ) : (
+                        <>
+                          <img 
+                            src={thumbnailUrl} 
+                            alt="Video thumbnail"
+                            className="w-full aspect-video object-cover"
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
+                            <div className="w-16 h-16 rounded-full bg-primary/90 flex items-center justify-center">
+                              <Play className="h-8 w-8 text-primary-foreground ml-1" />
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    {!showVideoEmbed && (
+                      <p className="text-xs text-muted-foreground mt-1">Click to play</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">No video available</p>
+                )
+              ) : (
+                // Editable view
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Link2 className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={localVideoUrl}
+                      onChange={(e) => setLocalVideoUrl(e.target.value)}
+                      placeholder="Paste YouTube URL or video ID..."
+                      className="flex-1"
+                    />
+                    {localVideoUrl && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open(localVideoUrl.startsWith('http') ? localVideoUrl : `https://www.youtube.com/watch?v=${localVideoUrl}`, '_blank')}
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {thumbnailUrl && (
+                    <div 
+                      className="relative cursor-pointer rounded-lg overflow-hidden border bg-muted"
+                      onClick={() => setShowVideoEmbed(!showVideoEmbed)}
+                    >
+                      {showVideoEmbed ? (
+                        <iframe
+                          width="100%"
+                          height="200"
+                          src={`https://www.youtube.com/embed/${youtubeId}`}
+                          title="YouTube video player"
+                          frameBorder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                      ) : (
+                        <>
+                          <img 
+                            src={thumbnailUrl} 
+                            alt="Video thumbnail"
+                            className="w-full h-[200px] object-cover"
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors">
+                            <div className="w-12 h-12 rounded-full bg-primary/90 flex items-center justify-center">
+                              <Play className="h-6 w-6 text-primary-foreground ml-0.5" />
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            <Separator />
+            
+            {/* Description Section */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold">Description / Execution Instructions</h3>
+              
+              {readOnly ? (
+                description ? (
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{description}</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">No description available</p>
+                )
+              ) : (
+                <Textarea
+                  value={localDescription}
+                  onChange={(e) => setLocalDescription(e.target.value)}
+                  placeholder="Enter exercise description, execution instructions, coaching cues..."
+                  className="min-h-[100px] resize-none"
+                />
+              )}
+            </div>
+            
+            <Separator />
+            
+            {/* Exercise Characteristics */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold">Characteristics</h3>
+              
+              {Object.keys(exerciseData).length === 0 ? (
+                <p className="text-sm text-muted-foreground italic">No characteristics available</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {Object.entries(exerciseData).map(([key, value]) => {
+                    // Skip empty values
+                    if (!value) return null;
+                    
+                    // Find column for display name
+                    const column = columns.find(col => col.id === key);
+                    const displayName = column?.name || key;
+                    
+                    return (
+                      <div key={key} className="flex flex-col gap-1">
+                        <span className="text-xs font-medium text-muted-foreground">{displayName}</span>
+                        <Badge variant="secondary" className="w-fit font-normal">
+                          {String(value)}
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </ScrollArea>
+        
+        <DialogFooter className="mt-4">
+          {readOnly ? (
+            <Button onClick={onClose}>Close</Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <Button onClick={handleSave}>Save</Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
