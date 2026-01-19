@@ -36,6 +36,8 @@ interface WorkoutSectionCardProps {
   onResetParamsToDefaults?: () => void;
   onAutoCalculateWeightChange?: (exerciseId: string, value: boolean) => void;
   onAutoCalculateTargetHRChange?: (exerciseId: string, value: boolean) => void;
+  // Exercise detail dialog
+  onOpenExerciseDetail?: (exercise: WorkoutExercise) => void;
 }
 
 export function WorkoutSectionCard({
@@ -63,6 +65,7 @@ export function WorkoutSectionCard({
   onResetParamsToDefaults,
   onAutoCalculateWeightChange,
   onAutoCalculateTargetHRChange,
+  onOpenExerciseDetail,
 }: WorkoutSectionCardProps) {
   // Helper to get toolbox params for an exercise based on method
   const getToolboxParamsForExercise = (exercise: WorkoutExercise): ToolboxEntry[] => {
@@ -299,6 +302,7 @@ export function WorkoutSectionCard({
                                             onAutoCalculateTargetHRChange={(value) => onAutoCalculateTargetHRChange?.(exercise.id, value)}
                                             isCollapsed={collapsedExercises[exercise.id] || false}
                                             onToggleCollapse={() => toggleExerciseCollapse(exercise.id)}
+                                            onOpenDetail={() => onOpenExerciseDetail?.(exercise)}
                                           />
                                         </div>
                                       )}
@@ -380,6 +384,7 @@ export function WorkoutSectionCard({
                                     onAutoCalculateTargetHRChange={(value) => onAutoCalculateTargetHRChange?.(exercise.id, value)}
                                     isCollapsed={collapsedExercises[exercise.id] || false}
                                     onToggleCollapse={() => toggleExerciseCollapse(exercise.id)}
+                                    onOpenDetail={() => onOpenExerciseDetail?.(exercise)}
                                   />
                                 </div>
                               )}

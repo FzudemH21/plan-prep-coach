@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { CustomLibraryColumnFilter } from './CustomLibraryColumnFilter';
 import { ColumnDeleteDialog } from '@/components/shared/ColumnDeleteDialog';
 import { ColumnRenameDialog } from '@/components/shared/ColumnRenameDialog';
+import { ExerciseDetailDialog } from '@/components/shared/ExerciseDetailDialog';
 
 interface DynamicLibraryTableProps {
   library: CustomLibrary;
@@ -49,6 +50,11 @@ interface DeleteColumnDialog {
   isOpen: boolean;
   columnId: string;
   columnName: string;
+}
+
+interface ExerciseDetailState {
+  isOpen: boolean;
+  exercise: CustomExercise | null;
 }
 
 export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
@@ -95,6 +101,10 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
     type: 'text',
     options: '',
     required: false
+  });
+  const [detailDialog, setDetailDialog] = useState<ExerciseDetailState>({
+    isOpen: false,
+    exercise: null
   });
 
   const handleCellEdit = (exerciseId: string, columnId: string, value: string) => {
@@ -220,7 +230,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
     setSelectedIds([]);
   };
 
-  const renderCell = (exercise: CustomExercise, column: LibraryColumn) => {
+  const renderCell = (exercise: CustomExercise, column: LibraryColumn, isFirstColumn: boolean) => {
     const value = (exercise.data || {})[column.id] || '';
     const isEditing = editingCell?.exerciseId === exercise.id && editingCell?.columnId === column.id;
 
@@ -283,6 +293,33 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
       );
     }
 
+    // First column (exercise name) is clickable to open detail dialog
+    if (isFirstColumn) {
+      return (
+        <div className="flex items-center gap-2">
+          <button
+            className="text-left font-medium text-primary hover:underline cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDetailDialog({ isOpen: true, exercise });
+            }}
+          >
+            {value || 'Unnamed Exercise'}
+          </button>
+          <button
+            className="p-1 rounded hover:bg-muted/50"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditingCell({ exerciseId: exercise.id, columnId: column.id, value });
+            }}
+            title="Edit name"
+          >
+            <Edit2 className="h-3 w-3 text-muted-foreground" />
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div
         className="cursor-pointer hover:bg-muted/50 p-1 rounded min-h-[24px]"
@@ -301,7 +338,6 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
             <div className="flex items-center justify-between">
               <span className="font-medium">
                 {column.name}
-                {column.required && <span className="text-destructive ml-1">*</span>}
               </span>
               <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <CustomLibraryColumnFilter
@@ -346,24 +382,22 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
             <Plus className="h-4 w-4 mr-2" />
             Add Column
           </ContextMenuItem>
-          {!column.required && (
-            <ContextMenuItem 
-              key={`delete-${column.id}`}
-              onSelect={() => {
-                setTimeout(() => {
-                  setDeleteDialog({
-                    isOpen: true,
-                    columnId: column.id,
-                    columnName: column.name
-                  });
-                }, 0);
-              }}
-              className="text-destructive"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete Column
-            </ContextMenuItem>
-          )}
+          <ContextMenuItem 
+            key={`delete-${column.id}`}
+            onSelect={() => {
+              setTimeout(() => {
+                setDeleteDialog({
+                  isOpen: true,
+                  columnId: column.id,
+                  columnName: column.name
+                });
+              }, 0);
+            }}
+            className="text-destructive"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Delete Column
+          </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
     );
@@ -458,9 +492,9 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
                     key={exercise.id}
                     className={selectedIds.includes(exercise.id) ? "bg-muted/50" : ""}
                   >
-                    {safeLibrary.columns.map(column => (
+                    {safeLibrary.columns.map((column, columnIndex) => (
                       <TableCell key={column.id}>
-                        {renderCell(exercise, column)}
+                        {renderCell(exercise, column, columnIndex === 0)}
                       </TableCell>
                     ))}
                     <TableCell>
@@ -555,6 +589,21 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
         onConfirm={handleDeleteColumn}
         columnName={deleteDialog.columnName}
       />
+
+      {/* Exercise Detail Dialog */}
+      {detailDialog.exercise && (
+        <ExerciseDetailDialog
+          isOpen={detailDialog.isOpen}
+          onClose={() => setDetailDialog({ isOpen: false, exercise: null })}
+          exerciseId={detailDialog.exercise.id}
+          exerciseName={detailDialog.exercise.data[safeLibrary.columns[0]?.id] || 'Unnamed Exercise'}
+          libraryId={library.id}
+          readOnly={false}
+          exerciseData={detailDialog.exercise.data}
+          videoUrl={detailDialog.exercise.videoUrl}
+          description={detailDialog.exercise.description}
+        />
+      )}
     </>
   );
 }
