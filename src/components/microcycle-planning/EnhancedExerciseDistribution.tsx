@@ -316,8 +316,19 @@ export function EnhancedExerciseDistribution({
       });
     });
 
+    // Build set of valid exercise IDs from Step 5 selection
+    const validExerciseIds = new Set<string>();
+    Object.values(exerciseSelectionData).forEach(cellData => {
+      if (cellData.mesocycleId !== mesocycle.id) return;
+      cellData.exercises.forEach(ex => validExerciseIds.add(ex.exerciseId));
+    });
+
     // 2. Also add exercises from exerciseDistribution (captures exercises added in Master Planner or Workout Session Card)
+    // BUT only if they are still selected in Step 5
     exerciseDistribution.forEach(ex => {
+      // Only include if this exercise is still selected in Step 5
+      if (!validExerciseIds.has(ex.exerciseId)) return;
+      
       const methodId = ex.methodId;
       const categoryName = isValidCategoryName(ex.categoryName) ? ex.categoryName : '';
       

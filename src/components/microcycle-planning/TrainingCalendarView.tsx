@@ -1110,6 +1110,13 @@ export function TrainingCalendarView({
           toolboxData={toolboxData}
           allExerciseDistribution={exerciseDistribution}
           onDistributionChange={onDistributionChange}
+          microcycleDates={(() => {
+            const trainingDay = trainingDays.find(td => td.date === selectedSession.dayDate);
+            if (!trainingDay?.microcycleId) return [];
+            return trainingDays
+              .filter(td => td.microcycleId === trainingDay.microcycleId)
+              .map(td => td.date);
+          })()}
         />
       )}
 
