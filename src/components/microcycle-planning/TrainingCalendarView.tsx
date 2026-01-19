@@ -19,6 +19,8 @@ import { useToolboxData } from '@/hooks/useToolboxData';
 import { ExerciseDistribution as CanonicalExerciseDistribution, SessionSection, SupersetMapping, ExerciseSelection } from '@/types/microcycle-planning';
 import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
 import { MethodSelectionDialog } from './MethodSelectionDialog';
+import { ExerciseDetailDialog } from '@/components/shared/ExerciseDetailDialog';
+import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import { toggleSuperset, cleanupSupersetsOnExerciseDelete } from '@/utils/supersetUtils';
 
 // Local interface for internal use - compatible with WeekRow, TrainingDayCell etc.
@@ -158,6 +160,7 @@ export function TrainingCalendarView({
 }: TrainingCalendarViewProps) {
   const { toast } = useToast();
   const { data: toolboxData } = useToolboxData();
+  const { libraries, updateExerciseInLibrary } = useCustomLibraries();
   const [viewMode, setViewMode] = useState<ViewMode>('4week');
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number>(1); // 1=Monday
   const [currentDate, setCurrentDate] = useState<Date>(currentMesocycle.startDate);
@@ -181,6 +184,48 @@ export function TrainingCalendarView({
     sessionIndex: number;
     sectionId: string;
   } | null>(null);
+
+  // State for exercise detail dialog (Master Planner)
+  const [detailExercise, setDetailExercise] = useState<ExerciseDistribution | null>(null);
+
+  // Exercise detail dialog handlers for Master Planner
+  const handleOpenExerciseDetail = (exercise: ExerciseDistribution) => {
+    setDetailExercise(exercise);
+  };
+
+  const handleSaveExerciseToLibrary = (updatedData: {
+    name: string;
+    videoUrl: string;
+    description: string;
+    data: Record<string, any>;
+  }) => {
+    if (!detailExercise) return;
+    
+    // Find which library contains this exercise
+    for (const lib of libraries) {
+      const exercise = lib.exercises.find(e => e.id === detailExercise.exerciseId);
+      if (exercise) {
+        // Find the name column (usually the first column)
+        const nameColumn = lib.columns.find(c => c.name.toLowerCase() === 'name' || c.name.toLowerCase() === 'exercise name') || lib.columns[0];
+        
+        updateExerciseInLibrary(lib.id, detailExercise.exerciseId, {
+          videoUrl: updatedData.videoUrl || undefined,
+          description: updatedData.description || undefined,
+          data: {
+            ...updatedData.data,
+            ...(nameColumn ? { [nameColumn.id]: updatedData.name } : {})
+          }
+        });
+        toast({
+          title: "Exercise updated",
+          description: `${updatedData.name} has been updated in the library`,
+        });
+        break;
+      }
+    }
+    
+    setDetailExercise(null);
+  };
 
   // Get the currently viewed mesocycle (for Master Planner view)
   const viewedMesocycle = useMemo(() => {
@@ -996,6 +1041,7 @@ export function TrainingCalendarView({
               availableTests={availableTests}
               availableEvents={availableEvents}
               allExerciseDistribution={exerciseDistribution}
+              onOpenExerciseDetail={handleOpenExerciseDetail}
             />
           ) : (
             /* Calendar View */
@@ -1151,6 +1197,18 @@ export function TrainingCalendarView({
         microcycleIndex={addExerciseMicrocycleIndex}
         sessionIndex={addExerciseContext?.sessionIndex || 0}
       />
+
+      {/* Exercise Detail Dialog for Master Planner */}
+      {detailExercise && (
+        <ExerciseDetailDialog
+          isOpen={!!detailExercise}
+          onClose={() => setDetailExercise(null)}
+          exerciseId={detailExercise.exerciseId}
+          exerciseName={detailExercise.exerciseName}
+          mode="edit"
+          onSave={handleSaveExerciseToLibrary}
+        />
+      )}
     </div>
   );
 }

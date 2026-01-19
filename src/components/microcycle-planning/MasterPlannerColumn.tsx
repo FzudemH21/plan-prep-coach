@@ -188,6 +188,8 @@ interface MasterPlannerColumnProps {
     sessionIndex: number;
     order?: number;
   }>;
+  // Exercise detail dialog
+  onOpenExerciseDetail?: (exercise: ExerciseDistribution) => void;
 }
 
 // Helper to format parameter names nicely
@@ -504,6 +506,7 @@ export function MasterPlannerColumn({
   availableTests,
   availableEvents,
   allExerciseDistribution,
+  onOpenExerciseDetail,
 }: MasterPlannerColumnProps) {
   const [dayIntensityPopoverOpen, setDayIntensityPopoverOpen] = useState(false);
   const [sessionIntensityPopovers, setSessionIntensityPopovers] = useState<Record<number, boolean>>({});
@@ -1240,7 +1243,15 @@ export function MasterPlannerColumn({
                                             {supersetLabel}
                                           </Badge>
                                         )}
-                                        <p className="font-semibold truncate flex-1">{exercise.exerciseName}</p>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            onOpenExerciseDetail?.(exercise);
+                                          }}
+                                          className="font-semibold truncate flex-1 text-left hover:underline cursor-pointer"
+                                        >
+                                          {exercise.exerciseName}
+                                        </button>
                                         {/* Exercise reorder arrows */}
                                         {sectionExercises.length > 1 && (
                                           <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
