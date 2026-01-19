@@ -15,6 +15,7 @@ import { ExtendedMesocycle } from '@/features/planner/types';
 import { ToolboxDatabase } from '@/types/toolbox';
 import { SessionSection, SupersetMapping } from '@/types/microcycle-planning';
 import { getSupersetLabelFromMapping } from '@/utils/supersetUtils';
+import { getMethodSessionIndex } from '@/utils/sessionIndexUtils';
 import {
   Table,
   TableBody,
@@ -177,6 +178,16 @@ interface MasterPlannerColumnProps {
   onUpdateEventComment?: (eventId: string, comments: string) => void;
   availableTests?: SubGoal[];
   availableEvents?: Event[];
+  // Full exercise distribution for chronological session index calculation (flexible type)
+  allExerciseDistribution?: Array<{
+    id?: string;
+    exerciseId: string;
+    methodId: string;
+    categoryName?: string;
+    dayDate: string;
+    sessionIndex: number;
+    order?: number;
+  }>;
 }
 
 // Helper to format parameter names nicely
@@ -492,6 +503,7 @@ export function MasterPlannerColumn({
   onUpdateEventComment,
   availableTests,
   availableEvents,
+  allExerciseDistribution,
 }: MasterPlannerColumnProps) {
   const [dayIntensityPopoverOpen, setDayIntensityPopoverOpen] = useState(false);
   const [sessionIntensityPopovers, setSessionIntensityPopovers] = useState<Record<number, boolean>>({});
@@ -595,10 +607,24 @@ export function MasterPlannerColumn({
     return key.replace(/ Tier/g, '-Tier').replace(/ tier/g, '-tier');
   };
 
+  // Get all exercises for the current microcycle (for chronological session index calculation)
+  const getMicrocycleDates = useCallback((): string[] => {
+    if (!currentMesocycle || !trainingDays) return [];
+    
+    const trainingDay = trainingDays.find(td => td.date === day.dateString);
+    const microcycleId = trainingDay?.microcycleId;
+    
+    if (!microcycleId) return [];
+    
+    return trainingDays
+      .filter(td => td.microcycleId === microcycleId)
+      .map(td => td.date);
+  }, [currentMesocycle, trainingDays, day.dateString]);
+
   // Get parameters for an exercise from toolbox data
   const getExerciseParams = useCallback((exercise: ExerciseDistribution) => {
     if (!currentMesocycle || !parameterValues) {
-      return { storedParams: {}, methodParams: [] as MethodParameter[] };
+      return { storedParams: {}, methodParams: [] as MethodParameter[], chronologicalSessionIndex: 0 };
     }
 
     const trainingDay = trainingDays?.find(td => td.date === day.dateString);
@@ -608,6 +634,19 @@ export function MasterPlannerColumn({
     if (microcycleIndex < 0) {
       microcycleIndex = Math.max(0, weekNumber - 1);
     }
+
+    // Calculate chronological session index for this exercise within its method
+    const microcycleDates = getMicrocycleDates();
+    // Convert local ExerciseDistribution to the type expected by getMethodSessionIndex
+    const exerciseForLookup = {
+      ...exercise,
+      id: exercise.id || exercise.exerciseId, // Ensure id is always present
+    };
+    const chronologicalSessionIndex = getMethodSessionIndex(
+      exerciseForLookup,
+      (allExerciseDistribution || []).map(ex => ({ ...ex, id: ex.id || ex.exerciseId })),
+      microcycleDates
+    );
 
     const hasValidCategory = exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '';
     const fullMethodKey = hasValidCategory
@@ -620,15 +659,18 @@ export function MasterPlannerColumn({
     const mesocycleParams = parameterValues[currentMesocycle.id];
     const microcycleParams = mesocycleParams?.[microcycleIndex];
     
+    // UPDATED: Try chronological session index FIRST for split methods,
+    // then fall back to session 0 for non-split methods
     const storedParams = 
+      microcycleParams?.[fullMethodKey]?.[chronologicalSessionIndex] ||
+      microcycleParams?.[normalizedFullMethodKey]?.[chronologicalSessionIndex] ||
+      microcycleParams?.[exercise.methodId]?.[chronologicalSessionIndex] ||
+      microcycleParams?.[normalizedMethodId]?.[chronologicalSessionIndex] ||
+      // Fallback to session 0 for non-split methods
       microcycleParams?.[fullMethodKey]?.[0] ||
       microcycleParams?.[normalizedFullMethodKey]?.[0] ||
-      microcycleParams?.[fullMethodKey]?.[exercise.sessionIndex] ||
-      microcycleParams?.[normalizedFullMethodKey]?.[exercise.sessionIndex] ||
       microcycleParams?.[exercise.methodId]?.[0] ||
       microcycleParams?.[normalizedMethodId]?.[0] ||
-      microcycleParams?.[exercise.methodId]?.[exercise.sessionIndex] ||
-      microcycleParams?.[normalizedMethodId]?.[exercise.sessionIndex] ||
       {};
 
     const methodParts = exercise.methodId.split(' - ');
@@ -670,8 +712,8 @@ export function MasterPlannerColumn({
       };
     });
 
-    return { storedParams, methodParams };
-  }, [currentMesocycle, parameterValues, trainingDays, day.dateString, toolboxData, weekNumber]);
+    return { storedParams, methodParams, chronologicalSessionIndex };
+  }, [currentMesocycle, parameterValues, trainingDays, day.dateString, toolboxData, weekNumber, getMicrocycleDates, allExerciseDistribution]);
 
   // Get superset label for an exercise (A1, A2, B1, B2, etc.)
   const getSupersetLabel = useCallback((exercise: ExerciseDistribution): string | null => {

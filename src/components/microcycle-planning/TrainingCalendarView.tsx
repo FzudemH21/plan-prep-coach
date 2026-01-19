@@ -995,6 +995,7 @@ export function TrainingCalendarView({
               onUpdateEventComment={onUpdateEventComment}
               availableTests={availableTests}
               availableEvents={availableEvents}
+              allExerciseDistribution={exerciseDistribution}
             />
           ) : (
             /* Calendar View */
