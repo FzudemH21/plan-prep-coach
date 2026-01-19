@@ -121,6 +121,8 @@ interface MasterPlannerGridProps {
   availableEvents?: Event[];
   // Full exercise distribution for chronological session index calculation
   allExerciseDistribution?: ExerciseDistribution[];
+  // Exercise detail dialog
+  onOpenExerciseDetail?: (exercise: ExerciseDistribution) => void;
 }
 
 const MAX_WEEKS_DISPLAY = 6;
@@ -172,6 +174,7 @@ export function MasterPlannerGrid({
   availableTests,
   availableEvents,
   allExerciseDistribution,
+  onOpenExerciseDetail,
 }: MasterPlannerGridProps) {
   const [startWeekOffset, setStartWeekOffset] = useState(0);
 
@@ -302,6 +305,7 @@ export function MasterPlannerGrid({
               availableTests={availableTests}
               availableEvents={availableEvents}
               allExerciseDistribution={allExerciseDistribution}
+              onOpenExerciseDetail={onOpenExerciseDetail}
             />
           ))}
         </div>
