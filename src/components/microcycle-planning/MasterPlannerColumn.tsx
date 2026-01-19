@@ -15,7 +15,7 @@ import { ExtendedMesocycle } from '@/features/planner/types';
 import { ToolboxDatabase } from '@/types/toolbox';
 import { SessionSection, SupersetMapping } from '@/types/microcycle-planning';
 import { getSupersetLabelFromMapping } from '@/utils/supersetUtils';
-import { getMethodSessionIndex } from '@/utils/sessionIndexUtils';
+import { getMethodSessionIndex, getModuloSessionIndex } from '@/utils/sessionIndexUtils';
 import {
   Table,
   TableBody,
@@ -642,7 +642,7 @@ export function MasterPlannerColumn({
       ...exercise,
       id: exercise.id || exercise.exerciseId, // Ensure id is always present
     };
-    const chronologicalSessionIndex = getMethodSessionIndex(
+    const rawChronologicalIndex = getMethodSessionIndex(
       exerciseForLookup,
       (allExerciseDistribution || []).map(ex => ({ ...ex, id: ex.id || ex.exerciseId })),
       microcycleDates
@@ -658,6 +658,29 @@ export function MasterPlannerColumn({
 
     const mesocycleParams = parameterValues[currentMesocycle.id];
     const microcycleParams = mesocycleParams?.[microcycleIndex];
+    
+    // Count how many session parameter sets are defined for this method
+    const methodParamsForSession = microcycleParams?.[fullMethodKey] ||
+      microcycleParams?.[normalizedFullMethodKey] ||
+      microcycleParams?.[exercise.methodId] ||
+      microcycleParams?.[normalizedMethodId] || {};
+    const sessionCount = Object.keys(methodParamsForSession).filter(k => !isNaN(Number(k))).length;
+    
+    // Apply modulo if there are more exercises than sessions
+    const chronologicalSessionIndex = sessionCount > 0 
+      ? getModuloSessionIndex(rawChronologicalIndex, sessionCount)
+      : rawChronologicalIndex;
+    
+    console.log('[MasterPlannerColumn] Session index calculation:', {
+      exerciseName: exercise.exerciseName,
+      methodId: exercise.methodId,
+      categoryName: exercise.categoryName,
+      dayDate: exercise.dayDate,
+      rawChronologicalIndex,
+      sessionCount,
+      chronologicalSessionIndex,
+      fullMethodKey,
+    });
     
     // UPDATED: Try chronological session index FIRST for split methods,
     // then fall back to session 0 for non-split methods

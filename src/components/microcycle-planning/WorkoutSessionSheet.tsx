@@ -27,6 +27,7 @@ import { ExerciseSelection } from '@/types/microcycle-planning';
 import { ToolboxDatabase } from '@/types/toolbox';
 import { cn } from '@/lib/utils';
 import { toggleSuperset, getSupersetLabelFromMapping, cleanupSupersetsOnExerciseDelete } from '@/utils/supersetUtils';
+import { getMethodSessionIndex, getModuloSessionIndex } from '@/utils/sessionIndexUtils';
 
 interface ExerciseDistribution {
   id?: string;
@@ -110,6 +111,8 @@ interface WorkoutSessionSheetProps {
   // Sync exercise distribution changes back to Step 1
   allExerciseDistribution?: ExerciseDistribution[];
   onDistributionChange?: (distribution: ExerciseDistribution[]) => void;
+  // Microcycle dates for chronological session parameter assignment
+  microcycleDates?: string[];
 }
 
 export function WorkoutSessionSheet({
@@ -149,6 +152,7 @@ export function WorkoutSessionSheet({
   toolboxData,
   allExerciseDistribution,
   onDistributionChange,
+  microcycleDates,
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -219,9 +223,51 @@ export function WorkoutSessionSheet({
                   ? `${ex.methodId}::${ex.categoryName}` 
                   : ex.methodId;
                 
-                // Calculate chronological session index for this exercise
-                // This ensures exercises get the correct split method parameters based on their order in the microcycle
-                const chronologicalSessionIndex = idx; // Use the order within this session as approximation
+                // Calculate chronological session index for this exercise within the MICROCYCLE
+                // This ensures exercises get the correct split method parameters based on their order
+                const exerciseForLookup = {
+                  id: ex.id || ex.exerciseId,
+                  exerciseId: ex.exerciseId,
+                  methodId: ex.methodId,
+                  categoryName: ex.categoryName || '',
+                  dayDate: ex.dayDate,
+                  sessionIndex: ex.sessionIndex,
+                  order: ex.order ?? idx,
+                };
+                
+                const rawChronologicalIndex = getMethodSessionIndex(
+                  exerciseForLookup,
+                  (allExerciseDistribution || []).map(e => ({
+                    id: e.id || e.exerciseId,
+                    exerciseId: e.exerciseId,
+                    methodId: e.methodId,
+                    categoryName: e.categoryName || '',
+                    dayDate: e.dayDate,
+                    sessionIndex: e.sessionIndex,
+                    order: e.order ?? 0,
+                  })),
+                  microcycleDates || []
+                );
+                
+                // Count how many session parameter sets are defined for this method
+                const methodParamsForSession = currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey] ||
+                  currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId] || {};
+                const sessionCount = Object.keys(methodParamsForSession).filter(k => !isNaN(Number(k))).length;
+                
+                // Apply modulo if there are more exercises than sessions
+                const chronologicalSessionIndex = sessionCount > 0 
+                  ? getModuloSessionIndex(rawChronologicalIndex, sessionCount)
+                  : rawChronologicalIndex;
+                
+                console.log('[WorkoutSessionSheet] Session index calculation:', {
+                  exerciseName: ex.exerciseName,
+                  methodId: ex.methodId,
+                  categoryName: ex.categoryName,
+                  rawChronologicalIndex,
+                  sessionCount,
+                  chronologicalSessionIndex,
+                  fullMethodKey,
+                });
                 
                 // Try chronological session index FIRST for split methods, then fallback to session 0
                 const storedParams = 
@@ -359,12 +405,48 @@ export function WorkoutSessionSheet({
       const fullMethodKey = hasValidCategory 
         ? `${ex.methodId}::${ex.categoryName}` 
         : ex.methodId;
-      // Try base method first (matches how MesocyclePage saves), then category-specific
+      
+      // Calculate chronological session index for this exercise within the MICROCYCLE
+      const exerciseForLookup = {
+        id: (ex as any).id || ex.exerciseId,
+        exerciseId: ex.exerciseId,
+        methodId: ex.methodId,
+        categoryName: ex.categoryName || '',
+        dayDate: ex.dayDate,
+        sessionIndex: ex.sessionIndex,
+        order: (ex as any).order ?? index,
+      };
+      
+      const rawChronologicalIndex = getMethodSessionIndex(
+        exerciseForLookup,
+        (allExerciseDistribution || []).map(e => ({
+          id: (e as any).id || e.exerciseId,
+          exerciseId: e.exerciseId,
+          methodId: e.methodId,
+          categoryName: e.categoryName || '',
+          dayDate: e.dayDate,
+          sessionIndex: e.sessionIndex,
+          order: (e as any).order ?? 0,
+        })),
+        microcycleDates || []
+      );
+      
+      // Count how many session parameter sets are defined for this method
+      const methodParamsForSession = currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey] ||
+        currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId] || {};
+      const sessionCount = Object.keys(methodParamsForSession).filter(k => !isNaN(Number(k))).length;
+      
+      // Apply modulo if there are more exercises than sessions
+      const chronologicalSessionIndex = sessionCount > 0 
+        ? getModuloSessionIndex(rawChronologicalIndex, sessionCount)
+        : rawChronologicalIndex;
+      
+      // Try chronological session index FIRST for split methods, then fallback to session 0
       const storedParams = 
-        currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[0] ||
-        currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex] ||
+        currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[chronologicalSessionIndex] ||
         currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[0] ||
-        currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex] ||
+        currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[chronologicalSessionIndex] ||
+        currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[0] ||
         {};
       
       // PRIMARY: Derive parameters from storedParams (method periodization grid)
