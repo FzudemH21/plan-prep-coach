@@ -119,6 +119,8 @@ interface MasterPlannerGridProps {
   onUpdateEventComment?: (eventId: string, comments: string) => void;
   availableTests?: SubGoal[];
   availableEvents?: Event[];
+  // Full exercise distribution for chronological session index calculation
+  allExerciseDistribution?: ExerciseDistribution[];
 }
 
 const MAX_WEEKS_DISPLAY = 6;
@@ -169,6 +171,7 @@ export function MasterPlannerGrid({
   onUpdateEventComment,
   availableTests,
   availableEvents,
+  allExerciseDistribution,
 }: MasterPlannerGridProps) {
   const [startWeekOffset, setStartWeekOffset] = useState(0);
 
@@ -298,6 +301,7 @@ export function MasterPlannerGrid({
               onUpdateEventComment={onUpdateEventComment}
               availableTests={availableTests}
               availableEvents={availableEvents}
+              allExerciseDistribution={allExerciseDistribution}
             />
           ))}
         </div>

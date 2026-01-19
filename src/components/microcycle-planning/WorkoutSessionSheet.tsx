@@ -218,12 +218,17 @@ export function WorkoutSessionSheet({
                 const fullMethodKey = hasValidCategory 
                   ? `${ex.methodId}::${ex.categoryName}` 
                   : ex.methodId;
-                // Try sessionIndex=0 first (for non-split methods), then actual sessionIndex
+                
+                // Calculate chronological session index for this exercise
+                // This ensures exercises get the correct split method parameters based on their order in the microcycle
+                const chronologicalSessionIndex = idx; // Use the order within this session as approximation
+                
+                // Try chronological session index FIRST for split methods, then fallback to session 0
                 const storedParams = 
+                  currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[chronologicalSessionIndex] ||
                   currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[0] ||
-                  currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex] ||
+                  currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[chronologicalSessionIndex] ||
                   currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[0] ||
-                  currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[sessionIndex] ||
                   {};
                 
                 // PRIMARY: Derive parameters from storedParams (method periodization grid)
