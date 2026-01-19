@@ -14,8 +14,13 @@ const createSlug = (name: string): string => {
     .trim();
 };
 
-// Convert slug back to find library
+// Find library by slug OR by direct ID match
 const findLibraryBySlug = (libraries: any[], slug: string) => {
+  // First try exact ID match (for built-in libraries)
+  const byId = libraries.find(lib => lib.id === slug);
+  if (byId) return byId;
+  
+  // Then try slug match from name
   return libraries.find(lib => createSlug(lib.name) === slug);
 };
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -132,9 +132,20 @@ export function ExerciseDetailDialog({
   // Get columns from props or library
   const columns = propColumns || library?.columns || [];
   
-  // Sync local state when dialog opens
+  // Track initialization to prevent re-syncing while dialog is open
+  const hasInitialized = useRef(false);
+  
+  // Reset initialization flag when dialog closes
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) {
+      hasInitialized.current = false;
+    }
+  }, [isOpen]);
+  
+  // Sync local state only when dialog first opens
+  useEffect(() => {
+    if (isOpen && !hasInitialized.current) {
+      hasInitialized.current = true;
       setLocalName(exerciseName);
       setLocalVideoUrl(videoUrl);
       setLocalDescription(description);
