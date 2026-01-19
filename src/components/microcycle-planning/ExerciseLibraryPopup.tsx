@@ -10,7 +10,7 @@ import { Search, Plus, ChevronUp, ChevronDown, X } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { ExerciseSelection, ExerciseLibraryType } from '@/types/microcycle-planning';
 import { FilterState } from '@/types/exercises';
-import { useCustomLibraries } from '@/hooks/useCustomLibraries';
+import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import { ColumnFilter } from '@/components/exercises/ColumnFilter';
 import { PlyometricsColumnFilter } from '@/components/plyometrics/PlyometricsColumnFilter';
 import { NewExerciseDialog } from './NewExerciseDialog';
