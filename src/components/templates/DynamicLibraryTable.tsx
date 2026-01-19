@@ -106,6 +106,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
     isOpen: false,
     exercise: null
   });
+  const [isCreatingNewExercise, setIsCreatingNewExercise] = useState(false);
 
   const handleCellEdit = (exerciseId: string, columnId: string, value: string) => {
     const exercise = safeLibrary.exercises.find(ex => ex.id === exerciseId);
@@ -118,13 +119,8 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
   };
 
   const handleAddExercise = () => {
-    const newExerciseData: Record<string, any> = {};
-    safeLibrary.columns.forEach(col => {
-      newExerciseData[col.id] = col.required && col.type === 'text' ? 'New Exercise' : '';
-    });
-
-    addExerciseToLibrary(library.id, { data: newExerciseData });
-    toast({ title: "Success", description: "Exercise added successfully" });
+    // Open the create dialog instead of adding a blank row
+    setIsCreatingNewExercise(true);
   };
 
   const handleDeleteExercise = (exerciseId: string) => {
@@ -330,11 +326,11 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
     );
   };
 
-  const renderColumnHeader = (column: LibraryColumn) => {
+  const renderColumnHeader = (column: LibraryColumn, isFirstColumn: boolean = false) => {
     return (
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <TableHead className="cursor-pointer relative group">
+          <TableHead className="cursor-pointer relative group bg-background">
             <div className="flex items-center justify-between">
               <span className="font-medium">
                 {column.name}
@@ -382,22 +378,25 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
             <Plus className="h-4 w-4 mr-2" />
             Add Column
           </ContextMenuItem>
-          <ContextMenuItem 
-            key={`delete-${column.id}`}
-            onSelect={() => {
-              setTimeout(() => {
-                setDeleteDialog({
-                  isOpen: true,
-                  columnId: column.id,
-                  columnName: column.name
-                });
-              }, 0);
-            }}
-            className="text-destructive"
-          >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Delete Column
-          </ContextMenuItem>
+          {/* Only show delete for non-first columns */}
+          {!isFirstColumn && (
+            <ContextMenuItem 
+              key={`delete-${column.id}`}
+              onSelect={() => {
+                setTimeout(() => {
+                  setDeleteDialog({
+                    isOpen: true,
+                    columnId: column.id,
+                    columnName: column.name
+                  });
+                }, 0);
+              }}
+              className="text-destructive"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Column
+            </ContextMenuItem>
+          )}
         </ContextMenuContent>
       </ContextMenu>
     );
@@ -470,10 +469,10 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
 
         <div className="border rounded-lg overflow-hidden">
           <Table>
-            <TableHeader>
-              <TableRow>
-                {safeLibrary.columns.map(column => renderColumnHeader(column))}
-                <TableHead className="w-20">Actions</TableHead>
+            <TableHeader className="sticky top-0 z-10 bg-background">
+              <TableRow className="bg-background hover:bg-background">
+                {safeLibrary.columns.map((column, index) => renderColumnHeader(column, index === 0))}
+                <TableHead className="w-20 bg-background">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -590,7 +589,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
         columnName={deleteDialog.columnName}
       />
 
-      {/* Exercise Detail Dialog */}
+      {/* Exercise Detail Dialog - Edit Mode */}
       {detailDialog.exercise && (
         <ExerciseDetailDialog
           isOpen={detailDialog.isOpen}
@@ -599,11 +598,47 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
           exerciseName={detailDialog.exercise.data[safeLibrary.columns[0]?.id] || 'Unnamed Exercise'}
           libraryId={library.id}
           readOnly={false}
+          mode="edit"
+          columns={safeLibrary.columns}
           exerciseData={detailDialog.exercise.data}
           videoUrl={detailDialog.exercise.videoUrl}
           description={detailDialog.exercise.description}
+          onSave={(data) => {
+            if (detailDialog.exercise) {
+              const firstColumnId = safeLibrary.columns[0]?.id;
+              updateExerciseInLibrary(library.id, detailDialog.exercise.id, {
+                data: { ...data.data, ...(firstColumnId ? { [firstColumnId]: data.name } : {}) },
+                videoUrl: data.videoUrl || undefined,
+                description: data.description || undefined,
+              });
+              toast({ title: "Success", description: "Exercise updated successfully" });
+            }
+            setDetailDialog({ isOpen: false, exercise: null });
+          }}
         />
       )}
+
+      {/* Exercise Detail Dialog - Create Mode */}
+      <ExerciseDetailDialog
+        isOpen={isCreatingNewExercise}
+        onClose={() => setIsCreatingNewExercise(false)}
+        exerciseId=""
+        exerciseName=""
+        libraryId={library.id}
+        readOnly={false}
+        mode="create"
+        columns={safeLibrary.columns}
+        onSave={(data) => {
+          const firstColumnId = safeLibrary.columns[0]?.id;
+          addExerciseToLibrary(library.id, {
+            data: { ...data.data, ...(firstColumnId ? { [firstColumnId]: data.name } : {}) },
+            videoUrl: data.videoUrl || undefined,
+            description: data.description || undefined,
+          });
+          setIsCreatingNewExercise(false);
+          toast({ title: "Success", description: "Exercise added successfully" });
+        }}
+      />
     </>
   );
 }
