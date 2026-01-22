@@ -157,7 +157,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                   return meso.microcycles.length > 0 ? (
                     <div 
                       key={meso.id}
-                      className={cn("relative text-center border font-semibold border-slate-400 py-3 shrink-0 rounded-md", getSubtleIntensityBg(meso.intensity))}
+                      className={cn("relative text-center border font-semibold border-border py-3 shrink-0 rounded-md", getSubtleIntensityBg(meso.intensity))}
                       style={{ width: `${width}px` }}
                     >
                       {/* Mesocycle Name Row with Clickable Intensity Badge */}
