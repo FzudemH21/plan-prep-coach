@@ -240,8 +240,8 @@ export function ExerciseDetailDialog({
           </DialogTitle>
         </DialogHeader>
         
-        <ScrollArea className="flex-1 pr-4">
-          <div className="space-y-6">
+        <ScrollArea className="flex-1 px-1">
+          <div className="space-y-6 px-1">
             {/* Exercise Name - Editable in create/edit modes */}
             {isEditable && (
               <div className="space-y-2">
