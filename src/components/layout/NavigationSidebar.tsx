@@ -108,6 +108,7 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
     icon: FileText,
     path: "/templates",
     items: [
+      { title: "Training Programs", path: "/templates/programs", icon: Calendar },
       { title: "Athleticism Database", path: "/templates/athleticism", icon: Activity },
       { title: "Athleticism Database (v2)", path: "/templates/athleticism-v2", icon: Activity },
       { title: "Training Toolbox", path: "/templates/toolbox", icon: Wrench },

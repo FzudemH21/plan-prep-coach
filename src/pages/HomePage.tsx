@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,35 +13,41 @@ import {
   Clock,
   TrendingUp
 } from "lucide-react";
+import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
+import { useAthletes } from "@/hooks/useAthletes";
+import { getAthleteDisplayName } from "@/types/athlete";
+import { formatDistanceToNow } from "date-fns";
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const [recentPlans] = useState([
-    {
-      id: "1",
-      name: "Sprint Development Program",
-      athlete: "John Smith",
-      progress: 65,
-      status: "active",
-      daysRemaining: 23
-    },
-    {
-      id: "2", 
-      name: "Strength & Power Phase",
-      athlete: "Sarah Johnson",
-      progress: 90,
-      status: "completing",
-      daysRemaining: 3
-    }
-  ]);
+  const { getRecentPrograms, loadProgramIntoSession, clearSession } = useTrainingPrograms();
+  const { athletes } = useAthletes();
+  
+  const recentPrograms = getRecentPrograms(6);
+
+  const getAthleteName = (athleteId: string | null): string => {
+    if (!athleteId) return "Unassigned";
+    const athlete = athletes.find(a => a.id === athleteId);
+    return athlete ? getAthleteDisplayName(athlete) : "Unknown";
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "active": return "bg-green-500 text-white";
-      case "completing": return "bg-yellow-500 text-white";
-      case "draft": return "bg-gray-500 text-white";
-      default: return "bg-blue-500 text-white";
+      case "completed": return "bg-blue-500 text-white";
+      case "archived": return "bg-gray-500 text-white";
+      default: return "bg-yellow-500 text-white";
     }
+  };
+
+  const handleProgramClick = (programId: string) => {
+    loadProgramIntoSession(programId);
+    navigate('/macrocycle');
+  };
+
+  const handleCreateNew = () => {
+    clearSession();
+    navigate('/macrocycle');
   };
 
   return (
@@ -60,7 +65,7 @@ export default function HomePage() {
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/macrocycle")}>
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={handleCreateNew}>
           <CardHeader className="text-center pb-4">
             <Target className="h-12 w-12 text-primary mx-auto mb-2" />
             <CardTitle className="text-lg">New Training Plan</CardTitle>
@@ -97,45 +102,49 @@ export default function HomePage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-semibold">Recent Training Plans</h2>
-          <Button onClick={() => navigate("/macrocycle")}>
+          <Button onClick={handleCreateNew}>
             <Plus className="h-4 w-4 mr-2" />
             Create New Plan
           </Button>
         </div>
 
-        {recentPlans.length > 0 ? (
+        {recentPrograms.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {recentPlans.map((plan) => (
-              <Card key={plan.id} className="cursor-pointer hover:shadow-md transition-shadow">
+            {recentPrograms.map((program) => (
+              <Card 
+                key={program.id} 
+                className="cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => handleProgramClick(program.id)}
+              >
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div>
-                      <CardTitle className="text-lg">{plan.name}</CardTitle>
-                      <CardDescription>{plan.athlete}</CardDescription>
+                      <CardTitle className="text-lg">{program.name}</CardTitle>
+                      <CardDescription>{getAthleteName(program.athleteId)}</CardDescription>
                     </div>
-                    <Badge className={getStatusColor(plan.status)}>
-                      {plan.status}
+                    <Badge className={getStatusColor(program.status)}>
+                      {program.status}
                     </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Progress</span>
-                      <span>{plan.progress}%</span>
-                    </div>
-                    <Progress value={plan.progress} className="h-2" />
-                  </div>
+                  {program.primaryGoal && (
+                    <p className="text-sm text-muted-foreground line-clamp-2">
+                      {program.primaryGoal}
+                    </p>
+                  )}
                   
                   <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                     <div className="flex items-center space-x-1">
                       <Clock className="h-4 w-4" />
-                      <span>{plan.daysRemaining} days left</span>
+                      <span>{formatDistanceToNow(new Date(program.lastModifiedAt), { addSuffix: true })}</span>
                     </div>
-                    <div className="flex items-center space-x-1">
-                      <TrendingUp className="h-4 w-4" />
-                      <span>On track</span>
-                    </div>
+                    {program.duration.weeks > 0 && (
+                      <div className="flex items-center space-x-1">
+                        <Calendar className="h-4 w-4" />
+                        <span>{program.duration.weeks} weeks</span>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -149,7 +158,7 @@ export default function HomePage() {
               <p className="text-muted-foreground mb-4">
                 Get started by creating your first training program
               </p>
-              <Button onClick={() => navigate("/macrocycle")}>
+              <Button onClick={handleCreateNew}>
                 <Plus className="h-4 w-4 mr-2" />
                 Create Your First Plan
               </Button>
