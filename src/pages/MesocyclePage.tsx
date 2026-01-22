@@ -1007,7 +1007,7 @@ export default function MesocyclePage() {
                         
                         <div className="space-y-2">
                           {meso.microcycles?.map((micro, microIndex) => (
-                            <div key={micro.id} className="flex items-center space-x-3 p-3 border rounded-md bg-muted/20">
+                            <div key={micro.id} className="flex items-center space-x-3 p-3 border rounded-md bg-muted/20 w-fit">
                               <Input
                                 value={micro.name}
                                 onChange={(e) => updateMicrocycle(index, microIndex, 'name', e.target.value)}
