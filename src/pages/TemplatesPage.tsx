@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Database, FileText, ArrowLeft, Target, Wrench, Activity, Plus, Edit2, Trash2 } from "lucide-react";
+import { Database, FileText, ArrowLeft, Target, Wrench, Activity, Plus, Edit2, Trash2, Calendar } from "lucide-react";
 import { AddLibraryDialog } from "@/components/templates/AddLibraryDialog";
 import { EditLibraryDialog } from "@/components/templates/EditLibraryDialog";
 import { useCustomLibraries, CustomLibrary } from "@/hooks/useCustomLibraries";
@@ -88,6 +88,26 @@ export default function TemplatesPage() {
 
       {/* Database Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        <Card className="cursor-pointer hover:shadow-md transition-shadow border-primary/20" onClick={() => navigate("/templates/programs")}>
+          <CardHeader>
+            <div className="flex items-center space-x-3">
+              <Calendar className="h-8 w-8 text-primary" />
+              <div>
+                <CardTitle>Training Programs</CardTitle>
+                <CardDescription>Saved training plans</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              Your saved training programs library. Create, edit, duplicate and manage all your training plans in one place.
+            </p>
+            <div className="flex items-center justify-between">
+              <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">Manage Plans</span>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/templates/athleticism")}>
           <CardHeader>
             <div className="flex items-center space-x-3">
@@ -238,7 +258,6 @@ export default function TemplatesPage() {
             </p>
             <div className="flex items-center justify-between">
               <span className="text-xs bg-muted px-2 py-1 rounded">Coming Soon</span>
-              <span className="text-xs text-muted-foreground">12 templates</span>
             </div>
           </CardContent>
         </Card>

@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils';
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
 import { TrainingCalendarView, EnhancedExerciseDistribution } from '@/components/microcycle-planning';
 import { DropResult } from '@hello-pangea/dnd';
+import { SaveProgramButton } from '@/components/programs/SaveProgramButton';
 
 // Using ExerciseDistribution, SessionSection, and SupersetMapping from types file
 
@@ -3048,7 +3049,10 @@ export default function MicrocyclePlanningPage() {
     <div className="mx-auto py-6 space-y-6 px-4 w-full max-w-[98vw]">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-3xl font-bold">Microcycle Planning</h1>
-        <PlanningNavigationMenu currentPage="microcycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
+        <div className="flex items-center gap-2">
+          <SaveProgramButton />
+          <PlanningNavigationMenu currentPage="microcycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
+        </div>
       </div>
 
       <NavigationButtons />

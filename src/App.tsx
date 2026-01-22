@@ -11,6 +11,7 @@ import MacrocyclePage from "./pages/MacrocyclePage";
 import MesocyclePage from "./pages/MesocyclePage";
 import MicrocyclePlanningPage from "./pages/MicrocyclePlanningPage";
 import TemplatesPage from "./pages/TemplatesPage";
+import TrainingProgramsPage from "./pages/TrainingProgramsPage";
 import AthleticismDatabase from "./pages/AthleticismDatabase";
 import AthleticismDatabaseV2 from "./pages/AthleticismDatabaseV2";
 import ToolboxDatabase from "./pages/ToolboxDatabase";
@@ -36,6 +37,7 @@ const App = () => (
               <Route path="/microcycle" element={<MicrocyclePlanningPage />} />
               <Route path="/athletes" element={<AthleteDatabase />} />
               <Route path="/templates" element={<TemplatesPage />} />
+              <Route path="/templates/programs" element={<TrainingProgramsPage />} />
               <Route path="/templates/athleticism" element={<AthleticismDatabase />} />
               <Route path="/templates/athleticism-v2" element={<AthleticismDatabaseV2 />} />
               <Route path="/templates/toolbox" element={<ToolboxDatabase />} />
