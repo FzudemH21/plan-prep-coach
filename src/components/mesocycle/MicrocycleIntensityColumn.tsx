@@ -31,21 +31,6 @@ interface MicrocycleIntensityColumnProps {
   endDate?: Date;
 }
 
-// Helper to get subtle intensity-tinted background for microcycle headers
-const getSubtleIntensityBg = (intensityLevel: IntensityLevel): string => {
-  const bgMappings: Record<IntensityLevel, string> = {
-    "off": "bg-gray-500/10",
-    "deload": "bg-green-500/10",
-    "easy": "bg-lime-500/10",
-    "easy-moderate": "bg-yellow-500/10",
-    "moderate": "bg-amber-500/10",
-    "moderate-hard": "bg-orange-500/10",
-    "hard": "bg-red-500/10",
-    "extremely-hard": "bg-red-700/15"
-  };
-  return bgMappings[intensityLevel] || "bg-muted/50";
-};
-
 const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
   microcycle,
   mesocycleId,
@@ -132,9 +117,9 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
   const hasIcons = testDetails.length > 0 || eventDetails.length > 0;
 
   return (
-    <div className={`flex flex-col w-[120px] shrink-0 box-border border-l border-border/40 ${getBorderClasses()}`}>
-      {/* Microcycle header - with intensity-tinted background */}
-      <div className={`h-24 text-center text-xs rounded w-full mb-2 flex flex-col p-1 ${getSubtleIntensityBg(intensity)}`}>
+    <div className={`flex flex-col w-[120px] shrink-0 box-border ${getBorderClasses()}`}>
+      {/* Microcycle header */}
+      <div className="h-24 text-center text-xs bg-primary/10 rounded w-full mb-2 flex flex-col p-1">
         {/* Content wrapper - vertically centered */}
         <div className="flex-1 flex flex-col items-center justify-center">
           {/* Microcycle name */}
