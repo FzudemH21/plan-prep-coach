@@ -1055,6 +1055,14 @@ export default function MesocyclePage() {
                 intensityLevels={intensityLevels}
                 getIntensityColor={getIntensityColor}
                 onMicrocycleIntensityChange={handleMicrocycleIntensityChange}
+                onMesocycleIntensityChange={(mesocycleId, intensity) => {
+                  const mesoIndex = mesocycles.findIndex(m => m.id === mesocycleId);
+                  if (mesoIndex !== -1) {
+                    const updated = [...mesocycles];
+                    updated[mesoIndex] = { ...updated[mesoIndex], intensity };
+                    setMesocycles(updated);
+                  }
+                }}
                 onCopyMesocycle={copyMesocycleIntensity}
                 subGoals={macrocycleData?.subGoals}
                 events={macrocycleData?.events}
