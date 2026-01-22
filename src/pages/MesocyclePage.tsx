@@ -4669,7 +4669,7 @@ export default function MesocyclePage() {
                     </div>
                     <div className="flex flex-nowrap">
                       {currentMeso && (() => {
-                        const width = currentMeso.microcycles.reduce((acc, micro) => acc + micro.duration * 80, 0);
+                        const width = currentMeso.microcycles.reduce((acc, micro) => acc + micro.duration * 100, 0);
                         return currentMeso.microcycles.length > 0 ? (
                           <div 
                             key={currentMeso.id}
