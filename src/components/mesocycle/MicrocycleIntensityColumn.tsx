@@ -5,6 +5,7 @@ import { Trophy, CalendarDays } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface TestDetail {
   name: string;
@@ -30,6 +31,21 @@ interface MicrocycleIntensityColumnProps {
   startDate?: Date;
   endDate?: Date;
 }
+
+// Helper to get subtle intensity-tinted background (same color, transparent)
+const getSubtleIntensityBg = (intensity: IntensityLevel): string => {
+  const bgMappings: Record<IntensityLevel, string> = {
+    "off": "bg-[hsl(var(--intensity-off)/0.10)]",
+    "deload": "bg-[hsl(var(--intensity-deload)/0.10)]",
+    "easy": "bg-[hsl(var(--intensity-easy)/0.10)]",
+    "easy-moderate": "bg-[hsl(var(--intensity-easy-moderate)/0.10)]",
+    "moderate": "bg-[hsl(var(--intensity-moderate)/0.10)]",
+    "moderate-hard": "bg-[hsl(var(--intensity-moderate-hard)/0.10)]",
+    "hard": "bg-[hsl(var(--intensity-hard)/0.10)]",
+    "extremely-hard": "bg-[hsl(var(--intensity-extremely-hard)/0.15)]"
+  };
+  return bgMappings[intensity] || "bg-primary/10";
+};
 
 const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
   microcycle,
@@ -117,9 +133,9 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
   const hasIcons = testDetails.length > 0 || eventDetails.length > 0;
 
   return (
-    <div className={`flex flex-col w-[120px] shrink-0 box-border ${getBorderClasses()}`}>
+    <div className={cn("flex flex-col w-[120px] shrink-0 box-border border-l border-border/40", getBorderClasses())}>
       {/* Microcycle header */}
-      <div className="h-24 text-center text-xs bg-primary/10 rounded w-full mb-2 flex flex-col p-1">
+      <div className={cn("h-24 text-center text-xs rounded w-full mb-2 flex flex-col p-1", getSubtleIntensityBg(intensity))}>
         {/* Content wrapper - vertically centered */}
         <div className="flex-1 flex flex-col items-center justify-center">
           {/* Microcycle name */}
