@@ -27,6 +27,7 @@ import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu
 import { TrainingCalendarView, EnhancedExerciseDistribution } from '@/components/microcycle-planning';
 import { DropResult } from '@hello-pangea/dnd';
 import { SaveProgramButton } from '@/components/programs/SaveProgramButton';
+import { useTrainingPrograms } from '@/hooks/useTrainingPrograms';
 
 // Using ExerciseDistribution, SessionSection, and SupersetMapping from types file
 
@@ -66,6 +67,7 @@ export default function MicrocyclePlanningPage() {
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
   const { athletes } = useAthletes();
+  const { saveCurrentSession } = useTrainingPrograms();
   
   // Resolve athlete name from selectedAthleteId
   const selectedAthlete = athletes.find(a => a.id === macrocycleData?.selectedAthleteId);
@@ -3050,6 +3052,17 @@ export default function MicrocyclePlanningPage() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-3xl font-bold">Microcycle Planning</h1>
         <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => {
+              saveCurrentSession();
+              navigate("/templates/programs");
+            }}
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Library
+          </Button>
           <SaveProgramButton />
           <PlanningNavigationMenu currentPage="microcycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
         </div>

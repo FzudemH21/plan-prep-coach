@@ -2,7 +2,6 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { 
   Target, 
   Users, 
@@ -10,8 +9,7 @@ import {
   BarChart3, 
   Plus, 
   FileText,
-  Clock,
-  TrendingUp
+  Clock
 } from "lucide-react";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useAthletes } from "@/hooks/useAthletes";
@@ -20,7 +18,7 @@ import { formatDistanceToNow } from "date-fns";
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { getRecentPrograms, loadProgramIntoSession, clearSession } = useTrainingPrograms();
+  const { getRecentPrograms, loadProgramIntoSession } = useTrainingPrograms();
   const { athletes } = useAthletes();
   
   const recentPrograms = getRecentPrograms(6);
@@ -45,11 +43,6 @@ export default function HomePage() {
     navigate('/macrocycle');
   };
 
-  const handleCreateNew = () => {
-    clearSession();
-    navigate('/macrocycle');
-  };
-
   return (
     <div className="w-full max-w-none space-y-8">
       {/* Welcome Section */}
@@ -64,15 +57,7 @@ export default function HomePage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={handleCreateNew}>
-          <CardHeader className="text-center pb-4">
-            <Target className="h-12 w-12 text-primary mx-auto mb-2" />
-            <CardTitle className="text-lg">New Training Plan</CardTitle>
-            <CardDescription>Start with goal setting and athlete info</CardDescription>
-          </CardHeader>
-        </Card>
-
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/athletes")}>
           <CardHeader className="text-center pb-4">
             <Users className="h-12 w-12 text-primary mx-auto mb-2" />
@@ -81,11 +66,11 @@ export default function HomePage() {
           </CardHeader>
         </Card>
 
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/templates")}>
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/templates/programs")}>
           <CardHeader className="text-center pb-4">
             <FileText className="h-12 w-12 text-primary mx-auto mb-2" />
-            <CardTitle className="text-lg">Templates & Library</CardTitle>
-            <CardDescription>Access exercise glossaries and templates</CardDescription>
+            <CardTitle className="text-lg">Training Programs</CardTitle>
+            <CardDescription>Create and manage training programs</CardDescription>
           </CardHeader>
         </Card>
 
@@ -102,9 +87,8 @@ export default function HomePage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-semibold">Recent Training Plans</h2>
-          <Button onClick={handleCreateNew}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create New Plan
+          <Button variant="outline" onClick={() => navigate("/templates/programs")}>
+            View All Programs
           </Button>
         </div>
 
@@ -158,9 +142,9 @@ export default function HomePage() {
               <p className="text-muted-foreground mb-4">
                 Get started by creating your first training program
               </p>
-              <Button onClick={handleCreateNew}>
+              <Button onClick={() => navigate("/templates/programs")}>
                 <Plus className="h-4 w-4 mr-2" />
-                Create Your First Plan
+                Go to Training Programs
               </Button>
             </CardContent>
           </Card>

@@ -33,8 +33,9 @@ import { cn } from "@/lib/utils";
 import { AddSmartGoalDialog, AddSubGoalDialog, AddAdditionalMethodDialog } from "@/components/macrocycle";
 import { AddParameterDialogV2 } from "@/components/goals/AddParameterDialogV2";
 import { useToolboxData } from "@/hooks/useToolboxData";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ArrowLeft } from "lucide-react";
 import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
+import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 
 // Type for manually added methods with rationale
 interface ManuallyAddedMethod {
@@ -48,6 +49,7 @@ export default function MacrocyclePage() {
   const { displayMode } = useDisplayMode();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { saveCurrentSession } = useTrainingPrograms();
   const { data: athleticismData } = useAthleticismData();
   const { data: parametersDataV2, addParameter: addAthleticismParameter, addInteraction: addParameterInteraction } = useParametersDataV2();
   const { data: toolboxData } = useToolboxData();
@@ -2624,6 +2626,17 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Macrocycle Overview</h1>
           <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => {
+                saveCurrentSession();
+                navigate("/templates/programs");
+              }}
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Library
+            </Button>
             <SaveProgramButton />
             <Button variant="outline" size="sm">
               <Bot className="h-4 w-4 mr-2" />
@@ -2725,6 +2738,17 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Macrocycle Planning</h1>
           <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => {
+                saveCurrentSession();
+                navigate("/templates/programs");
+              }}
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Library
+            </Button>
             <SaveProgramButton />
             <Button variant="outline" size="sm">
               <Bot className="h-4 w-4 mr-2" />
