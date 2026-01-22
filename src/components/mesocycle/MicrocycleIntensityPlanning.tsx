@@ -7,6 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Copy, MessageSquare } from 'lucide-react';
 import { addDays, differenceInDays, format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface SubGoal {
   testDates?: string[];
@@ -52,6 +53,20 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
   events = [],
   planStartDate
 }) => {
+  // Helper to get subtle intensity-tinted background (same color, transparent)
+  const getSubtleIntensityBg = (intensity: IntensityLevel): string => {
+    const bgMappings: Record<IntensityLevel, string> = {
+      "off": "bg-[hsl(var(--intensity-off)/0.15)]",
+      "deload": "bg-[hsl(var(--intensity-deload)/0.15)]",
+      "easy": "bg-[hsl(var(--intensity-easy)/0.15)]",
+      "easy-moderate": "bg-[hsl(var(--intensity-easy-moderate)/0.15)]",
+      "moderate": "bg-[hsl(var(--intensity-moderate)/0.15)]",
+      "moderate-hard": "bg-[hsl(var(--intensity-moderate-hard)/0.15)]",
+      "hard": "bg-[hsl(var(--intensity-hard)/0.15)]",
+      "extremely-hard": "bg-[hsl(var(--intensity-extremely-hard)/0.20)]"
+    };
+    return bgMappings[intensity] || "bg-muted/50";
+  };
   // Calculate microcycle date ranges
   const microcycleDates = useMemo(() => {
     const dates = new Map<string, { start: Date; end: Date }>();
@@ -139,7 +154,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                   return meso.microcycles.length > 0 ? (
                     <div 
                       key={meso.id}
-                      className="relative text-center border-r-2 font-semibold border-r-slate-400 py-3 shrink-0 bg-muted/50"
+                      className={cn("relative text-center border-r-2 font-semibold border-r-slate-400 py-3 shrink-0", getSubtleIntensityBg(meso.intensity))}
                       style={{ width: `${width}px` }}
                     >
                       {/* Mesocycle Name Row with Rounded Square Indicator and Notes Icon */}
