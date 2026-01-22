@@ -118,9 +118,9 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
 
   const dayHeader = (
     <div className={cn(
-      "relative h-16 text-center text-xs rounded w-full mb-2 flex flex-col items-center justify-center",
-      day.isTestDay ? 'bg-blue-100 border border-blue-300' : 
-      day.isEventDay ? 'bg-orange-100 border border-orange-300' : 
+      "relative h-16 text-center text-xs rounded-md border border-border w-full mb-2 flex flex-col items-center justify-center",
+      day.isTestDay ? 'bg-blue-100 border-blue-300' : 
+      day.isEventDay ? 'bg-orange-100 border-orange-300' : 
       getSubtleIntensityBg(intensity)
     )}>
       <div className="font-medium">{format(new Date(day.date), 'MMM d')}</div>

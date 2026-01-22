@@ -135,7 +135,7 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
   return (
     <div className={cn("flex flex-col w-[120px] shrink-0 box-border border-l border-border/40", getBorderClasses())}>
       {/* Microcycle header */}
-      <div className={cn("h-24 text-center text-xs rounded w-full mb-2 flex flex-col p-1", getSubtleIntensityBg(intensity))}>
+      <div className={cn("h-24 text-center text-xs rounded-md border border-border w-full mb-2 flex flex-col p-1", getSubtleIntensityBg(intensity))}>
         {/* Content wrapper - vertically centered */}
         <div className="flex-1 flex flex-col items-center justify-center">
           {/* Microcycle name */}
