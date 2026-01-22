@@ -1011,7 +1011,7 @@ export default function MesocyclePage() {
                               <Input
                                 value={micro.name}
                                 onChange={(e) => updateMicrocycle(index, microIndex, 'name', e.target.value)}
-                                className="flex-1"
+                                className="flex-1 max-w-sm"
                                 placeholder="Microcycle name"
                               />
                               <div className="flex items-center space-x-2">
