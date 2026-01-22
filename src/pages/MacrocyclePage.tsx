@@ -34,6 +34,7 @@ import { AddSmartGoalDialog, AddSubGoalDialog, AddAdditionalMethodDialog } from 
 import { AddParameterDialogV2 } from "@/components/goals/AddParameterDialogV2";
 import { useToolboxData } from "@/hooks/useToolboxData";
 import { AlertTriangle } from "lucide-react";
+import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
 
 // Type for manually added methods with rationale
 interface ManuallyAddedMethod {
@@ -2623,6 +2624,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Macrocycle Overview</h1>
           <div className="flex items-center gap-2">
+            <SaveProgramButton />
             <Button variant="outline" size="sm">
               <Bot className="h-4 w-4 mr-2" />
               Ask AI for Help
@@ -2723,6 +2725,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Macrocycle Planning</h1>
           <div className="flex items-center gap-2">
+            <SaveProgramButton />
             <Button variant="outline" size="sm">
               <Bot className="h-4 w-4 mr-2" />
               Ask AI for Help

@@ -45,6 +45,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy, AlertCircle, FolderOpen, Trophy } from "lucide-react";
 import { ResourcesDialog } from "@/components/mesocycle/ResourcesDialog";
+import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
 import { format, addWeeks, differenceInWeeks, addDays, differenceInDays } from "date-fns";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 import { IntensityLevel } from "@/types/training";
@@ -4910,6 +4911,7 @@ export default function MesocyclePage() {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Mesocycle Planning</h1>
           <div className="flex items-center gap-2">
+            <SaveProgramButton />
             <Button variant="outline" size="sm">
               <Bot className="h-4 w-4 mr-2" />
               Ask AI for Help

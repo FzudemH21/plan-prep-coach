@@ -308,7 +308,8 @@ export function useTrainingPrograms() {
 
   // Clear session and start fresh
   const clearSession = useCallback(() => {
-    const keysToRemove = [
+    // Static keys to remove
+    const staticKeysToRemove = [
       'macrocycleData',
       'mesocycleData',
       'trainingDays',
@@ -324,7 +325,28 @@ export function useTrainingPrograms() {
       'activeProgramId'
     ];
     
+    staticKeysToRemove.forEach(key => localStorage.removeItem(key));
+    
+    // Also clear dynamically-keyed session data (workout sections, exercises, etc.)
+    const dynamicPrefixes = [
+      'workoutSections_',
+      'workoutSessions_',
+      'sessionIntensities_',
+      'sessionNames_',
+      'exercises_'
+    ];
+    
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && dynamicPrefixes.some(prefix => key.startsWith(prefix))) {
+        keysToRemove.push(key);
+      }
+    }
     keysToRemove.forEach(key => localStorage.removeItem(key));
+    
+    console.log('[clearSession] Cleared all session data:', 
+      staticKeysToRemove.length + keysToRemove.length, 'keys');
   }, []);
 
   // Update program status
