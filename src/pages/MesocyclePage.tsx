@@ -46,6 +46,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy, AlertCircle, FolderOpen, Trophy } from "lucide-react";
 import { ResourcesDialog } from "@/components/mesocycle/ResourcesDialog";
 import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
+import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { format, addWeeks, differenceInWeeks, addDays, differenceInDays } from "date-fns";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 import { IntensityLevel } from "@/types/training";
@@ -210,6 +211,7 @@ export default function MesocyclePage() {
   const { dragState, startDrag, endDrag, addToSelection, clearSelection, fillCells } = useDragFill();
   const { toast } = useToast();
   const { athletes } = useAthletes();
+  const { saveCurrentSession } = useTrainingPrograms();
   
   // Resolve athlete name from selectedAthleteId
   const selectedAthlete = athletes.find(a => a.id === macrocycleData?.selectedAthleteId);
@@ -4911,6 +4913,17 @@ export default function MesocyclePage() {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Mesocycle Planning</h1>
           <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => {
+                saveCurrentSession();
+                navigate("/templates/programs");
+              }}
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Library
+            </Button>
             <SaveProgramButton />
             <Button variant="outline" size="sm">
               <Bot className="h-4 w-4 mr-2" />
