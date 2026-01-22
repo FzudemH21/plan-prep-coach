@@ -42,6 +42,21 @@ interface MicrocycleIntensityPlanningProps {
   planStartDate?: Date;
 }
 
+// Helper to get subtle intensity-tinted background
+const getSubtleIntensityBg = (intensity: IntensityLevel): string => {
+  const bgMappings: Record<IntensityLevel, string> = {
+    "off": "bg-gray-500/10",
+    "deload": "bg-green-500/15",
+    "easy": "bg-lime-500/15",
+    "easy-moderate": "bg-yellow-500/15",
+    "moderate": "bg-amber-500/15",
+    "moderate-hard": "bg-orange-500/15",
+    "hard": "bg-red-500/15",
+    "extremely-hard": "bg-red-700/20"
+  };
+  return bgMappings[intensity] || "bg-muted/50";
+};
+
 const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = ({
   mesocycles,
   intensityLevels,
@@ -129,6 +144,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
           <div className="w-max p-4">
             {/* Mesocycle Headers */}
             <div className="flex mb-4">
+              {/* Spacer matching the intensity scale width */}
               <div className="sticky left-0 bg-background z-20 w-[150px] shrink-0">
                 <div className="text-sm font-semibold text-center py-4">Microcycle Intensity</div>
               </div>
@@ -138,7 +154,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                   return meso.microcycles.length > 0 ? (
                     <div 
                       key={meso.id}
-                      className="relative text-center border-r-2 font-semibold border-r-slate-400 bg-muted/50 py-3 shrink-0"
+                      className={`relative text-center border-r-2 font-semibold border-r-slate-400 py-3 shrink-0 ${getSubtleIntensityBg(meso.intensity)}`}
                       style={{ width: `${width}px` }}
                     >
                       {/* Mesocycle Name Row with Rounded Square Indicator and Notes Icon */}

@@ -135,18 +135,26 @@ export default function TrainingProgramsPage() {
     setDeleteDialogOpen(false);
   };
 
-  const formatDuration = (program: TrainingProgram) => {
-    if (!program.duration.startDate || !program.duration.endDate) {
-      return program.duration.weeks ? `${program.duration.weeks} weeks` : "—";
+const formatDuration = (program: TrainingProgram) => {
+    const weeks = program.duration.weeks || 0;
+    
+    // Calculate total days from dates if available
+    let totalDays = 0;
+    if (program.duration.startDate && program.duration.endDate) {
+      try {
+        const start = new Date(program.duration.startDate);
+        const end = new Date(program.duration.endDate);
+        totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      } catch {
+        totalDays = weeks * 7;
+      }
+    } else {
+      totalDays = weeks * 7;
     }
     
-    try {
-      const start = format(new Date(program.duration.startDate), "MMM d");
-      const end = format(new Date(program.duration.endDate), "MMM d, yyyy");
-      return `${start} - ${end}`;
-    } catch {
-      return program.duration.weeks ? `${program.duration.weeks} weeks` : "—";
-    }
+    if (weeks === 0 && totalDays === 0) return "—";
+    
+    return `${weeks} week${weeks !== 1 ? 's' : ''} (${totalDays} days)`;
   };
 
   const formatLastModified = (dateStr: string) => {
@@ -214,7 +222,6 @@ export default function TrainingProgramsPage() {
                 <TableHead>Goal</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead>Last Modified</TableHead>
-                <TableHead>Status</TableHead>
                 <TableHead className="w-[60px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -245,11 +252,6 @@ export default function TrainingProgramsPage() {
                   </TableCell>
                   <TableCell>{formatDuration(program)}</TableCell>
                   <TableCell>{formatLastModified(program.lastModifiedAt)}</TableCell>
-                  <TableCell>
-                    <Badge className={getStatusColor(program.status)}>
-                      {program.status}
-                    </Badge>
-                  </TableCell>
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
