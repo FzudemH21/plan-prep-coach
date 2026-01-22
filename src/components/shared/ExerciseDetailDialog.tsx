@@ -241,7 +241,7 @@ export function ExerciseDetailDialog({
         </DialogHeader>
         
         <ScrollArea className="flex-1 px-1">
-          <div className="space-y-6 px-1">
+          <div className="space-y-6 px-1 pb-4">
             {/* Exercise Name - Editable in create/edit modes */}
             {isEditable && (
               <div className="space-y-2">
