@@ -641,6 +641,21 @@ export default function MesocyclePage() {
     return colors[intensity] || "bg-muted text-muted-foreground";
   };
 
+  // Helper to get subtle intensity-tinted background for Step 2 headers
+  const getSubtleIntensityBg = (intensity: IntensityLevel): string => {
+    const bgMappings: Record<IntensityLevel, string> = {
+      "off": "bg-[hsl(var(--intensity-off)/0.15)]",
+      "deload": "bg-[hsl(var(--intensity-deload)/0.15)]",
+      "easy": "bg-[hsl(var(--intensity-easy)/0.15)]",
+      "easy-moderate": "bg-[hsl(var(--intensity-easy-moderate)/0.15)]",
+      "moderate": "bg-[hsl(var(--intensity-moderate)/0.15)]",
+      "moderate-hard": "bg-[hsl(var(--intensity-moderate-hard)/0.15)]",
+      "hard": "bg-[hsl(var(--intensity-hard)/0.15)]",
+      "extremely-hard": "bg-[hsl(var(--intensity-extremely-hard)/0.20)]"
+    };
+    return bgMappings[intensity] || "bg-muted/50";
+  };
+
   const renderTrainingPlanOverview = () => {
     const primaryGoal = macrocycleData?.smartGoal?.description || 
                         macrocycleData?.smartGoal?.specific || 
@@ -4650,7 +4665,7 @@ export default function MesocyclePage() {
                         return currentMeso.microcycles.length > 0 ? (
                           <div 
                             key={currentMeso.id}
-                            className="relative text-center border border-border rounded-md font-semibold bg-primary/10 py-3 shrink-0"
+                            className={cn("relative text-center border border-border rounded-md font-semibold py-3 shrink-0", getSubtleIntensityBg(currentMeso.intensity))}
                             style={{ width: `${width}px` }}
                           >
                             {/* Mesocycle Name Row with Clickable Intensity Badge */}
@@ -4772,7 +4787,7 @@ export default function MesocyclePage() {
                         return (
                           <div 
                             key={micro.id}
-                            className="relative text-center text-sm font-semibold py-1 px-2 shrink-0 bg-primary/10 border border-border rounded-md"
+                            className={cn("relative text-center text-sm font-semibold py-1 px-2 shrink-0 border-l border-border/50 border border-border rounded-md", getSubtleIntensityBg(micro.intensity))}
                             style={{ width: `${width}px` }}
                           >
                             <div className="flex items-center justify-center gap-1">
