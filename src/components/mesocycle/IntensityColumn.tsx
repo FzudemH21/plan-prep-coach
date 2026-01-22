@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
 import { Badge } from '@/components/ui/badge';
 import { Trophy, Calendar } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface IntensityColumnProps {
   day: TrainingDay;
@@ -16,6 +17,21 @@ interface IntensityColumnProps {
   intensityLevels: IntensityLevel[];
   getIntensityColor: (intensity: IntensityLevel) => string;
 }
+
+// Helper to get subtle intensity-tinted background for day headers
+const getSubtleIntensityBg = (intensity: IntensityLevel): string => {
+  const bgMappings: Record<IntensityLevel, string> = {
+    "off": "bg-[hsl(var(--intensity-off)/0.10)]",
+    "deload": "bg-[hsl(var(--intensity-deload)/0.10)]",
+    "easy": "bg-[hsl(var(--intensity-easy)/0.10)]",
+    "easy-moderate": "bg-[hsl(var(--intensity-easy-moderate)/0.10)]",
+    "moderate": "bg-[hsl(var(--intensity-moderate)/0.10)]",
+    "moderate-hard": "bg-[hsl(var(--intensity-moderate-hard)/0.10)]",
+    "hard": "bg-[hsl(var(--intensity-hard)/0.10)]",
+    "extremely-hard": "bg-[hsl(var(--intensity-extremely-hard)/0.15)]"
+  };
+  return bgMappings[intensity] || "bg-primary/10";
+};
 
 const IntensityColumn: React.FC<IntensityColumnProps> = ({
   day,
@@ -101,10 +117,12 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
   };
 
   const dayHeader = (
-    <div className={`relative h-16 text-center text-xs rounded w-full mb-2 flex flex-col items-center justify-center ${
+    <div className={cn(
+      "relative h-16 text-center text-xs rounded w-full mb-2 flex flex-col items-center justify-center",
       day.isTestDay ? 'bg-blue-100 border border-blue-300' : 
-      day.isEventDay ? 'bg-orange-100 border border-orange-300' : 'bg-primary/10'
-    }`}>
+      day.isEventDay ? 'bg-orange-100 border border-orange-300' : 
+      getSubtleIntensityBg(intensity)
+    )}>
       <div className="font-medium">{format(new Date(day.date), 'MMM d')}</div>
       <div className="text-xs">{day.dayName}</div>
       

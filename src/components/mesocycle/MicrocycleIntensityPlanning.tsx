@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { IntensityLevel } from '@/types/training';
 import IntensityScale from './IntensityScale';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Copy, MessageSquare } from 'lucide-react';
 import { addDays, differenceInDays, format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface SubGoal {
   testDates?: string[];
@@ -37,6 +38,7 @@ interface MicrocycleIntensityPlanningProps {
   intensityLevels: IntensityLevel[];
   getIntensityColor: (intensity: IntensityLevel) => string;
   onMicrocycleIntensityChange: (mesocycleId: string, microcycleId: string, intensity: IntensityLevel) => void;
+  onMesocycleIntensityChange?: (mesocycleId: string, intensity: IntensityLevel) => void;
   onCopyMesocycle?: (mesocycleId: string) => void;
   subGoals?: SubGoal[];
   events?: Event[];
@@ -48,6 +50,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
   intensityLevels,
   getIntensityColor,
   onMicrocycleIntensityChange,
+  onMesocycleIntensityChange,
   onCopyMesocycle,
   subGoals = [],
   events = [],
@@ -157,10 +160,49 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                       className={cn("relative text-center border-r-2 font-semibold border-r-slate-400 py-3 shrink-0", getSubtleIntensityBg(meso.intensity))}
                       style={{ width: `${width}px` }}
                     >
-                      {/* Mesocycle Name Row with Rounded Square Indicator and Notes Icon */}
+                      {/* Mesocycle Name Row with Clickable Intensity Badge */}
                       <div className="flex items-center justify-center gap-2">
-                        <div className={`w-3 h-3 rounded-sm ${getIntensityColor(meso.intensity)}`} />
                         <span>{meso.name}</span>
+                        {onMesocycleIntensityChange ? (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className={cn(
+                                  "text-xs font-medium px-2 py-0.5 h-auto hover:opacity-80 rounded",
+                                  getIntensityColor(meso.intensity)
+                                )}
+                              >
+                                {meso.intensity.replace(/-/g, ' ').toUpperCase()}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-56 p-2 bg-popover" align="center">
+                              <div className="space-y-1">
+                                <div className="text-sm font-medium mb-2">Change Mesocycle Intensity</div>
+                                {intensityLevels.map((level) => (
+                                  <Button
+                                    key={level}
+                                    variant="ghost"
+                                    size="sm"
+                                    className={cn(
+                                      "w-full justify-start text-xs",
+                                      level === meso.intensity && "bg-accent"
+                                    )}
+                                    onClick={() => onMesocycleIntensityChange(meso.id, level)}
+                                  >
+                                    <span className={cn("inline-block w-3 h-3 rounded-full mr-2", getIntensityColor(level))} />
+                                    {level.replace(/-/g, ' ')}
+                                  </Button>
+                                ))}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        ) : (
+                          <span className={cn("text-xs font-medium px-2 py-0.5 rounded", getIntensityColor(meso.intensity))}>
+                            {meso.intensity.replace(/-/g, ' ').toUpperCase()}
+                          </span>
+                        )}
                         <MessageSquare className="h-3 w-3 text-muted-foreground" />
                       </div>
                       
