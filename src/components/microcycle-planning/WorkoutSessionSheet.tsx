@@ -178,6 +178,9 @@ export function WorkoutSessionSheet({
   // Exercise detail dialog state
   const [detailExercise, setDetailExercise] = useState<WorkoutExercise | null>(null);
 
+  // Change exercise library popup state
+  const [changeExerciseTarget, setChangeExerciseTarget] = useState<string | null>(null);
+
   // Parameter visibility overrides (loaded from localStorage, saved on save)
   const [parameterVisibilityOverrides, setParameterVisibilityOverrides] = useState<ParameterVisibilityOverrides>(() => {
     const metadataKey = `workoutSessions_${mesocycleId}_${dayDate}_${sessionIndex}`;
@@ -1082,6 +1085,20 @@ export function WorkoutSessionSheet({
   };
 
   const handleExercisesSelected = (exercises: ExerciseSelection[]) => {
+    // Handle change exercise mode (single-select for replacing an exercise)
+    if (changeExerciseTarget && exercises.length > 0) {
+      const newExercise = exercises[0];
+      handleChangeExercise(changeExerciseTarget, {
+        exerciseId: newExercise.exerciseId,
+        exerciseName: newExercise.exerciseName,
+        libraryId: newExercise.library,
+      });
+      setIsLibraryOpen(false);
+      setChangeExerciseTarget(null);
+      return;
+    }
+    
+    // Normal add exercise mode
     if (!currentSectionId) return;
     
     // Store exercises and open method selection dialog
@@ -1268,6 +1285,63 @@ export function WorkoutSessionSheet({
       const updatedDistribution = allExerciseDistribution.filter(ex => ex.id !== exerciseId);
       onDistributionChange(updatedDistribution);
     }
+  };
+
+  // Handler for changing an exercise to a different one from the library
+  const handleChangeExercise = (
+    exerciseId: string, 
+    newExercise: { 
+      exerciseId: string; 
+      exerciseName: string; 
+      libraryId: string;
+      videoUrl?: string;
+      description?: string;
+    }
+  ) => {
+    // Update the exercise in workoutSections, preserving all metadata
+    setWorkoutSections(sections =>
+      sections.map(section => ({
+        ...section,
+        exercises: section.exercises.map(ex => 
+          ex.id === exerciseId 
+            ? { 
+                ...ex, 
+                exerciseId: newExercise.exerciseId,
+                exerciseName: newExercise.exerciseName,
+                libraryId: newExercise.libraryId,
+                videoUrl: newExercise.videoUrl,
+                libraryDescription: newExercise.description,
+                // Keep: methodId, categoryName, parameters, notes, eachSide, supersetId, order, etc.
+              } 
+            : ex
+        )
+      }))
+    );
+    
+    // Sync to Step 1's exerciseDistribution
+    if (onDistributionChange && allExerciseDistribution) {
+      const updatedDistribution = allExerciseDistribution.map(ex =>
+        ex.id === exerciseId 
+          ? { 
+              ...ex, 
+              exerciseId: newExercise.exerciseId, 
+              exerciseName: newExercise.exerciseName,
+            } 
+          : ex
+      );
+      onDistributionChange(updatedDistribution);
+    }
+    
+    toast({
+      title: "Exercise Changed",
+      description: `Changed to ${newExercise.exerciseName}`,
+    });
+  };
+
+  // Handler to open the full library popup for changing an exercise
+  const handleOpenChangeLibrary = (exerciseId: string) => {
+    setChangeExerciseTarget(exerciseId);
+    setIsLibraryOpen(true);
   };
 
   const handleExerciseNotesChange = (exerciseId: string, notes: string) => {
@@ -2059,6 +2133,8 @@ export function WorkoutSessionSheet({
                                 onAutoCalculateWeightChange={handleAutoCalculateWeightChange}
                                 onAutoCalculateTargetHRChange={handleAutoCalculateTargetHRChange}
                                 onOpenExerciseDetail={handleOpenExerciseDetail}
+                                onChangeExercise={(exerciseId, newEx) => handleChangeExercise(exerciseId, newEx)}
+                                onOpenChangeLibrary={handleOpenChangeLibrary}
                               />
                             </div>
                           )}
@@ -2109,10 +2185,12 @@ export function WorkoutSessionSheet({
         onClose={() => {
           setIsLibraryOpen(false);
           setCurrentSectionId(null);
+          setChangeExerciseTarget(null);
         }}
         onSelectExercises={handleExercisesSelected}
         selectedExerciseIds={[]}
         onExerciseCreated={handleExerciseCreated}
+        singleSelect={!!changeExerciseTarget}
       />
 
       {/* Method Selection Dialog */}
