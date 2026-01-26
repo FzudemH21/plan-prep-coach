@@ -175,6 +175,10 @@ export function ExerciseDetailDialog({
         description: localDescription,
         data: localData,
       });
+      // For edit mode, return to view mode; for create mode, dialog closes via onSave callback
+      if (mode === 'edit') {
+        setIsEditing(false);
+      }
       return;
     }
     
@@ -194,7 +198,12 @@ export function ExerciseDetailDialog({
       });
     }
     
-    onClose();
+    // For edit mode, return to view mode instead of closing
+    if (mode === 'edit') {
+      setIsEditing(false);
+    } else {
+      onClose();
+    }
   };
   
   const youtubeId = extractYouTubeId(localVideoUrl || videoUrl);
@@ -440,29 +449,35 @@ export function ExerciseDetailDialog({
                   </div>
                 ) : (
                   // Read-only characteristics display
-                  Object.keys(exerciseData).length === 0 ? (
-                    <p className="text-sm text-muted-foreground italic">No characteristics available</p>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {Object.entries(exerciseData).map(([key, value]) => {
-                        // Skip empty values
-                        if (!value) return null;
-                        
-                        // Find column for display name
-                        const column = columns.find(col => col.id === key);
-                        const displayName = column?.name || key;
-                        
-                        return (
-                          <div key={key} className="flex flex-col gap-1">
-                            <span className="text-xs font-medium text-muted-foreground">{displayName}</span>
-                            <Badge variant="secondary" className="w-fit font-normal">
-                              {String(value)}
-                            </Badge>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )
+                  (() => {
+                    // Get first column ID to exclude (it's the exercise name shown in title)
+                    const firstColumnId = columns.length > 0 ? columns[0].id : null;
+                    const filteredEntries = Object.entries(exerciseData).filter(([key]) => key !== firstColumnId);
+                    
+                    return filteredEntries.length === 0 ? (
+                      <p className="text-sm text-muted-foreground italic">No characteristics available</p>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {filteredEntries.map(([key, value]) => {
+                          // Skip empty values
+                          if (!value) return null;
+                          
+                          // Find column for display name
+                          const column = columns.find(col => col.id === key);
+                          const displayName = column?.name || key;
+                          
+                          return (
+                            <div key={key} className="flex flex-col gap-1">
+                              <span className="text-xs font-medium text-muted-foreground">{displayName}</span>
+                              <Badge variant="secondary" className="w-fit font-normal">
+                                {String(value)}
+                              </Badge>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()
                 )}
               </div>
             </div>
