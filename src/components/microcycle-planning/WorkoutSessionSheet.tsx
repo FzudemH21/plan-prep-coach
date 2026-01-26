@@ -1391,8 +1391,7 @@ export function WorkoutSessionSheet({
         break;
       }
     }
-    
-    setDetailExercise(null);
+    // Dialog handles its own close/view-mode transition
   };
 
   const handleScrollToExercise = (exerciseId: string) => {
