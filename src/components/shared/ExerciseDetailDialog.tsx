@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   Dialog,
-  DialogContent,
+  DialogPortal,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -14,8 +15,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Play, Video, ExternalLink, Link2 } from 'lucide-react';
+import { Play, Video, ExternalLink, Link2, X, Pencil } from 'lucide-react';
 import { useCustomLibraries, CustomLibrary, CustomExercise, LibraryColumn } from '@/contexts/CustomLibrariesContext';
+import { cn } from '@/lib/utils';
 
 interface ExerciseDetailDialogProps {
   isOpen: boolean;
@@ -88,7 +90,6 @@ export function ExerciseDetailDialog({
   
   // Determine actual mode
   const mode = propMode || (readOnly ? 'view' : 'edit');
-  const isEditable = mode !== 'view';
   
   // Local state for editing
   const [localName, setLocalName] = useState('');
@@ -96,6 +97,7 @@ export function ExerciseDetailDialog({
   const [localDescription, setLocalDescription] = useState('');
   const [localData, setLocalData] = useState<Record<string, any>>({});
   const [showVideoEmbed, setShowVideoEmbed] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   
   // Find exercise in libraries if not provided
   const foundExercise = React.useMemo(() => {
@@ -151,8 +153,12 @@ export function ExerciseDetailDialog({
       setLocalDescription(description);
       setLocalData({ ...exerciseData });
       setShowVideoEmbed(false);
+      setIsEditing(false); // Start in view mode
     }
   }, [isOpen, exerciseName, videoUrl, description, exerciseData]);
+  
+  // Determine if currently editable (create mode always editable, edit mode only when user clicks Edit)
+  const isEditable = mode === 'create' || (mode === 'edit' && isEditing);
   
   // Handle save
   const handleSave = () => {
@@ -233,218 +239,262 @@ export function ExerciseDetailDialog({
   
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="text-xl">
-            {mode === 'create' ? 'Add New Exercise' : (isEditable ? 'Edit Exercise' : exerciseName)}
-          </DialogTitle>
-        </DialogHeader>
-        
-        <ScrollArea className="flex-1 px-1">
-          <div className="space-y-6 px-1 pb-4">
-            {/* Exercise Name - Editable in create/edit modes */}
-            {isEditable && (
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">Exercise Name</Label>
-                <Input
-                  value={localName}
-                  onChange={(e) => setLocalName(e.target.value)}
-                  placeholder="Enter exercise name..."
-                  className="font-medium"
-                />
-              </div>
-            )}
-            
-            {/* Video Section */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <Video className="h-4 w-4" />
-                Video
-              </h3>
-              
-              {!isEditable ? (
-                // Read-only view
-                thumbnailUrl ? (
-                  <div className="relative group">
-                    <div 
-                      className="relative cursor-pointer rounded-lg overflow-hidden border bg-muted"
-                      onClick={() => setShowVideoEmbed(!showVideoEmbed)}
-                    >
-                      {showVideoEmbed ? (
-                        <iframe
-                          width="100%"
-                          height="315"
-                          src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1`}
-                          title="YouTube video player"
-                          frameBorder="0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                          className="aspect-video"
-                        />
-                      ) : (
-                        <>
-                          <img 
-                            src={thumbnailUrl} 
-                            alt="Video thumbnail"
-                            className="w-full aspect-video object-cover"
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
-                            <div className="w-16 h-16 rounded-full bg-primary/90 flex items-center justify-center">
-                              <Play className="h-8 w-8 text-primary-foreground ml-1" />
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                    {!showVideoEmbed && (
-                      <p className="text-xs text-muted-foreground mt-1">Click to play</p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground italic">No video available</p>
-                )
-              ) : (
-                // Editable view
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Link2 className="h-4 w-4 text-muted-foreground" />
-                    <Input
-                      value={localVideoUrl}
-                      onChange={(e) => setLocalVideoUrl(e.target.value)}
-                      placeholder="Paste YouTube URL or video ID..."
-                      className="flex-1"
-                    />
-                    {localVideoUrl && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open(localVideoUrl.startsWith('http') ? localVideoUrl : `https://www.youtube.com/watch?v=${localVideoUrl}`, '_blank')}
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                  
-                  {thumbnailUrl && (
-                    <div 
-                      className="relative cursor-pointer rounded-lg overflow-hidden border bg-muted"
-                      onClick={() => setShowVideoEmbed(!showVideoEmbed)}
-                    >
-                      {showVideoEmbed ? (
-                        <iframe
-                          width="100%"
-                          height="200"
-                          src={`https://www.youtube.com/embed/${youtubeId}`}
-                          title="YouTube video player"
-                          frameBorder="0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                        />
-                      ) : (
-                        <>
-                          <img 
-                            src={thumbnailUrl} 
-                            alt="Video thumbnail"
-                            className="w-full h-[200px] object-cover"
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors">
-                            <div className="w-12 h-12 rounded-full bg-primary/90 flex items-center justify-center">
-                              <Play className="h-6 w-6 text-primary-foreground ml-0.5" />
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            
-            <Separator />
-            
-            {/* Description Section */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold">Description / Execution Instructions</h3>
-              
-              {!isEditable ? (
-                localDescription || description ? (
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{localDescription || description}</p>
-                ) : (
-                  <p className="text-sm text-muted-foreground italic">No description available</p>
-                )
-              ) : (
-                <Textarea
-                  value={localDescription}
-                  onChange={(e) => setLocalDescription(e.target.value)}
-                  placeholder="Enter exercise description, execution instructions, coaching cues..."
-                  className="min-h-[100px] resize-none"
-                />
-              )}
-            </div>
-            
-            <Separator />
-            
-            {/* Exercise Characteristics / Properties */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold">
-                {isEditable ? 'Properties' : 'Characteristics'}
-              </h3>
-              
-              {isEditable && columns.length > 0 ? (
-                // Editable properties grid (skip first column which is the name)
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {columns.slice(1).map(column => (
-                    <div key={column.id} className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">{column.name}</Label>
-                      {renderColumnInput(column, localData[column.id], (val) => 
-                        setLocalData(prev => ({ ...prev, [column.id]: val }))
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                // Read-only characteristics display
-                Object.keys(exerciseData).length === 0 ? (
-                  <p className="text-sm text-muted-foreground italic">No characteristics available</p>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {Object.entries(exerciseData).map(([key, value]) => {
-                      // Skip empty values
-                      if (!value) return null;
-                      
-                      // Find column for display name
-                      const column = columns.find(col => col.id === key);
-                      const displayName = column?.name || key;
-                      
-                      return (
-                        <div key={key} className="flex flex-col gap-1">
-                          <span className="text-xs font-medium text-muted-foreground">{displayName}</span>
-                          <Badge variant="secondary" className="w-fit font-normal">
-                            {String(value)}
-                          </Badge>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )
-              )}
-            </div>
-          </div>
-        </ScrollArea>
-        
-        <DialogFooter className="mt-4">
-          {!isEditable ? (
-            <Button onClick={onClose}>Close</Button>
-          ) : (
-            <>
-              <Button variant="outline" onClick={onClose}>Cancel</Button>
-              <Button onClick={handleSave} disabled={mode === 'create' && !localName.trim()}>
-                {mode === 'create' ? 'Add Exercise' : 'Save'}
-              </Button>
-            </>
+      <DialogPortal>
+        {/* Custom overlay with higher z-index for better darkening over sheets */}
+        <DialogPrimitive.Overlay
+          className={cn(
+            "fixed inset-0 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+            "z-[120]"
           )}
-        </DialogFooter>
-      </DialogContent>
+        />
+        <DialogPrimitive.Content
+          className={cn(
+            "fixed left-1/2 top-1/2 z-[130] translate-x-[-50%] translate-y-[-50%]",
+            "max-w-2xl max-h-[90vh] w-full flex flex-col gap-4 border bg-background p-6 shadow-lg rounded-lg",
+            "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+          )}
+        >
+          {/* Close button */}
+          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+          
+          <DialogHeader className="flex flex-row items-center justify-between pr-8">
+            <DialogTitle className="text-xl">
+              {mode === 'create' ? 'Add New Exercise' : exerciseName}
+            </DialogTitle>
+            {mode === 'edit' && !isEditing && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setIsEditing(true)}
+              >
+                <Pencil className="h-4 w-4 mr-1" />
+                Edit
+              </Button>
+            )}
+          </DialogHeader>
+          
+          <ScrollArea className="flex-1 px-1">
+            <div className="space-y-6 px-1 pb-4">
+              {/* Exercise Name - Editable in create/edit modes */}
+              {isEditable && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">Exercise Name</Label>
+                  <Input
+                    value={localName}
+                    onChange={(e) => setLocalName(e.target.value)}
+                    placeholder="Enter exercise name..."
+                    className="font-medium"
+                  />
+                </div>
+              )}
+              
+              {/* Video Section */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <Video className="h-4 w-4" />
+                  Video
+                </h3>
+                
+                {!isEditable ? (
+                  // Read-only view
+                  thumbnailUrl ? (
+                    <div className="relative group">
+                      <div 
+                        className="relative cursor-pointer rounded-lg overflow-hidden border bg-muted"
+                        onClick={() => setShowVideoEmbed(!showVideoEmbed)}
+                      >
+                        {showVideoEmbed ? (
+                          <iframe
+                            width="100%"
+                            height="315"
+                            src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1`}
+                            title="YouTube video player"
+                            frameBorder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                            className="aspect-video"
+                          />
+                        ) : (
+                          <>
+                            <img 
+                              src={thumbnailUrl} 
+                              alt="Video thumbnail"
+                              className="w-full aspect-video object-cover"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
+                              <div className="w-16 h-16 rounded-full bg-primary/90 flex items-center justify-center">
+                                <Play className="h-8 w-8 text-primary-foreground ml-1" />
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      {!showVideoEmbed && (
+                        <p className="text-xs text-muted-foreground mt-1">Click to play</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">No video available</p>
+                  )
+                ) : (
+                  // Editable view
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Link2 className="h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={localVideoUrl}
+                        onChange={(e) => setLocalVideoUrl(e.target.value)}
+                        placeholder="Paste YouTube URL or video ID..."
+                        className="flex-1"
+                      />
+                      {localVideoUrl && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(localVideoUrl.startsWith('http') ? localVideoUrl : `https://www.youtube.com/watch?v=${localVideoUrl}`, '_blank')}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    
+                    {thumbnailUrl && (
+                      <div 
+                        className="relative cursor-pointer rounded-lg overflow-hidden border bg-muted"
+                        onClick={() => setShowVideoEmbed(!showVideoEmbed)}
+                      >
+                        {showVideoEmbed ? (
+                          <iframe
+                            width="100%"
+                            height="200"
+                            src={`https://www.youtube.com/embed/${youtubeId}`}
+                            title="YouTube video player"
+                            frameBorder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                          />
+                        ) : (
+                          <>
+                            <img 
+                              src={thumbnailUrl} 
+                              alt="Video thumbnail"
+                              className="w-full h-[200px] object-cover"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors">
+                              <div className="w-12 h-12 rounded-full bg-primary/90 flex items-center justify-center">
+                                <Play className="h-6 w-6 text-primary-foreground ml-0.5" />
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              
+              <Separator />
+              
+              {/* Description Section */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold">Description / Execution Instructions</h3>
+                
+                {!isEditable ? (
+                  localDescription || description ? (
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{localDescription || description}</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">No description available</p>
+                  )
+                ) : (
+                  <Textarea
+                    value={localDescription}
+                    onChange={(e) => setLocalDescription(e.target.value)}
+                    placeholder="Enter exercise description, execution instructions, coaching cues..."
+                    className="min-h-[100px] resize-none"
+                  />
+                )}
+              </div>
+              
+              <Separator />
+              
+              {/* Exercise Characteristics / Properties */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold">
+                  {isEditable ? 'Properties' : 'Characteristics'}
+                </h3>
+                
+                {isEditable && columns.length > 0 ? (
+                  // Editable properties grid (skip first column which is the name)
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {columns.slice(1).map(column => (
+                      <div key={column.id} className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">{column.name}</Label>
+                        {renderColumnInput(column, localData[column.id], (val) => 
+                          setLocalData(prev => ({ ...prev, [column.id]: val }))
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  // Read-only characteristics display
+                  Object.keys(exerciseData).length === 0 ? (
+                    <p className="text-sm text-muted-foreground italic">No characteristics available</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {Object.entries(exerciseData).map(([key, value]) => {
+                        // Skip empty values
+                        if (!value) return null;
+                        
+                        // Find column for display name
+                        const column = columns.find(col => col.id === key);
+                        const displayName = column?.name || key;
+                        
+                        return (
+                          <div key={key} className="flex flex-col gap-1">
+                            <span className="text-xs font-medium text-muted-foreground">{displayName}</span>
+                            <Badge variant="secondary" className="w-fit font-normal">
+                              {String(value)}
+                            </Badge>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+          </ScrollArea>
+          
+          <DialogFooter className="mt-4">
+            {!isEditable ? (
+              <Button onClick={onClose}>Close</Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => {
+                  if (mode === 'edit' && isEditing) {
+                    // Go back to view mode and reset changes
+                    setIsEditing(false);
+                    setLocalName(exerciseName);
+                    setLocalVideoUrl(videoUrl);
+                    setLocalDescription(description);
+                    setLocalData({ ...exerciseData });
+                  } else {
+                    onClose();
+                  }
+                }}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSave} disabled={mode === 'create' && !localName.trim()}>
+                  {mode === 'create' ? 'Add Exercise' : 'Save'}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogPrimitive.Content>
+      </DialogPortal>
     </Dialog>
   );
 }
