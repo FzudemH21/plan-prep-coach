@@ -38,6 +38,15 @@ interface WorkoutSectionCardProps {
   onAutoCalculateTargetHRChange?: (exerciseId: string, value: boolean) => void;
   // Exercise detail dialog
   onOpenExerciseDetail?: (exercise: WorkoutExercise) => void;
+  // Change exercise handlers
+  onChangeExercise?: (exerciseId: string, newExercise: { 
+    exerciseId: string; 
+    exerciseName: string; 
+    libraryId: string;
+    videoUrl?: string;
+    description?: string;
+  }) => void;
+  onOpenChangeLibrary?: (exerciseId: string) => void;
 }
 
 export function WorkoutSectionCard({
@@ -66,6 +75,8 @@ export function WorkoutSectionCard({
   onAutoCalculateWeightChange,
   onAutoCalculateTargetHRChange,
   onOpenExerciseDetail,
+  onChangeExercise,
+  onOpenChangeLibrary,
 }: WorkoutSectionCardProps) {
   // Helper to get toolbox params for an exercise based on method
   const getToolboxParamsForExercise = (exercise: WorkoutExercise): ToolboxEntry[] => {
@@ -303,6 +314,8 @@ export function WorkoutSectionCard({
                                             isCollapsed={collapsedExercises[exercise.id] || false}
                                             onToggleCollapse={() => toggleExerciseCollapse(exercise.id)}
                                             onOpenDetail={() => onOpenExerciseDetail?.(exercise)}
+                                            onChangeExercise={onChangeExercise ? (newEx) => onChangeExercise(exercise.id, newEx) : undefined}
+                                            onOpenChangeLibrary={onOpenChangeLibrary ? () => onOpenChangeLibrary(exercise.id) : undefined}
                                           />
                                         </div>
                                       )}
@@ -385,6 +398,8 @@ export function WorkoutSectionCard({
                                     isCollapsed={collapsedExercises[exercise.id] || false}
                                     onToggleCollapse={() => toggleExerciseCollapse(exercise.id)}
                                     onOpenDetail={() => onOpenExerciseDetail?.(exercise)}
+                                    onChangeExercise={onChangeExercise ? (newEx) => onChangeExercise(exercise.id, newEx) : undefined}
+                                    onOpenChangeLibrary={onOpenChangeLibrary ? () => onOpenChangeLibrary(exercise.id) : undefined}
                                   />
                                 </div>
                               )}

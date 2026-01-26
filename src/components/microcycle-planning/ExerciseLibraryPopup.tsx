@@ -29,6 +29,7 @@ interface ExerciseLibraryPopupProps {
   onSelectExercises: (exercises: ExerciseSelection[]) => void;
   selectedExerciseIds: string[];
   onExerciseCreated: (exercise: ExerciseSelection) => void;
+  singleSelect?: boolean; // When true, allows only one exercise selection (for change exercise mode)
 }
 
 export function ExerciseLibraryPopup({ 
@@ -36,7 +37,8 @@ export function ExerciseLibraryPopup({
   onClose, 
   onSelectExercises, 
   selectedExerciseIds,
-  onExerciseCreated 
+  onExerciseCreated,
+  singleSelect = false,
 }: ExerciseLibraryPopupProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<string>('');
@@ -236,6 +238,32 @@ export function ExerciseLibraryPopup({
   }, [searchTimeout]);
 
   const handleItemSelect = (exerciseId: string, isSelected: boolean) => {
+    if (singleSelect) {
+      // In single-select mode, directly select and confirm
+      const exercise = filteredAndSortedExercises.find(ex => ex.id === exerciseId);
+      if (!exercise) return;
+      
+      // Get exercise name from appropriate field based on library
+      let exerciseName = 'Unknown Exercise';
+      const library = allLibraries[activeTab];
+      if (library && library.columns && library.columns.length > 0) {
+        const firstColumn = library.columns[0];
+        exerciseName = exercise[firstColumn.key] || 'Unknown Exercise';
+      } else {
+        exerciseName = exercise.name || 'Unknown Exercise';
+      }
+
+      onSelectExercises([{
+        id: `${exercise.library}-${exerciseId}-${Date.now()}`,
+        exerciseId: exerciseId,
+        exerciseName: exerciseName,
+        library: exercise.library
+      }]);
+      handleClose();
+      return;
+    }
+    
+    // Multi-select mode
     const newSelected = new Set(selectedItems);
     if (isSelected) {
       newSelected.add(exerciseId);
@@ -325,7 +353,7 @@ export function ExerciseLibraryPopup({
           )}
         >
           <DialogHeader>
-            <DialogTitle>Select Exercises</DialogTitle>
+            <DialogTitle>{singleSelect ? 'Change Exercise' : 'Select Exercises'}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 flex flex-col overflow-hidden">
@@ -535,12 +563,14 @@ export function ExerciseLibraryPopup({
             <Button variant="outline" onClick={handleClose}>
               Cancel
             </Button>
-            <Button 
-              onClick={handleConfirm}
-              disabled={selectedItems.size === 0}
-            >
-              Add Selected ({selectedItems.size})
-            </Button>
+            {!singleSelect && (
+              <Button 
+                onClick={handleConfirm}
+                disabled={selectedItems.size === 0}
+              >
+                Add Selected ({selectedItems.size})
+              </Button>
+            )}
           </DialogFooter>
 
           {/* Close button */}
