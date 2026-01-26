@@ -612,7 +612,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
               });
               toast({ title: "Success", description: "Exercise updated successfully" });
             }
-            setDetailDialog({ isOpen: false, exercise: null });
+            // Dialog handles its own close/view-mode transition
           }}
         />
       )}

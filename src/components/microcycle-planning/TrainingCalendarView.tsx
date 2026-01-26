@@ -223,8 +223,7 @@ export function TrainingCalendarView({
         break;
       }
     }
-    
-    setDetailExercise(null);
+    // Dialog handles its own close/view-mode transition
   };
 
   // Get the currently viewed mesocycle (for Master Planner view)
