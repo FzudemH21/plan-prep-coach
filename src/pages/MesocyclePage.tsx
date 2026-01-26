@@ -684,6 +684,30 @@ export default function MesocyclePage() {
     );
   };
 
+  // Helper to count daily intensity distribution for a microcycle
+  const getMicrocycleIntensityDistribution = (microcycleId: string): Record<IntensityLevel, number> => {
+    const distribution: Record<IntensityLevel, number> = {
+      "off": 0,
+      "deload": 0,
+      "easy": 0,
+      "easy-moderate": 0,
+      "moderate": 0,
+      "moderate-hard": 0,
+      "hard": 0,
+      "extremely-hard": 0
+    };
+    
+    dailyIntensityData
+      .filter(day => day.microcycleId === microcycleId)
+      .forEach(day => {
+        if (distribution.hasOwnProperty(day.intensity)) {
+          distribution[day.intensity]++;
+        }
+      });
+    
+    return distribution;
+  };
+
   // Calculate microcycle date ranges for event/test checking
   const calculateMicrocycleDates = useMemo(() => {
     let currentDate = new Date(planStartDate);
@@ -3277,72 +3301,90 @@ export default function MesocyclePage() {
                                     const testDetails = dateRange ? getTestsInRange(dateRange.start, dateRange.end) : [];
                                     const eventDetails = dateRange ? getEventsInRange(dateRange.start, dateRange.end) : [];
                                     
+                                    const distribution = getMicrocycleIntensityDistribution(microcycle.id);
+                                    const hasDistributionData = Object.values(distribution).some(count => count > 0);
+                                    
                                     return (
-                                      <div key={`${meso.id}-micro-${microcycleIndex}`} className={`text-center border rounded-b ${intensityBg(intensity)}`}>
-                                        <div className="text-xs p-1 font-medium">
-                                          {microcycle.name || `Mic${microcycleIndex + 1}`}
-                                        </div>
-                                        <div className="text-xs px-1 py-0.5 opacity-80 border-t">
-                                          {microcycle.duration} days
-                                        </div>
-                                        {/* Event/Test indicators - centered below */}
-                                        {(testDetails.length > 0 || eventDetails.length > 0) && (
-                                          <div className="flex items-center justify-center gap-1 py-0.5 border-t border-border/30">
-                                            {testDetails.length > 0 && (
-                                              <TooltipProvider>
-                                                <Tooltip>
-                                                  <TooltipTrigger asChild>
-                                                    <div className="cursor-pointer">
-                                                      <Badge variant="secondary" className="h-4 px-1 text-xs">
-                                                        <Trophy className="h-2.5 w-2.5" />
-                                                      </Badge>
+                                      <TooltipProvider key={`${meso.id}-micro-${microcycleIndex}`}>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div className={`text-center border rounded-b cursor-help ${intensityBg(intensity)}`}>
+                                              <div className="text-xs p-1 font-medium">
+                                                {microcycle.name || `Mic${microcycleIndex + 1}`}
+                                              </div>
+                                              <div className="text-xs px-1 py-0.5 opacity-80 border-t">
+                                                {microcycle.duration} days
+                                              </div>
+                                              {/* Event/Test indicators - centered below */}
+                                              {(testDetails.length > 0 || eventDetails.length > 0) && (
+                                                <div className="flex items-center justify-center gap-1 py-0.5 border-t border-border/30">
+                                                  {testDetails.length > 0 && (
+                                                    <Badge variant="secondary" className="h-4 px-1 text-xs">
+                                                      <Trophy className="h-2.5 w-2.5" />
+                                                    </Badge>
+                                                  )}
+                                                  {eventDetails.length > 0 && (
+                                                    <Badge variant="secondary" className="h-4 px-1 text-xs">
+                                                      <CalendarDays className="h-2.5 w-2.5" />
+                                                    </Badge>
+                                                  )}
+                                                </div>
+                                              )}
+                                            </div>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="bottom" className="p-3 max-w-xs">
+                                            <div className="space-y-2">
+                                              <p className="text-xs font-semibold border-b pb-1">Daily Intensity Distribution</p>
+                                              {hasDistributionData ? (
+                                                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                                                  {Object.entries(distribution)
+                                                    .filter(([_, count]) => count > 0)
+                                                    .sort(([a], [b]) => {
+                                                      const order = ["extremely-hard", "hard", "moderate-hard", "moderate", "easy-moderate", "easy", "deload", "off"];
+                                                      return order.indexOf(a) - order.indexOf(b);
+                                                    })
+                                                    .map(([level, count]) => (
+                                                      <div key={level} className="flex items-center gap-2 text-xs">
+                                                        <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", getIntensityColor(level as IntensityLevel))} />
+                                                        <span className="capitalize truncate">{level.replace(/-/g, ' ')}</span>
+                                                        <span className="text-muted-foreground ml-auto">{count}</span>
+                                                      </div>
+                                                    ))}
+                                                </div>
+                                              ) : (
+                                                <p className="text-xs text-muted-foreground">No daily intensities set yet. Configure in Step 2.</p>
+                                              )}
+                                              {/* Show tests/events in tooltip too */}
+                                              {testDetails.length > 0 && (
+                                                <div className="pt-2 border-t">
+                                                  <p className="text-xs font-semibold">Tests:</p>
+                                                  {testDetails.map((test, i) => (
+                                                    <div key={i} className="text-xs text-muted-foreground">
+                                                      <div>• {test.goal ? `${test.goal}: ` : ''}{test.name}</div>
+                                                      <div className="pl-2 text-[10px]">
+                                                        {test.dates.map(d => format(d, 'MMM d')).join(', ')}
+                                                      </div>
                                                     </div>
-                                                  </TooltipTrigger>
-                                                  <TooltipContent>
-                                                    <div className="space-y-1">
-                                                      <p className="text-xs font-semibold">Tests:</p>
-                                                      {testDetails.map((test, i) => (
-                                                        <div key={i} className="text-xs text-muted-foreground">
-                                                          <div>• {test.goal ? `${test.goal}: ` : ''}{test.name}</div>
-                                                          <div className="pl-2 text-[10px]">
-                                                            {test.dates.map(d => format(d, 'MMM d')).join(', ')}
-                                                          </div>
-                                                        </div>
-                                                      ))}
+                                                  ))}
+                                                </div>
+                                              )}
+                                              {eventDetails.length > 0 && (
+                                                <div className="pt-2 border-t">
+                                                  <p className="text-xs font-semibold">Events:</p>
+                                                  {eventDetails.map((event, i) => (
+                                                    <div key={i} className="text-xs text-muted-foreground">
+                                                      <div>• {event.name}</div>
+                                                      <div className="pl-2 text-[10px]">
+                                                        {event.dates.map(d => format(d, 'MMM d')).join(', ')}
+                                                      </div>
                                                     </div>
-                                                  </TooltipContent>
-                                                </Tooltip>
-                                              </TooltipProvider>
-                                            )}
-                                            {eventDetails.length > 0 && (
-                                              <TooltipProvider>
-                                                <Tooltip>
-                                                  <TooltipTrigger asChild>
-                                                    <div className="cursor-pointer">
-                                                      <Badge variant="secondary" className="h-4 px-1 text-xs">
-                                                        <CalendarDays className="h-2.5 w-2.5" />
-                                                      </Badge>
-                                                    </div>
-                                                  </TooltipTrigger>
-                                                  <TooltipContent>
-                                                    <div className="space-y-1">
-                                                      <p className="text-xs font-semibold">Events:</p>
-                                                      {eventDetails.map((event, i) => (
-                                                        <div key={i} className="text-xs text-muted-foreground">
-                                                          <div>• {event.name}</div>
-                                                          <div className="pl-2 text-[10px]">
-                                                            {event.dates.map(d => format(d, 'MMM d')).join(', ')}
-                                                          </div>
-                                                        </div>
-                                                      ))}
-                                                    </div>
-                                                  </TooltipContent>
-                                                </Tooltip>
-                                              </TooltipProvider>
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
+                                                  ))}
+                                                </div>
+                                              )}
+                                            </div>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
                                     );
                                   })}
                                </React.Fragment>
