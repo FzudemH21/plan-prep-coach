@@ -217,15 +217,15 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                       {mesoIndex > 0 && onCopyMesocycle && (
                         <Button
                           size="sm"
-                          variant="secondary"
+                          variant="ghost"
                           onClick={(e) => {
                             e.stopPropagation();
                             onCopyMesocycle(meso.id);
                           }}
-                          className="absolute top-1 right-1 h-5 w-5 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"
+                          className="absolute top-1 right-1 h-6 w-6 p-0"
                           title="Copy intensity pattern from previous mesocycle"
                         >
-                          <Copy className="h-3 w-3 text-gray-800" />
+                          <Copy className="h-3 w-3" />
                         </Button>
                       )}
                     </div>
