@@ -1,170 +1,100 @@
 
 
-## Fix: Timeline Data Not Persisting Between Wizard Steps
+### What’s actually going wrong (confirmed from the code)
+There are **two separate bugs** causing the timeline (and sometimes the whole macrocycle UI) to “disappear” when moving forward/backward in the wizard:
 
-### Problem
-When navigating between macrocycle planning and mesocycle planning (and going back and forth), the timeline dates are lost. This causes:
-1. Wrong dates displayed in the Training Plan Overview
-2. Incorrect number of mesocycles being calculated (defaults to 12 weeks instead of actual plan duration)
-3. Data inconsistency when moving through the wizard in both directions
+1) **Macrocycle “Next → Mesocycle” overwrites `macrocycleData` with an incomplete object**
+- `MacrocyclePage.tsx` has a continuous-save `useEffect` that correctly writes:
+  - `planDuration`
+  - `smartGoals` (plural)
+  - legacy `smartGoal` (for backward compatibility)
+- But when you click **“Move on to Mesocycle”** (or **“Continue Anyway”** in the missing rationale dialog), `handleNext` manually saves a *different, older shape* of `macrocycleData` that **omits `planDuration` and `smartGoals`**.
+- That manual save happens **right before navigation**, so it overwrites the correct data and Mesocycle sees missing dates/goals → wrong timeline, wrong mesocycle count.
 
-### Root Cause
-
-**MacrocyclePage** saves dates in two structures:
-1. New `planDuration` object (with `startDate`, `endDate`, `totalDays`, `totalWeeks`)
-2. Legacy `smartGoal` object for backward compatibility
-
-However, the legacy `smartGoal` construction has a bug:
-
-```typescript
-// MacrocyclePage.tsx:319-325
-const legacySmartGoal = smartGoals.length > 0 ? {
-  ...smartGoals[0],
-  startDate: planDuration?.startDate,  // ← Only populated if smartGoals exists!
-  endDate: planDuration?.endDate,
-  totalDays: planDuration?.totalDays,
-  totalWeeks: planDuration?.totalWeeks,
-} : smartGoal;  // ← Falls back to OLD smartGoal state (may be empty!)
-```
-
-**MesocyclePage** only reads from the legacy structure:
-
-```typescript
-// MesocyclePage.tsx:286-287
-const startDate = data.smartGoal?.startDate ? new Date(data.smartGoal.startDate) : new Date();
-const endDate = data.smartGoal?.endDate ? new Date(data.smartGoal.endDate) : addWeeks(startDate, 12);
-```
-
-When `smartGoals.length === 0` but `planDuration` has dates, the legacy `smartGoal` won't have dates, causing MesocyclePage to fall back to `new Date()` and 12 weeks.
+2) **Going “Back to Macrocycle” can send MacrocyclePage to an invalid step number**
+- `MesocyclePage.tsx` sets `macrocycleStep` to **5** as a fallback:
+  ```ts
+  const targetStep = savedStep ? parseInt(savedStep) : 5;
+  ```
+- But `MacrocyclePage.tsx` has `totalSteps = 3` and only renders steps 1–3.
+- Result: Macrocycle loads `currentStep = 5`, renders **no step content**, and it looks like “absolutely no data at all” even if `macrocycleData` still exists.
 
 ---
 
-### Solution
-
-**Update MesocyclePage** to prioritize `planDuration` (the new structure) over `smartGoal` (the legacy structure), similar to how MicrocyclePlanningPage already does it correctly:
-
-```typescript
-// MicrocyclePlanningPage.tsx:2983-2984 (correct pattern)
-const startDate = macrocycleData?.planDuration?.startDate || macrocycleData?.smartGoal?.startDate;
-const endDate = macrocycleData?.planDuration?.endDate || macrocycleData?.smartGoal?.endDate;
-```
+### Fix overview
+We’ll make wizard navigation robust by:
+- Ensuring the **final “save before navigate” uses the same full schema** as the continuous save (so `planDuration` + `smartGoals` are never dropped).
+- Ensuring the **macrocycle step number is always valid (1–3)** when navigating back.
 
 ---
 
-### Implementation Details
+### Changes to implement
 
-**File 1: `src/pages/MesocyclePage.tsx`**
+#### A) `src/pages/MacrocyclePage.tsx` — stop overwriting `macrocycleData` with a partial payload
+1. Create a small helper (inside the component) like:
+   - `buildMacrocycleDataSnapshot({ completedAt?: string })`
+   - It will return the same shape as the continuous-save `useEffect`:
+     - `planName`
+     - `selectedAthleteId`
+     - `planDuration`
+     - `smartGoals`
+     - `smartGoal` (legacy) = merged with `planDuration` dates (same logic already used in the `useEffect`)
+     - `subGoals`, `events`, `qualities`, `qualitiesBySubGoal`, `methodsByQuality`, `selectedTest`, `selectedEvent`
+     - `selectedMethods: Array.from(selectedMethods)`
+     - `manuallyAddedMethods`
+     - `completedAt` or `lastUpdated` (keep both if helpful; but do not remove existing fields other parts might rely on)
 
-#### Change 1: Update date loading logic (Lines 285-294)
+2. Update **both** manual save locations to use this helper:
+   - In `handleNext` when `currentStep === totalSteps`
+   - In the “Continue Anyway” handler in the Missing Rationales dialog
+   This guarantees `planDuration` + `smartGoals` survive the transition.
 
-**Before:**
-```typescript
-// Calculate total weeks from date range
-const startDate = data.smartGoal?.startDate ? new Date(data.smartGoal.startDate) : new Date();
-const endDate = data.smartGoal?.endDate ? new Date(data.smartGoal.endDate) : addWeeks(startDate, 12);
-const weeks = data.smartGoal?.startDate && data.smartGoal?.endDate ? 
-  Math.ceil((Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))) / 7) : 12;
-```
-
-**After:**
-```typescript
-// Calculate total weeks from date range - prioritize planDuration over legacy smartGoal
-const rawStartDate = data.planDuration?.startDate || data.smartGoal?.startDate;
-const rawEndDate = data.planDuration?.endDate || data.smartGoal?.endDate;
-const rawTotalWeeks = data.planDuration?.totalWeeks || data.smartGoal?.totalWeeks;
-
-const startDate = rawStartDate ? new Date(rawStartDate) : new Date();
-const endDate = rawEndDate ? new Date(rawEndDate) : addWeeks(startDate, 12);
-const weeks = rawTotalWeeks || 
-  (rawStartDate && rawEndDate 
-    ? Math.ceil((Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))) / 7) 
-    : 12);
-```
-
-#### Change 2: Update TrainingPlanOverview render (Lines 659-667)
-
-**Before:**
-```typescript
-const renderTrainingPlanOverview = () => {
-  const primaryGoal = macrocycleData?.smartGoal?.description || ...;
-  
-  const totalDays = macrocycleData?.smartGoal?.startDate && macrocycleData?.smartGoal?.endDate
-    ? Math.ceil((planEndDate.getTime() - planStartDate.getTime()) / (1000 * 60 * 60 * 24))
-    : undefined;
-```
-
-**After:**
-```typescript
-const renderTrainingPlanOverview = () => {
-  const primaryGoal = macrocycleData?.smartGoals?.[0]?.description || 
-                      macrocycleData?.smartGoal?.description || ...;
-  
-  // Use planDuration.totalDays if available, otherwise calculate
-  const totalDays = macrocycleData?.planDuration?.totalDays || 
-    (planStartDate && planEndDate
-      ? Math.ceil((planEndDate.getTime() - planStartDate.getTime()) / (1000 * 60 * 60 * 24))
-      : undefined);
-```
+#### B) `src/pages/MacrocyclePage.tsx` — clamp invalid saved step numbers
+3. In the “load saved step from localStorage” `useEffect`, clamp the loaded step:
+   - Parse int
+   - If invalid or out of range, fallback to `1` (or `totalSteps`), and also rewrite `localStorage.macrocycleStep` to the corrected value.
+   This prevents “Step 5 of 3” situations and blank rendering.
 
 ---
 
-**File 2: `src/pages/MacrocyclePage.tsx`**
-
-#### Change 3: Fix legacy smartGoal construction to always include dates (Lines 318-325)
-
-**Before:**
-```typescript
-const legacySmartGoal = smartGoals.length > 0 ? {
-  ...smartGoals[0],
-  startDate: planDuration?.startDate,
-  endDate: planDuration?.endDate,
-  totalDays: planDuration?.totalDays,
-  totalWeeks: planDuration?.totalWeeks,
-} : smartGoal;
-```
-
-**After:**
-```typescript
-// Always include planDuration dates in legacy smartGoal for backward compatibility
-const legacySmartGoal = {
-  ...(smartGoals.length > 0 ? smartGoals[0] : smartGoal),
-  startDate: planDuration?.startDate,
-  endDate: planDuration?.endDate,
-  totalDays: planDuration?.totalDays,
-  totalWeeks: planDuration?.totalWeeks,
-};
-```
-
-This ensures the legacy `smartGoal` ALWAYS has dates from `planDuration`, regardless of whether `smartGoals` array is populated.
+#### C) `src/pages/MesocyclePage.tsx` — fix the fallback “Back to Macrocycle” step
+4. Change the fallback from `5` to a valid macrocycle step:
+   - default to `3` (last macrocycle step) or `1` (start)
+   - also clamp parsed values into `[1, 3]` before writing to localStorage
+   This prevents Mesocycle from ever sending Macrocycle to a non-existent step.
 
 ---
 
-### Files Modified
-
-| File | Changes |
-|------|---------|
-| `src/pages/MesocyclePage.tsx` | Prioritize `planDuration` over `smartGoal` when reading dates; update TrainingPlanOverview to use new structure |
-| `src/pages/MacrocyclePage.tsx` | Fix legacy `smartGoal` construction to always include dates from `planDuration` |
+### Why this will fix your symptoms
+- Mesocycle will now always receive `macrocycleData.planDuration.startDate/endDate/totalWeeks`, so:
+  - Training Plan Overview timeline will match what you set in Macrocycle
+  - Suggested mesocycle count won’t incorrectly default to 12 weeks / today’s date
+- Going back to Macrocycle will no longer land on a non-existent step, so the UI won’t appear empty.
 
 ---
 
-### Testing Checklist
+### Testing checklist (what I’ll verify after implementation)
+1. **Forward timeline persistence**
+   - Set start/end dates in Macrocycle Step 1
+   - Go to Mesocycle
+   - Confirm Training Plan Overview shows the correct start/end + weeks/days
+   - Confirm mesocycle count aligns with your plan duration
 
-After implementation:
-1. **Forward Navigation Test**:
-   - Set a timeline in Macrocycle Planning (e.g., Feb 1 - May 1)
-   - Navigate to Mesocycle Planning
-   - Verify Training Plan Overview shows correct dates
-   - Verify correct number of mesocycles are calculated
+2. **Backward persistence**
+   - From Mesocycle Step 1, click “Back to Macrocycle”
+   - Confirm Macrocycle shows the correct step and all previous inputs (goals, methods, timeline)
 
-2. **Backward Navigation Test**:
-   - From Mesocycle Planning, click "Back to Macrocycle"
-   - Verify dates are still displayed correctly in Macrocycle Planning
-   - Navigate forward to Mesocycle Planning again
-   - Verify dates are still correct
+3. **Missing rationale path**
+   - Add a manually added method without rationale
+   - Click “Move on to Mesocycle” → get warning → “Continue Anyway”
+   - Confirm timeline/goals still persist correctly
 
-3. **Full Wizard Round-Trip**:
-   - Complete macrocycle → mesocycle → microcycle
-   - Navigate back to macrocycle
-   - Verify all timeline data is preserved throughout
+---
+
+### Files involved
+- `src/pages/MacrocyclePage.tsx`
+  - Fix manual save payloads (include `planDuration` + `smartGoals`)
+  - Clamp invalid `macrocycleStep` on load
+- `src/pages/MesocyclePage.tsx`
+  - Fix “Back to Macrocycle” fallback step from 5 → 3 (and clamp to 1–3)
 
