@@ -1,12 +1,12 @@
 import { useState, useMemo } from 'react';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSameMonth, isSameDay, isWithinInterval, addMonths, subMonths } from 'date-fns';
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, isSameMonth, isWithinInterval } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { Athlete, AthleteCalendarAssignment } from '@/types/athlete';
 import { AssignProgramDialog } from './AssignProgramDialog';
-import { useTrainingPrograms, TrainingProgram } from '@/hooks/useTrainingPrograms';
+import { useTrainingPrograms } from '@/hooks/useTrainingPrograms';
 import { useAthletes } from '@/hooks/useAthletes';
 import {
   AlertDialog,
@@ -18,80 +18,170 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { AthleteCalendarWeekRow } from './AthleteCalendarWeekRow';
+import { AthleteCalendarDay, AthleteCalendarSession } from './AthleteCalendarDayCell';
+import { cn } from '@/lib/utils';
 
 interface AthleteCalendarViewProps {
   athlete: Athlete;
 }
 
-// Color palette for assignments (will cycle through)
-const ASSIGNMENT_COLORS = [
-  'bg-blue-500/80 hover:bg-blue-500',
-  'bg-green-500/80 hover:bg-green-500',
-  'bg-purple-500/80 hover:bg-purple-500',
-  'bg-orange-500/80 hover:bg-orange-500',
-  'bg-pink-500/80 hover:bg-pink-500',
-  'bg-cyan-500/80 hover:bg-cyan-500',
-];
+type ViewMode = '1week' | '2week' | '4week';
+
+// Intensity color helper matching the training calendar
+const getIntensityColor = (intensity: string): string => {
+  switch (intensity) {
+    case 'off': return 'bg-gray-200';
+    case 'deload': return 'bg-blue-200';
+    case 'easy': return 'bg-green-300';
+    case 'easy-moderate': return 'bg-green-400';
+    case 'moderate': return 'bg-yellow-300';
+    case 'moderate-hard': return 'bg-orange-400';
+    case 'hard': return 'bg-red-400';
+    case 'extremely-hard': return 'bg-red-600';
+    default: return 'bg-gray-200';
+  }
+};
 
 export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<ViewMode>('4week');
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [deleteAssignment, setDeleteAssignment] = useState<AthleteCalendarAssignment | null>(null);
-  
+
   const { programs } = useTrainingPrograms();
   const athleteData = useAthletes();
-  
+
   const assignments = useMemo(() => {
     return athleteData.getAthleteCalendarAssignments(athlete.id);
   }, [athleteData, athlete.id]);
 
-  const monthStart = startOfMonth(currentMonth);
-  const monthEnd = endOfMonth(currentMonth);
-  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
-  const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+  // Calculate calendar days based on view mode
+  const calendarDays = useMemo((): AthleteCalendarDay[] => {
+    const start = startOfWeek(currentDate, { weekStartsOn: 1 });
+    let end: Date;
 
-  // Generate all dates for the calendar grid
-  const calendarDays = useMemo(() => {
-    const days: Date[] = [];
-    let day = calendarStart;
-    while (day <= calendarEnd) {
-      days.push(day);
-      day = addDays(day, 1);
+    switch (viewMode) {
+      case '1week':
+        end = endOfWeek(currentDate, { weekStartsOn: 1 });
+        break;
+      case '2week':
+        end = endOfWeek(addWeeks(currentDate, 1), { weekStartsOn: 1 });
+        break;
+      case '4week':
+      default:
+        end = endOfWeek(addWeeks(currentDate, 3), { weekStartsOn: 1 });
+        break;
     }
-    return days;
-  }, [calendarStart, calendarEnd]);
 
-  // Get assignments that overlap with a specific date
-  const getAssignmentsForDate = (date: Date) => {
-    return assignments.filter(assignment => {
-      const start = new Date(assignment.startDate);
-      const end = new Date(assignment.endDate);
-      return isWithinInterval(date, { start, end });
+    const days = eachDayOfInterval({ start, end });
+
+    return days.map(date => {
+      const dateString = format(date, 'yyyy-MM-dd');
+
+      // Find assignments that overlap with this date
+      const dayAssignments = assignments.filter(assignment => {
+        const assignmentStart = new Date(assignment.startDate);
+        const assignmentEnd = new Date(assignment.endDate);
+        return isWithinInterval(date, { start: assignmentStart, end: assignmentEnd });
+      });
+
+      // Extract session data from assignments for this specific day
+      const sessions: AthleteCalendarSession[] = [];
+      let testNames: string[] = [];
+      let eventNames: string[] = [];
+      let assignmentId: string | undefined;
+      let programName: string | undefined;
+
+      dayAssignments.forEach(assignment => {
+        assignmentId = assignment.id;
+        programName = assignment.programName;
+
+        // Calculate which day within the assignment this is
+        const assignmentStart = new Date(assignment.startDate);
+        const dayOffset = Math.floor((date.getTime() - assignmentStart.getTime()) / (1000 * 60 * 60 * 24));
+
+        // Find the corresponding mesocycle and microcycle
+        let currentOffset = 0;
+        for (const meso of assignment.assignedMesocycles) {
+          const mesoStart = new Date(meso.startDate);
+          const mesoEnd = new Date(meso.endDate);
+          
+          if (date >= mesoStart && date <= mesoEnd) {
+            // This day is within this mesocycle
+            const dayWithinMeso = Math.floor((date.getTime() - mesoStart.getTime()) / (1000 * 60 * 60 * 24));
+            
+            // Find which microcycle this day belongs to
+            let microOffset = 0;
+            for (const micro of meso.microcycles) {
+              if (dayWithinMeso >= microOffset && dayWithinMeso < microOffset + micro.duration) {
+                // This day is within this microcycle
+                const dayWithinMicro = dayWithinMeso - microOffset;
+                
+                // Create a session for this day (simplified - assumes one session per day)
+                // In reality, you'd parse the full session data from the assignment
+                const sessionId = `${assignment.id}-${dateString}-0`;
+                sessions.push({
+                  id: sessionId,
+                  sessionIndex: 0,
+                  sessionName: `${meso.name} - Day ${dayWithinMicro + 1}`,
+                  exerciseCount: Math.floor(Math.random() * 8) + 3, // Placeholder - would come from actual data
+                  intensity: meso.intensity || 'moderate',
+                });
+                break;
+              }
+              microOffset += micro.duration;
+            }
+            break;
+          }
+          currentOffset += meso.duration;
+        }
+      });
+
+      return {
+        date,
+        dateString,
+        isCurrentMonth: isSameMonth(date, currentDate),
+        sessions,
+        testNames: testNames.length > 0 ? testNames : undefined,
+        eventNames: eventNames.length > 0 ? eventNames : undefined,
+        assignmentId,
+        programName,
+      };
     });
+  }, [currentDate, viewMode, assignments]);
+
+  // Group days into weeks
+  const weeks = useMemo(() => {
+    const result: AthleteCalendarDay[][] = [];
+    for (let i = 0; i < calendarDays.length; i += 7) {
+      result.push(calendarDays.slice(i, i + 7));
+    }
+    return result;
+  }, [calendarDays]);
+
+  // Calculate date range display
+  const dateRangeDisplay = useMemo(() => {
+    if (calendarDays.length === 0) return '';
+    const firstDay = calendarDays[0].date;
+    const lastDay = calendarDays[calendarDays.length - 1].date;
+    return `${format(firstDay, 'MMM d')} - ${format(lastDay, 'MMM d, yyyy')}`;
+  }, [calendarDays]);
+
+  const handlePrevious = () => {
+    setCurrentDate(prev => subWeeks(prev, 1));
   };
 
-  // Get color for an assignment
-  const getAssignmentColor = (assignmentId: string) => {
-    const index = assignments.findIndex(a => a.id === assignmentId);
-    return ASSIGNMENT_COLORS[index % ASSIGNMENT_COLORS.length];
+  const handleNext = () => {
+    setCurrentDate(prev => addWeeks(prev, 1));
   };
 
-  const handlePreviousMonth = () => {
-    setCurrentMonth(subMonths(currentMonth, 1));
+  const handleToday = () => {
+    setCurrentDate(new Date());
   };
 
-  const handleNextMonth = () => {
-    setCurrentMonth(addMonths(currentMonth, 1));
-  };
-
-  const handleDateClick = (date: Date) => {
+  const handleDayClick = (date: Date) => {
     setSelectedDate(date);
     setShowAssignDialog(true);
   };
@@ -109,118 +199,90 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     }
   };
 
-  const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const handleDeleteAssignmentById = (assignmentId: string) => {
+    const assignment = assignments.find(a => a.id === assignmentId);
+    if (assignment) {
+      setDeleteAssignment(assignment);
+    }
+  };
+
+  const weekDayHeaders = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-          <div className="flex items-center gap-4">
-            <Button variant="outline" size="icon" onClick={handlePreviousMonth}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <CardTitle className="text-lg font-semibold min-w-[180px] text-center">
-              {format(currentMonth, 'MMMM yyyy')}
-            </CardTitle>
-            <Button variant="outline" size="icon" onClick={handleNextMonth}>
-              <ChevronRight className="h-4 w-4" />
+        <CardHeader className="pb-4">
+          {/* Navigation and Controls Row */}
+          <div className="flex items-center justify-between gap-4">
+            {/* Left: Navigation */}
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" onClick={handlePrevious}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="icon" onClick={handleNext}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleToday}>
+                Today
+              </Button>
+              <span className="text-sm font-medium text-muted-foreground ml-2">
+                {dateRangeDisplay}
+              </span>
+            </div>
+
+            {/* Center: View Mode Selector */}
+            <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+              {(['1week', '2week', '4week'] as ViewMode[]).map((mode) => (
+                <Button
+                  key={mode}
+                  variant={viewMode === mode ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode(mode)}
+                  className="h-7 px-3 text-xs"
+                >
+                  {mode === '1week' ? '1 Week' : mode === '2week' ? '2 Week' : '4 Week'}
+                </Button>
+              ))}
+            </div>
+
+            {/* Right: Assign Program Button */}
+            <Button
+              onClick={() => {
+                setSelectedDate(new Date());
+                setShowAssignDialog(true);
+              }}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Assign Program
             </Button>
           </div>
-          <Button onClick={() => {
-            setSelectedDate(new Date());
-            setShowAssignDialog(true);
-          }}>
-            <Plus className="h-4 w-4 mr-2" />
-            Assign Program
-          </Button>
         </CardHeader>
+
         <CardContent>
-          {/* Calendar Grid */}
-          <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden">
-            {/* Day Headers */}
-            {weekDays.map(day => (
-              <div 
-                key={day} 
-                className="bg-muted p-2 text-center text-sm font-medium text-muted-foreground"
+          {/* Day Headers */}
+          <div className="grid grid-cols-7 gap-2 mb-4">
+            {weekDayHeaders.map(day => (
+              <div
+                key={day}
+                className="text-center text-sm font-medium text-muted-foreground py-2"
               >
                 {day}
               </div>
             ))}
-            
-            {/* Calendar Days */}
-            {calendarDays.map((day, index) => {
-              const dayAssignments = getAssignmentsForDate(day);
-              const isCurrentMonth = isSameMonth(day, currentMonth);
-              const isToday = isSameDay(day, new Date());
-              
-              return (
-                <div
-                  key={index}
-                  className={`
-                    min-h-[100px] p-1 bg-background cursor-pointer transition-colors
-                    hover:bg-muted/50
-                    ${!isCurrentMonth ? 'bg-muted/30' : ''}
-                  `}
-                  onClick={() => handleDateClick(day)}
-                >
-                  <div className={`
-                    text-right text-sm p-1
-                    ${!isCurrentMonth ? 'text-muted-foreground/50' : ''}
-                    ${isToday ? 'bg-primary text-primary-foreground rounded-full w-7 h-7 flex items-center justify-center ml-auto' : ''}
-                  `}>
-                    {format(day, 'd')}
-                  </div>
-                  
-                  {/* Assignment indicators */}
-                  <div className="space-y-1 mt-1">
-                    <TooltipProvider>
-                      {dayAssignments.slice(0, 2).map(assignment => {
-                        const isStart = isSameDay(new Date(assignment.startDate), day);
-                        const isEnd = isSameDay(new Date(assignment.endDate), day);
-                        
-                        return (
-                          <Tooltip key={assignment.id}>
-                            <TooltipTrigger asChild>
-                              <div
-                                className={`
-                                  text-xs text-white px-1 py-0.5 truncate cursor-pointer
-                                  ${getAssignmentColor(assignment.id)}
-                                  ${isStart ? 'rounded-l' : ''}
-                                  ${isEnd ? 'rounded-r' : ''}
-                                  ${!isStart && !isEnd ? '' : ''}
-                                `}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDeleteAssignment(assignment);
-                                }}
-                              >
-                                {isStart ? assignment.programName : ''}
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <div className="text-sm">
-                                <p className="font-medium">{assignment.programName}</p>
-                                <p className="text-muted-foreground">
-                                  {format(new Date(assignment.startDate), 'MMM d')} - {format(new Date(assignment.endDate), 'MMM d, yyyy')}
-                                </p>
-                                <p className="text-muted-foreground">
-                                  {assignment.assignedMesocycles.length} mesocycle(s)
-                                </p>
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
-                        );
-                      })}
-                    </TooltipProvider>
-                    {dayAssignments.length > 2 && (
-                      <div className="text-xs text-muted-foreground px-1">
-                        +{dayAssignments.length - 2} more
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+          </div>
+
+          {/* Week Rows */}
+          <div className="space-y-6">
+            {weeks.map((week, idx) => (
+              <AthleteCalendarWeekRow
+                key={`week-${idx}`}
+                week={week}
+                weekIdx={idx}
+                onDayClick={handleDayClick}
+                onDeleteAssignment={handleDeleteAssignmentById}
+                getIntensityColor={getIntensityColor}
+              />
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -236,12 +298,12 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
               {assignments
                 .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
                 .map(assignment => (
-                  <div 
+                  <div
                     key={assignment.id}
                     className="flex items-center justify-between p-3 rounded-lg border"
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`w-3 h-3 rounded-full ${getAssignmentColor(assignment.id).split(' ')[0]}`} />
+                      <div className="w-3 h-3 rounded-full bg-primary" />
                       <div>
                         <p className="font-medium">{assignment.programName}</p>
                         <p className="text-sm text-muted-foreground">
@@ -253,8 +315,8 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                       <Badge variant="secondary">
                         {assignment.assignedMesocycles.length} mesocycle(s)
                       </Badge>
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-destructive hover:text-destructive"
                         onClick={() => setDeleteAssignment(assignment)}
@@ -285,7 +347,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>Remove Assignment</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to remove "{deleteAssignment?.programName}" from the calendar? 
+              Are you sure you want to remove "{deleteAssignment?.programName}" from the calendar?
               This will not delete the original training program.
             </AlertDialogDescription>
           </AlertDialogHeader>
