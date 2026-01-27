@@ -1,90 +1,62 @@
 
+Problem
+- Copying microcycle setups and copying mesocycle setups brings over the exercises/sections, but the superset links (SS1 badges / linked chain) disappear in the copied target.
 
-## Fix: Superset Copying Between Mesocycles and Microcycles
+What I found (root cause)
+- In src/components/microcycle-planning/EnhancedExerciseDistribution.tsx, both copy handlers correctly build a “newSupersets” object and populate it with remapped exercise IDs and section IDs.
+- But after doing that, both handlers then “clear target days” by deleting newSupersets[targetDate] for all target dates right before calling onSupersetsChange(...).
+- That deletion step wipes out the supersets that were just copied, so the target ends up with no supersets even though the mapping logic itself is correct.
 
-### Problem
-When copying exercises between mesocycles or microcycles, supersets are not being copied correctly. Exercises that are in a superset lose their superset connection after copying.
+Scope of fix
+- Fix both:
+  - handleCopyFromPreviousMicrocycle (microcycle-to-microcycle copy)
+  - handleCopyFromPreviousMesocycle (mesocycle-to-mesocycle copy)
 
-### Root Cause Analysis
+Implementation approach
+A) Microcycle copy (handleCopyFromPreviousMicrocycle)
+1) Compute targetDates early (already available via targetDays).
+2) Clear existing supersets for those targetDates BEFORE copying:
+   - const newSupersets = { ...supersets };
+   - targetDates.forEach(date => delete newSupersets[date]);
+3) Run the existing “copy supersets” loop to populate newSupersets[targetDate] with remapped exercise IDs and (sectionId or __unsectioned__) keys.
+4) Remove the later deletion block that currently runs after the copy loop (the one that deletes newSupersets[date] again).
 
-**Issue 1: Missing `__unsectioned__` Handling in Mesocycle Copy**
+Why this works
+- It preserves the intent (“overwrite target’s supersets”) while not deleting the newly created superset mappings.
 
-The microcycle copy correctly handles the special `__unsectioned__` key:
-```tsx
-// Microcycle copy (CORRECT)
-const newSectionId = oldSectionId === '__unsectioned__' 
-  ? '__unsectioned__' 
-  : (oldToNewSectionIds[oldSectionId] || oldSectionId);
-```
+B) Mesocycle copy (handleCopyFromPreviousMesocycle)
+1) Before starting the per-microcycle loop, determine all dates belonging to the target mesocycle (same logic currently used later via currentMesocycleDays + targetDates).
+2) Clear existing supersets for those dates BEFORE copying:
+   - const newSupersets: SupersetMapping = { ...supersets };
+   - targetDates.forEach(date => delete newSupersets[date]);
+3) Keep the existing “STEP 3: Copy supersets” loop (which fills newSupersets[targetDate] per day).
+4) Remove the later deletion block that currently runs right before applying changes (it currently wipes out the freshly copied entries).
 
-But the mesocycle copy doesn't:
-```tsx
-// Mesocycle copy (BUG)
-const newSectionId = oldToNewSectionIds[sectionId] || sectionId;
-```
+Testing checklist (what I will verify in the preview)
+1) Microcycle copy test
+- In a microcycle, create a section and two exercises in a superset (SS1 shows).
+- Use “Copy from previous microcycle”.
+- Confirm in the target microcycle:
+  - SS1 badges appear on the copied exercises
+  - the chain/linked behavior between exercises is preserved
+  - unlinking/linking still works after copy
 
-When supersets exist at the session level (not inside a section), they use `__unsectioned__` as the key. The mesocycle copy tries to remap this through `oldToNewSectionIds` which returns `undefined`, causing the fallback to use the original `__unsectioned__` string - but this happens incorrectly because the lookup logic differs.
+2) Mesocycle copy test
+- In Mesocycle 1, create sections + supersets on Day 1/Day 2.
+- Use “Copy mesocycle setup” to Mesocycle 2.
+- Confirm in Mesocycle 2:
+  - copied exercises remain in their sections
+  - SS1 badges appear and represent the copied superset relationships
+  - Step 2 (Training Calendar) also shows the same superset grouping for those sessions
 
-**Issue 2: Superset Validity Check**
+3) Overwrite behavior
+- If the target already had supersets, confirm they are replaced by the copied ones (not merged).
 
-The current code only checks `if (newExerciseIds.length > 0)` before adding a superset. However, a valid superset requires at least 2 exercises. With `> 0`, orphan supersets with only 1 exercise could be copied.
+Files to change
+- src/components/microcycle-planning/EnhancedExerciseDistribution.tsx
+  - Adjust ordering/removal of “delete newSupersets[targetDate]” in:
+    - handleCopyFromPreviousMicrocycle
+    - handleCopyFromPreviousMesocycle
 
----
-
-### Solution
-
-1. **Fix mesocycle copy superset handling**: Add the same `__unsectioned__` check as microcycle copy
-2. **Fix superset validity check**: Change from `> 0` to `>= 2` in both functions to ensure only valid supersets are copied
-
----
-
-### Implementation Details
-
-**File**: `src/components/microcycle-planning/EnhancedExerciseDistribution.tsx`
-
-#### Change 1: Fix Mesocycle Copy `__unsectioned__` Handling (Line 1686)
-
-| Current | Fixed |
-|---------|-------|
-| `const newSectionId = oldToNewSectionIds[sectionId] \|\| sectionId;` | `const newSectionId = sectionId === '__unsectioned__' ? '__unsectioned__' : (oldToNewSectionIds[sectionId] \|\| sectionId);` |
-
-#### Change 2: Fix Mesocycle Copy Superset Validity Check (Line 1694)
-
-| Current | Fixed |
-|---------|-------|
-| `if (newExerciseIds.length > 0)` | `if (newExerciseIds.length >= 2)` |
-
-#### Change 3: Fix Microcycle Copy Superset Validity Check (Line 1488)
-
-| Current | Fixed |
-|---------|-------|
-| `if (newExerciseIds.length > 0)` | `if (newExerciseIds.length >= 2)` |
-
----
-
-### Files Modified
-
-| File | Changes |
-|------|---------|
-| `src/components/microcycle-planning/EnhancedExerciseDistribution.tsx` | Fix `__unsectioned__` handling and superset validity checks in both copy functions |
-
----
-
-### Testing Checklist
-
-After implementation:
-1. **Mesocycle Copy with Supersets**:
-   - Add exercises to Mesocycle 1 and create supersets (A1/A2)
-   - Copy Mesocycle 1 to Mesocycle 2
-   - Verify supersets appear correctly in Mesocycle 2
-
-2. **Microcycle Copy with Supersets**:
-   - Add exercises to Microcycle 1 within a mesocycle and create supersets
-   - Copy Microcycle 1 to Microcycle 2
-   - Verify supersets appear correctly in Microcycle 2
-
-3. **Edge Cases**:
-   - Supersets without sections (`__unsectioned__`)
-   - Supersets inside sections
-   - 3+ exercise superset chains (A1/A2/A3)
-
+Optional follow-up (not required for this fix, but related)
+- There are other copy/paste pathways (e.g., paste section/session/day/week in MicrocyclePlanningPage.tsx) where superset remapping rules are inconsistent. After this is fixed, we can unify those so supersets behave consistently across every copy/paste feature.
