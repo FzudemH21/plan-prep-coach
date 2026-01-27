@@ -225,9 +225,10 @@ export default function MesocyclePage() {
       <Button 
         onClick={() => {
           if (currentStep <= 1) {
-            // Smart navigation: go to last saved step in macrocycle
+            // Smart navigation: go to last saved step in macrocycle (clamped to valid range 1-3)
             const savedStep = localStorage.getItem('macrocycleStep');
-            const targetStep = savedStep ? parseInt(savedStep) : 5; // Go to last step if no saved step
+            const parsed = savedStep ? parseInt(savedStep) : 3;
+            const targetStep = isNaN(parsed) ? 3 : Math.max(1, Math.min(3, parsed));
             localStorage.setItem('macrocycleStep', targetStep.toString());
             navigate('/macrocycle');
           } else {
