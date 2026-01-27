@@ -1,62 +1,170 @@
 
-Problem
-- Copying microcycle setups and copying mesocycle setups brings over the exercises/sections, but the superset links (SS1 badges / linked chain) disappear in the copied target.
 
-What I found (root cause)
-- In src/components/microcycle-planning/EnhancedExerciseDistribution.tsx, both copy handlers correctly build a “newSupersets” object and populate it with remapped exercise IDs and section IDs.
-- But after doing that, both handlers then “clear target days” by deleting newSupersets[targetDate] for all target dates right before calling onSupersetsChange(...).
-- That deletion step wipes out the supersets that were just copied, so the target ends up with no supersets even though the mapping logic itself is correct.
+## Fix: Timeline Data Not Persisting Between Wizard Steps
 
-Scope of fix
-- Fix both:
-  - handleCopyFromPreviousMicrocycle (microcycle-to-microcycle copy)
-  - handleCopyFromPreviousMesocycle (mesocycle-to-mesocycle copy)
+### Problem
+When navigating between macrocycle planning and mesocycle planning (and going back and forth), the timeline dates are lost. This causes:
+1. Wrong dates displayed in the Training Plan Overview
+2. Incorrect number of mesocycles being calculated (defaults to 12 weeks instead of actual plan duration)
+3. Data inconsistency when moving through the wizard in both directions
 
-Implementation approach
-A) Microcycle copy (handleCopyFromPreviousMicrocycle)
-1) Compute targetDates early (already available via targetDays).
-2) Clear existing supersets for those targetDates BEFORE copying:
-   - const newSupersets = { ...supersets };
-   - targetDates.forEach(date => delete newSupersets[date]);
-3) Run the existing “copy supersets” loop to populate newSupersets[targetDate] with remapped exercise IDs and (sectionId or __unsectioned__) keys.
-4) Remove the later deletion block that currently runs after the copy loop (the one that deletes newSupersets[date] again).
+### Root Cause
 
-Why this works
-- It preserves the intent (“overwrite target’s supersets”) while not deleting the newly created superset mappings.
+**MacrocyclePage** saves dates in two structures:
+1. New `planDuration` object (with `startDate`, `endDate`, `totalDays`, `totalWeeks`)
+2. Legacy `smartGoal` object for backward compatibility
 
-B) Mesocycle copy (handleCopyFromPreviousMesocycle)
-1) Before starting the per-microcycle loop, determine all dates belonging to the target mesocycle (same logic currently used later via currentMesocycleDays + targetDates).
-2) Clear existing supersets for those dates BEFORE copying:
-   - const newSupersets: SupersetMapping = { ...supersets };
-   - targetDates.forEach(date => delete newSupersets[date]);
-3) Keep the existing “STEP 3: Copy supersets” loop (which fills newSupersets[targetDate] per day).
-4) Remove the later deletion block that currently runs right before applying changes (it currently wipes out the freshly copied entries).
+However, the legacy `smartGoal` construction has a bug:
 
-Testing checklist (what I will verify in the preview)
-1) Microcycle copy test
-- In a microcycle, create a section and two exercises in a superset (SS1 shows).
-- Use “Copy from previous microcycle”.
-- Confirm in the target microcycle:
-  - SS1 badges appear on the copied exercises
-  - the chain/linked behavior between exercises is preserved
-  - unlinking/linking still works after copy
+```typescript
+// MacrocyclePage.tsx:319-325
+const legacySmartGoal = smartGoals.length > 0 ? {
+  ...smartGoals[0],
+  startDate: planDuration?.startDate,  // ← Only populated if smartGoals exists!
+  endDate: planDuration?.endDate,
+  totalDays: planDuration?.totalDays,
+  totalWeeks: planDuration?.totalWeeks,
+} : smartGoal;  // ← Falls back to OLD smartGoal state (may be empty!)
+```
 
-2) Mesocycle copy test
-- In Mesocycle 1, create sections + supersets on Day 1/Day 2.
-- Use “Copy mesocycle setup” to Mesocycle 2.
-- Confirm in Mesocycle 2:
-  - copied exercises remain in their sections
-  - SS1 badges appear and represent the copied superset relationships
-  - Step 2 (Training Calendar) also shows the same superset grouping for those sessions
+**MesocyclePage** only reads from the legacy structure:
 
-3) Overwrite behavior
-- If the target already had supersets, confirm they are replaced by the copied ones (not merged).
+```typescript
+// MesocyclePage.tsx:286-287
+const startDate = data.smartGoal?.startDate ? new Date(data.smartGoal.startDate) : new Date();
+const endDate = data.smartGoal?.endDate ? new Date(data.smartGoal.endDate) : addWeeks(startDate, 12);
+```
 
-Files to change
-- src/components/microcycle-planning/EnhancedExerciseDistribution.tsx
-  - Adjust ordering/removal of “delete newSupersets[targetDate]” in:
-    - handleCopyFromPreviousMicrocycle
-    - handleCopyFromPreviousMesocycle
+When `smartGoals.length === 0` but `planDuration` has dates, the legacy `smartGoal` won't have dates, causing MesocyclePage to fall back to `new Date()` and 12 weeks.
 
-Optional follow-up (not required for this fix, but related)
-- There are other copy/paste pathways (e.g., paste section/session/day/week in MicrocyclePlanningPage.tsx) where superset remapping rules are inconsistent. After this is fixed, we can unify those so supersets behave consistently across every copy/paste feature.
+---
+
+### Solution
+
+**Update MesocyclePage** to prioritize `planDuration` (the new structure) over `smartGoal` (the legacy structure), similar to how MicrocyclePlanningPage already does it correctly:
+
+```typescript
+// MicrocyclePlanningPage.tsx:2983-2984 (correct pattern)
+const startDate = macrocycleData?.planDuration?.startDate || macrocycleData?.smartGoal?.startDate;
+const endDate = macrocycleData?.planDuration?.endDate || macrocycleData?.smartGoal?.endDate;
+```
+
+---
+
+### Implementation Details
+
+**File 1: `src/pages/MesocyclePage.tsx`**
+
+#### Change 1: Update date loading logic (Lines 285-294)
+
+**Before:**
+```typescript
+// Calculate total weeks from date range
+const startDate = data.smartGoal?.startDate ? new Date(data.smartGoal.startDate) : new Date();
+const endDate = data.smartGoal?.endDate ? new Date(data.smartGoal.endDate) : addWeeks(startDate, 12);
+const weeks = data.smartGoal?.startDate && data.smartGoal?.endDate ? 
+  Math.ceil((Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))) / 7) : 12;
+```
+
+**After:**
+```typescript
+// Calculate total weeks from date range - prioritize planDuration over legacy smartGoal
+const rawStartDate = data.planDuration?.startDate || data.smartGoal?.startDate;
+const rawEndDate = data.planDuration?.endDate || data.smartGoal?.endDate;
+const rawTotalWeeks = data.planDuration?.totalWeeks || data.smartGoal?.totalWeeks;
+
+const startDate = rawStartDate ? new Date(rawStartDate) : new Date();
+const endDate = rawEndDate ? new Date(rawEndDate) : addWeeks(startDate, 12);
+const weeks = rawTotalWeeks || 
+  (rawStartDate && rawEndDate 
+    ? Math.ceil((Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))) / 7) 
+    : 12);
+```
+
+#### Change 2: Update TrainingPlanOverview render (Lines 659-667)
+
+**Before:**
+```typescript
+const renderTrainingPlanOverview = () => {
+  const primaryGoal = macrocycleData?.smartGoal?.description || ...;
+  
+  const totalDays = macrocycleData?.smartGoal?.startDate && macrocycleData?.smartGoal?.endDate
+    ? Math.ceil((planEndDate.getTime() - planStartDate.getTime()) / (1000 * 60 * 60 * 24))
+    : undefined;
+```
+
+**After:**
+```typescript
+const renderTrainingPlanOverview = () => {
+  const primaryGoal = macrocycleData?.smartGoals?.[0]?.description || 
+                      macrocycleData?.smartGoal?.description || ...;
+  
+  // Use planDuration.totalDays if available, otherwise calculate
+  const totalDays = macrocycleData?.planDuration?.totalDays || 
+    (planStartDate && planEndDate
+      ? Math.ceil((planEndDate.getTime() - planStartDate.getTime()) / (1000 * 60 * 60 * 24))
+      : undefined);
+```
+
+---
+
+**File 2: `src/pages/MacrocyclePage.tsx`**
+
+#### Change 3: Fix legacy smartGoal construction to always include dates (Lines 318-325)
+
+**Before:**
+```typescript
+const legacySmartGoal = smartGoals.length > 0 ? {
+  ...smartGoals[0],
+  startDate: planDuration?.startDate,
+  endDate: planDuration?.endDate,
+  totalDays: planDuration?.totalDays,
+  totalWeeks: planDuration?.totalWeeks,
+} : smartGoal;
+```
+
+**After:**
+```typescript
+// Always include planDuration dates in legacy smartGoal for backward compatibility
+const legacySmartGoal = {
+  ...(smartGoals.length > 0 ? smartGoals[0] : smartGoal),
+  startDate: planDuration?.startDate,
+  endDate: planDuration?.endDate,
+  totalDays: planDuration?.totalDays,
+  totalWeeks: planDuration?.totalWeeks,
+};
+```
+
+This ensures the legacy `smartGoal` ALWAYS has dates from `planDuration`, regardless of whether `smartGoals` array is populated.
+
+---
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `src/pages/MesocyclePage.tsx` | Prioritize `planDuration` over `smartGoal` when reading dates; update TrainingPlanOverview to use new structure |
+| `src/pages/MacrocyclePage.tsx` | Fix legacy `smartGoal` construction to always include dates from `planDuration` |
+
+---
+
+### Testing Checklist
+
+After implementation:
+1. **Forward Navigation Test**:
+   - Set a timeline in Macrocycle Planning (e.g., Feb 1 - May 1)
+   - Navigate to Mesocycle Planning
+   - Verify Training Plan Overview shows correct dates
+   - Verify correct number of mesocycles are calculated
+
+2. **Backward Navigation Test**:
+   - From Mesocycle Planning, click "Back to Macrocycle"
+   - Verify dates are still displayed correctly in Macrocycle Planning
+   - Navigate forward to Mesocycle Planning again
+   - Verify dates are still correct
+
+3. **Full Wizard Round-Trip**:
+   - Complete macrocycle → mesocycle → microcycle
+   - Navigate back to macrocycle
+   - Verify all timeline data is preserved throughout
+
