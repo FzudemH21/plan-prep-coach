@@ -133,7 +133,7 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
   const hasIcons = testDetails.length > 0 || eventDetails.length > 0;
 
   return (
-    <div className={cn("flex flex-col w-[120px] shrink-0 box-border border-l border-border/40", getBorderClasses())}>
+    <div className={cn("flex flex-col w-[140px] shrink-0 box-border border-l border-border/40", getBorderClasses())}>
       {/* Microcycle header */}
       <div className={cn("h-24 text-center text-xs rounded-md border border-border w-full mb-2 flex flex-col p-1", getSubtleIntensityBg(intensity))}>
         {/* Content wrapper - vertically centered */}
@@ -234,7 +234,7 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
       </div>
       
       {/* Fixed Intensity label - prevent width changes */}
-      <div className="text-xs mt-2 text-center capitalize font-medium w-[120px] whitespace-nowrap overflow-hidden text-ellipsis">
+      <div className="text-xs mt-2 text-center capitalize font-medium w-[140px] whitespace-nowrap overflow-hidden text-ellipsis">
         {intensity.replace('-', ' ')}
       </div>
     </div>

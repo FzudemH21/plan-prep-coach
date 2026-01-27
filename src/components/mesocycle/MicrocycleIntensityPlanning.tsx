@@ -153,15 +153,15 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
               </div>
               <div className="flex flex-nowrap">
                 {mesocycles.map((meso, mesoIndex) => {
-                  const width = meso.microcycles.length * 120; // 120px per microcycle
+                  const width = meso.microcycles.length * 140; // 140px per microcycle
                   return meso.microcycles.length > 0 ? (
                     <div 
                       key={meso.id}
-                      className={cn("relative text-center border font-semibold border-border py-3 shrink-0 rounded-md", getSubtleIntensityBg(meso.intensity))}
+                      className={cn("relative text-center border font-semibold border-border py-3 shrink-0 rounded-md overflow-hidden", getSubtleIntensityBg(meso.intensity))}
                       style={{ width: `${width}px` }}
                     >
                       {/* Mesocycle Name Row with Clickable Intensity Badge */}
-                      <div className="flex items-center justify-center gap-2">
+                      <div className="flex items-center justify-center gap-1.5 flex-wrap min-w-0 px-2">
                         <span>{meso.name}</span>
                         {onMesocycleIntensityChange ? (
                           <Popover>
