@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -9,13 +9,11 @@ import { Switch } from '@/components/ui/switch';
 import { GripVertical, MoreVertical, Link2, Copy, Trash2, Plus, StickyNote, Calculator, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { WorkoutExercise } from '@/types/workout';
 import { ParameterInputField } from './ParameterInputField';
 import { getParametersForMethod } from '@/data/methodParameters';
 import { ParameterVisibilityPopover, ParameterVisibilityOverrides, isParameterVisible } from './ParameterVisibilityPopover';
 import { ToolboxEntry } from '@/types/toolbox';
-import { ExerciseChangePopup } from './ExerciseChangePopup';
 
 interface WorkoutExerciseCardProps {
   exercise: WorkoutExercise;
@@ -86,7 +84,6 @@ export function WorkoutExerciseCard({
   onChangeExercise,
   onOpenChangeLibrary,
 }: WorkoutExerciseCardProps) {
-  const [isChangePopoverOpen, setIsChangePopoverOpen] = useState(false);
   // Get parameters: FIRST derive from exercise.parameters (from method periodization), THEN fallback to static dictionary
   const methodParams = (() => {
     // PRIMARY: Derive parameters from exercise.parameters (populated from method periodization grid)
@@ -267,41 +264,13 @@ export function WorkoutExerciseCard({
           {/* Exercise Header */}
           <div className="flex items-start justify-between">
             <div>
-              {/* Exercise name with inline change popover */}
-              {onChangeExercise ? (
-                <Popover open={isChangePopoverOpen} onOpenChange={setIsChangePopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <h4 
-                      className="font-medium text-primary hover:underline cursor-pointer"
-                      title="Click to change exercise"
-                    >
-                      {exercise.exerciseName}
-                    </h4>
-                  </PopoverTrigger>
-                  <PopoverContent 
-                    className="p-0 w-auto" 
-                    align="start" 
-                    side="bottom"
-                    sideOffset={4}
-                  >
-                    <ExerciseChangePopup
-                      onSelect={(newExercise) => {
-                        onChangeExercise(newExercise);
-                        setIsChangePopoverOpen(false);
-                      }}
-                      currentExerciseId={exercise.exerciseId}
-                      onClose={() => setIsChangePopoverOpen(false)}
-                    />
-                  </PopoverContent>
-                </Popover>
-              ) : (
-                <h4 
-                  className={`font-medium ${onOpenDetail ? 'text-primary hover:underline cursor-pointer' : ''}`}
-                  onClick={() => onOpenDetail?.()}
-                >
-                  {exercise.exerciseName}
-                </h4>
-              )}
+              {/* Exercise name - click to view details */}
+              <h4 
+                className={`font-medium ${onOpenDetail ? 'text-primary hover:underline cursor-pointer' : ''}`}
+                onClick={() => onOpenDetail?.()}
+              >
+                {exercise.exerciseName}
+              </h4>
               {!isCollapsed && (
                 <p className="text-sm text-muted-foreground">
                   {exercise.methodId} {exercise.categoryName && `• ${exercise.categoryName}`}
