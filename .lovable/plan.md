@@ -1,103 +1,55 @@
 
+## Fix: Increase Column Width and Update Copy Button Style
 
-## Fix: Mesocycle Header Overcrowding in Step 1
-
-### Problem
-When a mesocycle has only 1 microcycle (7 days), its header width is only 120px, but the content (name + intensity badge + icons + dates) requires more space. This causes:
-1. Text and badges to overlap with adjacent mesocycles
-2. Intensity badge extending outside the container box
-3. Visual clutter making it hard to read
+### Issues to Address
+1. **Copy button overlapping mesocycle name**: The 140px width is still too tight for single-microcycle mesocycles with a copy button
+2. **Copy button style mismatch**: The current copy button uses a lighter style, but the user wants it to match Step 2's darker border style
 
 ### Solution
-Increase the **minimum width per microcycle** to ensure mesocycle headers have enough room for their content. The key insight is that a single-microcycle mesocycle still needs enough horizontal space for:
-- Mesocycle name (e.g., "Mesocycle 3")
-- Intensity badge (e.g., "DELOAD" or "EXTREMELY HARD")
-- Copy button (if not the first mesocycle)
-- Date range text
 
-### Implementation
+#### 1. Increase microcycle width from 140px → 160px
+This provides more breathing room for the header content and prevents the copy button from overlapping.
 
-**Files to modify:**
-1. `src/components/mesocycle/MicrocycleIntensityPlanning.tsx`
-2. `src/components/mesocycle/MicrocycleIntensityColumn.tsx`
+| Microcycles | Before (140px) | After (160px) |
+|-------------|----------------|---------------|
+| 1 | 140px | 160px |
+| 4 | 560px | 640px |
 
-### Changes
+#### 2. Match copy button style to Step 2
+The reference screenshot shows the copy button with:
+- Darker border (`border-2 border-gray-800`)
+- Stronger shadow (`shadow-md`)
+- Darker icon (`text-gray-800`)
+- Slightly smaller (`h-5 w-5`)
 
-#### 1. Increase microcycle column width from 120px → 140px
+### Files to Modify
 
-This gives each microcycle column 20px more breathing room, which translates to:
-- 1 microcycle mesocycle: 140px (was 120px) 
-- 4 microcycle mesocycle: 560px (was 480px)
+**`src/components/mesocycle/MicrocycleIntensityPlanning.tsx`**:
+1. Line 156: Change `140` → `160` for width calculation
+2. Lines 218-229: Update copy button styling to match Step 2:
+   ```
+   Before: "h-6 w-6 p-0 bg-white hover:bg-white/90 shadow-sm border border-border"
+   After:  "h-5 w-5 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"
+   
+   Icon before: "h-3 w-3 text-foreground"
+   Icon after:  "h-3 w-3 text-gray-800"
+   ```
 
-**MicrocycleIntensityPlanning.tsx (line 156):**
-```typescript
-// Before
-const width = meso.microcycles.length * 120; // 120px per microcycle
-
-// After  
-const width = meso.microcycles.length * 140; // 140px per microcycle
-```
-
-**MicrocycleIntensityColumn.tsx (line 136 and 237):**
-```typescript
-// Before
-<div className={cn("flex flex-col w-[120px] shrink-0 ...")}>
-
-// After
-<div className={cn("flex flex-col w-[140px] shrink-0 ...")}>
-```
-
-```typescript
-// Before (line 237)
-<div className="text-xs mt-2 text-center ... w-[120px] ...">
-
-// After
-<div className="text-xs mt-2 text-center ... w-[140px] ...">
-```
-
-#### 2. Make mesocycle header content more flexible
-
-Add `overflow-hidden` and `min-w-0` to prevent content from overflowing, and use `flex-wrap` or truncation for very long intensity names:
-
-**MicrocycleIntensityPlanning.tsx (line 164):**
-```typescript
-// Before
-<div className="flex items-center justify-center gap-2">
-
-// After
-<div className="flex items-center justify-center gap-1.5 flex-wrap min-w-0 px-2">
-```
-
-Also ensure the mesocycle header container has `overflow-hidden`:
-```typescript
-// Line 160
-<div 
-  key={meso.id}
-  className={cn("relative text-center border font-semibold border-border py-3 shrink-0 rounded-md overflow-hidden", ...)}
-```
+**`src/components/mesocycle/MicrocycleIntensityColumn.tsx`**:
+1. Line 136: Change `w-[140px]` → `w-[160px]` for column width
+2. Line 237: Change `w-[140px]` → `w-[160px]` for intensity label width
 
 ### Summary of Changes
 
 | File | Location | Change |
 |------|----------|--------|
-| `MicrocycleIntensityPlanning.tsx` | Line 156 | `120` → `140` for width calculation |
-| `MicrocycleIntensityPlanning.tsx` | Line 160 | Add `overflow-hidden` to mesocycle header |
-| `MicrocycleIntensityPlanning.tsx` | Line 164 | Add `flex-wrap min-w-0 px-2`, reduce `gap-2` → `gap-1.5` |
-| `MicrocycleIntensityColumn.tsx` | Line 136 | `w-[120px]` → `w-[140px]` |
-| `MicrocycleIntensityColumn.tsx` | Line 237 | `w-[120px]` → `w-[140px]` |
+| `MicrocycleIntensityPlanning.tsx` | Line 156 | `140` → `160` (width calculation) |
+| `MicrocycleIntensityPlanning.tsx` | Line 225 | Update button class to match Step 2 styling |
+| `MicrocycleIntensityPlanning.tsx` | Line 228 | Update icon class to `text-gray-800` |
+| `MicrocycleIntensityColumn.tsx` | Line 136 | `w-[140px]` → `w-[160px]` |
+| `MicrocycleIntensityColumn.tsx` | Line 237 | `w-[140px]` → `w-[160px]` |
 
-### Why 140px?
-- 120px was too tight for mesocycle names + badges
-- 140px provides comfortable padding for:
-  - "Mesocycle 3" (≈75px)
-  - "DELOAD" badge (≈50px)
-  - Gap and icon (≈15px)
-- Still keeps the overall view compact
-
-### Testing
-After implementation:
-1. Create a plan with 3+ mesocycles where one has only 1 microcycle
-2. Verify all mesocycle headers are fully visible without overlap
-3. Verify intensity badges stay within their container
-4. Verify the scrollable area still works correctly
-
+### Visual Result
+- Single-microcycle mesocycles will have 160px width (20px more space)
+- Copy button will have a more pronounced, darker border matching Step 2's style
+- No more overlap between the mesocycle name and the copy button
