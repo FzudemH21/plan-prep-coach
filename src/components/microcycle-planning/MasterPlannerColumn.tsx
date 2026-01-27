@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dumbbell, Plus, Trophy, Calendar, ChevronDown, ChevronRight, MessageSquare, Pencil, StickyNote, Calculator, ArrowUp, ArrowDown, Copy, Trash2, MoreVertical, Link2, ClipboardPaste, RefreshCw } from 'lucide-react';
-import { ExerciseChangePopup } from './ExerciseChangePopup';
 import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
 import { Switch } from '@/components/ui/switch';
 import { SubGoal, Event } from '@/types/training';
@@ -1261,28 +1260,15 @@ export function MasterPlannerColumn({
                                             {supersetLabel}
                                           </Badge>
                                         )}
-                                        <Popover>
-                                          <PopoverTrigger asChild>
-                                            <button
-                                              onClick={(e) => e.stopPropagation()}
-                                              className="font-semibold truncate flex-1 text-left hover:underline cursor-pointer"
-                                            >
-                                              {exercise.exerciseName}
-                                            </button>
-                                          </PopoverTrigger>
-                                          <PopoverContent className="w-auto p-0 z-[300]" align="start">
-                                            <ExerciseChangePopup
-                                              onSelect={(newEx) => onExerciseChange?.(
-                                                day.dateString,
-                                                session.sessionIndex,
-                                                section.id,
-                                                exercise.id || exercise.exerciseId,
-                                                newEx
-                                              )}
-                                              currentExerciseId={exercise.exerciseId}
-                                            />
-                                          </PopoverContent>
-                                        </Popover>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            onOpenExerciseDetail?.(exercise);
+                                          }}
+                                          className="font-semibold truncate flex-1 text-left hover:underline cursor-pointer"
+                                        >
+                                          {exercise.exerciseName}
+                                        </button>
                                         {/* Exercise reorder arrows */}
                                         {sectionExercises.length > 1 && (
                                           <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -1515,28 +1501,15 @@ export function MasterPlannerColumn({
                                   {supersetLabel}
                                 </Badge>
                               )}
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <button
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="font-semibold truncate flex-1 text-left hover:underline cursor-pointer"
-                                  >
-                                    {exercise.exerciseName}
-                                  </button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0 z-[300]" align="start">
-                                  <ExerciseChangePopup
-                                    onSelect={(newEx) => onExerciseChange?.(
-                                      day.dateString,
-                                      session.sessionIndex,
-                                      '',
-                                      exercise.id || exercise.exerciseId,
-                                      newEx
-                                    )}
-                                    currentExerciseId={exercise.exerciseId}
-                                  />
-                                </PopoverContent>
-                              </Popover>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onOpenExerciseDetail?.(exercise);
+                                }}
+                                className="font-semibold truncate flex-1 text-left hover:underline cursor-pointer"
+                              >
+                                {exercise.exerciseName}
+                              </button>
                               {/* Dropdown menu for duplicate/delete */}
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
