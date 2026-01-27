@@ -59,7 +59,6 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
   const { libraries } = useCustomLibraries();
   
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    athletes: true,
     templates: true,
     exerciseLibraries: false,
   });
@@ -94,14 +93,6 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
     path: `/templates/libraries/${lib.id}`,
     icon: Library
   }));
-
-  const athletesGroup: NavGroup = {
-    title: "Athletes",
-    icon: Users,
-    items: [
-      { title: "Athlete Database", path: "/athletes", icon: Users },
-    ]
-  };
 
   const templatesGroup: NavGroup = {
     title: "Templates & Library",
@@ -253,8 +244,18 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
             Home
           </Button>
 
-          {/* Athletes Group */}
-          {renderNavGroup(athletesGroup, "athletes")}
+          {/* Athlete Database - standalone */}
+          <Button
+            variant="ghost"
+            className={cn(
+              "w-full justify-start h-10",
+              isActive("/athletes") && "bg-accent text-accent-foreground font-medium"
+            )}
+            onClick={() => handleNavigate("/athletes")}
+          >
+            <Users className="h-4 w-4 mr-2" />
+            Athlete Database
+          </Button>
 
           {/* Templates & Library Group */}
           {renderNavGroup(templatesGroup, "templates")}
