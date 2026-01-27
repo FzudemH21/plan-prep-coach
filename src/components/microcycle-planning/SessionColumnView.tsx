@@ -118,8 +118,8 @@ export function SessionColumnView({
 }: SessionColumnViewProps) {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionName, setEditingSectionName] = useState('');
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [exerciseToDelete, setExerciseToDelete] = useState<string | null>(null);
+  const [deleteSectionDialogOpen, setDeleteSectionDialogOpen] = useState(false);
+  const [sectionToDelete, setSectionToDelete] = useState<string | null>(null);
   const [isEditingSessionName, setIsEditingSessionName] = useState(false);
   const [editingSessionNameValue, setEditingSessionNameValue] = useState('');
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
@@ -170,17 +170,12 @@ export function SessionColumnView({
     setIsEditingSessionName(false);
   };
 
-  const handleDeleteExerciseClick = (exerciseId: string) => {
-    setExerciseToDelete(exerciseId);
-    setDeleteDialogOpen(true);
-  };
-
-  const confirmDeleteExercise = () => {
-    if (exerciseToDelete) {
-      onDeleteExercise(exerciseToDelete);
+  const confirmDeleteSection = () => {
+    if (sectionToDelete) {
+      onDeleteSection(sectionToDelete);
     }
-    setDeleteDialogOpen(false);
-    setExerciseToDelete(null);
+    setSectionToDelete(null);
+    setDeleteSectionDialogOpen(false);
   };
 
   // Group exercises by section
@@ -299,7 +294,7 @@ export function SessionColumnView({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem
-                        onClick={() => handleDeleteExerciseClick(exercise.id)}
+                        onClick={() => onDeleteExercise(exercise.id)}
                         className="text-destructive"
                       >
                         <Trash2 className="mr-2 h-3 w-3" />
@@ -671,9 +666,6 @@ export function SessionColumnView({
                               )}
                               
                               <span className="text-sm font-semibold">{section.name}</span>
-                              <Badge variant="secondary" className="text-xs">
-                                {exercisesBySection.sectioned[section.id]?.length || 0}
-                              </Badge>
                             </div>
                             <div className="flex items-center gap-1">
                               {/* Copy Section Button */}
@@ -700,7 +692,10 @@ export function SessionColumnView({
                                 variant="ghost"
                                 size="sm"
                                 className="h-6 w-6 p-0 text-destructive hover:bg-accent"
-                                onClick={() => onDeleteSection(section.id)}
+                                onClick={() => {
+                                  setSectionToDelete(section.id);
+                                  setDeleteSectionDialogOpen(true);
+                                }}
                               >
                                 <Trash2 className="h-3 w-3" />
                               </Button>
@@ -817,17 +812,17 @@ export function SessionColumnView({
         </CardContent>
       </div>
 
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialog open={deleteSectionDialogOpen} onOpenChange={setDeleteSectionDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Exercise</AlertDialogTitle>
+            <AlertDialogTitle>Delete Section</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to remove this exercise from the session?
+              Are you sure you want to delete this section? All exercises in this section will also be removed.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteExercise}>Delete</AlertDialogAction>
+            <AlertDialogAction onClick={confirmDeleteSection}>Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
