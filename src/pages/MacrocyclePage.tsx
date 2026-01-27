@@ -1403,8 +1403,16 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                   <div key={goal.id} className="border rounded-lg overflow-hidden">
                     {/* Primary Goal Header */}
                     <div 
-                      className="p-3 bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
+                      className={cn(
+                        "p-3 bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors",
+                        selectedSmartGoal === goal.id && "ring-2 ring-inset ring-primary bg-primary/5"
+                      )}
                       onClick={() => {
+                        // Select/deselect this goal for scheduling
+                        setSelectedSmartGoal(selectedSmartGoal === goal.id ? null : goal.id);
+                        setSelectedTest(null);
+                        setSelectedEvent(null);
+                        // Also toggle expand
                         setExpandedPrimaryGoals(prev => {
                           const next = new Set(prev);
                           if (next.has(goal.id)) {
@@ -1784,7 +1792,24 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                         e.preventDefault();
                         e.stopPropagation();
                         
-                        if (selectedTest) {
+                        // Handle primary (SMART) goal scheduling
+                        if (selectedSmartGoal) {
+                          setSmartGoals(prev => prev.map(goal => {
+                            if (goal.id === selectedSmartGoal) {
+                              const currentDates = goal.testDates || [];
+                              const isAlreadyScheduled = currentDates.includes(dateStr);
+                              if (isAlreadyScheduled) {
+                                toast({ title: 'Test Unscheduled', description: `Removed test from ${format(date, 'PPP')}` });
+                                return { ...goal, testDates: currentDates.filter(d => d !== dateStr) };
+                              } else {
+                                toast({ title: 'Test Scheduled', description: `Scheduled test for ${format(date, 'PPP')}` });
+                                return { ...goal, testDates: [...currentDates, dateStr] };
+                              }
+                            }
+                            return goal;
+                          }));
+                        } else if (selectedTest) {
+                          // First check user-created subGoals
                           const updated = [...subGoals];
                           const subGoalIndex = updated.findIndex(sg => sg.id === selectedTest);
                           if (subGoalIndex !== -1) {
@@ -1802,11 +1827,26 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                               toast({ title: 'Test Scheduled', description: `Added "${updated[subGoalIndex].testMethod}" to ${format(date, 'PPP')}` });
                             }
                             setSubGoals(updated);
+                          } else {
+                            // Check if it's a derived sub-goal and "promote" it
+                            const derivedSubGoal = derivedSubGoals.find(sg => sg.id === selectedTest);
+                            if (derivedSubGoal) {
+                              const promotedSubGoal: SubGoal = {
+                                ...derivedSubGoal,
+                                testDates: [dateStr],
+                                isDerived: false,
+                              };
+                              setSubGoals(prev => [...prev, promotedSubGoal]);
+                              toast({ 
+                                title: 'Test Scheduled', 
+                                description: `Scheduled "${derivedSubGoal.description}" for ${format(date, 'PPP')}` 
+                              });
+                            }
                           }
                         } else if (selectedEvent) {
                           scheduleEvent(selectedEvent, date);
                         } else {
-                          toast({ title: 'Select an item', description: 'Choose a sub-goal or event from the list, then click a date.' });
+                          toast({ title: 'Select an item', description: 'Choose a goal, sub-goal, or event from the list, then click a date.' });
                         }
                       };
                       
