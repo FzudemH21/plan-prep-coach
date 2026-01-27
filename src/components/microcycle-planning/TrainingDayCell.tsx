@@ -502,11 +502,11 @@ export function TrainingDayCell({
                 onAddSession(day.dateString);
               }}
               variant="ghost"
-              size="sm"
-              className="w-full mt-1 h-7 text-xs"
+              size="icon"
+              className="w-full mt-1 h-7"
+              title="Add session"
             >
-              <Plus className="h-3 w-3 mr-1" />
-              Add Session
+              <Plus className="h-4 w-4" />
             </Button>
           )}
         </>
@@ -533,11 +533,11 @@ export function TrainingDayCell({
                         onAddSession(day.dateString);
                       }}
                       variant="ghost"
-                      size="sm"
-                      className="mt-2 h-7 text-xs"
+                      size="icon"
+                      className="mt-2 h-7 w-7"
+                      title="Add session"
                     >
-                      <Plus className="h-3 w-3 mr-1" />
-                      Add Session
+                      <Plus className="h-4 w-4" />
                     </Button>
                   )}
                 </>
@@ -567,11 +567,11 @@ export function TrainingDayCell({
                       onAddSession(day.dateString);
                     }}
                     variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
+                    size="icon"
+                    className="h-7 w-7"
+                    title="Add session"
                   >
-                    <Plus className="h-3 w-3 mr-1" />
-                    Add Session
+                    <Plus className="h-4 w-4" />
                   </Button>
                 )
               )}
