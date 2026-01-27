@@ -1,46 +1,117 @@
 
 
-## Remove Exercise Allocation Indicators from Exercise Library Panel
+## Replace "Add Session" Button Text with Plus Icon Only
 
 ### Overview
 
-Remove the colored dots and allocation count numbers next to exercises in the Exercise Library Panel to create a cleaner, slimmer interface.
+Replace the "Add Session" button text in the Training Calendar view with a simple plus icon button to create a cleaner, more compact interface.
 
 ---
 
 ### Changes
 
-**File**: `src/components/microcycle-planning/ExerciseLibraryPanel.tsx`
+**File**: `src/components/microcycle-planning/TrainingDayCell.tsx`
 
-#### Remove Colored Dot and Allocation Badge
+Three "Add Session" buttons need to be updated to show only a plus icon:
 
-The exercise items appear in two places in the code (for methods with and without categories). In both places, remove:
+#### 1. Button for days with existing sessions (lines 497-511)
+Currently shows after session cards when day has training.
 
-1. **The colored allocation dot** (lines 231-234 and 316-319):
 ```tsx
-// REMOVE:
-<div className={cn(
-  "w-2 h-2 rounded-full flex-shrink-0",
-  getAllocationDotColor(allocationCount)
-)} />
-```
-
-2. **The allocation count Badge** (lines 236-241 and 321-326):
-```tsx
-// REMOVE:
-<Badge 
-  variant={getAllocationBadgeVariant(allocationCount)} 
-  className="text-xs px-2 py-0.5 font-semibold"
+// BEFORE:
+<Button
+  onClick={(e) => {
+    e.stopPropagation();
+    onAddSession(day.dateString);
+  }}
+  variant="ghost"
+  size="sm"
+  className="w-full mt-1 h-7 text-xs"
 >
-  {allocationCount}
-</Badge>
+  <Plus className="h-3 w-3 mr-1" />
+  Add Session
+</Button>
+
+// AFTER:
+<Button
+  onClick={(e) => {
+    e.stopPropagation();
+    onAddSession(day.dateString);
+  }}
+  variant="ghost"
+  size="icon"
+  className="w-full mt-1 h-7"
+  title="Add session"
+>
+  <Plus className="h-4 w-4" />
+</Button>
 ```
 
-3. **Remove unused variables and functions**:
-   - Remove `allocationCount` variable in each exercise map (lines 211 and 296)
-   - Remove `getAllocationBadgeVariant` function (lines 71-76)
-   - Remove `getAllocationDotColor` function (lines 78-83)
-   - Remove `Badge` import if no longer needed (line 4)
+#### 2. Button for rest days (lines 530-542)
+Currently shows on hover for days marked as rest.
+
+```tsx
+// BEFORE:
+<Button
+  onClick={(e) => {
+    e.stopPropagation();
+    onAddSession(day.dateString);
+  }}
+  variant="ghost"
+  size="sm"
+  className="mt-2 h-7 text-xs"
+>
+  <Plus className="h-3 w-3 mr-1" />
+  Add Session
+</Button>
+
+// AFTER:
+<Button
+  onClick={(e) => {
+    e.stopPropagation();
+    onAddSession(day.dateString);
+  }}
+  variant="ghost"
+  size="icon"
+  className="mt-2 h-7 w-7"
+  title="Add session"
+>
+  <Plus className="h-4 w-4" />
+</Button>
+```
+
+#### 3. Button for empty days (lines 564-576)
+The main one visible in the screenshot - shows in empty day cells.
+
+```tsx
+// BEFORE:
+<Button
+  onClick={(e) => {
+    e.stopPropagation();
+    onAddSession(day.dateString);
+  }}
+  variant="outline"
+  size="sm"
+  className="h-7 text-xs"
+>
+  <Plus className="h-3 w-3 mr-1" />
+  Add Session
+</Button>
+
+// AFTER:
+<Button
+  onClick={(e) => {
+    e.stopPropagation();
+    onAddSession(day.dateString);
+  }}
+  variant="outline"
+  size="icon"
+  className="h-7 w-7"
+  title="Add session"
+>
+  <Plus className="h-4 w-4" />
+</Button>
+```
 
 ---
 
@@ -48,28 +119,33 @@ The exercise items appear in two places in the code (for methods with and withou
 
 **Before:**
 ```
-⋮ ● Squat                    [2]
-⋮ ● RDL                      [0]
+┌─────────────────────┐
+│ 26  🟨              │
+│                     │
+│   [+ Add Session]   │
+│                     │
+└─────────────────────┘
 ```
 
 **After:**
 ```
-⋮ Squat
-⋮ RDL
+┌─────────────────────┐
+│ 26  🟨              │
+│                     │
+│        [+]          │
+│                     │
+└─────────────────────┘
 ```
 
 ---
 
 ### Summary
 
-| Item | Action |
-|------|--------|
-| Colored allocation dot | Remove |
-| Allocation count Badge | Remove |
-| `getAllocationBadgeVariant` function | Remove |
-| `getAllocationDotColor` function | Remove |
-| `allocationCount` variable | Remove |
-| `Badge` import | Remove (if unused) |
+| Location | Change |
+|----------|--------|
+| Days with sessions | Replace "Add Session" text with plus icon |
+| Rest days | Replace "Add Session" text with plus icon |
+| Empty days | Replace "Add Session" text with plus icon |
 
-The exercises will now show only the drag handle (GripVertical) and the exercise name, making the list slimmer and cleaner.
+All buttons will have a `title="Add session"` attribute for accessibility/tooltip on hover, so users can still understand the button's purpose.
 
