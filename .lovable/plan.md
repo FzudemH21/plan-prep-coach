@@ -1,119 +1,78 @@
 
-## Plan: Replace "Next" Button with Final Action on Last Step of Microcycle Planning
+
+## Plan: Simplify Athletes Navigation to Direct Link
 
 ### Summary
-On the last step of Microcycle Planning (Step 2 - Training Calendar), replace the disabled "Next" button with a meaningful final action. The best option is to show a "Save & Finish" button that saves the program and navigates back to the library, since that's the logical conclusion of the planning workflow.
+Remove the collapsible dropdown for "Athletes" in the navigation sidebar and make it a direct link to the Athlete Database, since there's only one item in that section.
 
 ---
 
 ### Current Behavior
-- **Step 1**: "Previous" goes to Mesocycle, "Next" goes to Step 2 ✓
-- **Step 2**: "Previous" goes to Step 1, "Next" is **disabled** (confusing - implies there's more)
+```
+▼ Athletes                    (collapsible header)
+    └── Athlete Database      (sub-item)
+```
 
 ### Proposed Behavior
-- **Step 1**: "Previous" goes to Mesocycle, "Next" goes to Step 2 (unchanged)
-- **Step 2**: "Previous" goes to Step 1, **"Save & Finish"** saves and navigates to library
+```
+Athlete Database              (direct link, same level as Home/Analytics)
+```
 
 ---
 
 ### Implementation
 
-**File**: `src/pages/MicrocyclePlanningPage.tsx`
+**File**: `src/components/layout/NavigationSidebar.tsx`
 
-**Location**: Lines 2929-2955 (NavigationButtons component)
+**Change**: Replace the `renderNavGroup(athletesGroup, "athletes")` call with a standalone button, similar to how "Home" and "Analytics" are rendered.
 
-**Change**: Modify the NavigationButtons component to conditionally render different right-side buttons based on whether the user is on the last step.
+#### Remove
+- The `athletesGroup` definition (lines 98-104)
+- The `athletes: true` from initial `openGroups` state (line 62)
+- The `{renderNavGroup(athletesGroup, "athletes")}` call (line 257)
 
-```text
-Current:
-+------------------+     +------------------+
-|  ← Previous      |     |   Next →         |  (disabled on Step 2)
-+------------------+     +------------------+
-
-After:
-Step 1:
-+------------------+     +------------------+
-|  ← Back to       |     |   Next →         |
-|    Mesocycle     |     |                  |
-+------------------+     +------------------+
-
-Step 2:
-+------------------+     +------------------+
-|  ← Previous      |     | ✓ Save & Finish  |
-+------------------+     +------------------+
-```
-
-### Code Changes
+#### Add
+A standalone button for "Athlete Database" between Home and Templates:
 
 ```tsx
-const NavigationButtons = () => {
-  const isLastStep = currentStep >= totalSteps;
-  
-  return (
-    <div className="flex flex-col md:flex-row md:justify-between items-stretch md:items-center gap-3 w-full">
-      <Button 
-        onClick={() => {
-          if (currentStep <= 1) {
-            localStorage.setItem('mesocycleStep', '5');
-            navigate('/mesocycle');
-          } else {
-            setCurrentStep(Math.max(1, currentStep - 1));
-          }
-        }}
-        variant="outline"
-        className="w-full md:w-auto"
-      >
-        <ArrowLeft className="mr-2 h-4 w-4" />
-        {currentStep <= 1 ? "Back to Mesocycle Planning" : "Previous"}
-      </Button>
-      
-      {isLastStep ? (
-        <Button 
-          onClick={() => {
-            saveCurrentSession();
-            toast({
-              title: "Program saved",
-              description: "Your training program has been saved.",
-            });
-            navigate("/templates/programs");
-          }}
-          className="w-full md:w-auto"
-        >
-          <Check className="mr-2 h-4 w-4" />
-          Save & Finish
-        </Button>
-      ) : (
-        <Button 
-          onClick={() => setCurrentStep(Math.min(totalSteps, currentStep + 1))}
-          className="w-full md:w-auto"
-        >
-          Next
-          <ArrowRight className="ml-2 h-4 w-4" />
-        </Button>
-      )}
-    </div>
-  );
-};
-```
-
-### Import Required
-Add `Check` to the existing lucide-react imports:
-```tsx
-import { ArrowLeft, ArrowRight, ..., Check } from 'lucide-react';
+{/* Athlete Database - standalone */}
+<Button
+  variant="ghost"
+  className={cn(
+    "w-full justify-start h-10",
+    isActive("/athletes") && "bg-accent text-accent-foreground font-medium"
+  )}
+  onClick={() => handleNavigate("/athletes")}
+>
+  <Users className="h-4 w-4 mr-2" />
+  Athlete Database
+</Button>
 ```
 
 ---
 
-### Alternative Options Considered
+### Visual Result
 
-| Option | Pros | Cons |
-|--------|------|------|
-| **Save & Finish** (navigates to library) | Clear completion, prevents "dead end" | User leaves the page |
-| **Save Program** (same as header) | Duplicates existing functionality | Redundant with header button |
-| **Complete Planning** (no navigation) | Stays on page | Less clear what happens |
-| **Hide button entirely** | Simple | Unbalanced layout |
+**Before:**
+```
+Home
+▼ Athletes
+    Athlete Database
+▼ Templates & Library
+    Training Programs
+    ...
+Analytics
+```
 
-**Recommendation**: "Save & Finish" provides the clearest indication that the user has completed the planning workflow and gives them a smooth transition back to their program library.
+**After:**
+```
+Home
+Athlete Database
+▼ Templates & Library
+    Training Programs
+    ...
+Analytics
+```
 
 ---
 
@@ -121,20 +80,5 @@ import { ArrowLeft, ArrowRight, ..., Check } from 'lucide-react';
 
 | File | Changes |
 |------|---------|
-| `src/pages/MicrocyclePlanningPage.tsx` | Modify NavigationButtons to show "Save & Finish" on last step |
+| `src/components/layout/NavigationSidebar.tsx` | Replace Athletes collapsible group with direct link button |
 
----
-
-### Visual Result
-
-**Step 1 (Exercise Distribution)**:
-```
-[ ← Back to Mesocycle Planning ]                    [ Next → ]
-```
-
-**Step 2 (Training Calendar)**:
-```
-[ ← Previous ]                               [ ✓ Save & Finish ]
-```
-
-The "Save & Finish" button saves the program and navigates the user back to the Training Programs library, providing a clear conclusion to the planning workflow.
