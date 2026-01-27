@@ -107,3 +107,54 @@ export const SEX_LABELS: Record<Sex, string> = {
   female: 'Female',
   other: 'Other',
 };
+
+// ============ ATHLETE CALENDAR ASSIGNMENT ============
+// For assigning training programs to athlete calendars
+
+export interface AssignedMicrocycle {
+  id: string;
+  name: string;
+  duration: number; // days
+  intensity: string;
+}
+
+export interface AssignedMesocycle {
+  id: string;
+  name: string;
+  startDate: string; // ISO date string (shifted)
+  endDate: string;   // ISO date string (shifted)
+  weeks: number;
+  duration: number;  // days
+  intensity: string;
+  microcycles: AssignedMicrocycle[];
+  sessionsPerWeek: number;
+  sessionLength: number;
+  trainingQualities?: string[];
+  allocatedSubGoals?: string[];
+}
+
+export interface AthleteCalendarAssignment {
+  id: string;
+  athleteId: string;
+  programId: string;           // Reference to source TrainingProgram
+  programName: string;         // Snapshot of program name at assignment time
+  
+  // Assignment dates (shifted to athlete's calendar)
+  startDate: string;           // ISO date string
+  endDate: string;             // ISO date string
+  
+  // Original program dates (for reference/warning)
+  originalStartDate: string;
+  originalEndDate: string;
+  
+  // Selection filters (what portions were assigned)
+  selectedMesocycleIds: string[];      // Empty = all mesocycles
+  selectedMicrocycleIds: string[];     // Empty = all microcycles in selected mesocycles
+  
+  // Copied data (snapshot at assignment time)
+  assignedMesocycles: AssignedMesocycle[];  // Full mesocycle data with shifted dates
+  
+  // Metadata
+  createdAt: string;
+  notes?: string;
+}
