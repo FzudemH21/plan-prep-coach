@@ -153,7 +153,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
               </div>
               <div className="flex flex-nowrap">
                 {mesocycles.map((meso, mesoIndex) => {
-                  const width = meso.microcycles.length * 140; // 140px per microcycle
+                  const width = meso.microcycles.length * 160; // 160px per microcycle
                   return meso.microcycles.length > 0 ? (
                     <div 
                       key={meso.id}
@@ -222,10 +222,10 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                             e.stopPropagation();
                             onCopyMesocycle(meso.id);
                           }}
-                          className="absolute top-1 right-1 h-6 w-6 p-0 bg-white hover:bg-white/90 shadow-sm border border-border"
+                          className="absolute top-1 right-1 h-5 w-5 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"
                           title="Copy intensity pattern from previous mesocycle"
                         >
-                          <Copy className="h-3 w-3 text-foreground" />
+                          <Copy className="h-3 w-3 text-gray-800" />
                         </Button>
                       )}
                     </div>
