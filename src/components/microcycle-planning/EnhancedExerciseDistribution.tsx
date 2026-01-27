@@ -1985,8 +1985,7 @@ export function EnhancedExerciseDistribution({
                     </Badge>
                   </div>
                   
-                  {/* Sticky Icons */}
-                  <div className="sticky right-4 flex items-center gap-1 z-10 bg-background/80 rounded p-1">
+                  <div className="flex items-center gap-1">
                     {(() => {
                       const currentMesoIndex = allMesocycles.findIndex(m => m.id === mesocycle.id);
                       const isFirstMesocycle = currentMesoIndex === 0;
@@ -2076,8 +2075,7 @@ export function EnhancedExerciseDistribution({
                             </Badge>
                           </div>
                           
-                          {/* Sticky Icons */}
-                          <div className="sticky right-2 flex items-center gap-1 z-10 bg-background/80 rounded p-1">
+                          <div className="flex items-center gap-1">
                             {!isVeryFirstMicrocycle && (
                               <Button
                                 size="sm"
