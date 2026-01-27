@@ -1608,6 +1608,7 @@ export function EnhancedExerciseDistribution({
       const newSections: SessionSection[] = [];
       const newSupersets: SupersetMapping = { ...supersets };
       const oldToNewExerciseIds: Record<string, string> = {};
+      const oldToNewSectionIds: Record<string, string> = {};
       
       // Loop through each microcycle pair
       mesocycle.microcycles.forEach((targetMicro, microIndex) => {
@@ -1625,7 +1626,28 @@ export function EnhancedExerciseDistribution({
           dayMapping[sourceDays[i].date] = targetDays[i].date;
         }
         
-        // Copy exercises for this microcycle pair
+        // STEP 1: Copy sections FIRST, building the oldToNewSectionIds mapping
+        sourceDays.forEach((sourceDay, dayIndex) => {
+          if (dayIndex >= minDays) return;
+          
+          const targetDate = dayMapping[sourceDay.date];
+          const sourceDateSections = sessionSections.filter(
+            s => s.dayDate === sourceDay.date
+          );
+          
+          sourceDateSections.forEach(section => {
+            const newSectionId = `section-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            oldToNewSectionIds[section.id] = newSectionId;
+            
+            newSections.push({
+              ...section,
+              id: newSectionId,
+              dayDate: targetDate,
+            });
+          });
+        });
+        
+        // STEP 2: Copy exercises AFTER, remapping sectionId using the mapping
         sourceDays.forEach((sourceDay, dayIndex) => {
           if (dayIndex >= minDays) return;
           
@@ -1642,29 +1664,12 @@ export function EnhancedExerciseDistribution({
               ...exercise,
               id: newId,
               dayDate: targetDate,
+              sectionId: exercise.sectionId ? oldToNewSectionIds[exercise.sectionId] : undefined,
             });
           });
         });
         
-        // Copy sections for this microcycle pair
-        sourceDays.forEach((sourceDay, dayIndex) => {
-          if (dayIndex >= minDays) return;
-          
-          const targetDate = dayMapping[sourceDay.date];
-          const sourceDateSections = sessionSections.filter(
-            s => s.dayDate === sourceDay.date
-          );
-          
-          sourceDateSections.forEach(section => {
-            newSections.push({
-              ...section,
-              id: `section-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-              dayDate: targetDate,
-            });
-          });
-        });
-        
-        // Copy supersets for this microcycle pair
+        // STEP 3: Copy supersets, remapping both exercise IDs and section IDs
         sourceDays.forEach((sourceDay, dayIndex) => {
           if (dayIndex >= minDays) return;
           
@@ -1678,7 +1683,8 @@ export function EnhancedExerciseDistribution({
               newSupersets[targetDate][Number(sessionIndex)] = {};
               
               Object.entries(sessionSupersets).forEach(([sectionId, sectionSupersets]) => {
-                newSupersets[targetDate][Number(sessionIndex)][sectionId] = {};
+                const newSectionId = oldToNewSectionIds[sectionId] || sectionId;
+                newSupersets[targetDate][Number(sessionIndex)][newSectionId] = {};
                 
                 Object.entries(sectionSupersets).forEach(([supersetId, exerciseIds]) => {
                   const newExerciseIds = exerciseIds
@@ -1686,7 +1692,7 @@ export function EnhancedExerciseDistribution({
                     .filter(id => id !== undefined);
                   
                   if (newExerciseIds.length > 0) {
-                    newSupersets[targetDate][Number(sessionIndex)][sectionId][supersetId] = newExerciseIds;
+                    newSupersets[targetDate][Number(sessionIndex)][newSectionId][supersetId] = newExerciseIds;
                   }
                 });
               });
