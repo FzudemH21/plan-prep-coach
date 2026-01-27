@@ -2121,7 +2121,7 @@ export function EnhancedExerciseDistribution({
                     )}
                     <div className="flex gap-4">
                       {days.map((day) => {
-                        const sessionsCount = day.sessions ?? 1;
+                        const sessionsCount = day.sessions ?? (day.intensity === 'off' ? 0 : 1);
                         
                         // Safety check
                         if (!day || !day.date) {

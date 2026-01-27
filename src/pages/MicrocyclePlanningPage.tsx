@@ -377,10 +377,15 @@ export default function MicrocyclePlanningPage() {
   // Sync day split states to trainingDays
   useEffect(() => {
     setTrainingDays(prev => 
-      prev.map(day => ({
-        ...day,
-        sessions: daySplitStates[day.date] ?? 1
-      }))
+      prev.map(day => {
+        // If there's a saved split state, use it
+        if (daySplitStates[day.date] !== undefined) {
+          return { ...day, sessions: daySplitStates[day.date] };
+        }
+        // Otherwise, default to 0 if intensity is "off", else 1
+        const defaultSessions = day.intensity === 'off' ? 0 : 1;
+        return { ...day, sessions: defaultSessions };
+      })
     );
   }, [daySplitStates]);
 
