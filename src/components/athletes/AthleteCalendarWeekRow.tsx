@@ -6,6 +6,7 @@ interface AthleteCalendarWeekRowProps {
   weekIdx: number;
   onSessionClick?: (dayDate: string, sessionIndex: number) => void;
   onDayClick?: (date: Date) => void;
+  onAddSession?: (date: Date) => void;
   onDeleteAssignment?: (assignmentId: string) => void;
   getIntensityColor?: (intensity: string) => string;
 }
@@ -15,6 +16,7 @@ export function AthleteCalendarWeekRow({
   weekIdx,
   onSessionClick,
   onDayClick,
+  onAddSession,
   onDeleteAssignment,
   getIntensityColor,
 }: AthleteCalendarWeekRowProps) {
@@ -35,6 +37,7 @@ export function AthleteCalendarWeekRow({
             day={day}
             onSessionClick={onSessionClick}
             onDayClick={onDayClick}
+            onAddSession={onAddSession}
             onDeleteAssignment={onDeleteAssignment}
             getIntensityColor={getIntensityColor}
           />

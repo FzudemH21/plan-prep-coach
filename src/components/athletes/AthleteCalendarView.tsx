@@ -3,7 +3,7 @@ import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trash2, Calendar } from 'lucide-react';
 import { Athlete, AthleteCalendarAssignment } from '@/types/athlete';
 import { AssignProgramDialog } from './AssignProgramDialog';
 import { useTrainingPrograms } from '@/hooks/useTrainingPrograms';
@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { AthleteCalendarWeekRow } from './AthleteCalendarWeekRow';
 import { AthleteCalendarDay, AthleteCalendarSession } from './AthleteCalendarDayCell';
+import { WorkoutSessionSheet } from '@/components/microcycle-planning/WorkoutSessionSheet';
 import { cn } from '@/lib/utils';
 
 interface AthleteCalendarViewProps {
@@ -49,6 +50,8 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [deleteAssignment, setDeleteAssignment] = useState<AthleteCalendarAssignment | null>(null);
+  const [sessionSheetOpen, setSessionSheetOpen] = useState(false);
+  const [selectedSessionDate, setSelectedSessionDate] = useState<Date | null>(null);
 
   const { programs } = useTrainingPrograms();
   const athleteData = useAthletes();
@@ -186,6 +189,11 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     setShowAssignDialog(true);
   };
 
+  const handleAddSession = (date: Date) => {
+    setSelectedSessionDate(date);
+    setSessionSheetOpen(true);
+  };
+
   const handleAssignProgram = (assignment: Omit<AthleteCalendarAssignment, 'id' | 'createdAt'>) => {
     athleteData.createCalendarAssignment(athlete.id, assignment);
     setShowAssignDialog(false);
@@ -214,47 +222,43 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         <CardHeader className="pb-4">
           {/* Navigation and Controls Row */}
           <div className="flex items-center justify-between gap-4">
-            {/* Left: Navigation */}
+            {/* Left: Title with Calendar Icon */}
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={handlePrevious}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="icon" onClick={handleNext}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleToday}>
-                Today
-              </Button>
-              <span className="text-sm font-medium text-muted-foreground ml-2">
+              <Calendar className="h-5 w-5 text-primary" />
+              <span className="text-base font-semibold">Athlete Calendar</span>
+              <span className="text-sm text-muted-foreground ml-2">
                 {dateRangeDisplay}
               </span>
             </div>
 
-            {/* Center: View Mode Selector */}
-            <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
-              {(['1week', '2week', '4week'] as ViewMode[]).map((mode) => (
-                <Button
-                  key={mode}
-                  variant={viewMode === mode ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode(mode)}
-                  className="h-7 px-3 text-xs"
-                >
-                  {mode === '1week' ? '1 Week' : mode === '2week' ? '2 Week' : '4 Week'}
-                </Button>
-              ))}
-            </div>
+            {/* Right: View Mode + Navigation */}
+            <div className="flex items-center gap-2">
+              {/* View Mode Selector */}
+              <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+                {(['1week', '2week', '4week'] as ViewMode[]).map((mode) => (
+                  <Button
+                    key={mode}
+                    variant={viewMode === mode ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode(mode)}
+                    className="h-7 px-3 text-xs"
+                  >
+                    {mode === '1week' ? '1W' : mode === '2week' ? '2W' : '4W'}
+                  </Button>
+                ))}
+              </div>
 
-            {/* Right: Assign Program Button */}
-            <Button
-              onClick={() => {
-                setSelectedDate(new Date());
-                setShowAssignDialog(true);
-              }}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Assign Program
-            </Button>
+              {/* Navigation */}
+              <Button variant="outline" size="icon" onClick={handlePrevious}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleToday}>
+                Today
+              </Button>
+              <Button variant="outline" size="icon" onClick={handleNext}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </CardHeader>
 
@@ -279,6 +283,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 week={week}
                 weekIdx={idx}
                 onDayClick={handleDayClick}
+                onAddSession={handleAddSession}
                 onDeleteAssignment={handleDeleteAssignmentById}
                 getIntensityColor={getIntensityColor}
               />
@@ -362,6 +367,19 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Workout Session Sheet for adding ad-hoc sessions */}
+      <WorkoutSessionSheet
+        isOpen={sessionSheetOpen}
+        onClose={() => setSessionSheetOpen(false)}
+        dayDate={selectedSessionDate ? format(selectedSessionDate, 'yyyy-MM-dd') : ''}
+        sessionIndex={0}
+        exercises={[]}
+        mesocycleId=""
+        microcycleIndex={0}
+        parameterValues={{}}
+        onSaveParameters={() => {}}
+      />
     </div>
   );
 }
