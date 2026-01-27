@@ -3033,7 +3033,7 @@ export default function MicrocyclePlanningPage() {
     }
 
     return (
-      <div className="h-[calc(100vh-200px)]">
+      <div className="min-h-[400px] max-h-[calc(100vh-200px)] overflow-y-auto">
         <EnhancedExerciseDistribution
           mesocycle={currentMesocycle}
           allMesocycles={mesocycles}

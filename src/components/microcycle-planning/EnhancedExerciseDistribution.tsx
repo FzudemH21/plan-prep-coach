@@ -144,6 +144,21 @@ export function EnhancedExerciseDistribution({
     return labels[intensity] || intensity.toUpperCase();
   };
 
+  // Helper function for subtle transparent intensity backgrounds (matching Step 2 Mesocycle Planning)
+  const getSubtleIntensityBg = (intensity: IntensityLevel): string => {
+    const bgMappings: Record<IntensityLevel, string> = {
+      "off": "bg-[hsl(var(--intensity-off)/0.15)]",
+      "deload": "bg-[hsl(var(--intensity-deload)/0.15)]",
+      "easy": "bg-[hsl(var(--intensity-easy)/0.15)]",
+      "easy-moderate": "bg-[hsl(var(--intensity-easy-moderate)/0.15)]",
+      "moderate": "bg-[hsl(var(--intensity-moderate)/0.15)]",
+      "moderate-hard": "bg-[hsl(var(--intensity-moderate-hard)/0.15)]",
+      "hard": "bg-[hsl(var(--intensity-hard)/0.15)]",
+      "extremely-hard": "bg-[hsl(var(--intensity-extremely-hard)/0.20)]"
+    };
+    return bgMappings[intensity] || "bg-primary/10";
+  };
+
   // Helper to swap session comments in local state immediately
   const swapSessionComments = (dayDate: string, indexA: number, indexB: number) => {
     if (!mesocycle?.id) return;
@@ -1951,55 +1966,65 @@ export function EnhancedExerciseDistribution({
         </div>
 
         <div className="flex-1 overflow-hidden">
-          <div className="h-full overflow-x-auto p-4">
+          <div className="overflow-x-auto p-4">
             <div className="w-max min-w-full">
               
               {/* Mesocycle Header */}
-              <div className={cn("mb-4 border-b pb-3", getIntensityColor(mesocycle.intensity))}>
-                <div className="flex items-center justify-center gap-3">
-                  <h2 className="text-xl font-bold">
-                    {mesocycle.name}
-                  </h2>
-                  <Badge variant="secondary" className="font-semibold">
-                    {formatIntensityLabel(mesocycle.intensity)}
-                  </Badge>
-                  {(() => {
-                    const currentMesoIndex = allMesocycles.findIndex(m => m.id === mesocycle.id);
-                    const isFirstMesocycle = currentMesoIndex === 0;
-                    
-                    if (!isFirstMesocycle) {
-                      return (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0"
-                          disabled={copyingMesocycle}
-                          title={`Copy entire setup from ${allMesocycles[currentMesoIndex - 1].name}`}
-                          onClick={handleCopyFromPreviousMesocycle}
-                        >
-                          {copyingMesocycle ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Copy className="h-4 w-4" />
-                          )}
-                        </Button>
-                      );
-                    }
-                    return null;
-                  })()}
+              <div className={cn(
+                "mb-4 rounded-md border border-border pb-3 relative",
+                getSubtleIntensityBg(mesocycle.intensity)
+              )}>
+                <div className="flex items-center px-4 py-2">
+                  {/* Centered content: Name and badge */}
+                  <div className="flex-1 flex items-center justify-center gap-3">
+                    <h2 className="text-xl font-bold">
+                      {mesocycle.name}
+                    </h2>
+                    <Badge variant="secondary" className={cn("font-semibold", getIntensityColor(mesocycle.intensity))}>
+                      {formatIntensityLabel(mesocycle.intensity)}
+                    </Badge>
+                  </div>
                   
-                  {/* Clear Mesocycle Button */}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 w-7 p-0 hover:bg-destructive/10 hover:text-destructive"
-                    title={`Clear all content from ${mesocycle.name} (preserves day intensities)`}
-                    onClick={() => setClearingMesocycleId(mesocycle.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {/* Sticky Icons */}
+                  <div className="sticky right-4 flex items-center gap-1 z-10 bg-background/80 rounded p-1">
+                    {(() => {
+                      const currentMesoIndex = allMesocycles.findIndex(m => m.id === mesocycle.id);
+                      const isFirstMesocycle = currentMesoIndex === 0;
+                      
+                      if (!isFirstMesocycle) {
+                        return (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0"
+                            disabled={copyingMesocycle}
+                            title={`Copy entire setup from ${allMesocycles[currentMesoIndex - 1].name}`}
+                            onClick={handleCopyFromPreviousMesocycle}
+                          >
+                            {copyingMesocycle ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Copy className="h-4 w-4" />
+                            )}
+                          </Button>
+                        );
+                      }
+                      return null;
+                    })()}
+                    
+                    {/* Clear Mesocycle Button */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0 hover:bg-destructive/10 hover:text-destructive"
+                      title={`Clear all content from ${mesocycle.name} (preserves day intensities)`}
+                      onClick={() => setClearingMesocycleId(mesocycle.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-                <p className="text-sm text-center mt-1">
+                <p className="text-sm text-center">
                   {(() => {
                     const mesocycleStartDate = typeof mesocycle.startDate === 'string' 
                       ? (mesocycle.startDate as string).split('T')[0] 
@@ -2013,7 +2038,7 @@ export function EnhancedExerciseDistribution({
               </div>
               
               {/* Microcycle Headers Row */}
-              <div className="flex gap-4 mb-2 border-b">
+              <div className="flex gap-4 mb-2">
                 {Array.from(daysByMicrocycle.entries()).map(([microId, { microcycle, days }], microIndex) => {
                   // Width derives from invisible placeholders below to mirror day columns
                   
@@ -2024,66 +2049,74 @@ export function EnhancedExerciseDistribution({
                   })();
                   
                   return (
-            <React.Fragment key={microId}>
-              {microIndex > 0 && (
-                <div className="w-1 bg-border shrink-0" />
-              )}
-              <div 
-                  className={cn(
-                    "relative shrink-0 text-center font-semibold py-3",
-                    getIntensityColor(microcycle.intensity)
-                  )}
-              >
-                <div className="invisible pointer-events-none flex gap-4">
-                  {days.map((_, i) => (
-                    <div key={i} className="w-80" />
-                  ))}
-                </div>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="flex items-center justify-center gap-2">
-                    <span>{microcycle.name}</span>
-                    <Badge variant="secondary" className="font-semibold">
-                      {formatIntensityLabel(microcycle.intensity)}
-                    </Badge>
-                    {!isVeryFirstMicrocycle && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 w-6 p-0"
-                        disabled={copyingMicrocycleId === microId}
-                        title={(() => {
-                          const currentMesoIndex = allMesocycles.findIndex(m => m.id === mesocycle.id);
-                          if (microIndex > 0) {
-                            return `Copy setup from ${mesocycle.microcycles[microIndex - 1].name}`;
-                          } else if (currentMesoIndex > 0) {
-                            const prevMeso = allMesocycles[currentMesoIndex - 1];
-                            const prevMicro = prevMeso.microcycles[prevMeso.microcycles.length - 1];
-                            return `Copy setup from ${prevMicro.name} (${prevMeso.name})`;
-                          }
-                          return 'Copy setup from previous microcycle';
-                        })()}
-                        onClick={() => handleCopyFromPreviousMicrocycle(microId)}
-                      >
-                        {copyingMicrocycleId === microId ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <Copy className="h-3 w-3" />
+                    <React.Fragment key={microId}>
+                      {microIndex > 0 && (
+                        <div className="w-1 bg-border shrink-0" />
+                      )}
+                      <div 
+                        className={cn(
+                          "relative shrink-0 text-center font-semibold py-3 rounded-md border border-border",
+                          getSubtleIntensityBg(microcycle.intensity)
                         )}
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
-                      title={`Clear all content from ${microcycle.name}`}
-                      onClick={() => setClearingMicrocycleId(microId)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </React.Fragment>
+                      >
+                        <div className="invisible pointer-events-none flex gap-4">
+                          {days.map((_, i) => (
+                            <div key={i} className="w-80" />
+                          ))}
+                        </div>
+                        <div className="absolute inset-0 flex items-center justify-between px-3">
+                          {/* Left spacer for balance */}
+                          <div className="w-16" />
+                          
+                          {/* Centered content */}
+                          <div className="flex items-center justify-center gap-2">
+                            <span>{microcycle.name}</span>
+                            <Badge variant="secondary" className={cn("font-semibold", getIntensityColor(microcycle.intensity))}>
+                              {formatIntensityLabel(microcycle.intensity)}
+                            </Badge>
+                          </div>
+                          
+                          {/* Sticky Icons */}
+                          <div className="sticky right-2 flex items-center gap-1 z-10 bg-background/80 rounded p-1">
+                            {!isVeryFirstMicrocycle && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 w-6 p-0"
+                                disabled={copyingMicrocycleId === microId}
+                                title={(() => {
+                                  const currentMesoIndex = allMesocycles.findIndex(m => m.id === mesocycle.id);
+                                  if (microIndex > 0) {
+                                    return `Copy setup from ${mesocycle.microcycles[microIndex - 1].name}`;
+                                  } else if (currentMesoIndex > 0) {
+                                    const prevMeso = allMesocycles[currentMesoIndex - 1];
+                                    const prevMicro = prevMeso.microcycles[prevMeso.microcycles.length - 1];
+                                    return `Copy setup from ${prevMicro.name} (${prevMeso.name})`;
+                                  }
+                                  return 'Copy setup from previous microcycle';
+                                })()}
+                                onClick={() => handleCopyFromPreviousMicrocycle(microId)}
+                              >
+                                {copyingMicrocycleId === microId ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Copy className="h-3 w-3" />
+                                )}
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
+                              title={`Clear all content from ${microcycle.name}`}
+                              onClick={() => setClearingMicrocycleId(microId)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </React.Fragment>
                   );
                 })}
               </div>
