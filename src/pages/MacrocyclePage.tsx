@@ -1140,13 +1140,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
               smartGoals.map((goal) => (
                 <div
                   key={goal.id}
-                  className={cn(
-                    "p-3 border rounded-lg flex items-start justify-between gap-3 cursor-pointer transition-colors",
-                    selectedSmartGoal === goal.id 
-                      ? "ring-2 ring-green-500 bg-green-500/5" 
-                      : "bg-muted/30 hover:bg-muted/50"
-                  )}
-                  onClick={() => setSelectedSmartGoal(selectedSmartGoal === goal.id ? null : goal.id)}
+                  className="p-3 border rounded-lg flex items-start justify-between gap-3 bg-muted/30"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -1195,11 +1189,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                 </div>
               ))
             )}
-            {selectedSmartGoal && (
-              <p className="text-xs text-muted-foreground text-center bg-muted/50 p-2 rounded">
-                Click on a date in the calendar to schedule a test for this goal
-              </p>
-            )}
           </CardContent>
         </Card>
 
@@ -1222,28 +1211,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                   selected={planDuration?.startDate || planDuration?.endDate}
                   onSelect={(selectedDate) => {
                     if (!selectedDate) return;
-                    
-                    // If a SMART goal is selected, toggle scheduling for that goal
-                    if (selectedSmartGoal) {
-                      const dateStr = format(selectedDate, 'yyyy-MM-dd');
-                      setSmartGoals(prev => prev.map(goal => {
-                        if (goal.id === selectedSmartGoal) {
-                          const currentDates = goal.testDates || [];
-                          const isAlreadyScheduled = currentDates.includes(dateStr);
-                          if (isAlreadyScheduled) {
-                            toast({ title: 'Test Unscheduled', description: `Removed test from ${format(selectedDate, 'PPP')}` });
-                            return { ...goal, testDates: currentDates.filter(d => d !== dateStr) };
-                          } else {
-                            toast({ title: 'Test Scheduled', description: `Scheduled test for ${format(selectedDate, 'PPP')}` });
-                            return { ...goal, testDates: [...currentDates, dateStr] };
-                          }
-                        }
-                        return goal;
-                      }));
-                    } else {
-                      // Original calendar selection behavior
-                      handleCalendarSelect(selectedDate);
-                    }
+                    handleCalendarSelect(selectedDate);
                   }}
                   modifiers={{
                     start: (date) => planDuration?.startDate ? date.getTime() === planDuration.startDate.getTime() : false,
@@ -1252,9 +1220,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                       if (!planDuration?.startDate || !planDuration?.endDate) return false;
                       return date > planDuration.startDate && date < planDuration.endDate;
                     },
-                    goalScheduled: smartGoals
-                      .flatMap(g => g.testDates || [])
-                      .map(dateStr => parseISO(dateStr))
                   }}
                   modifiersStyles={{
                     start: { 
@@ -1272,11 +1237,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                     middle: { 
                       backgroundColor: 'hsl(var(--muted))',
                       color: 'hsl(var(--foreground))'
-                    },
-                    goalScheduled: {
-                      backgroundColor: 'hsl(38 92% 50%)',
-                      color: 'white',
-                      fontWeight: 'bold'
                     }
                   }}
                   className="rounded-md pointer-events-auto"
