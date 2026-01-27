@@ -1308,17 +1308,72 @@ export function EnhancedExerciseDistribution({
   };
 
   const handleDeleteSection = (sectionId: string) => {
-    // Remove section
-    const updated = sessionSections.filter(s => s.id !== sectionId);
-    onSectionsChange(updated);
+    // Find section to get dayDate and sessionIndex for superset cleanup
+    const section = sessionSections.find(s => s.id === sectionId);
+    
+    // Get all exercises in this section
+    const exercisesInSection = exerciseDistribution.filter(ex => ex.sectionId === sectionId);
+    const exerciseIdsToDelete = exercisesInSection.map(ex => ex.id);
+    
+    // Remove the section
+    const updatedSections = sessionSections.filter(s => s.id !== sectionId);
+    onSectionsChange(updatedSections);
 
-    // Clear sectionId from exercises
-    const updatedExercises = exerciseDistribution.map(ex =>
-      ex.sectionId === sectionId ? { ...ex, sectionId: undefined } : ex
-    );
+    // Remove all exercises in the section (not just clear sectionId)
+    const updatedExercises = exerciseDistribution.filter(ex => ex.sectionId !== sectionId);
     onDistributionChange(updatedExercises);
+    
+    // Clean up supersets for deleted exercises
+    if (section) {
+      let updatedSupersets = { ...supersets };
+      for (const exerciseId of exerciseIdsToDelete) {
+        updatedSupersets = cleanupSupersetsOnExerciseDelete(updatedSupersets, exerciseId);
+      }
+      onSupersetsChange(updatedSupersets);
+    }
 
-    toast({ title: 'Section deleted', description: 'Section removed' });
+    const exerciseCount = exercisesInSection.length;
+    toast({ 
+      title: 'Section deleted', 
+      description: exerciseCount > 0 
+        ? `Section and ${exerciseCount} exercise${exerciseCount !== 1 ? 's' : ''} removed` 
+        : 'Section removed' 
+    });
+  };
+
+  const handleSectionReorder = (sectionId: string, direction: 'up' | 'down') => {
+    const section = sessionSections.find(s => s.id === sectionId);
+    if (!section) return;
+    
+    const { dayDate, sessionIndex } = section;
+    
+    // Get sections for this specific session, sorted by order
+    const sessionSpecificSections = sessionSections
+      .filter(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex)
+      .sort((a, b) => a.order - b.order);
+    
+    // Find current section index
+    const currentIndex = sessionSpecificSections.findIndex(s => s.id === sectionId);
+    if (currentIndex < 0) return;
+    
+    // Calculate new index
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (newIndex < 0 || newIndex >= sessionSpecificSections.length) return;
+    
+    // Swap sections
+    const reordered = [...sessionSpecificSections];
+    [reordered[currentIndex], reordered[newIndex]] = [reordered[newIndex], reordered[currentIndex]];
+    
+    // Reassign order values
+    const reorderedWithOrder = reordered.map((s, idx) => ({ ...s, order: idx }));
+    
+    // Update sessionSections state (keep other sessions' sections unchanged)
+    const otherSections = sessionSections.filter(
+      s => !(s.dayDate === dayDate && s.sessionIndex === sessionIndex)
+    );
+    onSectionsChange([...otherSections, ...reorderedWithOrder]);
+    
+    toast({ title: "Section reordered" });
   };
 
   const handleToggleSuperset = (dayDate: string, sessionIndex: number, exerciseId1: string, exerciseId2: string, sectionId?: string) => {
@@ -2191,6 +2246,7 @@ export function EnhancedExerciseDistribution({
                                     onMoveSessionUp={handleMoveSessionUpLocal}
                                     onMoveSessionDown={handleMoveSessionDownLocal}
                                     onExerciseNotesChange={handleExerciseNotesChange}
+                                    onReorderSection={handleSectionReorder}
                                   />
                                 );
                               })}
