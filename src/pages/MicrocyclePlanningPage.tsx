@@ -9,7 +9,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info, Copy, ChevronDown, Columns, ChevronRight, X, Trash2, Trophy, Calendar } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info, Copy, ChevronDown, Columns, ChevronRight, X, Trash2, Trophy, Calendar, Check } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { useAthletes } from '@/hooks/useAthletes';
@@ -2926,33 +2926,54 @@ export default function MicrocyclePlanningPage() {
     });
   };
 
-  const NavigationButtons = () => (
-    <div className="flex flex-col md:flex-row md:justify-between items-stretch md:items-center gap-3 w-full">
-      <Button 
-        onClick={() => {
-          if (currentStep <= 1) {
-            localStorage.setItem('mesocycleStep', '5');
-            navigate('/mesocycle');
-          } else {
-            setCurrentStep(Math.max(1, currentStep - 1));
-          }
-        }}
-        variant="outline"
-        className="w-full md:w-auto"
-      >
-        <ArrowLeft className="mr-2 h-4 w-4" />
-        {currentStep <= 1 ? "Back to Mesocycle Planning" : "Previous"}
-      </Button>
-      <Button 
-        onClick={() => setCurrentStep(Math.min(totalSteps, currentStep + 1))}
-        disabled={currentStep >= totalSteps}
-        className="w-full md:w-auto"
-      >
-        Next
-        <ArrowRight className="ml-2 h-4 w-4" />
-      </Button>
-    </div>
-  );
+  const NavigationButtons = () => {
+    const isLastStep = currentStep >= totalSteps;
+    
+    return (
+      <div className="flex flex-col md:flex-row md:justify-between items-stretch md:items-center gap-3 w-full">
+        <Button 
+          onClick={() => {
+            if (currentStep <= 1) {
+              localStorage.setItem('mesocycleStep', '5');
+              navigate('/mesocycle');
+            } else {
+              setCurrentStep(Math.max(1, currentStep - 1));
+            }
+          }}
+          variant="outline"
+          className="w-full md:w-auto"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          {currentStep <= 1 ? "Back to Mesocycle Planning" : "Previous"}
+        </Button>
+        
+        {isLastStep ? (
+          <Button 
+            onClick={() => {
+              saveCurrentSession();
+              toast({
+                title: "Program saved",
+                description: "Your training program has been saved.",
+              });
+              navigate("/templates/programs");
+            }}
+            className="w-full md:w-auto"
+          >
+            <Check className="mr-2 h-4 w-4" />
+            Save & Finish
+          </Button>
+        ) : (
+          <Button 
+            onClick={() => setCurrentStep(Math.min(totalSteps, currentStep + 1))}
+            className="w-full md:w-auto"
+          >
+            Next
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        )}
+      </div>
+    );
+  };
 
   const renderTrainingPlanOverview = () => {
     const primaryGoal = macrocycleData?.smartGoal?.description || 
