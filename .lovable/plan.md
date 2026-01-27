@@ -1,209 +1,151 @@
 
 
-## Bug Fix: Test Scheduling in Macrocycle Planning Step 2
+## Plan: Move SMART Goal Scheduling to Step 2 Only
 
-### Problem Summary
-The user cannot schedule tests in Step 2 of macrocycle planning. The session replay confirms clicking on goals and sub-goals, then clicking the calendar, does not add tests to the calendar.
-
-### Root Cause Analysis
-
-I identified **three bugs** in `src/pages/MacrocyclePage.tsx`:
+### Summary
+Remove the ability to schedule SMART goal tests in Step 1. In Step 1, the calendar should only be used for setting the plan duration (start/end dates). SMART goal test scheduling will only be available in Step 2.
 
 ---
 
-### Bug 1: Primary Goals Cannot Be Selected for Scheduling
+### Current Behavior (Step 1)
+1. SMART goals are clickable and can be selected
+2. When a goal is selected, clicking a calendar date schedules a test
+3. A hint appears: "Click on a date in the calendar to schedule a test for this goal"
 
-**Location**: Lines 1405-1417
-
-**Issue**: Clicking on a primary (SMART) goal in Step 2 only toggles the expand/collapse state. It does NOT set `selectedSmartGoal`, so there's no way to select a primary goal for test scheduling in Step 2.
-
-**Current Code**:
-```jsx
-<div 
-  className="p-3 bg-muted/30 cursor-pointer hover:bg-muted/50"
-  onClick={() => {
-    // ONLY toggles expand - doesn't set selectedSmartGoal
-    setExpandedPrimaryGoals(prev => { ... });
-  }}
->
-```
-
-**Fix**: Add a separate clickable area or modify the click handler to also set `selectedSmartGoal` and clear other selections.
+### Proposed Behavior (Step 1)
+1. SMART goals are displayed but **not selectable** for scheduling
+2. Clicking calendar dates **only** sets plan start/end dates
+3. No scheduling hint displayed
+4. Edit/delete buttons still functional
 
 ---
 
-### Bug 2: Calendar Handler Ignores Primary Goals
+### Implementation
 
-**Location**: Lines 1782-1811
+**File**: `src/pages/MacrocyclePage.tsx`
 
-**Issue**: The Step 2 calendar's click handler only checks for `selectedTest` (sub-goals) and `selectedEvent` (events). It completely ignores `selectedSmartGoal` (primary goals).
+#### Change 1: Remove Goal Selection in Step 1 (Lines 1140-1149)
 
-**Current Code**:
-```jsx
-const handleClick = (e: any) => {
-  if (selectedTest) {
-    // Handle sub-goal scheduling...
-  } else if (selectedEvent) {
-    scheduleEvent(selectedEvent, date);
-  } else {
-    toast({ title: 'Select an item', ... });
-  }
-  // Missing: no check for selectedSmartGoal!
-};
-```
+Remove the clickable selection behavior from SMART goal cards. Keep the display but remove:
+- The `cursor-pointer` class
+- The `onClick` handler that sets `selectedSmartGoal`
+- The selection highlight styling
 
-**Fix**: Add handling for `selectedSmartGoal` similar to how Step 1's calendar handles it (lines 1227-1242).
-
----
-
-### Bug 3: Derived Sub-Goals Cannot Be Scheduled
-
-**Location**: Lines 1787-1805
-
-**Issue**: When scheduling a sub-goal test, the code searches in the `subGoals` array:
-```jsx
-const subGoalIndex = updated.findIndex(sg => sg.id === selectedTest);
-```
-
-But **derived sub-goals** (auto-generated from parameter relationships) exist only in `derivedSubGoals` (a useMemo), not in `subGoals`. So when `subGoalIndex` is -1, nothing happens.
-
-**Fix**: Search in both `subGoals` and `derivedSubGoals`, or convert derived sub-goals to regular sub-goals when scheduling a test for them.
-
----
-
-## Implementation Plan
-
-### File to Modify
-`src/pages/MacrocyclePage.tsx`
-
-### Step 1: Fix Primary Goal Selection (Bug 1)
-
-Add a way to select primary goals for scheduling. Either:
-- **Option A**: Add a "Schedule Test" button on the primary goal card
-- **Option B**: Add selection state to the primary goal header (with visual highlight)
-
-I recommend **Option B** for consistency with sub-goal selection:
-
-```jsx
-// In the primary goal header (around line 1405)
-<div 
+**Before:**
+```tsx
+<div
+  key={goal.id}
   className={cn(
-    "p-3 bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors",
-    selectedSmartGoal === goal.id && "ring-2 ring-inset ring-primary bg-primary/5"
+    "p-3 border rounded-lg flex items-start justify-between gap-3 cursor-pointer transition-colors",
+    selectedSmartGoal === goal.id 
+      ? "ring-2 ring-green-500 bg-green-500/5" 
+      : "bg-muted/30 hover:bg-muted/50"
   )}
-  onClick={(e) => {
-    // If clicking the expand arrow area, just toggle
-    // Otherwise, select the goal for scheduling
-    setSelectedSmartGoal(selectedSmartGoal === goal.id ? null : goal.id);
-    setSelectedTest(null);
-    setSelectedEvent(null);
-    // Keep expand behavior too
-    setExpandedPrimaryGoals(prev => {
-      const next = new Set(prev);
-      if (next.has(goal.id)) next.delete(goal.id);
-      else next.add(goal.id);
-      return next;
-    });
-  }}
+  onClick={() => setSelectedSmartGoal(selectedSmartGoal === goal.id ? null : goal.id)}
 >
 ```
 
-### Step 2: Fix Calendar Handler (Bug 2)
-
-Add `selectedSmartGoal` handling to the Step 2 calendar click handler:
-
-```jsx
-const handleClick = (e: any) => {
-  dayProps?.onClick?.(e);
-  e.preventDefault();
-  e.stopPropagation();
-  
-  // NEW: Handle primary (SMART) goal scheduling
-  if (selectedSmartGoal) {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    setSmartGoals(prev => prev.map(goal => {
-      if (goal.id === selectedSmartGoal) {
-        const currentDates = goal.testDates || [];
-        const isAlreadyScheduled = currentDates.includes(dateStr);
-        if (isAlreadyScheduled) {
-          toast({ title: 'Test Unscheduled', description: `Removed test from ${format(date, 'PPP')}` });
-          return { ...goal, testDates: currentDates.filter(d => d !== dateStr) };
-        } else {
-          toast({ title: 'Test Scheduled', description: `Scheduled test for ${format(date, 'PPP')}` });
-          return { ...goal, testDates: [...currentDates, dateStr] };
-        }
-      }
-      return goal;
-    }));
-  } else if (selectedTest) {
-    // Existing sub-goal handling...
-  } else if (selectedEvent) {
-    scheduleEvent(selectedEvent, date);
-  } else {
-    toast({ title: 'Select an item', description: 'Choose a goal, sub-goal, or event from the list, then click a date.' });
-  }
-};
+**After:**
+```tsx
+<div
+  key={goal.id}
+  className="p-3 border rounded-lg flex items-start justify-between gap-3 bg-muted/30"
+>
 ```
 
-### Step 3: Fix Derived Sub-Goal Scheduling (Bug 3)
+#### Change 2: Remove Scheduling Hint in Step 1 (Lines 1198-1202)
 
-Modify the sub-goal scheduling logic to also check `derivedSubGoals`. When a derived sub-goal is scheduled, "promote" it to a regular sub-goal:
+Delete or hide the hint that says "Click on a date in the calendar to schedule a test for this goal".
 
-```jsx
-if (selectedTest) {
-  // First check user-created subGoals
-  let subGoalIndex = subGoals.findIndex(sg => sg.id === selectedTest);
+**Remove:**
+```tsx
+{selectedSmartGoal && (
+  <p className="text-xs text-muted-foreground text-center bg-muted/50 p-2 rounded">
+    Click on a date in the calendar to schedule a test for this goal
+  </p>
+)}
+```
+
+#### Change 3: Remove Goal Scheduling Logic from Calendar (Lines 1226-1246)
+
+Remove the `if (selectedSmartGoal)` branch from the calendar's `onSelect` handler, so clicking always sets plan duration.
+
+**Before:**
+```tsx
+onSelect={(selectedDate) => {
+  if (!selectedDate) return;
   
-  if (subGoalIndex !== -1) {
-    // Existing logic for user-created sub-goals...
+  // If a SMART goal is selected, toggle scheduling for that goal
+  if (selectedSmartGoal) {
+    // ... scheduling logic ...
   } else {
-    // Check if it's a derived sub-goal
-    const derivedSubGoal = derivedSubGoals.find(sg => sg.id === selectedTest);
-    if (derivedSubGoal) {
-      // "Promote" to regular sub-goal with the scheduled date
-      const promotedSubGoal: SubGoal = {
-        ...derivedSubGoal,
-        testDates: [dateStr],
-        isDerived: false, // No longer derived once user schedules it
-      };
-      setSubGoals(prev => [...prev, promotedSubGoal]);
-      toast({ 
-        title: 'Test Scheduled', 
-        description: `Scheduled "${derivedSubGoal.description}" for ${format(date, 'PPP')}` 
-      });
-    }
+    // Original calendar selection behavior
+    handleCalendarSelect(selectedDate);
   }
+}}
+```
+
+**After:**
+```tsx
+onSelect={(selectedDate) => {
+  if (!selectedDate) return;
+  handleCalendarSelect(selectedDate);
+}}
+```
+
+#### Change 4: Remove Goal Scheduled Modifier from Calendar (Lines 1255-1280)
+
+Remove the `goalScheduled` modifier and its styling from Step 1's calendar since we no longer show scheduled tests there.
+
+**Remove from modifiers:**
+```tsx
+goalScheduled: smartGoals
+  .flatMap(g => g.testDates || [])
+  .map(dateStr => parseISO(dateStr))
+```
+
+**Remove from modifiersStyles:**
+```tsx
+goalScheduled: {
+  backgroundColor: 'hsl(38 92% 50%)',
+  color: 'white',
+  fontWeight: 'bold'
 }
 ```
 
 ---
 
-## Visual Changes
+### Visual Result
 
-After the fix:
-- **Primary goals**: Clickable with visual highlight when selected (ring border + light background)
-- **Sub-goals**: Same as current (ring highlight when selected)
-- **Calendar**: Responds to all three selection types (primary goals, sub-goals, events)
-- **Derived sub-goals**: Can be scheduled, which "promotes" them to regular sub-goals
+**Step 1 (Plan Setup & Goals)**
+- SMART goals displayed as static cards (no click-to-select)
+- Calendar only used for selecting plan start/end dates
+- No amber "scheduled test" markers in calendar
+
+**Step 2 (Sub-Goals & Testing)**
+- SMART goals (primary goals) are clickable and selectable
+- Sub-goals are clickable and selectable
+- Events are clickable and selectable
+- Calendar shows all scheduled tests with appropriate markers
+- Full scheduling functionality available
 
 ---
 
-## Files Modified
+### Files Modified
 
 | File | Changes |
 |------|---------|
-| `src/pages/MacrocyclePage.tsx` | Fix 3 bugs in Step 2 test scheduling |
+| `src/pages/MacrocyclePage.tsx` | Remove SMART goal scheduling from Step 1 calendar |
 
 ---
 
-## Testing Checklist
+### Testing Checklist
 
-After implementation, verify:
-1. Clicking a primary goal in Step 2 highlights it
-2. With primary goal selected, clicking calendar date adds test (amber square appears)
-3. Clicking a sub-goal highlights it
-4. With sub-goal selected, clicking calendar date adds test (black circle appears)
-5. Derived sub-goals (blue "Linked" badge) can be scheduled
-6. Events can still be scheduled normally
-7. Visual feedback shows correctly in calendar
+After implementation:
+1. ✓ Step 1: SMART goals display correctly but cannot be selected
+2. ✓ Step 1: Calendar only sets plan duration (start/end dates)
+3. ✓ Step 1: No "schedule test" hint appears
+4. ✓ Step 2: Primary goals can be clicked and selected (with visual highlight)
+5. ✓ Step 2: Clicking calendar with primary goal selected schedules a test
+6. ✓ Step 2: Sub-goals and events scheduling still works
 
