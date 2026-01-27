@@ -1,10 +1,10 @@
 
 
-## Revert Sticky Icon Changes
+## Reposition Icons Next to Intensity Labels
 
 ### Overview
 
-Simple revert to remove the sticky positioning from header icons in Step 1 of Microcycle Planning. The transparent intensity backgrounds and badges will be preserved.
+Move the copy and trash icons to be positioned directly next to the intensity badge, rather than pushed to the right edge of the header.
 
 ---
 
@@ -12,26 +12,56 @@ Simple revert to remove the sticky positioning from header icons in Step 1 of Mi
 
 **File**: `src/components/microcycle-planning/EnhancedExerciseDistribution.tsx`
 
-#### Change 1: Mesocycle Header Icons (line 1988-1989)
+#### Change 1: Mesocycle Header (lines 1977-1988)
 
+Current structure:
 ```tsx
-// BEFORE (current - with sticky styling)
-{/* Sticky Icons */}
-<div className="sticky right-4 flex items-center gap-1 z-10 bg-background/80 rounded p-1">
-
-// AFTER (reverted - simple flex)
-<div className="flex items-center gap-1">
+<div className="flex items-center px-4 py-2">
+  <div className="flex-1 flex items-center justify-center gap-3">
+    <h2>...</h2>
+    <Badge>...</Badge>
+  </div>
+  
+  <div className="flex items-center gap-1">  {/* Icons pushed right */}
 ```
 
-#### Change 2: Microcycle Header Icons (line 2079-2080)
-
+New structure - move icons inside the centered container:
 ```tsx
-// BEFORE (current - with sticky styling)
-{/* Sticky Icons */}
-<div className="sticky right-2 flex items-center gap-1 z-10 bg-background/80 rounded p-1">
+<div className="flex items-center justify-center px-4 py-2">
+  <div className="flex items-center gap-3">
+    <h2>...</h2>
+    <Badge>...</Badge>
+    <div className="flex items-center gap-1">  {/* Icons next to badge */}
+      {/* Copy and Trash buttons */}
+    </div>
+  </div>
+</div>
+```
 
-// AFTER (reverted - simple flex)
-<div className="flex items-center gap-1">
+#### Change 2: Microcycle Header (lines 2066-2078)
+
+Current structure:
+```tsx
+<div className="absolute inset-0 flex items-center justify-between px-3">
+  <div className="w-16" />  {/* Left spacer */}
+  <div className="flex items-center justify-center gap-2">
+    <span>{microcycle.name}</span>
+    <Badge>...</Badge>
+  </div>
+  <div className="flex items-center gap-1">  {/* Icons pushed right */}
+```
+
+New structure - remove spacer and move icons inside centered container:
+```tsx
+<div className="absolute inset-0 flex items-center justify-center px-3">
+  <div className="flex items-center gap-2">
+    <span>{microcycle.name}</span>
+    <Badge>...</Badge>
+    <div className="flex items-center gap-1">  {/* Icons next to badge */}
+      {/* Copy and Trash buttons */}
+    </div>
+  </div>
+</div>
 ```
 
 ---
@@ -40,13 +70,20 @@ Simple revert to remove the sticky positioning from header icons in Step 1 of Mi
 
 | Location | Change |
 |----------|--------|
-| Line 1988-1989 | Remove comment and change to `<div className="flex items-center gap-1">` |
-| Line 2079-2080 | Remove comment and change to `<div className="flex items-center gap-1">` |
+| Lines 1977-1988 | Change to `justify-center`, remove `flex-1`, move icons div inside centered container |
+| Lines 2066-2078 | Change to `justify-center`, remove left spacer, move icons div inside centered container |
 
-### What Stays the Same
+### Visual Result
 
-- Transparent intensity-tinted backgrounds (`getSubtleIntensityBg`)
-- Colored intensity badges
-- `rounded-md border border-border` styling on headers
-- Dynamic height behavior
+**Before:**
+```
+[                    Mesocycle Name  MODERATE                    [📋][🗑️]]
+```
+
+**After:**
+```
+[              Mesocycle Name  MODERATE  [📋][🗑️]              ]
+```
+
+Icons will now appear directly next to the intensity badge, centered with the rest of the header content.
 
