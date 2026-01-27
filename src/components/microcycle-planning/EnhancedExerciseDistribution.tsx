@@ -1485,7 +1485,7 @@ export function EnhancedExerciseDistribution({
                   .map(oldId => oldToNewExerciseIds[oldId])
                   .filter(id => id !== undefined);
                 
-                if (newExerciseIds.length > 0) {
+                if (newExerciseIds.length >= 2) {
                   newSupersets[targetDate][Number(sessionIndex)][newSectionId][supersetId] = newExerciseIds;
                 }
               });
@@ -1683,7 +1683,9 @@ export function EnhancedExerciseDistribution({
               newSupersets[targetDate][Number(sessionIndex)] = {};
               
               Object.entries(sessionSupersets).forEach(([sectionId, sectionSupersets]) => {
-                const newSectionId = oldToNewSectionIds[sectionId] || sectionId;
+                const newSectionId = sectionId === '__unsectioned__' 
+                  ? '__unsectioned__' 
+                  : (oldToNewSectionIds[sectionId] || sectionId);
                 newSupersets[targetDate][Number(sessionIndex)][newSectionId] = {};
                 
                 Object.entries(sectionSupersets).forEach(([supersetId, exerciseIds]) => {
@@ -1691,7 +1693,7 @@ export function EnhancedExerciseDistribution({
                     .map(oldId => oldToNewExerciseIds[oldId])
                     .filter(id => id !== undefined);
                   
-                  if (newExerciseIds.length > 0) {
+                  if (newExerciseIds.length >= 2) {
                     newSupersets[targetDate][Number(sessionIndex)][newSectionId][supersetId] = newExerciseIds;
                   }
                 });
