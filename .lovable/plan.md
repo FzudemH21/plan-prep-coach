@@ -1,72 +1,106 @@
 
 
-## Fix: Sub-Goal Selection Should Clear Parent Goal Selection
+## Plan: Simplify Clear All Button Placement
 
-### Problem
-When clicking on a sub-goal (e.g., "1RM Front Squat"), the main goal ("100m Sprint Time") remains selected. When clicking on the calendar, the handler checks `selectedSmartGoal` first, so the main goal gets scheduled instead of the sub-goal.
-
-### Root Cause
-In the sub-goal click handler (lines 1469-1472):
-```tsx
-onClick={() => {
-  setSelectedTest(selectedTest === subGoal.id ? null : subGoal.id);
-  setSelectedEvent(null);
-  // Missing: setSelectedSmartGoal(null) ← THIS IS THE BUG
-}}
-```
-
-The calendar handler (lines 1804-1819) checks in this order:
-1. `if (selectedSmartGoal)` → schedules the main goal
-2. `else if (selectedTest)` → schedules the sub-goal
-
-Since `selectedSmartGoal` is not cleared when clicking a sub-goal, the main goal remains "selected" and takes priority.
-
-### Solution
-Add `setSelectedSmartGoal(null)` to the sub-goal click handler so that selecting a sub-goal clears the parent goal selection.
+### Summary
+Remove the recently added "Clear All" button from the calendar header and make the existing "Clear All" button below the calendar always visible (not conditional).
 
 ---
 
-## Implementation
+### Current State
 
-### File: `src/pages/MacrocyclePage.tsx`
+**Two "Clear All" buttons exist in Step 2:**
+1. **Header button** (Lines 1707-1726): Always visible, X icon, no confirmation
+2. **Below-calendar button** (Lines 1972-1999): Only shows when items are scheduled, Trash2 icon, has confirmation dialog
 
-#### Change: Add `setSelectedSmartGoal(null)` to sub-goal click (Lines 1469-1472)
+### Target State
 
-**Current code:**
+**One "Clear All" button in Step 2:**
+- Located below the calendar
+- Always visible
+- Includes confirmation dialog (existing behavior)
+
+---
+
+### Implementation
+
+**File**: `src/pages/MacrocyclePage.tsx`
+
+#### Change 1: Remove Header Clear All Button (Lines 1707-1726)
+
+Remove the header with the Clear All button and just keep a simple header title:
+
+**Before (Lines 1707-1726):**
 ```tsx
-onClick={() => {
-  setSelectedTest(selectedTest === subGoal.id ? null : subGoal.id);
-  setSelectedEvent(null);
-}}
+<div className="flex items-center justify-between">
+  <h3 className="font-semibold text-sm">Calendar Scheduling</h3>
+  <Button
+    variant="ghost"
+    size="sm"
+    className="text-muted-foreground hover:text-destructive h-7 text-xs"
+    onClick={() => {
+      // Clear all scheduled tests from SMART goals
+      setSmartGoals(prev => prev.map(g => ({ ...g, testDates: [] })));
+      // Clear all scheduled tests from sub-goals  
+      setSubGoals(prev => prev.map(sg => ({ ...sg, testDates: [] })));
+      // Clear all scheduled events
+      setEvents(prev => prev.map(e => ({ ...e, eventDates: [] })));
+      toast({ title: 'Calendar Cleared', description: 'All scheduled items have been removed.' });
+    }}
+  >
+    <X className="h-3 w-3 mr-1" />
+    Clear All
+  </Button>
+</div>
 ```
 
-**Fixed code:**
+**After:**
 ```tsx
-onClick={() => {
-  setSelectedTest(selectedTest === subGoal.id ? null : subGoal.id);
-  setSelectedSmartGoal(null);  // Clear main goal selection
-  setSelectedEvent(null);
-}}
+<h3 className="font-semibold text-sm">Calendar Scheduling</h3>
+```
+
+#### Change 2: Make Below-Calendar Clear Button Always Visible (Lines 1972-1999)
+
+Remove the conditional wrapper that only shows the button when items are scheduled:
+
+**Before (Lines 1972-1999):**
+```tsx
+{/* Clear button */}
+{(subGoals.some(sg => sg.testDates && sg.testDates.length > 0) || 
+  events.some(e => e.eventDates && e.eventDates.length > 0)) && (
+  <div className="mt-4 flex justify-center">
+    <AlertDialog>
+      ...
+    </AlertDialog>
+  </div>
+)}
+```
+
+**After:**
+```tsx
+{/* Clear button - always visible */}
+<div className="mt-4 flex justify-center">
+  <AlertDialog>
+    ...
+  </AlertDialog>
+</div>
 ```
 
 ---
 
-## Summary
+### Visual Result
 
-| Location | Change |
-|----------|--------|
-| Line 1469-1472 | Add `setSelectedSmartGoal(null)` to sub-goal click handler |
-
-This ensures mutual exclusivity: when you select a sub-goal, the main goal is deselected, and vice versa. The calendar handler will then correctly schedule whichever item is selected.
+| Before | After |
+|--------|-------|
+| Two Clear All buttons (header + below calendar) | One Clear All button (below calendar only) |
+| Below-calendar button only visible when items scheduled | Below-calendar button always visible |
+| Header button has no confirmation | Single button has confirmation dialog |
 
 ---
 
-## Testing Checklist
+### Files Modified
 
-After implementation:
-1. Click on a primary goal (100m Sprint Time) → it should highlight
-2. Click on its sub-goal (1RM Front Squat) → sub-goal highlights, main goal de-highlights
-3. Click on calendar → the sub-goal test is scheduled (not the main goal)
-4. Click on main goal again → main goal highlights, sub-goal de-highlights
-5. Click on calendar → main goal test is scheduled
+| File | Changes |
+|------|---------|
+| `src/pages/MacrocyclePage.tsx` | Remove header Clear All button, make below-calendar button always visible |
 
