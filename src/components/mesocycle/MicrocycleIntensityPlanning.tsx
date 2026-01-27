@@ -5,7 +5,7 @@ import IntensityScale from './IntensityScale';
 import MicrocycleIntensityColumn from './MicrocycleIntensityColumn';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { Copy, MessageSquare } from 'lucide-react';
+import { Copy } from 'lucide-react';
 import { addDays, differenceInDays, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -203,7 +203,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                             {meso.intensity.replace(/-/g, ' ').toUpperCase()}
                           </span>
                         )}
-                        <MessageSquare className="h-3 w-3 text-muted-foreground" />
+                        
                       </div>
                       
                       {/* Date Range with Duration */}
