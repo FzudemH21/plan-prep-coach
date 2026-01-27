@@ -1,126 +1,110 @@
 
 
-## Plan: Revert Exercise Name Click to Open Detail Dialog Instead of Change Exercise
+## Plan: Fix Duplicate Description in Exercise Detail Dialog
 
-### Summary
-Revert the exercise name click behavior to open the **Exercise Detail Dialog** (which allows viewing and editing exercise metadata) instead of the Change Exercise popup. Keep the "Change Exercise" option in the three-dot dropdown menu.
+### Problem Analysis
+In the Exercise Detail Dialog, "Description" appears twice:
+1. **Dedicated section** (line 411-428): "Description / Execution Instructions" - uses `exercise.description` (the special field on `CustomExercise`)
+2. **Properties section** (line 440-448): Shows all columns except the first (exercise name), which includes a "Description" column with id `description`
+
+This happens because:
+- `CustomExercise` type has a special `description?: string` field (line 29 of `CustomLibrariesContext.tsx`)
+- Default library columns include `{ id: 'description', name: 'Description', type: 'textarea' }` (line 142)
+
+So the same concept is stored in two places and displayed twice.
+
+### Solution
+Filter out columns that are "reserved" special fields (like `description` and `videoUrl`) from the Properties section since they're already handled by their own dedicated UI sections.
+
+### File to Modify
+`src/components/shared/ExerciseDetailDialog.tsx`
 
 ---
 
-### Problem with Current Implementation
-- Clicking exercise name opens "Change Exercise" popup
-- This removes quick access to exercise details (video, description, characteristics)
-- Viewing details is more common than changing exercises
+### Change 1: Filter Reserved Columns in Edit Mode (Line 441)
 
-### Improved UX Pattern
-- **Click on exercise name** → Opens Exercise Detail Dialog (view mode with edit option)
-- **Three-dot menu "Change Exercise"** → Opens change exercise popup (deliberate action)
-
----
-
-### Changes Required
-
-#### 1. WorkoutExerciseCard.tsx
-**Remove:** The `Popover` wrapper around exercise name that triggers `ExerciseChangePopup`
-
-**Change from:**
+**Current:**
 ```tsx
-{onChangeExercise ? (
-  <Popover open={isChangePopoverOpen} onOpenChange={setIsChangePopoverOpen}>
-    <PopoverTrigger asChild>
-      <h4 className="font-medium text-primary hover:underline cursor-pointer">
-        {exercise.exerciseName}
-      </h4>
-    </PopoverTrigger>
-    <PopoverContent ...>
-      <ExerciseChangePopup ... />
-    </PopoverContent>
-  </Popover>
-) : (
-  <h4 onClick={() => onOpenDetail?.()}>
-    {exercise.exerciseName}
-  </h4>
-)}
+{columns.slice(1).map(column => (
+  <div key={column.id} className="space-y-1">
+    <Label className="text-xs text-muted-foreground">{column.name}</Label>
+    {renderColumnInput(column, localData[column.id], (val) => 
+      setLocalData(prev => ({ ...prev, [column.id]: val }))
+    )}
+  </div>
+))}
 ```
 
-**Change to:**
+**After:**
 ```tsx
-<h4 
-  className={`font-medium ${onOpenDetail ? 'text-primary hover:underline cursor-pointer' : ''}`}
-  onClick={() => onOpenDetail?.()}
->
-  {exercise.exerciseName}
-</h4>
+{columns.slice(1)
+  .filter(column => !['description', 'videoUrl', 'video_url', 'video'].includes(column.id.toLowerCase()))
+  .map(column => (
+    <div key={column.id} className="space-y-1">
+      <Label className="text-xs text-muted-foreground">{column.name}</Label>
+      {renderColumnInput(column, localData[column.id], (val) => 
+        setLocalData(prev => ({ ...prev, [column.id]: val }))
+      )}
+    </div>
+  ))}
 ```
 
-This restores clicking the exercise name to open the detail dialog. The "Change Exercise" option remains in the three-dot menu.
+This filters out:
+- `description` - already shown in the dedicated Description/Execution Instructions section
+- `videoUrl` / `video_url` / `video` - already shown in the Video section
 
 ---
 
-#### 2. MasterPlannerColumn.tsx (Sectioned Exercises)
-**Remove:** The `Popover` wrapper around exercise name at lines 1264-1285
+### Change 2: Filter Reserved Columns in View Mode (Line 455)
 
-**Change from:**
+**Current:**
 ```tsx
-<Popover>
-  <PopoverTrigger asChild>
-    <button className="font-semibold truncate flex-1 text-left hover:underline cursor-pointer">
-      {exercise.exerciseName}
-    </button>
-  </PopoverTrigger>
-  <PopoverContent ...>
-    <ExerciseChangePopup ... />
-  </PopoverContent>
-</Popover>
+const firstColumnId = columns.length > 0 ? columns[0].id : null;
+const filteredEntries = Object.entries(exerciseData).filter(([key]) => key !== firstColumnId);
 ```
 
-**Change to:**
+**After:**
 ```tsx
-<button
-  onClick={(e) => {
-    e.stopPropagation();
-    onOpenExerciseDetail?.({...exercise});
-  }}
-  className="font-semibold truncate flex-1 text-left hover:underline cursor-pointer"
->
-  {exercise.exerciseName}
-</button>
+const firstColumnId = columns.length > 0 ? columns[0].id : null;
+const reservedKeys = ['description', 'videoUrl', 'video_url', 'video'];
+const filteredEntries = Object.entries(exerciseData).filter(([key]) => 
+  key !== firstColumnId && !reservedKeys.includes(key.toLowerCase())
+);
 ```
 
-The "Change Exercise" option remains in the three-dot dropdown menu (lines 1327-1340).
-
----
-
-#### 3. MasterPlannerColumn.tsx (Unsectioned Exercises)
-**Same change** for unsectioned exercises at line ~1473
-
----
-
-### Files to Modify
-
-| File | Changes |
-|------|---------|
-| `WorkoutExerciseCard.tsx` | Remove Popover around exercise name, restore `onOpenDetail` click handler |
-| `MasterPlannerColumn.tsx` | Remove Popover around exercise names (both sectioned and unsectioned), use `onOpenExerciseDetail` callback |
-
----
-
-### What Stays the Same
-- ✅ Three-dot menu "Change Exercise" option (opens full library popup)
-- ✅ Exercise Detail Dialog functionality (view mode with edit button)
-- ✅ All synchronization logic for exercise changes
-- ✅ All parameter preservation when changing exercises
+This ensures the read-only characteristics view also excludes description/video fields.
 
 ---
 
 ### Visual Result
 
 **Before:**
-- Click exercise name → Change Exercise popup (loses access to details)
+```
+Description / Execution Instructions
+[ textarea with description ]
+
+Properties
+Description: [ textarea - DUPLICATE! ]
+Pattern: Hinge
+```
 
 **After:**
-- Click exercise name → Exercise Detail Dialog (view video, description, edit capabilities)
-- Three-dot menu → "Change Exercise" option (for deliberate exercise swaps)
+```
+Description / Execution Instructions
+[ textarea with description ]
 
-This restores the intuitive pattern where clicking an exercise shows its details, while replacing it is a deliberate action through the menu.
+Properties
+Pattern: Hinge
+```
+
+The description appears only once in its dedicated section.
+
+---
+
+### Scope
+This fix applies universally to the Exercise Detail Dialog, regardless of where it's opened from:
+- Exercise Library table
+- Workout Session Sheet
+- Master Planner
+- Any other location that uses this dialog
 
