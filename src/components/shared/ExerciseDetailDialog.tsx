@@ -436,23 +436,29 @@ export function ExerciseDetailDialog({
                 </h3>
                 
                 {isEditable && columns.length > 0 ? (
-                  // Editable properties grid (skip first column which is the name)
+                  // Editable properties grid (skip first column which is the name, and reserved fields)
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {columns.slice(1).map(column => (
-                      <div key={column.id} className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">{column.name}</Label>
-                        {renderColumnInput(column, localData[column.id], (val) => 
-                          setLocalData(prev => ({ ...prev, [column.id]: val }))
-                        )}
-                      </div>
-                    ))}
+                    {columns.slice(1)
+                      .filter(column => !['description', 'videourl', 'video_url', 'video'].includes(column.id.toLowerCase()))
+                      .map(column => (
+                        <div key={column.id} className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">{column.name}</Label>
+                          {renderColumnInput(column, localData[column.id], (val) => 
+                            setLocalData(prev => ({ ...prev, [column.id]: val }))
+                          )}
+                        </div>
+                      ))}
                   </div>
                 ) : (
                   // Read-only characteristics display
                   (() => {
                     // Get first column ID to exclude (it's the exercise name shown in title)
                     const firstColumnId = columns.length > 0 ? columns[0].id : null;
-                    const filteredEntries = Object.entries(exerciseData).filter(([key]) => key !== firstColumnId);
+                    // Also exclude reserved fields that have their own dedicated UI sections
+                    const reservedKeys = ['description', 'videourl', 'video_url', 'video'];
+                    const filteredEntries = Object.entries(exerciseData).filter(([key]) => 
+                      key !== firstColumnId && !reservedKeys.includes(key.toLowerCase())
+                    );
                     
                     return filteredEntries.length === 0 ? (
                       <p className="text-sm text-muted-foreground italic">No characteristics available</p>
