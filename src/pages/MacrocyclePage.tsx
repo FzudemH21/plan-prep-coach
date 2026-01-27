@@ -1468,6 +1468,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                                     className="flex-1 cursor-pointer min-w-0"
                                     onClick={() => {
                                       setSelectedTest(selectedTest === subGoal.id ? null : subGoal.id);
+                                      setSelectedSmartGoal(null);  // Clear main goal selection
                                       setSelectedEvent(null);
                                     }}
                                   >
