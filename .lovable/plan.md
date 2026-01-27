@@ -1,55 +1,53 @@
 
-## Fix: Increase Column Width and Update Copy Button Style
+## Fix: Update Copy Button to Match Microcycle Planning Transparent Style
 
-### Issues to Address
-1. **Copy button overlapping mesocycle name**: The 140px width is still too tight for single-microcycle mesocycles with a copy button
-2. **Copy button style mismatch**: The current copy button uses a lighter style, but the user wants it to match Step 2's darker border style
+### Current Issue
+The copy button in Mesocycle Step 1 was updated with a solid white background and dark border style, but the user wants it to match the microcycle planning step's **transparent ghost style**:
+- Default: Transparent background with gray icon
+- Hover: Subtle light background with slightly darker icon
 
-### Solution
+### Reference Implementation
+From `EnhancedExerciseDistribution.tsx` (lines 2048-2072), the microcycle copy button uses:
+```tsx
+<Button
+  size="sm"
+  variant="ghost"
+  className="h-6 w-6 p-0"
+>
+  <Copy className="h-3 w-3" />
+</Button>
+```
 
-#### 1. Increase microcycle width from 140px → 160px
-This provides more breathing room for the header content and prevents the copy button from overlapping.
+This `ghost` variant provides:
+- Transparent background by default
+- Subtle hover effect (`hover:bg-accent hover:text-accent-foreground`)
+- Icon inherits text color from parent/variant state
 
-| Microcycles | Before (140px) | After (160px) |
-|-------------|----------------|---------------|
-| 1 | 140px | 160px |
-| 4 | 560px | 640px |
+### Changes to Implement
 
-#### 2. Match copy button style to Step 2
-The reference screenshot shows the copy button with:
-- Darker border (`border-2 border-gray-800`)
-- Stronger shadow (`shadow-md`)
-- Darker icon (`text-gray-800`)
-- Slightly smaller (`h-5 w-5`)
+**File: `src/components/mesocycle/MicrocycleIntensityPlanning.tsx`**
 
-### Files to Modify
+Update lines 218-229 to change the copy button from solid style to ghost style:
 
-**`src/components/mesocycle/MicrocycleIntensityPlanning.tsx`**:
-1. Line 156: Change `140` → `160` for width calculation
-2. Lines 218-229: Update copy button styling to match Step 2:
-   ```
-   Before: "h-6 w-6 p-0 bg-white hover:bg-white/90 shadow-sm border border-border"
-   After:  "h-5 w-5 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"
-   
-   Icon before: "h-3 w-3 text-foreground"
-   Icon after:  "h-3 w-3 text-gray-800"
-   ```
+| Property | Before | After |
+|----------|--------|-------|
+| `variant` | `"secondary"` | `"ghost"` |
+| Button `className` | `"absolute top-1 right-1 h-5 w-5 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"` | `"absolute top-1 right-1 h-6 w-6 p-0"` |
+| Icon `className` | `"h-3 w-3 text-gray-800"` | `"h-3 w-3"` |
 
-**`src/components/mesocycle/MicrocycleIntensityColumn.tsx`**:
-1. Line 136: Change `w-[140px]` → `w-[160px]` for column width
-2. Line 237: Change `w-[140px]` → `w-[160px]` for intensity label width
+### Technical Details
 
-### Summary of Changes
+The `ghost` variant from the Button component provides:
+- Default: `bg-transparent` + `text-muted-foreground` (gray)
+- Hover: `bg-accent` (subtle light background) + `text-accent-foreground` (darker text)
 
-| File | Location | Change |
-|------|----------|--------|
-| `MicrocycleIntensityPlanning.tsx` | Line 156 | `140` → `160` (width calculation) |
-| `MicrocycleIntensityPlanning.tsx` | Line 225 | Update button class to match Step 2 styling |
-| `MicrocycleIntensityPlanning.tsx` | Line 228 | Update icon class to `text-gray-800` |
-| `MicrocycleIntensityColumn.tsx` | Line 136 | `w-[140px]` → `w-[160px]` |
-| `MicrocycleIntensityColumn.tsx` | Line 237 | `w-[140px]` → `w-[160px]` |
+This matches exactly what the user showed in their screenshots:
+1. Screenshot 1 (default): Gray transparent icon
+2. Screenshot 2 (hover): White/light background with visible icon
 
-### Visual Result
-- Single-microcycle mesocycles will have 160px width (20px more space)
-- Copy button will have a more pronounced, darker border matching Step 2's style
-- No more overlap between the mesocycle name and the copy button
+### Summary
+- Single file change: `src/components/mesocycle/MicrocycleIntensityPlanning.tsx`
+- Update button variant from `secondary` to `ghost`
+- Remove explicit background/border/shadow styles
+- Remove explicit icon color to let it inherit from variant
+- Keep size at `h-6 w-6` to match microcycle planning
