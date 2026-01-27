@@ -1974,53 +1974,51 @@ export function EnhancedExerciseDistribution({
                 "mb-4 rounded-md border border-border pb-3 relative",
                 getSubtleIntensityBg(mesocycle.intensity)
               )}>
-                <div className="flex items-center px-4 py-2">
-                  {/* Centered content: Name and badge */}
-                  <div className="flex-1 flex items-center justify-center gap-3">
+                <div className="flex items-center justify-center px-4 py-2">
+                  <div className="flex items-center gap-3">
                     <h2 className="text-xl font-bold">
                       {mesocycle.name}
                     </h2>
                     <Badge variant="secondary" className={cn("font-semibold", getIntensityColor(mesocycle.intensity))}>
                       {formatIntensityLabel(mesocycle.intensity)}
                     </Badge>
-                  </div>
-                  
-                  <div className="flex items-center gap-1">
-                    {(() => {
-                      const currentMesoIndex = allMesocycles.findIndex(m => m.id === mesocycle.id);
-                      const isFirstMesocycle = currentMesoIndex === 0;
+                    <div className="flex items-center gap-1">
+                      {(() => {
+                        const currentMesoIndex = allMesocycles.findIndex(m => m.id === mesocycle.id);
+                        const isFirstMesocycle = currentMesoIndex === 0;
+                        
+                        if (!isFirstMesocycle) {
+                          return (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0"
+                              disabled={copyingMesocycle}
+                              title={`Copy entire setup from ${allMesocycles[currentMesoIndex - 1].name}`}
+                              onClick={handleCopyFromPreviousMesocycle}
+                            >
+                              {copyingMesocycle ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Copy className="h-4 w-4" />
+                              )}
+                            </Button>
+                          );
+                        }
+                        return null;
+                      })()}
                       
-                      if (!isFirstMesocycle) {
-                        return (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 w-7 p-0"
-                            disabled={copyingMesocycle}
-                            title={`Copy entire setup from ${allMesocycles[currentMesoIndex - 1].name}`}
-                            onClick={handleCopyFromPreviousMesocycle}
-                          >
-                            {copyingMesocycle ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Copy className="h-4 w-4" />
-                            )}
-                          </Button>
-                        );
-                      }
-                      return null;
-                    })()}
-                    
-                    {/* Clear Mesocycle Button */}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 w-7 p-0 hover:bg-destructive/10 hover:text-destructive"
-                      title={`Clear all content from ${mesocycle.name} (preserves day intensities)`}
-                      onClick={() => setClearingMesocycleId(mesocycle.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                      {/* Clear Mesocycle Button */}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0 hover:bg-destructive/10 hover:text-destructive"
+                        title={`Clear all content from ${mesocycle.name} (preserves day intensities)`}
+                        onClick={() => setClearingMesocycleId(mesocycle.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
                 <p className="text-sm text-center">
@@ -2063,54 +2061,49 @@ export function EnhancedExerciseDistribution({
                             <div key={i} className="w-80" />
                           ))}
                         </div>
-                        <div className="absolute inset-0 flex items-center justify-between px-3">
-                          {/* Left spacer for balance */}
-                          <div className="w-16" />
-                          
-                          {/* Centered content */}
-                          <div className="flex items-center justify-center gap-2">
+                        <div className="absolute inset-0 flex items-center justify-center px-3">
+                          <div className="flex items-center gap-2">
                             <span>{microcycle.name}</span>
                             <Badge variant="secondary" className={cn("font-semibold", getIntensityColor(microcycle.intensity))}>
                               {formatIntensityLabel(microcycle.intensity)}
                             </Badge>
-                          </div>
-                          
-                          <div className="flex items-center gap-1">
-                            {!isVeryFirstMicrocycle && (
+                            <div className="flex items-center gap-1">
+                              {!isVeryFirstMicrocycle && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 w-6 p-0"
+                                  disabled={copyingMicrocycleId === microId}
+                                  title={(() => {
+                                    const currentMesoIndex = allMesocycles.findIndex(m => m.id === mesocycle.id);
+                                    if (microIndex > 0) {
+                                      return `Copy setup from ${mesocycle.microcycles[microIndex - 1].name}`;
+                                    } else if (currentMesoIndex > 0) {
+                                      const prevMeso = allMesocycles[currentMesoIndex - 1];
+                                      const prevMicro = prevMeso.microcycles[prevMeso.microcycles.length - 1];
+                                      return `Copy setup from ${prevMicro.name} (${prevMeso.name})`;
+                                    }
+                                    return 'Copy setup from previous microcycle';
+                                  })()}
+                                  onClick={() => handleCopyFromPreviousMicrocycle(microId)}
+                                >
+                                  {copyingMicrocycleId === microId ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Copy className="h-3 w-3" />
+                                  )}
+                                </Button>
+                              )}
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-6 w-6 p-0"
-                                disabled={copyingMicrocycleId === microId}
-                                title={(() => {
-                                  const currentMesoIndex = allMesocycles.findIndex(m => m.id === mesocycle.id);
-                                  if (microIndex > 0) {
-                                    return `Copy setup from ${mesocycle.microcycles[microIndex - 1].name}`;
-                                  } else if (currentMesoIndex > 0) {
-                                    const prevMeso = allMesocycles[currentMesoIndex - 1];
-                                    const prevMicro = prevMeso.microcycles[prevMeso.microcycles.length - 1];
-                                    return `Copy setup from ${prevMicro.name} (${prevMeso.name})`;
-                                  }
-                                  return 'Copy setup from previous microcycle';
-                                })()}
-                                onClick={() => handleCopyFromPreviousMicrocycle(microId)}
+                                className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
+                                title={`Clear all content from ${microcycle.name}`}
+                                onClick={() => setClearingMicrocycleId(microId)}
                               >
-                                {copyingMicrocycleId === microId ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <Copy className="h-3 w-3" />
-                                )}
+                                <Trash2 className="h-3 w-3" />
                               </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
-                              title={`Clear all content from ${microcycle.name}`}
-                              onClick={() => setClearingMicrocycleId(microId)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                            </div>
                           </div>
                         </div>
                       </div>
