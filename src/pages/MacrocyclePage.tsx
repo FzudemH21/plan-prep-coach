@@ -315,14 +315,14 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
 
   // Save data whenever form data changes (continuous saving)
   useEffect(() => {
-    // Build smartGoal for backward compatibility with other pages
-    const legacySmartGoal = smartGoals.length > 0 ? {
-      ...smartGoals[0],
+    // Always include planDuration dates in legacy smartGoal for backward compatibility
+    const legacySmartGoal = {
+      ...(smartGoals.length > 0 ? smartGoals[0] : smartGoal),
       startDate: planDuration?.startDate,
       endDate: planDuration?.endDate,
       totalDays: planDuration?.totalDays,
       totalWeeks: planDuration?.totalWeeks,
-    } : smartGoal;
+    };
     
     const macrocycleData = {
       planName,

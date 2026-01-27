@@ -282,11 +282,17 @@ export default function MesocyclePage() {
       console.log('DEBUG: Loaded macrocycle data:', data);
       setMacrocycleData(data);
       
-      // Calculate total weeks from date range
-      const startDate = data.smartGoal?.startDate ? new Date(data.smartGoal.startDate) : new Date();
-      const endDate = data.smartGoal?.endDate ? new Date(data.smartGoal.endDate) : addWeeks(startDate, 12);
-      const weeks = data.smartGoal?.startDate && data.smartGoal?.endDate ? 
-        Math.ceil((Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))) / 7) : 12;
+      // Calculate total weeks from date range - prioritize planDuration over legacy smartGoal
+      const rawStartDate = data.planDuration?.startDate || data.smartGoal?.startDate;
+      const rawEndDate = data.planDuration?.endDate || data.smartGoal?.endDate;
+      const rawTotalWeeks = data.planDuration?.totalWeeks || data.smartGoal?.totalWeeks;
+      
+      const startDate = rawStartDate ? new Date(rawStartDate) : new Date();
+      const endDate = rawEndDate ? new Date(rawEndDate) : addWeeks(startDate, 12);
+      const weeks = rawTotalWeeks || 
+        (rawStartDate && rawEndDate 
+          ? Math.ceil((Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))) / 7) 
+          : 12);
       setTotalWeeks(weeks);
       
       // Set plan dates
@@ -657,14 +663,17 @@ export default function MesocyclePage() {
   };
 
   const renderTrainingPlanOverview = () => {
-    const primaryGoal = macrocycleData?.smartGoal?.description || 
+    const primaryGoal = macrocycleData?.smartGoals?.[0]?.description || 
+                        macrocycleData?.smartGoal?.description || 
                         macrocycleData?.smartGoal?.specific || 
                         macrocycleData?.smartGoal?.measurable || 
                         macrocycleData?.smartGoal?.realistic;
     
-    const totalDays = macrocycleData?.smartGoal?.startDate && macrocycleData?.smartGoal?.endDate
-      ? Math.ceil((planEndDate.getTime() - planStartDate.getTime()) / (1000 * 60 * 60 * 24))
-      : undefined;
+    // Use planDuration.totalDays if available, otherwise calculate
+    const totalDays = macrocycleData?.planDuration?.totalDays || 
+      (planStartDate && planEndDate
+        ? Math.ceil((planEndDate.getTime() - planStartDate.getTime()) / (1000 * 60 * 60 * 24))
+        : undefined);
     
     return (
       <TrainingPlanOverview
