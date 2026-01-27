@@ -1,110 +1,140 @@
 
+## Plan: Replace "Next" Button with Final Action on Last Step of Microcycle Planning
 
-## Plan: Fix Duplicate Description in Exercise Detail Dialog
-
-### Problem Analysis
-In the Exercise Detail Dialog, "Description" appears twice:
-1. **Dedicated section** (line 411-428): "Description / Execution Instructions" - uses `exercise.description` (the special field on `CustomExercise`)
-2. **Properties section** (line 440-448): Shows all columns except the first (exercise name), which includes a "Description" column with id `description`
-
-This happens because:
-- `CustomExercise` type has a special `description?: string` field (line 29 of `CustomLibrariesContext.tsx`)
-- Default library columns include `{ id: 'description', name: 'Description', type: 'textarea' }` (line 142)
-
-So the same concept is stored in two places and displayed twice.
-
-### Solution
-Filter out columns that are "reserved" special fields (like `description` and `videoUrl`) from the Properties section since they're already handled by their own dedicated UI sections.
-
-### File to Modify
-`src/components/shared/ExerciseDetailDialog.tsx`
+### Summary
+On the last step of Microcycle Planning (Step 2 - Training Calendar), replace the disabled "Next" button with a meaningful final action. The best option is to show a "Save & Finish" button that saves the program and navigates back to the library, since that's the logical conclusion of the planning workflow.
 
 ---
 
-### Change 1: Filter Reserved Columns in Edit Mode (Line 441)
+### Current Behavior
+- **Step 1**: "Previous" goes to Mesocycle, "Next" goes to Step 2 ✓
+- **Step 2**: "Previous" goes to Step 1, "Next" is **disabled** (confusing - implies there's more)
 
-**Current:**
-```tsx
-{columns.slice(1).map(column => (
-  <div key={column.id} className="space-y-1">
-    <Label className="text-xs text-muted-foreground">{column.name}</Label>
-    {renderColumnInput(column, localData[column.id], (val) => 
-      setLocalData(prev => ({ ...prev, [column.id]: val }))
-    )}
-  </div>
-))}
+### Proposed Behavior
+- **Step 1**: "Previous" goes to Mesocycle, "Next" goes to Step 2 (unchanged)
+- **Step 2**: "Previous" goes to Step 1, **"Save & Finish"** saves and navigates to library
+
+---
+
+### Implementation
+
+**File**: `src/pages/MicrocyclePlanningPage.tsx`
+
+**Location**: Lines 2929-2955 (NavigationButtons component)
+
+**Change**: Modify the NavigationButtons component to conditionally render different right-side buttons based on whether the user is on the last step.
+
+```text
+Current:
++------------------+     +------------------+
+|  ← Previous      |     |   Next →         |  (disabled on Step 2)
++------------------+     +------------------+
+
+After:
+Step 1:
++------------------+     +------------------+
+|  ← Back to       |     |   Next →         |
+|    Mesocycle     |     |                  |
++------------------+     +------------------+
+
+Step 2:
++------------------+     +------------------+
+|  ← Previous      |     | ✓ Save & Finish  |
++------------------+     +------------------+
 ```
 
-**After:**
+### Code Changes
+
 ```tsx
-{columns.slice(1)
-  .filter(column => !['description', 'videoUrl', 'video_url', 'video'].includes(column.id.toLowerCase()))
-  .map(column => (
-    <div key={column.id} className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{column.name}</Label>
-      {renderColumnInput(column, localData[column.id], (val) => 
-        setLocalData(prev => ({ ...prev, [column.id]: val }))
+const NavigationButtons = () => {
+  const isLastStep = currentStep >= totalSteps;
+  
+  return (
+    <div className="flex flex-col md:flex-row md:justify-between items-stretch md:items-center gap-3 w-full">
+      <Button 
+        onClick={() => {
+          if (currentStep <= 1) {
+            localStorage.setItem('mesocycleStep', '5');
+            navigate('/mesocycle');
+          } else {
+            setCurrentStep(Math.max(1, currentStep - 1));
+          }
+        }}
+        variant="outline"
+        className="w-full md:w-auto"
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        {currentStep <= 1 ? "Back to Mesocycle Planning" : "Previous"}
+      </Button>
+      
+      {isLastStep ? (
+        <Button 
+          onClick={() => {
+            saveCurrentSession();
+            toast({
+              title: "Program saved",
+              description: "Your training program has been saved.",
+            });
+            navigate("/templates/programs");
+          }}
+          className="w-full md:w-auto"
+        >
+          <Check className="mr-2 h-4 w-4" />
+          Save & Finish
+        </Button>
+      ) : (
+        <Button 
+          onClick={() => setCurrentStep(Math.min(totalSteps, currentStep + 1))}
+          className="w-full md:w-auto"
+        >
+          Next
+          <ArrowRight className="ml-2 h-4 w-4" />
+        </Button>
       )}
     </div>
-  ))}
+  );
+};
 ```
 
-This filters out:
-- `description` - already shown in the dedicated Description/Execution Instructions section
-- `videoUrl` / `video_url` / `video` - already shown in the Video section
+### Import Required
+Add `Check` to the existing lucide-react imports:
+```tsx
+import { ArrowLeft, ArrowRight, ..., Check } from 'lucide-react';
+```
 
 ---
 
-### Change 2: Filter Reserved Columns in View Mode (Line 455)
+### Alternative Options Considered
 
-**Current:**
-```tsx
-const firstColumnId = columns.length > 0 ? columns[0].id : null;
-const filteredEntries = Object.entries(exerciseData).filter(([key]) => key !== firstColumnId);
-```
+| Option | Pros | Cons |
+|--------|------|------|
+| **Save & Finish** (navigates to library) | Clear completion, prevents "dead end" | User leaves the page |
+| **Save Program** (same as header) | Duplicates existing functionality | Redundant with header button |
+| **Complete Planning** (no navigation) | Stays on page | Less clear what happens |
+| **Hide button entirely** | Simple | Unbalanced layout |
 
-**After:**
-```tsx
-const firstColumnId = columns.length > 0 ? columns[0].id : null;
-const reservedKeys = ['description', 'videoUrl', 'video_url', 'video'];
-const filteredEntries = Object.entries(exerciseData).filter(([key]) => 
-  key !== firstColumnId && !reservedKeys.includes(key.toLowerCase())
-);
-```
+**Recommendation**: "Save & Finish" provides the clearest indication that the user has completed the planning workflow and gives them a smooth transition back to their program library.
 
-This ensures the read-only characteristics view also excludes description/video fields.
+---
+
+### Files to Modify
+
+| File | Changes |
+|------|---------|
+| `src/pages/MicrocyclePlanningPage.tsx` | Modify NavigationButtons to show "Save & Finish" on last step |
 
 ---
 
 ### Visual Result
 
-**Before:**
+**Step 1 (Exercise Distribution)**:
 ```
-Description / Execution Instructions
-[ textarea with description ]
-
-Properties
-Description: [ textarea - DUPLICATE! ]
-Pattern: Hinge
+[ ← Back to Mesocycle Planning ]                    [ Next → ]
 ```
 
-**After:**
+**Step 2 (Training Calendar)**:
 ```
-Description / Execution Instructions
-[ textarea with description ]
-
-Properties
-Pattern: Hinge
+[ ← Previous ]                               [ ✓ Save & Finish ]
 ```
 
-The description appears only once in its dedicated section.
-
----
-
-### Scope
-This fix applies universally to the Exercise Detail Dialog, regardless of where it's opened from:
-- Exercise Library table
-- Workout Session Sheet
-- Master Planner
-- Any other location that uses this dialog
-
+The "Save & Finish" button saves the program and navigates the user back to the Training Programs library, providing a clear conclusion to the planning workflow.
