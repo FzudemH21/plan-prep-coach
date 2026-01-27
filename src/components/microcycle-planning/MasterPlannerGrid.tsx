@@ -123,6 +123,14 @@ interface MasterPlannerGridProps {
   allExerciseDistribution?: ExerciseDistribution[];
   // Exercise detail dialog
   onOpenExerciseDetail?: (exercise: ExerciseDistribution) => void;
+  // Exercise change
+  onExerciseChange?: (
+    dayDate: string,
+    sessionIndex: number,
+    sectionId: string,
+    exerciseId: string,
+    newExercise: { exerciseId: string; exerciseName: string; libraryId: string }
+  ) => void;
 }
 
 const MAX_WEEKS_DISPLAY = 6;
@@ -175,6 +183,7 @@ export function MasterPlannerGrid({
   availableEvents,
   allExerciseDistribution,
   onOpenExerciseDetail,
+  onExerciseChange,
 }: MasterPlannerGridProps) {
   const [startWeekOffset, setStartWeekOffset] = useState(0);
 
@@ -306,6 +315,7 @@ export function MasterPlannerGrid({
               availableEvents={availableEvents}
               allExerciseDistribution={allExerciseDistribution}
               onOpenExerciseDetail={onOpenExerciseDetail}
+              onExerciseChange={onExerciseChange}
             />
           ))}
         </div>

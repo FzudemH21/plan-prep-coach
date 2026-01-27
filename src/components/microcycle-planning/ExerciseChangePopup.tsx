@@ -133,8 +133,8 @@ export function ExerciseChangePopup({
 
         {/* Search Input */}
         <div className="px-2 py-2 border-b">
-          <div className="relative px-1">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <div className="relative px-1 py-1">
+            <Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search exercises..."
               value={searchTerm}

@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dumbbell, Plus, Trophy, Calendar, ChevronDown, ChevronRight, MessageSquare, Pencil, StickyNote, Calculator, ArrowUp, ArrowDown, Copy, Trash2, MoreVertical, Link2, ClipboardPaste } from 'lucide-react';
+import { Dumbbell, Plus, Trophy, Calendar, ChevronDown, ChevronRight, MessageSquare, Pencil, StickyNote, Calculator, ArrowUp, ArrowDown, Copy, Trash2, MoreVertical, Link2, ClipboardPaste, RefreshCw } from 'lucide-react';
+import { ExerciseChangePopup } from './ExerciseChangePopup';
+import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
 import { Switch } from '@/components/ui/switch';
 import { SubGoal, Event } from '@/types/training';
 import { CombinedTestEventDialog } from './CombinedTestEventDialog';
@@ -190,6 +192,14 @@ interface MasterPlannerColumnProps {
   }>;
   // Exercise detail dialog
   onOpenExerciseDetail?: (exercise: ExerciseDistribution) => void;
+  // Exercise change
+  onExerciseChange?: (
+    dayDate: string,
+    sessionIndex: number,
+    sectionId: string,
+    exerciseId: string,
+    newExercise: { exerciseId: string; exerciseName: string; libraryId: string }
+  ) => void;
 }
 
 // Helper to format parameter names nicely
@@ -507,12 +517,20 @@ export function MasterPlannerColumn({
   availableEvents,
   allExerciseDistribution,
   onOpenExerciseDetail,
+  onExerciseChange,
 }: MasterPlannerColumnProps) {
   const [dayIntensityPopoverOpen, setDayIntensityPopoverOpen] = useState(false);
   const [sessionIntensityPopovers, setSessionIntensityPopovers] = useState<Record<number, boolean>>({});
   // Default all exercises to collapsed (true = collapsed)
   const [expandedExercises, setExpandedExercises] = useState<Record<string, boolean>>({});
   const [combinedDialogOpen, setCombinedDialogOpen] = useState(false);
+  // State for Change Exercise via full library popup
+  const [changeExerciseTarget, setChangeExerciseTarget] = useState<{
+    dayDate: string;
+    sessionIndex: number;
+    sectionId: string;
+    exerciseId: string;
+  } | null>(null);
   
   const toggleExerciseCollapse = (exerciseId: string) => {
     setExpandedExercises(prev => ({
@@ -1243,15 +1261,28 @@ export function MasterPlannerColumn({
                                             {supersetLabel}
                                           </Badge>
                                         )}
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            onOpenExerciseDetail?.(exercise);
-                                          }}
-                                          className="font-semibold truncate flex-1 text-left hover:underline cursor-pointer"
-                                        >
-                                          {exercise.exerciseName}
-                                        </button>
+                                        <Popover>
+                                          <PopoverTrigger asChild>
+                                            <button
+                                              onClick={(e) => e.stopPropagation()}
+                                              className="font-semibold truncate flex-1 text-left hover:underline cursor-pointer"
+                                            >
+                                              {exercise.exerciseName}
+                                            </button>
+                                          </PopoverTrigger>
+                                          <PopoverContent className="w-auto p-0 z-[300]" align="start">
+                                            <ExerciseChangePopup
+                                              onSelect={(newEx) => onExerciseChange?.(
+                                                day.dateString,
+                                                session.sessionIndex,
+                                                section.id,
+                                                exercise.id || exercise.exerciseId,
+                                                newEx
+                                              )}
+                                              currentExerciseId={exercise.exerciseId}
+                                            />
+                                          </PopoverContent>
+                                        </Popover>
                                         {/* Exercise reorder arrows */}
                                         {sectionExercises.length > 1 && (
                                           <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -1293,6 +1324,20 @@ export function MasterPlannerColumn({
                                             </Button>
                                           </DropdownMenuTrigger>
                                           <DropdownMenuContent align="end" className="z-[300] bg-background border">
+                                            <DropdownMenuItem
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setChangeExerciseTarget({
+                                                  dayDate: day.dateString,
+                                                  sessionIndex: session.sessionIndex,
+                                                  sectionId: section.id,
+                                                  exerciseId: exercise.id || exercise.exerciseId,
+                                                });
+                                              }}
+                                            >
+                                              <RefreshCw className="h-3.5 w-3.5 mr-2" />
+                                              Change Exercise
+                                            </DropdownMenuItem>
                                             <DropdownMenuItem
                                               onClick={(e) => {
                                                 e.stopPropagation();
@@ -1470,7 +1515,28 @@ export function MasterPlannerColumn({
                                   {supersetLabel}
                                 </Badge>
                               )}
-                              <p className="font-semibold truncate flex-1">{exercise.exerciseName}</p>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <button
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="font-semibold truncate flex-1 text-left hover:underline cursor-pointer"
+                                  >
+                                    {exercise.exerciseName}
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 z-[300]" align="start">
+                                  <ExerciseChangePopup
+                                    onSelect={(newEx) => onExerciseChange?.(
+                                      day.dateString,
+                                      session.sessionIndex,
+                                      '',
+                                      exercise.id || exercise.exerciseId,
+                                      newEx
+                                    )}
+                                    currentExerciseId={exercise.exerciseId}
+                                  />
+                                </PopoverContent>
+                              </Popover>
                               {/* Dropdown menu for duplicate/delete */}
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -1479,6 +1545,20 @@ export function MasterPlannerColumn({
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="z-[300] bg-background border">
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setChangeExerciseTarget({
+                                        dayDate: day.dateString,
+                                        sessionIndex: session.sessionIndex,
+                                        sectionId: '',
+                                        exerciseId: exercise.id || exercise.exerciseId,
+                                      });
+                                    }}
+                                  >
+                                    <RefreshCw className="h-3.5 w-3.5 mr-2" />
+                                    Change Exercise
+                                  </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -1926,6 +2006,34 @@ export function MasterPlannerColumn({
           }
         }}
       />
+      
+      {/* Exercise Library Popup for changing exercise via three-dot menu */}
+      {changeExerciseTarget && (
+        <ExerciseLibraryPopup
+          isOpen={!!changeExerciseTarget}
+          onClose={() => setChangeExerciseTarget(null)}
+          onSelectExercises={(exercises) => {
+            if (exercises.length > 0) {
+              const ex = exercises[0];
+              onExerciseChange?.(
+                changeExerciseTarget.dayDate,
+                changeExerciseTarget.sessionIndex,
+                changeExerciseTarget.sectionId,
+                changeExerciseTarget.exerciseId,
+                {
+                  exerciseId: ex.exerciseId,
+                  exerciseName: ex.exerciseName,
+                  libraryId: ex.library,
+                }
+              );
+              setChangeExerciseTarget(null);
+            }
+          }}
+          singleSelect={true}
+          selectedExerciseIds={[]}
+          onExerciseCreated={() => {}}
+        />
+      )}
     </div>
   );
 }

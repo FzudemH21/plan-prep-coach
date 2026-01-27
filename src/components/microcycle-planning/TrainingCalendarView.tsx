@@ -1041,6 +1041,22 @@ export function TrainingCalendarView({
               availableEvents={availableEvents}
               allExerciseDistribution={exerciseDistribution}
               onOpenExerciseDetail={handleOpenExerciseDetail}
+              onExerciseChange={(dayDate, sessionIndex, sectionId, exerciseId, newExercise) => {
+                if (!onDistributionChange) return;
+                
+                // Update exerciseDistribution - preserve all other fields, just change exercise ID and name
+                const updatedDistribution = exerciseDistribution.map(ex =>
+                  (ex.id === exerciseId || ex.exerciseId === exerciseId) && 
+                  ex.dayDate === dayDate && 
+                  ex.sessionIndex === sessionIndex &&
+                  (sectionId === '' || ex.sectionId === sectionId)
+                    ? { ...ex, exerciseId: newExercise.exerciseId, exerciseName: newExercise.exerciseName }
+                    : ex
+                );
+                onDistributionChange(updatedDistribution);
+                
+                toast({ title: "Exercise changed", description: `Changed to ${newExercise.exerciseName}` });
+              }}
             />
           ) : (
             /* Calendar View */
