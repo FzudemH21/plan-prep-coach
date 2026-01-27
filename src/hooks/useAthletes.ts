@@ -8,6 +8,7 @@ import {
   ParameterValue,
   DEFAULT_BIOMETRICS,
   AthletePerformanceParameter,
+  AthleteCalendarAssignment,
 } from '@/types/athlete';
 
 interface AthleteDatabase {
@@ -16,6 +17,7 @@ interface AthleteDatabase {
   biometricDefinitions: BiometricDefinition[];
   athleteBiometrics: AthleteBiometric[];
   athletePerformanceParameters: AthletePerformanceParameter[];
+  calendarAssignments: AthleteCalendarAssignment[];
 }
 
 // Legacy interface for migration
@@ -44,6 +46,7 @@ const migrateData = (data: LegacyAthleteDatabase | AthleteDatabase): AthleteData
       biometricDefinitions: data.parameterDefinitions || [],
       athleteBiometrics: migratedBiometrics,
       athletePerformanceParameters: [],
+      calendarAssignments: [],
     };
   }
   
@@ -59,6 +62,7 @@ const migrateData = (data: LegacyAthleteDatabase | AthleteDatabase): AthleteData
     biometricDefinitions: (data as AthleteDatabase).biometricDefinitions || [],
     athleteBiometrics: biometrics,
     athletePerformanceParameters: (data as AthleteDatabase).athletePerformanceParameters || [],
+    calendarAssignments: (data as AthleteDatabase).calendarAssignments || [],
   };
 };
 
@@ -78,6 +82,7 @@ const getInitialData = (): AthleteDatabase => {
     biometricDefinitions: defaultDefs,
     athleteBiometrics: [],
     athletePerformanceParameters: [],
+    calendarAssignments: [],
   };
 };
 
@@ -201,6 +206,7 @@ export function useAthletes() {
         athletes: migrated.athletes.filter((a) => a.id !== id),
         athleteBiometrics: migrated.athleteBiometrics.filter((ab) => ab.athleteId !== id),
         athletePerformanceParameters: migrated.athletePerformanceParameters.filter((pp) => pp.athleteId !== id),
+        calendarAssignments: migrated.calendarAssignments.filter((ca) => ca.athleteId !== id),
       };
     });
   }, [setData]);
@@ -460,6 +466,52 @@ export function useAthletes() {
     return data.athletes.find((a) => a.id === id);
   }, [data.athletes]);
 
+  // ============ CALENDAR ASSIGNMENTS ============
+  const createCalendarAssignment = useCallback((
+    athleteId: string, 
+    assignment: Omit<AthleteCalendarAssignment, 'id' | 'createdAt'>
+  ): AthleteCalendarAssignment => {
+    const newAssignment: AthleteCalendarAssignment = {
+      ...assignment,
+      id: generateId(),
+      createdAt: new Date().toISOString(),
+    };
+    setData((prev) => {
+      const migrated = migrateData(prev);
+      return {
+        ...migrated,
+        calendarAssignments: [...migrated.calendarAssignments, newAssignment],
+      };
+    });
+    return newAssignment;
+  }, [setData]);
+
+  const updateCalendarAssignment = useCallback((id: string, updates: Partial<AthleteCalendarAssignment>) => {
+    setData((prev) => {
+      const migrated = migrateData(prev);
+      return {
+        ...migrated,
+        calendarAssignments: migrated.calendarAssignments.map((ca) =>
+          ca.id === id ? { ...ca, ...updates } : ca
+        ),
+      };
+    });
+  }, [setData]);
+
+  const deleteCalendarAssignment = useCallback((id: string) => {
+    setData((prev) => {
+      const migrated = migrateData(prev);
+      return {
+        ...migrated,
+        calendarAssignments: migrated.calendarAssignments.filter((ca) => ca.id !== id),
+      };
+    });
+  }, [setData]);
+
+  const getAthleteCalendarAssignments = useCallback((athleteId: string) => {
+    return data.calendarAssignments.filter((ca) => ca.athleteId === athleteId);
+  }, [data.calendarAssignments]);
+
   // ============ LEGACY ALIASES ============
   // These are kept for backward compatibility with existing code
 
@@ -503,6 +555,7 @@ export function useAthletes() {
     biometricDefinitions: data.biometricDefinitions,
     athleteBiometrics: data.athleteBiometrics,
     athletePerformanceParameters: data.athletePerformanceParameters,
+    calendarAssignments: data.calendarAssignments,
 
     // Legacy data aliases
     parameterDefinitions,
@@ -557,5 +610,11 @@ export function useAthletes() {
     addPerformanceParameterValue,
     updatePerformanceParameterValue,
     deletePerformanceParameterValue,
+
+    // Calendar assignment operations
+    createCalendarAssignment,
+    updateCalendarAssignment,
+    deleteCalendarAssignment,
+    getAthleteCalendarAssignments,
   };
 }

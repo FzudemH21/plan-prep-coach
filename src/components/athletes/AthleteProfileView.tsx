@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -40,7 +41,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Save, Trash2, TrendingUp, X } from 'lucide-react';
+import { Plus, Save, Trash2, TrendingUp, X, Calendar, User } from 'lucide-react';
 import {
   Athlete,
   AthleteGroup,
@@ -54,6 +55,7 @@ import {
 } from '@/types/athlete';
 import { ParameterSection } from './ParameterSection';
 import { ParameterValueHistory } from './ParameterValueHistory';
+import { AthleteCalendarView } from './AthleteCalendarView';
 import { useAthletes } from '@/hooks/useAthletes';
 
 interface AthleteProfileViewProps {
@@ -255,8 +257,22 @@ export function AthleteProfileView({
   };
 
   return (
-    <ScrollArea className="h-full">
-      <div className="space-y-6 p-1 pr-4">
+    <div className="h-full flex flex-col">
+      <Tabs defaultValue="profile" className="flex-1 flex flex-col">
+        <TabsList className="mx-1 mt-1 w-fit">
+          <TabsTrigger value="profile" className="gap-2">
+            <User className="h-4 w-4" />
+            Profile
+          </TabsTrigger>
+          <TabsTrigger value="calendar" className="gap-2">
+            <Calendar className="h-4 w-4" />
+            Calendar
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="profile" className="flex-1 mt-0">
+          <ScrollArea className="h-full">
+            <div className="space-y-6 p-1 pr-4">
         {/* Core Profile */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -650,7 +666,14 @@ export function AthleteProfileView({
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
-    </ScrollArea>
+            </div>
+          </ScrollArea>
+        </TabsContent>
+        
+        <TabsContent value="calendar" className="flex-1 mt-0 px-1">
+          <AthleteCalendarView athlete={athlete} />
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }
