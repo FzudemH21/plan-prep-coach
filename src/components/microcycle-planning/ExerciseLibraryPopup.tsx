@@ -360,8 +360,8 @@ export function ExerciseLibraryPopup({
             {/* Search and Filter Controls */}
             <div className="flex items-center justify-between gap-4 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="relative">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <div className="relative px-1">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="Search exercises..."
                     value={filterState.search}
