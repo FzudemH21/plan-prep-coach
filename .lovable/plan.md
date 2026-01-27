@@ -1,151 +1,189 @@
 
 
-## Plan: Move SMART Goal Scheduling to Step 2 Only
+## Fix: Sub-Goal Selection Logic and Add Clear Calendar Feature
 
 ### Summary
-Remove the ability to schedule SMART goal tests in Step 1. In Step 1, the calendar should only be used for setting the plan duration (start/end dates). SMART goal test scheduling will only be available in Step 2.
+Two changes needed:
+1. **Fix sub-goal selection bug**: Separate the expand/collapse behavior from the selection behavior on primary goals, so clicking a sub-goal correctly selects it (not the parent goal)
+2. **Add "Clear Calendar" buttons**: Allow users to clear scheduled dates in both Step 1 and Step 2
 
 ---
 
-### Current Behavior (Step 1)
-1. SMART goals are clickable and can be selected
-2. When a goal is selected, clicking a calendar date schedules a test
-3. A hint appears: "Click on a date in the calendar to schedule a test for this goal"
+## Problem 1: Sub-Goal Selection Bug
 
-### Proposed Behavior (Step 1)
-1. SMART goals are displayed but **not selectable** for scheduling
-2. Clicking calendar dates **only** sets plan start/end dates
-3. No scheduling hint displayed
-4. Edit/delete buttons still functional
+### Root Cause
+In Step 2, clicking anywhere on the primary goal header (lines 1365-1386) does two things simultaneously:
+1. Selects/deselects the primary goal for scheduling (`setSelectedSmartGoal`)
+2. Expands/collapses the dropdown
+
+When a user clicks to expand and see sub-goals, it also selects the primary goal. Then when they click a sub-goal, the `selectedSmartGoal` state is still set, so the calendar handler schedules the primary goal instead.
+
+### Solution
+Separate the expand arrow from the selection area:
+- **Clicking the arrow icon**: Only toggle expand/collapse (no selection change)
+- **Clicking the goal content area**: Select/deselect the primary goal for scheduling
+
+This matches the sub-goal pattern where there's a separate expand button.
 
 ---
 
-### Implementation
+## Problem 2: Clear Calendar Feature
 
-**File**: `src/pages/MacrocyclePage.tsx`
+### Step 1 Clear Calendar
+- Add a "Clear Dates" button next to the calendar
+- When clicked: Clear `planDuration` (sets to undefined/null)
+- Result: Both start and end dates are removed
 
-#### Change 1: Remove Goal Selection in Step 1 (Lines 1140-1149)
+### Step 2 Clear Calendar  
+- Add a "Clear All Scheduled" button above the calendar
+- When clicked: Clear all `testDates` from all `smartGoals`, `subGoals`, and all `eventDates` from `events`
+- Result: All scheduled items are removed from the calendar
 
-Remove the clickable selection behavior from SMART goal cards. Keep the display but remove:
-- The `cursor-pointer` class
-- The `onClick` handler that sets `selectedSmartGoal`
-- The selection highlight styling
+---
 
-**Before:**
+## Implementation Details
+
+### File: `src/pages/MacrocyclePage.tsx`
+
+#### Change 1: Separate Expand from Selection (Lines 1365-1408)
+
+**Current Structure:**
 ```tsx
-<div
-  key={goal.id}
-  className={cn(
-    "p-3 border rounded-lg flex items-start justify-between gap-3 cursor-pointer transition-colors",
-    selectedSmartGoal === goal.id 
-      ? "ring-2 ring-green-500 bg-green-500/5" 
-      : "bg-muted/30 hover:bg-muted/50"
-  )}
-  onClick={() => setSelectedSmartGoal(selectedSmartGoal === goal.id ? null : goal.id)}
+<div 
+  className="p-3 bg-muted/30 cursor-pointer..."
+  onClick={() => {
+    setSelectedSmartGoal(...);  // Selection
+    setExpandedPrimaryGoals(...); // Expand
+  }}
 >
+  {/* Goal content */}
+  <ChevronDown className="h-4 w-4" />  {/* Arrow - not interactive */}
+</div>
 ```
 
-**After:**
+**New Structure:**
 ```tsx
-<div
-  key={goal.id}
-  className="p-3 border rounded-lg flex items-start justify-between gap-3 bg-muted/30"
->
+<div className="p-3 bg-muted/30 flex items-start gap-2">
+  {/* Expand Arrow - separate button */}
+  <Button
+    variant="ghost"
+    size="icon"
+    className="h-6 w-6 shrink-0 mt-0.5"
+    onClick={(e) => {
+      e.stopPropagation();
+      setExpandedPrimaryGoals(prev => {
+        const next = new Set(prev);
+        if (next.has(goal.id)) next.delete(goal.id);
+        else next.add(goal.id);
+        return next;
+      });
+    }}
+  >
+    <ChevronDown className={cn("h-4 w-4 transition-transform", isGoalExpanded && "rotate-180")} />
+  </Button>
+  
+  {/* Goal Content - clickable for selection */}
+  <div 
+    className={cn(
+      "flex-1 cursor-pointer transition-colors rounded p-1 -m-1",
+      selectedSmartGoal === goal.id 
+        ? "ring-2 ring-inset ring-primary bg-primary/5" 
+        : "hover:bg-muted/50"
+    )}
+    onClick={() => {
+      setSelectedSmartGoal(selectedSmartGoal === goal.id ? null : goal.id);
+      setSelectedTest(null);
+      setSelectedEvent(null);
+    }}
+  >
+    {/* Goal title, values, badges */}
+  </div>
+</div>
 ```
 
-#### Change 2: Remove Scheduling Hint in Step 1 (Lines 1198-1202)
+#### Change 2: Add Clear Button for Step 1 Calendar (Around line 1244)
 
-Delete or hide the hint that says "Click on a date in the calendar to schedule a test for this goal".
+Add a "Clear Dates" button after the calendar:
 
-**Remove:**
 ```tsx
-{selectedSmartGoal && (
-  <p className="text-xs text-muted-foreground text-center bg-muted/50 p-2 rounded">
-    Click on a date in the calendar to schedule a test for this goal
-  </p>
+{planDuration && (
+  <div className="flex justify-center mt-2">
+    <Button
+      variant="ghost"
+      size="sm"
+      className="text-muted-foreground hover:text-destructive"
+      onClick={() => {
+        setPlanDuration(undefined);
+        toast({ title: 'Calendar Cleared', description: 'Start and end dates have been removed.' });
+      }}
+    >
+      <X className="h-4 w-4 mr-1" />
+      Clear Dates
+    </Button>
+  </div>
 )}
 ```
 
-#### Change 3: Remove Goal Scheduling Logic from Calendar (Lines 1226-1246)
+#### Change 3: Add Clear Button for Step 2 Calendar (Around line 1677)
 
-Remove the `if (selectedSmartGoal)` branch from the calendar's `onSelect` handler, so clicking always sets plan duration.
+Add a "Clear All Scheduled" button in the calendar header area:
 
-**Before:**
 ```tsx
-onSelect={(selectedDate) => {
-  if (!selectedDate) return;
-  
-  // If a SMART goal is selected, toggle scheduling for that goal
-  if (selectedSmartGoal) {
-    // ... scheduling logic ...
-  } else {
-    // Original calendar selection behavior
-    handleCalendarSelect(selectedDate);
-  }
-}}
-```
-
-**After:**
-```tsx
-onSelect={(selectedDate) => {
-  if (!selectedDate) return;
-  handleCalendarSelect(selectedDate);
-}}
-```
-
-#### Change 4: Remove Goal Scheduled Modifier from Calendar (Lines 1255-1280)
-
-Remove the `goalScheduled` modifier and its styling from Step 1's calendar since we no longer show scheduled tests there.
-
-**Remove from modifiers:**
-```tsx
-goalScheduled: smartGoals
-  .flatMap(g => g.testDates || [])
-  .map(dateStr => parseISO(dateStr))
-```
-
-**Remove from modifiersStyles:**
-```tsx
-goalScheduled: {
-  backgroundColor: 'hsl(38 92% 50%)',
-  color: 'white',
-  fontWeight: 'bold'
-}
+<div className="flex items-center justify-between mb-2">
+  <h3 className="font-semibold text-sm">Calendar Scheduling</h3>
+  <Button
+    variant="ghost"
+    size="sm"
+    className="text-muted-foreground hover:text-destructive h-7 text-xs"
+    onClick={() => {
+      // Clear all scheduled tests from SMART goals
+      setSmartGoals(prev => prev.map(g => ({ ...g, testDates: [] })));
+      // Clear all scheduled tests from sub-goals
+      setSubGoals(prev => prev.map(sg => ({ ...sg, testDates: [] })));
+      // Clear all scheduled events
+      setEvents(prev => prev.map(e => ({ ...e, eventDates: [] })));
+      toast({ title: 'Calendar Cleared', description: 'All scheduled items have been removed.' });
+    }}
+  >
+    <X className="h-3 w-3 mr-1" />
+    Clear All
+  </Button>
+</div>
 ```
 
 ---
 
-### Visual Result
+## Visual Changes Summary
 
-**Step 1 (Plan Setup & Goals)**
-- SMART goals displayed as static cards (no click-to-select)
-- Calendar only used for selecting plan start/end dates
-- No amber "scheduled test" markers in calendar
+### Step 2 Primary Goals
+- **Before**: Entire header area clickable, selects AND expands
+- **After**: Arrow button on left for expand only, goal content area for selection only
 
-**Step 2 (Sub-Goals & Testing)**
-- SMART goals (primary goals) are clickable and selectable
-- Sub-goals are clickable and selectable
-- Events are clickable and selectable
-- Calendar shows all scheduled tests with appropriate markers
-- Full scheduling functionality available
+### Step 1 Calendar
+- **Before**: No way to clear dates (must re-select)
+- **After**: "Clear Dates" button appears when dates are set
+
+### Step 2 Calendar  
+- **Before**: No way to clear all scheduled items at once
+- **After**: "Clear All" button in header clears all schedules
 
 ---
 
-### Files Modified
+## Files Modified
 
 | File | Changes |
 |------|---------|
-| `src/pages/MacrocyclePage.tsx` | Remove SMART goal scheduling from Step 1 calendar |
+| `src/pages/MacrocyclePage.tsx` | 1. Separate expand/select in primary goal header, 2. Add clear button for Step 1, 3. Add clear button for Step 2 |
 
 ---
 
-### Testing Checklist
+## Testing Checklist
 
 After implementation:
-1. ✓ Step 1: SMART goals display correctly but cannot be selected
-2. ✓ Step 1: Calendar only sets plan duration (start/end dates)
-3. ✓ Step 1: No "schedule test" hint appears
-4. ✓ Step 2: Primary goals can be clicked and selected (with visual highlight)
-5. ✓ Step 2: Clicking calendar with primary goal selected schedules a test
-6. ✓ Step 2: Sub-goals and events scheduling still works
+1. Click the expand arrow on a primary goal - it should only expand, not select
+2. Click the goal content area - it should select (with visual highlight), arrow stays independent
+3. With primary goal expanded, click a sub-goal - the sub-goal should be selected (not the primary)
+4. Click calendar date - the correct selected item (primary or sub-goal) is scheduled
+5. In Step 1, click "Clear Dates" - both start and end dates are removed
+6. In Step 2, click "Clear All" - all scheduled tests and events are removed from calendar
 
