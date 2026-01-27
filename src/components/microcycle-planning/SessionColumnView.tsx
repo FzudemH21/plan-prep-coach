@@ -22,7 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, X, ChevronUp, MessageSquare, Copy, ArrowUp, ArrowDown, StickyNote } from 'lucide-react';
+import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, X, ChevronUp, ChevronDown, ChevronRight, MessageSquare, Copy, ArrowUp, ArrowDown, StickyNote } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { TrainingDay } from '@/types/daily-intensity';
 import { IntensityLevel } from '@/types/training';
@@ -82,6 +82,7 @@ interface SessionColumnViewProps {
   onMoveSessionUp?: (dayDate: string, sessionIndex: number) => void;
   onMoveSessionDown?: (dayDate: string, sessionIndex: number) => void;
   onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
+  onReorderSection?: (sectionId: string, direction: 'up' | 'down') => void;
 }
 
 export function SessionColumnView({
@@ -113,6 +114,7 @@ export function SessionColumnView({
   onMoveSessionUp,
   onMoveSessionDown,
   onExerciseNotesChange,
+  onReorderSection,
 }: SessionColumnViewProps) {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionName, setEditingSectionName] = useState('');
@@ -122,6 +124,15 @@ export function SessionColumnView({
   const [editingSessionNameValue, setEditingSessionNameValue] = useState('');
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
+  const [deleteSessionDialogOpen, setDeleteSessionDialogOpen] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+
+  const toggleSectionCollapse = (sectionId: string) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [sectionId]: !prev[sectionId]
+    }));
+  };
 
   const getSuperset = (exerciseId: string, sectionId?: string): string | undefined => {
     const sectionKey = sectionId || '__unsectioned__';
@@ -458,7 +469,7 @@ export function SessionColumnView({
                     variant="ghost"
                     size="sm"
                     className="h-6 w-6 p-0 text-destructive hover:bg-accent"
-                    onClick={() => onRemoveSession(day.date, sessionIndex)}
+                    onClick={() => setDeleteSessionDialogOpen(true)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -571,29 +582,9 @@ export function SessionColumnView({
                 </Droppable>
               )}
 
-              {/* Empty state when no exercises at all */}
-              {exercises.length === 0 && (
-                <Droppable droppableId={`session-${day.date}::${sessionIndex}`} type="EXERCISE">
-                  {(provided, snapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.droppableProps}
-                      className={cn(
-                        "rounded-md border-2 border-dashed p-8 min-h-[200px] flex items-center justify-center",
-                        snapshot.isDraggingOver ? "border-primary bg-primary/5" : "border-muted"
-                      )}
-                    >
-                      <div className="text-xs text-muted-foreground text-center">
-                        Drag exercises here
-                      </div>
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              )}
 
               {/* Sections with their exercises */}
-              {exercisesBySection.sortedSections.map(section => (
+              {exercisesBySection.sortedSections.map((section, sectionIndex) => (
                 <div key={section.id} className="space-y-2">
                   {/* Section Container - white background with muted header */}
                   <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
@@ -638,7 +629,47 @@ export function SessionColumnView({
                         ) : (
                           <>
                             <div className="flex items-center gap-2">
-                              <GripVertical className="h-4 w-4 text-muted-foreground" />
+                              {/* Collapse/Expand Toggle */}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-5 w-5 p-0"
+                                onClick={() => toggleSectionCollapse(section.id)}
+                              >
+                                {collapsedSections[section.id] 
+                                  ? <ChevronRight className="h-4 w-4" /> 
+                                  : <ChevronDown className="h-4 w-4" />
+                                }
+                              </Button>
+                              
+                              {/* Arrow buttons for reordering - only show when multiple sections */}
+                              {exercisesBySection.sortedSections.length > 1 && (
+                                <div className="flex items-center gap-0.5">
+                                  {sectionIndex > 0 && onReorderSection && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-5 w-5 p-0"
+                                      onClick={() => onReorderSection(section.id, 'up')}
+                                      title="Move section up"
+                                    >
+                                      <ArrowUp className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                  {sectionIndex < exercisesBySection.sortedSections.length - 1 && onReorderSection && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-5 w-5 p-0"
+                                      onClick={() => onReorderSection(section.id, 'down')}
+                                      title="Move section down"
+                                    >
+                                      <ArrowDown className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
+                              
                               <span className="text-sm font-semibold">{section.name}</span>
                               <Badge variant="secondary" className="text-xs">
                                 {exercisesBySection.sectioned[section.id]?.length || 0}
@@ -679,57 +710,59 @@ export function SessionColumnView({
                       </div>
                     </div>
 
-                    {/* Section Content Area - white background */}
-                    <div className="p-3 space-y-2">
-                      {/* Section Comments */}
-                      {!editingSectionId && onSectionCommentsChange && (
-                        <div className="pb-2">
-                          <label className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
-                            <MessageSquare className="h-3 w-3" />
-                            Section Notes
-                          </label>
-                          <Textarea
-                            value={section.comments || ''}
-                            onChange={(e) => onSectionCommentsChange(section.id, e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                e.currentTarget.blur();
-                              }
-                            }}
-                            placeholder="Add notes for this section..."
-                            className="min-h-[50px] text-xs resize-none"
-                          />
-                        </div>
-                      )}
-
-                      {/* Section exercises droppable area */}
-                      <Droppable droppableId={`section-${section.id}`} type="EXERCISE">
-                        {(provided, snapshot) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.droppableProps}
-                            className={cn(
-                              "rounded-md border-2 border-dashed p-2 min-h-[60px] transition-colors",
-                              snapshot.isDraggingOver ? "border-primary bg-primary/5" : "border-muted/50"
-                            )}
-                          >
-                            <div className="space-y-2">
-                              {exercisesBySection.sectioned[section.id]?.length === 0 ? (
-                                <div className="text-xs text-muted-foreground text-center py-4">
-                                  Drop exercises here
-                                </div>
-                              ) : (
-                                exercisesBySection.sectioned[section.id]?.map((exercise, index) => 
-                                  renderExerciseCard(exercise, index, exercisesBySection.sectioned[section.id], section.id)
-                                )
-                              )}
-                              {provided.placeholder}
-                            </div>
+                    {/* Section Content Area - white background (collapsible) */}
+                    {!collapsedSections[section.id] && (
+                      <div className="p-3 space-y-2">
+                        {/* Section Comments */}
+                        {!editingSectionId && onSectionCommentsChange && (
+                          <div className="pb-2">
+                            <label className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                              <MessageSquare className="h-3 w-3" />
+                              Section Notes
+                            </label>
+                            <Textarea
+                              value={section.comments || ''}
+                              onChange={(e) => onSectionCommentsChange(section.id, e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault();
+                                  e.currentTarget.blur();
+                                }
+                              }}
+                              placeholder="Add notes for this section..."
+                              className="min-h-[50px] text-xs resize-none"
+                            />
                           </div>
                         )}
-                      </Droppable>
-                    </div>
+
+                        {/* Section exercises droppable area */}
+                        <Droppable droppableId={`section-${section.id}`} type="EXERCISE">
+                          {(provided, snapshot) => (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.droppableProps}
+                              className={cn(
+                                "rounded-md border-2 border-dashed p-2 min-h-[60px] transition-colors",
+                                snapshot.isDraggingOver ? "border-primary bg-primary/5" : "border-muted/50"
+                              )}
+                            >
+                              <div className="space-y-2">
+                                {exercisesBySection.sectioned[section.id]?.length === 0 ? (
+                                  <div className="text-xs text-muted-foreground text-center py-4">
+                                    Drop exercises here
+                                  </div>
+                                ) : (
+                                  exercisesBySection.sectioned[section.id]?.map((exercise, index) => 
+                                    renderExerciseCard(exercise, index, exercisesBySection.sectioned[section.id], section.id)
+                                  )
+                                )}
+                                {provided.placeholder}
+                              </div>
+                            </div>
+                          )}
+                        </Droppable>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -795,6 +828,28 @@ export function SessionColumnView({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDeleteExercise}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteSessionDialogOpen} onOpenChange={setDeleteSessionDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Session</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{sessionName}"? This will remove all exercises and sections in this session.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => {
+                onRemoveSession?.(day.date, sessionIndex);
+                setDeleteSessionDialogOpen(false);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
