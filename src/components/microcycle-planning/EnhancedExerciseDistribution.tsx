@@ -1457,7 +1457,12 @@ export function EnhancedExerciseDistribution({
       });
       
       // Copy supersets with new exercise IDs and section IDs
+      // Clear target dates FIRST to overwrite any existing supersets
       const newSupersets: SupersetMapping = { ...supersets };
+      const targetDates = targetDays.map(d => d.date);
+      targetDates.forEach(date => {
+        delete newSupersets[date];
+      });
       
       sourceDays.forEach((sourceDay, dayIndex) => {
         if (dayIndex >= minDays) return;
@@ -1525,18 +1530,14 @@ export function EnhancedExerciseDistribution({
         }
       });
       
-      // Remove existing exercises, sections, and supersets for target days
-      const targetDates = targetDays.map(d => d.date);
+      // Remove existing exercises and sections for target days
+      // (supersets were already cleared before copying above)
       const filteredExercises = exerciseDistribution.filter(
         ex => !targetDates.includes(ex.dayDate)
       );
       const filteredSections = sessionSections.filter(
         s => !targetDates.includes(s.dayDate)
       );
-      
-      targetDates.forEach(date => {
-        delete newSupersets[date];
-      });
       
       // Add new data
       onDistributionChange([...filteredExercises, ...newExercises]);
@@ -1606,9 +1607,25 @@ export function EnhancedExerciseDistribution({
       // All validations passed - proceed with copy
       const newExercises: ExerciseDistribution[] = [];
       const newSections: SessionSection[] = [];
-      const newSupersets: SupersetMapping = { ...supersets };
       const oldToNewExerciseIds: Record<string, string> = {};
       const oldToNewSectionIds: Record<string, string> = {};
+      
+      // Clear target mesocycle's supersets BEFORE copying
+      const currentMesocycleDays = trainingDays.filter(day => {
+        const mesocycleStartDate = typeof mesocycle.startDate === 'string' 
+          ? (mesocycle.startDate as string).split('T')[0] 
+          : format(mesocycle.startDate as Date, 'yyyy-MM-dd');
+        const mesocycleEndDate = typeof mesocycle.endDate === 'string'
+          ? (mesocycle.endDate as string).split('T')[0]
+          : format(mesocycle.endDate as Date, 'yyyy-MM-dd');
+        return day.date >= mesocycleStartDate && day.date <= mesocycleEndDate;
+      });
+      const targetDates = currentMesocycleDays.map(d => d.date);
+      
+      const newSupersets: SupersetMapping = { ...supersets };
+      targetDates.forEach(date => {
+        delete newSupersets[date];
+      });
       
       // Loop through each microcycle pair
       mesocycle.microcycles.forEach((targetMicro, microIndex) => {
@@ -1703,28 +1720,14 @@ export function EnhancedExerciseDistribution({
         });
       });
       
-      // Clear target mesocycle's existing data
-      const currentMesocycleDays = trainingDays.filter(day => {
-        const mesocycleStartDate = typeof mesocycle.startDate === 'string' 
-          ? (mesocycle.startDate as string).split('T')[0] 
-          : format(mesocycle.startDate as Date, 'yyyy-MM-dd');
-        const mesocycleEndDate = typeof mesocycle.endDate === 'string'
-          ? (mesocycle.endDate as string).split('T')[0]
-          : format(mesocycle.endDate as Date, 'yyyy-MM-dd');
-        return day.date >= mesocycleStartDate && day.date <= mesocycleEndDate;
-      });
-      
-      const targetDates = currentMesocycleDays.map(d => d.date);
+      // Clear target mesocycle's existing exercises and sections
+      // (supersets were already cleared before copying above)
       const filteredExercises = exerciseDistribution.filter(
         ex => !targetDates.includes(ex.dayDate)
       );
       const filteredSections = sessionSections.filter(
         s => !targetDates.includes(s.dayDate)
       );
-      
-      targetDates.forEach(date => {
-        delete newSupersets[date];
-      });
       
       // Apply copied data
       onDistributionChange([...filteredExercises, ...newExercises]);
