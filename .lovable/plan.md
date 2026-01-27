@@ -1,100 +1,110 @@
 
 
-## Plan: Simplify Clear All Button Placement
+## Fix: Cross-Mesocycle Copy Missing Section ID Remapping
 
-### Summary
-Remove the recently added "Clear All" button from the calendar header and make the existing "Clear All" button below the calendar always visible (not conditional).
+### Problem
+When copying a mesocycle setup to another mesocycle, exercises are appearing outside of their sections (as seen in your screenshot where "Squat" and "RDL" appear above "Section 1" instead of inside it). This also causes sessions to not appear in the Training Calendar.
 
----
+### Root Cause
+The `handleCopyFromPreviousMesocycle` function in `EnhancedExerciseDistribution.tsx` has a critical bug:
 
-### Current State
+1. **Wrong order**: It copies exercises BEFORE sections
+2. **Missing mapping**: It doesn't create an `oldToNewSectionIds` mapping
+3. **No remapping**: Exercises keep their original `sectionId` which doesn't exist in the target mesocycle
+4. **Superset issue**: Supersets also use old section IDs without remapping
 
-**Two "Clear All" buttons exist in Step 2:**
-1. **Header button** (Lines 1707-1726): Always visible, X icon, no confirmation
-2. **Below-calendar button** (Lines 1972-1999): Only shows when items are scheduled, Trash2 icon, has confirmation dialog
-
-### Target State
-
-**One "Clear All" button in Step 2:**
-- Located below the calendar
-- Always visible
-- Includes confirmation dialog (existing behavior)
+In contrast, the working microcycle copy (`handleCopyMicrocycleSetup`) correctly:
+1. Copies sections FIRST, building an `oldToNewSectionIds` map
+2. Copies exercises AFTER, remapping `sectionId` using: `sectionId: exercise.sectionId ? oldToNewSectionIds[exercise.sectionId] : undefined`
 
 ---
 
-### Implementation
+### Solution
+Reorder the mesocycle copy logic to match the working microcycle copy pattern:
 
-**File**: `src/pages/MacrocyclePage.tsx`
-
-#### Change 1: Remove Header Clear All Button (Lines 1707-1726)
-
-Remove the header with the Clear All button and just keep a simple header title:
-
-**Before (Lines 1707-1726):**
-```tsx
-<div className="flex items-center justify-between">
-  <h3 className="font-semibold text-sm">Calendar Scheduling</h3>
-  <Button
-    variant="ghost"
-    size="sm"
-    className="text-muted-foreground hover:text-destructive h-7 text-xs"
-    onClick={() => {
-      // Clear all scheduled tests from SMART goals
-      setSmartGoals(prev => prev.map(g => ({ ...g, testDates: [] })));
-      // Clear all scheduled tests from sub-goals  
-      setSubGoals(prev => prev.map(sg => ({ ...sg, testDates: [] })));
-      // Clear all scheduled events
-      setEvents(prev => prev.map(e => ({ ...e, eventDates: [] })));
-      toast({ title: 'Calendar Cleared', description: 'All scheduled items have been removed.' });
-    }}
-  >
-    <X className="h-3 w-3 mr-1" />
-    Clear All
-  </Button>
-</div>
-```
-
-**After:**
-```tsx
-<h3 className="font-semibold text-sm">Calendar Scheduling</h3>
-```
-
-#### Change 2: Make Below-Calendar Clear Button Always Visible (Lines 1972-1999)
-
-Remove the conditional wrapper that only shows the button when items are scheduled:
-
-**Before (Lines 1972-1999):**
-```tsx
-{/* Clear button */}
-{(subGoals.some(sg => sg.testDates && sg.testDates.length > 0) || 
-  events.some(e => e.eventDates && e.eventDates.length > 0)) && (
-  <div className="mt-4 flex justify-center">
-    <AlertDialog>
-      ...
-    </AlertDialog>
-  </div>
-)}
-```
-
-**After:**
-```tsx
-{/* Clear button - always visible */}
-<div className="mt-4 flex justify-center">
-  <AlertDialog>
-    ...
-  </AlertDialog>
-</div>
-```
+1. **Copy sections FIRST** - Create the `oldToNewSectionIds` mapping while doing so
+2. **Copy exercises SECOND** - Use the mapping to remap each exercise's `sectionId`
+3. **Copy supersets THIRD** - Use the mapping to remap section IDs in the superset structure
 
 ---
 
-### Visual Result
+### Implementation Details
 
-| Before | After |
-|--------|-------|
-| Two Clear All buttons (header + below calendar) | One Clear All button (below calendar only) |
-| Below-calendar button only visible when items scheduled | Below-calendar button always visible |
-| Header button has no confirmation | Single button has confirmation dialog |
+**File**: `src/components/microcycle-planning/EnhancedExerciseDistribution.tsx`
+
+#### Change: Restructure `handleCopyFromPreviousMesocycle` (Lines 1606-1696)
+
+**Current (broken) order:**
+```tsx
+// Line 1606: Initialize arrays
+const newExercises: ExerciseDistribution[] = [];
+const newSections: SessionSection[] = [];
+const oldToNewExerciseIds: Record<string, string> = {};  // Missing oldToNewSectionIds!
+
+// Lines 1628-1646: Copy exercises FIRST (no sectionId remapping!)
+newExercises.push({
+  ...exercise,
+  id: newId,
+  dayDate: targetDate,
+  // BUG: sectionId not remapped!
+});
+
+// Lines 1649-1665: Copy sections AFTER (mapping not stored!)
+newSections.push({
+  ...section,
+  id: `section-${Date.now()}-...`,  // New ID created but not mapped!
+  dayDate: targetDate,
+});
+```
+
+**Fixed order:**
+```tsx
+// Initialize arrays with section mapping
+const newExercises: ExerciseDistribution[] = [];
+const newSections: SessionSection[] = [];
+const oldToNewExerciseIds: Record<string, string> = {};
+const oldToNewSectionIds: Record<string, string> = {};  // ADD THIS
+
+// STEP 1: Copy sections FIRST, building the mapping
+sourceDays.forEach((sourceDay, dayIndex) => {
+  // ... get targetDate ...
+  const sourceDateSections = sessionSections.filter(s => s.dayDate === sourceDay.date);
+  
+  sourceDateSections.forEach(section => {
+    const newSectionId = `section-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    oldToNewSectionIds[section.id] = newSectionId;  // STORE MAPPING
+    
+    newSections.push({
+      ...section,
+      id: newSectionId,
+      dayDate: targetDate,
+    });
+  });
+});
+
+// STEP 2: Copy exercises AFTER, using the mapping
+sourceDays.forEach((sourceDay, dayIndex) => {
+  // ... get targetDate ...
+  const sourceDateExercises = exerciseDistribution.filter(ex => ex.dayDate === sourceDay.date);
+  
+  sourceDateExercises.forEach(exercise => {
+    const newId = `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    oldToNewExerciseIds[exercise.id] = newId;
+    
+    newExercises.push({
+      ...exercise,
+      id: newId,
+      dayDate: targetDate,
+      sectionId: exercise.sectionId ? oldToNewSectionIds[exercise.sectionId] : undefined,  // REMAP
+    });
+  });
+});
+
+// STEP 3: Copy supersets, using both mappings
+// ... also remap sectionId in superset structure ...
+const newSectionId = oldToNewSectionIds[sectionId] || sectionId;
+newSupersets[targetDate][sessionIndex][newSectionId] = { ... };
+```
 
 ---
 
@@ -102,5 +112,16 @@ Remove the conditional wrapper that only shows the button when items are schedul
 
 | File | Changes |
 |------|---------|
-| `src/pages/MacrocyclePage.tsx` | Remove header Clear All button, make below-calendar button always visible |
+| `src/components/microcycle-planning/EnhancedExerciseDistribution.tsx` | Reorder section/exercise copy, add `oldToNewSectionIds` mapping, remap exercise `sectionId` and superset section IDs |
+
+---
+
+### Testing Checklist
+
+After implementation:
+1. Add exercises to sessions in Mesocycle 1 (sections should auto-create)
+2. Copy Mesocycle 1 setup to Mesocycle 2
+3. Verify exercises appear INSIDE their sections (not above/outside)
+4. Verify sessions appear correctly in Training Calendar (Step 2)
+5. Verify supersets are preserved and work correctly in the copied mesocycle
 
