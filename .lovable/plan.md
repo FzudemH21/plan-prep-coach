@@ -1,30 +1,40 @@
 
 
-## Fix: Cross-Mesocycle Copy Missing Section ID Remapping
+## Fix: Superset Copying Between Mesocycles and Microcycles
 
 ### Problem
-When copying a mesocycle setup to another mesocycle, exercises are appearing outside of their sections (as seen in your screenshot where "Squat" and "RDL" appear above "Section 1" instead of inside it). This also causes sessions to not appear in the Training Calendar.
+When copying exercises between mesocycles or microcycles, supersets are not being copied correctly. Exercises that are in a superset lose their superset connection after copying.
 
-### Root Cause
-The `handleCopyFromPreviousMesocycle` function in `EnhancedExerciseDistribution.tsx` has a critical bug:
+### Root Cause Analysis
 
-1. **Wrong order**: It copies exercises BEFORE sections
-2. **Missing mapping**: It doesn't create an `oldToNewSectionIds` mapping
-3. **No remapping**: Exercises keep their original `sectionId` which doesn't exist in the target mesocycle
-4. **Superset issue**: Supersets also use old section IDs without remapping
+**Issue 1: Missing `__unsectioned__` Handling in Mesocycle Copy**
 
-In contrast, the working microcycle copy (`handleCopyMicrocycleSetup`) correctly:
-1. Copies sections FIRST, building an `oldToNewSectionIds` map
-2. Copies exercises AFTER, remapping `sectionId` using: `sectionId: exercise.sectionId ? oldToNewSectionIds[exercise.sectionId] : undefined`
+The microcycle copy correctly handles the special `__unsectioned__` key:
+```tsx
+// Microcycle copy (CORRECT)
+const newSectionId = oldSectionId === '__unsectioned__' 
+  ? '__unsectioned__' 
+  : (oldToNewSectionIds[oldSectionId] || oldSectionId);
+```
+
+But the mesocycle copy doesn't:
+```tsx
+// Mesocycle copy (BUG)
+const newSectionId = oldToNewSectionIds[sectionId] || sectionId;
+```
+
+When supersets exist at the session level (not inside a section), they use `__unsectioned__` as the key. The mesocycle copy tries to remap this through `oldToNewSectionIds` which returns `undefined`, causing the fallback to use the original `__unsectioned__` string - but this happens incorrectly because the lookup logic differs.
+
+**Issue 2: Superset Validity Check**
+
+The current code only checks `if (newExerciseIds.length > 0)` before adding a superset. However, a valid superset requires at least 2 exercises. With `> 0`, orphan supersets with only 1 exercise could be copied.
 
 ---
 
 ### Solution
-Reorder the mesocycle copy logic to match the working microcycle copy pattern:
 
-1. **Copy sections FIRST** - Create the `oldToNewSectionIds` mapping while doing so
-2. **Copy exercises SECOND** - Use the mapping to remap each exercise's `sectionId`
-3. **Copy supersets THIRD** - Use the mapping to remap section IDs in the superset structure
+1. **Fix mesocycle copy superset handling**: Add the same `__unsectioned__` check as microcycle copy
+2. **Fix superset validity check**: Change from `> 0` to `>= 2` in both functions to ensure only valid supersets are copied
 
 ---
 
@@ -32,79 +42,23 @@ Reorder the mesocycle copy logic to match the working microcycle copy pattern:
 
 **File**: `src/components/microcycle-planning/EnhancedExerciseDistribution.tsx`
 
-#### Change: Restructure `handleCopyFromPreviousMesocycle` (Lines 1606-1696)
+#### Change 1: Fix Mesocycle Copy `__unsectioned__` Handling (Line 1686)
 
-**Current (broken) order:**
-```tsx
-// Line 1606: Initialize arrays
-const newExercises: ExerciseDistribution[] = [];
-const newSections: SessionSection[] = [];
-const oldToNewExerciseIds: Record<string, string> = {};  // Missing oldToNewSectionIds!
+| Current | Fixed |
+|---------|-------|
+| `const newSectionId = oldToNewSectionIds[sectionId] \|\| sectionId;` | `const newSectionId = sectionId === '__unsectioned__' ? '__unsectioned__' : (oldToNewSectionIds[sectionId] \|\| sectionId);` |
 
-// Lines 1628-1646: Copy exercises FIRST (no sectionId remapping!)
-newExercises.push({
-  ...exercise,
-  id: newId,
-  dayDate: targetDate,
-  // BUG: sectionId not remapped!
-});
+#### Change 2: Fix Mesocycle Copy Superset Validity Check (Line 1694)
 
-// Lines 1649-1665: Copy sections AFTER (mapping not stored!)
-newSections.push({
-  ...section,
-  id: `section-${Date.now()}-...`,  // New ID created but not mapped!
-  dayDate: targetDate,
-});
-```
+| Current | Fixed |
+|---------|-------|
+| `if (newExerciseIds.length > 0)` | `if (newExerciseIds.length >= 2)` |
 
-**Fixed order:**
-```tsx
-// Initialize arrays with section mapping
-const newExercises: ExerciseDistribution[] = [];
-const newSections: SessionSection[] = [];
-const oldToNewExerciseIds: Record<string, string> = {};
-const oldToNewSectionIds: Record<string, string> = {};  // ADD THIS
+#### Change 3: Fix Microcycle Copy Superset Validity Check (Line 1488)
 
-// STEP 1: Copy sections FIRST, building the mapping
-sourceDays.forEach((sourceDay, dayIndex) => {
-  // ... get targetDate ...
-  const sourceDateSections = sessionSections.filter(s => s.dayDate === sourceDay.date);
-  
-  sourceDateSections.forEach(section => {
-    const newSectionId = `section-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    oldToNewSectionIds[section.id] = newSectionId;  // STORE MAPPING
-    
-    newSections.push({
-      ...section,
-      id: newSectionId,
-      dayDate: targetDate,
-    });
-  });
-});
-
-// STEP 2: Copy exercises AFTER, using the mapping
-sourceDays.forEach((sourceDay, dayIndex) => {
-  // ... get targetDate ...
-  const sourceDateExercises = exerciseDistribution.filter(ex => ex.dayDate === sourceDay.date);
-  
-  sourceDateExercises.forEach(exercise => {
-    const newId = `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    oldToNewExerciseIds[exercise.id] = newId;
-    
-    newExercises.push({
-      ...exercise,
-      id: newId,
-      dayDate: targetDate,
-      sectionId: exercise.sectionId ? oldToNewSectionIds[exercise.sectionId] : undefined,  // REMAP
-    });
-  });
-});
-
-// STEP 3: Copy supersets, using both mappings
-// ... also remap sectionId in superset structure ...
-const newSectionId = oldToNewSectionIds[sectionId] || sectionId;
-newSupersets[targetDate][sessionIndex][newSectionId] = { ... };
-```
+| Current | Fixed |
+|---------|-------|
+| `if (newExerciseIds.length > 0)` | `if (newExerciseIds.length >= 2)` |
 
 ---
 
@@ -112,16 +66,25 @@ newSupersets[targetDate][sessionIndex][newSectionId] = { ... };
 
 | File | Changes |
 |------|---------|
-| `src/components/microcycle-planning/EnhancedExerciseDistribution.tsx` | Reorder section/exercise copy, add `oldToNewSectionIds` mapping, remap exercise `sectionId` and superset section IDs |
+| `src/components/microcycle-planning/EnhancedExerciseDistribution.tsx` | Fix `__unsectioned__` handling and superset validity checks in both copy functions |
 
 ---
 
 ### Testing Checklist
 
 After implementation:
-1. Add exercises to sessions in Mesocycle 1 (sections should auto-create)
-2. Copy Mesocycle 1 setup to Mesocycle 2
-3. Verify exercises appear INSIDE their sections (not above/outside)
-4. Verify sessions appear correctly in Training Calendar (Step 2)
-5. Verify supersets are preserved and work correctly in the copied mesocycle
+1. **Mesocycle Copy with Supersets**:
+   - Add exercises to Mesocycle 1 and create supersets (A1/A2)
+   - Copy Mesocycle 1 to Mesocycle 2
+   - Verify supersets appear correctly in Mesocycle 2
+
+2. **Microcycle Copy with Supersets**:
+   - Add exercises to Microcycle 1 within a mesocycle and create supersets
+   - Copy Microcycle 1 to Microcycle 2
+   - Verify supersets appear correctly in Microcycle 2
+
+3. **Edge Cases**:
+   - Supersets without sections (`__unsectioned__`)
+   - Supersets inside sections
+   - 3+ exercise superset chains (A1/A2/A3)
 
