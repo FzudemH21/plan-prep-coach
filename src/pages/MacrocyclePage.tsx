@@ -1704,26 +1704,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           
           {/* Right Column: Calendar */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-sm">Calendar Scheduling</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground hover:text-destructive h-7 text-xs"
-                onClick={() => {
-                  // Clear all scheduled tests from SMART goals
-                  setSmartGoals(prev => prev.map(g => ({ ...g, testDates: [] })));
-                  // Clear all scheduled tests from sub-goals
-                  setSubGoals(prev => prev.map(sg => ({ ...sg, testDates: [] })));
-                  // Clear all scheduled events
-                  setEvents(prev => prev.map(e => ({ ...e, eventDates: [] })));
-                  toast({ title: 'Calendar Cleared', description: 'All scheduled items have been removed.' });
-                }}
-              >
-                <X className="h-3 w-3 mr-1" />
-                Clear All
-              </Button>
-            </div>
+            <h3 className="font-semibold text-sm">Calendar Scheduling</h3>
             {planDuration?.startDate && planDuration?.endDate ? (
               <div className="border rounded-lg p-4 bg-muted/30 flex flex-col items-center">
                 {/* Plan Duration Summary */}
@@ -1969,34 +1950,31 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                   }}
                 />
                 
-                {/* Clear button */}
-                {(subGoals.some(sg => sg.testDates && sg.testDates.length > 0) || 
-                  events.some(e => e.eventDates && e.eventDates.length > 0)) && (
-                  <div className="mt-4 flex justify-center">
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          <Trash2 className="h-3 w-3 mr-1" />
+                {/* Clear button - always visible */}
+                <div className="mt-4 flex justify-center">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <Trash2 className="h-3 w-3 mr-1" />
+                        Clear All
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Clear all scheduled items?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will remove all test and event dates from the calendar.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={clearAllScheduledItems}>
                           Clear All
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Clear all scheduled items?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This will remove all test and event dates from the calendar.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={clearAllScheduledItems}>
-                            Clear All
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                )}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground border border-dashed rounded-lg">
