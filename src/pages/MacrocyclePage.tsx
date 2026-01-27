@@ -1241,6 +1241,23 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                   }}
                   className="rounded-md pointer-events-auto"
                 />
+                {planDuration && (
+                  <div className="flex justify-center mt-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => {
+                        setPlanDuration(undefined);
+                        setSelectionPhase('start');
+                        toast({ title: 'Calendar Cleared', description: 'Start and end dates have been removed.' });
+                      }}
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      Clear Dates
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1362,48 +1379,60 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                 return (
                   <div key={goal.id} className="border rounded-lg overflow-hidden">
                     {/* Primary Goal Header */}
-                    <div 
-                      className={cn(
-                        "p-3 bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors",
-                        selectedSmartGoal === goal.id && "ring-2 ring-inset ring-primary bg-primary/5"
-                      )}
-                      onClick={() => {
-                        // Select/deselect this goal for scheduling
-                        setSelectedSmartGoal(selectedSmartGoal === goal.id ? null : goal.id);
-                        setSelectedTest(null);
-                        setSelectedEvent(null);
-                        // Also toggle expand
-                        setExpandedPrimaryGoals(prev => {
-                          const next = new Set(prev);
-                          if (next.has(goal.id)) {
-                            next.delete(goal.id);
-                          } else {
-                            next.add(goal.id);
-                          }
-                          return next;
-                        });
-                      }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Target className="h-4 w-4 shrink-0 text-primary" />
-                          <span className="font-medium text-sm truncate">{goal.description}</span>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Badge variant="outline" className="text-xs">
+                    <div className="p-3 bg-muted/30 flex items-start gap-2">
+                      {/* Expand Arrow - separate button */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0 mt-0.5 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedPrimaryGoals(prev => {
+                            const next = new Set(prev);
+                            if (next.has(goal.id)) {
+                              next.delete(goal.id);
+                            } else {
+                              next.add(goal.id);
+                            }
+                            return next;
+                          });
+                        }}
+                      >
+                        <ChevronDown className={cn("h-4 w-4 transition-transform", isGoalExpanded && "rotate-180")} />
+                      </Button>
+                      
+                      {/* Goal Content - clickable for selection */}
+                      <div 
+                        className={cn(
+                          "flex-1 cursor-pointer transition-colors rounded p-1 -m-1 min-w-0",
+                          selectedSmartGoal === goal.id 
+                            ? "ring-2 ring-inset ring-primary bg-primary/5" 
+                            : "hover:bg-muted/50"
+                        )}
+                        onClick={() => {
+                          setSelectedSmartGoal(selectedSmartGoal === goal.id ? null : goal.id);
+                          setSelectedTest(null);
+                          setSelectedEvent(null);
+                        }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Target className="h-4 w-4 shrink-0 text-primary" />
+                            <span className="font-medium text-sm truncate">{goal.description}</span>
+                          </div>
+                          <Badge variant="outline" className="text-xs shrink-0">
                             {goalSubGoals.length} sub-goal{goalSubGoals.length !== 1 ? 's' : ''}
                           </Badge>
-                          <ChevronDown className={cn("h-4 w-4 transition-transform", isGoalExpanded && "rotate-180")} />
                         </div>
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {goal.baselineValue} {goal.unit} → {goal.desiredValue} {goal.unit}
-                        <Badge 
-                          variant={goal.percentChange > 0 ? "default" : "secondary"}
-                          className="text-xs ml-2"
-                        >
-                          {goal.percentChange > 0 ? "+" : ""}{goal.percentChange.toFixed(1)}%
-                        </Badge>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {goal.baselineValue} {goal.unit} → {goal.desiredValue} {goal.unit}
+                          <Badge 
+                            variant={goal.percentChange > 0 ? "default" : "secondary"}
+                            className="text-xs ml-2"
+                          >
+                            {goal.percentChange > 0 ? "+" : ""}{goal.percentChange.toFixed(1)}%
+                          </Badge>
+                        </div>
                       </div>
                     </div>
                     
@@ -1665,7 +1694,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
               )}
             </div>
             
-            {(selectedTest || selectedEvent) && (
+            {(selectedSmartGoal || selectedTest || selectedEvent) && (
               <p className="text-xs text-muted-foreground text-center bg-muted/50 p-2 rounded">
                 Click on a date in the calendar to schedule the selected item
               </p>
@@ -1674,7 +1703,26 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           
           {/* Right Column: Calendar */}
           <div className="space-y-4">
-            <h3 className="font-semibold text-sm">Calendar Scheduling</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm">Calendar Scheduling</h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-destructive h-7 text-xs"
+                onClick={() => {
+                  // Clear all scheduled tests from SMART goals
+                  setSmartGoals(prev => prev.map(g => ({ ...g, testDates: [] })));
+                  // Clear all scheduled tests from sub-goals
+                  setSubGoals(prev => prev.map(sg => ({ ...sg, testDates: [] })));
+                  // Clear all scheduled events
+                  setEvents(prev => prev.map(e => ({ ...e, eventDates: [] })));
+                  toast({ title: 'Calendar Cleared', description: 'All scheduled items have been removed.' });
+                }}
+              >
+                <X className="h-3 w-3 mr-1" />
+                Clear All
+              </Button>
+            </div>
             {planDuration?.startDate && planDuration?.endDate ? (
               <div className="border rounded-lg p-4 bg-muted/30 flex flex-col items-center">
                 {/* Plan Duration Summary */}
