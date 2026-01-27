@@ -1,83 +1,61 @@
 
 
-## Add Section Deletion Confirmation and Simplify UI
+## Remove Exercise Allocation Indicators from Exercise Library Panel
 
 ### Overview
 
-Three changes to SessionColumnView.tsx:
-1. Remove exercise deletion confirmation dialog (delete directly)
-2. Remove section exercise count badge
-3. Add section deletion confirmation dialog
+Remove the colored dots and allocation count numbers next to exercises in the Exercise Library Panel to create a cleaner, slimmer interface.
 
 ---
 
 ### Changes
 
-**File**: `src/components/microcycle-planning/SessionColumnView.tsx`
+**File**: `src/components/microcycle-planning/ExerciseLibraryPanel.tsx`
 
-#### Change 1: Remove Exercise Deletion Confirmation
+#### Remove Colored Dot and Allocation Badge
 
-**Remove** these items:
-- State: `deleteDialogOpen` and `exerciseToDelete` (lines 121-122)
-- Function: `handleDeleteExerciseClick` (lines 173-176)
-- Function: `confirmDeleteExercise` (lines 178-184)
-- AlertDialog for exercise deletion (lines 820-833)
+The exercise items appear in two places in the code (for methods with and without categories). In both places, remove:
 
-**Update** the delete dropdown item to call `onDeleteExercise` directly instead of `handleDeleteExerciseClick`
+1. **The colored allocation dot** (lines 231-234 and 316-319):
+```tsx
+// REMOVE:
+<div className={cn(
+  "w-2 h-2 rounded-full flex-shrink-0",
+  getAllocationDotColor(allocationCount)
+)} />
+```
+
+2. **The allocation count Badge** (lines 236-241 and 321-326):
+```tsx
+// REMOVE:
+<Badge 
+  variant={getAllocationBadgeVariant(allocationCount)} 
+  className="text-xs px-2 py-0.5 font-semibold"
+>
+  {allocationCount}
+</Badge>
+```
+
+3. **Remove unused variables and functions**:
+   - Remove `allocationCount` variable in each exercise map (lines 211 and 296)
+   - Remove `getAllocationBadgeVariant` function (lines 71-76)
+   - Remove `getAllocationDotColor` function (lines 78-83)
+   - Remove `Badge` import if no longer needed (line 4)
 
 ---
 
-#### Change 2: Remove Section Exercise Count Badge
+### Visual Result
 
-**Remove** the Badge component showing exercise count from section headers (lines 674-676)
-
----
-
-#### Change 3: Add Section Deletion Confirmation Dialog
-
-**Add** new state for section deletion:
-```tsx
-const [deleteSectionDialogOpen, setDeleteSectionDialogOpen] = useState(false);
-const [sectionToDelete, setSectionToDelete] = useState<string | null>(null);
+**Before:**
+```
+⋮ ● Squat                    [2]
+⋮ ● RDL                      [0]
 ```
 
-**Update** the section delete button (line 703) to open dialog:
-```tsx
-onClick={() => {
-  setSectionToDelete(section.id);
-  setDeleteSectionDialogOpen(true);
-}}
+**After:**
 ```
-
-**Add** confirmation handler:
-```tsx
-const confirmDeleteSection = () => {
-  if (sectionToDelete) {
-    onDeleteSection(sectionToDelete);
-  }
-  setSectionToDelete(null);
-  setDeleteSectionDialogOpen(false);
-};
-```
-
-**Add** AlertDialog for section deletion (after the session delete dialog):
-```tsx
-<AlertDialog open={deleteSectionDialogOpen} onOpenChange={setDeleteSectionDialogOpen}>
-  <AlertDialogContent>
-    <AlertDialogHeader>
-      <AlertDialogTitle>Delete Section</AlertDialogTitle>
-      <AlertDialogDescription>
-        Are you sure you want to delete this section? All exercises in this section will also be removed.
-      </AlertDialogDescription>
-    </AlertDialogHeader>
-    <AlertDialogFooter>
-      <AlertDialogCancel>Cancel</AlertDialogCancel>
-      <AlertDialogAction onClick={confirmDeleteSection}>
-        Delete
-      </AlertDialogAction>
-    </AlertDialogFooter>
-  </AlertDialogContent>
-</AlertDialog>
+⋮ Squat
+⋮ RDL
 ```
 
 ---
@@ -86,26 +64,12 @@ const confirmDeleteSection = () => {
 
 | Item | Action |
 |------|--------|
-| Exercise deletion confirmation | Remove (delete directly) |
-| Section exercise count badge | Remove |
-| Section deletion confirmation | Add new dialog |
-| Session deletion confirmation | Keep (no change) |
+| Colored allocation dot | Remove |
+| Allocation count Badge | Remove |
+| `getAllocationBadgeVariant` function | Remove |
+| `getAllocationDotColor` function | Remove |
+| `allocationCount` variable | Remove |
+| `Badge` import | Remove (if unused) |
 
----
-
-### Visual Result
-
-**Section Header Before:**
-```
-[▼] [↑↓] Section 1  [3]  [📋] [✏️] [🗑️]
-```
-
-**Section Header After:**
-```
-[▼] [↑↓] Section 1  [📋] [✏️] [🗑️]
-```
-
-- Clicking trash on exercise dropdown: Deletes immediately
-- Clicking trash on section header: Shows confirmation dialog
-- Clicking trash on session header: Shows confirmation dialog (existing)
+The exercises will now show only the drag handle (GripVertical) and the exercise name, making the list slimmer and cleaner.
 
