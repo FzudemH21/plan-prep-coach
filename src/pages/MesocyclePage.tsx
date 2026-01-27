@@ -4769,6 +4769,20 @@ export default function MesocyclePage() {
                                   </div>
                                 </PopoverContent>
                               </Popover>
+                              {currentMesocycleIndexDailyPlanning > 0 && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    copyMesocycleDailyIntensity(currentMeso.id);
+                                  }}
+                                  className="h-6 w-6 p-0"
+                                  title="Copy daily intensity pattern from previous mesocycle"
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </Button>
+                              )}
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -4776,10 +4790,10 @@ export default function MesocyclePage() {
                                   e.stopPropagation();
                                   clearMesocycleDailyIntensity(currentMeso.id);
                                 }}
-                                className="h-5 w-5 p-0 hover:bg-muted"
+                                className="h-6 w-6 p-0"
                                 title={`Clear all daily intensities for ${currentMeso.name}`}
                               >
-                                <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                                <Trash2 className="h-3 w-3" />
                               </Button>
                             </div>
                             
@@ -4787,24 +4801,6 @@ export default function MesocyclePage() {
                             {currentMeso.startDate && currentMeso.endDate && (
                               <div className="text-xs font-normal text-muted-foreground">
                                 {format(new Date(currentMeso.startDate), 'MMM d')} - {format(new Date(currentMeso.endDate), 'MMM d')} ({differenceInDays(new Date(currentMeso.endDate), new Date(currentMeso.startDate)) + 1}d)
-                              </div>
-                            )}
-                            
-                            {/* Copy button - only if not the first mesocycle */}
-                            {currentMesocycleIndexDailyPlanning > 0 && (
-                              <div className="absolute top-1 right-1">
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    copyMesocycleDailyIntensity(currentMeso.id);
-                                  }}
-                                  className="h-6 w-6 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"
-                                  title="Copy daily intensity pattern from previous mesocycle"
-                                >
-                                  <Copy className="h-3 w-3 text-gray-800" />
-                                </Button>
                               </div>
                             )}
                           </div>
@@ -4895,30 +4891,30 @@ export default function MesocyclePage() {
                               {canCopy && (
                                 <Button
                                   size="sm"
-                                  variant="secondary"
+                                  variant="ghost"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     copyMicrocycleDailyIntensity(currentMeso.id, micro.id);
                                   }}
-                                  className="h-5 w-5 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"
+                                  className="h-6 w-6 p-0"
                                   title={`Copy intensity pattern from ${copySourceName}`}
                                 >
-                                  <Copy className="h-3 w-3 text-gray-800" />
+                                  <Copy className="h-3 w-3" />
                                 </Button>
                               )}
                               
                               {/* Clear button */}
                               <Button
                                 size="sm"
-                                variant="secondary"
+                                variant="ghost"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   clearMicrocycleDailyIntensity(currentMeso.id, micro.id);
                                 }}
-                                className="h-5 w-5 p-0 bg-white hover:bg-white/95 shadow-md border-2 border-gray-800"
+                                className="h-6 w-6 p-0"
                                 title={`Clear all daily intensities for ${micro.name}`}
                               >
-                                <Trash2 className="h-3 w-3 text-gray-800" />
+                                <Trash2 className="h-3 w-3" />
                               </Button>
                             </div>
                           </div>
