@@ -1,169 +1,171 @@
 
-## Redesign Athlete Calendar to Match Training Calendar View
+
+## Align Athlete Calendar with Training Calendar Design
 
 ### Overview
 
-This is a significant redesign to replace the current monthly calendar in the Athlete Database with a week-based Training Calendar-style view. The new design will show assigned program workouts in day cells with the same visual styling and interaction patterns as the Microcycle Planning wizard.
+This plan updates the Athlete Calendar header layout to match the Training Calendar from the planning wizard, and adds a dropdown menu when clicking the plus button to allow users to either "Assign Program" or "Add Session" (which opens an empty workout session sheet).
 
 ---
 
-### Current vs. Target Design
+### Changes
 
-**Current Athlete Calendar:**
-- Monthly grid view (5-6 rows of 7 days)
-- Shows program assignments as colored horizontal bars spanning multiple days
-- Click on a day to assign a program
-- Simple "Assign Program" button in header
-- No session details, exercises, or intensity indicators visible
-
-**Target Design (Training Calendar Style):**
-- Week-based view (1-week, 2-week, 4-week toggle options)
-- Individual day cells showing:
-  - Session cards with exercise counts
-  - Intensity color indicators (badges)
-  - Test/event indicators
-  - "Add session" plus icon button
-- Week navigation (previous/next)
-- View mode selector in header
-- Day header dropdown menus for copy/paste/clear operations
-
----
-
-### Architecture Considerations
-
-The Athlete Calendar has a fundamentally different data model than the Training Calendar:
-
-| Aspect | Training Calendar | Athlete Calendar |
-|--------|------------------|------------------|
-| Data source | Active planning session (in-memory state) | Saved program assignments (localStorage/database) |
-| Purpose | Building/editing a training program | Viewing/managing assigned programs for an athlete |
-| Sessions | Dynamically created during planning | Loaded from saved program snapshots |
-| Editing | Full exercise/session editing | Read-only view of assigned programs (or edit if needed) |
-
----
-
-### Implementation Plan
-
-#### Phase 1: Create New Week-Based Calendar Structure
+#### 1. Update Header Layout to Match Training Calendar
 
 **File:** `src/components/athletes/AthleteCalendarView.tsx`
 
-1. **Add view mode state and navigation:**
-   - `viewMode`: '1week' | '2week' | '4week'
-   - `currentDate`: Date for week navigation
-   - Previous/Next week navigation buttons
-   - View mode selector dropdown
-
-2. **Replace monthly grid with week-based grid:**
-   - Calculate week ranges based on currentDate and viewMode
-   - Use similar `calendarDays` and `weeks` computation as TrainingCalendarView
-   - Create WeekRow-style layout for each week
-
-3. **Create athlete-specific day cells:**
-   - New component `AthleteCalendarDayCell` (or adapt existing patterns)
-   - Show assigned program sessions for each day
-   - Display session cards with exercise counts
-   - Show intensity badges
-   - Include test/event indicators from assigned programs
-
----
-
-#### Phase 2: Day Cell Design (Matching TrainingDayCell)
-
-**Create:** `src/components/athletes/AthleteCalendarDayCell.tsx`
-
-Visual elements to include:
-- Day number header with intensity badge
-- Session cards showing:
-  - Session name
-  - Exercise count badge
-  - Method name (primary)
-- Today indicator (blue circle around date)
-- Outside-month muted styling
-- Hover state with dropdown menu
-
-Interactions:
-- Click on day → Expand to view session details or assign program
-- Plus icon button → Assign new program starting from this date
-- Dropdown menu → View details, copy, clear assignment
-
----
-
-#### Phase 3: Load Assigned Program Data into Calendar
-
-1. **Extract session data from assignments:**
-   - Each `AthleteCalendarAssignment` contains `assignedMesocycles` with full program data
-   - Parse the mesocycle data to get:
-     - Session schedules per day
-     - Exercise distributions
-     - Intensity levels
-     - Test/event schedules
-
-2. **Map assignment dates to calendar days:**
-   - Use the assignment's `startDate` and calculate each day's training schedule
-   - Handle multiple overlapping assignments (show stacked or merged)
-
----
-
-#### Phase 4: Header and Controls
-
-Update the header to match Training Calendar style:
-- Left side: Previous/Next navigation + "Today" button + date range display
-- Center: View mode buttons (1 Week, 2 Week, 4 Week)
-- Right side: "Assign Program" button
-
----
-
-### Summary Table
-
-| Component | Action |
-|-----------|--------|
-| `AthleteCalendarView.tsx` | Major rewrite - week-based layout, view mode, navigation |
-| `AthleteCalendarDayCell.tsx` | New component - styled like TrainingDayCell |
-| Program assignment data | Parse to extract daily sessions/exercises |
-| Header controls | New navigation and view mode selector |
-
----
-
-### Visual Mockup
-
-**New Athlete Calendar Layout:**
+Current layout:
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│  [<] [>] Jan 27 - Feb 23, 2026   [1W] [2W] [4W]    [+ Assign Program]│
-├──────────────────────────────────────────────────────────────────────┤
-│ Mon          Tue          Wed          Thu          Fri          Sat │
-├──────────────────────────────────────────────────────────────────────┤
-│ ┌────┐      ┌────┐       ┌────┐       ┌────┐       ┌────┐       ┌───┐│
-│ │27🟡│      │28🟢│       │29🔴│       │30🟡│       │31🔴│       │ 1 ││
-│ │Sess│      │Sess│       │Rest│       │Sess│       │Test│       │   ││
-│ │[4] │      │[6] │       │    │       │[5] │       │🏆  │       │[+]││
-│ └────┘      └────┘       └────┘       └────┘       └────┘       └───┘│
-├──────────────────────────────────────────────────────────────────────┤
-│ (Week 2...)                                                          │
-└──────────────────────────────────────────────────────────────────────┘
+[<] [>] [Today] Jan 27 - Feb 23   [1W] [2W] [4W]   [+ Assign Program]
 ```
+
+New layout (matching TrainingCalendarView):
+```
+[📅 Calendar]   [1W] [2W] [4W]   [<] [Today] [>]
+```
+
+Changes:
+- Remove the separate "Assign Program" button from header (will be in day cell dropdown)
+- Move navigation (< Today >) to the **right side** of the header
+- Add Calendar icon with title on the left side (like Training Calendar)
+- Keep view mode selector (1W, 2W, 4W) in the **center** of the navigation group
+
+---
+
+#### 2. Add Dropdown Menu to Plus Button in Day Cells
+
+**File:** `src/components/athletes/AthleteCalendarDayCell.tsx`
+
+When user clicks the plus (+) button on an empty day, show a dropdown menu with two options:
+- **"Assign Program"** - Opens the existing AssignProgramDialog
+- **"Add Session"** - Opens an empty workout session sheet
+
+Update props interface:
+```typescript
+interface AthleteCalendarDayCellProps {
+  // ... existing props
+  onAddSession?: (date: Date) => void;  // NEW: Opens workout session sheet
+}
+```
+
+Replace the current Button with a DropdownMenu:
+```tsx
+<DropdownMenu>
+  <DropdownMenuTrigger asChild>
+    <Button variant="outline" size="icon" className="h-7 w-7" title="Add to calendar">
+      <Plus className="h-4 w-4" />
+    </Button>
+  </DropdownMenuTrigger>
+  <DropdownMenuContent align="center" className="z-[100] bg-background">
+    <DropdownMenuItem onClick={() => onDayClick?.(day.date)}>
+      <CalendarPlus className="mr-2 h-4 w-4" />
+      Assign Program
+    </DropdownMenuItem>
+    <DropdownMenuItem onClick={() => onAddSession?.(day.date)}>
+      <Dumbbell className="mr-2 h-4 w-4" />
+      Add Session
+    </DropdownMenuItem>
+  </DropdownMenuContent>
+</DropdownMenu>
+```
+
+---
+
+#### 3. Add Workout Session Sheet Integration
+
+**File:** `src/components/athletes/AthleteCalendarView.tsx`
+
+Add state and handler for opening an empty workout session sheet:
+```typescript
+const [sessionSheetOpen, setSessionSheetOpen] = useState(false);
+const [selectedSessionDate, setSelectedSessionDate] = useState<Date | null>(null);
+
+const handleAddSession = (date: Date) => {
+  setSelectedSessionDate(date);
+  setSessionSheetOpen(true);
+};
+```
+
+Import and render the WorkoutSessionSheet component:
+```tsx
+import { WorkoutSessionSheet } from '@/components/microcycle-planning/WorkoutSessionSheet';
+
+// In the component JSX:
+<WorkoutSessionSheet
+  isOpen={sessionSheetOpen}
+  onClose={() => setSessionSheetOpen(false)}
+  dayDate={selectedSessionDate ? format(selectedSessionDate, 'yyyy-MM-dd') : ''}
+  sessionIndex={0}
+  exercises={[]}  // Empty for new session
+  // ... minimal required props for empty session
+/>
+```
+
+---
+
+#### 4. Update Props Flow
+
+**File:** `src/components/athletes/AthleteCalendarWeekRow.tsx`
+
+Pass the new `onAddSession` callback down to day cells:
+```typescript
+interface AthleteCalendarWeekRowProps {
+  // ... existing
+  onAddSession?: (date: Date) => void;  // NEW
+}
+```
+
+---
+
+### Visual Result
+
+**Header - Before:**
+```
+[<] [>] [Today] Jan 27 - Feb 23    [1W] [2W] [4W]    [+ Assign Program]
+```
+
+**Header - After:**
+```
+📅 Athlete Calendar    [1W] [2W] [4W]    [<] [Today] [>]
+```
+
+**Day Cell Plus Button - Before:**
+```
+┌─────────────────┐
+│ 27              │
+│                 │
+│      [+]        │  ← Single button opens Assign Program
+│                 │
+└─────────────────┘
+```
+
+**Day Cell Plus Button - After:**
+```
+┌─────────────────┐
+│ 27              │
+│                 │
+│      [+]        │  ← Dropdown with 2 options:
+│                 │     📅 Assign Program
+└─────────────────┘     🏋️ Add Session
+```
+
+---
+
+### Summary of Files to Modify
+
+| File | Changes |
+|------|---------|
+| `AthleteCalendarView.tsx` | Update header layout, add WorkoutSessionSheet integration |
+| `AthleteCalendarDayCell.tsx` | Replace plus button with dropdown menu |
+| `AthleteCalendarWeekRow.tsx` | Pass `onAddSession` prop to day cells |
 
 ---
 
 ### Technical Notes
 
-1. **Data Extraction:** The assigned program snapshots contain complete mesocycle data. We need to:
-   - Calculate day offsets from assignment start date
-   - Map each day to the corresponding microcycle day
-   - Extract session configurations (sections, exercises, intensity)
+1. **WorkoutSessionSheet Props**: The sheet requires several props (mesocycleId, microcycleIndex, parameterValues, etc.). For athlete ad-hoc sessions, we'll provide minimal/dummy values since these sessions aren't tied to a training program structure.
 
-2. **Read vs. Edit Mode:** Initially, the Athlete Calendar will be read-only for viewing assigned programs. Future enhancement could allow editing sessions directly.
+2. **Session Storage**: Ad-hoc athlete sessions will need a new storage mechanism. For this initial implementation, we can store them in a new array within the athlete database (e.g., `athleteSessions: AthleteSession[]`). This is an enhancement that can be added after the UI is working.
 
-3. **Assignments List:** Keep the existing "Assigned Programs" card below the calendar as a summary/management view.
-
----
-
-### Files to Modify/Create
-
-| File | Action |
-|------|--------|
-| `src/components/athletes/AthleteCalendarView.tsx` | Major redesign |
-| `src/components/athletes/AthleteCalendarDayCell.tsx` | Create new |
-| `src/components/athletes/index.ts` | Export new component |
+3. **Future Enhancement**: Full session editing and persistence for athlete calendar will require extending the `useAthletes` hook to store session data separately from program assignments.
 
