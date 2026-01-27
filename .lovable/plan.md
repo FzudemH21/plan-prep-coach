@@ -1,100 +1,103 @@
 
 
-### What’s actually going wrong (confirmed from the code)
-There are **two separate bugs** causing the timeline (and sometimes the whole macrocycle UI) to “disappear” when moving forward/backward in the wizard:
+## Fix: Mesocycle Header Overcrowding in Step 1
 
-1) **Macrocycle “Next → Mesocycle” overwrites `macrocycleData` with an incomplete object**
-- `MacrocyclePage.tsx` has a continuous-save `useEffect` that correctly writes:
-  - `planDuration`
-  - `smartGoals` (plural)
-  - legacy `smartGoal` (for backward compatibility)
-- But when you click **“Move on to Mesocycle”** (or **“Continue Anyway”** in the missing rationale dialog), `handleNext` manually saves a *different, older shape* of `macrocycleData` that **omits `planDuration` and `smartGoals`**.
-- That manual save happens **right before navigation**, so it overwrites the correct data and Mesocycle sees missing dates/goals → wrong timeline, wrong mesocycle count.
+### Problem
+When a mesocycle has only 1 microcycle (7 days), its header width is only 120px, but the content (name + intensity badge + icons + dates) requires more space. This causes:
+1. Text and badges to overlap with adjacent mesocycles
+2. Intensity badge extending outside the container box
+3. Visual clutter making it hard to read
 
-2) **Going “Back to Macrocycle” can send MacrocyclePage to an invalid step number**
-- `MesocyclePage.tsx` sets `macrocycleStep` to **5** as a fallback:
-  ```ts
-  const targetStep = savedStep ? parseInt(savedStep) : 5;
-  ```
-- But `MacrocyclePage.tsx` has `totalSteps = 3` and only renders steps 1–3.
-- Result: Macrocycle loads `currentStep = 5`, renders **no step content**, and it looks like “absolutely no data at all” even if `macrocycleData` still exists.
+### Solution
+Increase the **minimum width per microcycle** to ensure mesocycle headers have enough room for their content. The key insight is that a single-microcycle mesocycle still needs enough horizontal space for:
+- Mesocycle name (e.g., "Mesocycle 3")
+- Intensity badge (e.g., "DELOAD" or "EXTREMELY HARD")
+- Copy button (if not the first mesocycle)
+- Date range text
 
----
+### Implementation
 
-### Fix overview
-We’ll make wizard navigation robust by:
-- Ensuring the **final “save before navigate” uses the same full schema** as the continuous save (so `planDuration` + `smartGoals` are never dropped).
-- Ensuring the **macrocycle step number is always valid (1–3)** when navigating back.
+**Files to modify:**
+1. `src/components/mesocycle/MicrocycleIntensityPlanning.tsx`
+2. `src/components/mesocycle/MicrocycleIntensityColumn.tsx`
 
----
+### Changes
 
-### Changes to implement
+#### 1. Increase microcycle column width from 120px → 140px
 
-#### A) `src/pages/MacrocyclePage.tsx` — stop overwriting `macrocycleData` with a partial payload
-1. Create a small helper (inside the component) like:
-   - `buildMacrocycleDataSnapshot({ completedAt?: string })`
-   - It will return the same shape as the continuous-save `useEffect`:
-     - `planName`
-     - `selectedAthleteId`
-     - `planDuration`
-     - `smartGoals`
-     - `smartGoal` (legacy) = merged with `planDuration` dates (same logic already used in the `useEffect`)
-     - `subGoals`, `events`, `qualities`, `qualitiesBySubGoal`, `methodsByQuality`, `selectedTest`, `selectedEvent`
-     - `selectedMethods: Array.from(selectedMethods)`
-     - `manuallyAddedMethods`
-     - `completedAt` or `lastUpdated` (keep both if helpful; but do not remove existing fields other parts might rely on)
+This gives each microcycle column 20px more breathing room, which translates to:
+- 1 microcycle mesocycle: 140px (was 120px) 
+- 4 microcycle mesocycle: 560px (was 480px)
 
-2. Update **both** manual save locations to use this helper:
-   - In `handleNext` when `currentStep === totalSteps`
-   - In the “Continue Anyway” handler in the Missing Rationales dialog
-   This guarantees `planDuration` + `smartGoals` survive the transition.
+**MicrocycleIntensityPlanning.tsx (line 156):**
+```typescript
+// Before
+const width = meso.microcycles.length * 120; // 120px per microcycle
 
-#### B) `src/pages/MacrocyclePage.tsx` — clamp invalid saved step numbers
-3. In the “load saved step from localStorage” `useEffect`, clamp the loaded step:
-   - Parse int
-   - If invalid or out of range, fallback to `1` (or `totalSteps`), and also rewrite `localStorage.macrocycleStep` to the corrected value.
-   This prevents “Step 5 of 3” situations and blank rendering.
+// After  
+const width = meso.microcycles.length * 140; // 140px per microcycle
+```
 
----
+**MicrocycleIntensityColumn.tsx (line 136 and 237):**
+```typescript
+// Before
+<div className={cn("flex flex-col w-[120px] shrink-0 ...")}>
 
-#### C) `src/pages/MesocyclePage.tsx` — fix the fallback “Back to Macrocycle” step
-4. Change the fallback from `5` to a valid macrocycle step:
-   - default to `3` (last macrocycle step) or `1` (start)
-   - also clamp parsed values into `[1, 3]` before writing to localStorage
-   This prevents Mesocycle from ever sending Macrocycle to a non-existent step.
+// After
+<div className={cn("flex flex-col w-[140px] shrink-0 ...")}>
+```
 
----
+```typescript
+// Before (line 237)
+<div className="text-xs mt-2 text-center ... w-[120px] ...">
 
-### Why this will fix your symptoms
-- Mesocycle will now always receive `macrocycleData.planDuration.startDate/endDate/totalWeeks`, so:
-  - Training Plan Overview timeline will match what you set in Macrocycle
-  - Suggested mesocycle count won’t incorrectly default to 12 weeks / today’s date
-- Going back to Macrocycle will no longer land on a non-existent step, so the UI won’t appear empty.
+// After
+<div className="text-xs mt-2 text-center ... w-[140px] ...">
+```
 
----
+#### 2. Make mesocycle header content more flexible
 
-### Testing checklist (what I’ll verify after implementation)
-1. **Forward timeline persistence**
-   - Set start/end dates in Macrocycle Step 1
-   - Go to Mesocycle
-   - Confirm Training Plan Overview shows the correct start/end + weeks/days
-   - Confirm mesocycle count aligns with your plan duration
+Add `overflow-hidden` and `min-w-0` to prevent content from overflowing, and use `flex-wrap` or truncation for very long intensity names:
 
-2. **Backward persistence**
-   - From Mesocycle Step 1, click “Back to Macrocycle”
-   - Confirm Macrocycle shows the correct step and all previous inputs (goals, methods, timeline)
+**MicrocycleIntensityPlanning.tsx (line 164):**
+```typescript
+// Before
+<div className="flex items-center justify-center gap-2">
 
-3. **Missing rationale path**
-   - Add a manually added method without rationale
-   - Click “Move on to Mesocycle” → get warning → “Continue Anyway”
-   - Confirm timeline/goals still persist correctly
+// After
+<div className="flex items-center justify-center gap-1.5 flex-wrap min-w-0 px-2">
+```
 
----
+Also ensure the mesocycle header container has `overflow-hidden`:
+```typescript
+// Line 160
+<div 
+  key={meso.id}
+  className={cn("relative text-center border font-semibold border-border py-3 shrink-0 rounded-md overflow-hidden", ...)}
+```
 
-### Files involved
-- `src/pages/MacrocyclePage.tsx`
-  - Fix manual save payloads (include `planDuration` + `smartGoals`)
-  - Clamp invalid `macrocycleStep` on load
-- `src/pages/MesocyclePage.tsx`
-  - Fix “Back to Macrocycle” fallback step from 5 → 3 (and clamp to 1–3)
+### Summary of Changes
+
+| File | Location | Change |
+|------|----------|--------|
+| `MicrocycleIntensityPlanning.tsx` | Line 156 | `120` → `140` for width calculation |
+| `MicrocycleIntensityPlanning.tsx` | Line 160 | Add `overflow-hidden` to mesocycle header |
+| `MicrocycleIntensityPlanning.tsx` | Line 164 | Add `flex-wrap min-w-0 px-2`, reduce `gap-2` → `gap-1.5` |
+| `MicrocycleIntensityColumn.tsx` | Line 136 | `w-[120px]` → `w-[140px]` |
+| `MicrocycleIntensityColumn.tsx` | Line 237 | `w-[120px]` → `w-[140px]` |
+
+### Why 140px?
+- 120px was too tight for mesocycle names + badges
+- 140px provides comfortable padding for:
+  - "Mesocycle 3" (≈75px)
+  - "DELOAD" badge (≈50px)
+  - Gap and icon (≈15px)
+- Still keeps the overall view compact
+
+### Testing
+After implementation:
+1. Create a plan with 3+ mesocycles where one has only 1 microcycle
+2. Verify all mesocycle headers are fully visible without overlap
+3. Verify intensity badges stay within their container
+4. Verify the scrollable area still works correctly
 
