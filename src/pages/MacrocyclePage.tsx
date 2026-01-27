@@ -306,9 +306,17 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     
     if (savedStep) {
       try {
-        setCurrentStep(parseInt(savedStep));
+        const parsed = parseInt(savedStep);
+        // Clamp to valid range [1, totalSteps] to prevent blank UI
+        const clamped = isNaN(parsed) ? 1 : Math.max(1, Math.min(3, parsed));
+        setCurrentStep(clamped);
+        // Rewrite localStorage if we had to clamp
+        if (clamped !== parsed) {
+          localStorage.setItem('macrocycleStep', clamped.toString());
+        }
       } catch (error) {
         console.error('Error loading saved step:', error);
+        setCurrentStep(1);
       }
     }
   }, []);
@@ -2623,10 +2631,20 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       }
       
       // Save macrocycle data to localStorage before navigation
+      // Build unified snapshot including planDuration and smartGoals
+      const legacySmartGoal = {
+        ...(smartGoals.length > 0 ? smartGoals[0] : smartGoal),
+        startDate: planDuration?.startDate,
+        endDate: planDuration?.endDate,
+        totalDays: planDuration?.totalDays,
+        totalWeeks: planDuration?.totalWeeks,
+      };
       const macrocycleData = {
         planName,
         selectedAthleteId,
-        smartGoal,
+        planDuration,
+        smartGoals,
+        smartGoal: legacySmartGoal,
         subGoals,
         events,
         qualities,
@@ -2734,10 +2752,20 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
             </AlertDialogCancel>
             <AlertDialogAction onClick={() => {
               // Force proceed
+              // Build unified snapshot including planDuration and smartGoals
+              const legacySmartGoal = {
+                ...(smartGoals.length > 0 ? smartGoals[0] : smartGoal),
+                startDate: planDuration?.startDate,
+                endDate: planDuration?.endDate,
+                totalDays: planDuration?.totalDays,
+                totalWeeks: planDuration?.totalWeeks,
+              };
               const macrocycleData = {
                 planName,
                 selectedAthleteId,
-                smartGoal,
+                planDuration,
+                smartGoals,
+                smartGoal: legacySmartGoal,
                 subGoals,
                 events,
                 qualities,
