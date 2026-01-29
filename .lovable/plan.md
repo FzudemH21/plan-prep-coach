@@ -1,52 +1,89 @@
 
 
-## Remove Visual Distinction for Adjacent Month Days
+## Fix "No Programs Available" Issue and Dialog Overlay Styling
 
-### Overview
+### Issue 1: Programs Not Showing
 
-Currently, days from adjacent months (like February days visible in a January 4-week view) have a grayed-out appearance with muted background and text colors. This change will make all visible days look identical regardless of which month they belong to.
+**Root Cause**: There's a data structure mismatch:
+- When mesocycle data is saved during planning, it's stored as `{ mesocycles: [...] }` (an object with a `mesocycles` property)
+- The AssignProgramDialog filter expects `mesocycleData` to be a direct array
+
+**Location**: `src/components/athletes/AssignProgramDialog.tsx`
+
+**Current code (line 243)**:
+```tsx
+const availablePrograms = programs.filter(p => p.mesocycleData && Array.isArray(p.mesocycleData) && p.mesocycleData.length > 0);
+```
+
+**Fixed code**:
+```tsx
+const availablePrograms = programs.filter(p => {
+  if (!p.mesocycleData) return false;
+  // Handle both formats: direct array or { mesocycles: [...] } object
+  const mesocycles = Array.isArray(p.mesocycleData) 
+    ? p.mesocycleData 
+    : p.mesocycleData.mesocycles;
+  return Array.isArray(mesocycles) && mesocycles.length > 0;
+});
+```
+
+**Also update parsing (lines 83-87)**:
+```tsx
+const programMesocycles = useMemo((): AssignedMesocycle[] => {
+  if (!selectedProgram?.mesocycleData) return [];
+  
+  // Handle both formats: direct array or { mesocycles: [...] } object
+  const mesoData = Array.isArray(selectedProgram.mesocycleData) 
+    ? selectedProgram.mesocycleData 
+    : selectedProgram.mesocycleData.mesocycles;
+    
+  if (!Array.isArray(mesoData)) return [];
+  // ... rest of the function
+```
 
 ---
 
-### Changes
+### Issue 2: Dialog Overlay Cut Off
 
-#### File: `src/components/athletes/AthleteCalendarDayCell.tsx`
+**Root Cause**: Looking at the screenshot, the dialog background overlay appears to be cut off on the left and right sides. This is because the dialog is rendered inside a parent component that may have overflow constraints.
 
-**Change 1: Remove background color distinction (line 65)**
+**Solution**: Ensure the `DialogOverlay` uses `inset-0` properly and has no margin/padding issues.
 
-Before:
+**Location**: `src/components/ui/dialog.tsx` (line 22)
+
+The current overlay class is:
 ```tsx
-day.isCurrentMonth ? "bg-card" : "bg-muted/30",
+"fixed inset-0 z-[100] bg-black/80 ..."
 ```
 
-After:
+The issue might be that the preview is showing a scrollbar that makes the overlay not cover the full viewport. We should ensure `overflow-x: hidden` on the body when dialog is open, or add `overflow: hidden` to the html element. 
+
+However, a simpler fix is to increase the overlay coverage with explicit width/height:
+
+**Current code (line 22)**:
 ```tsx
-"bg-card",
+className={cn(
+  "fixed inset-0 z-[100] bg-black/80  data-[state=open]:animate-in ...",
+  className
+)}
 ```
 
-**Change 2: Remove text color distinction (line 79)**
-
-Before:
+**Fixed code**:
 ```tsx
-!isTodayDate && !day.isCurrentMonth && "text-muted-foreground",
+className={cn(
+  "fixed inset-0 z-[100] bg-black/80 w-screen h-screen data-[state=open]:animate-in ...",
+  className
+)}
 ```
 
-After:
-```tsx
-// Remove this line entirely
-```
+This explicitly ensures the overlay covers the full viewport width and height.
 
 ---
 
-### Visual Result
-
-All days in the calendar grid will now have the same white/card background and the same text styling, creating a uniform appearance across the entire visible calendar regardless of month boundaries.
-
----
-
-### Summary
+### Summary of Changes
 
 | File | Change |
 |------|--------|
-| `src/components/athletes/AthleteCalendarDayCell.tsx` | Remove `isCurrentMonth` styling conditions for background color and text color |
+| `src/components/athletes/AssignProgramDialog.tsx` | Fix mesocycleData parsing to handle `{ mesocycles: [...] }` object format |
+| `src/components/ui/dialog.tsx` | Add `w-screen h-screen` to DialogOverlay for full viewport coverage |
 
