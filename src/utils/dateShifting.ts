@@ -1,5 +1,7 @@
-import { differenceInDays, addDays } from 'date-fns';
+import { differenceInDays, addDays, format, parseISO } from 'date-fns';
 import { AssignedMesocycle } from '@/types/athlete';
+import { ExerciseDistribution, SessionSection, SupersetMapping } from '@/types/microcycle-planning';
+import { DailyIntensity } from '@/types/daily-intensity';
 
 /**
  * Calculates the day offset between original and new start dates
@@ -100,4 +102,114 @@ export function recalculateMesocycleDates(
     currentDate = addDays(mesoEndDate, 1);
     return result;
   });
+}
+
+/**
+ * Shifts all exercise dates to match a new start date
+ */
+export function shiftExerciseDates(
+  exercises: ExerciseDistribution[],
+  originalStartDate: Date,
+  newStartDate: Date
+): ExerciseDistribution[] {
+  const dayOffset = calculateDayOffset(originalStartDate, newStartDate);
+  if (dayOffset === 0) return exercises;
+  
+  return exercises.map(ex => ({
+    ...ex,
+    dayDate: format(addDays(parseISO(ex.dayDate), dayOffset), 'yyyy-MM-dd'),
+  }));
+}
+
+/**
+ * Shifts all daily intensity dates to match a new start date
+ */
+export function shiftDailyIntensityDates(
+  dailyIntensity: DailyIntensity[],
+  originalStartDate: Date,
+  newStartDate: Date
+): DailyIntensity[] {
+  const dayOffset = calculateDayOffset(originalStartDate, newStartDate);
+  if (dayOffset === 0) return dailyIntensity;
+  
+  return dailyIntensity.map(di => ({
+    ...di,
+    date: format(addDays(parseISO(di.date), dayOffset), 'yyyy-MM-dd'),
+  }));
+}
+
+/**
+ * Shifts all session section dates to match a new start date
+ */
+export function shiftSessionSectionDates(
+  sections: SessionSection[],
+  originalStartDate: Date,
+  newStartDate: Date
+): SessionSection[] {
+  const dayOffset = calculateDayOffset(originalStartDate, newStartDate);
+  if (dayOffset === 0) return sections;
+  
+  return sections.map(section => ({
+    ...section,
+    dayDate: format(addDays(parseISO(section.dayDate), dayOffset), 'yyyy-MM-dd'),
+  }));
+}
+
+/**
+ * Shifts all superset date keys to match a new start date
+ */
+export function shiftSupersetDates(
+  supersets: SupersetMapping,
+  originalStartDate: Date,
+  newStartDate: Date
+): SupersetMapping {
+  const dayOffset = calculateDayOffset(originalStartDate, newStartDate);
+  if (dayOffset === 0) return supersets;
+  
+  const shifted: SupersetMapping = {};
+  
+  Object.entries(supersets).forEach(([dateKey, sessionData]) => {
+    const newDateKey = format(addDays(parseISO(dateKey), dayOffset), 'yyyy-MM-dd');
+    shifted[newDateKey] = sessionData;
+  });
+  
+  return shifted;
+}
+
+/**
+ * Shifts training days dates to match a new start date
+ */
+export function shiftTrainingDaysDates(
+  trainingDays: any[],
+  originalStartDate: Date,
+  newStartDate: Date
+): any[] {
+  const dayOffset = calculateDayOffset(originalStartDate, newStartDate);
+  if (dayOffset === 0) return trainingDays;
+  
+  return trainingDays.map(day => ({
+    ...day,
+    date: format(addDays(parseISO(day.date), dayOffset), 'yyyy-MM-dd'),
+  }));
+}
+
+/**
+ * Shifts daySplitStates date keys to match a new start date
+ */
+export function shiftDaySplitStatesDates(
+  daySplitStates: Record<string, number>,
+  originalStartDate: Date,
+  newStartDate: Date
+): Record<string, number> {
+  const dayOffset = calculateDayOffset(originalStartDate, newStartDate);
+  if (dayOffset === 0) return daySplitStates;
+  
+  const shifted: Record<string, number> = {};
+  
+  Object.entries(daySplitStates).forEach(([dateKey, value]) => {
+    const newDateKey = format(addDays(parseISO(dateKey), dayOffset), 'yyyy-MM-dd');
+    shifted[newDateKey] = value;
+  });
+  
+  return shifted;
 }
