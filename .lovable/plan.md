@@ -1,82 +1,164 @@
 
 
-## Fix "No Programs Available" Issue and Dialog Overlay Styling
+## Fix Counting Numbers Bug and Enable Session Click in Athlete Calendar
 
-### Issue 1: Programs Not Showing
+### Issues Identified
 
-**Root Cause**: There's a data structure mismatch:
-- When mesocycle data is saved during planning, it's stored as `{ mesocycles: [...] }` (an object with a `mesocycles` property)
-- The AssignProgramDialog filter expects `mesocycleData` to be a direct array
+1. **Counting Numbers Bug**: The exercise count displayed on each session card is using `Math.floor(Math.random() * 8) + 3` (line 194 in AthleteCalendarView.tsx). Since React re-renders components frequently, this creates a new random number on every render, causing the numbers to count erratically.
 
-**Location**: `src/components/athletes/AssignProgramDialog.tsx`
+2. **Session Click Not Working**: The `onSessionClick` handler is defined in `AthleteCalendarView.tsx` but is never passed down to `AthleteCalendarWeekRow` (line 473-481). The component has the prop available but it's not being used.
 
-**Current code (line 243)**:
+3. **Workout Session Sheet Not Properly Connected**: The WorkoutSessionSheet is rendered but with empty/placeholder data. It needs to receive the actual session exercises and be properly wired up to open when a session is clicked.
+
+---
+
+### Solution
+
+#### Fix 1: Remove Random Number Generation (Line 194)
+
+Replace the placeholder random exercise count with the actual exercise count from the assignment data. Since we're building sessions from the assignment mesocycle data, we need to:
+- Track actual exercises from the `exerciseDistribution` state or calculate a proper count from the stored data.
+
+For now, we'll replace the random number with a stable count calculation. The proper exercise count should come from stored assignment data.
+
+**Current code (line 194):**
 ```tsx
-const availablePrograms = programs.filter(p => p.mesocycleData && Array.isArray(p.mesocycleData) && p.mesocycleData.length > 0);
+exerciseCount: Math.floor(Math.random() * 8) + 3, // Placeholder - would come from actual data
 ```
 
-**Fixed code**:
+**Fixed code:**
 ```tsx
-const availablePrograms = programs.filter(p => {
-  if (!p.mesocycleData) return false;
-  // Handle both formats: direct array or { mesocycles: [...] } object
-  const mesocycles = Array.isArray(p.mesocycleData) 
-    ? p.mesocycleData 
-    : p.mesocycleData.mesocycles;
-  return Array.isArray(mesocycles) && mesocycles.length > 0;
-});
+exerciseCount: 0, // Will be populated from stored assignment data
 ```
 
-**Also update parsing (lines 83-87)**:
+But a better approach is to use the editing hook's data. We need to refactor the calendar days calculation to use real data.
+
+---
+
+#### Fix 2: Pass `onSessionClick` to Week Row (Line 473-481)
+
+Add the missing `onSessionClick` prop to `AthleteCalendarWeekRow`:
+
+**Current code:**
 ```tsx
-const programMesocycles = useMemo((): AssignedMesocycle[] => {
-  if (!selectedProgram?.mesocycleData) return [];
-  
-  // Handle both formats: direct array or { mesocycles: [...] } object
-  const mesoData = Array.isArray(selectedProgram.mesocycleData) 
-    ? selectedProgram.mesocycleData 
-    : selectedProgram.mesocycleData.mesocycles;
-    
-  if (!Array.isArray(mesoData)) return [];
-  // ... rest of the function
+<AthleteCalendarWeekRow
+  key={`week-${idx}`}
+  week={week}
+  weekIdx={idx}
+  onDayClick={handleDayClick}
+  onAddSession={handleAddSession}
+  onDeleteAssignment={handleDeleteAssignmentById}
+  getIntensityColor={getIntensityColor}
+/>
+```
+
+**Fixed code:**
+```tsx
+<AthleteCalendarWeekRow
+  key={`week-${idx}`}
+  week={week}
+  weekIdx={idx}
+  onSessionClick={handleSessionClick}
+  onDayClick={handleDayClick}
+  onAddSession={handleAddSession}
+  onDeleteAssignment={handleDeleteAssignmentById}
+  getIntensityColor={getIntensityColor}
+/>
 ```
 
 ---
 
-### Issue 2: Dialog Overlay Cut Off
+#### Fix 3: Create `handleSessionClick` Handler and Wire Up WorkoutSessionSheet
 
-**Root Cause**: Looking at the screenshot, the dialog background overlay appears to be cut off on the left and right sides. This is because the dialog is rendered inside a parent component that may have overflow constraints.
+Add a new state and handler for opening a session:
 
-**Solution**: Ensure the `DialogOverlay` uses `inset-0` properly and has no margin/padding issues.
-
-**Location**: `src/components/ui/dialog.tsx` (line 22)
-
-The current overlay class is:
 ```tsx
-"fixed inset-0 z-[100] bg-black/80 ..."
+const [selectedSessionInfo, setSelectedSessionInfo] = useState<{
+  dayDate: string;
+  sessionIndex: number;
+  exercises: ExerciseDistribution[];
+} | null>(null);
+
+const handleSessionClick = (dayDate: string, sessionIndex: number) => {
+  // Get exercises for this session from editing hook or assignment data
+  const sessionExercises = editing.exerciseDistribution.filter(
+    ex => ex.dayDate === dayDate && ex.sessionIndex === sessionIndex
+  );
+  
+  setSelectedSessionInfo({
+    dayDate,
+    sessionIndex,
+    exercises: sessionExercises,
+  });
+  setSessionSheetOpen(true);
+};
 ```
 
-The issue might be that the preview is showing a scrollbar that makes the overlay not cover the full viewport. We should ensure `overflow-x: hidden` on the body when dialog is open, or add `overflow: hidden` to the html element. 
+---
 
-However, a simpler fix is to increase the overlay coverage with explicit width/height:
+#### Fix 4: Connect WorkoutSessionSheet with Real Data
 
-**Current code (line 22)**:
+Update the WorkoutSessionSheet to receive proper data from the assignment:
+
 ```tsx
-className={cn(
-  "fixed inset-0 z-[100] bg-black/80  data-[state=open]:animate-in ...",
-  className
-)}
+<WorkoutSessionSheet
+  isOpen={sessionSheetOpen}
+  onClose={() => {
+    setSessionSheetOpen(false);
+    setSelectedSessionInfo(null);
+  }}
+  dayDate={selectedSessionInfo?.dayDate || ''}
+  sessionIndex={selectedSessionInfo?.sessionIndex || 0}
+  exercises={selectedSessionInfo?.exercises || []}
+  mesocycleId={editing.selectedAssignment?.assignedMesocycles[0]?.id || ''}
+  microcycleIndex={0}
+  parameterValues={editing.parameterValues}
+  onSaveParameters={handleSaveParameters}
+  dailyIntensityData={editing.dailyIntensityData}
+  onIntensityChange={editing.handleDayIntensityChange}
+  onSessionIntensityChange={editing.handleSessionIntensityChange}
+  getIntensityColor={getIntensityColor}
+  intensityLevels={intensityLevels}
+  sessionSections={editing.sessionSections}
+  supersets={editing.supersets}
+  onSectionsChange={(sections) => editing.setSessionSections(sections)}
+  onSupersetsChange={(s) => editing.setSupersets(s)}
+  toolboxData={toolboxData}
+  allExerciseDistribution={editing.exerciseDistribution}
+  onDistributionChange={editing.setExerciseDistribution}
+  // ... additional props as needed
+/>
 ```
 
-**Fixed code**:
-```tsx
-className={cn(
-  "fixed inset-0 z-[100] bg-black/80 w-screen h-screen data-[state=open]:animate-in ...",
-  className
-)}
-```
+---
 
-This explicitly ensures the overlay covers the full viewport width and height.
+#### Fix 5: Refactor Calendar Days to Use Real Exercise Counts
+
+Update the `calendarDays` useMemo to calculate exercise counts from the stored assignment data rather than using random numbers:
+
+```tsx
+// Instead of random exercise count, look up from stored data
+const storageKey = `athlete-assignment-${assignmentId}`;
+const savedData = localStorage.getItem(storageKey);
+let exerciseCount = 0;
+if (savedData) {
+  try {
+    const parsed = JSON.parse(savedData);
+    const exercises = parsed.exerciseDistribution || [];
+    exerciseCount = exercises.filter(
+      (ex: any) => ex.dayDate === dateString && ex.sessionIndex === 0
+    ).length;
+  } catch (e) {}
+}
+
+sessions.push({
+  id: sessionId,
+  sessionIndex: 0,
+  sessionName: `${meso.name} - Day ${dayWithinMicro + 1}`,
+  exerciseCount: exerciseCount,
+  intensity: meso.intensity || 'moderate',
+});
+```
 
 ---
 
@@ -84,6 +166,5 @@ This explicitly ensures the overlay covers the full viewport width and height.
 
 | File | Change |
 |------|--------|
-| `src/components/athletes/AssignProgramDialog.tsx` | Fix mesocycleData parsing to handle `{ mesocycles: [...] }` object format |
-| `src/components/ui/dialog.tsx` | Add `w-screen h-screen` to DialogOverlay for full viewport coverage |
+| `src/components/athletes/AthleteCalendarView.tsx` | 1. Add `handleSessionClick` handler<br>2. Pass `onSessionClick` to `AthleteCalendarWeekRow`<br>3. Replace random exercise count with real data lookup<br>4. Wire up WorkoutSessionSheet with proper props from editing hook<br>5. Add `selectedSessionInfo` state |
 
