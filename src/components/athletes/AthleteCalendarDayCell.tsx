@@ -22,6 +22,7 @@ export interface AthleteCalendarSession {
   sessionName: string;
   exerciseCount: number;
   intensity?: string;
+  assignmentId?: string;
 }
 
 export interface AthleteCalendarDay {
@@ -37,7 +38,7 @@ export interface AthleteCalendarDay {
 
 interface AthleteCalendarDayCellProps {
   day: AthleteCalendarDay;
-  onSessionClick?: (dayDate: string, sessionIndex: number) => void;
+  onSessionClick?: (dayDate: string, sessionIndex: number, assignmentId: string) => void;
   onDayClick?: (date: Date) => void;
   onAddSession?: (date: Date) => void;
   onDeleteAssignment?: (assignmentId: string) => void;
@@ -188,7 +189,7 @@ export function AthleteCalendarDayCell({
               key={session.id}
               onClick={(e) => {
                 e.stopPropagation();
-                onSessionClick?.(day.dateString, session.sessionIndex);
+                onSessionClick?.(day.dateString, session.sessionIndex, session.assignmentId || day.assignmentId || '');
               }}
               className={cn(
                 "p-2 rounded-md bg-primary/10 border border-primary/20 transition-all cursor-pointer hover:bg-primary/15"
