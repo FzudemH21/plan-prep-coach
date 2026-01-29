@@ -83,7 +83,11 @@ export function AssignProgramDialog({
   const programMesocycles = useMemo((): AssignedMesocycle[] => {
     if (!selectedProgram?.mesocycleData) return [];
     
-    const mesoData = selectedProgram.mesocycleData;
+    // Handle both formats: direct array or { mesocycles: [...] } object
+    const mesoData = Array.isArray(selectedProgram.mesocycleData) 
+      ? selectedProgram.mesocycleData 
+      : selectedProgram.mesocycleData.mesocycles;
+      
     if (!Array.isArray(mesoData)) return [];
     
     return mesoData.map((meso: any, index: number) => ({
@@ -240,7 +244,14 @@ export function AssignProgramDialog({
     onAssign(assignment);
   };
 
-  const availablePrograms = programs.filter(p => p.mesocycleData && Array.isArray(p.mesocycleData) && p.mesocycleData.length > 0);
+  const availablePrograms = programs.filter(p => {
+    if (!p.mesocycleData) return false;
+    // Handle both formats: direct array or { mesocycles: [...] } object
+    const mesocycles = Array.isArray(p.mesocycleData) 
+      ? p.mesocycleData 
+      : p.mesocycleData.mesocycles;
+    return Array.isArray(mesocycles) && mesocycles.length > 0;
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
