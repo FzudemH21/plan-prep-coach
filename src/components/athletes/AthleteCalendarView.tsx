@@ -366,8 +366,32 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     
     // Copy program workout data with shifted dates
     if (newAssignment && assignment.programId) {
-      const program = getProgram(assignment.programId);
+      // Read directly from localStorage to ensure we get latest data (bypasses stale React state)
+      let program: TrainingProgram | null = null;
+      try {
+        const stored = localStorage.getItem('trainingPrograms');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          program = parsed.programs?.find((p: TrainingProgram) => p.id === assignment.programId) || null;
+        }
+      } catch (e) {
+        console.error('[handleAssignProgram] Error reading program from localStorage:', e);
+      }
+      
+      // Fallback to hook's getProgram if localStorage read fails
+      if (!program) {
+        program = getProgram(assignment.programId);
+      }
+      
       if (program) {
+        console.log('[handleAssignProgram] Program found:', {
+          id: program.id,
+          name: program.name,
+          exerciseCount: program.exerciseDistribution?.length || 0,
+          hasSessionSections: !!program.sessionSections,
+          hasDailyIntensity: !!program.dailyIntensityData?.length,
+        });
+        
         const originalStartDate = program.duration?.startDate 
           ? new Date(program.duration.startDate) 
           : new Date();
@@ -414,6 +438,13 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           copiedAt: new Date().toISOString(),
         };
         
+        console.log('[handleAssignProgram] Saving assignment data:', {
+          storageKey,
+          exerciseCount: shiftedExercises.length,
+          sectionsCount: Array.isArray(shiftedSections) ? shiftedSections.length : Object.keys(shiftedSections).length,
+          dailyIntensityCount: shiftedDailyIntensity.length,
+        });
+        
         localStorage.setItem(storageKey, JSON.stringify(dataToSave));
         
         // Update cache immediately
@@ -421,6 +452,8 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           ...prev,
           [newAssignment.id]: dataToSave,
         }));
+      } else {
+        console.warn('[handleAssignProgram] Program not found:', assignment.programId);
       }
     }
     
