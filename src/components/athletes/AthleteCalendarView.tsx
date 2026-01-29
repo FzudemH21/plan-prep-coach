@@ -1,15 +1,23 @@
-import { useState, useMemo, useCallback } from 'react';
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, isSameMonth, isWithinInterval } from 'date-fns';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, isSameMonth, isWithinInterval, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight, Trash2, Calendar, LayoutGrid, Columns } from 'lucide-react';
 import { Athlete, AthleteCalendarAssignment } from '@/types/athlete';
 import { AssignProgramDialog } from './AssignProgramDialog';
-import { useTrainingPrograms } from '@/hooks/useTrainingPrograms';
+import { useTrainingPrograms, TrainingProgram } from '@/hooks/useTrainingPrograms';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useAthleteCalendarEditing } from '@/hooks/useAthleteCalendarEditing';
+import {
+  shiftExerciseDates,
+  shiftDailyIntensityDates,
+  shiftSessionSectionDates,
+  shiftSupersetDates,
+  shiftTrainingDaysDates,
+  shiftDaySplitStatesDates,
+} from '@/utils/dateShifting';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -77,16 +85,56 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number>(1); // 1=Monday
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
 
-  const { programs } = useTrainingPrograms();
+  const { programs, getProgram } = useTrainingPrograms();
   const athleteData = useAthletes();
   const { data: toolboxData } = useToolboxData();
 
   const assignments = useMemo(() => {
     return athleteData.getAthleteCalendarAssignments(athlete.id);
   }, [athleteData, athlete.id]);
+  
+  // Store a map of assignment ID -> stored program data for quick lookups
+  const [assignmentDataCache, setAssignmentDataCache] = useState<Record<string, any>>({});
+  
+  // Load assignment data from localStorage for all assignments
+  useEffect(() => {
+    if (assignments.length === 0) {
+      if (Object.keys(assignmentDataCache).length > 0) {
+        setAssignmentDataCache({});
+      }
+      return;
+    }
+    
+    const cache: Record<string, any> = {};
+    let hasNewData = false;
+    
+    assignments.forEach(assignment => {
+      // Check if already cached
+      if (assignmentDataCache[assignment.id]) {
+        cache[assignment.id] = assignmentDataCache[assignment.id];
+        return;
+      }
+      
+      const storageKey = `athlete-assignment-${assignment.id}`;
+      try {
+        const savedData = localStorage.getItem(storageKey);
+        if (savedData) {
+          cache[assignment.id] = JSON.parse(savedData);
+          hasNewData = true;
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+    });
+    
+    // Only update if we found new data
+    if (hasNewData || Object.keys(cache).length !== Object.keys(assignmentDataCache).length) {
+      setAssignmentDataCache(cache);
+    }
+  }, [assignments]); // intentionally exclude assignmentDataCache to prevent infinite loop
 
   // Initialize selected assignment when assignments change
-  useMemo(() => {
+  useEffect(() => {
     if (assignments.length > 0 && !selectedAssignmentId) {
       setSelectedAssignmentId(assignments[0].id);
     }
@@ -191,20 +239,29 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 // Create a session for this day
                 const sessionId = `${assignment.id}-${dateString}-0`;
                 
+                // Get data from cache for this assignment
+                const cachedData = assignmentDataCache[assignment.id];
+                
                 // Get actual exercise count from stored assignment data
                 let exerciseCount = 0;
-                const storageKey = `athlete-assignment-${assignment.id}`;
-                try {
-                  const savedData = localStorage.getItem(storageKey);
-                  if (savedData) {
-                    const parsed = JSON.parse(savedData);
-                    const storedExercises = parsed.exerciseDistribution || [];
-                    exerciseCount = storedExercises.filter(
-                      (ex: any) => ex.dayDate === dateString && ex.sessionIndex === 0
-                    ).length;
+                if (cachedData?.exerciseDistribution) {
+                  exerciseCount = cachedData.exerciseDistribution.filter(
+                    (ex: any) => ex.dayDate === dateString && ex.sessionIndex === 0
+                  ).length;
+                }
+                
+                // Get actual day intensity from stored daily intensity data
+                let dayIntensity: IntensityLevel = 'moderate';
+                if (cachedData?.dailyIntensity) {
+                  const storedDayIntensity = cachedData.dailyIntensity.find(
+                    (d: any) => d.date === dateString
+                  );
+                  if (storedDayIntensity?.intensity) {
+                    dayIntensity = storedDayIntensity.intensity as IntensityLevel;
                   }
-                } catch (e) {
-                  // Ignore parse errors, default to 0
+                } else {
+                  // Fallback to mesocycle intensity only if no stored data
+                  dayIntensity = (meso.intensity || 'moderate') as IntensityLevel;
                 }
                 
                 sessions.push({
@@ -212,7 +269,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                   sessionIndex: 0,
                   sessionName: `${meso.name} - Day ${dayWithinMicro + 1}`,
                   exerciseCount,
-                  intensity: meso.intensity || 'moderate',
+                  intensity: dayIntensity,
                 });
                 break;
               }
@@ -235,7 +292,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         programName,
       };
     });
-  }, [currentDate, viewMode, assignments]);
+  }, [currentDate, viewMode, assignments, assignmentDataCache]);
 
   // Group days into weeks
   const weeks = useMemo(() => {
@@ -303,11 +360,73 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     setSessionSheetOpen(true);
   }, [assignments]);
 
-  const handleAssignProgram = (assignment: Omit<AthleteCalendarAssignment, 'id' | 'createdAt'>) => {
-    athleteData.createCalendarAssignment(athlete.id, assignment);
+  const handleAssignProgram = useCallback((assignment: Omit<AthleteCalendarAssignment, 'id' | 'createdAt'>) => {
+    // Create the assignment and get the new ID
+    const newAssignment = athleteData.createCalendarAssignment(athlete.id, assignment);
+    
+    // Copy program workout data with shifted dates
+    if (newAssignment && assignment.programId) {
+      const program = getProgram(assignment.programId);
+      if (program) {
+        const originalStartDate = program.duration?.startDate 
+          ? new Date(program.duration.startDate) 
+          : new Date();
+        const newStartDate = new Date(assignment.startDate);
+        
+        // Shift all program data to match the new start date
+        const shiftedExercises = program.exerciseDistribution 
+          ? shiftExerciseDates(program.exerciseDistribution, originalStartDate, newStartDate)
+          : [];
+          
+        const shiftedDailyIntensity = program.dailyIntensityData
+          ? shiftDailyIntensityDates(program.dailyIntensityData, originalStartDate, newStartDate)
+          : [];
+          
+        const shiftedSections = program.sessionSections
+          ? Array.isArray(program.sessionSections)
+            ? shiftSessionSectionDates(program.sessionSections, originalStartDate, newStartDate)
+            : program.sessionSections
+          : [];
+          
+        const shiftedSupersets = program.supersets
+          ? shiftSupersetDates(program.supersets as any, originalStartDate, newStartDate)
+          : {};
+          
+        const shiftedTrainingDays = program.trainingDays
+          ? shiftTrainingDaysDates(program.trainingDays, originalStartDate, newStartDate)
+          : [];
+          
+        const shiftedDaySplitStates = program.daySplitStates
+          ? shiftDaySplitStatesDates(program.daySplitStates, originalStartDate, newStartDate)
+          : {};
+        
+        // Save shifted data to localStorage
+        const storageKey = `athlete-assignment-${newAssignment.id}`;
+        const dataToSave = {
+          exerciseDistribution: shiftedExercises,
+          sessionSections: shiftedSections,
+          supersets: shiftedSupersets,
+          parameterValues: program.parameterValues || {},
+          dailyIntensity: shiftedDailyIntensity,
+          trainingDays: shiftedTrainingDays,
+          daySplitStates: shiftedDaySplitStates,
+          copiedFromProgram: program.id,
+          copiedAt: new Date().toISOString(),
+        };
+        
+        localStorage.setItem(storageKey, JSON.stringify(dataToSave));
+        
+        // Update cache immediately
+        setAssignmentDataCache(prev => ({
+          ...prev,
+          [newAssignment.id]: dataToSave,
+        }));
+      }
+    }
+    
     setShowAssignDialog(false);
     setSelectedDate(null);
-  };
+  }, [athlete.id, athleteData, getProgram]);
 
   const handleDeleteAssignment = () => {
     if (deleteAssignment) {

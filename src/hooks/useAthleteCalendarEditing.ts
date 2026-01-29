@@ -51,6 +51,9 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   const [trainingDays, setTrainingDays] = useState<TrainingDay[]>([]);
   const [daySplitStates, setDaySplitStates] = useState<Record<string, number>>({});
   
+  // Flag to prevent auto-save during initial load
+  const [isInitializing, setIsInitializing] = useState(false);
+  
   // Copy/paste state
   const [copiedSession, setCopiedSession] = useState<CopiedSession | null>(null);
   const [copiedDay, setCopiedDay] = useState<CopiedDay | null>(null);
@@ -62,8 +65,18 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   );
 
   // Build training days from assignment
-  const buildTrainingDaysFromAssignment = useCallback((assignment: AthleteCalendarAssignment): TrainingDay[] => {
+  const buildTrainingDaysFromAssignment = useCallback((assignment: AthleteCalendarAssignment, storedDailyIntensity?: any[]): TrainingDay[] => {
     const days: TrainingDay[] = [];
+    
+    // Create a lookup map for stored daily intensity
+    const intensityLookup = new Map<string, IntensityLevel>();
+    if (storedDailyIntensity && storedDailyIntensity.length > 0) {
+      storedDailyIntensity.forEach(di => {
+        if (di.date && di.intensity) {
+          intensityLookup.set(di.date, di.intensity as IntensityLevel);
+        }
+      });
+    }
     
     assignment.assignedMesocycles.forEach((meso) => {
       const mesoStart = new Date(meso.startDate);
@@ -77,6 +90,11 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
           if (!dayDate) continue;
           
           const dateString = format(dayDate, 'yyyy-MM-dd');
+          
+          // Use stored day intensity if available, otherwise fall back to meso/micro intensity
+          const storedIntensity = intensityLookup.get(dateString);
+          const intensity: IntensityLevel = storedIntensity || (meso.intensity || micro.intensity || 'moderate') as IntensityLevel;
+          
           days.push({
             date: dateString,
             dayOfWeek: dayDate.getDay(),
@@ -86,7 +104,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
             isTestDay: false,
             isEventDay: false,
             isTrainingDay: true,
-            intensity: (meso.intensity || micro.intensity || 'moderate') as IntensityLevel,
+            intensity,
             sessions: 1,
             sessionNames: ['Session 1'],
           });
@@ -103,26 +121,51 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     const assignment = assignments.find(a => a.id === assignmentId);
     if (!assignment) return;
     
+    setIsInitializing(true);
+    
     const storageKey = `athlete-assignment-${assignmentId}`;
     const savedData = localStorage.getItem(storageKey);
     
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData);
-        setExerciseDistribution(parsed.exerciseDistribution || []);
-        setSessionSections(parsed.sessionSections || []);
-        setSupersets(parsed.supersets || {});
-        setParameterValues(parsed.parameterValues || {});
-        setDailyIntensityData(parsed.dailyIntensity || []);
-        setTrainingDays(parsed.trainingDays || buildTrainingDaysFromAssignment(assignment));
-        setDaySplitStates(parsed.daySplitStates || {});
+        const storedExercises = parsed.exerciseDistribution || [];
+        const storedSections = Array.isArray(parsed.sessionSections) ? parsed.sessionSections : [];
+        const storedSupersets = parsed.supersets || {};
+        const storedParams = parsed.parameterValues || {};
+        const storedDailyIntensity = parsed.dailyIntensity || [];
+        const storedDaySplitStates = parsed.daySplitStates || {};
+        
+        setExerciseDistribution(storedExercises);
+        setSessionSections(storedSections);
+        setSupersets(storedSupersets);
+        setParameterValues(storedParams);
+        setDailyIntensityData(storedDailyIntensity);
+        setDaySplitStates(storedDaySplitStates);
+        
+        // Build training days using stored intensity data
+        const days = parsed.trainingDays?.length > 0 
+          ? parsed.trainingDays 
+          : buildTrainingDaysFromAssignment(assignment, storedDailyIntensity);
+        setTrainingDays(days);
+        
+        console.log('[loadAssignmentForEditing] Loaded data:', {
+          exercises: storedExercises.length,
+          sections: storedSections.length,
+          dailyIntensity: storedDailyIntensity.length,
+        });
       } catch (e) {
         console.error('Failed to parse saved assignment data:', e);
         initializeFromAssignment(assignment);
       }
     } else {
+      console.log('[loadAssignmentForEditing] No saved data found, initializing from assignment');
       initializeFromAssignment(assignment);
     }
+    
+    // Re-enable auto-save after initial load
+    setTimeout(() => setIsInitializing(false), 100);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assignments, buildTrainingDaysFromAssignment]);
 
   // Initialize from assignment snapshot
@@ -155,7 +198,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
 
   // Auto-save edits to localStorage
   useEffect(() => {
-    if (!selectedAssignmentId) return;
+    if (!selectedAssignmentId || isInitializing) return;
     
     const storageKey = `athlete-assignment-${selectedAssignmentId}`;
     const dataToSave = {
@@ -172,6 +215,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     localStorage.setItem(storageKey, JSON.stringify(dataToSave));
   }, [
     selectedAssignmentId,
+    isInitializing,
     exerciseDistribution,
     sessionSections,
     supersets,
