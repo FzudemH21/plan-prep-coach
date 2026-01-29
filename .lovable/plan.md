@@ -1,170 +1,160 @@
 
+## Fix Athlete Calendar: Intensity Display, Exercises Not Loading, and Date Shifting Issues
 
-## Fix Counting Numbers Bug and Enable Session Click in Athlete Calendar
+### Overview
 
-### Issues Identified
+There are four interconnected issues with the Athlete Calendar when programs are assigned:
 
-1. **Counting Numbers Bug**: The exercise count displayed on each session card is using `Math.floor(Math.random() * 8) + 3` (line 194 in AthleteCalendarView.tsx). Since React re-renders components frequently, this creates a new random number on every render, causing the numbers to count erratically.
+1. **Intensity Display Wrong**: The day intensity square shows mesocycle intensity instead of actual per-day intensity; session intensity shows microcycle intensity instead of session-specific intensity
+2. **Exercises Not Showing**: When opening sessions, exercises are empty because the original program's exercise data is not copied during assignment
+3. **Dates Display**: The "Assigned Programs" section should show the actual assigned dates (this is already working correctly)
+4. **Start Date Mismatch**: When assigning with a specific start date (e.g., Jan 29), the program should start on that exact date, not an earlier date
 
-2. **Session Click Not Working**: The `onSessionClick` handler is defined in `AthleteCalendarView.tsx` but is never passed down to `AthleteCalendarWeekRow` (line 473-481). The component has the prop available but it's not being used.
+---
 
-3. **Workout Session Sheet Not Properly Connected**: The WorkoutSessionSheet is rendered but with empty/placeholder data. It needs to receive the actual session exercises and be properly wired up to open when a session is clicked.
+### Root Cause Analysis
+
+**Issue 1 - Intensity:**
+- In `AthleteCalendarView.tsx` (line 215), sessions are created with `meso.intensity` (the mesocycle's overall intensity) instead of looking up the actual per-day intensity from `dailyIntensityData`
+- The editing hook's `buildTrainingDaysFromAssignment` (line 89) also defaults to `meso.intensity || micro.intensity || 'moderate'` instead of using the granular day-level intensity data from the original program
+
+**Issue 2 - Exercises:**
+- When `initializeFromAssignment` is called, it sets `exerciseDistribution` to an empty array (line 132)
+- The program's `exerciseDistribution` stored in the TrainingProgram is never copied to the athlete assignment storage
+- When the assignment is created, only mesocycle structure is copied - not the actual workout data (exercises, sections, supersets, parameters)
+
+**Issue 3 - Date Shifting:**
+- The `recalculateMesocycleDates` function correctly shifts dates based on the selected start date
+- However, when the program is assigned, the original program's `exerciseDistribution` has day dates like `"2025-08-01"` that need to be shifted to match the new assignment dates
 
 ---
 
 ### Solution
 
-#### Fix 1: Remove Random Number Generation (Line 194)
+#### Part 1: Copy Program Data During Assignment
 
-Replace the placeholder random exercise count with the actual exercise count from the assignment data. Since we're building sessions from the assignment mesocycle data, we need to:
-- Track actual exercises from the `exerciseDistribution` state or calculate a proper count from the stored data.
+When a program is assigned to an athlete, we need to:
+1. Copy the program's `exerciseDistribution`, `sessionSections`, `supersets`, `parameterValues`, and `dailyIntensityData`
+2. Shift all the `dayDate` fields in the copied data to match the new assignment start date
+3. Store this copied data in `localStorage` with the assignment ID
 
-For now, we'll replace the random number with a stable count calculation. The proper exercise count should come from stored assignment data.
+**File: `src/components/athletes/AssignProgramDialog.tsx`**
 
-**Current code (line 194):**
+After creating the assignment, copy the program's workout data with shifted dates:
+
 ```tsx
-exerciseCount: Math.floor(Math.random() * 8) + 3, // Placeholder - would come from actual data
+// In handleAssign, after calling onAssign(assignment):
+// 1. Load source program's workout data from localStorage
+// 2. Shift all dayDate fields based on the day offset between original and new start
+// 3. Save to athlete-assignment-{newAssignmentId}
 ```
 
-**Fixed code:**
+**File: `src/components/athletes/AthleteCalendarView.tsx`**
+
+Modify `handleAssignProgram` to:
+1. Create the assignment (get back the new assignment ID)
+2. Load the original program's data from `trainingPrograms` localStorage
+3. Shift the dates and save to `athlete-assignment-{assignmentId}`
+
+#### Part 2: Fix Intensity Display in Calendar
+
+**File: `src/components/athletes/AthleteCalendarView.tsx`**
+
+In the `calendarDays` useMemo, when creating sessions:
+- Look up the actual day intensity from the stored assignment data instead of using `meso.intensity`
+- Use `dailyIntensityData` from the saved assignment storage
+
+Change line ~215:
 ```tsx
-exerciseCount: 0, // Will be populated from stored assignment data
+// Current (wrong):
+intensity: meso.intensity || 'moderate',
+
+// Fixed - look up from stored data:
+intensity: storedDayIntensity || meso.intensity || 'moderate',
 ```
 
-But a better approach is to use the editing hook's data. We need to refactor the calendar days calculation to use real data.
+**File: `src/hooks/useAthleteCalendarEditing.ts`**
 
----
+Update `buildTrainingDaysFromAssignment` to use day-level intensity from the stored daily intensity data when available.
 
-#### Fix 2: Pass `onSessionClick` to Week Row (Line 473-481)
+#### Part 3: Fix Start Date Synchronization
 
-Add the missing `onSessionClick` prop to `AthleteCalendarWeekRow`:
+The date recalculation is already correct in `recalculateMesocycleDates`. The issue is that when exercises are copied, their `dayDate` values need to be shifted using the same offset logic.
 
-**Current code:**
-```tsx
-<AthleteCalendarWeekRow
-  key={`week-${idx}`}
-  week={week}
-  weekIdx={idx}
-  onDayClick={handleDayClick}
-  onAddSession={handleAddSession}
-  onDeleteAssignment={handleDeleteAssignmentById}
-  getIntensityColor={getIntensityColor}
-/>
-```
-
-**Fixed code:**
-```tsx
-<AthleteCalendarWeekRow
-  key={`week-${idx}`}
-  week={week}
-  weekIdx={idx}
-  onSessionClick={handleSessionClick}
-  onDayClick={handleDayClick}
-  onAddSession={handleAddSession}
-  onDeleteAssignment={handleDeleteAssignmentById}
-  getIntensityColor={getIntensityColor}
-/>
-```
-
----
-
-#### Fix 3: Create `handleSessionClick` Handler and Wire Up WorkoutSessionSheet
-
-Add a new state and handler for opening a session:
+**New utility function in `src/utils/dateShifting.ts`:**
 
 ```tsx
-const [selectedSessionInfo, setSelectedSessionInfo] = useState<{
-  dayDate: string;
-  sessionIndex: number;
-  exercises: ExerciseDistribution[];
-} | null>(null);
-
-const handleSessionClick = (dayDate: string, sessionIndex: number) => {
-  // Get exercises for this session from editing hook or assignment data
-  const sessionExercises = editing.exerciseDistribution.filter(
-    ex => ex.dayDate === dayDate && ex.sessionIndex === sessionIndex
-  );
-  
-  setSelectedSessionInfo({
-    dayDate,
-    sessionIndex,
-    exercises: sessionExercises,
-  });
-  setSessionSheetOpen(true);
-};
-```
-
----
-
-#### Fix 4: Connect WorkoutSessionSheet with Real Data
-
-Update the WorkoutSessionSheet to receive proper data from the assignment:
-
-```tsx
-<WorkoutSessionSheet
-  isOpen={sessionSheetOpen}
-  onClose={() => {
-    setSessionSheetOpen(false);
-    setSelectedSessionInfo(null);
-  }}
-  dayDate={selectedSessionInfo?.dayDate || ''}
-  sessionIndex={selectedSessionInfo?.sessionIndex || 0}
-  exercises={selectedSessionInfo?.exercises || []}
-  mesocycleId={editing.selectedAssignment?.assignedMesocycles[0]?.id || ''}
-  microcycleIndex={0}
-  parameterValues={editing.parameterValues}
-  onSaveParameters={handleSaveParameters}
-  dailyIntensityData={editing.dailyIntensityData}
-  onIntensityChange={editing.handleDayIntensityChange}
-  onSessionIntensityChange={editing.handleSessionIntensityChange}
-  getIntensityColor={getIntensityColor}
-  intensityLevels={intensityLevels}
-  sessionSections={editing.sessionSections}
-  supersets={editing.supersets}
-  onSectionsChange={(sections) => editing.setSessionSections(sections)}
-  onSupersetsChange={(s) => editing.setSupersets(s)}
-  toolboxData={toolboxData}
-  allExerciseDistribution={editing.exerciseDistribution}
-  onDistributionChange={editing.setExerciseDistribution}
-  // ... additional props as needed
-/>
-```
-
----
-
-#### Fix 5: Refactor Calendar Days to Use Real Exercise Counts
-
-Update the `calendarDays` useMemo to calculate exercise counts from the stored assignment data rather than using random numbers:
-
-```tsx
-// Instead of random exercise count, look up from stored data
-const storageKey = `athlete-assignment-${assignmentId}`;
-const savedData = localStorage.getItem(storageKey);
-let exerciseCount = 0;
-if (savedData) {
-  try {
-    const parsed = JSON.parse(savedData);
-    const exercises = parsed.exerciseDistribution || [];
-    exerciseCount = exercises.filter(
-      (ex: any) => ex.dayDate === dateString && ex.sessionIndex === 0
-    ).length;
-  } catch (e) {}
+export function shiftExerciseDates(
+  exercises: ExerciseDistribution[],
+  originalStartDate: Date,
+  newStartDate: Date
+): ExerciseDistribution[] {
+  const dayOffset = differenceInDays(newStartDate, originalStartDate);
+  return exercises.map(ex => ({
+    ...ex,
+    dayDate: format(addDays(parseISO(ex.dayDate), dayOffset), 'yyyy-MM-dd'),
+  }));
 }
 
-sessions.push({
-  id: sessionId,
-  sessionIndex: 0,
-  sessionName: `${meso.name} - Day ${dayWithinMicro + 1}`,
-  exerciseCount: exerciseCount,
-  intensity: meso.intensity || 'moderate',
-});
+export function shiftDailyIntensityDates(
+  dailyIntensity: DailyIntensity[],
+  originalStartDate: Date,
+  newStartDate: Date
+): DailyIntensity[] {
+  const dayOffset = differenceInDays(newStartDate, originalStartDate);
+  return dailyIntensity.map(di => ({
+    ...di,
+    date: format(addDays(parseISO(di.date), dayOffset), 'yyyy-MM-dd'),
+  }));
+}
+```
+
+---
+
+### Implementation Plan
+
+| Step | File | Change |
+|------|------|--------|
+| 1 | `src/utils/dateShifting.ts` | Add `shiftExerciseDates`, `shiftDailyIntensityDates`, `shiftSessionSections`, and `shiftSupersets` utility functions |
+| 2 | `src/components/athletes/AthleteCalendarView.tsx` | Update `handleAssignProgram` to copy and date-shift program data into assignment storage |
+| 3 | `src/components/athletes/AthleteCalendarView.tsx` | Fix `calendarDays` to look up actual day intensity from stored data |
+| 4 | `src/hooks/useAthleteCalendarEditing.ts` | Update `initializeFromAssignment` to prefer stored data over building from scratch |
+| 5 | `src/components/athletes/AthleteCalendarDayCell.tsx` | No changes needed - it already receives intensity via props |
+
+---
+
+### Technical Details
+
+**Date Shifting Logic:**
+
+```text
+Original Program Dates:    Aug 1 - Aug 28 (28 days)
+Selected Start Date:       Jan 29, 2026
+Day Offset:               +181 days
+
+Original exercise on "2025-08-01" → Shifted to "2026-01-29"
+Original exercise on "2025-08-02" → Shifted to "2026-01-30"
+...and so on
+```
+
+**Data Flow After Fix:**
+
+```text
+1. User selects program + start date (Jan 29)
+2. AssignProgramDialog calls recalculateMesocycleDates (shifts mesocycle dates)
+3. handleAssignProgram creates assignment with new ID
+4. Copy program's exerciseDistribution from TrainingProgram
+5. Shift all dayDate fields using day offset
+6. Save shifted data to localStorage key: athlete-assignment-{newId}
+7. Calendar view loads this data and displays correct exercises + intensity
 ```
 
 ---
 
 ### Summary of Changes
 
-| File | Change |
-|------|--------|
-| `src/components/athletes/AthleteCalendarView.tsx` | 1. Add `handleSessionClick` handler<br>2. Pass `onSessionClick` to `AthleteCalendarWeekRow`<br>3. Replace random exercise count with real data lookup<br>4. Wire up WorkoutSessionSheet with proper props from editing hook<br>5. Add `selectedSessionInfo` state |
-
+| File | Changes |
+|------|---------|
+| `src/utils/dateShifting.ts` | Add functions to shift exercise dates, daily intensity dates, session sections, and supersets |
+| `src/components/athletes/AthleteCalendarView.tsx` | 1. Update `handleAssignProgram` to copy program workout data with date shifting<br>2. Update `calendarDays` to use stored intensity data |
+| `src/hooks/useAthleteCalendarEditing.ts` | Update initialization to properly load stored data and avoid overwriting with empty arrays |
