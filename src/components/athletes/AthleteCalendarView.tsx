@@ -1,13 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, isSameMonth, isWithinInterval } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Trash2, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trash2, Calendar, LayoutGrid, Columns } from 'lucide-react';
 import { Athlete, AthleteCalendarAssignment } from '@/types/athlete';
 import { AssignProgramDialog } from './AssignProgramDialog';
 import { useTrainingPrograms } from '@/hooks/useTrainingPrograms';
 import { useAthletes } from '@/hooks/useAthletes';
+import { useToolboxData } from '@/hooks/useToolboxData';
+import { useAthleteCalendarEditing } from '@/hooks/useAthleteCalendarEditing';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,31 +20,45 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { AthleteCalendarWeekRow } from './AthleteCalendarWeekRow';
 import { AthleteCalendarDay, AthleteCalendarSession } from './AthleteCalendarDayCell';
 import { WorkoutSessionSheet } from '@/components/microcycle-planning/WorkoutSessionSheet';
+import { MasterPlannerGrid } from '@/components/microcycle-planning/MasterPlannerGrid';
+import { IntensityLevel } from '@/types/training';
 import { cn } from '@/lib/utils';
 
 interface AthleteCalendarViewProps {
   athlete: Athlete;
 }
 
-type ViewMode = '1week' | '2week' | '4week';
+type ViewMode = '1week' | '2week' | '4week' | 'master';
 
 // Intensity color helper matching the training calendar
-const getIntensityColor = (intensity: string): string => {
-  switch (intensity) {
-    case 'off': return 'bg-gray-200';
-    case 'deload': return 'bg-blue-200';
-    case 'easy': return 'bg-green-300';
-    case 'easy-moderate': return 'bg-green-400';
-    case 'moderate': return 'bg-yellow-300';
-    case 'moderate-hard': return 'bg-orange-400';
-    case 'hard': return 'bg-red-400';
-    case 'extremely-hard': return 'bg-red-600';
-    default: return 'bg-gray-200';
-  }
+const getIntensityColor = (intensity: IntensityLevel | string): string => {
+  const colors: Record<string, string> = {
+    "off": "bg-[hsl(var(--intensity-off))] text-black border-2",
+    "deload": "bg-[hsl(var(--intensity-deload))] text-white",
+    "easy": "bg-[hsl(var(--intensity-easy))] text-white", 
+    "easy-moderate": "bg-[hsl(var(--intensity-easy-moderate))] text-white",
+    "moderate": "bg-[hsl(var(--intensity-moderate))] text-black",
+    "moderate-hard": "bg-[hsl(var(--intensity-moderate-hard))] text-white",
+    "hard": "bg-[hsl(var(--intensity-hard))] text-white",
+    "extremely-hard": "bg-[hsl(var(--intensity-extremely-hard))] text-white"
+  };
+  return colors[intensity] || "bg-muted text-muted-foreground";
 };
+
+const intensityLevels: IntensityLevel[] = ["off", "deload", "easy", "easy-moderate", "moderate", "moderate-hard", "hard", "extremely-hard"];
+
+const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -52,16 +68,62 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   const [deleteAssignment, setDeleteAssignment] = useState<AthleteCalendarAssignment | null>(null);
   const [sessionSheetOpen, setSessionSheetOpen] = useState(false);
   const [selectedSessionDate, setSelectedSessionDate] = useState<Date | null>(null);
+  
+  // Master planner state
+  const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number>(1); // 1=Monday
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
 
   const { programs } = useTrainingPrograms();
   const athleteData = useAthletes();
+  const { data: toolboxData } = useToolboxData();
 
   const assignments = useMemo(() => {
     return athleteData.getAthleteCalendarAssignments(athlete.id);
   }, [athleteData, athlete.id]);
 
-  // Calculate calendar days based on view mode
+  // Initialize selected assignment when assignments change
+  useMemo(() => {
+    if (assignments.length > 0 && !selectedAssignmentId) {
+      setSelectedAssignmentId(assignments[0].id);
+    }
+  }, [assignments, selectedAssignmentId]);
+
+  // Use the editing hook for master planner functionality
+  const editing = useAthleteCalendarEditing(selectedAssignmentId, assignments);
+
+  // Build mesocycle from assignment for MasterPlannerGrid
+  const currentMesocycleFromAssignment = useMemo(() => {
+    if (!editing.selectedAssignment) return undefined;
+    
+    const meso = editing.selectedAssignment.assignedMesocycles[0];
+    if (!meso) return undefined;
+    
+    return {
+      id: meso.id,
+      name: meso.name,
+      weeks: meso.weeks,
+      sessionsPerWeek: meso.sessionsPerWeek,
+      sessionLength: meso.sessionLength,
+      startDate: new Date(meso.startDate),
+      endDate: new Date(meso.endDate),
+      duration: meso.duration,
+      intensity: meso.intensity as any,
+      microcycles: meso.microcycles.map(m => ({
+        id: m.id,
+        name: m.name,
+        duration: m.duration,
+        intensity: m.intensity as any,
+      })),
+      trainingMethods: [],
+      trainingQualities: meso.trainingQualities,
+      allocatedSubGoals: meso.allocatedSubGoals,
+    };
+  }, [editing.selectedAssignment]);
+
+  // Calculate calendar days based on view mode (for calendar view)
   const calendarDays = useMemo((): AthleteCalendarDay[] => {
+    if (viewMode === 'master') return [];
+    
     const start = startOfWeek(currentDate, { weekStartsOn: 1 });
     let end: Date;
 
@@ -166,11 +228,14 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
 
   // Calculate date range display
   const dateRangeDisplay = useMemo(() => {
+    if (viewMode === 'master' && editing.selectedAssignment) {
+      return `${format(new Date(editing.selectedAssignment.startDate), 'MMM d')} - ${format(new Date(editing.selectedAssignment.endDate), 'MMM d, yyyy')}`;
+    }
     if (calendarDays.length === 0) return '';
     const firstDay = calendarDays[0].date;
     const lastDay = calendarDays[calendarDays.length - 1].date;
     return `${format(firstDay, 'MMM d')} - ${format(lastDay, 'MMM d, yyyy')}`;
-  }, [calendarDays]);
+  }, [calendarDays, viewMode, editing.selectedAssignment]);
 
   const handlePrevious = () => {
     setCurrentDate(prev => subWeeks(prev, 1));
@@ -214,7 +279,15 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     }
   };
 
+  const handleViewModeChange = (mode: string) => {
+    if (mode) {
+      setViewMode(mode as ViewMode);
+    }
+  };
+
   const weekDayHeaders = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  const isMasterMode = viewMode === 'master';
 
   return (
     <div className="space-y-4">
@@ -231,64 +304,185 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
               </span>
             </div>
 
-            {/* Right: View Mode + Navigation */}
-            <div className="flex items-center gap-2">
-              {/* View Mode Selector */}
-              <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
-                {(['1week', '2week', '4week'] as ViewMode[]).map((mode) => (
-                  <Button
-                    key={mode}
-                    variant={viewMode === mode ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode(mode)}
-                    className="h-7 px-3 text-xs"
-                  >
-                    {mode === '1week' ? '1W' : mode === '2week' ? '2W' : '4W'}
-                  </Button>
-                ))}
-              </div>
+            {/* Center/Right: Controls */}
+            <div className="flex items-center gap-3">
+              {/* View Mode Toggle (Calendar vs Master Planner) */}
+              <ToggleGroup type="single" value={isMasterMode ? 'master' : 'calendar'} onValueChange={(v) => {
+                if (v === 'master') {
+                  setViewMode('master');
+                } else if (v === 'calendar') {
+                  setViewMode('4week');
+                }
+              }}>
+                <ToggleGroupItem value="calendar" aria-label="Calendar view" className="h-8 px-3 gap-1.5">
+                  <LayoutGrid className="h-4 w-4" />
+                  <span className="text-xs">Calendar</span>
+                </ToggleGroupItem>
+                <ToggleGroupItem value="master" aria-label="Master Planner view" className="h-8 px-3 gap-1.5">
+                  <Columns className="h-4 w-4" />
+                  <span className="text-xs">Master Planner</span>
+                </ToggleGroupItem>
+              </ToggleGroup>
 
-              {/* Navigation */}
-              <Button variant="outline" size="icon" onClick={handlePrevious}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleToday}>
-                Today
-              </Button>
-              <Button variant="outline" size="icon" onClick={handleNext}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+              {/* Master Planner specific controls */}
+              {isMasterMode && (
+                <>
+                  {/* Day of Week Selector */}
+                  <Select 
+                    value={selectedDayOfWeek.toString()} 
+                    onValueChange={(v) => setSelectedDayOfWeek(parseInt(v))}
+                  >
+                    <SelectTrigger className="w-32 h-8">
+                      <SelectValue placeholder="Select Day" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DAY_NAMES.map((day, idx) => (
+                        <SelectItem key={idx} value={(idx + 1).toString()}>{day}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {/* Assignment Selector (if multiple) */}
+                  {assignments.length > 1 && (
+                    <Select 
+                      value={selectedAssignmentId || ''} 
+                      onValueChange={setSelectedAssignmentId}
+                    >
+                      <SelectTrigger className="w-40 h-8">
+                        <SelectValue placeholder="Select Program" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {assignments.map(a => (
+                          <SelectItem key={a.id} value={a.id}>{a.programName}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </>
+              )}
+
+              {/* Calendar view controls */}
+              {!isMasterMode && (
+                <>
+                  {/* View Mode Selector */}
+                  <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+                    {(['1week', '2week', '4week'] as const).map((mode) => (
+                      <Button
+                        key={mode}
+                        variant={viewMode === mode ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => setViewMode(mode)}
+                        className="h-7 px-3 text-xs"
+                      >
+                        {mode === '1week' ? '1W' : mode === '2week' ? '2W' : '4W'}
+                      </Button>
+                    ))}
+                  </div>
+
+                  {/* Navigation */}
+                  <Button variant="outline" size="icon" onClick={handlePrevious}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleToday}>
+                    Today
+                  </Button>
+                  <Button variant="outline" size="icon" onClick={handleNext}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </CardHeader>
 
         <CardContent>
-          {/* Day Headers */}
-          <div className="grid grid-cols-7 gap-2 mb-4">
-            {weekDayHeaders.map(day => (
-              <div
-                key={day}
-                className="text-center text-sm font-medium text-muted-foreground py-2"
-              >
-                {day}
+          {isMasterMode ? (
+            // Master Planner Grid
+            assignments.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+                <Calendar className="h-12 w-12 mb-4 opacity-50" />
+                <p>No programs assigned yet.</p>
+                <p className="text-sm">Assign a program to view the Master Planner.</p>
               </div>
-            ))}
-          </div>
-
-          {/* Week Rows */}
-          <div className="space-y-6">
-            {weeks.map((week, idx) => (
-              <AthleteCalendarWeekRow
-                key={`week-${idx}`}
-                week={week}
-                weekIdx={idx}
-                onDayClick={handleDayClick}
-                onAddSession={handleAddSession}
-                onDeleteAssignment={handleDeleteAssignmentById}
+            ) : !editing.selectedAssignment ? (
+              <div className="flex items-center justify-center h-64 text-muted-foreground">
+                Select a program to view
+              </div>
+            ) : (
+              <MasterPlannerGrid
+                calendarDays={editing.allAssignmentDays}
+                selectedDayOfWeek={selectedDayOfWeek}
                 getIntensityColor={getIntensityColor}
+                dailyIntensityData={editing.dailyIntensityData}
+                parameterValues={editing.parameterValues}
+                currentMesocycle={currentMesocycleFromAssignment}
+                trainingDays={editing.trainingDays}
+                toolboxData={toolboxData}
+                onParameterChange={editing.handleParameterChange}
+                sessionSections={editing.sessionSections}
+                supersets={editing.supersets}
+                onSessionNameChange={editing.handleSessionNameChange}
+                onSessionCommentChange={editing.handleSessionCommentChange}
+                onSectionCommentChange={editing.handleSectionCommentChange}
+                onExerciseNotesChange={editing.handleExerciseNotesChange}
+                onExerciseEachSideChange={editing.handleExerciseEachSideChange}
+                onExerciseAutoCalcChange={editing.handleExerciseAutoCalcChange}
+                onDayIntensityChange={editing.handleDayIntensityChange}
+                onSessionIntensityChange={editing.handleSessionIntensityChange}
+                intensityLevels={intensityLevels}
+                onSectionReorder={editing.handleSectionReorder}
+                onExerciseReorder={editing.handleExerciseReorder}
+                onAddSectionToSession={editing.handleAddSectionToSession}
+                onAddExerciseToSection={editing.handleAddExerciseToSection}
+                onExerciseDuplicate={editing.handleExerciseDuplicate}
+                onExerciseDelete={editing.handleExerciseDelete}
+                onToggleSuperset={editing.handleToggleSuperset}
+                onSectionDuplicate={editing.handleSectionDuplicate}
+                onSectionDelete={editing.handleSectionDelete}
+                onCopySession={editing.handleCopySession}
+                onDeleteSession={editing.handleDeleteSession}
+                onPasteSession={editing.handlePasteSession}
+                copiedSession={editing.copiedSession}
+                onCopyDay={editing.handleCopyDay}
+                onClearDay={editing.handleClearDay}
+                onPasteDay={editing.handlePasteDay}
+                copiedDay={editing.copiedDay}
+                onAddSession={editing.handleAddSession}
+                allExerciseDistribution={editing.exerciseDistribution}
+                onExerciseChange={editing.handleExerciseChange}
               />
-            ))}
-          </div>
+            )
+          ) : (
+            // Calendar View
+            <>
+              {/* Day Headers */}
+              <div className="grid grid-cols-7 gap-2 mb-4">
+                {weekDayHeaders.map(day => (
+                  <div
+                    key={day}
+                    className="text-center text-sm font-medium text-muted-foreground py-2"
+                  >
+                    {day}
+                  </div>
+                ))}
+              </div>
+
+              {/* Week Rows */}
+              <div className="space-y-6">
+                {weeks.map((week, idx) => (
+                  <AthleteCalendarWeekRow
+                    key={`week-${idx}`}
+                    week={week}
+                    weekIdx={idx}
+                    onDayClick={handleDayClick}
+                    onAddSession={handleAddSession}
+                    onDeleteAssignment={handleDeleteAssignmentById}
+                    getIntensityColor={getIntensityColor}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -305,10 +499,24 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 .map(assignment => (
                   <div
                     key={assignment.id}
-                    className="flex items-center justify-between p-3 rounded-lg border"
+                    className={cn(
+                      "flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors",
+                      selectedAssignmentId === assignment.id && isMasterMode
+                        ? "border-primary bg-primary/5"
+                        : "hover:bg-muted/50"
+                    )}
+                    onClick={() => {
+                      setSelectedAssignmentId(assignment.id);
+                      if (!isMasterMode) {
+                        setViewMode('master');
+                      }
+                    }}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-3 h-3 rounded-full bg-primary" />
+                      <div className={cn(
+                        "w-3 h-3 rounded-full",
+                        selectedAssignmentId === assignment.id ? "bg-primary" : "bg-muted-foreground/30"
+                      )} />
                       <div>
                         <p className="font-medium">{assignment.programName}</p>
                         <p className="text-sm text-muted-foreground">
@@ -324,7 +532,10 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => setDeleteAssignment(assignment)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteAssignment(assignment);
+                        }}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
