@@ -156,7 +156,7 @@ export function AthleteCalendarDayCell({
           )}
 
           {/* Day-level Menu */}
-          {day.isCurrentMonth && day.assignmentId && onDeleteAssignment && (
+          {day.assignmentId && onDeleteAssignment && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                 <button className="h-5 w-5 flex items-center justify-center rounded hover:bg-accent transition-colors">
@@ -227,30 +227,28 @@ export function AthleteCalendarDayCell({
       ) : (
         /* Empty Day - Show Add Dropdown */
         <div className="flex flex-col items-center justify-center h-[calc(100%-40px)]">
-          {day.isCurrentMonth && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-7 w-7"
-                  title="Add to calendar"
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="center" className="z-[100] bg-background">
-                <DropdownMenuItem onClick={() => onDayClick?.(day.date)}>
-                  <CalendarPlus className="mr-2 h-4 w-4" />
-                  Assign Program
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onAddSession?.(day.date)}>
-                  <Dumbbell className="mr-2 h-4 w-4" />
-                  Add Session
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-7 w-7"
+                title="Add to calendar"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" className="z-[100] bg-background">
+              <DropdownMenuItem onClick={() => onDayClick?.(day.date)}>
+                <CalendarPlus className="mr-2 h-4 w-4" />
+                Assign Program
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onAddSession?.(day.date)}>
+                <Dumbbell className="mr-2 h-4 w-4" />
+                Add Session
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       )}
     </div>
