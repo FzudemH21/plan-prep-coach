@@ -215,69 +215,73 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         assignmentId = assignment.id;
         programName = assignment.programName;
 
-        // Calculate which day within the assignment this is
-        const assignmentStart = new Date(assignment.startDate);
-        const dayOffset = Math.floor((date.getTime() - assignmentStart.getTime()) / (1000 * 60 * 60 * 24));
-
-        // Find the corresponding mesocycle and microcycle
-        let currentOffset = 0;
-        for (const meso of assignment.assignedMesocycles) {
-          const mesoStart = new Date(meso.startDate);
-          const mesoEnd = new Date(meso.endDate);
-          
-          if (date >= mesoStart && date <= mesoEnd) {
-            // This day is within this mesocycle
-            const dayWithinMeso = Math.floor((date.getTime() - mesoStart.getTime()) / (1000 * 60 * 60 * 24));
-            
-            // Find which microcycle this day belongs to
-            let microOffset = 0;
-            for (const micro of meso.microcycles) {
-              if (dayWithinMeso >= microOffset && dayWithinMeso < microOffset + micro.duration) {
-                // This day is within this microcycle
-                const dayWithinMicro = dayWithinMeso - microOffset;
-                
-                // Create a session for this day
-                const sessionId = `${assignment.id}-${dateString}-0`;
-                
-                // Get data from cache for this assignment
-                const cachedData = assignmentDataCache[assignment.id];
-                
-                // Get actual exercise count from stored assignment data
-                let exerciseCount = 0;
-                if (cachedData?.exerciseDistribution) {
-                  exerciseCount = cachedData.exerciseDistribution.filter(
-                    (ex: any) => ex.dayDate === dateString && ex.sessionIndex === 0
-                  ).length;
-                }
-                
-                // Get actual day intensity from stored daily intensity data
-                let dayIntensity: IntensityLevel = 'moderate';
-                if (cachedData?.dailyIntensity) {
-                  const storedDayIntensity = cachedData.dailyIntensity.find(
-                    (d: any) => d.date === dateString
-                  );
-                  if (storedDayIntensity?.intensity) {
-                    dayIntensity = storedDayIntensity.intensity as IntensityLevel;
-                  }
-                } else {
-                  // Fallback to mesocycle intensity only if no stored data
-                  dayIntensity = (meso.intensity || 'moderate') as IntensityLevel;
-                }
-                
-                sessions.push({
-                  id: sessionId,
-                  sessionIndex: 0,
-                  sessionName: `${meso.name} - Day ${dayWithinMicro + 1}`,
-                  exerciseCount,
-                  intensity: dayIntensity,
-                });
-                break;
-              }
-              microOffset += micro.duration;
-            }
-            break;
+        // Get data from cache for this assignment
+        const cachedData = assignmentDataCache[assignment.id];
+        
+        // Find trainingDay from cached data for this specific date
+        const trainingDay = cachedData?.trainingDays?.find((td: any) => td.date === dateString);
+        
+        // Get number of sessions from daySplitStates or trainingDay
+        const numSessions = cachedData?.daySplitStates?.[dateString] ?? trainingDay?.sessions ?? 1;
+        
+        // Get day intensity from dailyIntensity data
+        let dayIntensity: IntensityLevel = 'moderate';
+        if (cachedData?.dailyIntensity) {
+          const storedDayIntensity = cachedData.dailyIntensity.find(
+            (d: any) => d.date === dateString
+          );
+          if (storedDayIntensity?.intensity) {
+            dayIntensity = storedDayIntensity.intensity as IntensityLevel;
           }
-          currentOffset += meso.duration;
+        }
+        
+        // Collect test/event names
+        if (trainingDay?.testNames?.length > 0) {
+          testNames = [...testNames, ...trainingDay.testNames];
+        }
+        if (trainingDay?.eventNames?.length > 0) {
+          eventNames = [...eventNames, ...trainingDay.eventNames];
+        }
+        
+        // Check if this is a training day (either has exercises or is marked as training day)
+        const hasExercises = cachedData?.exerciseDistribution?.some((ex: any) => ex.dayDate === dateString);
+        const isTrainingDay = hasExercises || trainingDay?.isTrainingDay;
+        
+        if (isTrainingDay) {
+          // Create one session entry per session on this day
+          for (let sessionIdx = 0; sessionIdx < numSessions; sessionIdx++) {
+            const sessionId = `${assignment.id}-${dateString}-${sessionIdx}`;
+            
+            // Get real session name from trainingDay
+            const sessionName = trainingDay?.sessionNames?.[sessionIdx] || `Session ${sessionIdx + 1}`;
+            
+            // Get exercise count for this specific session
+            let exerciseCount = 0;
+            if (cachedData?.exerciseDistribution) {
+              exerciseCount = cachedData.exerciseDistribution.filter(
+                (ex: any) => ex.dayDate === dateString && ex.sessionIndex === sessionIdx
+              ).length;
+            }
+            
+            // Get session-specific intensity if different from day
+            let sessionIntensity = dayIntensity;
+            // Check for stored session intensity (mesocycle-specific key format)
+            if (trainingDay?.mesocycleId && cachedData?.parameterValues) {
+              const sessionIntensityKey = `sessionIntensity_${trainingDay.mesocycleId}_${dateString}_${sessionIdx}`;
+              if (cachedData.parameterValues[sessionIntensityKey]) {
+                sessionIntensity = cachedData.parameterValues[sessionIntensityKey] as IntensityLevel;
+              }
+            }
+            
+            sessions.push({
+              id: sessionId,
+              sessionIndex: sessionIdx,
+              sessionName,
+              exerciseCount,
+              intensity: sessionIntensity,
+              assignmentId: assignment.id,
+            });
+          }
         }
       });
 
@@ -341,16 +345,14 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     setSessionSheetOpen(true);
   };
 
-  const handleSessionClick = useCallback((dayDate: string, sessionIndex: number) => {
-    // Find which assignment this day belongs to
-    const dayAssignments = assignments.filter(assignment => {
-      const start = new Date(assignment.startDate);
-      const end = new Date(assignment.endDate);
-      const clickedDate = new Date(dayDate);
-      return clickedDate >= start && clickedDate <= end;
-    });
-
-    const assignmentId = dayAssignments[0]?.id || '';
+  const handleSessionClick = useCallback((dayDate: string, sessionIndex: number, assignmentId: string) => {
+    console.log('[handleSessionClick] Clicked:', { dayDate, sessionIndex, assignmentId });
+    
+    // Use the provided assignmentId directly (no guessing)
+    if (assignmentId) {
+      // Set the selected assignment BEFORE opening the sheet
+      setSelectedAssignmentId(assignmentId);
+    }
     
     setSelectedSessionInfo({
       dayDate,
@@ -358,7 +360,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
       assignmentId,
     });
     setSessionSheetOpen(true);
-  }, [assignments]);
+  }, []);
 
   const handleAssignProgram = useCallback((assignment: Omit<AthleteCalendarAssignment, 'id' | 'createdAt'>) => {
     // Create the assignment and get the new ID
@@ -777,54 +779,73 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
       </AlertDialog>
 
       {/* Workout Session Sheet for viewing/editing sessions */}
-      <WorkoutSessionSheet
-        isOpen={sessionSheetOpen}
-        onClose={() => {
-          setSessionSheetOpen(false);
-          setSelectedSessionInfo(null);
-        }}
-        dayDate={selectedSessionInfo?.dayDate || ''}
-        sessionIndex={selectedSessionInfo?.sessionIndex || 0}
-        exercises={editing.exerciseDistribution.filter(
-          ex => ex.dayDate === selectedSessionInfo?.dayDate && ex.sessionIndex === selectedSessionInfo?.sessionIndex
-        ).map(ex => ({
-          ...ex,
-          id: ex.id || `${ex.exerciseId}-${ex.dayDate}-${ex.sessionIndex}`,
-        }))}
-        mesocycleId={editing.selectedAssignment?.assignedMesocycles[0]?.id || ''}
-        microcycleIndex={0}
-        parameterValues={editing.parameterValues}
-        onSaveParameters={(mesocycleId, microcycleIndex, methodId, sessionIndex, exerciseId, parameters) => {
-          // Adapt the WorkoutSessionSheet signature to the editing hook signature
-          Object.entries(parameters).forEach(([paramName, value]) => {
-            editing.handleParameterChange(
-              selectedSessionInfo?.dayDate || '',
-              sessionIndex,
-              methodId,
-              '', // categoryName - not used in this context
-              paramName,
-              value
-            );
-          });
-        }}
-        dailyIntensityData={editing.dailyIntensityData}
-        onIntensityChange={editing.handleDayIntensityChange}
-        onSessionIntensityChange={editing.handleSessionIntensityChange}
-        getIntensityColor={getIntensityColor}
-        intensityLevels={intensityLevels}
-        sessionSections={editing.sessionSections}
-        supersets={editing.supersets}
-        onSectionsChange={(sections) => editing.setSessionSections(sections)}
-        onSupersetsChange={(s) => editing.setSupersets(s)}
-        toolboxData={toolboxData}
-        allExerciseDistribution={editing.exerciseDistribution.map(ex => ({
-          ...ex,
-          id: ex.id || `${ex.exerciseId}-${ex.dayDate}-${ex.sessionIndex}`,
-        }))}
-        onDistributionChange={(distribution) => {
-          editing.setExerciseDistribution(distribution as any);
-        }}
-      />
+      {selectedSessionInfo && selectedSessionInfo.dayDate && selectedSessionInfo.assignmentId && (
+        <WorkoutSessionSheet
+          isOpen={sessionSheetOpen}
+          onClose={() => {
+            setSessionSheetOpen(false);
+            setSelectedSessionInfo(null);
+          }}
+          dayDate={selectedSessionInfo.dayDate}
+          sessionIndex={selectedSessionInfo.sessionIndex}
+          exercises={editing.exerciseDistribution.filter(
+            ex => ex.dayDate === selectedSessionInfo.dayDate && ex.sessionIndex === selectedSessionInfo.sessionIndex
+          ).map(ex => ({
+            ...ex,
+            id: ex.id || `${ex.exerciseId}-${ex.dayDate}-${ex.sessionIndex}`,
+          }))}
+          mesocycleId={(() => {
+            // Find the correct mesocycleId from trainingDays for this date
+            const trainingDay = editing.trainingDays.find(td => td.date === selectedSessionInfo.dayDate);
+            if (trainingDay?.mesocycleId) return trainingDay.mesocycleId;
+            // Fallback to first mesocycle
+            return editing.selectedAssignment?.assignedMesocycles[0]?.id || '';
+          })()}
+          microcycleIndex={(() => {
+            // Find the correct microcycleIndex from trainingDays for this date
+            const trainingDay = editing.trainingDays.find(td => td.date === selectedSessionInfo.dayDate);
+            if (trainingDay?.mesocycleId && trainingDay?.microcycleId) {
+              const meso = editing.selectedAssignment?.assignedMesocycles.find(m => m.id === trainingDay.mesocycleId);
+              if (meso) {
+                const idx = meso.microcycles.findIndex(mic => mic.id === trainingDay.microcycleId);
+                if (idx >= 0) return idx;
+              }
+            }
+            return 0;
+          })()}
+          parameterValues={editing.parameterValues}
+          onSaveParameters={(mesocycleId, microcycleIndex, methodId, sessionIndex, exerciseId, parameters) => {
+            // Adapt the WorkoutSessionSheet signature to the editing hook signature
+            Object.entries(parameters).forEach(([paramName, value]) => {
+              editing.handleParameterChange(
+                selectedSessionInfo.dayDate,
+                sessionIndex,
+                methodId,
+                '', // categoryName - not used in this context
+                paramName,
+                value
+              );
+            });
+          }}
+          dailyIntensityData={editing.dailyIntensityData}
+          onIntensityChange={editing.handleDayIntensityChange}
+          onSessionIntensityChange={editing.handleSessionIntensityChange}
+          getIntensityColor={getIntensityColor}
+          intensityLevels={intensityLevels}
+          sessionSections={editing.sessionSections}
+          supersets={editing.supersets}
+          onSectionsChange={(sections) => editing.setSessionSections(sections)}
+          onSupersetsChange={(s) => editing.setSupersets(s)}
+          toolboxData={toolboxData}
+          allExerciseDistribution={editing.exerciseDistribution.map(ex => ({
+            ...ex,
+            id: ex.id || `${ex.exerciseId}-${ex.dayDate}-${ex.sessionIndex}`,
+          }))}
+          onDistributionChange={(distribution) => {
+            editing.setExerciseDistribution(distribution as any);
+          }}
+        />
+      )}
     </div>
   );
 }

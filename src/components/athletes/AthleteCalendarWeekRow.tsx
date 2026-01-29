@@ -4,7 +4,7 @@ import { AthleteCalendarDayCell, AthleteCalendarDay } from './AthleteCalendarDay
 interface AthleteCalendarWeekRowProps {
   week: AthleteCalendarDay[];
   weekIdx: number;
-  onSessionClick?: (dayDate: string, sessionIndex: number) => void;
+  onSessionClick?: (dayDate: string, sessionIndex: number, assignmentId: string) => void;
   onDayClick?: (date: Date) => void;
   onAddSession?: (date: Date) => void;
   onDeleteAssignment?: (assignmentId: string) => void;
