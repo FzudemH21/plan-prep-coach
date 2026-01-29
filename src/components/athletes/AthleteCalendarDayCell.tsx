@@ -62,7 +62,7 @@ export function AthleteCalendarDayCell({
     <div
       className={cn(
         "min-h-[140px] border rounded-lg p-3 transition-all relative",
-        day.isCurrentMonth ? "bg-card" : "bg-muted/30",
+        "bg-card",
         !hasTraining && "cursor-default",
         isSpecialDay && "border-red-500 border-2"
       )}
@@ -76,7 +76,7 @@ export function AthleteCalendarDayCell({
               "text-sm font-medium flex items-center justify-center shrink-0",
               isTodayDate && "bg-primary text-primary-foreground rounded-full w-7 h-7",
               !isTodayDate && isSpecialDay && "rounded-full w-7 h-7",
-              !isTodayDate && !day.isCurrentMonth && "text-muted-foreground",
+              
               !isTodayDate && hasTraining && !isSpecialDay && "text-primary font-semibold"
             )}
           >
