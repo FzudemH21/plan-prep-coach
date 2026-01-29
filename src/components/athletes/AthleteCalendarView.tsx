@@ -67,7 +67,11 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [deleteAssignment, setDeleteAssignment] = useState<AthleteCalendarAssignment | null>(null);
   const [sessionSheetOpen, setSessionSheetOpen] = useState(false);
-  const [selectedSessionDate, setSelectedSessionDate] = useState<Date | null>(null);
+  const [selectedSessionInfo, setSelectedSessionInfo] = useState<{
+    dayDate: string;
+    sessionIndex: number;
+    assignmentId: string;
+  } | null>(null);
   
   // Master planner state
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number>(1); // 1=Monday
@@ -184,14 +188,30 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 // This day is within this microcycle
                 const dayWithinMicro = dayWithinMeso - microOffset;
                 
-                // Create a session for this day (simplified - assumes one session per day)
-                // In reality, you'd parse the full session data from the assignment
+                // Create a session for this day
                 const sessionId = `${assignment.id}-${dateString}-0`;
+                
+                // Get actual exercise count from stored assignment data
+                let exerciseCount = 0;
+                const storageKey = `athlete-assignment-${assignment.id}`;
+                try {
+                  const savedData = localStorage.getItem(storageKey);
+                  if (savedData) {
+                    const parsed = JSON.parse(savedData);
+                    const storedExercises = parsed.exerciseDistribution || [];
+                    exerciseCount = storedExercises.filter(
+                      (ex: any) => ex.dayDate === dateString && ex.sessionIndex === 0
+                    ).length;
+                  }
+                } catch (e) {
+                  // Ignore parse errors, default to 0
+                }
+                
                 sessions.push({
                   id: sessionId,
                   sessionIndex: 0,
                   sessionName: `${meso.name} - Day ${dayWithinMicro + 1}`,
-                  exerciseCount: Math.floor(Math.random() * 8) + 3, // Placeholder - would come from actual data
+                  exerciseCount,
                   intensity: meso.intensity || 'moderate',
                 });
                 break;
@@ -255,9 +275,33 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   };
 
   const handleAddSession = (date: Date) => {
-    setSelectedSessionDate(date);
+    const dateString = format(date, 'yyyy-MM-dd');
+    setSelectedSessionInfo({
+      dayDate: dateString,
+      sessionIndex: 0,
+      assignmentId: '',
+    });
     setSessionSheetOpen(true);
   };
+
+  const handleSessionClick = useCallback((dayDate: string, sessionIndex: number) => {
+    // Find which assignment this day belongs to
+    const dayAssignments = assignments.filter(assignment => {
+      const start = new Date(assignment.startDate);
+      const end = new Date(assignment.endDate);
+      const clickedDate = new Date(dayDate);
+      return clickedDate >= start && clickedDate <= end;
+    });
+
+    const assignmentId = dayAssignments[0]?.id || '';
+    
+    setSelectedSessionInfo({
+      dayDate,
+      sessionIndex,
+      assignmentId,
+    });
+    setSessionSheetOpen(true);
+  }, [assignments]);
 
   const handleAssignProgram = (assignment: Omit<AthleteCalendarAssignment, 'id' | 'createdAt'>) => {
     athleteData.createCalendarAssignment(athlete.id, assignment);
@@ -474,6 +518,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                     key={`week-${idx}`}
                     week={week}
                     weekIdx={idx}
+                    onSessionClick={handleSessionClick}
                     onDayClick={handleDayClick}
                     onAddSession={handleAddSession}
                     onDeleteAssignment={handleDeleteAssignmentById}
@@ -579,17 +624,54 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Workout Session Sheet for adding ad-hoc sessions */}
+      {/* Workout Session Sheet for viewing/editing sessions */}
       <WorkoutSessionSheet
         isOpen={sessionSheetOpen}
-        onClose={() => setSessionSheetOpen(false)}
-        dayDate={selectedSessionDate ? format(selectedSessionDate, 'yyyy-MM-dd') : ''}
-        sessionIndex={0}
-        exercises={[]}
-        mesocycleId=""
+        onClose={() => {
+          setSessionSheetOpen(false);
+          setSelectedSessionInfo(null);
+        }}
+        dayDate={selectedSessionInfo?.dayDate || ''}
+        sessionIndex={selectedSessionInfo?.sessionIndex || 0}
+        exercises={editing.exerciseDistribution.filter(
+          ex => ex.dayDate === selectedSessionInfo?.dayDate && ex.sessionIndex === selectedSessionInfo?.sessionIndex
+        ).map(ex => ({
+          ...ex,
+          id: ex.id || `${ex.exerciseId}-${ex.dayDate}-${ex.sessionIndex}`,
+        }))}
+        mesocycleId={editing.selectedAssignment?.assignedMesocycles[0]?.id || ''}
         microcycleIndex={0}
-        parameterValues={{}}
-        onSaveParameters={() => {}}
+        parameterValues={editing.parameterValues}
+        onSaveParameters={(mesocycleId, microcycleIndex, methodId, sessionIndex, exerciseId, parameters) => {
+          // Adapt the WorkoutSessionSheet signature to the editing hook signature
+          Object.entries(parameters).forEach(([paramName, value]) => {
+            editing.handleParameterChange(
+              selectedSessionInfo?.dayDate || '',
+              sessionIndex,
+              methodId,
+              '', // categoryName - not used in this context
+              paramName,
+              value
+            );
+          });
+        }}
+        dailyIntensityData={editing.dailyIntensityData}
+        onIntensityChange={editing.handleDayIntensityChange}
+        onSessionIntensityChange={editing.handleSessionIntensityChange}
+        getIntensityColor={getIntensityColor}
+        intensityLevels={intensityLevels}
+        sessionSections={editing.sessionSections}
+        supersets={editing.supersets}
+        onSectionsChange={(sections) => editing.setSessionSections(sections)}
+        onSupersetsChange={(s) => editing.setSupersets(s)}
+        toolboxData={toolboxData}
+        allExerciseDistribution={editing.exerciseDistribution.map(ex => ({
+          ...ex,
+          id: ex.id || `${ex.exerciseId}-${ex.dayDate}-${ex.sessionIndex}`,
+        }))}
+        onDistributionChange={(distribution) => {
+          editing.setExerciseDistribution(distribution as any);
+        }}
       />
     </div>
   );
