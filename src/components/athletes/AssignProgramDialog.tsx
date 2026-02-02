@@ -244,13 +244,23 @@ export function AssignProgramDialog({
     onAssign(assignment);
   };
 
+  // Filter programs that have at least one session/exercise
   const availablePrograms = programs.filter(p => {
+    // Must have mesocycle data
     if (!p.mesocycleData) return false;
     // Handle both formats: direct array or { mesocycles: [...] } object
     const mesocycles = Array.isArray(p.mesocycleData) 
       ? p.mesocycleData 
       : p.mesocycleData.mesocycles;
-    return Array.isArray(mesocycles) && mesocycles.length > 0;
+    if (!Array.isArray(mesocycles) || mesocycles.length === 0) return false;
+    
+    // CRITICAL: Require at least one exercise in the training calendar
+    // This ensures the program actually has workout content to copy
+    if (!p.exerciseDistribution || !Array.isArray(p.exerciseDistribution) || p.exerciseDistribution.length === 0) {
+      return false;
+    }
+    
+    return true;
   });
 
   return (
@@ -272,7 +282,7 @@ export function AssignProgramDialog({
                 <SelectContent>
                   {availablePrograms.length === 0 ? (
                     <SelectItem value="none" disabled>
-                      No programs available
+                      No programs with sessions available
                     </SelectItem>
                   ) : (
                     availablePrograms.map(program => (

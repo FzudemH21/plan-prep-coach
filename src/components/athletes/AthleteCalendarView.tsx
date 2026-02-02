@@ -394,66 +394,122 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           hasDailyIntensity: !!program.dailyIntensityData?.length,
         });
         
-        const originalStartDate = program.duration?.startDate 
-          ? new Date(program.duration.startDate) 
-          : new Date();
+        // Compute a robust originalStartDate from the earliest valid date in program data
+        // Order of precedence: trainingDays > exerciseDistribution > dailyIntensityData > duration.startDate
+        let originalStartDate: Date | null = null;
+        
+        // Try trainingDays first
+        if (program.trainingDays && Array.isArray(program.trainingDays) && program.trainingDays.length > 0) {
+          const validDates = program.trainingDays
+            .map((d: any) => new Date(d.date))
+            .filter((d: Date) => !isNaN(d.getTime()));
+          if (validDates.length > 0) {
+            originalStartDate = new Date(Math.min(...validDates.map(d => d.getTime())));
+          }
+        }
+        
+        // Try exerciseDistribution
+        if (!originalStartDate && program.exerciseDistribution && program.exerciseDistribution.length > 0) {
+          const validDates = program.exerciseDistribution
+            .map((ex: any) => new Date(ex.dayDate))
+            .filter((d: Date) => !isNaN(d.getTime()));
+          if (validDates.length > 0) {
+            originalStartDate = new Date(Math.min(...validDates.map(d => d.getTime())));
+          }
+        }
+        
+        // Try dailyIntensityData
+        if (!originalStartDate && program.dailyIntensityData && program.dailyIntensityData.length > 0) {
+          const validDates = program.dailyIntensityData
+            .map((di: any) => new Date(di.date))
+            .filter((d: Date) => !isNaN(d.getTime()));
+          if (validDates.length > 0) {
+            originalStartDate = new Date(Math.min(...validDates.map(d => d.getTime())));
+          }
+        }
+        
+        // Fallback to duration.startDate
+        if (!originalStartDate && program.duration?.startDate) {
+          const parsed = new Date(program.duration.startDate);
+          if (!isNaN(parsed.getTime())) {
+            originalStartDate = parsed;
+          }
+        }
+        
+        // If still no valid date, show error and cleanup
+        if (!originalStartDate) {
+          console.error('[handleAssignProgram] Could not determine original start date');
+          // Cleanup the created assignment - silently fail and remove broken assignment
+          athleteData.deleteCalendarAssignment(newAssignment.id);
+          return;
+        }
+        
         const newStartDate = new Date(assignment.startDate);
         
-        // Shift all program data to match the new start date
-        const shiftedExercises = program.exerciseDistribution 
-          ? shiftExerciseDates(program.exerciseDistribution, originalStartDate, newStartDate)
-          : [];
+        try {
+          // Shift all program data to match the new start date
+          const shiftedExercises = program.exerciseDistribution 
+            ? shiftExerciseDates(program.exerciseDistribution, originalStartDate, newStartDate)
+            : [];
+            
+          const shiftedDailyIntensity = program.dailyIntensityData
+            ? shiftDailyIntensityDates(program.dailyIntensityData, originalStartDate, newStartDate)
+            : [];
+            
+          const shiftedSections = program.sessionSections
+            ? Array.isArray(program.sessionSections)
+              ? shiftSessionSectionDates(program.sessionSections, originalStartDate, newStartDate)
+              : program.sessionSections
+            : [];
+            
+          const shiftedSupersets = program.supersets
+            ? shiftSupersetDates(program.supersets as any, originalStartDate, newStartDate)
+            : {};
+            
+          const shiftedTrainingDays = program.trainingDays
+            ? shiftTrainingDaysDates(program.trainingDays, originalStartDate, newStartDate)
+            : [];
+            
+          const shiftedDaySplitStates = program.daySplitStates
+            ? shiftDaySplitStatesDates(program.daySplitStates, originalStartDate, newStartDate)
+            : {};
           
-        const shiftedDailyIntensity = program.dailyIntensityData
-          ? shiftDailyIntensityDates(program.dailyIntensityData, originalStartDate, newStartDate)
-          : [];
+          // Save shifted data to localStorage
+          const storageKey = `athlete-assignment-${newAssignment.id}`;
+          const dataToSave = {
+            exerciseDistribution: shiftedExercises,
+            sessionSections: shiftedSections,
+            supersets: shiftedSupersets,
+            parameterValues: program.parameterValues || {},
+            dailyIntensity: shiftedDailyIntensity,
+            trainingDays: shiftedTrainingDays,
+            daySplitStates: shiftedDaySplitStates,
+            copiedFromProgram: program.id,
+            copiedAt: new Date().toISOString(),
+          };
           
-        const shiftedSections = program.sessionSections
-          ? Array.isArray(program.sessionSections)
-            ? shiftSessionSectionDates(program.sessionSections, originalStartDate, newStartDate)
-            : program.sessionSections
-          : [];
+          console.log('[handleAssignProgram] Saving assignment data:', {
+            storageKey,
+            exerciseCount: shiftedExercises.length,
+            sectionsCount: Array.isArray(shiftedSections) ? shiftedSections.length : Object.keys(shiftedSections).length,
+            dailyIntensityCount: shiftedDailyIntensity.length,
+            originalStartDate: originalStartDate.toISOString(),
+            newStartDate: newStartDate.toISOString(),
+          });
           
-        const shiftedSupersets = program.supersets
-          ? shiftSupersetDates(program.supersets as any, originalStartDate, newStartDate)
-          : {};
+          localStorage.setItem(storageKey, JSON.stringify(dataToSave));
           
-        const shiftedTrainingDays = program.trainingDays
-          ? shiftTrainingDaysDates(program.trainingDays, originalStartDate, newStartDate)
-          : [];
-          
-        const shiftedDaySplitStates = program.daySplitStates
-          ? shiftDaySplitStatesDates(program.daySplitStates, originalStartDate, newStartDate)
-          : {};
-        
-        // Save shifted data to localStorage
-        const storageKey = `athlete-assignment-${newAssignment.id}`;
-        const dataToSave = {
-          exerciseDistribution: shiftedExercises,
-          sessionSections: shiftedSections,
-          supersets: shiftedSupersets,
-          parameterValues: program.parameterValues || {},
-          dailyIntensity: shiftedDailyIntensity,
-          trainingDays: shiftedTrainingDays,
-          daySplitStates: shiftedDaySplitStates,
-          copiedFromProgram: program.id,
-          copiedAt: new Date().toISOString(),
-        };
-        
-        console.log('[handleAssignProgram] Saving assignment data:', {
-          storageKey,
-          exerciseCount: shiftedExercises.length,
-          sectionsCount: Array.isArray(shiftedSections) ? shiftedSections.length : Object.keys(shiftedSections).length,
-          dailyIntensityCount: shiftedDailyIntensity.length,
-        });
-        
-        localStorage.setItem(storageKey, JSON.stringify(dataToSave));
-        
-        // Update cache immediately
-        setAssignmentDataCache(prev => ({
-          ...prev,
-          [newAssignment.id]: dataToSave,
-        }));
+          // Update cache immediately
+          setAssignmentDataCache(prev => ({
+            ...prev,
+            [newAssignment.id]: dataToSave,
+          }));
+        } catch (shiftError) {
+          console.error('[handleAssignProgram] Error shifting dates:', shiftError);
+          // Cleanup the created assignment on error
+          athleteData.deleteCalendarAssignment(newAssignment.id);
+          return;
+        }
       } else {
         console.warn('[handleAssignProgram] Program not found:', assignment.programId);
       }
@@ -844,6 +900,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           onDistributionChange={(distribution) => {
             editing.setExerciseDistribution(distribution as any);
           }}
+          useExternalIntensityOnly={true}
         />
       )}
     </div>
