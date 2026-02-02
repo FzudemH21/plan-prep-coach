@@ -1,137 +1,113 @@
 
-### What’s actually going wrong (root cause)
-Right now, the Athlete Calendar “overview” and the “opened session” are reading **two different sources of truth**:
+## Step-by-step investigation summary (what’s actually happening)
 
-- **Calendar overview (grid)** is built from `assignmentDataCache[assignmentId]` (the snapshot stored in `localStorage` under `athlete-assignment-{assignmentId}`), so it can show the correct day intensity.
-- **WorkoutSessionSheet (when you click a session)** is currently fed from `useAthleteCalendarEditing(selectedAssignmentId, assignments)` — but **`selectedAssignmentId` is not being synchronized to the assignment you clicked**.  
-  So the sheet often loads the “wrong” assignment (or none), which causes:
-  - `exercisesCount = 0` (because it’s filtering exercises from the wrong assignment)
-  - Day/session intensity falling back to `moderate` (because it can’t find the correct `dailyIntensityData`)
-  - `mesocycleId` sometimes being empty (sheet is opening before required IDs exist)
+### A) Exercises “appear once, then disappear”
+This is not because the program has no exercises. The exercises are being copied into the athlete assignment key, but then they get wiped out by an **auto-save race condition**:
 
-Additionally, even when the correct assignment is selected:
-- The sheet is always passed `mesocycleId={editing.selectedAssignment?.assignedMesocycles[0]?.id || ''}` and `microcycleIndex={0}`, which can be wrong for a clicked date if you have multiple mesocycles/microcycles. That breaks parameter/intensity lookups inside the sheet and contributes to the “moderate” fallback behavior.
+- The athlete calendar loads assignment data from `localStorage` key: `athlete-assignment-{assignmentId}`.
+- `useAthleteCalendarEditing` has an “auto-save” effect that writes the current in-memory state back to that same key.
+- When you click/open a session, `selectedAssignmentId` changes → the hook starts loading the assignment…
+- But **before the load finishes**, the auto-save effect can run once with the default empty state (`exerciseDistribution = []`) and overwrite the assignment storage with empty arrays.
+- Result: you see exercises briefly, then they’re gone; leaving/re-entering the calendar shows everything reset to “moderate” and empty.
 
-Finally:
-- The calendar overview is currently hardcoding session names as `${meso.name} - Day X` instead of using the **real session names** stored in `trainingDays.sessionNames`.
+This is visible in:
+- `src/hooks/useAthleteCalendarEditing.ts` (auto-save effect around lines ~200-226)
 
----
+### B) Some programs assign with no exercises or missing days (e.g., only day 1 shows)
+There is also a separate failure mode during assignment:
 
-### Goal / Acceptance criteria
-After the fix:
-1. **Exercises appear** in the Athlete Calendar sessions (both in the overview count and inside the opened WorkoutSessionSheet).
-2. **Intensity matches**: if the overview shows “hard”, opening the workout shows Day intensity “hard” and Session intensity “hard” (unless the user explicitly changed session intensity).
-3. **Session names match the plan**: the calendar overview shows the real session names from the planning wizard, not “Mesocycle 1 / Day 1”.
+- `AthleteCalendarView.handleAssignProgram` uses `program.duration.startDate` as the “anchor” for date shifting.
+- If `program.duration.startDate` is empty or invalid, date shifting can produce errors or invalid results, and exercises won’t land on the expected dates (or may fail to save cleanly).
 
----
+This is in:
+- `src/components/athletes/AthleteCalendarView.tsx` (originalStartDate logic around lines ~397-405)
+- `src/utils/dateShifting.ts` (shift helpers assume valid dates)
 
-### Implementation plan (what I’ll change)
+### C) Intensities revert to “moderate”
+This is mostly a consequence of (A): once the assignment snapshot gets overwritten, `dailyIntensity` becomes empty and the UI falls back to “moderate”.
 
-#### 1) Make session clicks unambiguous: pass the assignmentId through the click chain
-Today, `AthleteCalendarDayCell` calls `onSessionClick(dayDate, sessionIndex)` and `AthleteCalendarView` tries to “guess” which assignment that date belongs to by scanning assignments. This is fragile and is a major source of “wrong assignment loaded”.
+Additionally, `WorkoutSessionSheet` reads session intensity from global localStorage keys:
+- `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`
+If those keys don’t exist for the athlete-assigned dates, it falls back to “moderate”.
+
+This is in:
+- `src/components/microcycle-planning/WorkoutSessionSheet.tsx` (load effect around lines ~663-692)
+
+## Implementation plan (what I will change)
+
+### 1) Fix the auto-save race condition (prevents data wipeouts)
+File: `src/hooks/useAthleteCalendarEditing.ts`
 
 Changes:
-- Update `AthleteCalendarDayCell` → `onSessionClick` to include `assignmentId`
-  - New signature: `onSessionClick(dayDate: string, sessionIndex: number, assignmentId: string)`
-- Update `AthleteCalendarWeekRow` to pass it through.
-- Update `AthleteCalendarView.handleSessionClick` to use the provided assignmentId directly.
+- Introduce a synchronous `useRef` guard (example: `loadingAssignmentIdRef.current`) that is set **immediately** when `selectedAssignmentId` changes, before state updates.
+- Update the auto-save effect to exit early if:
+  - the hook is currently loading that assignment (checked via the ref), or
+  - we haven’t completed the first successful load for that assignment yet.
+- Remove the current `setTimeout(() => setIsInitializing(false), 100)` approach and instead mark loading complete deterministically after parsing and setting state.
 
-Result: clicking a session always targets the correct assignment snapshot.
+Expected result:
+- Assignment data (exercises, intensity, sections, etc.) will not get overwritten with empty defaults during navigation/open/close.
+- Exercises will no longer “disappear” after reopening.
 
+### 2) Make assignment date shifting robust (prevents missing days / “only first day has exercises”)
+File: `src/components/athletes/AthleteCalendarView.tsx`
+
+Changes:
+- Replace `program.duration.startDate` as the sole anchor.
+- Compute a reliable `originalStartDate` using the earliest valid date found in this order:
+  1) `program.trainingDays[].date`
+  2) `program.exerciseDistribution[].dayDate`
+  3) `program.dailyIntensityData[].date`
+  4) fallback: `program.duration.startDate` only if it’s valid
+- If we still cannot compute a valid start date, show a clear toast error and do not create the assignment (or rollback the assignment creation).
+
+Also:
+- Wrap the shifting + localStorage save in a try/catch.
+- If shifting fails, immediately delete the just-created assignment metadata to avoid leaving a broken assignment in the athlete database.
+
+Expected result:
+- Exercises and training days will be shifted correctly and appear on all the correct days, not just day 1.
+
+### 3) Enforce “only assign programs that have at least one session” (your requested constraint)
 Files:
-- `src/components/athletes/AthleteCalendarDayCell.tsx`
-- `src/components/athletes/AthleteCalendarWeekRow.tsx`
+- `src/components/athletes/AssignProgramDialog.tsx`
+
+Changes:
+- Tighten `availablePrograms` filtering so a program is only assignable if it has at least one real session.
+- Practical rule (reliable with current data model): require `exerciseDistribution?.length > 0`.
+  - This ensures at least one actual workout exists, which matches your “at least one session” requirement in a way that won’t allow empty templates.
+- In the UI, show a helpful message if there are no assignable programs: “No programs with sessions available”.
+
+Expected result:
+- You can no longer assign “empty” programs that could trigger confusing states.
+
+### 4) Fix intensity mismatch inside the opened session (remove “snap back to moderate”)
+File: `src/components/microcycle-planning/WorkoutSessionSheet.tsx` (targeted change)
+and possibly small glue in:
 - `src/components/athletes/AthleteCalendarView.tsx`
 
----
+Changes:
+- Add an “external persistence” mode to `WorkoutSessionSheet` (for Athlete Calendar usage) so it does not read/write session intensity from the global `sessionIntensity_*` localStorage keys.
+- In Athlete Calendar, session intensity should be derived from:
+  - the assignment snapshot’s `dailyIntensity` for day intensity, and
+  - (optionally) a new assignment-scoped session intensity map saved inside `athlete-assignment-{id}` if we want per-session intensity overrides.
 
-#### 2) Synchronize the editing context to the clicked assignment BEFORE opening the sheet
-When the user clicks a session:
-- Set `selectedAssignmentId` to the clicked session’s `assignmentId`
-- Set `selectedSessionInfo` to `{ dayDate, sessionIndex, assignmentId }`
-- Open the sheet
+Minimum viable version (fastest and already a big improvement):
+- When used in Athlete Calendar, always initialize session intensity from the passed `dailyIntensityData` (day intensity) and do not overwrite it from global localStorage.
 
-Additionally, prevent “blank props” renders:
-- Only render/open `WorkoutSessionSheet` when `selectedSessionInfo` exists and has a non-empty `dayDate` and `assignmentId`.
-- (Optional but recommended) show a lightweight “Loading session…” state until `editing.selectedAssignment?.id === selectedSessionInfo.assignmentId`.
+Expected result:
+- When the calendar overview says “hard”, opening the session will also show “hard” and won’t revert to “moderate”.
 
-This removes the repeated console logs where `dayDate: ""` / `mesocycleId: ""` and avoids initializing the sheet against empty IDs.
+## Verification checklist (end-to-end)
+After implementing, you should be able to:
+1) Assign an existing saved program to an athlete.
+2) Open Day 1 session → see exercises.
+3) Close and reopen the same session → exercises still there.
+4) Open Day 2 session → exercises also there.
+5) Navigate out of athlete profile and back into calendar → exercises and intensities remain.
+6) Compare overview intensity vs opened session intensity → they match.
 
-Files:
-- `src/components/athletes/AthleteCalendarView.tsx`
-
----
-
-#### 3) Feed WorkoutSessionSheet the correct mesocycleId + microcycleIndex for the clicked day
-Inside AthleteCalendarView (right before rendering WorkoutSessionSheet):
-- Locate the clicked `trainingDay` from `editing.trainingDays` by `dayDate`
-- Use that to compute:
-  - `mesocycleId = trainingDay.mesocycleId` (instead of always using the first mesocycle)
-  - `microcycleIndex` by finding `trainingDay.microcycleId` within the relevant `assignedMesocycle.microcycles[]`
-
-Also pass:
-- `trainingDay={trainingDay}`
-- `totalSessionsOnDay={editing.daySplitStates[dayDate] ?? trainingDay.sessions ?? 1}`
-- `sessionNameFromState={trainingDay.sessionNames?.[sessionIndex]}`
-
-Result:
-- Day intensity lookup inside the sheet will use the correct `dailyIntensityData` and dayDate
-- Session intensity key lookups use the correct `mesocycleId`
-- Session title can show the actual session name
-
-Files:
-- `src/components/athletes/AthleteCalendarView.tsx`
-
----
-
-#### 4) Fix the calendar overview session names (and support multiple sessions per day)
-Update the `calendarDays` builder in `AthleteCalendarView.tsx`:
-- Instead of always creating a single session named `${meso.name} - Day X`, build sessions like the planning wizard does:
-  - Use cached assignment snapshot (`assignmentDataCache[assignment.id]`) to fetch:
-    - `trainingDays` (for sessionNames)
-    - `daySplitStates` (for how many sessions exist)
-    - `exerciseDistribution` (for per-session exercise counts)
-    - `dailyIntensity` (for day intensity)
-  - Create one session row per sessionIndex:
-    - `sessionName = trainingDay.sessionNames?.[i] || Session ${i+1}`
-    - `exerciseCount = number of exercises where dayDate===dateString && sessionIndex===i`
-    - `intensity = localStorage sessionIntensity (if present) else dayIntensity`
-
-Also: store assignmentId on each session object (so click handling is correct).
-
-Result:
-- Overview shows real session names (what you asked for)
-- Overview and sheet intensities align
-- Multi-session days render properly
-
-Files:
-- `src/components/athletes/AthleteCalendarView.tsx`
-- (minor typing updates) `src/components/athletes/AthleteCalendarDayCell.tsx`
-
----
-
-#### 5) Verification / debugging hooks (temporary logs)
-Add a small number of targeted logs (and remove/limit them afterward if noisy):
-- On session click: log `assignmentId`, `dayDate`, `sessionIndex`, and counts from:
-  - `assignmentDataCache[assignmentId]?.exerciseDistribution?.length`
-  - `editing.exerciseDistribution.length` after the assignment switches
-
-This will confirm whether the issue was “wrong assignment context” vs “data truly missing”.
-
-Files:
-- `src/components/athletes/AthleteCalendarView.tsx`
-
----
-
-### Why this will fix both problems you reported
-- **No exercises shown**: today the sheet is filtering exercises from the wrong assignment’s editing state; syncing `selectedAssignmentId` to the clicked assignment fixes it.
-- **Intensity mismatch**: the sheet is looking up intensity from the wrong assignment (or with wrong mesocycleId/dayDate); passing the correct `trainingDay.mesocycleId`, `microcycleIndex`, and correct assignment selection fixes it.
-- **Session names wrong in overview**: currently hardcoded; switching to `trainingDays.sessionNames` fixes it.
-
----
-
-### Files that will be changed
-- `src/components/athletes/AthleteCalendarView.tsx` (main fixes: session selection, sheet wiring, session name/intensity building)
-- `src/components/athletes/AthleteCalendarDayCell.tsx` (include assignmentId in session click)
-- `src/components/athletes/AthleteCalendarWeekRow.tsx` (pass updated click signature through)
-
+## Notes / why this will finally stabilize it
+- The biggest “it worked for a second then broke” symptom is classic for an auto-save overwrite. Fixing that race condition is the key.
+- The second major issue is invalid or inconsistent “start date anchors” causing shifting problems. Making the anchor robust prevents missing-day copying.
+- Restricting assignable programs to those with at least one session eliminates a whole class of edge cases that don’t make sense in real coaching usage.
