@@ -1,113 +1,92 @@
 
-## Step-by-step investigation summary (what’s actually happening)
+## Root Cause Analysis
 
-### A) Exercises “appear once, then disappear”
-This is not because the program has no exercises. The exercises are being copied into the athlete assignment key, but then they get wiped out by an **auto-save race condition**:
+The investigation confirms:
+1. **Exercises ARE being copied and stored** - Console logs show "2 exercises, 2 sections, 28 dailyIntensity" being loaded from storage
+2. **The data is being loaded correctly** - The `useAthleteCalendarEditing` hook successfully parses and loads the data
+3. **BUT exercises don't appear in the UI** - The filter at line 847 (`ex.dayDate === selectedSessionInfo.dayDate`) returns no matches
 
-- The athlete calendar loads assignment data from `localStorage` key: `athlete-assignment-{assignmentId}`.
-- `useAthleteCalendarEditing` has an “auto-save” effect that writes the current in-memory state back to that same key.
-- When you click/open a session, `selectedAssignmentId` changes → the hook starts loading the assignment…
-- But **before the load finishes**, the auto-save effect can run once with the default empty state (`exerciseDistribution = []`) and overwrite the assignment storage with empty arrays.
-- Result: you see exercises briefly, then they’re gone; leaving/re-entering the calendar shows everything reset to “moderate” and empty.
+### The Problem: Date Mismatch
 
-This is visible in:
-- `src/hooks/useAthleteCalendarEditing.ts` (auto-save effect around lines ~200-226)
+The exercises stored in `editing.exerciseDistribution` have `dayDate` values that don't match the calendar's `selectedSessionInfo.dayDate`. This can happen because:
 
-### B) Some programs assign with no exercises or missing days (e.g., only day 1 shows)
-There is also a separate failure mode during assignment:
+1. **The date shifting IS working** during initial assignment, BUT...
+2. **A subsequent auto-save may be overwriting the data** with unshifted dates, OR
+3. **The dates are in a different format** (e.g., ISO timestamp vs `yyyy-MM-dd` string), OR
+4. **Timezone issues** are causing off-by-one day errors
 
-- `AthleteCalendarView.handleAssignProgram` uses `program.duration.startDate` as the “anchor” for date shifting.
-- If `program.duration.startDate` is empty or invalid, date shifting can produce errors or invalid results, and exercises won’t land on the expected dates (or may fail to save cleanly).
+### The Solution: Add Debug Logging + Fix Date Comparison
 
-This is in:
-- `src/components/athletes/AthleteCalendarView.tsx` (originalStartDate logic around lines ~397-405)
-- `src/utils/dateShifting.ts` (shift helpers assume valid dates)
+I'll add diagnostic logging to identify exactly what dates the exercises have vs what the calendar is looking for. Then I'll implement a robust fix.
 
-### C) Intensities revert to “moderate”
-This is mostly a consequence of (A): once the assignment snapshot gets overwritten, `dailyIntensity` becomes empty and the UI falls back to “moderate”.
+---
 
-Additionally, `WorkoutSessionSheet` reads session intensity from global localStorage keys:
-- `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`
-If those keys don’t exist for the athlete-assigned dates, it falls back to “moderate”.
+## Implementation Plan
 
-This is in:
-- `src/components/microcycle-planning/WorkoutSessionSheet.tsx` (load effect around lines ~663-692)
+### Step 1: Add Diagnostic Logging (to pinpoint the exact issue)
+**File: `src/hooks/useAthleteCalendarEditing.ts`**
 
-## Implementation plan (what I will change)
+Add detailed logging when loading exercises to show the actual `dayDate` values:
+- Log the first few exercise dates to see the format
+- Log the trainingDays dates to compare
 
-### 1) Fix the auto-save race condition (prevents data wipeouts)
-File: `src/hooks/useAthleteCalendarEditing.ts`
+### Step 2: Add Diagnostic Logging in the Calendar View
+**File: `src/components/athletes/AthleteCalendarView.tsx`**
 
-Changes:
-- Introduce a synchronous `useRef` guard (example: `loadingAssignmentIdRef.current`) that is set **immediately** when `selectedAssignmentId` changes, before state updates.
-- Update the auto-save effect to exit early if:
-  - the hook is currently loading that assignment (checked via the ref), or
-  - we haven’t completed the first successful load for that assignment yet.
-- Remove the current `setTimeout(() => setIsInitializing(false), 100)` approach and instead mark loading complete deterministically after parsing and setting state.
+When opening a session, log:
+- The `selectedSessionInfo.dayDate` being searched for
+- The actual `dayDate` values in `editing.exerciseDistribution`
+- The count of matching exercises
 
-Expected result:
-- Assignment data (exercises, intensity, sections, etc.) will not get overwritten with empty defaults during navigation/open/close.
-- Exercises will no longer “disappear” after reopening.
+### Step 3: Normalize Date Format
+**File: `src/utils/dateShifting.ts`**
 
-### 2) Make assignment date shifting robust (prevents missing days / “only first day has exercises”)
-File: `src/components/athletes/AthleteCalendarView.tsx`
+Ensure all date shifting functions handle edge cases:
+- Add validation for invalid input dates
+- Ensure consistent `yyyy-MM-dd` format output
+- Handle edge cases where `parseISO` might fail
 
-Changes:
-- Replace `program.duration.startDate` as the sole anchor.
-- Compute a reliable `originalStartDate` using the earliest valid date found in this order:
-  1) `program.trainingDays[].date`
-  2) `program.exerciseDistribution[].dayDate`
-  3) `program.dailyIntensityData[].date`
-  4) fallback: `program.duration.startDate` only if it’s valid
-- If we still cannot compute a valid start date, show a clear toast error and do not create the assignment (or rollback the assignment creation).
+### Step 4: Fix Potential Race Condition (additional safeguard)
+**File: `src/hooks/useAthleteCalendarEditing.ts`**
 
-Also:
-- Wrap the shifting + localStorage save in a try/catch.
-- If shifting fails, immediately delete the just-created assignment metadata to avoid leaving a broken assignment in the athlete database.
+Ensure the auto-save effect doesn't overwrite correctly shifted data:
+- Add a flag to track whether the current data has been "freshly loaded" and shouldn't trigger auto-save immediately
+- Prevent auto-save from running until the user has made an actual edit
 
-Expected result:
-- Exercises and training days will be shifted correctly and appear on all the correct days, not just day 1.
+### Step 5: Add Date Normalization on Load and Save
+**File: `src/hooks/useAthleteCalendarEditing.ts`**
 
-### 3) Enforce “only assign programs that have at least one session” (your requested constraint)
-Files:
-- `src/components/athletes/AssignProgramDialog.tsx`
+When loading exercises, normalize all `dayDate` values to consistent `yyyy-MM-dd` format:
+```typescript
+const storedExercises = (parsed.exerciseDistribution || []).map(ex => ({
+  ...ex,
+  dayDate: format(parseISO(ex.dayDate), 'yyyy-MM-dd'),
+}));
+```
 
-Changes:
-- Tighten `availablePrograms` filtering so a program is only assignable if it has at least one real session.
-- Practical rule (reliable with current data model): require `exerciseDistribution?.length > 0`.
-  - This ensures at least one actual workout exists, which matches your “at least one session” requirement in a way that won’t allow empty templates.
-- In the UI, show a helpful message if there are no assignable programs: “No programs with sessions available”.
+---
 
-Expected result:
-- You can no longer assign “empty” programs that could trigger confusing states.
+## Technical Details
 
-### 4) Fix intensity mismatch inside the opened session (remove “snap back to moderate”)
-File: `src/components/microcycle-planning/WorkoutSessionSheet.tsx` (targeted change)
-and possibly small glue in:
-- `src/components/athletes/AthleteCalendarView.tsx`
+### Why this happens
+The most likely cause is that when the data is saved during assignment (`handleAssignProgram`), the shifted dates are correct. But when the data is loaded and re-saved by the auto-save effect, the dates may get corrupted or reset.
 
-Changes:
-- Add an “external persistence” mode to `WorkoutSessionSheet` (for Athlete Calendar usage) so it does not read/write session intensity from the global `sessionIntensity_*` localStorage keys.
-- In Athlete Calendar, session intensity should be derived from:
-  - the assignment snapshot’s `dailyIntensity` for day intensity, and
-  - (optionally) a new assignment-scoped session intensity map saved inside `athlete-assignment-{id}` if we want per-session intensity overrides.
+Another possibility is that the original exercise dates in the program have a format like `2025-01-15T00:00:00.000Z` (ISO timestamp) instead of `2025-01-15` (date string), and the `parseISO` + `format` pattern isn't handling this correctly.
 
-Minimum viable version (fastest and already a big improvement):
-- When used in Athlete Calendar, always initialize session intensity from the passed `dailyIntensityData` (day intensity) and do not overwrite it from global localStorage.
+### The fix approach
+1. **Defensive normalization**: Always normalize `dayDate` to `yyyy-MM-dd` format when loading and comparing
+2. **Better logging**: Add specific logs to identify the exact mismatch
+3. **Validate on assignment**: Log what dates are being stored during assignment to verify shifting works
 
-Expected result:
-- When the calendar overview says “hard”, opening the session will also show “hard” and won’t revert to “moderate”.
+---
 
-## Verification checklist (end-to-end)
-After implementing, you should be able to:
-1) Assign an existing saved program to an athlete.
-2) Open Day 1 session → see exercises.
-3) Close and reopen the same session → exercises still there.
-4) Open Day 2 session → exercises also there.
-5) Navigate out of athlete profile and back into calendar → exercises and intensities remain.
-6) Compare overview intensity vs opened session intensity → they match.
+## Files to Modify
+1. `src/hooks/useAthleteCalendarEditing.ts` - Add logging + date normalization on load
+2. `src/components/athletes/AthleteCalendarView.tsx` - Add logging when opening session + defensive date comparison
+3. `src/utils/dateShifting.ts` - Add validation for edge cases
 
-## Notes / why this will finally stabilize it
-- The biggest “it worked for a second then broke” symptom is classic for an auto-save overwrite. Fixing that race condition is the key.
-- The second major issue is invalid or inconsistent “start date anchors” causing shifting problems. Making the anchor robust prevents missing-day copying.
-- Restricting assignable programs to those with at least one session eliminates a whole class of edge cases that don’t make sense in real coaching usage.
+## Expected Outcome
+After these changes:
+- Console will clearly show what dates exercises have vs what's being searched
+- Dates will be normalized to consistent format
+- Exercises will match correctly and display in the session view
