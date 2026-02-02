@@ -115,6 +115,9 @@ interface WorkoutSessionSheetProps {
   onDistributionChange?: (distribution: ExerciseDistribution[]) => void;
   // Microcycle dates for chronological session parameter assignment
   microcycleDates?: string[];
+  // When true, skip reading session intensity from global localStorage keys
+  // and always derive from dailyIntensityData (used in Athlete Calendar context)
+  useExternalIntensityOnly?: boolean;
 }
 
 export function WorkoutSessionSheet({
@@ -155,6 +158,7 @@ export function WorkoutSessionSheet({
   allExerciseDistribution,
   onDistributionChange,
   microcycleDates,
+  useExternalIntensityOnly = false,
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
   const { libraries, updateExerciseInLibrary } = useCustomLibraries();
@@ -680,15 +684,22 @@ export function WorkoutSessionSheet({
         setSessionComments('');
       }
 
-      // Load session intensity - default to day intensity
-      const intensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`;
-      const storedIntensity = localStorage.getItem(intensityKey);
-      
-      if (storedIntensity) {
-        setSessionIntensity(storedIntensity as IntensityLevel);
-      } else {
-        // Always initialize from day intensity
+      // Load session intensity - behavior depends on context
+      if (useExternalIntensityOnly) {
+        // In Athlete Calendar context: always use day intensity from props
+        // Don't read from global localStorage keys that won't match shifted dates
         setSessionIntensity(currentIntensity || 'moderate');
+      } else {
+        // In Training Wizard context: try localStorage first, then fall back to day intensity
+        const intensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`;
+        const storedIntensity = localStorage.getItem(intensityKey);
+        
+        if (storedIntensity) {
+          setSessionIntensity(storedIntensity as IntensityLevel);
+        } else {
+          // Always initialize from day intensity
+          setSessionIntensity(currentIntensity || 'moderate');
+        }
       }
 
       // Load supersets - prioritize prop, then localStorage

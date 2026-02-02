@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { format, addDays, parseISO, eachDayOfInterval } from 'date-fns';
 import { AthleteCalendarAssignment, AssignedMesocycle } from '@/types/athlete';
 import { ExerciseDistribution, SessionSection, SupersetMapping } from '@/types/microcycle-planning';
@@ -53,6 +53,10 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   
   // Flag to prevent auto-save during initial load
   const [isInitializing, setIsInitializing] = useState(false);
+  
+  // Refs for race condition prevention (synchronous guards)
+  const loadingAssignmentIdRef = useRef<string | null>(null);
+  const loadedAssignmentIdRef = useRef<string | null>(null);
   
   // Copy/paste state
   const [copiedSession, setCopiedSession] = useState<CopiedSession | null>(null);
@@ -121,6 +125,10 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     const assignment = assignments.find(a => a.id === assignmentId);
     if (!assignment) return;
     
+    // CRITICAL: Set loading guard SYNCHRONOUSLY before any state updates
+    // This prevents auto-save from overwriting data during load
+    loadingAssignmentIdRef.current = assignmentId;
+    loadedAssignmentIdRef.current = null; // Mark as not yet loaded
     setIsInitializing(true);
     
     const storageKey = `athlete-assignment-${assignmentId}`;
@@ -163,8 +171,15 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       initializeFromAssignment(assignment);
     }
     
-    // Re-enable auto-save after initial load
-    setTimeout(() => setIsInitializing(false), 100);
+    // Mark loading complete after state updates are scheduled
+    // Use queueMicrotask to ensure state updates are committed first
+    queueMicrotask(() => {
+      if (loadingAssignmentIdRef.current === assignmentId) {
+        loadingAssignmentIdRef.current = null;
+        loadedAssignmentIdRef.current = assignmentId;
+        setIsInitializing(false);
+      }
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assignments, buildTrainingDaysFromAssignment]);
 
@@ -196,9 +211,17 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     }
   }, [selectedAssignmentId, loadAssignmentForEditing]);
 
-  // Auto-save edits to localStorage
+  // Auto-save edits to localStorage with race condition guard
   useEffect(() => {
-    if (!selectedAssignmentId || isInitializing) return;
+    // CRITICAL: Multiple guards to prevent overwriting data during load
+    // 1. No assignment selected
+    if (!selectedAssignmentId) return;
+    // 2. Currently initializing (state flag)
+    if (isInitializing) return;
+    // 3. Currently loading this assignment (synchronous ref guard)
+    if (loadingAssignmentIdRef.current !== null) return;
+    // 4. This assignment hasn't been successfully loaded yet
+    if (loadedAssignmentIdRef.current !== selectedAssignmentId) return;
     
     const storageKey = `athlete-assignment-${selectedAssignmentId}`;
     const dataToSave = {
