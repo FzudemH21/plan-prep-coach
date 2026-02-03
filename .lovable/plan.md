@@ -1,111 +1,101 @@
 
 
-# Fix Intensity Not Being Copied During Paste Operations
+# UI Updates: Paste Button Styling & Week Menu Position
 
-## Problem Identified
+## Summary
 
-After analyzing the copy/paste handlers, I found specific bugs where intensity is **not properly applied when pasting to dates that already exist**:
-
-### Session Paste Bug (`handlePasteSession`)
-1. **Line 533-538**: When updating an existing day, the `intensity` field is NOT included in the update
-2. **Line 562-563**: `dailyIntensityData` keeps existing intensity instead of applying the copied source intensity
-
-### Week Paste Issue
-The week paste handler (lines 911 and 1007-1018) correctly applies intensity for new days, but may have edge cases where intensity isn't propagated correctly. The fix will ensure consistent behavior.
-
-### Day Paste - Works Correctly
-The day paste handler (lines 692-728) already updates intensity correctly in both `trainingDays` and `dailyIntensityData`.
+Two visual changes to the Athlete Calendar:
+1. Style the "Paste Session" button to match the Training Calendar (black button with white text, appears on hover)
+2. Move the week 3-dot menu to the LEFT of the "Week of February 9th" label
 
 ---
 
-## Solution
+## Change 1: Paste Session Button Styling
 
-### File: `src/hooks/useAthleteCalendarEditing.ts`
+### Current State (AthleteCalendarDayCell.tsx)
+The paste session buttons use `variant="outline"` which gives them a transparent background with a border.
 
-#### Fix 1: Session Paste - Update intensity for existing days
+### Target State (matching TrainingDayCell.tsx)
+The Training Calendar uses `variant="default"` which gives them a solid black/primary background with white text, making them more prominent and visible.
 
-**Current code (lines 526-538):**
-```typescript
-if (existingIdx >= 0) {
-  // Update existing day
-  const existingDay = updated[existingIdx];
-  const sessionNames = [...(existingDay.sessionNames || [])];
-  while (sessionNames.length <= newSessionIndex) {
-    sessionNames.push(`Session ${sessionNames.length + 1}`);
-  }
-  updated[existingIdx] = {
-    ...existingDay,
-    sessions: newSplitState,
-    sessionNames,
-    isTrainingDay: true,
-    // MISSING: intensity field!
-  };
-}
-```
+### Implementation
 
-**Fixed code:**
-```typescript
-if (existingIdx >= 0) {
-  // Update existing day - include intensity from source session
-  const existingDay = updated[existingIdx];
-  const sessionNames = [...(existingDay.sessionNames || [])];
-  while (sessionNames.length <= newSessionIndex) {
-    sessionNames.push(`Session ${sessionNames.length + 1}`);
-  }
-  updated[existingIdx] = {
-    ...existingDay,
-    sessions: newSplitState,
-    sessionNames,
-    isTrainingDay: true,
-    intensity, // FIX: Apply copied intensity
-  };
-}
-```
+**File: `src/components/athletes/AthleteCalendarDayCell.tsx`**
 
-#### Fix 2: Session Paste - Update dailyIntensityData for existing days
+Update all paste session/day buttons to use:
+- `variant="default"` instead of `variant="outline"`
+- Use `Copy` icon (like Training Calendar) instead of `ClipboardPaste` for consistency
+- Keep the hover visibility behavior using `group-hover/day:opacity-100`
 
-**Current code (lines 560-566):**
-```typescript
-setDailyIntensityData(prev => {
-  const existingIdx = prev.findIndex(di => di.date === targetDate);
-  if (existingIdx >= 0) {
-    return prev; // Keep existing intensity <-- BUG
-  }
-  return [...prev, { date: targetDate, intensity }].sort(...);
-});
-```
-
-**Fixed code:**
-```typescript
-setDailyIntensityData(prev => {
-  const updated = [...prev];
-  const existingIdx = updated.findIndex(di => di.date === targetDate);
-  if (existingIdx >= 0) {
-    // FIX: Update existing entry with copied intensity
-    updated[existingIdx] = { ...updated[existingIdx], intensity };
-    return updated;
-  }
-  return [...updated, { date: targetDate, intensity }].sort((a, b) => a.date.localeCompare(b.date));
-});
-```
+Locations to update:
+1. **Line 388-400**: Paste Session button below existing sessions
+2. **Line 429-442**: Paste Day button for empty days  
+3. **Line 444-457**: Paste Session button for empty days (when no copied day)
 
 ---
 
-## Summary of Changes
+## Change 2: Week Menu Position
 
-| Location | Issue | Fix |
-|----------|-------|-----|
-| `handlePasteSession` lines 533-538 | Missing `intensity` when updating existing day | Add `intensity` field to update object |
-| `handlePasteSession` lines 560-566 | Keeps old intensity for existing days | Update existing entry with source intensity |
+### Current State (AthleteCalendarWeekRow.tsx)
+```
+Week of Feb 9                    [Paste Week] [⋮]
+```
+The week label is on the left (`flex-1`), menu is on the right.
+
+### Target State
+```
+[⋮]  Week of Feb 9               [Paste Week]
+```
+Move the 3-dot menu to the left of the week label.
+
+### Implementation
+
+**File: `src/components/athletes/AthleteCalendarWeekRow.tsx`**
+
+Reorder the flex items in the week header:
+1. 3-dot dropdown menu (first, on the left)
+2. Week label ("Week of MMM d")
+3. Paste Week button (on the right, when applicable)
 
 ---
 
-## Expected Outcome
+## Files to Modify
 
-After this fix:
-- **Copy Session → Paste Session**: Intensity from source day is applied to target day
-- **Copy Day → Paste Day**: Already works (no changes needed)
-- **Copy Week → Paste Week**: Intensity is correctly copied from each source day
+| File | Changes |
+|------|---------|
+| `src/components/athletes/AthleteCalendarDayCell.tsx` | Change paste buttons from `variant="outline"` to `variant="default"`, update icon to `Copy` |
+| `src/components/athletes/AthleteCalendarWeekRow.tsx` | Move week 3-dot menu to the left of the week label |
 
-The intensity indicator on the calendar should now match the source day's intensity after any paste operation.
+---
+
+## Visual Comparison
+
+### Paste Session Button
+
+**Before (outline variant):**
+```
+┌─────────────────────────────┐
+│  📋 Paste Session (1)       │  (transparent with border)
+└─────────────────────────────┘
+```
+
+**After (default variant - matching Training Calendar):**
+```
+┌─────────────────────────────┐
+│  📋 Paste Session (1)       │  (solid black with white text)
+└─────────────────────────────┘
+```
+
+### Week Header
+
+**Before:**
+```
+Week of Feb 9                              [⋮]
+```
+
+**After:**
+```
+[⋮]  Week of Feb 9                    
+```
+(with Paste Week button appearing on the right when a week is copied)
 
