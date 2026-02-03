@@ -18,6 +18,7 @@ import { WorkoutSectionCard } from './WorkoutSectionCard';
 import { WorkoutArrangementSidebar } from './WorkoutArrangementSidebar';
 import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
 import { MethodSelectionDialog } from './MethodSelectionDialog';
+import { AdHocMethodSelectionDialog } from './AdHocMethodSelectionDialog';
 import { CombinedTestEventDialog } from './CombinedTestEventDialog';
 import { ParameterVisibilityPopover, ParameterVisibilityOverrides } from './ParameterVisibilityPopover';
 import { ExerciseDetailDialog } from '@/components/shared/ExerciseDetailDialog';
@@ -118,6 +119,9 @@ interface WorkoutSessionSheetProps {
   // When true, skip reading session intensity from global localStorage keys
   // and always derive from dailyIntensityData (used in Athlete Calendar context)
   useExternalIntensityOnly?: boolean;
+  // When true, use AdHocMethodSelectionDialog instead of MethodSelectionDialog
+  // Allows selecting from all toolbox methods instead of periodization-configured methods
+  isAdHocSession?: boolean;
 }
 
 export function WorkoutSessionSheet({
@@ -159,6 +163,7 @@ export function WorkoutSessionSheet({
   onDistributionChange,
   microcycleDates,
   useExternalIntensityOnly = false,
+  isAdHocSession = false,
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
   const { libraries, updateExerciseInLibrary } = useCustomLibraries();
@@ -1229,6 +1234,142 @@ export function WorkoutSessionSheet({
     setCurrentSectionId(null);
   };
 
+  // Handler for ad-hoc method selection (from toolbox, not periodization)
+  const handleAdHocMethodSelected = (
+    methodId: string,
+    categoryName: string | undefined,
+    parameterVisibility: Record<string, boolean>,
+    initialParameters: Record<string, string | number>
+  ) => {
+    if (!currentSectionId) return;
+    
+    const section = workoutSections.find(s => s.id === currentSectionId);
+    if (!section) return;
+
+    // Get method parameters from toolbox
+    const methodParts = methodId.split(' - ');
+    const toolboxCategory = methodParts[0];
+    const toolboxSubCategory = methodParts.length > 1 ? methodParts.slice(1).join(' - ') : '';
+    
+    const methodEntries = toolboxData?.entries.filter(entry => 
+      entry.category === toolboxCategory && 
+      (toolboxSubCategory === '' ? entry.subCategory === '' : entry.subCategory === toolboxSubCategory)
+    ) || [];
+
+    // Find set parameter
+    const setParamEntry = methodEntries.find(e => e.isSetParameter);
+    const setParamName = setParamEntry?.parameterName || 
+                        methodEntries.find(e => /^sets?$/i.test(e.parameterName))?.parameterName ||
+                        'Sets';
+    const setCount = Number(initialParameters[setParamName] || 3);
+
+    // Build parameters with set-based structure
+    const buildExerciseParams = (): Record<string, string | number> => {
+      const params: Record<string, string | number> = {};
+      
+      methodEntries.forEach(entry => {
+        if (entry.isFrequencyParameter) return;
+        
+        const paramName = entry.parameterName;
+        const unit = entry.parameterType === 'quantitative' && entry.options.length > 0 
+          ? entry.options[0] 
+          : undefined;
+        
+        if (unit) {
+          params[`${paramName}_unit`] = unit;
+        }
+        
+        if (entry.isSetParameter) {
+          params[paramName] = setCount;
+        } else if (setCount > 0) {
+          // Fan out to per-set keys
+          for (let i = 1; i <= setCount; i++) {
+            params[`${paramName}_set${i}`] = '';
+          }
+          params[paramName] = '';
+        } else {
+          params[paramName] = '';
+        }
+      });
+      
+      return params;
+    };
+
+    // Create new exercises
+    const newExercises = selectedExercisesForMethod.map((ex, index) => {
+      return {
+        id: `${ex.exerciseId}-${Date.now()}-${index}`,
+        exerciseId: ex.exerciseId,
+        exerciseName: ex.exerciseName,
+        methodId,
+        categoryName: categoryName || section.name,
+        order: section.exercises.length + index,
+        parameters: buildExerciseParams()
+      } as WorkoutExercise;
+    });
+
+    // Add exercises to section
+    setWorkoutSections(sections =>
+      sections.map(s => {
+        if (s.id === currentSectionId) {
+          return {
+            ...s,
+            exercises: [...s.exercises, ...newExercises]
+          };
+        }
+        return s;
+      })
+    );
+
+    // Sync to Step 1 - create ExerciseDistribution entries
+    if (onDistributionChange && allExerciseDistribution) {
+      const newDistributionEntries = selectedExercisesForMethod.map((ex, index) => ({
+        id: newExercises[index]?.id || `${ex.exerciseId}-${Date.now()}-${index}`,
+        exerciseId: ex.exerciseId,
+        exerciseName: ex.exerciseName,
+        methodId,
+        categoryName: categoryName || '',
+        subCategory: ex.subCategory,
+        dayDate,
+        sessionIndex,
+        order: section.exercises.length + index,
+        sectionId: currentSectionId,
+      }));
+      
+      onDistributionChange([...allExerciseDistribution, ...newDistributionEntries]);
+    }
+
+    // Store parameter visibility overrides
+    if (Object.keys(parameterVisibility).length > 0) {
+      const metadataKey = `workoutSessions_${mesocycleId}_${dayDate}_${sessionIndex}`;
+      try {
+        const existing = localStorage.getItem(metadataKey);
+        const parsed = existing ? JSON.parse(existing) : {};
+        
+        // Merge visibility overrides per exercise
+        newExercises.forEach(ex => {
+          parsed.parameterVisibility = parsed.parameterVisibility || {};
+          parsed.parameterVisibility[ex.id] = parameterVisibility;
+        });
+        
+        localStorage.setItem(metadataKey, JSON.stringify(parsed));
+        setParameterVisibilityOverrides(parsed.parameterVisibility || {});
+      } catch (e) {
+        console.error('Failed to save parameter visibility:', e);
+      }
+    }
+
+    // Clean up
+    setIsMethodSelectionOpen(false);
+    setSelectedExercisesForMethod([]);
+    setCurrentSectionId(null);
+    
+    toast({
+      title: "Exercise(s) Added",
+      description: `Added ${newExercises.length} exercise(s) with ${methodId}`,
+    });
+  };
+
   const handleExerciseCreated = (exercise: ExerciseSelection) => {
     // When a new exercise is created, automatically add it
     handleExercisesSelected([exercise]);
@@ -2204,21 +2345,35 @@ export function WorkoutSessionSheet({
         singleSelect={!!changeExerciseTarget}
       />
 
-      {/* Method Selection Dialog */}
-      <MethodSelectionDialog
-        isOpen={isMethodSelectionOpen}
-        onClose={() => {
-          setIsMethodSelectionOpen(false);
-          setSelectedExercisesForMethod([]);
-          setCurrentSectionId(null);
-        }}
-        onMethodSelected={handleMethodSelected}
-        availableMethods={availableMethods}
-        mesocycleId={mesocycleId}
-        microcycleIndex={microcycleIndex}
-        sessionIndex={sessionIndex}
-        needsExplicitOverlay={true}
-      />
+      {/* Method Selection Dialog - conditionally render ad-hoc or regular */}
+      {isAdHocSession && toolboxData ? (
+        <AdHocMethodSelectionDialog
+          isOpen={isMethodSelectionOpen}
+          onClose={() => {
+            setIsMethodSelectionOpen(false);
+            setSelectedExercisesForMethod([]);
+            setCurrentSectionId(null);
+          }}
+          onMethodSelected={handleAdHocMethodSelected}
+          toolboxData={toolboxData}
+          needsExplicitOverlay={true}
+        />
+      ) : (
+        <MethodSelectionDialog
+          isOpen={isMethodSelectionOpen}
+          onClose={() => {
+            setIsMethodSelectionOpen(false);
+            setSelectedExercisesForMethod([]);
+            setCurrentSectionId(null);
+          }}
+          onMethodSelected={handleMethodSelected}
+          availableMethods={availableMethods}
+          mesocycleId={mesocycleId}
+          microcycleIndex={microcycleIndex}
+          sessionIndex={sessionIndex}
+          needsExplicitOverlay={true}
+        />
+      )}
 
       {/* Combined Test/Event Dialog */}
       <CombinedTestEventDialog
