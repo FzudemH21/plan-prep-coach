@@ -928,6 +928,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           }}
           dayDate={selectedSessionInfo.dayDate}
           sessionIndex={selectedSessionInfo.sessionIndex}
+          totalSessionsOnDay={editing.daySplitStates[selectedSessionInfo.dayDate] || 1}
           exercises={editing.exerciseDistribution.filter(
             ex => ex.dayDate === selectedSessionInfo.dayDate && ex.sessionIndex === selectedSessionInfo.sessionIndex
           ).map(ex => ({

@@ -19,6 +19,8 @@ export interface WorkoutExercise {
   eachSide?: boolean; // Mark exercise as unilateral (perform reps on each side)
   autoCalculateWeight?: boolean; // Auto-calculate weight from %1RM when assigned to athlete
   autoCalculateTargetHR?: boolean; // Auto-calculate target HR from %maxHR when assigned to athlete
+  // Source of parameter values: 'toolbox' = use blank grid (ad-hoc), 'periodization' = use program method periodization
+  parameterSource?: 'toolbox' | 'periodization';
 }
 
 export interface WorkoutSession {
