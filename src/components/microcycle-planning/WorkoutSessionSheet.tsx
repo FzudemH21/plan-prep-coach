@@ -46,6 +46,8 @@ interface ExerciseDistribution {
   supersetId?: string;
   notes?: string;
   eachSide?: boolean;
+  // Source of parameter values: 'toolbox' = use blank grid, 'periodization' = use program method periodization
+  parameterSource?: 'toolbox' | 'periodization';
 }
 
 interface SessionSectionProp {
@@ -233,6 +235,80 @@ export function WorkoutSessionSheet({
             const sectionExercises = exercisesList
               .filter((ex: any) => ex.sectionId === section.id)
               .map((ex, idx) => {
+                // ===== TOOLBOX-SOURCED EXERCISES: Generate blank parameters =====
+                // If this exercise was added via ad-hoc dialog (parameterSource === 'toolbox'),
+                // skip periodization lookup entirely and build blank parameters from toolbox
+                if ((ex as any).parameterSource === 'toolbox') {
+                  console.log('[buildSectionsFromExercises] Toolbox-sourced exercise, using blank params:', ex.exerciseName);
+                  
+                  // Get method parameters from toolbox
+                  const methodParts = ex.methodId.split(' - ');
+                  const toolboxCategory = methodParts[0];
+                  const toolboxSubCategory = methodParts.length > 1 ? methodParts.slice(1).join(' - ') : '';
+                  
+                  const methodEntries = toolboxData?.entries.filter(entry => {
+                    const categoryMatch = entry.category.toLowerCase().trim() === toolboxCategory.toLowerCase().trim();
+                    const subCategoryMatch = toolboxSubCategory === '' 
+                      ? (!entry.subCategory || entry.subCategory.trim() === '')
+                      : (entry.subCategory?.toLowerCase().trim() === toolboxSubCategory.toLowerCase().trim());
+                    return categoryMatch && subCategoryMatch;
+                  }) || [];
+                  
+                  // Find set parameter
+                  const setParamEntry = methodEntries.find(e => e.isSetParameter);
+                  const setParamName = setParamEntry?.parameterName || 
+                                      methodEntries.find(e => /^sets?$/i.test(e.parameterName))?.parameterName ||
+                                      'Sets';
+                  const setCount = 3; // Default blank
+                  
+                  // Build BLANK parameters
+                  const blankParameters: Record<string, string | number> = {};
+                  blankParameters[setParamName] = setCount;
+                  
+                  methodEntries.forEach(entry => {
+                    if (entry.isFrequencyParameter) return;
+                    const paramName = entry.parameterName;
+                    
+                    // Add unit if quantitative
+                    if (entry.parameterType === 'quantitative' && entry.options.length > 0) {
+                      blankParameters[`${paramName}_unit`] = entry.options[0];
+                    }
+                    
+                    // Create per-set keys (all blank)
+                    if (!entry.isSetParameter && setCount > 0) {
+                      for (let i = 1; i <= setCount; i++) {
+                        blankParameters[`${paramName}_set${i}`] = '';
+                      }
+                    }
+                  });
+                  
+                  // Detect auto-calc units
+                  let has1RMUnit = false;
+                  let hasMaxHRUnit = false;
+                  for (const entry of methodEntries) {
+                    if (entry.parameterType === 'quantitative' && entry.options) {
+                      if (entry.options.includes('%1RM')) has1RMUnit = true;
+                      if (entry.options.includes('%maxHR') || entry.options.includes('%HRmax')) hasMaxHRUnit = true;
+                    }
+                  }
+                  
+                  return {
+                    id: (ex as any).id || `${ex.exerciseId}-${idx}`,
+                    exerciseId: ex.exerciseId,
+                    exerciseName: ex.exerciseName,
+                    methodId: ex.methodId,
+                    categoryName: ex.categoryName || '',
+                    order: (ex as any).order ?? idx,
+                    supersetId: (ex as any).supersetId,
+                    parameters: blankParameters,
+                    notes: ex.notes,
+                    autoCalculateWeight: has1RMUnit ? true : undefined,
+                    autoCalculateTargetHR: hasMaxHRUnit ? true : undefined,
+                    parameterSource: 'toolbox' as const,
+                  };
+                }
+                
+                // ===== PERIODIZATION-SOURCED EXERCISES: Use method periodization table =====
                 // Priority lookup: category-specific first (for split methods), then base method
                 const hasValidCategory = ex.categoryName && 
                   ex.categoryName !== 'Uncategorized' && 
@@ -608,6 +684,7 @@ export function WorkoutSessionSheet({
   const hasInitializedRef = useRef(false);
   
   // Sync workoutSections when dialog opens or exercises are ADDED (not deleted)
+  // CRITICAL: Merge existing parameters with new exercises to preserve toolbox-sourced blank params
   useEffect(() => {
     if (isOpen && exercises.length > 0) {
       const prevCount = prevExerciseCountRef.current;
@@ -619,7 +696,40 @@ export function WorkoutSessionSheet({
       // 3. Dialog just opened (hasInitializedRef is false)
       if (!hasInitializedRef.current || currentCount > prevCount) {
         const newSections = buildSectionsFromExercises(exercises, parameterValues);
-        setWorkoutSections(newSections);
+        
+        // MERGE: Preserve existing exercise parameters (especially toolbox-sourced blank ones)
+        // Build a map of existing exercise IDs to their state
+        const existingExerciseMap = new Map<string, WorkoutExercise>();
+        workoutSections.forEach(section => {
+          section.exercises.forEach(ex => {
+            existingExerciseMap.set(ex.id, ex);
+          });
+        });
+        
+        // Merge: for each exercise in newSections, if it already exists in workoutSections,
+        // preserve its parameters, notes, eachSide, etc.
+        const mergedSections = newSections.map(section => ({
+          ...section,
+          exercises: section.exercises.map(newEx => {
+            const existing = existingExerciseMap.get(newEx.id);
+            if (existing) {
+              // Preserve existing state (parameters, notes, etc.) - don't overwrite with rebuilt values
+              console.log('[WorkoutSessionSheet] Preserving existing params for:', newEx.exerciseName, newEx.id);
+              return {
+                ...newEx,
+                parameters: existing.parameters,
+                notes: existing.notes,
+                eachSide: existing.eachSide,
+                autoCalculateWeight: existing.autoCalculateWeight,
+                autoCalculateTargetHR: existing.autoCalculateTargetHR,
+              };
+            }
+            // New exercise - use the built parameters
+            return newEx;
+          })
+        }));
+        
+        setWorkoutSections(mergedSections);
         hasInitializedRef.current = true;
       }
       
@@ -641,7 +751,34 @@ export function WorkoutSessionSheet({
       const timeoutId = setTimeout(() => {
         if (exercises.length > 0 && !hasInitializedRef.current) {
           const newSections = buildSectionsFromExercises(exercises, parameterValues);
-          setWorkoutSections(newSections);
+          
+          // Same merge logic as above
+          const existingExerciseMap = new Map<string, WorkoutExercise>();
+          workoutSections.forEach(section => {
+            section.exercises.forEach(ex => {
+              existingExerciseMap.set(ex.id, ex);
+            });
+          });
+          
+          const mergedSections = newSections.map(section => ({
+            ...section,
+            exercises: section.exercises.map(newEx => {
+              const existing = existingExerciseMap.get(newEx.id);
+              if (existing) {
+                return {
+                  ...newEx,
+                  parameters: existing.parameters,
+                  notes: existing.notes,
+                  eachSide: existing.eachSide,
+                  autoCalculateWeight: existing.autoCalculateWeight,
+                  autoCalculateTargetHR: existing.autoCalculateTargetHR,
+                };
+              }
+              return newEx;
+            })
+          }));
+          
+          setWorkoutSections(mergedSections);
           hasInitializedRef.current = true;
         }
       }, 100);
@@ -1353,7 +1490,7 @@ export function WorkoutSessionSheet({
       })
     );
 
-    // Sync to Step 1 - create ExerciseDistribution entries
+    // Sync to Step 1 - create ExerciseDistribution entries with parameterSource: 'toolbox'
     if (onDistributionChange && allExerciseDistribution) {
       const newDistributionEntries = selectedExercisesForMethod.map((ex, index) => ({
         id: newExercises[index]?.id || `${ex.exerciseId}-${Date.now()}-${index}`,
@@ -1366,6 +1503,7 @@ export function WorkoutSessionSheet({
         sessionIndex,
         order: section.exercises.length + index,
         sectionId: currentSectionId,
+        parameterSource: 'toolbox' as const, // Mark as toolbox-sourced to skip periodization
       }));
       
       onDistributionChange([...allExerciseDistribution, ...newDistributionEntries]);
