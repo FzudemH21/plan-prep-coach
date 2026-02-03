@@ -1246,51 +1246,83 @@ export function WorkoutSessionSheet({
     const section = workoutSections.find(s => s.id === currentSectionId);
     if (!section) return;
 
-    // Get method parameters from toolbox
+    // Get method parameters from toolbox with robust matching
     const methodParts = methodId.split(' - ');
     const toolboxCategory = methodParts[0];
     const toolboxSubCategory = methodParts.length > 1 ? methodParts.slice(1).join(' - ') : '';
     
-    const methodEntries = toolboxData?.entries.filter(entry => 
-      entry.category === toolboxCategory && 
-      (toolboxSubCategory === '' ? entry.subCategory === '' : entry.subCategory === toolboxSubCategory)
-    ) || [];
+    // Use case-insensitive matching with trimmed whitespace
+    const methodEntries = toolboxData?.entries.filter(entry => {
+      const categoryMatch = entry.category.toLowerCase().trim() === toolboxCategory.toLowerCase().trim();
+      const subCategoryMatch = toolboxSubCategory === '' 
+        ? (!entry.subCategory || entry.subCategory.trim() === '')
+        : (entry.subCategory?.toLowerCase().trim() === toolboxSubCategory.toLowerCase().trim());
+      return categoryMatch && subCategoryMatch;
+    }) || [];
 
-    // Find set parameter
+    console.log('[handleAdHocMethodSelected] Matching:', {
+      methodId,
+      toolboxCategory,
+      toolboxSubCategory,
+      foundEntries: methodEntries.length,
+      initialParametersKeys: Object.keys(initialParameters)
+    });
+
+    // Find set parameter from multiple sources
     const setParamEntry = methodEntries.find(e => e.isSetParameter);
     const setParamName = setParamEntry?.parameterName || 
                         methodEntries.find(e => /^sets?$/i.test(e.parameterName))?.parameterName ||
+                        Object.keys(initialParameters).find(k => /^sets?$/i.test(k)) ||
                         'Sets';
     const setCount = Number(initialParameters[setParamName] || 3);
 
-    // Build parameters with set-based structure
+    // Build parameters using initialParameters as base with per-set expansion
     const buildExerciseParams = (): Record<string, string | number> => {
-      const params: Record<string, string | number> = {};
+      // Start with initialParameters from the dialog
+      const params: Record<string, string | number> = { ...initialParameters };
       
+      // Ensure set parameter is present
+      if (!params[setParamName]) {
+        params[setParamName] = setCount;
+      }
+      
+      // Process toolbox entries for units and per-set keys
       methodEntries.forEach(entry => {
         if (entry.isFrequencyParameter) return;
         
         const paramName = entry.parameterName;
-        const unit = entry.parameterType === 'quantitative' && entry.options.length > 0 
-          ? entry.options[0] 
-          : undefined;
         
-        if (unit) {
-          params[`${paramName}_unit`] = unit;
+        // Add unit if quantitative
+        if (entry.parameterType === 'quantitative' && entry.options.length > 0) {
+          params[`${paramName}_unit`] = entry.options[0];
         }
         
-        if (entry.isSetParameter) {
-          params[paramName] = setCount;
-        } else if (setCount > 0) {
-          // Fan out to per-set keys
+        // Create per-set keys for non-set parameters
+        if (!entry.isSetParameter && setCount > 0) {
           for (let i = 1; i <= setCount; i++) {
-            params[`${paramName}_set${i}`] = '';
+            if (params[`${paramName}_set${i}`] === undefined) {
+              params[`${paramName}_set${i}`] = '';
+            }
           }
-          params[paramName] = '';
-        } else {
-          params[paramName] = '';
         }
       });
+      
+      // FALLBACK: If no toolbox entries found, create structure from initialParameters
+      if (methodEntries.length === 0 && Object.keys(initialParameters).length > 0) {
+        console.log('[handleAdHocMethodSelected] Using fallback from initialParameters');
+        Object.keys(initialParameters).forEach(paramName => {
+          if (/^sets?$/i.test(paramName)) {
+            params[paramName] = setCount;
+          } else if (setCount > 0) {
+            // Fan out to per-set keys
+            for (let i = 1; i <= setCount; i++) {
+              if (params[`${paramName}_set${i}`] === undefined) {
+                params[`${paramName}_set${i}`] = '';
+              }
+            }
+          }
+        });
+      }
       
       return params;
     };
