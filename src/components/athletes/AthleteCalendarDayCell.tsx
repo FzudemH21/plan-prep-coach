@@ -386,7 +386,7 @@ export function AthleteCalendarDayCell({
             {/* Paste Session Button (below existing sessions) */}
             {copiedSession && onPasteSession && (
               <Button
-                variant="outline"
+                variant="default"
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -394,7 +394,7 @@ export function AthleteCalendarDayCell({
                 }}
                 className="w-full h-7 text-xs opacity-0 group-hover/day:opacity-100 transition-opacity"
               >
-                <ClipboardPaste className="h-3 w-3 mr-1" />
+                <Copy className="h-3 w-3 mr-1" />
                 Paste Session ({copiedSession.exercises.length})
               </Button>
             )}
@@ -428,7 +428,7 @@ export function AthleteCalendarDayCell({
             {/* Paste buttons for empty days */}
             {copiedDay && onPasteDay && (
               <Button
-                variant="outline"
+                variant="default"
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -436,14 +436,14 @@ export function AthleteCalendarDayCell({
                 }}
                 className="h-6 px-2 text-xs opacity-0 group-hover/day:opacity-100 transition-opacity"
               >
-                <ClipboardPaste className="h-3 w-3 mr-1" />
+                <Copy className="h-3 w-3 mr-1" />
                 Paste Day
               </Button>
             )}
             
             {copiedSession && onPasteSession && !copiedDay && (
               <Button
-                variant="outline"
+                variant="default"
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -451,7 +451,7 @@ export function AthleteCalendarDayCell({
                 }}
                 className="h-6 px-2 text-xs opacity-0 group-hover/day:opacity-100 transition-opacity"
               >
-                <ClipboardPaste className="h-3 w-3 mr-1" />
+                <Copy className="h-3 w-3 mr-1" />
                 Paste Session
               </Button>
             )}
