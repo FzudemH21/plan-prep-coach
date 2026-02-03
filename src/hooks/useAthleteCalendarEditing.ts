@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { format, addDays, parseISO, eachDayOfInterval } from 'date-fns';
+import { format, addDays, parseISO, eachDayOfInterval, differenceInDays } from 'date-fns';
 import { AthleteCalendarAssignment, AssignedMesocycle } from '@/types/athlete';
 import { ExerciseDistribution, SessionSection, SupersetMapping } from '@/types/microcycle-planning';
 import { IntensityLevel } from '@/types/training';
@@ -21,6 +21,17 @@ interface CopiedDay {
   sourceDate: string;
   intensity?: IntensityLevel;
   splitState?: number;
+  testNames?: string[];
+  eventNames?: string[];
+}
+
+interface CopiedWeek {
+  exercises: ExerciseDistribution[];
+  sections: SessionSection[];
+  supersets: SupersetMapping;
+  sessionStructure: Record<string, number[]>; // dayDate -> sessionIndices
+  weekStartDate: string;
+  trainingDays: TrainingDay[];
 }
 
 interface CalendarDay {
@@ -61,6 +72,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   // Copy/paste state
   const [copiedSession, setCopiedSession] = useState<CopiedSession | null>(null);
   const [copiedDay, setCopiedDay] = useState<CopiedDay | null>(null);
+  const [copiedWeek, setCopiedWeek] = useState<CopiedWeek | null>(null);
   
   // Get selected assignment
   const selectedAssignment = useMemo(() => 
@@ -503,6 +515,276 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     setCopiedDay(null);
   }, [copiedDay, supersets, toast]);
 
+  // === Week Management Handlers ===
+
+  const handleCopyWeek = useCallback((weekStartDate: string) => {
+    const startDate = new Date(weekStartDate);
+    const weekDates: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      weekDates.push(format(addDays(startDate, i), 'yyyy-MM-dd'));
+    }
+
+    const weekExercises = exerciseDistribution.filter(ex => weekDates.includes(ex.dayDate));
+    const weekSections = sessionSections.filter(s => weekDates.includes(s.dayDate));
+    const weekTrainingDays = trainingDays.filter(td => weekDates.includes(td.date));
+
+    if (weekExercises.length === 0) {
+      toast({ title: "Cannot copy", description: "This week has no exercises", variant: "destructive" });
+      return;
+    }
+
+    // Build session structure: which days have which session indices
+    const sessionStructure: Record<string, number[]> = {};
+    weekDates.forEach(dayDate => {
+      const dayExercises = weekExercises.filter(ex => ex.dayDate === dayDate);
+      const sessionIndices = [...new Set(dayExercises.map(ex => ex.sessionIndex))].sort((a, b) => a - b);
+      if (sessionIndices.length > 0) {
+        sessionStructure[dayDate] = sessionIndices;
+      }
+    });
+
+    // Copy supersets for this week
+    const weekSupersets: SupersetMapping = {};
+    weekDates.forEach(dayDate => {
+      if (supersets[dayDate]) {
+        weekSupersets[dayDate] = supersets[dayDate];
+      }
+    });
+
+    setCopiedWeek({
+      exercises: weekExercises,
+      sections: weekSections,
+      supersets: weekSupersets,
+      sessionStructure,
+      weekStartDate,
+      trainingDays: weekTrainingDays,
+    });
+
+    toast({ title: "Week copied", description: `${weekExercises.length} exercise(s) copied` });
+  }, [exerciseDistribution, sessionSections, supersets, trainingDays, toast]);
+
+  const handleClearWeek = useCallback((weekStartDate: string) => {
+    const startDate = new Date(weekStartDate);
+    const weekDates: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      weekDates.push(format(addDays(startDate, i), 'yyyy-MM-dd'));
+    }
+
+    setExerciseDistribution(prev => prev.filter(ex => !weekDates.includes(ex.dayDate)));
+    setSessionSections(prev => prev.filter(s => !weekDates.includes(s.dayDate)));
+    setSupersets(prev => {
+      const newSupersets = { ...prev };
+      weekDates.forEach(d => delete newSupersets[d]);
+      return newSupersets;
+    });
+    setDaySplitStates(prev => {
+      const newStates = { ...prev };
+      weekDates.forEach(d => { newStates[d] = 0; });
+      return newStates;
+    });
+    setTrainingDays(prev =>
+      prev.map(day => weekDates.includes(day.date) 
+        ? { ...day, sessions: 0, sessionNames: [] } 
+        : day
+      )
+    );
+
+    toast({ title: "Week cleared" });
+  }, [toast]);
+
+  const handlePasteWeek = useCallback((targetWeekStartDate: string) => {
+    if (!copiedWeek) return;
+
+    const sourceStart = new Date(copiedWeek.weekStartDate);
+    const targetStart = new Date(targetWeekStartDate);
+    const dayOffset = differenceInDays(targetStart, sourceStart);
+
+    // Calculate new section IDs
+    const sectionIdMapping = new Map<string, string>();
+    copiedWeek.sections.forEach(section => {
+      sectionIdMapping.set(section.id, `section-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+    });
+
+    // Calculate new exercise IDs
+    const exerciseIdMapping = new Map<string, string>();
+    copiedWeek.exercises.forEach(ex => {
+      exerciseIdMapping.set(ex.id, `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+    });
+
+    // For each source day, calculate target day and session offset
+    const pastedExercises: ExerciseDistribution[] = [];
+    const pastedSections: SessionSection[] = [];
+    const newDaySplitUpdates: Record<string, number> = {};
+    const newTrainingDayUpdates: Record<string, { sessions: number; sessionNames: string[] }> = {};
+
+    Object.entries(copiedWeek.sessionStructure).forEach(([sourceDayDate, sessionIndices]) => {
+      const sourceDate = new Date(sourceDayDate);
+      const targetDate = addDays(sourceDate, dayOffset);
+      const targetDayDate = format(targetDate, 'yyyy-MM-dd');
+
+      // Calculate session offset based on existing sessions on target day
+      const existingSessionsOnTarget = exerciseDistribution.filter(ex => ex.dayDate === targetDayDate);
+      const maxExistingSessionIndex = existingSessionsOnTarget.length > 0
+        ? Math.max(...existingSessionsOnTarget.map(ex => ex.sessionIndex))
+        : -1;
+      const sessionOffset = maxExistingSessionIndex + 1;
+
+      // Map old session indices to new ones
+      const sessionIndexMapping = new Map<number, number>();
+      sessionIndices.forEach((oldIdx, i) => {
+        sessionIndexMapping.set(oldIdx, sessionOffset + i);
+      });
+
+      // Copy sections for this day
+      copiedWeek.sections
+        .filter(s => s.dayDate === sourceDayDate)
+        .forEach(section => {
+          const newSessionIndex = sessionIndexMapping.get(section.sessionIndex) ?? section.sessionIndex;
+          pastedSections.push({
+            ...section,
+            id: sectionIdMapping.get(section.id)!,
+            dayDate: targetDayDate,
+            sessionIndex: newSessionIndex,
+          });
+        });
+
+      // Copy exercises for this day
+      copiedWeek.exercises
+        .filter(ex => ex.dayDate === sourceDayDate)
+        .forEach(ex => {
+          const newSessionIndex = sessionIndexMapping.get(ex.sessionIndex) ?? ex.sessionIndex;
+          pastedExercises.push({
+            ...ex,
+            id: exerciseIdMapping.get(ex.id)!,
+            dayDate: targetDayDate,
+            sessionIndex: newSessionIndex,
+            sectionId: ex.sectionId ? sectionIdMapping.get(ex.sectionId) : undefined,
+          });
+        });
+
+      // Track updates needed
+      const newMaxSession = sessionOffset + sessionIndices.length;
+      const currentSplit = daySplitStates[targetDayDate] ?? 0;
+      newDaySplitUpdates[targetDayDate] = Math.max(currentSplit, newMaxSession);
+
+      const existingDay = trainingDays.find(d => d.date === targetDayDate);
+      const existingNames = existingDay?.sessionNames || [];
+      const newNames = [...existingNames];
+      for (let i = existingNames.length; i < newMaxSession; i++) {
+        newNames.push(`Session ${i + 1}`);
+      }
+      newTrainingDayUpdates[targetDayDate] = { sessions: Math.max(currentSplit, newMaxSession), sessionNames: newNames };
+    });
+
+    // Apply updates
+    setExerciseDistribution(prev => [...prev, ...pastedExercises]);
+    setSessionSections(prev => [...prev, ...pastedSections]);
+    setDaySplitStates(prev => ({ ...prev, ...newDaySplitUpdates }));
+    setTrainingDays(prev =>
+      prev.map(day => {
+        const update = newTrainingDayUpdates[day.date];
+        return update ? { ...day, sessions: update.sessions, sessionNames: update.sessionNames } : day;
+      })
+    );
+
+    // Remap supersets
+    const newSupersets = { ...supersets };
+    Object.entries(copiedWeek.supersets).forEach(([sourceDayDate, daySupersets]) => {
+      const sourceDate = new Date(sourceDayDate);
+      const targetDate = addDays(sourceDate, dayOffset);
+      const targetDayDate = format(targetDate, 'yyyy-MM-dd');
+
+      // Get session offset for this day
+      const existingSessionsOnTarget = exerciseDistribution.filter(ex => ex.dayDate === targetDayDate);
+      const maxExistingSessionIndex = existingSessionsOnTarget.length > 0
+        ? Math.max(...existingSessionsOnTarget.map(ex => ex.sessionIndex))
+        : -1;
+      const sessionOffset = maxExistingSessionIndex + 1;
+
+      if (!newSupersets[targetDayDate]) {
+        newSupersets[targetDayDate] = {};
+      }
+
+      Object.entries(daySupersets).forEach(([sessionIdxStr, sessionSupersets]) => {
+        const oldSessionIdx = parseInt(sessionIdxStr);
+        const newSessionIdx = sessionOffset + oldSessionIdx;
+
+        if (!newSupersets[targetDayDate][newSessionIdx]) {
+          newSupersets[targetDayDate][newSessionIdx] = {};
+        }
+
+        Object.entries(sessionSupersets).forEach(([sectionKey, supersetMap]) => {
+          const destSectionKey = sectionKey === '__unsectioned__'
+            ? '__unsectioned__'
+            : (sectionIdMapping.get(sectionKey) || sectionKey);
+
+          if (!newSupersets[targetDayDate][newSessionIdx][destSectionKey]) {
+            newSupersets[targetDayDate][newSessionIdx][destSectionKey] = {};
+          }
+
+          Object.entries(supersetMap).forEach(([supersetId, exerciseIds]) => {
+            const mappedIds = exerciseIds.map(id => exerciseIdMapping.get(id)).filter(Boolean) as string[];
+            if (mappedIds.length >= 2) {
+              newSupersets[targetDayDate][newSessionIdx][destSectionKey][supersetId] = mappedIds;
+            }
+          });
+        });
+      });
+    });
+
+    setSupersets(newSupersets);
+
+    toast({ title: "Week pasted", description: `${copiedWeek.exercises.length} exercise(s) pasted as new sessions` });
+    setCopiedWeek(null);
+  }, [copiedWeek, exerciseDistribution, supersets, daySplitStates, trainingDays, toast]);
+
+  // === Test/Event Management Handlers ===
+
+  const handleAddTestEvent = useCallback((
+    dayDate: string,
+    type: 'test' | 'event',
+    id: string,
+    name: string,
+    isNew: boolean,
+    comments?: string
+  ) => {
+    setTrainingDays(prev =>
+      prev.map(day => {
+        if (day.date !== dayDate) return day;
+        if (type === 'test') {
+          const testNames = [...(day.testNames || [])];
+          if (!testNames.includes(name)) {
+            testNames.push(name);
+          }
+          return { ...day, testNames, isTestDay: true };
+        } else {
+          const eventNames = [...(day.eventNames || [])];
+          if (!eventNames.includes(name)) {
+            eventNames.push(name);
+          }
+          return { ...day, eventNames, isEventDay: true };
+        }
+      })
+    );
+    toast({ title: `${type === 'test' ? 'Test' : 'Event'} added`, description: name });
+  }, [toast]);
+
+  const handleDeleteTestEvent = useCallback((dayDate: string, type: 'test' | 'event', name: string) => {
+    setTrainingDays(prev =>
+      prev.map(day => {
+        if (day.date !== dayDate) return day;
+        if (type === 'test') {
+          const testNames = (day.testNames || []).filter(t => t !== name);
+          return { ...day, testNames, isTestDay: testNames.length > 0 };
+        } else {
+          const eventNames = (day.eventNames || []).filter(e => e !== name);
+          return { ...day, eventNames, isEventDay: eventNames.length > 0 };
+        }
+      })
+    );
+    toast({ title: `${type === 'test' ? 'Test' : 'Event'} removed` });
+  }, [toast]);
+
   // === Section Management Handlers ===
   
   const handleAddSectionToSession = useCallback((dayDate: string, sessionIndex: number) => {
@@ -807,6 +1089,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     daySplitStates,
     copiedSession,
     copiedDay,
+    copiedWeek,
     selectedAssignment,
     allAssignmentDays,
     
@@ -820,6 +1103,15 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     handleCopyDay,
     handleClearDay,
     handlePasteDay,
+    
+    // Week handlers
+    handleCopyWeek,
+    handleClearWeek,
+    handlePasteWeek,
+    
+    // Test/Event handlers
+    handleAddTestEvent,
+    handleDeleteTestEvent,
     
     // Section handlers
     handleAddSectionToSession,

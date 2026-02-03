@@ -747,6 +747,26 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                     onAddSession={handleAddSession}
                     onDeleteAssignment={handleDeleteAssignmentById}
                     getIntensityColor={getIntensityColor}
+                    // Week operations
+                    copiedWeek={editing.copiedWeek}
+                    onCopyWeek={editing.handleCopyWeek}
+                    onClearWeek={editing.handleClearWeek}
+                    onPasteWeek={editing.handlePasteWeek}
+                    // Day operations
+                    copiedDay={editing.copiedDay}
+                    onCopyDay={editing.handleCopyDay}
+                    onClearDay={editing.handleClearDay}
+                    onPasteDay={editing.handlePasteDay}
+                    // Session operations
+                    copiedSession={editing.copiedSession}
+                    onCopySession={editing.handleCopySession}
+                    onDeleteSession={editing.handleDeleteSession}
+                    onPasteSession={editing.handlePasteSession}
+                    // Test/Event operations
+                    onAddTestEvent={editing.handleAddTestEvent}
+                    onDeleteTestEvent={editing.handleDeleteTestEvent}
+                    availableTests={[]}
+                    availableEvents={[]}
                   />
                 ))}
               </div>
