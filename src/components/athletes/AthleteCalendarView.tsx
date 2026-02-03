@@ -199,35 +199,31 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     return days.map(date => {
       const dateString = format(date, 'yyyy-MM-dd');
 
-      // Find assignments that overlap with this date
-      const dayAssignments = assignments.filter(assignment => {
-        const assignmentStart = new Date(assignment.startDate);
-        const assignmentEnd = new Date(assignment.endDate);
-        return isWithinInterval(date, { start: assignmentStart, end: assignmentEnd });
-      });
-
-      // Extract session data from assignments for this specific day
+      // Extract session data for this specific day
       const sessions: AthleteCalendarSession[] = [];
       let testNames: string[] = [];
       let eventNames: string[] = [];
       let assignmentId: string | undefined;
       let programName: string | undefined;
+      let usedLiveEditingState = false;
 
-      dayAssignments.forEach(assignment => {
-        assignmentId = assignment.id;
-        programName = assignment.programName;
-
-        // CRITICAL FIX: For the selected assignment being edited, use LIVE editing state
-        // This ensures immediate visual feedback after paste/copy operations
-        const isEditingAssignment = assignment.id === selectedAssignmentId;
+      // CRITICAL FIX: Check live editing state FIRST for the selected assignment
+      // This allows pasted content to display even on dates OUTSIDE the original assignment range
+      if (selectedAssignmentId) {
+        const liveExercises = editing.exerciseDistribution.filter(
+          (ex: any) => ex.dayDate === dateString
+        );
+        const liveSplitState = editing.daySplitStates[dateString] ?? 0;
+        const liveTrainingDay = editing.trainingDays.find((td: any) => td.date === dateString);
         
-        if (isEditingAssignment) {
-          // Use live editing state for immediate updates
-          const liveExercises = editing.exerciseDistribution.filter(
-            (ex: any) => ex.dayDate === dateString
-          );
-          const liveSplitState = editing.daySplitStates[dateString] ?? 0;
-          const liveTrainingDay = editing.trainingDays.find((td: any) => td.date === dateString);
+        // If we have exercises OR a split state (training day) for this date from live data, use it
+        const hasLiveData = liveExercises.length > 0 || liveSplitState > 0 || liveTrainingDay?.isTrainingDay;
+        
+        if (hasLiveData) {
+          usedLiveEditingState = true;
+          const selectedAssignment = assignments.find(a => a.id === selectedAssignmentId);
+          assignmentId = selectedAssignmentId;
+          programName = selectedAssignment?.programName;
           
           // Get day intensity from live dailyIntensity data
           let dayIntensity: IntensityLevel = 'moderate';
@@ -246,86 +242,148 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             eventNames = [...eventNames, ...liveTrainingDay.eventNames];
           }
           
-          // Check if this is a training day
-          const hasExercises = liveExercises.length > 0;
-          const isTrainingDay = hasExercises || liveTrainingDay?.isTrainingDay || liveSplitState > 0;
-          
-          if (isTrainingDay) {
-            const numSessions = liveSplitState || 1;
-            for (let sessionIdx = 0; sessionIdx < numSessions; sessionIdx++) {
-              const sessionId = `${assignment.id}-${dateString}-${sessionIdx}`;
-              const sessionName = liveTrainingDay?.sessionNames?.[sessionIdx] || `Session ${sessionIdx + 1}`;
-              const exerciseCount = liveExercises.filter(
-                (ex: any) => ex.sessionIndex === sessionIdx
-              ).length;
-              
-              sessions.push({
-                id: sessionId,
-                sessionIndex: sessionIdx,
-                sessionName,
-                exerciseCount,
-                intensity: dayIntensity,
-                assignmentId: assignment.id,
-              });
-            }
-          }
-        } else {
-          // Use cache for other (non-editing) assignments
-          const cachedData = assignmentDataCache[assignment.id];
-          const trainingDay = cachedData?.trainingDays?.find((td: any) => td.date === dateString);
-          const numSessions = cachedData?.daySplitStates?.[dateString] ?? trainingDay?.sessions ?? 1;
-          
-          let dayIntensity: IntensityLevel = 'moderate';
-          if (cachedData?.dailyIntensity) {
-            const storedDayIntensity = cachedData.dailyIntensity.find(
-              (d: any) => d.date === dateString
-            );
-            if (storedDayIntensity?.intensity) {
-              dayIntensity = storedDayIntensity.intensity as IntensityLevel;
-            }
-          }
-          
-          if (trainingDay?.testNames?.length > 0) {
-            testNames = [...testNames, ...trainingDay.testNames];
-          }
-          if (trainingDay?.eventNames?.length > 0) {
-            eventNames = [...eventNames, ...trainingDay.eventNames];
-          }
-          
-          const hasExercises = cachedData?.exerciseDistribution?.some((ex: any) => ex.dayDate === dateString);
-          const isTrainingDay = hasExercises || trainingDay?.isTrainingDay;
-          
-          if (isTrainingDay) {
-            for (let sessionIdx = 0; sessionIdx < numSessions; sessionIdx++) {
-              const sessionId = `${assignment.id}-${dateString}-${sessionIdx}`;
-              const sessionName = trainingDay?.sessionNames?.[sessionIdx] || `Session ${sessionIdx + 1}`;
-              let exerciseCount = 0;
-              if (cachedData?.exerciseDistribution) {
-                exerciseCount = cachedData.exerciseDistribution.filter(
-                  (ex: any) => ex.dayDate === dateString && ex.sessionIndex === sessionIdx
-                ).length;
-              }
-              
-              let sessionIntensity = dayIntensity;
-              if (trainingDay?.mesocycleId && cachedData?.parameterValues) {
-                const sessionIntensityKey = `sessionIntensity_${trainingDay.mesocycleId}_${dateString}_${sessionIdx}`;
-                if (cachedData.parameterValues[sessionIntensityKey]) {
-                  sessionIntensity = cachedData.parameterValues[sessionIntensityKey] as IntensityLevel;
-                }
-              }
-              
-              sessions.push({
-                id: sessionId,
-                sessionIndex: sessionIdx,
-                sessionName,
-                exerciseCount,
-                intensity: sessionIntensity,
-                assignmentId: assignment.id,
-              });
-            }
+          const numSessions = liveSplitState || 1;
+          for (let sessionIdx = 0; sessionIdx < numSessions; sessionIdx++) {
+            const sessionId = `${selectedAssignmentId}-${dateString}-${sessionIdx}`;
+            const sessionName = liveTrainingDay?.sessionNames?.[sessionIdx] || `Session ${sessionIdx + 1}`;
+            const exerciseCount = liveExercises.filter(
+              (ex: any) => ex.sessionIndex === sessionIdx
+            ).length;
+            
+            sessions.push({
+              id: sessionId,
+              sessionIndex: sessionIdx,
+              sessionName,
+              exerciseCount,
+              intensity: dayIntensity,
+              assignmentId: selectedAssignmentId,
+            });
           }
         }
-      });
+      }
+
+      // If not using live editing state, fall back to assignment range filtering
+      if (!usedLiveEditingState) {
+        // Find assignments that overlap with this date
+        const dayAssignments = assignments.filter(assignment => {
+          const assignmentStart = new Date(assignment.startDate);
+          const assignmentEnd = new Date(assignment.endDate);
+          return isWithinInterval(date, { start: assignmentStart, end: assignmentEnd });
+        });
+
+        dayAssignments.forEach(assignment => {
+          assignmentId = assignment.id;
+          programName = assignment.programName;
+
+          // For the selected assignment being edited, use LIVE editing state
+          const isEditingAssignment = assignment.id === selectedAssignmentId;
+          
+          if (isEditingAssignment) {
+            // Use live editing state for immediate updates
+            const liveExercises = editing.exerciseDistribution.filter(
+              (ex: any) => ex.dayDate === dateString
+            );
+            const liveSplitState = editing.daySplitStates[dateString] ?? 0;
+            const liveTrainingDay = editing.trainingDays.find((td: any) => td.date === dateString);
+            
+            // Get day intensity from live dailyIntensity data
+            let dayIntensity: IntensityLevel = 'moderate';
+            const liveDayIntensity = editing.dailyIntensityData.find(
+              (d: any) => d.date === dateString
+            );
+            if (liveDayIntensity?.intensity) {
+              dayIntensity = liveDayIntensity.intensity as IntensityLevel;
+            }
+            
+            // Collect test/event names from live data
+            if (liveTrainingDay?.testNames?.length > 0) {
+              testNames = [...testNames, ...liveTrainingDay.testNames];
+            }
+            if (liveTrainingDay?.eventNames?.length > 0) {
+              eventNames = [...eventNames, ...liveTrainingDay.eventNames];
+            }
+            
+            // Check if this is a training day
+            const hasExercises = liveExercises.length > 0;
+            const isTrainingDay = hasExercises || liveTrainingDay?.isTrainingDay || liveSplitState > 0;
+            
+            if (isTrainingDay) {
+              const numSessions = liveSplitState || 1;
+              for (let sessionIdx = 0; sessionIdx < numSessions; sessionIdx++) {
+                const sessionId = `${assignment.id}-${dateString}-${sessionIdx}`;
+                const sessionName = liveTrainingDay?.sessionNames?.[sessionIdx] || `Session ${sessionIdx + 1}`;
+                const exerciseCount = liveExercises.filter(
+                  (ex: any) => ex.sessionIndex === sessionIdx
+                ).length;
+                
+                sessions.push({
+                  id: sessionId,
+                  sessionIndex: sessionIdx,
+                  sessionName,
+                  exerciseCount,
+                  intensity: dayIntensity,
+                  assignmentId: assignment.id,
+                });
+              }
+            }
+          } else {
+            // Use cache for other (non-editing) assignments
+            const cachedData = assignmentDataCache[assignment.id];
+            const trainingDay = cachedData?.trainingDays?.find((td: any) => td.date === dateString);
+            const numSessions = cachedData?.daySplitStates?.[dateString] ?? trainingDay?.sessions ?? 1;
+            
+            let dayIntensity: IntensityLevel = 'moderate';
+            if (cachedData?.dailyIntensity) {
+              const storedDayIntensity = cachedData.dailyIntensity.find(
+                (d: any) => d.date === dateString
+              );
+              if (storedDayIntensity?.intensity) {
+                dayIntensity = storedDayIntensity.intensity as IntensityLevel;
+              }
+            }
+            
+            if (trainingDay?.testNames?.length > 0) {
+              testNames = [...testNames, ...trainingDay.testNames];
+            }
+            if (trainingDay?.eventNames?.length > 0) {
+              eventNames = [...eventNames, ...trainingDay.eventNames];
+            }
+            
+            const hasExercises = cachedData?.exerciseDistribution?.some((ex: any) => ex.dayDate === dateString);
+            const isTrainingDay = hasExercises || trainingDay?.isTrainingDay;
+            
+            if (isTrainingDay) {
+              for (let sessionIdx = 0; sessionIdx < numSessions; sessionIdx++) {
+                const sessionId = `${assignment.id}-${dateString}-${sessionIdx}`;
+                const sessionName = trainingDay?.sessionNames?.[sessionIdx] || `Session ${sessionIdx + 1}`;
+                let exerciseCount = 0;
+                if (cachedData?.exerciseDistribution) {
+                  exerciseCount = cachedData.exerciseDistribution.filter(
+                    (ex: any) => ex.dayDate === dateString && ex.sessionIndex === sessionIdx
+                  ).length;
+                }
+                
+                let sessionIntensity = dayIntensity;
+                if (trainingDay?.mesocycleId && cachedData?.parameterValues) {
+                  const sessionIntensityKey = `sessionIntensity_${trainingDay.mesocycleId}_${dateString}_${sessionIdx}`;
+                  if (cachedData.parameterValues[sessionIntensityKey]) {
+                    sessionIntensity = cachedData.parameterValues[sessionIntensityKey] as IntensityLevel;
+                  }
+                }
+                
+                sessions.push({
+                  id: sessionId,
+                  sessionIndex: sessionIdx,
+                  sessionName,
+                  exerciseCount,
+                  intensity: sessionIntensity,
+                  assignmentId: assignment.id,
+                });
+              }
+            }
+          }
+        });
+      }
 
       return {
         date,
