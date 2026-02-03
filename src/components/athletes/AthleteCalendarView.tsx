@@ -86,6 +86,9 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   // Master planner state
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number>(1); // 1=Monday
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
+  
+  // Drag end timestamp for click suppression in child components
+  const [lastDragEndTimestamp, setLastDragEndTimestamp] = useState<number>(0);
 
   const { programs, getProgram } = useTrainingPrograms();
   const athleteData = useAthletes();
@@ -261,12 +264,16 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 (ex: any) => ex.sessionIndex === sessionIdx
               ).length;
               
+              // Use per-session intensity if available, otherwise fall back to day intensity
+              const perSessionKey = `${dateString}-${sessionIdx}`;
+              const sessionIntensity = editing.sessionIntensities?.[perSessionKey] ?? dayIntensity;
+              
               sessions.push({
                 id: sessionId,
                 sessionIndex: sessionIdx,
                 sessionName,
                 exerciseCount,
-                intensity: dayIntensity,
+                intensity: sessionIntensity,
                 assignmentId: selectedAssignmentId,
               });
             }
@@ -329,12 +336,16 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                   (ex: any) => ex.sessionIndex === sessionIdx
                 ).length;
                 
+                // Use per-session intensity if available, otherwise fall back to day intensity
+                const perSessionKey = `${dateString}-${sessionIdx}`;
+                const sessionIntensity = editing.sessionIntensities?.[perSessionKey] ?? dayIntensity;
+                
                 sessions.push({
                   id: sessionId,
                   sessionIndex: sessionIdx,
                   sessionName,
                   exerciseCount,
-                  intensity: dayIntensity,
+                  intensity: sessionIntensity,
                   assignmentId: assignment.id,
                 });
               }
@@ -409,7 +420,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         programName,
       };
     });
-  }, [currentDate, viewMode, assignments, assignmentDataCache, selectedAssignmentId, editing.exerciseDistribution, editing.daySplitStates, editing.trainingDays, editing.dailyIntensityData]);
+  }, [currentDate, viewMode, assignments, assignmentDataCache, selectedAssignmentId, editing.exerciseDistribution, editing.daySplitStates, editing.trainingDays, editing.dailyIntensityData, editing.sessionIntensities]);
 
   // Group days into weeks
   const weeks = useMemo(() => {
@@ -481,15 +492,41 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     
     const sourceDayDate = result.source.droppableId;
     const destDayDate = result.destination.droppableId;
-    const sourceIndex = result.source.index;
-    const destIndex = result.destination.index;
     
-    // Same day, same position - no change needed
-    if (sourceDayDate === destDayDate && sourceIndex === destIndex) return;
+    // Parse session index from draggableId
+    // Format: "assignmentId-YYYY-MM-DD-sessionIndex"
+    const draggableId = result.draggableId;
+    const parts = draggableId.split('-');
+    // Last part is the session index
+    const sourceSessionIndex = parseInt(parts[parts.length - 1], 10);
+    
+    // Same day - no move needed (could add reordering later)
+    if (sourceDayDate === destDayDate) return;
+    
+    // Validate parsed index
+    if (isNaN(sourceSessionIndex)) {
+      console.error('[handleSessionDragEnd] Could not parse session index from draggableId:', draggableId);
+      return;
+    }
+    
+    console.log('[handleSessionDragEnd] Moving session:', {
+      sourceDayDate,
+      sourceSessionIndex,
+      destDayDate,
+      draggableId
+    });
     
     // Use the hook's handler for moving sessions
-    editing.handleMoveSession(sourceDayDate, sourceIndex, destDayDate);
-  }, [editing]);
+    editing.handleMoveSession(sourceDayDate, sourceSessionIndex, destDayDate);
+    
+    // Set the drag end timestamp for click suppression in child components
+    setLastDragEndTimestamp(Date.now());
+    
+    toast({
+      title: "Session moved",
+      description: `Moved to ${format(new Date(destDayDate), 'MMM d')}`,
+    });
+  }, [editing, toast]);
 
   const handleAssignProgram = useCallback((assignment: Omit<AthleteCalendarAssignment, 'id' | 'createdAt'>) => {
     // Create the assignment and get the new ID
@@ -900,6 +937,8 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                       // Intensity editing
                       intensityLevels={intensityLevels}
                       onIntensityChange={editing.handleDayIntensityChange}
+                      // Drag end timestamp for click suppression
+                      lastDragEndTimestamp={lastDragEndTimestamp}
                     />
                   ))}
                 </div>

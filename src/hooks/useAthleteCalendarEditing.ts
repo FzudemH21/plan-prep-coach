@@ -69,6 +69,8 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   const [dailyIntensityData, setDailyIntensityData] = useState<any[]>([]);
   const [trainingDays, setTrainingDays] = useState<TrainingDay[]>([]);
   const [daySplitStates, setDaySplitStates] = useState<Record<string, number>>({});
+  // Per-session intensity storage for multi-session days (key: "dayDate-sessionIndex")
+  const [sessionIntensities, setSessionIntensities] = useState<Record<string, IntensityLevel>>({});
   
   // Flag to prevent auto-save during initial load
   const [isInitializing, setIsInitializing] = useState(false);
@@ -219,6 +221,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         const storedParams = parsed.parameterValues || {};
         const storedDailyIntensity = parsed.dailyIntensity || [];
         const storedDaySplitStates = parsed.daySplitStates || {};
+        const storedSessionIntensities = parsed.sessionIntensities || {};
         
         setExerciseDistribution(storedExercises);
         setSessionSections(storedSections);
@@ -226,6 +229,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         setParameterValues(storedParams);
         setDailyIntensityData(storedDailyIntensity);
         setDaySplitStates(storedDaySplitStates);
+        setSessionIntensities(storedSessionIntensities);
         
         // Build training days using stored intensity data
         const days = parsed.trainingDays?.length > 0 
@@ -242,6 +246,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
           dailyIntensity: storedDailyIntensity,
           trainingDays: days,
           daySplitStates: storedDaySplitStates,
+          sessionIntensities: storedSessionIntensities,
         });
         lastSavedStateRef.current = loadedFingerprint;
         
@@ -299,6 +304,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       dailyIntensity: dailyIntensityData,
       trainingDays,
       daySplitStates,
+      sessionIntensities,
     };
     
     // ROBUST FINGERPRINT: Full content comparison (not just counts)
@@ -347,6 +353,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     dailyIntensityData,
     trainingDays,
     daySplitStates,
+    sessionIntensities,
   ]);
 
   // === Session Management Handlers ===
@@ -1406,26 +1413,46 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   // === Intensity Management Handlers ===
   
   const handleDayIntensityChange = useCallback((dayDate: string, intensity: IntensityLevel) => {
+    // Always update day-level intensity
     setTrainingDays(prev =>
       prev.map(day => day.date === dayDate ? { ...day, intensity } : day)
     );
     setDailyIntensityData(prev =>
       prev.map(di => di.date === dayDate ? { ...di, intensity } : di)
     );
-  }, []);
+    
+    // For single-session days, also sync the per-session intensity
+    const sessionCount = daySplitStates[dayDate] ?? 1;
+    if (sessionCount === 1) {
+      setSessionIntensities(prev => ({
+        ...prev,
+        [`${dayDate}-0`]: intensity
+      }));
+    }
+    // For multi-session days, session intensities remain INDEPENDENT - do not update them
+  }, [daySplitStates]);
 
   const handleSessionIntensityChange = useCallback((dayDate: string, sessionIndex: number, intensity: IntensityLevel) => {
     // Check session count from daySplitStates (source of truth), not trainingDays.sessions
     const sessionCount = daySplitStates[dayDate] ?? 1;
     
-    // For single session days, sync session intensity to day intensity
-    if (sessionCount === 1) {
-      handleDayIntensityChange(dayDate, intensity);
-    }
+    // Store per-session intensity
+    setSessionIntensities(prev => ({
+      ...prev,
+      [`${dayDate}-${sessionIndex}`]: intensity
+    }));
     
-    // For multi-session days, session intensity is independent (handled by the sheet's local state)
-    // The sheet persists session intensity on save; no action needed here for multi-session days
-  }, [daySplitStates, handleDayIntensityChange]);
+    // For single session days, also sync session intensity to day intensity
+    if (sessionCount === 1) {
+      setTrainingDays(prev =>
+        prev.map(day => day.date === dayDate ? { ...day, intensity } : day)
+      );
+      setDailyIntensityData(prev =>
+        prev.map(di => di.date === dayDate ? { ...di, intensity } : di)
+      );
+    }
+    // For multi-session days, session intensity is independent
+  }, [daySplitStates]);
 
   // === Session Naming Handlers ===
   
@@ -1523,6 +1550,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     dailyIntensityData,
     trainingDays,
     daySplitStates,
+    sessionIntensities,
     copiedSession,
     copiedDay,
     copiedWeek,
