@@ -1,108 +1,51 @@
 
-# Fix Week/Day Paste Not Working in Athlete Calendar
 
-## Root Cause Analysis
+# Fix Day/Session Paste Not Working in Athlete Calendar
 
-I found two interconnected issues causing the paste functionality to fail:
+## Root Cause Identified
 
-### Issue 1: Calendar View Uses Stale Cache
+The paste functionality appears to work (toast shows "Session pasted" with exercise count), but the pasted content **doesn't display** on the calendar. This happens because:
 
-The calendar view (`AthleteCalendarView.tsx`) reads session data from `assignmentDataCache`, which is only loaded once from localStorage when assignments first load. When paste operations update the `editing` state (which auto-saves to localStorage), the cache is NOT refreshed because:
+### Issue: Date Range Filtering Excludes Pasted Content
 
-1. The `useEffect` at line 100-134 only runs when `assignments` array changes
-2. It explicitly skips already-cached assignments to prevent re-loading
-
-**Result**: Paste succeeds, data saves to localStorage, but UI shows stale data.
-
-### Issue 2: trainingDays Update Uses Map Instead of Merge
-
-When pasting to days outside the original assignment range, the `setTrainingDays` update uses `.map()` which only updates existing entries. If the target date doesn't exist in `trainingDays`, nothing is added.
+The `calendarDays` memo in `AthleteCalendarView.tsx` (lines 203-206) only displays sessions for dates **within** an assignment's date range:
 
 ```typescript
-// Current code (only updates existing days)
-setTrainingDays(prev =>
-  prev.map(day => {
-    const update = newTrainingDayUpdates[day.date];
-    return update ? { ...day, ...update } : day;
-  })
-);
+const dayAssignments = assignments.filter(assignment => {
+  return isWithinInterval(date, { start: assignmentStart, end: assignmentEnd });
+});
 ```
+
+When you paste to a date **outside** the assigned program's range (e.g., a week before or after the program), `dayAssignments` is empty, so:
+1. The code never enters the loop to check for live editing state
+2. No sessions are displayed, even though exercises were added to `exerciseDistribution`
+
+### The Fix Strategy
+
+For the currently selected assignment, we need to **also** display sessions from the live editing state **regardless of whether the date falls within the assignment's original range**. This allows the calendar to show pasted content on any visible date.
 
 ---
 
 ## Solution
 
-### Part 1: Make Calendar View Read from Live Editing State
+### Part 1: Display Live Editing Content for Any Date
 
-When an assignment is selected (the one being edited), the calendar should read from `editing.exerciseDistribution` instead of `assignmentDataCache`. This provides immediate visual feedback for all operations.
+Modify `AthleteCalendarView.tsx` to check the live editing state **before** the assignment date range filter, so pasted exercises appear on dates outside the original range.
 
-**File: `src/components/athletes/AthleteCalendarView.tsx`**
+**Current Flow:**
+1. Filter assignments by date range → if none match, show nothing
+2. For matching assignments, check if it's the editing assignment and use live state
 
-Update the `calendarDays` useMemo to check if the assignment matches the currently editing one, and if so, use live data:
+**New Flow:**
+1. **First**: Check if the selected assignment is being edited AND has exercises for this date
+2. If yes, show live editing data (ignoring date range)
+3. If no, proceed with the existing assignment range filter logic
 
-```typescript
-// When building session data for each day:
-const isEditingAssignment = assignment.id === selectedAssignmentId;
+### Part 2: Extend Assignment Range When Pasting Outside
 
-if (isEditingAssignment) {
-  // Use live editing state for immediate updates
-  const liveExercises = editing.exerciseDistribution.filter(
-    ex => ex.dayDate === dateString
-  );
-  const liveSplitState = editing.daySplitStates[dateString] ?? 1;
-  // ... build sessions from live data
-} else {
-  // Use cache for other assignments
-  // ... existing cache-based logic
-}
-```
-
-### Part 2: Fix TrainingDays Update to Add Missing Days
-
-Update the paste handlers to properly add new days to `trainingDays` if they don't exist.
-
-**File: `src/hooks/useAthleteCalendarEditing.ts`**
-
-In `handlePasteWeek` (~line 683):
-```typescript
-setTrainingDays(prev => {
-  const updated = [...prev];
-  Object.entries(newTrainingDayUpdates).forEach(([date, update]) => {
-    const existingIdx = updated.findIndex(d => d.date === date);
-    if (existingIdx >= 0) {
-      // Update existing
-      updated[existingIdx] = { ...updated[existingIdx], ...update };
-    } else {
-      // Add new day entry
-      updated.push({
-        date,
-        dayOfWeek: new Date(date).getDay(),
-        dayName: format(new Date(date), 'EEEE'),
-        isTrainingDay: true,
-        intensity: 'moderate' as IntensityLevel,
-        ...update,
-      });
-    }
-  });
-  // Sort by date
-  return updated.sort((a, b) => a.date.localeCompare(b.date));
-});
-```
-
-Similarly update `handlePasteDay` to ensure the target day exists in `trainingDays`.
-
-### Part 3: Add Debug Logging
-
-Add console logs to help trace paste operations:
-
-```typescript
-console.log('[handlePasteWeek] Pasting', {
-  sourceWeek: copiedWeek.weekStartDate,
-  targetWeek: targetWeekStartDate,
-  exerciseCount: copiedWeek.exercises.length,
-  pastedExercises: pastedExercises.length,
-});
-```
+When pasting exercises to dates outside the assignment's current range, automatically extend the assignment's date range to include the pasted dates. This ensures:
+1. The pasted content persists correctly
+2. The visual display matches the data
 
 ---
 
@@ -110,41 +53,82 @@ console.log('[handlePasteWeek] Pasting', {
 
 | File | Changes |
 |------|---------|
-| `src/components/athletes/AthleteCalendarView.tsx` | Update `calendarDays` memo to use live `editing` state for the selected assignment |
-| `src/hooks/useAthleteCalendarEditing.ts` | Fix `handlePasteWeek` and `handlePasteDay` to properly add missing days to `trainingDays`; add debug logging |
+| `src/components/athletes/AthleteCalendarView.tsx` | Update `calendarDays` memo to check live editing state for any date, not just dates within assignment range |
+| `src/hooks/useAthleteCalendarEditing.ts` | In paste handlers, update the assignment's date range if pasting outside current bounds |
 
 ---
 
-## Technical Details
+## Technical Implementation
 
-### Why Cache vs Live State Matters
+### `AthleteCalendarView.tsx` - calendarDays Memo Update
 
-The current architecture uses:
-- `assignmentDataCache`: Static snapshot loaded from localStorage, used for calendar display
-- `editing.*` state: Live state managed by the hook, auto-saved to localStorage
-
-For real-time updates, operations that modify the editing state need to be reflected in the calendar immediately. The simplest fix is to make the calendar view read from the live editing state when viewing the selected assignment.
-
-### Session Count Calculation
-
-Currently, the calendar reads `numSessions` from:
 ```typescript
-const numSessions = cachedData?.daySplitStates?.[dateString] ?? trainingDay?.sessions ?? 1;
+return days.map(date => {
+  const dateString = format(date, 'yyyy-MM-dd');
+  
+  // NEW: Check live editing state FIRST for the selected assignment
+  // This allows pasted content to display even outside the original assignment range
+  let usedLiveEditingState = false;
+  const sessions: AthleteCalendarSession[] = [];
+  let testNames: string[] = [];
+  let eventNames: string[] = [];
+  let assignmentId: string | undefined;
+  let programName: string | undefined;
+
+  // Check if selected assignment has exercises for this date (from live state)
+  if (selectedAssignmentId) {
+    const liveExercises = editing.exerciseDistribution.filter(
+      (ex: any) => ex.dayDate === dateString
+    );
+    const liveSplitState = editing.daySplitStates[dateString] ?? 0;
+    
+    if (liveExercises.length > 0 || liveSplitState > 0) {
+      // Use live editing state for this date
+      usedLiveEditingState = true;
+      const selectedAssignment = assignments.find(a => a.id === selectedAssignmentId);
+      assignmentId = selectedAssignmentId;
+      programName = selectedAssignment?.programName;
+      
+      // ... build sessions from live data (same logic as before)
+    }
+  }
+  
+  // If not using live state, fall back to assignment range filtering
+  if (!usedLiveEditingState) {
+    const dayAssignments = assignments.filter(assignment => {
+      // ... existing range filter logic
+    });
+    // ... existing logic for other assignments
+  }
+  
+  return { date, dateString, sessions, ... };
+});
 ```
 
-After the fix, for the editing assignment:
-```typescript
-const numSessions = editing.daySplitStates[dateString] ?? 1;
-```
+### `useAthleteCalendarEditing.ts` - Extend Assignment Range
+
+In `handlePasteDay` and `handlePasteWeek`, after pasting exercises, check if any target dates fall outside the current assignment range and log a warning (the actual assignment update would require changes to the athlete data store).
+
+For now, the visual fix above will ensure pasted content displays immediately. A future enhancement could automatically extend the assignment's date range.
 
 ---
 
 ## Expected Outcome
 
-After these changes:
-1. Copying a week shows toast: "Week copied: X exercises"
-2. Clicking "Paste Week" immediately shows the pasted sessions in the calendar
-3. Pasting to a different week correctly shifts dates and adds sessions
-4. Existing sessions on target days are preserved (new sessions added)
-5. Pasting days works the same way with immediate visual feedback
-6. All data persists correctly to localStorage
+After this fix:
+1. **Copy Day/Session** - Works as before, shows toast with exercise count
+2. **Paste Day/Session** - Pasted content immediately appears on the target date, even if the date is outside the original program range
+3. **Data Persistence** - Exercises are saved to the assignment's localStorage correctly
+4. **UI Feedback** - The pasted session cards show with correct exercise counts and intensity indicators
+
+---
+
+## Testing Verification
+
+1. Assign a program to an athlete (e.g., Feb 1-14)
+2. Navigate to a session with exercises and click "Copy session"
+3. Navigate to a date **outside** the program range (e.g., Feb 20)
+4. Click the "Paste Session" button
+5. **Expected**: The session card appears immediately with the pasted exercises
+6. Click the session to open WorkoutSessionSheet and verify exercises are present
+
