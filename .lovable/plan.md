@@ -1,102 +1,175 @@
 
-# Fix: Date Shifting Off-by-One Due to Timezone
+# Add Week/Day Copy, Paste, Clear, and Test/Event Management to Athlete Calendar
 
-## Problem Identified
+## Overview
 
-When assigning a training program to an athlete calendar, the date shifting is **off by one day** due to timezone handling:
+You want the Athlete Calendar to have the same functionality as the Training Calendar wizard:
+1. **Week-level operations**: Copy week, paste week, clear week
+2. **Day-level operations**: Copy day, paste day (already exists in hook), clear day (already exists in hook), manage tests/events
 
-1. User selects February 9 (Monday) as the start date
-2. JavaScript creates `new Date()` at midnight *local time*
-3. When stored/logged in UTC, this becomes `2026-02-08T23:00:00.000Z` (11 PM on Feb 8)
-4. The original program start is `2026-02-01T00:00:00.000Z` (midnight UTC on Feb 1)
-5. `differenceInDays()` calculates offset = 7 days (not 8) because it's based on actual time difference
-6. Shifting Feb 1 by 7 days = Feb 8, not Feb 9
+## Current State
 
-Result: The program starts on Sunday (Feb 8) instead of Monday (Feb 9), so the "Easy" Monday session appears instead of the "Hard" Sunday session.
+The `useAthleteCalendarEditing` hook already has:
+- `handleCopyDay`, `handleClearDay`, `handlePasteDay` - Day copy/paste/clear
+- `handleCopySession`, `handlePasteSession`, `handleDeleteSession` - Session operations
+- `copiedSession`, `copiedDay` - Copy state
 
-## Solution
+**Missing:**
+- Week-level operations: `handleCopyWeek`, `handlePasteWeek`, `handleClearWeek`
+- `copiedWeek` state
+- Test/event management handlers for athlete calendar
+- UI components to expose these features in `AthleteCalendarWeekRow` and `AthleteCalendarDayCell`
 
-Normalize both dates to midnight UTC before calculating the offset. This ensures the shift is based purely on calendar days, not timestamps.
+---
 
-### Files to Modify
+## Implementation Plan
 
-**1. `src/utils/dateShifting.ts`**
+### 1. Add Week Operations to `useAthleteCalendarEditing`
+**File: `src/hooks/useAthleteCalendarEditing.ts`**
 
-Add a helper function to normalize dates to UTC midnight:
+Add:
+- `copiedWeek` state (similar to the Training Calendar structure)
+- `handleCopyWeek(weekStartDate: string)` - Copy all exercises, sections, supersets, session structure for a week
+- `handleClearWeek(weekStartDate: string)` - Clear all data for the week
+- `handlePasteWeek(targetWeekStartDate: string)` - Paste with "Add as New Sessions" behavior
+- Export these from the hook's return object
 
+The implementation will mirror `MicrocyclePlanningPage.tsx` lines 1676-1970 but adapted for the athlete calendar context.
+
+### 2. Add Test/Event Handlers to `useAthleteCalendarEditing`
+**File: `src/hooks/useAthleteCalendarEditing.ts`**
+
+Add:
+- `handleAddTestEvent(dayDate, type, id, name, isNew, comments?)` - Add test/event to a day
+- `handleDeleteTestEvent(dayDate, type, name)` - Remove test/event from a day
+- Store test/event info in `trainingDays` (updating `testNames`, `eventNames`, `isTestDay`, `isEventDay`)
+
+These will modify the `trainingDays` state to track which days have tests/events.
+
+### 3. Update `AthleteCalendarWeekRow` Component
+**File: `src/components/athletes/AthleteCalendarWeekRow.tsx`**
+
+Add:
+- 3-dot dropdown menu in week header with: "Copy week", "Clear week"
+- "Paste Week" button (visible on hover when `copiedWeek` exists)
+- Pass new props down to `AthleteCalendarDayCell`
+
+New props interface:
 ```typescript
-/**
- * Normalizes a date to UTC midnight to ensure consistent day-based calculations
- */
-function normalizeToUTCMidnight(date: Date): Date {
-  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+interface AthleteCalendarWeekRowProps {
+  // ... existing props
+  copiedWeek?: { exercises: any[]; weekStartDate: string } | null;
+  copiedDay?: { exercises: any[]; sourceDate: string } | null;
+  copiedSession?: { exercises: any[]; sourceDate: string; sessionIndex: number } | null;
+  onCopyWeek?: (weekStartDate: string) => void;
+  onClearWeek?: (weekStartDate: string) => void;
+  onPasteWeek?: (weekStartDate: string) => void;
+  onCopyDay?: (dayDate: string) => void;
+  onClearDay?: (dayDate: string) => void;
+  onPasteDay?: (dayDate: string) => void;
+  onAddTestEvent?: (...) => void;
+  onDeleteTestEvent?: (...) => void;
+  availableTests?: SubGoal[];
+  availableEvents?: Event[];
 }
 ```
 
-Update `calculateDayOffset()` to normalize dates:
+### 4. Update `AthleteCalendarDayCell` Component
+**File: `src/components/athletes/AthleteCalendarDayCell.tsx`**
 
+Enhance the existing 3-dot menu to include:
+- "Copy day" (always visible)
+- "Paste day" (visible when `copiedDay` exists)
+- "Clear day" (visible when day has training)
+- Separator
+- "Manage tests/events" (opens `CombinedTestEventDialog`)
+
+Add:
+- Import and use `CombinedTestEventDialog`
+- Paste Session/Day buttons on hover (like `TrainingDayCell`)
+- Session 3-dot menu with "Copy session", "Delete session"
+
+New props interface additions:
 ```typescript
-export function calculateDayOffset(originalStartDate: Date, newStartDate: Date): number {
-  // Normalize both dates to UTC midnight for accurate day-based offset
-  const normalizedOriginal = normalizeToUTCMidnight(originalStartDate);
-  const normalizedNew = normalizeToUTCMidnight(newStartDate);
-  return differenceInDays(normalizedNew, normalizedOriginal);
+interface AthleteCalendarDayCellProps {
+  // ... existing props
+  onCopyDay?: (dayDate: string) => void;
+  onClearDay?: (dayDate: string) => void;
+  onPasteDay?: (dayDate: string) => void;
+  copiedDay?: {...} | null;
+  copiedSession?: {...} | null;
+  onCopySession?: (dayDate: string, sessionIndex: number) => void;
+  onDeleteSession?: (dayDate: string, sessionIndex: number) => void;
+  onPasteSession?: (dayDate: string) => void;
+  onAddTestEvent?: (...) => void;
+  onDeleteTestEvent?: (...) => void;
+  availableTests?: SubGoal[];
+  availableEvents?: Event[];
 }
 ```
 
-**2. `src/components/athletes/AthleteCalendarView.tsx`**
+### 5. Update `AthleteCalendarView` to Wire Everything Together
+**File: `src/components/athletes/AthleteCalendarView.tsx`**
 
-When computing `originalStartDate` and `newStartDate`, ensure they're normalized before calling shift functions:
+- Pass the new week/day/session handlers from `editing` hook to `AthleteCalendarWeekRow`
+- Create or source available tests/events (from assignment data or allow ad-hoc creation)
+- Pass `copiedWeek`, `copiedDay`, `copiedSession` state
 
-In the `handleAssignProgram` function (~line 447):
-
-```typescript
-// Normalize dates to UTC midnight for accurate day-based shifting
-const normalizedOriginalStart = new Date(Date.UTC(
-  originalStartDate.getFullYear(),
-  originalStartDate.getMonth(),
-  originalStartDate.getDate()
-));
-
-const assignmentDate = new Date(assignment.startDate);
-const normalizedNewStart = new Date(Date.UTC(
-  assignmentDate.getFullYear(),
-  assignmentDate.getMonth(),
-  assignmentDate.getDate()
-));
-
-// Then use normalizedOriginalStart and normalizedNewStart for shifting
-const shiftedExercises = program.exerciseDistribution 
-  ? shiftExerciseDates(program.exerciseDistribution, normalizedOriginalStart, normalizedNewStart)
-  : [];
-// ... etc
-```
-
-### Why This Fixes It
-
-With normalization:
-- `originalStartDate`: Feb 1, 2026 00:00:00 UTC
-- `newStartDate`: Feb 9, 2026 00:00:00 UTC (not Feb 8 23:00!)
-- Offset: 8 days (correct!)
-- Feb 1 + 8 days = Feb 9 (correct!)
-
-Now the "Hard" session from Feb 1 (Day 1 of the program) will correctly land on Feb 9 (the assigned start date), regardless of user timezone.
+---
 
 ## Technical Details
 
-The issue affects ALL date-based operations when the user's timezone is not UTC. By normalizing to UTC midnight:
+### Week Copy Structure (matching Training Calendar)
+```typescript
+interface CopiedWeek {
+  exercises: ExerciseDistribution[];
+  sections: SessionSection[];
+  supersets: SupersetMapping;
+  sessionStructure: Record<string, number[]>; // dayDate -> sessionIndices
+  weekStartDate: string;
+}
+```
 
-1. We preserve the **calendar date** the user selected (Feb 9)
-2. We ignore the **time component** which varies by timezone
-3. All day calculations become consistent regardless of user location
+### Week Paste Behavior
+Following the existing pattern ("Add as New Sessions" - Option B):
+- Calculate day offset from source to target week
+- For each target day that will receive sessions, calculate session offset based on existing sessions
+- Remap section IDs, exercise IDs, superset IDs
+- Shift session indices so pasted sessions become new sessions (not replacing existing)
 
-This is a common fix pattern for date-based (not datetime-based) applications.
+### Test/Event Storage
+Tests and events will be stored in the `trainingDays` array within each day object:
+```typescript
+{
+  date: "2026-02-09",
+  isTestDay: true,
+  isEventDay: false,
+  testNames: ["1RM Back Squat"],
+  eventNames: [],
+  // ... other fields
+}
+```
 
-## Testing Verification
+---
 
-After the fix:
-1. Create a program starting on any day (e.g., Sunday Feb 1)
-2. Set Day 1 to "Hard" intensity with exercises
-3. Assign to athlete calendar starting on a different day (e.g., Monday Feb 9)
-4. The assigned start date should show "Hard" intensity and Day 1's exercises
-5. Day 2 of the program should appear on Feb 10, etc.
+## Files to Modify
+
+| File | Changes |
+|------|---------|
+| `src/hooks/useAthleteCalendarEditing.ts` | Add `copiedWeek` state, `handleCopyWeek`, `handlePasteWeek`, `handleClearWeek`, `handleAddTestEvent`, `handleDeleteTestEvent` |
+| `src/components/athletes/AthleteCalendarWeekRow.tsx` | Add week 3-dot menu, paste week button, pass props to day cells |
+| `src/components/athletes/AthleteCalendarDayCell.tsx` | Enhance 3-dot menu with copy/paste/clear day, manage tests/events, add session menu |
+| `src/components/athletes/AthleteCalendarView.tsx` | Wire new handlers and state to week rows |
+
+---
+
+## Expected Outcome
+
+After implementation:
+1. **Week header** will have a 3-dot menu with "Copy week" and "Clear week" options
+2. **Paste Week button** appears on hover when a week is copied
+3. **Day 3-dot menu** includes: Copy day, Paste day, Clear day, Manage tests/events
+4. **Session cards** have a 3-dot menu with: Copy session, Delete session
+5. **Paste Session/Day buttons** appear on hover when data is copied
+6. **CombinedTestEventDialog** opens for managing tests/events on any day
+7. All operations persist correctly to the athlete-assignment localStorage
