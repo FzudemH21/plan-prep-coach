@@ -217,7 +217,7 @@ export function AthleteCalendarDayCell({
             {/* Day-level Menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                <button className="h-5 w-5 flex items-center justify-center rounded hover:bg-accent transition-colors opacity-0 group-hover/day:opacity-100">
+                <button className="h-5 w-5 flex items-center justify-center rounded hover:bg-accent transition-colors">
                   <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
                 </button>
               </DropdownMenuTrigger>
@@ -347,7 +347,7 @@ export function AthleteCalendarDayCell({
                       {/* Session Menu */}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <button className="h-5 w-5 flex items-center justify-center rounded hover:bg-accent transition-colors opacity-0 group-hover/session:opacity-100">
+                          <button className="h-5 w-5 flex items-center justify-center rounded hover:bg-accent transition-colors">
                             <MoreVertical className="h-3 w-3 text-muted-foreground" />
                           </button>
                         </DropdownMenuTrigger>

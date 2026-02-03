@@ -90,7 +90,7 @@ export function AthleteCalendarWeekRow({
       {/* Week Header */}
       <div className="flex items-center gap-2 pl-1 min-h-[32px]">
         {/* Week Dropdown Menu - Now on the left */}
-        <div className="opacity-0 group-hover/week:opacity-100 transition-opacity">
+        <div>
           {(onCopyWeek || onClearWeek) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -124,7 +124,7 @@ export function AthleteCalendarWeekRow({
         </div>
         
         {/* Paste Week Button - on the right */}
-        <div className="opacity-0 group-hover/week:opacity-100 transition-opacity">
+        <div>
           {copiedWeek && onPasteWeek && (
             <Button
               variant="default"
