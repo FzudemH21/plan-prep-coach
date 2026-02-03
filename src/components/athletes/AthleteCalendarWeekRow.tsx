@@ -89,26 +89,8 @@ export function AthleteCalendarWeekRow({
     <div className="space-y-2 group/week">
       {/* Week Header */}
       <div className="flex items-center gap-2 pl-1 min-h-[32px]">
-        <div className="text-xs text-muted-foreground flex-1">
-          Week of {format(week[0].date, 'MMM d')}
-        </div>
-        
-        {/* Week Menu */}
-        <div className="flex items-center gap-1 opacity-0 group-hover/week:opacity-100 transition-opacity">
-          {/* Paste Week Button (visible when week is copied) */}
-          {copiedWeek && onPasteWeek && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPasteWeek(weekStartDate)}
-              className="h-6 px-2 text-xs gap-1"
-            >
-              <ClipboardPaste className="h-3 w-3" />
-              Paste Week ({copiedWeek.exercises.length})
-            </Button>
-          )}
-          
-          {/* Week Dropdown Menu */}
+        {/* Week Dropdown Menu - Now on the left */}
+        <div className="opacity-0 group-hover/week:opacity-100 transition-opacity">
           {(onCopyWeek || onClearWeek) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -116,7 +98,7 @@ export function AthleteCalendarWeekRow({
                   <MoreVertical className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="z-[100]">
+              <DropdownMenuContent align="start" className="z-[100]">
                 {onCopyWeek && hasExercisesInWeek && (
                   <DropdownMenuItem onClick={() => onCopyWeek(weekStartDate)}>
                     <Copy className="mr-2 h-4 w-4" />
@@ -134,6 +116,25 @@ export function AthleteCalendarWeekRow({
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+          )}
+        </div>
+        
+        <div className="text-xs text-muted-foreground flex-1">
+          Week of {format(week[0].date, 'MMM d')}
+        </div>
+        
+        {/* Paste Week Button - on the right */}
+        <div className="opacity-0 group-hover/week:opacity-100 transition-opacity">
+          {copiedWeek && onPasteWeek && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => onPasteWeek(weekStartDate)}
+              className="h-6 px-2 text-xs gap-1"
+            >
+              <Copy className="h-3 w-3" />
+              Paste Week ({copiedWeek.exercises.length})
+            </Button>
           )}
         </div>
       </div>
