@@ -412,6 +412,150 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     toast({ title: "Session deleted" });
   }, [daySplitStates, toast]);
 
+  // Move a session from one day to another (for drag-and-drop)
+  const handleMoveSession = useCallback((
+    sourceDayDate: string,
+    sourceSessionIndex: number,
+    destDayDate: string
+  ) => {
+    // Get source exercises for this session
+    const sourceExercises = exerciseDistribution.filter(
+      ex => ex.dayDate === sourceDayDate && ex.sessionIndex === sourceSessionIndex
+    );
+    
+    // Calculate new session index at destination (add as new session at end)
+    const destSessionCount = daySplitStates[destDayDate] || 0;
+    const newSessionIndex = destSessionCount;
+    
+    // Update exercise distribution - move exercises to new day/session
+    const newDistribution = exerciseDistribution.map(ex => {
+      if (ex.dayDate === sourceDayDate && ex.sessionIndex === sourceSessionIndex) {
+        return { ...ex, dayDate: destDayDate, sessionIndex: newSessionIndex };
+      }
+      // Adjust session indices for remaining sessions on source day
+      if (ex.dayDate === sourceDayDate && ex.sessionIndex > sourceSessionIndex) {
+        return { ...ex, sessionIndex: ex.sessionIndex - 1 };
+      }
+      return ex;
+    });
+    setExerciseDistribution(newDistribution);
+    
+    // Update session sections - move sections to new day/session
+    const newSections = sessionSections.map(section => {
+      if (section.dayDate === sourceDayDate && section.sessionIndex === sourceSessionIndex) {
+        return { ...section, dayDate: destDayDate, sessionIndex: newSessionIndex };
+      }
+      // Adjust session indices for remaining sections on source day
+      if (section.dayDate === sourceDayDate && section.sessionIndex > sourceSessionIndex) {
+        return { ...section, sessionIndex: section.sessionIndex - 1 };
+      }
+      return section;
+    });
+    setSessionSections(newSections);
+    
+    // Update supersets - move supersets to new day/session
+    const newSupersets = { ...supersets };
+    const sourceSessionSupersets = newSupersets[sourceDayDate]?.[sourceSessionIndex];
+    
+    // Remove from source
+    if (newSupersets[sourceDayDate]) {
+      delete newSupersets[sourceDayDate][sourceSessionIndex];
+      // Shift remaining session indices
+      const shifts: Record<number, any> = {};
+      Object.entries(newSupersets[sourceDayDate]).forEach(([idx, value]) => {
+        const numIdx = parseInt(idx);
+        if (numIdx > sourceSessionIndex) {
+          shifts[numIdx - 1] = value;
+          delete newSupersets[sourceDayDate][numIdx];
+        }
+      });
+      Object.entries(shifts).forEach(([idx, value]) => {
+        newSupersets[sourceDayDate][parseInt(idx)] = value;
+      });
+    }
+    
+    // Add to destination
+    if (sourceSessionSupersets && Object.keys(sourceSessionSupersets).length > 0) {
+      if (!newSupersets[destDayDate]) newSupersets[destDayDate] = {};
+      newSupersets[destDayDate][newSessionIndex] = sourceSessionSupersets;
+    }
+    setSupersets(newSupersets);
+    
+    // Update daySplitStates
+    setDaySplitStates(prev => {
+      const newStates = { ...prev };
+      
+      // Decrement source day count
+      if (newStates[sourceDayDate]) {
+        newStates[sourceDayDate] = Math.max(0, newStates[sourceDayDate] - 1);
+        if (newStates[sourceDayDate] === 0) {
+          delete newStates[sourceDayDate];
+        }
+      }
+      
+      // Increment destination day count
+      newStates[destDayDate] = (newStates[destDayDate] || 0) + 1;
+      
+      return newStates;
+    });
+    
+    // Update session names in trainingDays
+    const sourceDay = trainingDays.find(d => d.date === sourceDayDate);
+    const movedSessionName = sourceDay?.sessionNames?.[sourceSessionIndex] || `Session ${sourceSessionIndex + 1}`;
+    
+    setTrainingDays(prev => {
+      const updated = [...prev];
+      
+      // Update source day - remove the session name
+      const sourceIdx = updated.findIndex(d => d.date === sourceDayDate);
+      if (sourceIdx >= 0) {
+        const newNames = [...(updated[sourceIdx].sessionNames || [])];
+        newNames.splice(sourceSessionIndex, 1);
+        updated[sourceIdx] = { 
+          ...updated[sourceIdx], 
+          sessionNames: newNames, 
+          sessions: Math.max(0, (updated[sourceIdx].sessions || 1) - 1) 
+        };
+      }
+      
+      // Update destination day - add the session name
+      const destIdx = updated.findIndex(d => d.date === destDayDate);
+      if (destIdx >= 0) {
+        const newNames = [...(updated[destIdx].sessionNames || [])];
+        newNames.push(movedSessionName);
+        updated[destIdx] = { 
+          ...updated[destIdx], 
+          sessionNames: newNames, 
+          sessions: (updated[destIdx].sessions || 0) + 1,
+          isTrainingDay: true
+        };
+      } else {
+        // Create new day entry if it doesn't exist
+        const parsedDate = new Date(destDayDate);
+        updated.push({
+          date: destDayDate,
+          dayOfWeek: parsedDate.getDay(),
+          dayName: parsedDate.toLocaleDateString('en-US', { weekday: 'long' }),
+          mesocycleId: sourceDay?.mesocycleId || '',
+          microcycleId: sourceDay?.microcycleId || '',
+          isTestDay: false,
+          isEventDay: false,
+          isTrainingDay: true,
+          intensity: sourceDay?.intensity || 'moderate',
+          sessions: 1,
+          sessionNames: [movedSessionName],
+        });
+      }
+      
+      return updated;
+    });
+    
+    toast({ 
+      title: "Session moved", 
+      description: `Moved to ${new Date(destDayDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` 
+    });
+  }, [exerciseDistribution, sessionSections, supersets, daySplitStates, trainingDays, toast]);
+
   const handleCopySession = useCallback((dayDate: string, sessionIndex: number) => {
     const sessionExercises = exerciseDistribution.filter(
       ex => ex.dayDate === dayDate && ex.sessionIndex === sessionIndex
@@ -1390,6 +1534,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     handleDeleteSession,
     handleCopySession,
     handlePasteSession,
+    handleMoveSession,
     
     // Day handlers
     handleCopyDay,

@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ExerciseDistribution, SessionSection } from '@/types/microcycle-planning';
-import { SubGoal, Event } from '@/types/training';
+import { SubGoal, Event, IntensityLevel } from '@/types/training';
 
 interface CopiedWeekInfo {
   exercises: ExerciseDistribution[];
@@ -55,6 +55,9 @@ interface AthleteCalendarWeekRowProps {
   onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event', name: string) => void;
   availableTests?: SubGoal[];
   availableEvents?: Event[];
+  // Intensity editing
+  intensityLevels?: IntensityLevel[];
+  onIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
 }
 
 export function AthleteCalendarWeekRow({
@@ -81,6 +84,8 @@ export function AthleteCalendarWeekRow({
   onDeleteTestEvent,
   availableTests,
   availableEvents,
+  intensityLevels,
+  onIntensityChange,
 }: AthleteCalendarWeekRowProps) {
   const weekStartDate = format(week[0].date, 'yyyy-MM-dd');
   const hasExercisesInWeek = week.some(day => day.sessions.length > 0);
@@ -162,6 +167,8 @@ export function AthleteCalendarWeekRow({
             onDeleteTestEvent={onDeleteTestEvent}
             availableTests={availableTests}
             availableEvents={availableEvents}
+            intensityLevels={intensityLevels}
+            onIntensityChange={onIntensityChange}
           />
         ))}
       </div>
