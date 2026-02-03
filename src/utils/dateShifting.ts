@@ -4,10 +4,22 @@ import { ExerciseDistribution, SessionSection, SupersetMapping } from '@/types/m
 import { DailyIntensity } from '@/types/daily-intensity';
 
 /**
- * Calculates the day offset between original and new start dates
+ * Normalizes a date to UTC midnight to ensure consistent day-based calculations.
+ * This eliminates timezone-related off-by-one errors when calculating day offsets.
+ */
+function normalizeToUTCMidnight(date: Date): Date {
+  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+}
+
+/**
+ * Calculates the day offset between original and new start dates.
+ * Both dates are normalized to UTC midnight to ensure accurate day-based offset
+ * regardless of the user's timezone.
  */
 export function calculateDayOffset(originalStartDate: Date, newStartDate: Date): number {
-  return differenceInDays(newStartDate, originalStartDate);
+  const normalizedOriginal = normalizeToUTCMidnight(originalStartDate);
+  const normalizedNew = normalizeToUTCMidnight(newStartDate);
+  return differenceInDays(normalizedNew, normalizedOriginal);
 }
 
 /**
