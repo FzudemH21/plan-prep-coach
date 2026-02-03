@@ -1,57 +1,111 @@
 
-## Goal
-Make Athlete Calendar copy/paste (week/day/session) and clear-week reliable and non-destructive:
-- ✅ No more "appears for a split second then disappears"
-- ✅ Paste keeps the correct intensity
-- ✅ Clear week removes all sessions (no phantom sessions) and does not crash
-- ✅ Parameters don't mysteriously "vanish" after assignment/paste
 
-## Fixes Applied
+# Fix Intensity Not Being Copied During Paste Operations
 
-### A) Stop the "reload loop" (COMPLETED)
-**File:** `src/hooks/useAthleteCalendarEditing.ts`
+## Problem Identified
 
-Added:
-- `assignmentsRef` - stable reference prevents loadAssignmentForEditing recreation
-- `lastLoadedAssignmentIdRef` - prevents re-loading same assignment after paste/clear
-- Load guard: `if (lastLoadedAssignmentIdRef.current === assignmentId) return;`
+After analyzing the copy/paste handlers, I found specific bugs where intensity is **not properly applied when pasting to dates that already exist**:
 
-### B) Robust auto-save with debounce (COMPLETED)
-**File:** `src/hooks/useAthleteCalendarEditing.ts`
+### Session Paste Bug (`handlePasteSession`)
+1. **Line 533-538**: When updating an existing day, the `intensity` field is NOT included in the update
+2. **Line 562-563**: `dailyIntensityData` keeps existing intensity instead of applying the copied source intensity
 
-Added:
-- Full `JSON.stringify(savePayload)` fingerprint instead of counts-only
-- 300ms debounce via `saveTimeoutRef`
-- Set fingerprint on load to prevent immediate re-save
+### Week Paste Issue
+The week paste handler (lines 911 and 1007-1018) correctly applies intensity for new days, but may have edge cases where intensity isn't propagated correctly. The fix will ensure consistent behavior.
 
-### C) Fix "0 sessions becomes 1" (COMPLETED)
-**Files:**
-- `src/components/athletes/AthleteCalendarView.tsx`
-- `src/hooks/useAthleteCalendarEditing.ts`
+### Day Paste - Works Correctly
+The day paste handler (lines 692-728) already updates intensity correctly in both `trainingDays` and `dailyIntensityData`.
 
-Fixed:
-- Replaced `||` with `??` for splitState checks
-- Proper `hasLiveData` condition: exercises > 0 OR splitState > 0 OR tests/events
-- Cleared days no longer show phantom "Session 1"
+---
 
-### D) Paste operations include complete metadata (COMPLETED)
-**File:** `src/hooks/useAthleteCalendarEditing.ts`
+## Solution
 
-Extended interfaces:
-- `CopiedSession`: added `supersets`, `sourceMesocycleId`, `sourceMicrocycleId`, `sourceIntensity`
-- `CopiedDay`: added `sourceMesocycleId`, `sourceMicrocycleId`
+### File: `src/hooks/useAthleteCalendarEditing.ts`
 
-Updated handlers:
-- `handleCopySession`: captures supersets and metadata
-- `handlePasteSession`: creates complete TrainingDay with metadata when pasting outside range
-- `handleCopyDay`: captures meso/micro IDs
-- `handlePasteDay`: creates TrainingDay with metadata when pasting outside range
-- Week paste already had merge logic, now carries intensity correctly
+#### Fix 1: Session Paste - Update intensity for existing days
 
-## Acceptance checks
-1) ✅ Assign a program to an athlete.
-2) ✅ Copy a session → paste outside range → stays visible with supersets
-3) ✅ Copy a day → paste outside range → all sessions show
-4) ✅ Copy a week → paste outside range → sessions persist with correct intensity
-5) ✅ Clear week → no crash, all sessions removed
-6) ✅ Refresh page → pasted/cleared state persists
+**Current code (lines 526-538):**
+```typescript
+if (existingIdx >= 0) {
+  // Update existing day
+  const existingDay = updated[existingIdx];
+  const sessionNames = [...(existingDay.sessionNames || [])];
+  while (sessionNames.length <= newSessionIndex) {
+    sessionNames.push(`Session ${sessionNames.length + 1}`);
+  }
+  updated[existingIdx] = {
+    ...existingDay,
+    sessions: newSplitState,
+    sessionNames,
+    isTrainingDay: true,
+    // MISSING: intensity field!
+  };
+}
+```
+
+**Fixed code:**
+```typescript
+if (existingIdx >= 0) {
+  // Update existing day - include intensity from source session
+  const existingDay = updated[existingIdx];
+  const sessionNames = [...(existingDay.sessionNames || [])];
+  while (sessionNames.length <= newSessionIndex) {
+    sessionNames.push(`Session ${sessionNames.length + 1}`);
+  }
+  updated[existingIdx] = {
+    ...existingDay,
+    sessions: newSplitState,
+    sessionNames,
+    isTrainingDay: true,
+    intensity, // FIX: Apply copied intensity
+  };
+}
+```
+
+#### Fix 2: Session Paste - Update dailyIntensityData for existing days
+
+**Current code (lines 560-566):**
+```typescript
+setDailyIntensityData(prev => {
+  const existingIdx = prev.findIndex(di => di.date === targetDate);
+  if (existingIdx >= 0) {
+    return prev; // Keep existing intensity <-- BUG
+  }
+  return [...prev, { date: targetDate, intensity }].sort(...);
+});
+```
+
+**Fixed code:**
+```typescript
+setDailyIntensityData(prev => {
+  const updated = [...prev];
+  const existingIdx = updated.findIndex(di => di.date === targetDate);
+  if (existingIdx >= 0) {
+    // FIX: Update existing entry with copied intensity
+    updated[existingIdx] = { ...updated[existingIdx], intensity };
+    return updated;
+  }
+  return [...updated, { date: targetDate, intensity }].sort((a, b) => a.date.localeCompare(b.date));
+});
+```
+
+---
+
+## Summary of Changes
+
+| Location | Issue | Fix |
+|----------|-------|-----|
+| `handlePasteSession` lines 533-538 | Missing `intensity` when updating existing day | Add `intensity` field to update object |
+| `handlePasteSession` lines 560-566 | Keeps old intensity for existing days | Update existing entry with source intensity |
+
+---
+
+## Expected Outcome
+
+After this fix:
+- **Copy Session → Paste Session**: Intensity from source day is applied to target day
+- **Copy Day → Paste Day**: Already works (no changes needed)
+- **Copy Week → Paste Week**: Intensity is correctly copied from each source day
+
+The intensity indicator on the calendar should now match the source day's intensity after any paste operation.
+
