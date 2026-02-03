@@ -885,66 +885,6 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         </CardContent>
       </Card>
 
-      {/* Assignments List */}
-      {assignments.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Assigned Programs</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {assignments
-                .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
-                .map(assignment => (
-                  <div
-                    key={assignment.id}
-                    className={cn(
-                      "flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors",
-                      selectedAssignmentId === assignment.id && isMasterMode
-                        ? "border-primary bg-primary/5"
-                        : "hover:bg-muted/50"
-                    )}
-                    onClick={() => {
-                      setSelectedAssignmentId(assignment.id);
-                      if (!isMasterMode) {
-                        setViewMode('master');
-                      }
-                    }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={cn(
-                        "w-3 h-3 rounded-full",
-                        selectedAssignmentId === assignment.id ? "bg-primary" : "bg-muted-foreground/30"
-                      )} />
-                      <div>
-                        <p className="font-medium">{assignment.programName}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {format(new Date(assignment.startDate), 'MMM d, yyyy')} - {format(new Date(assignment.endDate), 'MMM d, yyyy')}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary">
-                        {assignment.assignedMesocycles.length} mesocycle(s)
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeleteAssignment(assignment);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Assign Program Dialog */}
       <AssignProgramDialog
