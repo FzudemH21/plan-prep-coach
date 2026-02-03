@@ -58,6 +58,8 @@ interface AthleteCalendarWeekRowProps {
   // Intensity editing
   intensityLevels?: IntensityLevel[];
   onIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
+  // Drag end timestamp for click suppression
+  lastDragEndTimestamp?: number;
 }
 
 export function AthleteCalendarWeekRow({
@@ -86,6 +88,7 @@ export function AthleteCalendarWeekRow({
   availableEvents,
   intensityLevels,
   onIntensityChange,
+  lastDragEndTimestamp,
 }: AthleteCalendarWeekRowProps) {
   const weekStartDate = format(week[0].date, 'yyyy-MM-dd');
   const hasExercisesInWeek = week.some(day => day.sessions.length > 0);
@@ -169,6 +172,7 @@ export function AthleteCalendarWeekRow({
             availableEvents={availableEvents}
             intensityLevels={intensityLevels}
             onIntensityChange={onIntensityChange}
+            lastDragEndTimestamp={lastDragEndTimestamp}
           />
         ))}
       </div>

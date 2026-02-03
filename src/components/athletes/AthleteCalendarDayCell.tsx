@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { format, isToday } from 'date-fns';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { Badge } from '@/components/ui/badge';
@@ -79,6 +79,8 @@ interface AthleteCalendarDayCellProps {
   // Intensity editing
   intensityLevels?: IntensityLevel[];
   onIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
+  // Drag end timestamp for click suppression
+  lastDragEndTimestamp?: number;
 }
 
 export function AthleteCalendarDayCell({
@@ -102,10 +104,10 @@ export function AthleteCalendarDayCell({
   availableEvents = [],
   intensityLevels,
   onIntensityChange,
+  lastDragEndTimestamp = 0,
 }: AthleteCalendarDayCellProps) {
   const [testEventDialogOpen, setTestEventDialogOpen] = useState(false);
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
-  const lastDragEndTime = useRef<number>(0);
   
   const hasTraining = day.sessions.length > 0;
   const isTestDay = day.testNames && day.testNames.length > 0;
@@ -361,20 +363,16 @@ export function AthleteCalendarDayCell({
                     draggableId={session.id}
                     index={idx}
                   >
-                    {(draggableProvided, draggableSnapshot) => {
-                      // Track when drag ends for click suppression
-                      if (!draggableSnapshot.isDragging && draggableSnapshot.draggingOver === null) {
-                        lastDragEndTime.current = Date.now();
-                      }
-                      return (
+                  {(draggableProvided, draggableSnapshot) => {
+                    return (
                         <div
                           ref={draggableProvided.innerRef}
                           {...draggableProvided.draggableProps}
                           style={draggableProvided.draggableProps.style}
                           onClick={(e) => {
                             e.stopPropagation();
-                            // Suppress clicks right after drag ends
-                            if (Date.now() - lastDragEndTime.current < 200) return;
+                            // Suppress clicks right after drag ends (using parent-provided timestamp)
+                            if (Date.now() - lastDragEndTimestamp < 200) return;
                             onSessionClick?.(day.dateString, session.sessionIndex, session.assignmentId || day.assignmentId || '');
                           }}
                           className={cn(
