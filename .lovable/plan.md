@@ -1,175 +1,158 @@
 
-# Fix: Ad-Hoc Method Parameter Grid Not Appearing
+## What’s happening (root cause)
 
-## Problem Analysis
+Even though `handleAdHocMethodSelected()` correctly creates **empty** exercise parameters (based on Toolbox + default Sets), those empty parameters are getting **overwritten immediately after** the exercise is added.
 
-When adding exercises via the ad-hoc workflow in the Athlete Calendar, the parameter grid doesn't appear for methods that are NOT in the method periodization table. However, if a method IS in the periodization table (like "Lower Body Resistance Training - Strength"), parameters appear correctly.
+The overwrite happens because `WorkoutSessionSheet` has a sync effect that rebuilds `workoutSections` from:
 
-### Root Cause
+- `exercises` (Step 1 / distribution list), and
+- `parameterValues` (which still contains the **assigned program’s method periodization values**)
 
-The issue is in `handleAdHocMethodSelected` in `WorkoutSessionSheet.tsx`. The function filters `toolboxData.entries` to find method parameters, but the matching logic fails silently in certain cases:
+When you add an exercise, `onDistributionChange()` updates `exercises`, which triggers this effect:
 
-```typescript
-const methodEntries = toolboxData?.entries.filter(entry => 
-  entry.category === toolboxCategory && 
-  (toolboxSubCategory === '' ? entry.subCategory === '' : entry.subCategory === toolboxSubCategory)
-) || [];
-```
+- `buildSectionsFromExercises(exercises, parameterValues)` runs
+- it finds periodization `storedParams` for that method (e.g. LBRT Strength)
+- it rebuilds the exercise parameters using those values
+- result: you see the same “method periodization table” values again
 
-**Two issues identified:**
+So the problem is not the ad-hoc dialog anymore; it’s the **rebuild logic** that assumes method periodization is the “source of truth”.
 
-1. **Empty result on mismatch**: If `methodEntries` returns empty (due to case sensitivity, spacing differences, or data format issues), `buildExerciseParams()` returns `{}`, causing `WorkoutExerciseCard` to show no parameter grid.
+---
 
-2. **No fallback handling**: When `methodEntries` is empty, there's no fallback to create at least a basic set of parameters (like "Sets" with a default of 3).
+## Goal (your requirement)
 
-### Flow Analysis
+For exercises added via the Toolbox/ad-hoc flow in Athlete Calendar:
 
-```text
-User selects exercise in ad-hoc session
-        ↓
-AdHocMethodSelectionDialog shows methods from toolboxData
-        ↓
-User selects method (e.g., "Sprinting - Acceleration") 
-and configures parameter visibility
-        ↓
-handleAdHocMethodSelected receives:
-  - methodId: "Sprinting - Acceleration"
-  - categoryName: "Acceleration"
-  - parameterVisibility: {...}
-  - initialParameters: {...}
-        ↓
-Filter toolboxData for matching entries ← FAILS HERE (returns [])
-        ↓
-buildExerciseParams() returns {} (empty)
-        ↓
-Exercise added with empty parameters
-        ↓
-WorkoutExerciseCard shows no grid
-```
+- Always show a **blank parameter grid**
+- Sets should exist as rows (default 3, and you can add/remove sets)
+- No values should be pulled from the assigned program’s method periodization table, even if the method exists there
 
-## Solution
+---
 
-Fix the `handleAdHocMethodSelected` function to:
+## Fix approach (high-level)
 
-1. Use a more robust matching approach that handles edge cases
-2. Add fallback logic when no entries are found  
-3. Use the `initialParameters` passed from the dialog (which has correct parameters from `generateInitialParameters`)
+We need to stop the “rebuild from periodization” step from clobbering the just-created blank parameters.
 
-### Technical Changes
+### Key idea
+When the sheet rebuilds from distribution, it must **preserve existing in-memory exercise.parameters** (the blank ones we just created) instead of regenerating them from `parameterValues`.
 
-**File: `src/components/microcycle-planning/WorkoutSessionSheet.tsx`**
+Optionally (recommended), we should also make the reopen behavior stable by preferring the saved `workoutSections_*` snapshot when available.
 
-Location: `handleAdHocMethodSelected` function (lines 1237-1371)
+---
 
-**Change 1: Use initialParameters from the dialog**
+## Implementation plan (code changes)
 
-The `AdHocMethodSelectionDialog` already generates correct initial parameters via `generateInitialParameters()`. The `handleAdHocMethodSelected` function receives these as `initialParameters` but currently ignores them and re-generates from scratch. 
+### 1) Preserve exercise IDs when rebuilding (critical for matching)
+In `buildSectionsFromExercises()`, exercises are currently created with IDs like:
 
-We should use `initialParameters` as the base and enhance with per-set expansion:
+- `id: \`${ex.exerciseId}-${index}\``
 
-```typescript
-// Instead of building from scratch, use the initialParameters from dialog
-// and expand for per-set storage
-const buildExerciseParams = (): Record<string, string | number> => {
-  const params: Record<string, string | number> = { ...initialParameters };
-  
-  // Find set count from initialParameters
-  const setParamEntry = methodEntries.find(e => e.isSetParameter);
-  const setParamName = setParamEntry?.parameterName || 
-                      methodEntries.find(e => /^sets?$/i.test(e.parameterName))?.parameterName ||
-                      Object.keys(initialParameters).find(k => /^sets?$/i.test(k)) ||
-                      'Sets';
-  
-  const setCount = Number(initialParameters[setParamName] || params[setParamName] || 3);
-  
-  // Ensure set parameter is present
-  if (!params[setParamName]) {
-    params[setParamName] = setCount;
-  }
-  
-  // Add units and per-set keys
-  methodEntries.forEach(entry => {
-    if (entry.isFrequencyParameter) return;
-    
-    const paramName = entry.parameterName;
-    
-    // Add unit if quantitative
-    if (entry.parameterType === 'quantitative' && entry.options.length > 0) {
-      params[`${paramName}_unit`] = entry.options[0];
-    }
-    
-    // Create per-set keys for non-set parameters
-    if (!entry.isSetParameter && setCount > 0) {
-      for (let i = 1; i <= setCount; i++) {
-        if (params[`${paramName}_set${i}`] === undefined) {
-          params[`${paramName}_set${i}`] = '';
-        }
-      }
-    }
-  });
-  
-  // FALLBACK: If still no displayable parameters (beyond set param), 
-  // create basic structure from initialParameters
-  if (methodEntries.length === 0 && Object.keys(initialParameters).length > 0) {
-    Object.keys(initialParameters).forEach(paramName => {
-      if (/^sets?$/i.test(paramName)) {
-        params[paramName] = setCount;
-      } else if (setCount > 0) {
-        for (let i = 1; i <= setCount; i++) {
-          if (params[`${paramName}_set${i}`] === undefined) {
-            params[`${paramName}_set${i}`] = '';
-          }
-        }
-      }
-    });
-  }
-  
-  return params;
-};
-```
+That breaks stable matching (and also makes it impossible to reliably preserve parameters).
 
-**Change 2: More robust toolbox entry matching**
+Change it to:
 
-Add case-insensitive matching and trim whitespace:
+- `id: ex.id || \`${ex.exerciseId}-${index}\``
 
-```typescript
-const methodEntries = toolboxData?.entries.filter(entry => {
-  const categoryMatch = entry.category.toLowerCase().trim() === toolboxCategory.toLowerCase().trim();
-  const subCategoryMatch = toolboxSubCategory === '' 
-    ? (!entry.subCategory || entry.subCategory.trim() === '')
-    : (entry.subCategory?.toLowerCase().trim() === toolboxSubCategory.toLowerCase().trim());
-  
-  return categoryMatch && subCategoryMatch;
-}) || [];
-```
+This ensures that when `handleAdHocMethodSelected()` creates new exercises with stable IDs, the rebuild can recognize and reuse them.
 
-**Change 3: Add debug logging**
+**File**
+- `src/components/microcycle-planning/WorkoutSessionSheet.tsx`
 
-Add console logging to trace issues during development:
+---
 
-```typescript
-console.log('[handleAdHocMethodSelected] Matching:', {
-  methodId,
-  toolboxCategory,
-  toolboxSubCategory,
-  foundEntries: methodEntries.length,
-  initialParametersKeys: Object.keys(initialParameters)
-});
-```
+### 2) Merge rebuild results with existing `workoutSections` (prevents “empty → overwritten”)
+Update the sync effect that currently does:
 
-## Implementation Summary
+- `setWorkoutSections(buildSectionsFromExercises(exercises, parameterValues))`
 
-| File | Change |
-|------|--------|
-| `src/components/microcycle-planning/WorkoutSessionSheet.tsx` | Fix `handleAdHocMethodSelected` to use `initialParameters` from dialog and add robust fallback handling |
+Instead, rebuild and then merge/overlay by exercise ID:
 
-## Expected Outcome
+- If an exercise already exists in current `workoutSections`, keep its:
+  - `parameters`
+  - `notes`, `eachSide`
+  - `autoCalculateWeight`, `autoCalculateTargetHR`
+  - any other per-exercise runtime state
+- Only generate parameters for *brand new* exercises not present yet.
 
-1. When selecting any method from the ad-hoc dialog (including those not in periodization), the parameter grid will appear with:
-   - The set parameter (e.g., "Sets") with default value of 3
-   - All configured parameters as empty inputs for user to fill
-   - Per-set rows matching the set count
+This guarantees:
+- The blank params created in `handleAdHocMethodSelected()` survive the distribution sync
+- Adding a second exercise won’t wipe edits you already made in the first one (this also fixes a subtle “unsaved edits get wiped when adding another exercise” bug)
 
-2. Users can add/remove sets and fill in parameter values for ad-hoc exercises
+**File**
+- `src/components/microcycle-planning/WorkoutSessionSheet.tsx`
 
-3. The visibility toggles configured in the ad-hoc dialog are respected
+---
+
+### 3) Stop periodization defaults from being applied to ad-hoc-added exercises (recommended for correctness on reopen)
+Right now, if you close/reopen, the sheet can still rebuild from `parameterValues` and reintroduce periodization values.
+
+To prevent that robustly, add a lightweight marker on distribution entries created by the ad-hoc flow, for example:
+
+- `parameterSource?: 'toolbox' | 'periodization'`
+
+Then:
+- In `handleAdHocMethodSelected()`, set `parameterSource: 'toolbox'` on the new distribution entries
+- In `buildSectionsFromExercises()`, if `parameterSource === 'toolbox'`, generate params as:
+  - Sets = 3 (or Toolbox set parameter name)
+  - other Toolbox parameters = `''`
+  - per-set keys = `''`
+  - never read from `parameterValues`
+
+This ensures:
+- Even after a full rebuild (or reopen), Toolbox-added exercises remain blank
+
+**Files**
+- `src/components/microcycle-planning/WorkoutSessionSheet.tsx`
+- `src/types/microcycle-planning.ts` (extend `ExerciseDistribution`)
+  - (and update any local `ExerciseDistribution` interfaces that shadow it)
+
+---
+
+### 4) (Optional but recommended) Prefer saved `workoutSections_*` on open in Athlete Calendar context
+The sheet already saves `workoutSections_${mesocycleId}_${dayDate}_${sessionIndex}` on Save.
+
+But initialization currently ignores it whenever `exercises.length > 0`.
+
+For Athlete Calendar, this localStorage snapshot is the only reliable way to persist *per-exercise* parameter grids independent of method-periodization.
+
+So, when opening the sheet:
+- if `sectionsKey` exists in localStorage, load it
+- merge with current `exercises` distribution (add/remove exercises as needed)
+
+This makes the experience consistent across sessions and reloads.
+
+**File**
+- `src/components/microcycle-planning/WorkoutSessionSheet.tsx`
+
+---
+
+## How we’ll verify the fix (manual test checklist)
+
+1) Athlete Calendar → “Add Session” → open session sheet  
+2) Add exercise → pick a method that IS in the assigned program periodization table (e.g. LBRT Strength)  
+3) Confirm in the grid:
+   - Sets shows (default 3)
+   - all parameter cells are blank
+   - no prefilled “80% / 5 reps / etc” values appear
+4) Add a second exercise after editing the first:
+   - confirm the first exercise’s edited values did not get wiped
+5) Save, close, reopen:
+   - confirm the blank grid / your entered values persist
+6) Try a method NOT in the periodization table:
+   - confirm it behaves identically (blank grid)
+
+---
+
+## Expected outcome
+
+- Toolbox-selected methods in Athlete Calendar no longer “inherit” periodization-table values from the assigned program.
+- You always start with a clean, editable grid (Sets + blank per-set cells), and can add sets and fill values freely.
+
+---
+
+<lov-actions>
+<lov-suggestion message="Test end-to-end: Athlete Calendar → Add Session → add an exercise → select a toolbox method that exists in the assigned program (e.g., LBRT Strength) and confirm the grid stays blank (no periodization values), then add a 2nd exercise and confirm the 1st exercise’s edits aren’t wiped.">Verify end-to-end behavior</lov-suggestion>
+<lov-suggestion message="Fix parameter visibility overrides so the parameters checked/unchecked in the Ad-Hoc Method dialog are actually respected per exercise (and persist on save/reopen).">Make parameter visibility per-exercise</lov-suggestion>
+<lov-suggestion message="Add an explicit 'Template session' vs 'Ad-hoc session' indicator in the UI (and store it), so it’s always clear when a session should pull defaults vs start blank.">Label ad-hoc sessions</lov-suggestion>
+<lov-suggestion message="Persist per-exercise parameter values into the athlete-assignment snapshot (instead of relying on workoutSections_* localStorage), so everything is stored in one place and avoids cross-assignment collisions.">Unify persistence in assignment snapshot</lov-suggestion>
+</lov-actions>
