@@ -10,8 +10,13 @@ import { useToast } from '@/hooks/use-toast';
 interface CopiedSession {
   exercises: ExerciseDistribution[];
   sections: SessionSection[];
+  supersets: { [sectionId: string]: { [supersetId: string]: string[] } }; // Added for session paste
   sourceDate: string;
   sessionIndex: number;
+  // Metadata for creating complete days when pasting outside range
+  sourceMesocycleId?: string;
+  sourceMicrocycleId?: string;
+  sourceIntensity?: IntensityLevel;
 }
 
 interface CopiedDay {
@@ -23,6 +28,9 @@ interface CopiedDay {
   splitState?: number;
   testNames?: string[];
   eventNames?: string[];
+  // Metadata for creating complete days when pasting outside range
+  sourceMesocycleId?: string;
+  sourceMicrocycleId?: string;
 }
 
 interface CopiedWeek {
@@ -65,19 +73,32 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   // Flag to prevent auto-save during initial load
   const [isInitializing, setIsInitializing] = useState(false);
   
-  // Refs for race condition prevention (synchronous guards)
+  // === CRITICAL REFS FOR STABILITY ===
+  // These refs prevent the "flicker then disappear" bug caused by reload loops
+  
+  // Stable reference to assignments - prevents loadAssignmentForEditing from being recreated on every render
+  const assignmentsRef = useRef(assignments);
+  useEffect(() => { assignmentsRef.current = assignments; }, [assignments]);
+  
+  // Synchronous loading guard - prevents auto-save during load
   const loadingAssignmentIdRef = useRef<string | null>(null);
   
-  // Ref to track last saved state to prevent unnecessary saves (infinite loop prevention)
-  const lastSavedStateRef = useRef<string>('');
+  // Tracks the last successfully loaded assignment - prevents re-loading the same assignment
+  const lastLoadedAssignmentIdRef = useRef<string | null>(null);
   const loadedAssignmentIdRef = useRef<string | null>(null);
+  
+  // Robust auto-save fingerprint - full content comparison, not just counts
+  const lastSavedStateRef = useRef<string>('');
+  
+  // Debounce timer for auto-save
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Copy/paste state
   const [copiedSession, setCopiedSession] = useState<CopiedSession | null>(null);
   const [copiedDay, setCopiedDay] = useState<CopiedDay | null>(null);
   const [copiedWeek, setCopiedWeek] = useState<CopiedWeek | null>(null);
   
-  // Get selected assignment
+  // Get selected assignment - use ref for stability in callbacks
   const selectedAssignment = useMemo(() => 
     assignments.find(a => a.id === selectedAssignmentId),
     [assignments, selectedAssignmentId]
@@ -135,10 +156,50 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     return days;
   }, []);
 
-  // Load assignment for editing
+  // Initialize from assignment snapshot - MUST be defined before loadAssignmentForEditing
+  const initializeFromAssignment = useCallback((assignment: AthleteCalendarAssignment) => {
+    const days = buildTrainingDaysFromAssignment(assignment);
+    setTrainingDays(days);
+    setExerciseDistribution([]);
+    setSessionSections([]);
+    setSupersets({});
+    setParameterValues({});
+    
+    // Build initial daySplitStates (1 session per training day)
+    const splitStates: Record<string, number> = {};
+    days.forEach(day => {
+      splitStates[day.date] = day.intensity === 'off' ? 0 : 1;
+    });
+    setDaySplitStates(splitStates);
+    
+    // Build daily intensity
+    const intensities = days.map(d => ({ date: d.date, intensity: d.intensity }));
+    setDailyIntensityData(intensities);
+    
+    // Set fingerprint for the initialized state
+    const initFingerprint = JSON.stringify({
+      exerciseDistribution: [],
+      sessionSections: [],
+      supersets: {},
+      parameterValues: {},
+      dailyIntensity: intensities,
+      trainingDays: days,
+      daySplitStates: splitStates,
+    });
+    lastSavedStateRef.current = initFingerprint;
+  }, [buildTrainingDaysFromAssignment]);
+
+  // Load assignment for editing - uses assignmentsRef to prevent recreation on every render
   const loadAssignmentForEditing = useCallback((assignmentId: string) => {
-    const assignment = assignments.find(a => a.id === assignmentId);
+    // Use ref instead of closure to prevent callback recreation
+    const assignment = assignmentsRef.current.find(a => a.id === assignmentId);
     if (!assignment) return;
+    
+    // CRITICAL: Prevent re-loading the same assignment (main fix for flicker/disappear)
+    if (lastLoadedAssignmentIdRef.current === assignmentId) {
+      console.log('[loadAssignmentForEditing] Already loaded, skipping:', assignmentId);
+      return;
+    }
     
     // CRITICAL: Set loading guard SYNCHRONOUSLY before any state updates
     // This prevents auto-save from overwriting data during load
@@ -172,6 +233,18 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
           : buildTrainingDaysFromAssignment(assignment, storedDailyIntensity);
         setTrainingDays(days);
         
+        // Set the fingerprint to match loaded data so we don't immediately re-save
+        const loadedFingerprint = JSON.stringify({
+          exerciseDistribution: storedExercises,
+          sessionSections: storedSections,
+          supersets: storedSupersets,
+          parameterValues: storedParams,
+          dailyIntensity: storedDailyIntensity,
+          trainingDays: days,
+          daySplitStates: storedDaySplitStates,
+        });
+        lastSavedStateRef.current = loadedFingerprint;
+        
         console.log('[loadAssignmentForEditing] Loaded data:', {
           exercises: storedExercises.length,
           sections: storedSections.length,
@@ -192,32 +265,11 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       if (loadingAssignmentIdRef.current === assignmentId) {
         loadingAssignmentIdRef.current = null;
         loadedAssignmentIdRef.current = assignmentId;
+        lastLoadedAssignmentIdRef.current = assignmentId; // Prevent future re-loads
         setIsInitializing(false);
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assignments, buildTrainingDaysFromAssignment]);
-
-  // Initialize from assignment snapshot
-  const initializeFromAssignment = useCallback((assignment: AthleteCalendarAssignment) => {
-    const days = buildTrainingDaysFromAssignment(assignment);
-    setTrainingDays(days);
-    setExerciseDistribution([]);
-    setSessionSections([]);
-    setSupersets({});
-    setParameterValues({});
-    
-    // Build initial daySplitStates (1 session per training day)
-    const splitStates: Record<string, number> = {};
-    days.forEach(day => {
-      splitStates[day.date] = day.intensity === 'off' ? 0 : 1;
-    });
-    setDaySplitStates(splitStates);
-    
-    // Build daily intensity
-    const intensities = days.map(d => ({ date: d.date, intensity: d.intensity }));
-    setDailyIntensityData(intensities);
-  }, [buildTrainingDaysFromAssignment]);
+  }, [buildTrainingDaysFromAssignment, initializeFromAssignment]);
 
   // Load when assignment changes
   useEffect(() => {
@@ -226,7 +278,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     }
   }, [selectedAssignmentId, loadAssignmentForEditing]);
 
-  // Auto-save edits to localStorage with race condition guard and infinite loop prevention
+  // Auto-save edits to localStorage with ROBUST fingerprinting and debounce
   useEffect(() => {
     // CRITICAL: Multiple guards to prevent overwriting data during load
     // 1. No assignment selected
@@ -238,23 +290,8 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     // 4. This assignment hasn't been successfully loaded yet
     if (loadedAssignmentIdRef.current !== selectedAssignmentId) return;
     
-    // INFINITE LOOP PREVENTION: Only save if data actually changed
-    // Compare a subset of the state that represents meaningful changes
-    const stateFingerprint = JSON.stringify({
-      ex: exerciseDistribution.length,
-      sec: sessionSections.length,
-      sup: Object.keys(supersets).length,
-      split: Object.entries(daySplitStates).filter(([_, v]) => v > 0).length,
-      days: trainingDays.length,
-    });
-    
-    if (stateFingerprint === lastSavedStateRef.current) {
-      return; // Skip save if state hasn't meaningfully changed
-    }
-    lastSavedStateRef.current = stateFingerprint;
-    
-    const storageKey = `athlete-assignment-${selectedAssignmentId}`;
-    const dataToSave = {
+    // Build full save payload for accurate fingerprinting
+    const savePayload = {
       exerciseDistribution,
       sessionSections,
       supersets,
@@ -262,10 +299,44 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       dailyIntensity: dailyIntensityData,
       trainingDays,
       daySplitStates,
-      lastModified: new Date().toISOString(),
     };
     
-    localStorage.setItem(storageKey, JSON.stringify(dataToSave));
+    // ROBUST FINGERPRINT: Full content comparison (not just counts)
+    // This catches ALL changes including parameter values, intensities, and metadata
+    const stateFingerprint = JSON.stringify(savePayload);
+    
+    if (stateFingerprint === lastSavedStateRef.current) {
+      return; // Skip save if state hasn't changed at all
+    }
+    
+    // Clear any pending save timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    
+    // DEBOUNCE: Wait 300ms before saving to prevent rapid-fire writes
+    saveTimeoutRef.current = setTimeout(() => {
+      // Re-check guards in case something changed during debounce
+      if (loadingAssignmentIdRef.current !== null) return;
+      if (loadedAssignmentIdRef.current !== selectedAssignmentId) return;
+      
+      const storageKey = `athlete-assignment-${selectedAssignmentId}`;
+      const dataToSave = {
+        ...savePayload,
+        lastModified: new Date().toISOString(),
+      };
+      
+      localStorage.setItem(storageKey, JSON.stringify(dataToSave));
+      lastSavedStateRef.current = stateFingerprint;
+      console.log('[Auto-save] Saved assignment data');
+    }, 300);
+    
+    // Cleanup timeout on unmount or deps change
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
   }, [
     selectedAssignmentId,
     isInitializing,
@@ -354,15 +425,26 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       return;
     }
     
+    // Get supersets for this session
+    const sessionSupersets = supersets[dayDate]?.[sessionIndex] || {};
+    
+    // Get metadata from source day for creating complete days when pasting outside range
+    const sourceDay = trainingDays.find(d => d.date === dayDate);
+    const dayIntensity = dailyIntensityData.find(d => d.date === dayDate);
+    
     setCopiedSession({
       exercises: sessionExercises,
       sections: sessionSectionsForSession,
+      supersets: sessionSupersets,
       sourceDate: dayDate,
       sessionIndex,
+      sourceMesocycleId: sourceDay?.mesocycleId,
+      sourceMicrocycleId: sourceDay?.microcycleId,
+      sourceIntensity: dayIntensity?.intensity || sourceDay?.intensity,
     });
     
     toast({ title: "Session copied", description: `${sessionExercises.length} exercise(s) copied` });
-  }, [exerciseDistribution, sessionSections, toast]);
+  }, [exerciseDistribution, sessionSections, supersets, trainingDays, dailyIntensityData, toast]);
 
   const handlePasteSession = useCallback((targetDate: string) => {
     if (!copiedSession) return;
@@ -373,10 +455,11 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       : -1;
     const newSessionIndex = maxSessionIndex + 1;
     
-    setDaySplitStates(prev => {
-      const current = prev[targetDate] ?? 1;
-      return { ...prev, [targetDate]: Math.max(current, newSessionIndex + 1) };
-    });
+    // Calculate initial splitState for target day
+    const currentSplitState = daySplitStates[targetDate] ?? 0;
+    const newSplitState = Math.max(currentSplitState, newSessionIndex + 1);
+    
+    setDaySplitStates(prev => ({ ...prev, [targetDate]: newSplitState }));
     
     const sectionIdMapping = new Map<string, string>();
     copiedSession.sections.forEach(section => {
@@ -390,10 +473,10 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       sessionIndex: newSessionIndex,
     }));
     
-    const oldToNewExerciseId: Record<string, string> = {};
+    const exerciseIdMapping = new Map<string, string>();
     const pastedExercises = copiedSession.exercises.map(ex => {
       const newId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      oldToNewExerciseId[ex.id] = newId;
+      exerciseIdMapping.set(ex.id, newId);
       return {
         ...ex,
         id: newId,
@@ -406,20 +489,85 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     setExerciseDistribution(prev => [...prev, ...pastedExercises]);
     setSessionSections(prev => [...prev, ...pastedSections]);
     
-    setTrainingDays(prev =>
-      prev.map(day => {
-        if (day.date !== targetDate) return day;
-        const sessionNames = [...(day.sessionNames || [])];
+    // Remap and copy supersets for the pasted session
+    setSupersets(prev => {
+      const newSupersets = { ...prev };
+      if (Object.keys(copiedSession.supersets).length > 0) {
+        if (!newSupersets[targetDate]) {
+          newSupersets[targetDate] = {};
+        }
+        newSupersets[targetDate][newSessionIndex] = {};
+        
+        Object.entries(copiedSession.supersets).forEach(([sectionKey, supersetMap]) => {
+          const destSectionKey = sectionKey === '__unsectioned__'
+            ? '__unsectioned__'
+            : (sectionIdMapping.get(sectionKey) || sectionKey);
+          newSupersets[targetDate][newSessionIndex][destSectionKey] = {};
+          
+          Object.entries(supersetMap).forEach(([supersetId, exerciseIds]) => {
+            const mappedIds = exerciseIds.map(id => exerciseIdMapping.get(id)).filter(Boolean) as string[];
+            if (mappedIds.length >= 2) {
+              newSupersets[targetDate][newSessionIndex][destSectionKey][supersetId] = mappedIds;
+            }
+          });
+        });
+      }
+      return newSupersets;
+    });
+    
+    // FIX: Use merge logic to ensure target day exists (for pasting outside range)
+    const targetDateObj = new Date(targetDate);
+    const intensity = copiedSession.sourceIntensity || ('moderate' as IntensityLevel);
+    
+    setTrainingDays(prev => {
+      const updated = [...prev];
+      const existingIdx = updated.findIndex(d => d.date === targetDate);
+      
+      if (existingIdx >= 0) {
+        // Update existing day
+        const existingDay = updated[existingIdx];
+        const sessionNames = [...(existingDay.sessionNames || [])];
         while (sessionNames.length <= newSessionIndex) {
           sessionNames.push(`Session ${sessionNames.length + 1}`);
         }
-        return { ...day, sessions: newSessionIndex + 1, sessionNames };
-      })
-    );
+        updated[existingIdx] = {
+          ...existingDay,
+          sessions: newSplitState,
+          sessionNames,
+          isTrainingDay: true,
+        };
+      } else {
+        // Add new day entry with metadata from source session
+        updated.push({
+          date: targetDate,
+          dayOfWeek: targetDateObj.getDay(),
+          dayName: format(targetDateObj, 'EEEE'),
+          mesocycleId: copiedSession.sourceMesocycleId || '',
+          microcycleId: copiedSession.sourceMicrocycleId || '',
+          isTrainingDay: true,
+          isTestDay: false,
+          isEventDay: false,
+          intensity,
+          sessions: newSplitState,
+          sessionNames: Array.from({ length: newSplitState }, (_, i) => `Session ${i + 1}`),
+        } as TrainingDay);
+      }
+      
+      return updated.sort((a, b) => a.date.localeCompare(b.date));
+    });
+    
+    // Also ensure dailyIntensityData has an entry
+    setDailyIntensityData(prev => {
+      const existingIdx = prev.findIndex(di => di.date === targetDate);
+      if (existingIdx >= 0) {
+        return prev; // Keep existing intensity
+      }
+      return [...prev, { date: targetDate, intensity }].sort((a, b) => a.date.localeCompare(b.date));
+    });
     
     toast({ title: "Session pasted", description: `${copiedSession.exercises.length} exercise(s) pasted` });
     setCopiedSession(null);
-  }, [copiedSession, exerciseDistribution, toast]);
+  }, [copiedSession, exerciseDistribution, daySplitStates, toast]);
 
   // === Day Management Handlers ===
   
@@ -441,6 +589,11 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       sourceDate: dayDate,
       intensity: day?.intensity,
       splitState: daySplitStates[dayDate],
+      testNames: day?.testNames,
+      eventNames: day?.eventNames,
+      // Metadata for creating complete days when pasting outside range
+      sourceMesocycleId: day?.mesocycleId,
+      sourceMicrocycleId: day?.microcycleId,
     });
     
     toast({ title: "Day copied", description: `${dayExercises.length} exercise(s) copied` });
@@ -544,12 +697,16 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
           isTrainingDay: true,
         };
       } else {
-        // Add new day entry
+        // Add new day entry with metadata from source day
         updated.push({
           date: targetDate,
           dayOfWeek: targetDateObj.getDay(),
           dayName: format(targetDateObj, 'EEEE'),
+          mesocycleId: copiedDay.sourceMesocycleId || '',
+          microcycleId: copiedDay.sourceMicrocycleId || '',
           isTrainingDay: true,
+          isTestDay: false,
+          isEventDay: false,
           intensity,
           sessions: copiedDay.splitState || 1,
           sessionNames: Array.from({ length: copiedDay.splitState || 1 }, (_, i) => `Session ${i + 1}`),
