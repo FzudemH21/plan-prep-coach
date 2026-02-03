@@ -444,34 +444,47 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           return;
         }
         
-        const newStartDate = new Date(assignment.startDate);
+        // Normalize both dates to UTC midnight for accurate day-based shifting
+        // This prevents timezone-related off-by-one errors
+        const normalizedOriginalStart = new Date(Date.UTC(
+          originalStartDate.getFullYear(),
+          originalStartDate.getMonth(),
+          originalStartDate.getDate()
+        ));
+        
+        const assignmentDate = new Date(assignment.startDate);
+        const normalizedNewStart = new Date(Date.UTC(
+          assignmentDate.getFullYear(),
+          assignmentDate.getMonth(),
+          assignmentDate.getDate()
+        ));
         
         try {
-          // Shift all program data to match the new start date
+          // Shift all program data to match the new start date using normalized dates
           const shiftedExercises = program.exerciseDistribution 
-            ? shiftExerciseDates(program.exerciseDistribution, originalStartDate, newStartDate)
+            ? shiftExerciseDates(program.exerciseDistribution, normalizedOriginalStart, normalizedNewStart)
             : [];
             
           const shiftedDailyIntensity = program.dailyIntensityData
-            ? shiftDailyIntensityDates(program.dailyIntensityData, originalStartDate, newStartDate)
+            ? shiftDailyIntensityDates(program.dailyIntensityData, normalizedOriginalStart, normalizedNewStart)
             : [];
             
           const shiftedSections = program.sessionSections
             ? Array.isArray(program.sessionSections)
-              ? shiftSessionSectionDates(program.sessionSections, originalStartDate, newStartDate)
+              ? shiftSessionSectionDates(program.sessionSections, normalizedOriginalStart, normalizedNewStart)
               : program.sessionSections
             : [];
             
           const shiftedSupersets = program.supersets
-            ? shiftSupersetDates(program.supersets as any, originalStartDate, newStartDate)
+            ? shiftSupersetDates(program.supersets as any, normalizedOriginalStart, normalizedNewStart)
             : {};
             
           const shiftedTrainingDays = program.trainingDays
-            ? shiftTrainingDaysDates(program.trainingDays, originalStartDate, newStartDate)
+            ? shiftTrainingDaysDates(program.trainingDays, normalizedOriginalStart, normalizedNewStart)
             : [];
             
           const shiftedDaySplitStates = program.daySplitStates
-            ? shiftDaySplitStatesDates(program.daySplitStates, originalStartDate, newStartDate)
+            ? shiftDaySplitStatesDates(program.daySplitStates, normalizedOriginalStart, normalizedNewStart)
             : {};
           
           // Save shifted data to localStorage
@@ -493,8 +506,9 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             exerciseCount: shiftedExercises.length,
             sectionsCount: Array.isArray(shiftedSections) ? shiftedSections.length : Object.keys(shiftedSections).length,
             dailyIntensityCount: shiftedDailyIntensity.length,
-            originalStartDate: originalStartDate.toISOString(),
-            newStartDate: newStartDate.toISOString(),
+            originalStartDate: normalizedOriginalStart.toISOString(),
+            newStartDate: normalizedNewStart.toISOString(),
+            dayOffset: Math.round((normalizedNewStart.getTime() - normalizedOriginalStart.getTime()) / (1000 * 60 * 60 * 24)),
           });
           
           localStorage.setItem(storageKey, JSON.stringify(dataToSave));
