@@ -535,6 +535,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
           sessions: newSplitState,
           sessionNames,
           isTrainingDay: true,
+          intensity, // Apply copied intensity
         };
       } else {
         // Add new day entry with metadata from source session
@@ -556,13 +557,16 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       return updated.sort((a, b) => a.date.localeCompare(b.date));
     });
     
-    // Also ensure dailyIntensityData has an entry
+    // Update dailyIntensityData with copied intensity
     setDailyIntensityData(prev => {
-      const existingIdx = prev.findIndex(di => di.date === targetDate);
+      const updated = [...prev];
+      const existingIdx = updated.findIndex(di => di.date === targetDate);
       if (existingIdx >= 0) {
-        return prev; // Keep existing intensity
+        // Update existing entry with copied intensity
+        updated[existingIdx] = { ...updated[existingIdx], intensity };
+        return updated;
       }
-      return [...prev, { date: targetDate, intensity }].sort((a, b) => a.date.localeCompare(b.date));
+      return [...updated, { date: targetDate, intensity }].sort((a, b) => a.date.localeCompare(b.date));
     });
     
     toast({ title: "Session pasted", description: `${copiedSession.exercises.length} exercise(s) pasted` });
