@@ -985,6 +985,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             editing.setExerciseDistribution(distribution as any);
           }}
           useExternalIntensityOnly={true}
+          isAdHocSession={true}
         />
       )}
     </div>
