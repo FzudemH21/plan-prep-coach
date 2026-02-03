@@ -67,6 +67,9 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   
   // Refs for race condition prevention (synchronous guards)
   const loadingAssignmentIdRef = useRef<string | null>(null);
+  
+  // Ref to track last saved state to prevent unnecessary saves (infinite loop prevention)
+  const lastSavedStateRef = useRef<string>('');
   const loadedAssignmentIdRef = useRef<string | null>(null);
   
   // Copy/paste state
@@ -223,7 +226,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     }
   }, [selectedAssignmentId, loadAssignmentForEditing]);
 
-  // Auto-save edits to localStorage with race condition guard
+  // Auto-save edits to localStorage with race condition guard and infinite loop prevention
   useEffect(() => {
     // CRITICAL: Multiple guards to prevent overwriting data during load
     // 1. No assignment selected
@@ -234,6 +237,21 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     if (loadingAssignmentIdRef.current !== null) return;
     // 4. This assignment hasn't been successfully loaded yet
     if (loadedAssignmentIdRef.current !== selectedAssignmentId) return;
+    
+    // INFINITE LOOP PREVENTION: Only save if data actually changed
+    // Compare a subset of the state that represents meaningful changes
+    const stateFingerprint = JSON.stringify({
+      ex: exerciseDistribution.length,
+      sec: sessionSections.length,
+      sup: Object.keys(supersets).length,
+      split: Object.entries(daySplitStates).filter(([_, v]) => v > 0).length,
+      days: trainingDays.length,
+    });
+    
+    if (stateFingerprint === lastSavedStateRef.current) {
+      return; // Skip save if state hasn't meaningfully changed
+    }
+    lastSavedStateRef.current = stateFingerprint;
     
     const storageKey = `athlete-assignment-${selectedAssignmentId}`;
     const dataToSave = {
@@ -722,7 +740,11 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       newDaySplitUpdates[targetDayDate] = Math.max(currentSplit, newMaxSession);
 
       // Build training day update - include full day structure for new days
+      // FIX: Copy intensity from source training day, not target
       const existingDay = trainingDays.find(d => d.date === targetDayDate);
+      const sourceTrainingDay = copiedWeek.trainingDays.find(td => td.date === sourceDayDate);
+      const copiedIntensity = sourceTrainingDay?.intensity || ('moderate' as IntensityLevel);
+      
       const existingNames = existingDay?.sessionNames || [];
       const newNames = [...existingNames];
       for (let i = existingNames.length; i < newMaxSession; i++) {
@@ -734,7 +756,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         dayOfWeek: targetDate.getDay(),
         dayName: format(targetDate, 'EEEE'),
         isTrainingDay: true,
-        intensity: existingDay?.intensity || ('moderate' as IntensityLevel),
+        intensity: copiedIntensity, // Use intensity from source day
         sessions: Math.max(currentSplit, newMaxSession),
         sessionNames: newNames,
       };
@@ -823,6 +845,20 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     });
 
     setSupersets(newSupersets);
+    
+    // FIX: Also update dailyIntensityData to sync intensity values
+    setDailyIntensityData(prev => {
+      const updated = [...prev];
+      Object.entries(newTrainingDayUpdates).forEach(([date, dayUpdate]) => {
+        const existingIdx = updated.findIndex(di => di.date === date);
+        if (existingIdx >= 0) {
+          updated[existingIdx] = { ...updated[existingIdx], intensity: dayUpdate.intensity };
+        } else {
+          updated.push({ date, intensity: dayUpdate.intensity });
+        }
+      });
+      return updated.sort((a, b) => a.date.localeCompare(b.date));
+    });
 
     toast({ title: "Week pasted", description: `${pastedExercises.length} exercise(s) pasted as new sessions` });
     setCopiedWeek(null);
