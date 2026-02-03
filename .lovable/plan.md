@@ -4,145 +4,101 @@
 
 ## Summary
 
-This plan addresses two distinct bugs in the Athlete Calendar:
+This plan addresses two bugs in the Athlete Calendar:
 
-1. **Parameter Grid Auto-Fill Bug**: When adding an exercise via the ad-hoc workflow, the parameter grid is immediately populated with values from the assigned program's method periodization table instead of remaining blank.
+1. **Parameter Grid Auto-Fill Bug**: When adding an exercise via the ad-hoc/toolbox workflow, the parameter grid is immediately populated with values from the assigned program's method periodization table. Ad-hoc exercises should start blank.
 
-2. **Intensity Coupling Bug**: Day and session intensity are always coupled - changing one always changes the other. Per your preference, they should ONLY be linked when a day has exactly 1 session; for days with 2+ sessions, changing day intensity should NOT affect session intensities (and vice versa).
+2. **Intensity Coupling Bug**: Day and session intensities are always coupled (changing one changes the other). Per your preference:
+   - **1-session days**: Remain linked (bidirectional sync)
+   - **Multi-session days (2+)**: Independent - changing day intensity does NOT affect individual session intensities (and vice versa)
 
 ---
 
 ## Issue 1: Parameter Grid Auto-Fill Bug
 
-### Root Cause
+### Root Cause Analysis
 
-Even though exercises are correctly marked with `parameterSource: 'toolbox'` when added via the ad-hoc dialog, the check in `buildSectionsFromExercises()` uses `(ex as any).parameterSource` without considering that this property might not survive the state update cycle.
+The current implementation has these pieces in place:
+- `handleAdHocMethodSelected()` correctly sets `parameterSource: 'toolbox'` on exercises
+- `buildSectionsFromExercises()` has a check for `parameterSource === 'toolbox'` at line 241
+- Exercises are tracked in `freshlyAddedExerciseIdsRef` to skip redundant rebuilds
 
-Looking at the code flow:
+**However**, the bug occurs because:
 
-1. `handleAdHocMethodSelected()` creates exercises with `parameterSource: 'toolbox'` and adds them to `workoutSections`
-2. It also calls `onDistributionChange()` which updates `exerciseDistribution` in the parent
-3. This triggers the sync `useEffect` in `WorkoutSessionSheet` (lines 688-738)
-4. The sync effect calls `buildSectionsFromExercises(exercises, parameterValues)`
-5. **Problem**: The `exercises` array from the prop is the ExerciseDistribution array, but when it's passed to `buildSectionsFromExercises`, the check `(ex as any).parameterSource === 'toolbox'` may fail because:
-   - The merge logic looks up existing exercises by ID
-   - The existing exercise was just added to `workoutSections` but not yet committed to the external state
-   - The merge lookup doesn't find it (different state timing)
-   - Result: it rebuilds using periodization values
+1. When `handleAdHocMethodSelected()` adds exercises, it also syncs to `exerciseDistribution` via `onDistributionChange()`
+2. This triggers the sync `useEffect` (lines 690-753) which calls `buildSectionsFromExercises(exercises, parameterValues)`
+3. **The problem**: The `exercises` prop passed to this function is the `ExerciseDistribution[]` array from the parent - which correctly includes `parameterSource: 'toolbox'`
+4. **BUT**: The check at line 241 uses `(ex as any).parameterSource` - this cast works
+5. **The actual issue**: In the fallback path (lines 487-651), when exercises are NOT in `sessionSectionsProp`, the fallback branch does NOT have the same `parameterSource: 'toolbox'` check - it always builds parameters from `parameterValues` (the periodization table)
 
-The specific timing issue:
-- `handleAdHocMethodSelected` adds to local `workoutSections` state
-- It also syncs to Step 1 via `onDistributionChange`
-- But the sync effect runs again due to `exercises.length` change
-- During rebuild, it doesn't find the exercise in `existingExerciseMap` (timing race)
+When running in Athlete Calendar:
+- `sessionSectionsProp` might be empty initially for ad-hoc sessions
+- The code falls through to the fallback grouping logic (line 487: "Fallback: Group exercises by categoryName")
+- This fallback path (lines 489-651) does NOT check `parameterSource` at all
+- It always fetches `storedParams` from `parameterValues` and populates the grid
 
 ### Solution
 
-Ensure that `parameterSource: 'toolbox'` is correctly carried through all state paths and the merge logic in `buildSectionsFromExercises` preserves blank parameters for toolbox-sourced exercises.
+Add the same `parameterSource: 'toolbox'` check to the fallback branch in `buildSectionsFromExercises()`.
 
-**Changes Required:**
+**Location**: `src/components/microcycle-planning/WorkoutSessionSheet.tsx`, inside the fallback `exercisesList.forEach()` loop (around line 489)
 
-1. **Preserve `parameterSource` on the WorkoutExercise interface** (in `WorkoutSessionSheet.tsx`)
-   - The local `WorkoutExercise` interface (line 42-51) should include `parameterSource`
-   - This ensures the property survives the merge
+Before the periodization lookup, check if this exercise is toolbox-sourced and generate blank parameters:
 
-2. **Fix the merge logic in sync useEffect** (lines 700-729)
-   - When preserving existing exercise state, also preserve `parameterSource`
-   - This prevents the race condition from wiping the marker
-
-3. **Ensure `buildSectionsFromExercises` uses the ExerciseDistribution's `parameterSource`**
-   - Currently it casts to `any` which is fragile
-   - The function should explicitly check both the exercise distribution AND the existing workoutSection exercise
-
-4. **Skip rebuild entirely for just-added exercises**
-   - If an exercise was just added (via handleAdHocMethodSelected), don't rebuild its parameters
+```typescript
+exercisesList.forEach((ex, index) => {
+  // ===== TOOLBOX-SOURCED EXERCISES: Generate blank parameters =====
+  if ((ex as any).parameterSource === 'toolbox') {
+    // Build blank parameters similar to lines 244-308
+    // ... (blank parameter generation code)
+    return; // Skip periodization lookup
+  }
+  
+  // ... existing periodization lookup logic
+});
+```
 
 ---
 
 ## Issue 2: Intensity Coupling Bug
 
-### Current Behavior (incorrect)
+### Root Cause Analysis
 
-In `WorkoutSessionSheet.tsx`:
-- When changing **day intensity** (lines 2100-2110): It always updates session intensity if `isSingleSessionDay`
-- When changing **session intensity** (lines 2175-2185): It always updates day intensity if `isSingleSessionDay`
+The intensity coupling logic in `WorkoutSessionSheet.tsx` (lines 2136-2141 and 2215-2217) uses `isSingleSessionDay` to decide whether to sync:
 
-In `useAthleteCalendarEditing.ts`:
-- `handleSessionIntensityChange` (lines 1273-1279): Always calls `handleDayIntensityChange` when `day?.sessions === 1`
-- `handleDayIntensityChange` (lines 1264-1271): Always updates `trainingDays` and `dailyIntensityData`, but does NOT update individual session intensities for multi-session days
+```typescript
+const isSingleSessionDay = useMemo(() => {
+  return totalSessionsOnDay === 1;
+}, [totalSessionsOnDay]);
+```
 
-### Expected Behavior (per user preference)
+The prop `totalSessionsOnDay` is correctly passed from `AthleteCalendarView.tsx` (line 931):
 
-- **1 session day**: Day and session intensity stay linked (bidirectional sync) - this is CORRECT currently
-- **2+ session day**: 
-  - Changing **day intensity** should NOT change individual session intensities
-  - Changing **session intensity** should NOT change day intensity
+```typescript
+totalSessionsOnDay={editing.daySplitStates[selectedSessionInfo.dayDate] || 1}
+```
 
-### Current Bug
+**The actual problem is in `useAthleteCalendarEditing.ts`**, lines 1273-1279:
 
-The bug is in `useAthleteCalendarEditing.ts`:
-
-`handleSessionIntensityChange` (lines 1273-1279):
 ```typescript
 const handleSessionIntensityChange = useCallback((dayDate: string, sessionIndex: number, intensity: IntensityLevel) => {
   // For single session days, also update day intensity
   const day = trainingDays.find(d => d.date === dayDate);
-  if (day?.sessions === 1) {  // <-- This is correct
+  if (day?.sessions === 1) {
     handleDayIntensityChange(dayDate, intensity);
   }
 }, [trainingDays, handleDayIntensityChange]);
 ```
 
-This looks correct! Let me check `MicrocyclePlanningPage.tsx` which has a different implementation (lines 1216-1254):
+This checks `day?.sessions === 1`, but `trainingDays[].sessions` may not be updated consistently with `daySplitStates`. The `daySplitStates` object is the source of truth for session count, but the handler checks `trainingDays[].sessions`.
 
-```typescript
-const handleSessionIntensityChange = (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => {
-  // ...
-  // Count total sessions for this day from trainingDays (source of truth)
-  const day = trainingDays.find(d => d.date === dayDate);
-  const sessionCount = day?.sessions ?? 1;
-  const isSingleSession = sessionCount === 1;
-  
-  // If single session day, bidirectionally sync with day intensity
-  if (isSingleSession) {
-    setTrainingDays(prev => 
-      prev.map(day => {
-        if (day.date === dayDate) {
-          return { ...day, intensity };
-        }
-        return day;
-      })
-    );
-    // ...
-  }
-  // ...
-};
-```
-
-This also looks correct. The bug must be in `WorkoutSessionSheet.tsx` itself. Let me trace the exact flow.
-
-**Bug Location**: `WorkoutSessionSheet.tsx`, lines 2103-2108 and 2183-2185
-
-In the sheet's popover click handlers:
-1. When day intensity changes (line 2102): `onIntensityChange(dayDate, level)`
-2. Then (lines 2104-2108): If `isSingleSessionDay`, also updates local `sessionIntensity` AND calls `onSessionIntensityChange`
-
-But the issue is: `isSingleSessionDay` is computed as `totalSessionsOnDay === 1` (line 798-800).
-
-**The bug**: `totalSessionsOnDay` is passed as a prop from `AthleteCalendarView.tsx`. Let me check what it passes...
-
-In `AthleteCalendarView.tsx` (lines 922-989), the `WorkoutSessionSheet` is rendered but I don't see `totalSessionsOnDay` being passed explicitly. Looking at the props, it would default to `1` (line 144 in WorkoutSessionSheet: `totalSessionsOnDay = 1`).
-
-**Root Cause of Intensity Bug**: The Athlete Calendar is NOT passing `totalSessionsOnDay` to `WorkoutSessionSheet`, so it defaults to `1`, making `isSingleSessionDay` always `true`. This causes all intensity changes to be coupled regardless of actual session count.
+Additionally, `handleSessionIntensityChange` does NOT actually store per-session intensity - it only syncs to day intensity for single-session days. For multi-session days, the session intensity is never persisted.
 
 ### Solution
 
-Pass `totalSessionsOnDay` correctly from `AthleteCalendarView.tsx` to `WorkoutSessionSheet`:
-
-```typescript
-// In AthleteCalendarView.tsx, when rendering WorkoutSessionSheet:
-totalSessionsOnDay={editing.daySplitStates[selectedSessionInfo.dayDate] || 1}
-```
+1. **Fix `handleSessionIntensityChange` to use `daySplitStates` instead of `trainingDays[].sessions`**
+2. **Store per-session intensity in the assignment snapshot** (not just day intensity)
+3. **Ensure the sheet reads per-session intensity correctly on open**
 
 ---
 
@@ -150,92 +106,147 @@ totalSessionsOnDay={editing.daySplitStates[selectedSessionInfo.dayDate] || 1}
 
 | File | Changes |
 |------|---------|
-| `src/components/athletes/AthleteCalendarView.tsx` | Add `totalSessionsOnDay` prop to `WorkoutSessionSheet` |
-| `src/components/microcycle-planning/WorkoutSessionSheet.tsx` | 1) Add `parameterSource` to local `WorkoutExercise` interface; 2) Fix merge logic to preserve `parameterSource`; 3) Skip rebuild for freshly-added exercises |
+| `src/components/microcycle-planning/WorkoutSessionSheet.tsx` | Add `parameterSource: 'toolbox'` check in the fallback branch of `buildSectionsFromExercises()` |
+| `src/hooks/useAthleteCalendarEditing.ts` | Fix `handleSessionIntensityChange` to use `daySplitStates` and persist per-session intensity |
 
 ---
 
 ## Technical Details
 
-### Change 1: Fix `totalSessionsOnDay` prop (AthleteCalendarView.tsx)
+### Change 1: Fix fallback branch in `buildSectionsFromExercises()` (WorkoutSessionSheet.tsx)
 
-**Location**: Lines 922-989 (WorkoutSessionSheet rendering)
+**Location**: Lines 489-651 (inside the `exercisesList.forEach()` loop in the fallback branch)
 
-Add this prop:
-```tsx
-totalSessionsOnDay={editing.daySplitStates[selectedSessionInfo.dayDate] || 1}
+Add at the beginning of the forEach callback (right after line 489):
+
+```typescript
+exercisesList.forEach((ex, index) => {
+  // ===== TOOLBOX-SOURCED EXERCISES: Generate blank parameters =====
+  // If this exercise was added via ad-hoc dialog (parameterSource === 'toolbox'),
+  // skip periodization lookup entirely and build blank parameters from toolbox
+  if ((ex as any).parameterSource === 'toolbox') {
+    const sectionName = ex.categoryName || 'Main Work';
+    if (!sectionsMap.has(sectionName)) {
+      sectionsMap.set(sectionName, []);
+    }
+
+    // Get method parameters from toolbox
+    const methodParts = ex.methodId.split(' - ');
+    const toolboxCategory = methodParts[0];
+    const toolboxSubCategory = methodParts.length > 1 ? methodParts.slice(1).join(' - ') : '';
+    
+    const methodEntries = toolboxData?.entries.filter(entry => {
+      const categoryMatch = entry.category.toLowerCase().trim() === toolboxCategory.toLowerCase().trim();
+      const subCategoryMatch = toolboxSubCategory === '' 
+        ? (!entry.subCategory || entry.subCategory.trim() === '')
+        : (entry.subCategory?.toLowerCase().trim() === toolboxSubCategory.toLowerCase().trim());
+      return categoryMatch && subCategoryMatch;
+    }) || [];
+    
+    // Find set parameter
+    const setParamEntry = methodEntries.find(e => e.isSetParameter);
+    const setParamName = setParamEntry?.parameterName || 
+                        methodEntries.find(e => /^sets?$/i.test(e.parameterName))?.parameterName ||
+                        'Sets';
+    const setCount = 3; // Default blank
+    
+    // Build BLANK parameters
+    const blankParameters: Record<string, string | number> = {};
+    blankParameters[setParamName] = setCount;
+    
+    methodEntries.forEach(entry => {
+      if (entry.isFrequencyParameter) return;
+      const paramName = entry.parameterName;
+      
+      // Add unit if quantitative
+      if (entry.parameterType === 'quantitative' && entry.options.length > 0) {
+        blankParameters[`${paramName}_unit`] = entry.options[0];
+      }
+      
+      // Create per-set keys (all blank)
+      if (!entry.isSetParameter && setCount > 0) {
+        for (let i = 1; i <= setCount; i++) {
+          blankParameters[`${paramName}_set${i}`] = '';
+        }
+      }
+    });
+    
+    // Detect auto-calc units
+    let has1RMUnit = false;
+    let hasMaxHRUnit = false;
+    for (const entry of methodEntries) {
+      if (entry.parameterType === 'quantitative' && entry.options) {
+        if (entry.options.includes('%1RM')) has1RMUnit = true;
+        if (entry.options.includes('%maxHR') || entry.options.includes('%HRmax')) hasMaxHRUnit = true;
+      }
+    }
+    
+    sectionsMap.get(sectionName)!.push({
+      id: (ex as any).id || `${ex.exerciseId}-${index}`,
+      exerciseId: ex.exerciseId,
+      exerciseName: ex.exerciseName,
+      methodId: ex.methodId,
+      categoryName: ex.categoryName || '',
+      order: (ex as any).order ?? index,
+      supersetId: (ex as any).supersetId,
+      parameters: blankParameters,
+      notes: ex.notes,
+      autoCalculateWeight: has1RMUnit ? true : undefined,
+      autoCalculateTargetHR: hasMaxHRUnit ? true : undefined,
+      parameterSource: 'toolbox' as const,
+    });
+    
+    return; // Skip periodization lookup
+  }
+  
+  // ... existing periodization lookup logic (unchanged)
+});
 ```
 
-### Change 2: Add `parameterSource` to WorkoutExercise interface (WorkoutSessionSheet.tsx)
+### Change 2: Fix `handleSessionIntensityChange` to use `daySplitStates` (useAthleteCalendarEditing.ts)
 
-**Location**: Lines 42-51
+**Location**: Lines 1273-1279
 
-```tsx
-interface WorkoutExercise extends Omit<WorkoutExercise, 'parameters'> {
-  // ... existing fields ...
-  parameterSource?: 'toolbox' | 'periodization';
-}
+Replace:
+
+```typescript
+const handleSessionIntensityChange = useCallback((dayDate: string, sessionIndex: number, intensity: IntensityLevel) => {
+  // For single session days, also update day intensity
+  const day = trainingDays.find(d => d.date === dayDate);
+  if (day?.sessions === 1) {
+    handleDayIntensityChange(dayDate, intensity);
+  }
+}, [trainingDays, handleDayIntensityChange]);
 ```
 
-### Change 3: Fix merge logic to preserve `parameterSource` (WorkoutSessionSheet.tsx)
+With:
 
-**Location**: Lines 716-725 (inside sync useEffect merge)
-
-When preserving existing exercise, also preserve `parameterSource`:
-```tsx
-if (existing) {
-  return {
-    ...newEx,
-    parameters: existing.parameters,
-    notes: existing.notes,
-    eachSide: existing.eachSide,
-    autoCalculateWeight: existing.autoCalculateWeight,
-    autoCalculateTargetHR: existing.autoCalculateTargetHR,
-    parameterSource: existing.parameterSource, // ADD THIS
-  };
-}
-```
-
-### Change 4: Ensure handleAdHocMethodSelected sets parameterSource on WorkoutExercise (WorkoutSessionSheet.tsx)
-
-**Location**: Lines 1467-1478
-
-Ensure the created exercise includes `parameterSource`:
-```tsx
-return {
-  id: `${ex.exerciseId}-${Date.now()}-${index}`,
-  // ... other fields ...
-  parameters: buildExerciseParams(),
-  parameterSource: 'toolbox', // ADD THIS
-} as WorkoutExercise;
-```
-
-### Change 5: Track freshly added exercises to skip redundant rebuilds (WorkoutSessionSheet.tsx)
-
-Add a ref to track exercise IDs that were just added in the current render cycle, so the sync effect can skip rebuilding their parameters:
-
-```tsx
-const freshlyAddedExerciseIdsRef = useRef<Set<string>>(new Set());
-
-// In handleAdHocMethodSelected, after creating exercises:
-newExercises.forEach(ex => freshlyAddedExerciseIdsRef.current.add(ex.id));
-
-// In the sync effect merge logic, check:
-if (existing || freshlyAddedExerciseIdsRef.current.has(newEx.id)) {
-  // preserve existing / skip rebuild
-}
-
-// Clear the set after merge completes
-freshlyAddedExerciseIdsRef.current.clear();
+```typescript
+const handleSessionIntensityChange = useCallback((dayDate: string, sessionIndex: number, intensity: IntensityLevel) => {
+  // Check session count from daySplitStates (source of truth), not trainingDays.sessions
+  const sessionCount = daySplitStates[dayDate] ?? 1;
+  
+  // For single session days, sync session intensity to day intensity
+  if (sessionCount === 1) {
+    handleDayIntensityChange(dayDate, intensity);
+  }
+  
+  // For multi-session days, session intensity is independent (handled by the sheet's local state)
+  // The sheet persists session intensity on save; no action needed here for multi-session days
+}, [daySplitStates, handleDayIntensityChange]);
 ```
 
 ---
 
 ## Expected Outcome
 
-1. **Parameter Grid**: Exercises added via the ad-hoc workflow will always start with a blank parameter grid (Sets = 3, other params empty), even if the same method exists in the assigned program's periodization table.
+1. **Parameter Grid (Ad-Hoc Exercises)**:
+   - Exercises added via the ad-hoc/toolbox flow will always start with a blank parameter grid (Sets = 3, other params empty)
+   - Exercises from assigned programs keep their copied values
+   - This works regardless of whether the method exists in the assigned program's periodization table
 
 2. **Intensity Coupling**:
-   - Days with 1 session: Day and session intensity remain linked (bidirectional sync)
-   - Days with 2+ sessions: Day and session intensity are independent - changing one does NOT affect the other
+   - **1-session days**: Day and session intensity remain linked (bidirectional sync)
+   - **2+ session days**: Day and session intensity are independent - changing one does NOT affect the other
+   - New sessions default to the day's current intensity (per your preference)
 
