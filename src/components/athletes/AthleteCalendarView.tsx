@@ -1,9 +1,11 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, isSameMonth, isWithinInterval, parseISO } from 'date-fns';
+import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight, Trash2, Calendar, LayoutGrid, Columns } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import { Athlete, AthleteCalendarAssignment } from '@/types/athlete';
 import { AssignProgramDialog } from './AssignProgramDialog';
 import { useTrainingPrograms, TrainingProgram } from '@/hooks/useTrainingPrograms';
@@ -88,6 +90,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   const { programs, getProgram } = useTrainingPrograms();
   const athleteData = useAthletes();
   const { data: toolboxData } = useToolboxData();
+  const { toast } = useToast();
 
   const assignments = useMemo(() => {
     return athleteData.getAthleteCalendarAssignments(athlete.id);
@@ -472,6 +475,22 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     setSessionSheetOpen(true);
   }, []);
 
+  // Handle session drag-and-drop between days
+  const handleSessionDragEnd = useCallback((result: DropResult) => {
+    if (!result.destination) return;
+    
+    const sourceDayDate = result.source.droppableId;
+    const destDayDate = result.destination.droppableId;
+    const sourceIndex = result.source.index;
+    const destIndex = result.destination.index;
+    
+    // Same day, same position - no change needed
+    if (sourceDayDate === destDayDate && sourceIndex === destIndex) return;
+    
+    // Use the hook's handler for moving sessions
+    editing.handleMoveSession(sourceDayDate, sourceIndex, destDayDate);
+  }, [editing]);
+
   const handleAssignProgram = useCallback((assignment: Omit<AthleteCalendarAssignment, 'id' | 'createdAt'>) => {
     // Create the assignment and get the new ID
     const newAssignment = athleteData.createCalendarAssignment(athlete.id, assignment);
@@ -846,40 +865,45 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
               </div>
 
               {/* Week Rows */}
-              <div className="space-y-6">
-                {weeks.map((week, idx) => (
-                  <AthleteCalendarWeekRow
-                    key={`week-${idx}`}
-                    week={week}
-                    weekIdx={idx}
-                    onSessionClick={handleSessionClick}
-                    onDayClick={handleDayClick}
-                    onAddSession={handleAddSession}
-                    onDeleteAssignment={handleDeleteAssignmentById}
-                    getIntensityColor={getIntensityColor}
-                    // Week operations
-                    copiedWeek={editing.copiedWeek}
-                    onCopyWeek={editing.handleCopyWeek}
-                    onClearWeek={editing.handleClearWeek}
-                    onPasteWeek={editing.handlePasteWeek}
-                    // Day operations
-                    copiedDay={editing.copiedDay}
-                    onCopyDay={editing.handleCopyDay}
-                    onClearDay={editing.handleClearDay}
-                    onPasteDay={editing.handlePasteDay}
-                    // Session operations
-                    copiedSession={editing.copiedSession}
-                    onCopySession={editing.handleCopySession}
-                    onDeleteSession={editing.handleDeleteSession}
-                    onPasteSession={editing.handlePasteSession}
-                    // Test/Event operations
-                    onAddTestEvent={editing.handleAddTestEvent}
-                    onDeleteTestEvent={editing.handleDeleteTestEvent}
-                    availableTests={[]}
-                    availableEvents={[]}
-                  />
-                ))}
-              </div>
+              <DragDropContext onDragEnd={handleSessionDragEnd}>
+                <div className="space-y-6">
+                  {weeks.map((week, idx) => (
+                    <AthleteCalendarWeekRow
+                      key={`week-${idx}`}
+                      week={week}
+                      weekIdx={idx}
+                      onSessionClick={handleSessionClick}
+                      onDayClick={handleDayClick}
+                      onAddSession={handleAddSession}
+                      onDeleteAssignment={handleDeleteAssignmentById}
+                      getIntensityColor={getIntensityColor}
+                      // Week operations
+                      copiedWeek={editing.copiedWeek}
+                      onCopyWeek={editing.handleCopyWeek}
+                      onClearWeek={editing.handleClearWeek}
+                      onPasteWeek={editing.handlePasteWeek}
+                      // Day operations
+                      copiedDay={editing.copiedDay}
+                      onCopyDay={editing.handleCopyDay}
+                      onClearDay={editing.handleClearDay}
+                      onPasteDay={editing.handlePasteDay}
+                      // Session operations
+                      copiedSession={editing.copiedSession}
+                      onCopySession={editing.handleCopySession}
+                      onDeleteSession={editing.handleDeleteSession}
+                      onPasteSession={editing.handlePasteSession}
+                      // Test/Event operations
+                      onAddTestEvent={editing.handleAddTestEvent}
+                      onDeleteTestEvent={editing.handleDeleteTestEvent}
+                      availableTests={[]}
+                      availableEvents={[]}
+                      // Intensity editing
+                      intensityLevels={intensityLevels}
+                      onIntensityChange={editing.handleDayIntensityChange}
+                    />
+                  ))}
+                </div>
+              </DragDropContext>
             </>
           )}
         </CardContent>

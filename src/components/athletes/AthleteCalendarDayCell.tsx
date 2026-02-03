@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { format, isToday } from 'date-fns';
+import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { Dumbbell, Trophy, Calendar, Plus, MoreVertical, Trash2, CalendarPlus, Copy, ClipboardPaste, Settings } from 'lucide-react';
+import { Dumbbell, Trophy, Calendar, Plus, MoreVertical, Trash2, CalendarPlus, Copy, ClipboardPaste, Settings, GripVertical } from 'lucide-react';
+import { IntensityLevel } from '@/types/training';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -73,6 +76,9 @@ interface AthleteCalendarDayCellProps {
   onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event', name: string) => void;
   availableTests?: SubGoal[];
   availableEvents?: Event[];
+  // Intensity editing
+  intensityLevels?: IntensityLevel[];
+  onIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
 }
 
 export function AthleteCalendarDayCell({
@@ -94,8 +100,12 @@ export function AthleteCalendarDayCell({
   onDeleteTestEvent,
   availableTests = [],
   availableEvents = [],
+  intensityLevels,
+  onIntensityChange,
 }: AthleteCalendarDayCellProps) {
   const [testEventDialogOpen, setTestEventDialogOpen] = useState(false);
+  const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
+  const lastDragEndTime = useRef<number>(0);
   
   const hasTraining = day.sessions.length > 0;
   const isTestDay = day.testNames && day.testNames.length > 0;
@@ -142,8 +152,42 @@ export function AthleteCalendarDayCell({
               {format(day.date, 'd')}
             </div>
 
-            {/* First Session Intensity Indicator */}
-            {hasTraining && day.sessions[0]?.intensity && getIntensityColor && (
+            {/* First Session Intensity Indicator - Clickable */}
+            {hasTraining && day.sessions[0]?.intensity && getIntensityColor && intensityLevels && onIntensityChange ? (
+              <Popover open={intensityPopoverOpen} onOpenChange={setIntensityPopoverOpen}>
+                <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                  <button 
+                    className={cn(
+                      "w-5 h-5 rounded-sm border transition-all hover:scale-110 cursor-pointer shrink-0",
+                      getIntensityColor(day.sessions[0].intensity)
+                    )}
+                    title={`Intensity: ${day.sessions[0].intensity.replace('-', ' ')}`}
+                  />
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-2 z-[100]" align="end">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium mb-2 text-muted-foreground">Select Intensity</p>
+                    {intensityLevels.map((level) => (
+                      <button
+                        key={level}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onIntensityChange(day.dateString, level);
+                          setIntensityPopoverOpen(false);
+                        }}
+                        className={cn(
+                          "w-full flex items-center gap-2 p-2 rounded hover:bg-accent transition-colors text-left",
+                          level === day.sessions[0]?.intensity && "bg-accent"
+                        )}
+                      >
+                        <div className={cn("w-3 h-3 rounded-sm border shrink-0", getIntensityColor(level))} />
+                        <span className="text-xs capitalize">{level.replace('-', ' ')}</span>
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            ) : hasTraining && day.sessions[0]?.intensity && getIntensityColor ? (
               <div
                 className={cn(
                   "w-5 h-5 rounded-sm border shrink-0",
@@ -151,7 +195,7 @@ export function AthleteCalendarDayCell({
                 )}
                 title={`Intensity: ${day.sessions[0].intensity.replace('-', ' ')}`}
               />
-            )}
+            ) : null}
           </div>
 
           {/* Status Icons + Day Menu */}
@@ -301,104 +345,135 @@ export function AthleteCalendarDayCell({
 
         {/* Training Content */}
         {hasTraining ? (
-          <div className="space-y-2">
-            {day.sessions.map((session, idx) => (
-              <div
-                key={session.id}
-                className="relative group/session"
+          <Droppable droppableId={day.dateString} type="session">
+            {(droppableProvided, droppableSnapshot) => (
+              <div 
+                ref={droppableProvided.innerRef}
+                {...droppableProvided.droppableProps}
+                className={cn(
+                  "space-y-2",
+                  droppableSnapshot.isDraggingOver && "bg-primary/5 rounded-md p-1"
+                )}
               >
-                <div
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSessionClick?.(day.dateString, session.sessionIndex, session.assignmentId || day.assignmentId || '');
-                  }}
-                  className={cn(
-                    "p-2 rounded-md bg-primary/10 border border-primary/20 transition-all cursor-pointer hover:bg-primary/15"
-                  )}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-1.5">
-                      <Dumbbell className="h-3 w-3 text-primary" />
-                      <span
-                        className="text-xs font-medium text-primary truncate max-w-[100px]"
-                        title={session.sessionName}
-                      >
-                        {session.sessionName}
-                      </span>
-
-                      {/* Session Intensity Indicator */}
-                      {session.intensity && getIntensityColor && (
+                {day.sessions.map((session, idx) => (
+                  <Draggable
+                    key={session.id}
+                    draggableId={session.id}
+                    index={idx}
+                  >
+                    {(draggableProvided, draggableSnapshot) => {
+                      // Track when drag ends for click suppression
+                      if (!draggableSnapshot.isDragging && draggableSnapshot.draggingOver === null) {
+                        lastDragEndTime.current = Date.now();
+                      }
+                      return (
                         <div
+                          ref={draggableProvided.innerRef}
+                          {...draggableProvided.draggableProps}
+                          style={draggableProvided.draggableProps.style}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Suppress clicks right after drag ends
+                            if (Date.now() - lastDragEndTime.current < 200) return;
+                            onSessionClick?.(day.dateString, session.sessionIndex, session.assignmentId || day.assignmentId || '');
+                          }}
                           className={cn(
-                            "w-3.5 h-3.5 rounded-sm border shrink-0",
-                            getIntensityColor(session.intensity)
+                            "p-2 rounded-md bg-primary/10 border border-primary/20 transition-all cursor-pointer hover:bg-primary/15",
+                            draggableSnapshot.isDragging && "shadow-lg ring-2 ring-primary opacity-90"
                           )}
-                          title={`Session intensity: ${session.intensity.replace('-', ' ')}`}
-                        />
-                      )}
-                    </div>
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-1.5">
+                              {/* Drag Handle */}
+                              <div {...draggableProvided.dragHandleProps} className="cursor-grab active:cursor-grabbing">
+                                <GripVertical className="h-3 w-3 text-muted-foreground hover:text-primary" />
+                              </div>
+                              <Dumbbell className="h-3 w-3 text-primary" />
+                              <span
+                                className="text-xs font-medium text-primary truncate max-w-[80px]"
+                                title={session.sessionName}
+                              >
+                                {session.sessionName}
+                              </span>
 
-                    <div className="flex items-center gap-1">
-                      {/* Exercise Count Badge */}
-                      <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
-                        {session.exerciseCount}
-                      </Badge>
-                      
-                      {/* Session Menu */}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <button className="h-5 w-5 flex items-center justify-center rounded hover:bg-accent transition-colors">
-                            <MoreVertical className="h-3 w-3 text-muted-foreground" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40 z-[100]">
-                          {onCopySession && session.exerciseCount > 0 && (
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onCopySession(day.dateString, session.sessionIndex);
-                              }}
-                            >
-                              <Copy className="mr-2 h-4 w-4" />
-                              Copy session
-                            </DropdownMenuItem>
-                          )}
-                          {onDeleteSession && (
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onDeleteSession(day.dateString, session.sessionIndex);
-                              }}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete session
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+                              {/* Session Intensity Indicator */}
+                              {session.intensity && getIntensityColor && (
+                                <div
+                                  className={cn(
+                                    "w-3.5 h-3.5 rounded-sm border shrink-0",
+                                    getIntensityColor(session.intensity)
+                                  )}
+                                  title={`Session intensity: ${session.intensity.replace('-', ' ')}`}
+                                />
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              {/* Exercise Count Badge */}
+                              <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                                {session.exerciseCount}
+                              </Badge>
+                              
+                              {/* Session Menu */}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                  <button className="h-5 w-5 flex items-center justify-center rounded hover:bg-accent transition-colors">
+                                    <MoreVertical className="h-3 w-3 text-muted-foreground" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-40 z-[100]">
+                                  {onCopySession && session.exerciseCount > 0 && (
+                                    <DropdownMenuItem
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onCopySession(day.dateString, session.sessionIndex);
+                                      }}
+                                    >
+                                      <Copy className="mr-2 h-4 w-4" />
+                                      Copy session
+                                    </DropdownMenuItem>
+                                  )}
+                                  {onDeleteSession && (
+                                    <DropdownMenuItem
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onDeleteSession(day.dateString, session.sessionIndex);
+                                      }}
+                                      className="text-destructive focus:text-destructive"
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Delete session
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }}
+                  </Draggable>
+                ))}
+                {droppableProvided.placeholder}
             
-            {/* Paste Session Button (below existing sessions) */}
-            {copiedSession && onPasteSession && (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPasteSession(day.dateString);
-                }}
-                className="w-full h-7 text-xs opacity-0 group-hover/day:opacity-100 transition-opacity"
-              >
-                <Copy className="h-3 w-3 mr-1" />
-                Paste Session ({copiedSession.exercises.length})
-              </Button>
+                {/* Paste Session Button (below existing sessions) */}
+                {copiedSession && onPasteSession && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPasteSession(day.dateString);
+                    }}
+                    className="w-full h-7 text-xs opacity-0 group-hover/day:opacity-100 transition-opacity"
+                  >
+                    <Copy className="h-3 w-3 mr-1" />
+                    Paste Session ({copiedSession.exercises.length})
+                  </Button>
+                )}
+              </div>
             )}
-          </div>
+          </Droppable>
         ) : (
           /* Empty Day - Show Add Dropdown */
           <div className="flex flex-col items-center justify-center h-[calc(100%-40px)] gap-2">
