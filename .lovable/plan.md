@@ -1,239 +1,192 @@
 
+## Goal
+Make Athlete Calendar copy/paste (week/day/session) and clear-week reliable and non-destructive:
+- No more “appears for a split second then disappears”
+- Paste keeps the correct intensity
+- Clear week removes all sessions (no phantom sessions) and does not crash
+- Parameters don’t mysteriously “vanish” after assignment/paste
 
-# Fix Athlete Calendar: Crashes, Paste Issues, and Conceptual Redesign
+## What’s actually going wrong (root causes)
+### 1) The editing hook is re-loading on (almost) every render
+In `useAthleteCalendarEditing`, the “load assignment” effect depends on `loadAssignmentForEditing`, and that callback depends on the `assignments` array.
 
-## Summary
+In `AthleteCalendarView`, `assignments` is derived from `useAthletes()`; that hook returns a new object each render, so `assignments` gets a new reference frequently. Result:
+- `loadAssignmentForEditing` is recreated frequently
+- the effect fires repeatedly
+- it reloads state from localStorage repeatedly
+- any paste/clear update you just did gets overwritten by the “re-load”, which matches your symptom: content flashes, then disappears
+- this also explains the “Maximum update depth exceeded” style crashes (render → load → setState → render → load…).
 
-You've identified two categories of issues:
-1. **Technical bugs**: Clear Week causes a crash (infinite loop), Paste Week/Day/Session doesn't work properly
-2. **Conceptual feedback**: The Athlete Calendar should treat workouts as independent entities, not tied to "assigned programs"
+### 2) “0 sessions” is treated as falsy and becomes “1 session”
+There are multiple places using `||` where `0` is a valid value:
+- `AthleteCalendarView` live branch: `const numSessions = liveSplitState || 1;`
+- `useAthleteCalendarEditing` master planner builder: `daySplitStates[dateStr] || (...)`
 
-This plan addresses the technical bugs first (so the app works), then outlines the conceptual redesign.
+So after you “Clear week” and set splitState to `0`, the UI often still shows a “Session 1” placeholder (and can look like clear didn’t work).
 
----
+### 3) New days created outside the original assignment range are missing important TrainingDay metadata
+When pasting outside the assigned range, we create a `TrainingDay` but currently omit fields like:
+- `mesocycleId`, `microcycleId`
+- `isTestDay`, `isEventDay`
+This causes secondary breakage:
+- parameter lookups can fail or show empty methods
+- intensity lookups may fall back incorrectly
+- session sheet context can become inconsistent
 
-## Part 1: Fix the Crash (Clear Week Infinite Loop)
+### 4) Auto-save “fingerprint” is too weak and can skip important saves
+The current infinite-loop prevention compares only counts/lengths. That means changes to:
+- parameterValues
+- intensities (if exercise counts don’t change)
+- trainingDay metadata
+may not persist reliably.
 
-### Root Cause
+## Implementation plan (in order)
 
-The console shows:
-```
-Maximum update depth exceeded...
-at useAthleteCalendarEditing.ts:126
-```
+### A) Stop the “reload loop” so paste/clear doesn’t get overwritten (main fix for flicker/disappear + crash)
+**File:** `src/hooks/useAthleteCalendarEditing.ts`
 
-This happens because the `handleClearWeek` function triggers state updates (`setTrainingDays`, `setDaySplitStates`, etc.) which cause the auto-save effect to run, which in turn might trigger re-renders that cascade into more updates.
+1) Add a stable `assignmentsRef`
+- `const assignmentsRef = useRef(assignments);`
+- `useEffect(() => { assignmentsRef.current = assignments; }, [assignments]);`
 
-The issue is in the auto-save `useEffect` dependency array - when `trainingDays` changes, it triggers a save, but the save might be triggering additional state changes in a loop.
+2) Refactor `loadAssignmentForEditing` to read from `assignmentsRef.current` so the callback does not depend on the `assignments` array reference.
+- This makes `loadAssignmentForEditing` stable across renders.
 
-### Fix
+3) Add `lastLoadedAssignmentIdRef`
+- Only load when `selectedAssignmentId` actually changes (or when we explicitly request a reload).
+- This prevents state from being reloaded right after paste/clear updates.
 
-Add a debounce mechanism to the auto-save effect and ensure state updates don't cause cascading loops:
-
-```text
-File: src/hooks/useAthleteCalendarEditing.ts
-
-1. Add a lastSavedRef to track what was last saved
-2. Compare current state with last saved before triggering save
-3. Use a stable reference for the save function
-```
-
----
-
-## Part 2: Fix Paste Week/Day/Session Not Displaying
-
-### Root Cause
-
-The current logic correctly pastes exercises to the state, but there are two issues:
-
-1. **Pasting outside assignment range**: The calendar view filters dates by assignment range - dates outside get no sessions displayed
-2. **Intensity not matching**: When pasting, the intensity from the copied week/day is not being applied to the target
-
-### Current Logic Issue
-
-In `handlePasteWeek`, the intensity is not being copied from the source day to the target day. The code sets:
-```typescript
-intensity: existingDay?.intensity || ('moderate' as IntensityLevel)
-```
-
-But it should use the copied week's training day intensity.
-
-### Fix
-
-```text
-File: src/hooks/useAthleteCalendarEditing.ts
-
-In handlePasteWeek:
-1. Look up the source day's intensity from copiedWeek.trainingDays
-2. Apply that intensity to the target day (unless target already has custom intensity)
-3. Update dailyIntensityData to include the pasted intensity values
-
-In handlePasteDay:
-1. Apply copiedDay.intensity to the target day's intensity data
-2. Ensure trainingDays gets updated with the copied intensity
-```
+**Expected result:** paste/clear updates remain in React state; no more “flash then revert”; crash risk drops drastically.
 
 ---
 
-## Part 3: Conceptual Redesign - Workouts Independent of Programs
+### B) Replace the weak auto-save fingerprint with a correct “save only if data changed” fingerprint + debounce
+**File:** `src/hooks/useAthleteCalendarEditing.ts`
 
-### Your Vision
-
-1. **Training Programming Wizard = Template Factory**
-   - Creates plans with dates, exercises, parameters, methods, periodization
-   - The dates are just for template organization
-
-2. **Athlete Calendar = Independent Workout View**
-   - When assigning: Take a "screenshot" of the template
-   - After assignment: Workouts are independent entities
-   - Sessions can be moved anywhere
-   - Parameters travel with the session
-   - No concept of "program range" limiting where workouts appear
-
-3. **Remove "Assigned Programs" Section**
-   - The calendar should just show workouts on days
-   - No need to track which program workouts came from
-
-### Implementation Approach
-
-This is a larger architectural change. For now, I'll focus on making the current system work properly, with one key change that aligns with your vision:
-
-**Remove the date range filter for the selected assignment** - Allow workouts to appear on ANY date where they exist, not just within the original program's date range.
-
-```text
-File: src/components/athletes/AthleteCalendarView.tsx
-
-Change in calendarDays memo:
-- Currently: Check if date is within assignment's startDate-endDate range
-- New: Always show workouts from the editing state, regardless of original range
-```
-
-This means:
-- When you paste a week to dates outside the program range, the workouts appear
-- The athlete's calendar becomes the "source of truth" for what workouts exist where
-- The original program range becomes irrelevant after assignment
-
-### Future Enhancement (Not in This Plan)
-
-Completely remove the `AthleteCalendarAssignment` concept and instead store workouts directly in a per-athlete structure:
-```typescript
-interface AthleteWorkout {
-  id: string;
-  athleteId: string;
-  date: string;
-  sessionIndex: number;
-  exercises: ExerciseDistribution[];
-  sections: SessionSection[];
-  // Parameters are embedded in exercises
-}
-```
-
-This would be a larger refactor for a future iteration.
-
----
-
-## Files to Modify
-
-| File | Changes |
-|------|---------|
-| `src/hooks/useAthleteCalendarEditing.ts` | 1. Fix infinite loop in auto-save effect<br>2. Fix handlePasteWeek to copy intensity values<br>3. Fix handlePasteDay to copy intensity values |
-| `src/components/athletes/AthleteCalendarView.tsx` | Remove date range filter for selected assignment - show workouts wherever they exist |
-
----
-
-## Technical Implementation Details
-
-### 1. Fix Infinite Loop (useAthleteCalendarEditing.ts)
-
-The auto-save effect needs a stable comparison:
-
-```typescript
-// Add ref to track last saved state
-const lastSavedStateRef = useRef<string>('');
-
-// In auto-save effect:
-useEffect(() => {
-  if (!selectedAssignmentId || isInitializing) return;
-  if (loadingAssignmentIdRef.current !== null) return;
-  if (loadedAssignmentIdRef.current !== selectedAssignmentId) return;
-  
-  const storageKey = `athlete-assignment-${selectedAssignmentId}`;
-  const dataToSave = {
-    exerciseDistribution,
-    sessionSections,
-    supersets,
-    parameterValues,
-    dailyIntensity: dailyIntensityData,
-    trainingDays,
-    daySplitStates,
-    lastModified: new Date().toISOString(),
-  };
-  
-  // Only save if data actually changed
-  const stateString = JSON.stringify({
-    exerciseDistribution,
-    sessionSections,
-    supersets,
-    daySplitStates,
-    // Exclude lastModified from comparison
-  });
-  
-  if (stateString === lastSavedStateRef.current) return;
-  lastSavedStateRef.current = stateString;
-  
-  localStorage.setItem(storageKey, JSON.stringify(dataToSave));
-}, [...dependencies]);
-```
-
-### 2. Fix Paste Week Intensity (useAthleteCalendarEditing.ts)
-
-In `handlePasteWeek`, update the intensity copy logic:
-
-```typescript
-// Find source training day to get intensity
-const sourceTrainingDay = copiedWeek.trainingDays.find(
-  td => td.date === sourceDayDate
-);
-const copiedIntensity = sourceTrainingDay?.intensity || 'moderate';
-
-// Apply to target
-newTrainingDayUpdates[targetDayDate] = {
-  ...
-  intensity: copiedIntensity as IntensityLevel, // Use copied intensity
-  ...
+1) Build a `savePayload` that matches what we store:
+```ts
+const savePayload = {
+  exerciseDistribution,
+  sessionSections,
+  supersets,
+  parameterValues,
+  dailyIntensity: dailyIntensityData,
+  trainingDays,
+  daySplitStates,
 };
 ```
 
-Also update `dailyIntensityData`:
+2) Create a fingerprint from `JSON.stringify(savePayload)` (excluding `lastModified`)
+- Compare to `lastSavedStateRef.current`
+- If identical: skip save
+- If changed: update ref + save
 
-```typescript
-setDailyIntensityData(prev => {
-  const updated = [...prev];
-  Object.entries(newTrainingDayUpdates).forEach(([date, update]) => {
-    const existingIdx = updated.findIndex(d => d.date === date);
-    if (existingIdx >= 0) {
-      updated[existingIdx] = { ...updated[existingIdx], intensity: update.intensity };
-    } else {
-      updated.push({ date, intensity: update.intensity });
-    }
-  });
-  return updated.sort((a, b) => a.date.localeCompare(b.date));
-});
-```
+3) Debounce saves (e.g., 250–400ms) with `setTimeout` in a `saveTimeoutRef`
+- Prevents excessive writes during rapid UI interactions
+- Still guarantees persistence
 
-### 3. Remove Date Range Filter (AthleteCalendarView.tsx)
+4) When loading from localStorage, set `lastSavedStateRef.current` to the loaded fingerprint so we don’t immediately re-save the same data and create churn.
 
-The current `calendarDays` memo already checks live editing state first - we just need to ensure it properly displays content without the range limitation. The key is that for the **selected assignment**, we should ALWAYS check the editing state first, and display whatever is there.
-
-The recent changes should handle this, but we need to ensure the training days are being created for pasted dates (which the merge logic now handles).
+**Expected result:** parameters/intensity edits persist consistently; no more “it worked then got lost” due to skipped saves.
 
 ---
 
-## Expected Outcome
+### C) Fix “0 sessions becomes 1” everywhere (clear week/day must actually look cleared)
+**Files:**
+- `src/components/athletes/AthleteCalendarView.tsx`
+- `src/hooks/useAthleteCalendarEditing.ts` (master planner builder)
 
-After these fixes:
-1. **Clear Week** - Works without crashing
-2. **Paste Week** - Pastes all exercises AND copies intensity from source days
-3. **Paste Day/Session** - Works correctly with proper intensity
-4. **Workouts appear anywhere** - No longer limited by original program date range
+1) Replace `||` with nullish logic where `0` is meaningful:
+- `liveSplitState || 1` becomes something like:
+  - use `??` and/or explicit checks so `0` stays `0`
+- In master planner day session count builder, use `??` instead of `||`
 
+2) Tighten the “hasLiveData” condition:
+- Do not treat `trainingDay.isTrainingDay` alone as a reason to render sessions
+- Use:
+  - exercises exist OR splitState > 0 OR tests/events exist
+- This prevents cleared days from still rendering “empty sessions”.
+
+**Expected result:** Clear week/day removes sessions visually and functionally. No phantom “Session 1”.
+
+---
+
+### D) Make paste operations create complete TrainingDay entries (including meso/micro metadata) for out-of-range dates
+**File:** `src/hooks/useAthleteCalendarEditing.ts`
+
+1) Extend copied payloads to include day metadata needed for “session screenshot” behavior:
+- For `CopiedDay`: include `sourceTrainingDay` (or at least `mesocycleId`, `microcycleId`, `testNames`, `eventNames`)
+- For `CopiedWeek`: when building `newTrainingDayUpdates`, also carry `mesocycleId` and `microcycleId` from the source day into the target day entry (not just intensity).
+
+2) When creating a new TrainingDay (target date not found), populate:
+- `mesocycleId`, `microcycleId` (copied from source)
+- `isTestDay`, `isEventDay` (derived from copied names)
+- keep intensity copied correctly
+- sessions/sessionNames set correctly
+
+**Expected result:** pasted sessions keep their method parameter context (the “screenshot” idea), and the session sheet won’t lose method parameters just because the date is outside the original program range.
+
+---
+
+### E) Fix session paste specifically (currently missing the “create missing day” logic)
+**File:** `src/hooks/useAthleteCalendarEditing.ts`
+
+1) Update `handlePasteSession` to:
+- If `trainingDays` has no entry for `targetDate`, add one (merge logic like we already did for day/week paste)
+- Set `daySplitStates[targetDate]` starting from `0` (not `1`) if the date is brand new
+- Optionally: if the date is brand new, initialize day intensity from the copied session’s source day intensity
+
+2) Copy supersets for session paste (so “everything” truly comes along)
+- Capture the source session’s superset structure from `supersets[sourceDate]?.[sourceSessionIndex]`
+- Remap section IDs and exercise IDs to the newly generated IDs
+- Insert into `supersets[targetDate][newSessionIndex]`
+
+**Expected result:** “Copy session → Paste session” works even outside range, including sections + supersets.
+
+---
+
+### F) Fix intensity correctness during week paste
+**Files:**
+- `src/hooks/useAthleteCalendarEditing.ts`
+- `src/components/athletes/AthleteCalendarView.tsx` (display fallback improvements)
+
+1) Ensure week paste sets intensity in both places:
+- `trainingDays[targetDate].intensity`
+- `dailyIntensityData` entry for that date
+
+2) In `AthleteCalendarView`, if dailyIntensityData is missing for a date, fall back to `trainingDays` intensity for display (so the UI doesn’t show “moderate” just because intensity array is incomplete).
+
+**Expected result:** pasted week/day shows the expected intensity immediately, without relying on a later save/reload.
+
+---
+
+## Acceptance checks (end-to-end)
+1) Assign a program to an athlete.
+2) Copy a session with exercises + supersets. Paste it to a date outside the assignment range.
+   - It stays visible (no flash/disappear).
+   - Opening the session shows the same sections + superset groupings.
+3) Copy a full day and paste it outside range.
+   - All sessions, sections, supersets show.
+4) Copy a week and paste it outside range.
+   - Sessions persist and do not revert.
+   - Intensity matches the source week.
+5) Clear a week.
+   - No crash.
+   - All sessions for that week are gone (calendar shows empty days with only “Add Session”).
+6) Refresh the page.
+   - The pasted/cleared state persists (verifies auto-save correctness).
+
+## Files that will be updated
+- `src/hooks/useAthleteCalendarEditing.ts`
+  - stabilize loading (assignmentsRef + lastLoaded guard)
+  - robust debounced auto-save fingerprint
+  - session paste: add missing day + superset remap
+  - paste week/day: carry meso/micro metadata
+  - clear week/day: ensure splitState=0 behaves correctly
+- `src/components/athletes/AthleteCalendarView.tsx`
+  - fix `0` session handling
+  - correct live “has data” rules so cleared days don’t render sessions
+  - intensity display fallback
+
+## Notes on the bigger redesign (your “workouts, not assigned programs” vision)
+The above fixes make today’s system behave like your intended “screenshot then independent workouts” model (sessions can exist on any date, keep their context, and don’t get constrained by the original assignment window), without yet removing the assignment concept. After stability is restored, we can safely remove/hide the “Assigned Programs” UI and evolve the data model toward true per-athlete workouts.
