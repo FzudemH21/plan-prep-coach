@@ -492,6 +492,82 @@ export function WorkoutSessionSheet({
         sectionsMap.set(sectionName, []);
       }
       
+      // ===== TOOLBOX-SOURCED EXERCISES: Generate blank parameters =====
+      // If this exercise was added via ad-hoc dialog (parameterSource === 'toolbox'),
+      // skip periodization lookup entirely and build blank parameters from toolbox
+      if ((ex as any).parameterSource === 'toolbox') {
+        console.log('[buildSectionsFromExercises FALLBACK] Toolbox-sourced exercise, using blank params:', ex.exerciseName);
+        
+        // Get method parameters from toolbox
+        const methodParts = ex.methodId.split(' - ');
+        const toolboxCategory = methodParts[0];
+        const toolboxSubCategory = methodParts.length > 1 ? methodParts.slice(1).join(' - ') : '';
+        
+        const methodEntries = toolboxData?.entries.filter(entry => {
+          const categoryMatch = entry.category.toLowerCase().trim() === toolboxCategory.toLowerCase().trim();
+          const subCategoryMatch = toolboxSubCategory === '' 
+            ? (!entry.subCategory || entry.subCategory.trim() === '')
+            : (entry.subCategory?.toLowerCase().trim() === toolboxSubCategory.toLowerCase().trim());
+          return categoryMatch && subCategoryMatch;
+        }) || [];
+        
+        // Find set parameter
+        const setParamEntry = methodEntries.find(e => e.isSetParameter);
+        const setParamName = setParamEntry?.parameterName || 
+                            methodEntries.find(e => /^sets?$/i.test(e.parameterName))?.parameterName ||
+                            'Sets';
+        const setCount = 3; // Default blank
+        
+        // Build BLANK parameters
+        const blankParameters: Record<string, string | number> = {};
+        blankParameters[setParamName] = setCount;
+        
+        methodEntries.forEach(entry => {
+          if (entry.isFrequencyParameter) return;
+          const paramName = entry.parameterName;
+          
+          // Add unit if quantitative
+          if (entry.parameterType === 'quantitative' && entry.options.length > 0) {
+            blankParameters[`${paramName}_unit`] = entry.options[0];
+          }
+          
+          // Create per-set keys (all blank)
+          if (!entry.isSetParameter && setCount > 0) {
+            for (let i = 1; i <= setCount; i++) {
+              blankParameters[`${paramName}_set${i}`] = '';
+            }
+          }
+        });
+        
+        // Detect auto-calc units
+        let has1RMUnit = false;
+        let hasMaxHRUnit = false;
+        for (const entry of methodEntries) {
+          if (entry.parameterType === 'quantitative' && entry.options) {
+            if (entry.options.includes('%1RM')) has1RMUnit = true;
+            if (entry.options.includes('%maxHR') || entry.options.includes('%HRmax')) hasMaxHRUnit = true;
+          }
+        }
+        
+        sectionsMap.get(sectionName)!.push({
+          id: (ex as any).id || `${ex.exerciseId}-${index}`,
+          exerciseId: ex.exerciseId,
+          exerciseName: ex.exerciseName,
+          methodId: ex.methodId,
+          categoryName: ex.categoryName || '',
+          order: (ex as any).order ?? index,
+          supersetId: (ex as any).supersetId,
+          parameters: blankParameters,
+          notes: ex.notes,
+          autoCalculateWeight: has1RMUnit ? true : undefined,
+          autoCalculateTargetHR: hasMaxHRUnit ? true : undefined,
+          parameterSource: 'toolbox' as const,
+        });
+        
+        return; // Skip periodization lookup
+      }
+      
+      // ===== PERIODIZATION-SOURCED EXERCISES: Use method periodization table =====
       // Priority lookup: category-specific first (for split methods), then base method
       const hasValidCategory = ex.categoryName && 
         ex.categoryName !== 'Uncategorized' && 

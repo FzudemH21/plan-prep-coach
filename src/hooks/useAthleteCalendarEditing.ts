@@ -1271,12 +1271,17 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   }, []);
 
   const handleSessionIntensityChange = useCallback((dayDate: string, sessionIndex: number, intensity: IntensityLevel) => {
-    // For single session days, also update day intensity
-    const day = trainingDays.find(d => d.date === dayDate);
-    if (day?.sessions === 1) {
+    // Check session count from daySplitStates (source of truth), not trainingDays.sessions
+    const sessionCount = daySplitStates[dayDate] ?? 1;
+    
+    // For single session days, sync session intensity to day intensity
+    if (sessionCount === 1) {
       handleDayIntensityChange(dayDate, intensity);
     }
-  }, [trainingDays, handleDayIntensityChange]);
+    
+    // For multi-session days, session intensity is independent (handled by the sheet's local state)
+    // The sheet persists session intensity on save; no action needed here for multi-session days
+  }, [daySplitStates, handleDayIntensityChange]);
 
   // === Session Naming Handlers ===
   
