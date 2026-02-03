@@ -1,92 +1,102 @@
 
-## Root Cause Analysis
+# Fix: Date Shifting Off-by-One Due to Timezone
 
-The investigation confirms:
-1. **Exercises ARE being copied and stored** - Console logs show "2 exercises, 2 sections, 28 dailyIntensity" being loaded from storage
-2. **The data is being loaded correctly** - The `useAthleteCalendarEditing` hook successfully parses and loads the data
-3. **BUT exercises don't appear in the UI** - The filter at line 847 (`ex.dayDate === selectedSessionInfo.dayDate`) returns no matches
+## Problem Identified
 
-### The Problem: Date Mismatch
+When assigning a training program to an athlete calendar, the date shifting is **off by one day** due to timezone handling:
 
-The exercises stored in `editing.exerciseDistribution` have `dayDate` values that don't match the calendar's `selectedSessionInfo.dayDate`. This can happen because:
+1. User selects February 9 (Monday) as the start date
+2. JavaScript creates `new Date()` at midnight *local time*
+3. When stored/logged in UTC, this becomes `2026-02-08T23:00:00.000Z` (11 PM on Feb 8)
+4. The original program start is `2026-02-01T00:00:00.000Z` (midnight UTC on Feb 1)
+5. `differenceInDays()` calculates offset = 7 days (not 8) because it's based on actual time difference
+6. Shifting Feb 1 by 7 days = Feb 8, not Feb 9
 
-1. **The date shifting IS working** during initial assignment, BUT...
-2. **A subsequent auto-save may be overwriting the data** with unshifted dates, OR
-3. **The dates are in a different format** (e.g., ISO timestamp vs `yyyy-MM-dd` string), OR
-4. **Timezone issues** are causing off-by-one day errors
+Result: The program starts on Sunday (Feb 8) instead of Monday (Feb 9), so the "Easy" Monday session appears instead of the "Hard" Sunday session.
 
-### The Solution: Add Debug Logging + Fix Date Comparison
+## Solution
 
-I'll add diagnostic logging to identify exactly what dates the exercises have vs what the calendar is looking for. Then I'll implement a robust fix.
+Normalize both dates to midnight UTC before calculating the offset. This ensures the shift is based purely on calendar days, not timestamps.
 
----
+### Files to Modify
 
-## Implementation Plan
+**1. `src/utils/dateShifting.ts`**
 
-### Step 1: Add Diagnostic Logging (to pinpoint the exact issue)
-**File: `src/hooks/useAthleteCalendarEditing.ts`**
+Add a helper function to normalize dates to UTC midnight:
 
-Add detailed logging when loading exercises to show the actual `dayDate` values:
-- Log the first few exercise dates to see the format
-- Log the trainingDays dates to compare
-
-### Step 2: Add Diagnostic Logging in the Calendar View
-**File: `src/components/athletes/AthleteCalendarView.tsx`**
-
-When opening a session, log:
-- The `selectedSessionInfo.dayDate` being searched for
-- The actual `dayDate` values in `editing.exerciseDistribution`
-- The count of matching exercises
-
-### Step 3: Normalize Date Format
-**File: `src/utils/dateShifting.ts`**
-
-Ensure all date shifting functions handle edge cases:
-- Add validation for invalid input dates
-- Ensure consistent `yyyy-MM-dd` format output
-- Handle edge cases where `parseISO` might fail
-
-### Step 4: Fix Potential Race Condition (additional safeguard)
-**File: `src/hooks/useAthleteCalendarEditing.ts`**
-
-Ensure the auto-save effect doesn't overwrite correctly shifted data:
-- Add a flag to track whether the current data has been "freshly loaded" and shouldn't trigger auto-save immediately
-- Prevent auto-save from running until the user has made an actual edit
-
-### Step 5: Add Date Normalization on Load and Save
-**File: `src/hooks/useAthleteCalendarEditing.ts`**
-
-When loading exercises, normalize all `dayDate` values to consistent `yyyy-MM-dd` format:
 ```typescript
-const storedExercises = (parsed.exerciseDistribution || []).map(ex => ({
-  ...ex,
-  dayDate: format(parseISO(ex.dayDate), 'yyyy-MM-dd'),
-}));
+/**
+ * Normalizes a date to UTC midnight to ensure consistent day-based calculations
+ */
+function normalizeToUTCMidnight(date: Date): Date {
+  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+}
 ```
 
----
+Update `calculateDayOffset()` to normalize dates:
+
+```typescript
+export function calculateDayOffset(originalStartDate: Date, newStartDate: Date): number {
+  // Normalize both dates to UTC midnight for accurate day-based offset
+  const normalizedOriginal = normalizeToUTCMidnight(originalStartDate);
+  const normalizedNew = normalizeToUTCMidnight(newStartDate);
+  return differenceInDays(normalizedNew, normalizedOriginal);
+}
+```
+
+**2. `src/components/athletes/AthleteCalendarView.tsx`**
+
+When computing `originalStartDate` and `newStartDate`, ensure they're normalized before calling shift functions:
+
+In the `handleAssignProgram` function (~line 447):
+
+```typescript
+// Normalize dates to UTC midnight for accurate day-based shifting
+const normalizedOriginalStart = new Date(Date.UTC(
+  originalStartDate.getFullYear(),
+  originalStartDate.getMonth(),
+  originalStartDate.getDate()
+));
+
+const assignmentDate = new Date(assignment.startDate);
+const normalizedNewStart = new Date(Date.UTC(
+  assignmentDate.getFullYear(),
+  assignmentDate.getMonth(),
+  assignmentDate.getDate()
+));
+
+// Then use normalizedOriginalStart and normalizedNewStart for shifting
+const shiftedExercises = program.exerciseDistribution 
+  ? shiftExerciseDates(program.exerciseDistribution, normalizedOriginalStart, normalizedNewStart)
+  : [];
+// ... etc
+```
+
+### Why This Fixes It
+
+With normalization:
+- `originalStartDate`: Feb 1, 2026 00:00:00 UTC
+- `newStartDate`: Feb 9, 2026 00:00:00 UTC (not Feb 8 23:00!)
+- Offset: 8 days (correct!)
+- Feb 1 + 8 days = Feb 9 (correct!)
+
+Now the "Hard" session from Feb 1 (Day 1 of the program) will correctly land on Feb 9 (the assigned start date), regardless of user timezone.
 
 ## Technical Details
 
-### Why this happens
-The most likely cause is that when the data is saved during assignment (`handleAssignProgram`), the shifted dates are correct. But when the data is loaded and re-saved by the auto-save effect, the dates may get corrupted or reset.
+The issue affects ALL date-based operations when the user's timezone is not UTC. By normalizing to UTC midnight:
 
-Another possibility is that the original exercise dates in the program have a format like `2025-01-15T00:00:00.000Z` (ISO timestamp) instead of `2025-01-15` (date string), and the `parseISO` + `format` pattern isn't handling this correctly.
+1. We preserve the **calendar date** the user selected (Feb 9)
+2. We ignore the **time component** which varies by timezone
+3. All day calculations become consistent regardless of user location
 
-### The fix approach
-1. **Defensive normalization**: Always normalize `dayDate` to `yyyy-MM-dd` format when loading and comparing
-2. **Better logging**: Add specific logs to identify the exact mismatch
-3. **Validate on assignment**: Log what dates are being stored during assignment to verify shifting works
+This is a common fix pattern for date-based (not datetime-based) applications.
 
----
+## Testing Verification
 
-## Files to Modify
-1. `src/hooks/useAthleteCalendarEditing.ts` - Add logging + date normalization on load
-2. `src/components/athletes/AthleteCalendarView.tsx` - Add logging when opening session + defensive date comparison
-3. `src/utils/dateShifting.ts` - Add validation for edge cases
-
-## Expected Outcome
-After these changes:
-- Console will clearly show what dates exercises have vs what's being searched
-- Dates will be normalized to consistent format
-- Exercises will match correctly and display in the session view
+After the fix:
+1. Create a program starting on any day (e.g., Sunday Feb 1)
+2. Set Day 1 to "Hard" intensity with exercises
+3. Assign to athlete calendar starting on a different day (e.g., Monday Feb 9)
+4. The assigned start date should show "Hard" intensity and Day 1's exercises
+5. Day 2 of the program should appear on Feb 10, etc.
