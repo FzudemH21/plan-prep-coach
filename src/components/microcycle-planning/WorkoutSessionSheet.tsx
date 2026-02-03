@@ -682,6 +682,8 @@ export function WorkoutSessionSheet({
   // Track previous exercise count to detect additions vs deletions
   const prevExerciseCountRef = useRef(exercises.length);
   const hasInitializedRef = useRef(false);
+  // Track freshly added exercise IDs to skip redundant rebuilds (they already have blank params)
+  const freshlyAddedExerciseIdsRef = useRef<Set<string>>(new Set());
   
   // Sync workoutSections when dialog opens or exercises are ADDED (not deleted)
   // CRITICAL: Merge existing parameters with new exercises to preserve toolbox-sourced blank params
@@ -706,14 +708,16 @@ export function WorkoutSessionSheet({
           });
         });
         
-        // Merge: for each exercise in newSections, if it already exists in workoutSections,
-        // preserve its parameters, notes, eachSide, etc.
+        // Merge: for each exercise in newSections, if it already exists in workoutSections
+        // OR was just added via handleAdHocMethodSelected (freshly added), preserve its parameters.
         const mergedSections = newSections.map(section => ({
           ...section,
           exercises: section.exercises.map(newEx => {
             const existing = existingExerciseMap.get(newEx.id);
+            const isFreshlyAdded = freshlyAddedExerciseIdsRef.current.has(newEx.id);
+            
             if (existing) {
-              // Preserve existing state (parameters, notes, etc.) - don't overwrite with rebuilt values
+              // Preserve existing state (parameters, notes, parameterSource, etc.) - don't overwrite with rebuilt values
               console.log('[WorkoutSessionSheet] Preserving existing params for:', newEx.exerciseName, newEx.id);
               return {
                 ...newEx,
@@ -722,12 +726,23 @@ export function WorkoutSessionSheet({
                 eachSide: existing.eachSide,
                 autoCalculateWeight: existing.autoCalculateWeight,
                 autoCalculateTargetHR: existing.autoCalculateTargetHR,
+                parameterSource: (existing as any).parameterSource, // Preserve parameterSource marker
               };
             }
+            
+            if (isFreshlyAdded) {
+              // Freshly added via ad-hoc dialog - skip rebuild, keep blank params from handleAdHocMethodSelected
+              console.log('[WorkoutSessionSheet] Skipping rebuild for freshly added exercise:', newEx.exerciseName, newEx.id);
+              return newEx;
+            }
+            
             // New exercise - use the built parameters
             return newEx;
           })
         }));
+        
+        // Clear freshly added IDs after merge
+        freshlyAddedExerciseIdsRef.current.clear();
         
         setWorkoutSections(mergedSections);
         hasInitializedRef.current = true;
@@ -764,6 +779,8 @@ export function WorkoutSessionSheet({
             ...section,
             exercises: section.exercises.map(newEx => {
               const existing = existingExerciseMap.get(newEx.id);
+              const isFreshlyAdded = freshlyAddedExerciseIdsRef.current.has(newEx.id);
+              
               if (existing) {
                 return {
                   ...newEx,
@@ -772,11 +789,20 @@ export function WorkoutSessionSheet({
                   eachSide: existing.eachSide,
                   autoCalculateWeight: existing.autoCalculateWeight,
                   autoCalculateTargetHR: existing.autoCalculateTargetHR,
+                  parameterSource: (existing as any).parameterSource,
                 };
               }
+              
+              if (isFreshlyAdded) {
+                return newEx;
+              }
+              
               return newEx;
             })
           }));
+          
+          // Clear freshly added IDs after merge
+          freshlyAddedExerciseIdsRef.current.clear();
           
           setWorkoutSections(mergedSections);
           hasInitializedRef.current = true;
@@ -1464,7 +1490,7 @@ export function WorkoutSessionSheet({
       return params;
     };
 
-    // Create new exercises
+    // Create new exercises with parameterSource marker
     const newExercises = selectedExercisesForMethod.map((ex, index) => {
       return {
         id: `${ex.exerciseId}-${Date.now()}-${index}`,
@@ -1473,8 +1499,14 @@ export function WorkoutSessionSheet({
         methodId,
         categoryName: categoryName || section.name,
         order: section.exercises.length + index,
-        parameters: buildExerciseParams()
+        parameters: buildExerciseParams(),
+        parameterSource: 'toolbox' as const, // Mark as toolbox-sourced
       } as WorkoutExercise;
+    });
+
+    // Track freshly added exercise IDs to prevent rebuild from overwriting blank params
+    newExercises.forEach(ex => {
+      freshlyAddedExerciseIdsRef.current.add(ex.id);
     });
 
     // Add exercises to section
