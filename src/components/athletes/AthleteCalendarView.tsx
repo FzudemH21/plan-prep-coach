@@ -213,11 +213,15 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         const liveExercises = editing.exerciseDistribution.filter(
           (ex: any) => ex.dayDate === dateString
         );
-        const liveSplitState = editing.daySplitStates[dateString] ?? 0;
+        const liveSplitState = editing.daySplitStates[dateString];
         const liveTrainingDay = editing.trainingDays.find((td: any) => td.date === dateString);
         
-        // If we have exercises OR a split state (training day) for this date from live data, use it
-        const hasLiveData = liveExercises.length > 0 || liveSplitState > 0 || liveTrainingDay?.isTrainingDay;
+        // FIX: Proper check for live data - don't use isTrainingDay alone since cleared days still exist
+        // A day has live content if: exercises exist OR splitState > 0 OR has tests/events
+        const hasLiveExercises = liveExercises.length > 0;
+        const hasLiveSessions = liveSplitState !== undefined && liveSplitState > 0;
+        const hasTestsOrEvents = (liveTrainingDay?.testNames?.length ?? 0) > 0 || (liveTrainingDay?.eventNames?.length ?? 0) > 0;
+        const hasLiveData = hasLiveExercises || hasLiveSessions || hasTestsOrEvents;
         
         if (hasLiveData) {
           usedLiveEditingState = true;
@@ -225,8 +229,8 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           assignmentId = selectedAssignmentId;
           programName = selectedAssignment?.programName;
           
-          // Get day intensity from live dailyIntensity data
-          let dayIntensity: IntensityLevel = 'moderate';
+          // Get day intensity from live dailyIntensity data, fall back to trainingDays intensity
+          let dayIntensity: IntensityLevel = liveTrainingDay?.intensity || 'moderate';
           const liveDayIntensity = editing.dailyIntensityData.find(
             (d: any) => d.date === dateString
           );
@@ -242,22 +246,27 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             eventNames = [...eventNames, ...liveTrainingDay.eventNames];
           }
           
-          const numSessions = liveSplitState || 1;
-          for (let sessionIdx = 0; sessionIdx < numSessions; sessionIdx++) {
-            const sessionId = `${selectedAssignmentId}-${dateString}-${sessionIdx}`;
-            const sessionName = liveTrainingDay?.sessionNames?.[sessionIdx] || `Session ${sessionIdx + 1}`;
-            const exerciseCount = liveExercises.filter(
-              (ex: any) => ex.sessionIndex === sessionIdx
-            ).length;
-            
-            sessions.push({
-              id: sessionId,
-              sessionIndex: sessionIdx,
-              sessionName,
-              exerciseCount,
-              intensity: dayIntensity,
-              assignmentId: selectedAssignmentId,
-            });
+          // FIX: Use actual splitState value - 0 means no sessions (cleared day)
+          // Only render sessions if we have exercises OR splitState > 0
+          const numSessions = liveSplitState ?? 0;
+          if (numSessions > 0 || hasLiveExercises) {
+            const sessionCount = numSessions > 0 ? numSessions : 1;
+            for (let sessionIdx = 0; sessionIdx < sessionCount; sessionIdx++) {
+              const sessionId = `${selectedAssignmentId}-${dateString}-${sessionIdx}`;
+              const sessionName = liveTrainingDay?.sessionNames?.[sessionIdx] || `Session ${sessionIdx + 1}`;
+              const exerciseCount = liveExercises.filter(
+                (ex: any) => ex.sessionIndex === sessionIdx
+              ).length;
+              
+              sessions.push({
+                id: sessionId,
+                sessionIndex: sessionIdx,
+                sessionName,
+                exerciseCount,
+                intensity: dayIntensity,
+                assignmentId: selectedAssignmentId,
+              });
+            }
           }
         }
       }
@@ -283,11 +292,11 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             const liveExercises = editing.exerciseDistribution.filter(
               (ex: any) => ex.dayDate === dateString
             );
-            const liveSplitState = editing.daySplitStates[dateString] ?? 0;
+            const liveSplitState = editing.daySplitStates[dateString];
             const liveTrainingDay = editing.trainingDays.find((td: any) => td.date === dateString);
             
-            // Get day intensity from live dailyIntensity data
-            let dayIntensity: IntensityLevel = 'moderate';
+            // Get day intensity from live dailyIntensity data, fall back to trainingDays intensity
+            let dayIntensity: IntensityLevel = liveTrainingDay?.intensity || 'moderate';
             const liveDayIntensity = editing.dailyIntensityData.find(
               (d: any) => d.date === dateString
             );
@@ -303,13 +312,14 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
               eventNames = [...eventNames, ...liveTrainingDay.eventNames];
             }
             
-            // Check if this is a training day
+            // FIX: Proper check for training day - exercises OR splitState > 0
             const hasExercises = liveExercises.length > 0;
-            const isTrainingDay = hasExercises || liveTrainingDay?.isTrainingDay || liveSplitState > 0;
+            const numSessions = liveSplitState ?? 0;
+            const isTrainingDay = hasExercises || numSessions > 0;
             
             if (isTrainingDay) {
-              const numSessions = liveSplitState || 1;
-              for (let sessionIdx = 0; sessionIdx < numSessions; sessionIdx++) {
+              const sessionCount = numSessions > 0 ? numSessions : 1;
+              for (let sessionIdx = 0; sessionIdx < sessionCount; sessionIdx++) {
                 const sessionId = `${assignment.id}-${dateString}-${sessionIdx}`;
                 const sessionName = liveTrainingDay?.sessionNames?.[sessionIdx] || `Session ${sessionIdx + 1}`;
                 const exerciseCount = liveExercises.filter(
