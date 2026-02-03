@@ -173,6 +173,8 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   }, [editing.selectedAssignment]);
 
   // Calculate calendar days based on view mode (for calendar view)
+  // IMPORTANT: For the currently selected assignment, read from live editing state
+  // to ensure immediate visual feedback after paste/copy operations
   const calendarDays = useMemo((): AthleteCalendarDay[] => {
     if (viewMode === 'master') return [];
     
@@ -215,72 +217,112 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         assignmentId = assignment.id;
         programName = assignment.programName;
 
-        // Get data from cache for this assignment
-        const cachedData = assignmentDataCache[assignment.id];
+        // CRITICAL FIX: For the selected assignment being edited, use LIVE editing state
+        // This ensures immediate visual feedback after paste/copy operations
+        const isEditingAssignment = assignment.id === selectedAssignmentId;
         
-        // Find trainingDay from cached data for this specific date
-        const trainingDay = cachedData?.trainingDays?.find((td: any) => td.date === dateString);
-        
-        // Get number of sessions from daySplitStates or trainingDay
-        const numSessions = cachedData?.daySplitStates?.[dateString] ?? trainingDay?.sessions ?? 1;
-        
-        // Get day intensity from dailyIntensity data
-        let dayIntensity: IntensityLevel = 'moderate';
-        if (cachedData?.dailyIntensity) {
-          const storedDayIntensity = cachedData.dailyIntensity.find(
+        if (isEditingAssignment) {
+          // Use live editing state for immediate updates
+          const liveExercises = editing.exerciseDistribution.filter(
+            (ex: any) => ex.dayDate === dateString
+          );
+          const liveSplitState = editing.daySplitStates[dateString] ?? 0;
+          const liveTrainingDay = editing.trainingDays.find((td: any) => td.date === dateString);
+          
+          // Get day intensity from live dailyIntensity data
+          let dayIntensity: IntensityLevel = 'moderate';
+          const liveDayIntensity = editing.dailyIntensityData.find(
             (d: any) => d.date === dateString
           );
-          if (storedDayIntensity?.intensity) {
-            dayIntensity = storedDayIntensity.intensity as IntensityLevel;
+          if (liveDayIntensity?.intensity) {
+            dayIntensity = liveDayIntensity.intensity as IntensityLevel;
           }
-        }
-        
-        // Collect test/event names
-        if (trainingDay?.testNames?.length > 0) {
-          testNames = [...testNames, ...trainingDay.testNames];
-        }
-        if (trainingDay?.eventNames?.length > 0) {
-          eventNames = [...eventNames, ...trainingDay.eventNames];
-        }
-        
-        // Check if this is a training day (either has exercises or is marked as training day)
-        const hasExercises = cachedData?.exerciseDistribution?.some((ex: any) => ex.dayDate === dateString);
-        const isTrainingDay = hasExercises || trainingDay?.isTrainingDay;
-        
-        if (isTrainingDay) {
-          // Create one session entry per session on this day
-          for (let sessionIdx = 0; sessionIdx < numSessions; sessionIdx++) {
-            const sessionId = `${assignment.id}-${dateString}-${sessionIdx}`;
-            
-            // Get real session name from trainingDay
-            const sessionName = trainingDay?.sessionNames?.[sessionIdx] || `Session ${sessionIdx + 1}`;
-            
-            // Get exercise count for this specific session
-            let exerciseCount = 0;
-            if (cachedData?.exerciseDistribution) {
-              exerciseCount = cachedData.exerciseDistribution.filter(
-                (ex: any) => ex.dayDate === dateString && ex.sessionIndex === sessionIdx
+          
+          // Collect test/event names from live data
+          if (liveTrainingDay?.testNames?.length > 0) {
+            testNames = [...testNames, ...liveTrainingDay.testNames];
+          }
+          if (liveTrainingDay?.eventNames?.length > 0) {
+            eventNames = [...eventNames, ...liveTrainingDay.eventNames];
+          }
+          
+          // Check if this is a training day
+          const hasExercises = liveExercises.length > 0;
+          const isTrainingDay = hasExercises || liveTrainingDay?.isTrainingDay || liveSplitState > 0;
+          
+          if (isTrainingDay) {
+            const numSessions = liveSplitState || 1;
+            for (let sessionIdx = 0; sessionIdx < numSessions; sessionIdx++) {
+              const sessionId = `${assignment.id}-${dateString}-${sessionIdx}`;
+              const sessionName = liveTrainingDay?.sessionNames?.[sessionIdx] || `Session ${sessionIdx + 1}`;
+              const exerciseCount = liveExercises.filter(
+                (ex: any) => ex.sessionIndex === sessionIdx
               ).length;
+              
+              sessions.push({
+                id: sessionId,
+                sessionIndex: sessionIdx,
+                sessionName,
+                exerciseCount,
+                intensity: dayIntensity,
+                assignmentId: assignment.id,
+              });
             }
-            
-            // Get session-specific intensity if different from day
-            let sessionIntensity = dayIntensity;
-            // Check for stored session intensity (mesocycle-specific key format)
-            if (trainingDay?.mesocycleId && cachedData?.parameterValues) {
-              const sessionIntensityKey = `sessionIntensity_${trainingDay.mesocycleId}_${dateString}_${sessionIdx}`;
-              if (cachedData.parameterValues[sessionIntensityKey]) {
-                sessionIntensity = cachedData.parameterValues[sessionIntensityKey] as IntensityLevel;
+          }
+        } else {
+          // Use cache for other (non-editing) assignments
+          const cachedData = assignmentDataCache[assignment.id];
+          const trainingDay = cachedData?.trainingDays?.find((td: any) => td.date === dateString);
+          const numSessions = cachedData?.daySplitStates?.[dateString] ?? trainingDay?.sessions ?? 1;
+          
+          let dayIntensity: IntensityLevel = 'moderate';
+          if (cachedData?.dailyIntensity) {
+            const storedDayIntensity = cachedData.dailyIntensity.find(
+              (d: any) => d.date === dateString
+            );
+            if (storedDayIntensity?.intensity) {
+              dayIntensity = storedDayIntensity.intensity as IntensityLevel;
+            }
+          }
+          
+          if (trainingDay?.testNames?.length > 0) {
+            testNames = [...testNames, ...trainingDay.testNames];
+          }
+          if (trainingDay?.eventNames?.length > 0) {
+            eventNames = [...eventNames, ...trainingDay.eventNames];
+          }
+          
+          const hasExercises = cachedData?.exerciseDistribution?.some((ex: any) => ex.dayDate === dateString);
+          const isTrainingDay = hasExercises || trainingDay?.isTrainingDay;
+          
+          if (isTrainingDay) {
+            for (let sessionIdx = 0; sessionIdx < numSessions; sessionIdx++) {
+              const sessionId = `${assignment.id}-${dateString}-${sessionIdx}`;
+              const sessionName = trainingDay?.sessionNames?.[sessionIdx] || `Session ${sessionIdx + 1}`;
+              let exerciseCount = 0;
+              if (cachedData?.exerciseDistribution) {
+                exerciseCount = cachedData.exerciseDistribution.filter(
+                  (ex: any) => ex.dayDate === dateString && ex.sessionIndex === sessionIdx
+                ).length;
               }
+              
+              let sessionIntensity = dayIntensity;
+              if (trainingDay?.mesocycleId && cachedData?.parameterValues) {
+                const sessionIntensityKey = `sessionIntensity_${trainingDay.mesocycleId}_${dateString}_${sessionIdx}`;
+                if (cachedData.parameterValues[sessionIntensityKey]) {
+                  sessionIntensity = cachedData.parameterValues[sessionIntensityKey] as IntensityLevel;
+                }
+              }
+              
+              sessions.push({
+                id: sessionId,
+                sessionIndex: sessionIdx,
+                sessionName,
+                exerciseCount,
+                intensity: sessionIntensity,
+                assignmentId: assignment.id,
+              });
             }
-            
-            sessions.push({
-              id: sessionId,
-              sessionIndex: sessionIdx,
-              sessionName,
-              exerciseCount,
-              intensity: sessionIntensity,
-              assignmentId: assignment.id,
-            });
           }
         }
       });
@@ -296,7 +338,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         programName,
       };
     });
-  }, [currentDate, viewMode, assignments, assignmentDataCache]);
+  }, [currentDate, viewMode, assignments, assignmentDataCache, selectedAssignmentId, editing.exerciseDistribution, editing.daySplitStates, editing.trainingDays, editing.dailyIntensityData]);
 
   // Group days into weeks
   const weeks = useMemo(() => {

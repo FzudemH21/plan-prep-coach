@@ -447,6 +447,12 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   const handlePasteDay = useCallback((targetDate: string) => {
     if (!copiedDay) return;
     
+    console.log('[handlePasteDay] Starting paste:', {
+      sourceDate: copiedDay.sourceDate,
+      targetDate,
+      exerciseCount: copiedDay.exercises.length,
+    });
+    
     // Clear target day first (overwrite behavior)
     setExerciseDistribution(prev => prev.filter(ex => ex.dayDate !== targetDate));
     setSessionSections(prev => prev.filter(s => s.dayDate !== targetDate));
@@ -502,16 +508,57 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     setSupersets(newSupersets);
     setDaySplitStates(prev => ({ ...prev, [targetDate]: copiedDay.splitState || 1 }));
     
-    if (copiedDay.intensity) {
-      setTrainingDays(prev =>
-        prev.map(day => day.date === targetDate ? { ...day, intensity: copiedDay.intensity! } : day)
-      );
-      setDailyIntensityData(prev =>
-        prev.map(di => di.date === targetDate ? { ...di, intensity: copiedDay.intensity } : di)
-      );
-    }
+    // FIX: Use merge logic instead of map to ensure target day exists
+    const targetDateObj = new Date(targetDate);
+    const intensity = copiedDay.intensity || ('moderate' as IntensityLevel);
     
-    toast({ title: "Day pasted", description: `${copiedDay.exercises.length} exercise(s) pasted` });
+    setTrainingDays(prev => {
+      const updated = [...prev];
+      const existingIdx = updated.findIndex(d => d.date === targetDate);
+      
+      if (existingIdx >= 0) {
+        // Update existing day
+        updated[existingIdx] = {
+          ...updated[existingIdx],
+          intensity,
+          sessions: copiedDay.splitState || 1,
+          sessionNames: Array.from({ length: copiedDay.splitState || 1 }, (_, i) => `Session ${i + 1}`),
+          isTrainingDay: true,
+        };
+      } else {
+        // Add new day entry
+        updated.push({
+          date: targetDate,
+          dayOfWeek: targetDateObj.getDay(),
+          dayName: format(targetDateObj, 'EEEE'),
+          isTrainingDay: true,
+          intensity,
+          sessions: copiedDay.splitState || 1,
+          sessionNames: Array.from({ length: copiedDay.splitState || 1 }, (_, i) => `Session ${i + 1}`),
+        } as TrainingDay);
+      }
+      
+      // Sort by date
+      return updated.sort((a, b) => a.date.localeCompare(b.date));
+    });
+    
+    setDailyIntensityData(prev => {
+      const existingIdx = prev.findIndex(di => di.date === targetDate);
+      if (existingIdx >= 0) {
+        const newData = [...prev];
+        newData[existingIdx] = { ...newData[existingIdx], intensity };
+        return newData;
+      } else {
+        return [...prev, { date: targetDate, intensity }].sort((a, b) => a.date.localeCompare(b.date));
+      }
+    });
+    
+    console.log('[handlePasteDay] Paste complete:', {
+      pastedExercises: pastedExercises.length,
+      pastedSections: pastedSections.length,
+    });
+    
+    toast({ title: "Day pasted", description: `${pastedExercises.length} exercise(s) pasted` });
     setCopiedDay(null);
   }, [copiedDay, supersets, toast]);
 
@@ -595,6 +642,13 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   const handlePasteWeek = useCallback((targetWeekStartDate: string) => {
     if (!copiedWeek) return;
 
+    console.log('[handlePasteWeek] Starting paste:', {
+      sourceWeek: copiedWeek.weekStartDate,
+      targetWeek: targetWeekStartDate,
+      exerciseCount: copiedWeek.exercises.length,
+      sectionCount: copiedWeek.sections.length,
+    });
+
     const sourceStart = new Date(copiedWeek.weekStartDate);
     const targetStart = new Date(targetWeekStartDate);
     const dayOffset = differenceInDays(targetStart, sourceStart);
@@ -615,7 +669,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     const pastedExercises: ExerciseDistribution[] = [];
     const pastedSections: SessionSection[] = [];
     const newDaySplitUpdates: Record<string, number> = {};
-    const newTrainingDayUpdates: Record<string, { sessions: number; sessionNames: string[] }> = {};
+    const newTrainingDayUpdates: Record<string, Partial<TrainingDay>> = {};
 
     Object.entries(copiedWeek.sessionStructure).forEach(([sourceDayDate, sessionIndices]) => {
       const sourceDate = new Date(sourceDayDate);
@@ -667,25 +721,61 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       const currentSplit = daySplitStates[targetDayDate] ?? 0;
       newDaySplitUpdates[targetDayDate] = Math.max(currentSplit, newMaxSession);
 
+      // Build training day update - include full day structure for new days
       const existingDay = trainingDays.find(d => d.date === targetDayDate);
       const existingNames = existingDay?.sessionNames || [];
       const newNames = [...existingNames];
       for (let i = existingNames.length; i < newMaxSession; i++) {
         newNames.push(`Session ${i + 1}`);
       }
-      newTrainingDayUpdates[targetDayDate] = { sessions: Math.max(currentSplit, newMaxSession), sessionNames: newNames };
+      
+      newTrainingDayUpdates[targetDayDate] = {
+        date: targetDayDate,
+        dayOfWeek: targetDate.getDay(),
+        dayName: format(targetDate, 'EEEE'),
+        isTrainingDay: true,
+        intensity: existingDay?.intensity || ('moderate' as IntensityLevel),
+        sessions: Math.max(currentSplit, newMaxSession),
+        sessionNames: newNames,
+      };
+    });
+
+    console.log('[handlePasteWeek] Updates prepared:', {
+      pastedExercises: pastedExercises.length,
+      pastedSections: pastedSections.length,
+      daySplitUpdates: Object.keys(newDaySplitUpdates),
+      trainingDayUpdates: Object.keys(newTrainingDayUpdates),
     });
 
     // Apply updates
     setExerciseDistribution(prev => [...prev, ...pastedExercises]);
     setSessionSections(prev => [...prev, ...pastedSections]);
     setDaySplitStates(prev => ({ ...prev, ...newDaySplitUpdates }));
-    setTrainingDays(prev =>
-      prev.map(day => {
-        const update = newTrainingDayUpdates[day.date];
-        return update ? { ...day, sessions: update.sessions, sessionNames: update.sessionNames } : day;
-      })
-    );
+    
+    // FIX: Use merge logic instead of map to add missing days
+    setTrainingDays(prev => {
+      const updated = [...prev];
+      Object.entries(newTrainingDayUpdates).forEach(([date, update]) => {
+        const existingIdx = updated.findIndex(d => d.date === date);
+        if (existingIdx >= 0) {
+          // Update existing day
+          updated[existingIdx] = { ...updated[existingIdx], ...update };
+        } else {
+          // Add new day entry
+          updated.push({
+            date,
+            dayOfWeek: update.dayOfWeek ?? new Date(date).getDay(),
+            dayName: update.dayName ?? format(new Date(date), 'EEEE'),
+            isTrainingDay: true,
+            intensity: update.intensity ?? ('moderate' as IntensityLevel),
+            sessions: update.sessions ?? 1,
+            sessionNames: update.sessionNames ?? ['Session 1'],
+          } as TrainingDay);
+        }
+      });
+      // Sort by date
+      return updated.sort((a, b) => a.date.localeCompare(b.date));
+    });
 
     // Remap supersets
     const newSupersets = { ...supersets };
@@ -734,7 +824,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
 
     setSupersets(newSupersets);
 
-    toast({ title: "Week pasted", description: `${copiedWeek.exercises.length} exercise(s) pasted as new sessions` });
+    toast({ title: "Week pasted", description: `${pastedExercises.length} exercise(s) pasted as new sessions` });
     setCopiedWeek(null);
   }, [copiedWeek, exerciseDistribution, supersets, daySplitStates, trainingDays, toast]);
 
