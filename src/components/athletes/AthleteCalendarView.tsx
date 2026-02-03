@@ -919,7 +919,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
       </AlertDialog>
 
       {/* Workout Session Sheet for viewing/editing sessions */}
-      {selectedSessionInfo && selectedSessionInfo.dayDate && selectedSessionInfo.assignmentId && (
+      {selectedSessionInfo && selectedSessionInfo.dayDate && selectedSessionInfo.assignmentId !== undefined && (
         <WorkoutSessionSheet
           isOpen={sessionSheetOpen}
           onClose={() => {
