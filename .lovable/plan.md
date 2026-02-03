@@ -1,153 +1,107 @@
 
-# Add Week/Day Copy, Paste, Clear, and Test/Event Management to Athlete Calendar
+# Fix Week/Day Paste Not Working in Athlete Calendar
 
-## Overview
+## Root Cause Analysis
 
-You want the Athlete Calendar to have the same functionality as the Training Calendar wizard:
-1. **Week-level operations**: Copy week, paste week, clear week
-2. **Day-level operations**: Copy day, paste day (already exists in hook), clear day (already exists in hook), manage tests/events
+I found two interconnected issues causing the paste functionality to fail:
 
-## Current State
+### Issue 1: Calendar View Uses Stale Cache
 
-The `useAthleteCalendarEditing` hook already has:
-- `handleCopyDay`, `handleClearDay`, `handlePasteDay` - Day copy/paste/clear
-- `handleCopySession`, `handlePasteSession`, `handleDeleteSession` - Session operations
-- `copiedSession`, `copiedDay` - Copy state
+The calendar view (`AthleteCalendarView.tsx`) reads session data from `assignmentDataCache`, which is only loaded once from localStorage when assignments first load. When paste operations update the `editing` state (which auto-saves to localStorage), the cache is NOT refreshed because:
 
-**Missing:**
-- Week-level operations: `handleCopyWeek`, `handlePasteWeek`, `handleClearWeek`
-- `copiedWeek` state
-- Test/event management handlers for athlete calendar
-- UI components to expose these features in `AthleteCalendarWeekRow` and `AthleteCalendarDayCell`
+1. The `useEffect` at line 100-134 only runs when `assignments` array changes
+2. It explicitly skips already-cached assignments to prevent re-loading
+
+**Result**: Paste succeeds, data saves to localStorage, but UI shows stale data.
+
+### Issue 2: trainingDays Update Uses Map Instead of Merge
+
+When pasting to days outside the original assignment range, the `setTrainingDays` update uses `.map()` which only updates existing entries. If the target date doesn't exist in `trainingDays`, nothing is added.
+
+```typescript
+// Current code (only updates existing days)
+setTrainingDays(prev =>
+  prev.map(day => {
+    const update = newTrainingDayUpdates[day.date];
+    return update ? { ...day, ...update } : day;
+  })
+);
+```
 
 ---
 
-## Implementation Plan
+## Solution
 
-### 1. Add Week Operations to `useAthleteCalendarEditing`
-**File: `src/hooks/useAthleteCalendarEditing.ts`**
+### Part 1: Make Calendar View Read from Live Editing State
 
-Add:
-- `copiedWeek` state (similar to the Training Calendar structure)
-- `handleCopyWeek(weekStartDate: string)` - Copy all exercises, sections, supersets, session structure for a week
-- `handleClearWeek(weekStartDate: string)` - Clear all data for the week
-- `handlePasteWeek(targetWeekStartDate: string)` - Paste with "Add as New Sessions" behavior
-- Export these from the hook's return object
+When an assignment is selected (the one being edited), the calendar should read from `editing.exerciseDistribution` instead of `assignmentDataCache`. This provides immediate visual feedback for all operations.
 
-The implementation will mirror `MicrocyclePlanningPage.tsx` lines 1676-1970 but adapted for the athlete calendar context.
-
-### 2. Add Test/Event Handlers to `useAthleteCalendarEditing`
-**File: `src/hooks/useAthleteCalendarEditing.ts`**
-
-Add:
-- `handleAddTestEvent(dayDate, type, id, name, isNew, comments?)` - Add test/event to a day
-- `handleDeleteTestEvent(dayDate, type, name)` - Remove test/event from a day
-- Store test/event info in `trainingDays` (updating `testNames`, `eventNames`, `isTestDay`, `isEventDay`)
-
-These will modify the `trainingDays` state to track which days have tests/events.
-
-### 3. Update `AthleteCalendarWeekRow` Component
-**File: `src/components/athletes/AthleteCalendarWeekRow.tsx`**
-
-Add:
-- 3-dot dropdown menu in week header with: "Copy week", "Clear week"
-- "Paste Week" button (visible on hover when `copiedWeek` exists)
-- Pass new props down to `AthleteCalendarDayCell`
-
-New props interface:
-```typescript
-interface AthleteCalendarWeekRowProps {
-  // ... existing props
-  copiedWeek?: { exercises: any[]; weekStartDate: string } | null;
-  copiedDay?: { exercises: any[]; sourceDate: string } | null;
-  copiedSession?: { exercises: any[]; sourceDate: string; sessionIndex: number } | null;
-  onCopyWeek?: (weekStartDate: string) => void;
-  onClearWeek?: (weekStartDate: string) => void;
-  onPasteWeek?: (weekStartDate: string) => void;
-  onCopyDay?: (dayDate: string) => void;
-  onClearDay?: (dayDate: string) => void;
-  onPasteDay?: (dayDate: string) => void;
-  onAddTestEvent?: (...) => void;
-  onDeleteTestEvent?: (...) => void;
-  availableTests?: SubGoal[];
-  availableEvents?: Event[];
-}
-```
-
-### 4. Update `AthleteCalendarDayCell` Component
-**File: `src/components/athletes/AthleteCalendarDayCell.tsx`**
-
-Enhance the existing 3-dot menu to include:
-- "Copy day" (always visible)
-- "Paste day" (visible when `copiedDay` exists)
-- "Clear day" (visible when day has training)
-- Separator
-- "Manage tests/events" (opens `CombinedTestEventDialog`)
-
-Add:
-- Import and use `CombinedTestEventDialog`
-- Paste Session/Day buttons on hover (like `TrainingDayCell`)
-- Session 3-dot menu with "Copy session", "Delete session"
-
-New props interface additions:
-```typescript
-interface AthleteCalendarDayCellProps {
-  // ... existing props
-  onCopyDay?: (dayDate: string) => void;
-  onClearDay?: (dayDate: string) => void;
-  onPasteDay?: (dayDate: string) => void;
-  copiedDay?: {...} | null;
-  copiedSession?: {...} | null;
-  onCopySession?: (dayDate: string, sessionIndex: number) => void;
-  onDeleteSession?: (dayDate: string, sessionIndex: number) => void;
-  onPasteSession?: (dayDate: string) => void;
-  onAddTestEvent?: (...) => void;
-  onDeleteTestEvent?: (...) => void;
-  availableTests?: SubGoal[];
-  availableEvents?: Event[];
-}
-```
-
-### 5. Update `AthleteCalendarView` to Wire Everything Together
 **File: `src/components/athletes/AthleteCalendarView.tsx`**
 
-- Pass the new week/day/session handlers from `editing` hook to `AthleteCalendarWeekRow`
-- Create or source available tests/events (from assignment data or allow ad-hoc creation)
-- Pass `copiedWeek`, `copiedDay`, `copiedSession` state
+Update the `calendarDays` useMemo to check if the assignment matches the currently editing one, and if so, use live data:
 
----
-
-## Technical Details
-
-### Week Copy Structure (matching Training Calendar)
 ```typescript
-interface CopiedWeek {
-  exercises: ExerciseDistribution[];
-  sections: SessionSection[];
-  supersets: SupersetMapping;
-  sessionStructure: Record<string, number[]>; // dayDate -> sessionIndices
-  weekStartDate: string;
+// When building session data for each day:
+const isEditingAssignment = assignment.id === selectedAssignmentId;
+
+if (isEditingAssignment) {
+  // Use live editing state for immediate updates
+  const liveExercises = editing.exerciseDistribution.filter(
+    ex => ex.dayDate === dateString
+  );
+  const liveSplitState = editing.daySplitStates[dateString] ?? 1;
+  // ... build sessions from live data
+} else {
+  // Use cache for other assignments
+  // ... existing cache-based logic
 }
 ```
 
-### Week Paste Behavior
-Following the existing pattern ("Add as New Sessions" - Option B):
-- Calculate day offset from source to target week
-- For each target day that will receive sessions, calculate session offset based on existing sessions
-- Remap section IDs, exercise IDs, superset IDs
-- Shift session indices so pasted sessions become new sessions (not replacing existing)
+### Part 2: Fix TrainingDays Update to Add Missing Days
 
-### Test/Event Storage
-Tests and events will be stored in the `trainingDays` array within each day object:
+Update the paste handlers to properly add new days to `trainingDays` if they don't exist.
+
+**File: `src/hooks/useAthleteCalendarEditing.ts`**
+
+In `handlePasteWeek` (~line 683):
 ```typescript
-{
-  date: "2026-02-09",
-  isTestDay: true,
-  isEventDay: false,
-  testNames: ["1RM Back Squat"],
-  eventNames: [],
-  // ... other fields
-}
+setTrainingDays(prev => {
+  const updated = [...prev];
+  Object.entries(newTrainingDayUpdates).forEach(([date, update]) => {
+    const existingIdx = updated.findIndex(d => d.date === date);
+    if (existingIdx >= 0) {
+      // Update existing
+      updated[existingIdx] = { ...updated[existingIdx], ...update };
+    } else {
+      // Add new day entry
+      updated.push({
+        date,
+        dayOfWeek: new Date(date).getDay(),
+        dayName: format(new Date(date), 'EEEE'),
+        isTrainingDay: true,
+        intensity: 'moderate' as IntensityLevel,
+        ...update,
+      });
+    }
+  });
+  // Sort by date
+  return updated.sort((a, b) => a.date.localeCompare(b.date));
+});
+```
+
+Similarly update `handlePasteDay` to ensure the target day exists in `trainingDays`.
+
+### Part 3: Add Debug Logging
+
+Add console logs to help trace paste operations:
+
+```typescript
+console.log('[handlePasteWeek] Pasting', {
+  sourceWeek: copiedWeek.weekStartDate,
+  targetWeek: targetWeekStartDate,
+  exerciseCount: copiedWeek.exercises.length,
+  pastedExercises: pastedExercises.length,
+});
 ```
 
 ---
@@ -156,20 +110,41 @@ Tests and events will be stored in the `trainingDays` array within each day obje
 
 | File | Changes |
 |------|---------|
-| `src/hooks/useAthleteCalendarEditing.ts` | Add `copiedWeek` state, `handleCopyWeek`, `handlePasteWeek`, `handleClearWeek`, `handleAddTestEvent`, `handleDeleteTestEvent` |
-| `src/components/athletes/AthleteCalendarWeekRow.tsx` | Add week 3-dot menu, paste week button, pass props to day cells |
-| `src/components/athletes/AthleteCalendarDayCell.tsx` | Enhance 3-dot menu with copy/paste/clear day, manage tests/events, add session menu |
-| `src/components/athletes/AthleteCalendarView.tsx` | Wire new handlers and state to week rows |
+| `src/components/athletes/AthleteCalendarView.tsx` | Update `calendarDays` memo to use live `editing` state for the selected assignment |
+| `src/hooks/useAthleteCalendarEditing.ts` | Fix `handlePasteWeek` and `handlePasteDay` to properly add missing days to `trainingDays`; add debug logging |
+
+---
+
+## Technical Details
+
+### Why Cache vs Live State Matters
+
+The current architecture uses:
+- `assignmentDataCache`: Static snapshot loaded from localStorage, used for calendar display
+- `editing.*` state: Live state managed by the hook, auto-saved to localStorage
+
+For real-time updates, operations that modify the editing state need to be reflected in the calendar immediately. The simplest fix is to make the calendar view read from the live editing state when viewing the selected assignment.
+
+### Session Count Calculation
+
+Currently, the calendar reads `numSessions` from:
+```typescript
+const numSessions = cachedData?.daySplitStates?.[dateString] ?? trainingDay?.sessions ?? 1;
+```
+
+After the fix, for the editing assignment:
+```typescript
+const numSessions = editing.daySplitStates[dateString] ?? 1;
+```
 
 ---
 
 ## Expected Outcome
 
-After implementation:
-1. **Week header** will have a 3-dot menu with "Copy week" and "Clear week" options
-2. **Paste Week button** appears on hover when a week is copied
-3. **Day 3-dot menu** includes: Copy day, Paste day, Clear day, Manage tests/events
-4. **Session cards** have a 3-dot menu with: Copy session, Delete session
-5. **Paste Session/Day buttons** appear on hover when data is copied
-6. **CombinedTestEventDialog** opens for managing tests/events on any day
-7. All operations persist correctly to the athlete-assignment localStorage
+After these changes:
+1. Copying a week shows toast: "Week copied: X exercises"
+2. Clicking "Paste Week" immediately shows the pasted sessions in the calendar
+3. Pasting to a different week correctly shifts dates and adds sessions
+4. Existing sessions on target days are preserved (new sessions added)
+5. Pasting days works the same way with immediate visual feedback
+6. All data persists correctly to localStorage
