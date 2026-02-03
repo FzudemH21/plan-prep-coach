@@ -1,119 +1,53 @@
 
 
-# Plan: Clickable Intensity Badge and Session Drag-and-Drop for Athlete Calendar
+# Fix: Intensity Decoupling for Multi-Session Days + Drag-and-Drop Session Movement
 
 ## Summary
 
-This plan adds two features to the Athlete Calendar:
+This plan fixes two issues in the Athlete Calendar:
 
-1. **Clickable Intensity Badge in Calendar Overview** - The intensity square next to each day number becomes clickable, opening a popover to change the day's intensity directly from the calendar grid (without opening a session).
+1. **Day Intensity Updating Session Intensities**: When changing the day intensity via the calendar overview, all sessions on that day have their displayed intensity changed. For multi-session days, the day intensity should be independent of per-session intensities.
 
-2. **Drag-and-Drop Sessions** - Add drag handles (grip icon) to session cards in the calendar, allowing sessions to be dragged between days, similar to the Training Calendar.
+2. **Drag-and-Drop Not Moving Sessions**: Dropping a session onto another day opens the session detail sheet instead of moving it. The session remains on its original day.
 
 ---
 
-## Feature 1: Clickable Intensity Badge
+## Root Cause Analysis
 
-### Current State
+### Issue 1: Intensity Coupling
 
-In `AthleteCalendarDayCell.tsx` (lines 145-154), the intensity indicator is a static `<div>`:
+**Current Behavior**:
+- `handleDayIntensityChange` correctly updates only `trainingDays` and `dailyIntensityData`
+- However, when building the calendar view (`calendarDays` in AthleteCalendarView.tsx), ALL sessions on a day are assigned the same `dayIntensity` (lines 268, 337)
+- There is no per-session intensity storage in the calendar overview
 
-```tsx
-{hasTraining && day.sessions[0]?.intensity && getIntensityColor && (
-  <div
-    className={cn(
-      "w-5 h-5 rounded-sm border shrink-0",
-      getIntensityColor(day.sessions[0].intensity)
-    )}
-    title={`Intensity: ${day.sessions[0].intensity.replace('-', ' ')}`}
-  />
-)}
+**Why This Appears Broken**:
+- The visual update is immediate because all sessions share the day's intensity in the view
+- There's no separate `sessionIntensities` data structure for multi-session days
+
+**Solution**:
+For multi-session days, we need to store and display per-session intensities. Currently there's a partial implementation using `parameterValues[sessionIntensityKey]` for cached assignments (lines 380-384), but:
+1. The live editing path doesn't check this
+2. The key format isn't consistent
+
+### Issue 2: Drag-and-Drop Not Working
+
+**Current Behavior**:
+- `handleSessionDragEnd` receives `result.source.index` (the visual position in the list: 0, 1, 2...)
+- It passes this directly to `handleMoveSession(sourceDayDate, sourceIndex, destDayDate)`
+- But `handleMoveSession` expects the actual `sessionIndex` from the exercise data
+
+**The Bug**:
+The `draggableId` contains the actual session index embedded in it:
 ```
+draggableId = `${assignment.id}-${dateString}-${sessionIdx}`
+```
+For example: `"abc123-2026-02-10-0"` (session index is `0`)
 
-### Target State
+But `handleSessionDragEnd` uses `result.source.index` instead of parsing the actual session index from the `draggableId`.
 
-The intensity indicator becomes a clickable button wrapped in a `Popover` that displays all intensity level options. When an intensity is selected:
-- The day intensity is updated via `editing.handleDayIntensityChange()`
-- All single-session days have their session intensity updated automatically (bidirectional sync)
-- Multi-session days only update the day intensity (session intensities remain independent)
-
-### Implementation
-
-**File: `src/components/athletes/AthleteCalendarDayCell.tsx`**
-
-1. **Add new props for intensity editing**:
-   - `intensityLevels?: IntensityLevel[]`
-   - `onIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void`
-
-2. **Replace the static intensity indicator** with a `Popover` component containing clickable intensity options (same UI pattern as TrainingDayCell lines 176-219).
-
-3. **Wire up the callback** to call `onIntensityChange(day.dateString, selectedLevel)`.
-
-**File: `src/components/athletes/AthleteCalendarWeekRow.tsx`**
-
-Pass the new props through to `AthleteCalendarDayCell`.
-
-**File: `src/components/athletes/AthleteCalendarView.tsx`**
-
-Pass `intensityLevels` and `editing.handleDayIntensityChange` to the WeekRow/DayCell components.
-
----
-
-## Feature 2: Drag-and-Drop Sessions
-
-### Current State
-
-In `AthleteCalendarDayCell.tsx`, session cards (lines 305-384) are static divs without drag-and-drop support.
-
-### Target State
-
-Sessions can be dragged from one day to another. The implementation mirrors TrainingCalendarView:
-- Wrap the calendar with `<DragDropContext>`
-- Each day cell becomes a `<Droppable>` zone
-- Each session card becomes a `<Draggable>` with a grip handle icon
-
-### Implementation
-
-**File: `src/components/athletes/AthleteCalendarDayCell.tsx`**
-
-1. **Add drag-and-drop imports**:
-   ```tsx
-   import { Droppable, Draggable, DraggableProvided, DroppableProvided } from '@hello-pangea/dnd';
-   import { GripVertical } from 'lucide-react';
-   ```
-
-2. **Add props for session IDs** (needed for Draggable IDs):
-   - Sessions already have `id` property, so this is available.
-
-3. **Wrap session list in `<Droppable>`** with `droppableId={day.dateString}`.
-
-4. **Wrap each session card in `<Draggable>`** with:
-   - `draggableId={session.id}`
-   - `index={idx}`
-   - Drag handle using `provided.dragHandleProps` on a `<GripVertical>` icon
-
-5. **Add click suppression after drag** (to prevent accidental session open):
-   - Use a `lastDragEndTime` ref
-   - Ignore clicks within 200ms of drag ending (same pattern as TrainingDayCell)
-
-**File: `src/components/athletes/AthleteCalendarWeekRow.tsx`**
-
-No changes needed - the DayCell handles its own droppable zones.
-
-**File: `src/components/athletes/AthleteCalendarView.tsx`**
-
-1. **Import DragDropContext**:
-   ```tsx
-   import { DragDropContext, DropResult } from '@hello-pangea/dnd';
-   ```
-
-2. **Wrap the calendar grid in `<DragDropContext>`** with an `onDragEnd` handler.
-
-3. **Implement `handleSessionDragEnd(result: DropResult)`**:
-   - Extract source day, session index, and destination day from the result
-   - Move the session exercises from source to destination
-   - Update `daySplitStates` for both days
-   - Update `trainingDays.sessionNames` for both days
+**Additional Issue**:
+The click-suppression logic in `AthleteCalendarDayCell` updates `lastDragEndTime.current` every render when `!isDragging && draggingOver === null`. This causes false positives where clicks get suppressed even without dragging.
 
 ---
 
@@ -121,228 +55,181 @@ No changes needed - the DayCell handles its own droppable zones.
 
 | File | Changes |
 |------|---------|
-| `src/components/athletes/AthleteCalendarDayCell.tsx` | Add clickable intensity popover; add drag-and-drop with Droppable/Draggable |
-| `src/components/athletes/AthleteCalendarWeekRow.tsx` | Pass through new props for intensity and drag |
-| `src/components/athletes/AthleteCalendarView.tsx` | Wrap in DragDropContext; implement handleSessionDragEnd; pass intensity props |
+| `src/components/athletes/AthleteCalendarView.tsx` | Fix `handleSessionDragEnd` to parse session index from `draggableId`; Add per-session intensity lookup for live editing |
+| `src/hooks/useAthleteCalendarEditing.ts` | Add `sessionIntensities` state for per-session intensity storage; Update `handleDayIntensityChange` to NOT cascade to multi-session days |
 
 ---
 
 ## Technical Details
 
-### Change 1: Clickable Intensity Popover (AthleteCalendarDayCell.tsx)
+### Fix 1: Parse Session Index from DraggableId
 
-**New Props (add to interface ~line 54-76)**:
-```tsx
-intensityLevels?: IntensityLevel[];
-onIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
-```
+**File**: `src/components/athletes/AthleteCalendarView.tsx`
+**Location**: `handleSessionDragEnd` (lines 478-492)
 
-**Add state for popover**:
-```tsx
-const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
-```
+The `draggableId` format is: `${assignmentId}-${dateString}-${sessionIndex}`
 
-**Get current intensity** (extract from first session):
-```tsx
-const currentIntensity = day.sessions[0]?.intensity || 'moderate';
-```
+Extract the session index by parsing the draggableId:
 
-**Replace static div with Popover** (lines 145-154):
-```tsx
-{getIntensityColor && intensityLevels && onIntensityChange && (
-  <Popover open={intensityPopoverOpen} onOpenChange={setIntensityPopoverOpen}>
-    <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-      <button 
-        className={cn(
-          "w-5 h-5 rounded-sm border transition-all hover:scale-110 cursor-pointer shrink-0",
-          getIntensityColor(currentIntensity)
-        )}
-        title={`Intensity: ${currentIntensity.replace('-', ' ')}`}
-      />
-    </PopoverTrigger>
-    <PopoverContent className="w-48 p-2 z-[100]" align="end">
-      <div className="space-y-1">
-        <p className="text-xs font-medium mb-2 text-muted-foreground">Select Intensity</p>
-        {intensityLevels.map((level) => (
-          <button
-            key={level}
-            onClick={(e) => {
-              e.stopPropagation();
-              onIntensityChange(day.dateString, level);
-              setIntensityPopoverOpen(false);
-            }}
-            className={cn(
-              "w-full flex items-center gap-2 p-2 rounded hover:bg-accent transition-colors text-left",
-              level === currentIntensity && "bg-accent"
-            )}
-          >
-            <div className={cn("w-3 h-3 rounded-sm border shrink-0", getIntensityColor(level))} />
-            <span className="text-xs capitalize">{level.replace('-', ' ')}</span>
-          </button>
-        ))}
-      </div>
-    </PopoverContent>
-  </Popover>
-)}
-```
-
-### Change 2: Drag-and-Drop Sessions (AthleteCalendarDayCell.tsx)
-
-**New imports**:
-```tsx
-import { Droppable, Draggable } from '@hello-pangea/dnd';
-import { GripVertical } from 'lucide-react';
-```
-
-**Add ref for click suppression**:
-```tsx
-const lastDragEndTime = useRef<number>(0);
-```
-
-**Wrap session list (lines 303-401)**:
-```tsx
-<Droppable droppableId={day.dateString} type="session">
-  {(provided, snapshot) => (
-    <div
-      ref={provided.innerRef}
-      {...provided.droppableProps}
-      className={cn("space-y-2", snapshot.isDraggingOver && "bg-primary/5 rounded-md p-1")}
-    >
-      {day.sessions.map((session, idx) => (
-        <Draggable
-          key={session.id}
-          draggableId={session.id}
-          index={idx}
-        >
-          {(provided, snapshot) => {
-            if (!snapshot.isDragging && snapshot.draggingOver === null) {
-              lastDragEndTime.current = Date.now();
-            }
-            return (
-              <div
-                ref={provided.innerRef}
-                {...provided.draggableProps}
-                style={provided.draggableProps.style}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (Date.now() - lastDragEndTime.current < 200) return;
-                  onSessionClick?.(day.dateString, session.sessionIndex, session.assignmentId || day.assignmentId || '');
-                }}
-                className={cn(
-                  "p-2 rounded-md bg-primary/10 border border-primary/20 transition-all cursor-pointer hover:bg-primary/15",
-                  snapshot.isDragging && "shadow-lg ring-2 ring-primary opacity-90"
-                )}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-1.5">
-                    {/* Drag Handle */}
-                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing">
-                      <GripVertical className="h-3 w-3 text-muted-foreground hover:text-primary" />
-                    </div>
-                    <Dumbbell className="h-3 w-3 text-primary" />
-                    <span className="text-xs font-medium text-primary truncate max-w-[100px]" title={session.sessionName}>
-                      {session.sessionName}
-                    </span>
-                    {/* ... rest of session content ... */}
-                  </div>
-                </div>
-              </div>
-            );
-          }}
-        </Draggable>
-      ))}
-      {provided.placeholder}
-    </div>
-  )}
-</Droppable>
-```
-
-### Change 3: DragDropContext in AthleteCalendarView.tsx
-
-**New import**:
-```tsx
-import { DragDropContext, DropResult } from '@hello-pangea/dnd';
-```
-
-**Add handler**:
-```tsx
+```typescript
 const handleSessionDragEnd = useCallback((result: DropResult) => {
   if (!result.destination) return;
   
   const sourceDayDate = result.source.droppableId;
   const destDayDate = result.destination.droppableId;
-  const sourceIndex = result.source.index;
-  const destIndex = result.destination.index;
   
-  // Same day reorder
-  if (sourceDayDate === destDayDate && sourceIndex === destIndex) return;
+  // Parse session index from draggableId
+  // Format: "assignmentId-YYYY-MM-DD-sessionIndex"
+  const draggableId = result.draggableId;
+  const parts = draggableId.split('-');
+  // Last part is the session index
+  const sourceSessionIndex = parseInt(parts[parts.length - 1], 10);
   
-  // Get source exercises for this session
-  const sourceExercises = editing.exerciseDistribution.filter(
-    ex => ex.dayDate === sourceDayDate && ex.sessionIndex === sourceIndex
-  );
+  // Same day, same position - no change needed
+  if (sourceDayDate === destDayDate) return;
   
-  if (sourceExercises.length === 0) return;
-  
-  // Update exercise distribution
-  const newDistribution = editing.exerciseDistribution.map(ex => {
-    if (ex.dayDate === sourceDayDate && ex.sessionIndex === sourceIndex) {
-      return { ...ex, dayDate: destDayDate, sessionIndex: destIndex };
-    }
-    return ex;
-  });
-  editing.setExerciseDistribution(newDistribution);
-  
-  // Update daySplitStates
-  const newDaySplitStates = { ...editing.daySplitStates };
-  
-  // Decrement source day (or remove if 0)
-  if (newDaySplitStates[sourceDayDate]) {
-    newDaySplitStates[sourceDayDate] = Math.max(0, newDaySplitStates[sourceDayDate] - 1);
-    if (newDaySplitStates[sourceDayDate] === 0) {
-      delete newDaySplitStates[sourceDayDate];
-    }
+  // Validate parsed index
+  if (isNaN(sourceSessionIndex)) {
+    console.error('[handleSessionDragEnd] Could not parse session index from draggableId:', draggableId);
+    return;
   }
   
-  // Increment destination day
-  newDaySplitStates[destDayDate] = (newDaySplitStates[destDayDate] || 0) + 1;
+  // Use the hook's handler for moving sessions
+  editing.handleMoveSession(sourceDayDate, sourceSessionIndex, destDayDate);
   
-  editing.setDaySplitStates(newDaySplitStates);
-  
-  toast({ title: "Session moved", description: `Moved to ${destDayDate}` });
+  toast({
+    title: "Session moved",
+    description: `Moved to ${format(new Date(destDayDate), 'MMM d')}`,
+  });
 }, [editing, toast]);
 ```
 
-**Wrap calendar in DragDropContext** (around the weeks map):
-```tsx
-<DragDropContext onDragEnd={handleSessionDragEnd}>
-  {weeks.map((week, weekIndex) => (
-    <AthleteCalendarWeekRow ... />
-  ))}
-</DragDropContext>
+### Fix 2: Per-Session Intensity for Multi-Session Days
+
+**File**: `src/hooks/useAthleteCalendarEditing.ts`
+
+1. Add a new state for per-session intensities:
+```typescript
+const [sessionIntensities, setSessionIntensities] = useState<Record<string, IntensityLevel>>({});
+// Key format: "dayDate-sessionIndex" -> IntensityLevel
 ```
 
-**Pass props to WeekRow/DayCell**:
-```tsx
-<AthleteCalendarWeekRow
-  ...
-  intensityLevels={intensityLevels}
-  onIntensityChange={editing.handleDayIntensityChange}
-/>
+2. Update `handleDayIntensityChange` to NOT update session intensities for multi-session days:
+```typescript
+const handleDayIntensityChange = useCallback((dayDate: string, intensity: IntensityLevel) => {
+  // Always update day-level intensity
+  setTrainingDays(prev =>
+    prev.map(day => day.date === dayDate ? { ...day, intensity } : day)
+  );
+  setDailyIntensityData(prev =>
+    prev.map(di => di.date === dayDate ? { ...di, intensity } : di)
+  );
+  
+  // For single-session days, also sync the session intensity
+  const sessionCount = daySplitStates[dayDate] ?? 1;
+  if (sessionCount === 1) {
+    setSessionIntensities(prev => ({
+      ...prev,
+      [`${dayDate}-0`]: intensity
+    }));
+  }
+  // For multi-session days, session intensities remain independent
+}, [daySplitStates]);
 ```
+
+3. Update `handleSessionIntensityChange` to store per-session intensity:
+```typescript
+const handleSessionIntensityChange = useCallback((dayDate: string, sessionIndex: number, intensity: IntensityLevel) => {
+  const sessionCount = daySplitStates[dayDate] ?? 1;
+  
+  // Store per-session intensity
+  setSessionIntensities(prev => ({
+    ...prev,
+    [`${dayDate}-${sessionIndex}`]: intensity
+  }));
+  
+  // For single session days, also sync to day intensity
+  if (sessionCount === 1) {
+    setTrainingDays(prev =>
+      prev.map(day => day.date === dayDate ? { ...day, intensity } : day)
+    );
+    setDailyIntensityData(prev =>
+      prev.map(di => di.date === dayDate ? { ...di, intensity } : di)
+    );
+  }
+}, [daySplitStates]);
+```
+
+4. Export `sessionIntensities` from the hook's return value.
+
+5. Include `sessionIntensities` in the auto-save payload.
+
+**File**: `src/components/athletes/AthleteCalendarView.tsx`
+
+Update the session building logic to use per-session intensities when available:
+
+```typescript
+// Inside the calendarDays useMemo, when building sessions:
+let sessionIntensity = dayIntensity;
+const perSessionKey = `${dateString}-${sessionIdx}`;
+if (editing.sessionIntensities?.[perSessionKey]) {
+  sessionIntensity = editing.sessionIntensities[perSessionKey];
+}
+
+sessions.push({
+  // ...
+  intensity: sessionIntensity,
+});
+```
+
+### Fix 3: Click Suppression Logic
+
+**File**: `src/components/athletes/AthleteCalendarDayCell.tsx`
+
+The current click suppression logic sets `lastDragEndTime.current = Date.now()` on every render when `!isDragging && draggingOver === null`. This causes clicks to be suppressed even when no drag occurred.
+
+Fix: Only set the timestamp when transitioning FROM dragging TO not dragging:
+
+```typescript
+// Inside the Draggable render function
+{(draggableProvided, draggableSnapshot) => {
+  // Track state transition for click suppression
+  const wasDraggingRef = useRef(false);
+  
+  useEffect(() => {
+    if (draggableSnapshot.isDragging) {
+      wasDraggingRef.current = true;
+    } else if (wasDraggingRef.current) {
+      // Just stopped dragging
+      lastDragEndTime.current = Date.now();
+      wasDraggingRef.current = false;
+    }
+  }, [draggableSnapshot.isDragging]);
+  
+  // ... rest of render
+}}
+```
+
+Alternative simpler fix - check if the snapshot indicates a completed drag:
+```typescript
+// Only suppress if we were actually dragging recently
+// The isDragging->false transition is what matters
+```
+
+---
+
+## Summary of Changes
+
+1. **Parse draggableId correctly** in `handleSessionDragEnd` to get the actual session index
+2. **Add per-session intensity storage** (`sessionIntensities` state) for multi-session days
+3. **Decouple day/session intensity** for multi-session days in both handlers
+4. **Fix click suppression** to only trigger after actual drag operations
 
 ---
 
 ## Expected Outcome
 
-1. **Clickable Intensity Badge**:
-   - In calendar overview, clicking the colored intensity square opens a popover
-   - Selecting an intensity updates the day intensity immediately
-   - The change is reflected in all views (calendar, session sheet, Master Planner)
-
-2. **Drag-and-Drop Sessions**:
-   - Each session card shows a grip handle icon on the left
-   - Sessions can be dragged to different days
-   - Exercise data and session names move with the session
-   - Same click-suppression behavior as Training Calendar (prevents accidental opens during drag)
+1. **Drag-and-Drop**: Sessions can be dragged to different days; the session moves with all its exercises and data
+2. **Intensity Independence**: On multi-session days, changing the day intensity only affects the day indicator; individual session intensities remain unchanged
+3. **No Accidental Opens**: Click suppression only activates after actual drag operations, preventing false positive session opens
 
