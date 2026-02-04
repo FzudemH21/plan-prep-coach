@@ -90,6 +90,30 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   // Ref-based drag end timestamp for SYNCHRONOUS click suppression
   // State was too slow - React re-render happens AFTER onClick fires
   const lastDragEndRef = useRef<number>(0);
+  
+  // Global click suppression: swallow the very next click after any drag
+  const suppressNextClickRef = useRef(false);
+  const suppressNextClickTimeoutRef = useRef<number | null>(null);
+  
+  // Install global capture-phase click listener to swallow post-drag clicks
+  useEffect(() => {
+    const handler = (event: MouseEvent) => {
+      if (suppressNextClickRef.current) {
+        suppressNextClickRef.current = false;
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        console.log('[Global Click Suppression] Swallowed post-drag click');
+      }
+    };
+    window.addEventListener('click', handler, true); // Capture phase
+    return () => {
+      window.removeEventListener('click', handler, true);
+      if (suppressNextClickTimeoutRef.current) {
+        clearTimeout(suppressNextClickTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const { programs, getProgram } = useTrainingPrograms();
   const athleteData = useAthletes();
@@ -487,6 +511,12 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   };
 
   const handleSessionClick = useCallback((dayDate: string, sessionIndex: number, assignmentId: string) => {
+    // FINAL SAFETY NET: Reject clicks within 600ms of last drag end
+    if (Date.now() - lastDragEndRef.current < 600) {
+      console.log('[handleSessionClick] Suppressed - too close to drag end');
+      return;
+    }
+    
     console.log('[handleSessionClick] Clicked:', { dayDate, sessionIndex, assignmentId });
     
     // Use the provided assignmentId directly (no guessing)
@@ -503,11 +533,26 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     setSessionSheetOpen(true);
   }, []);
 
+  // Handle drag start - arm click suppression immediately
+  const handleSessionDragStart = useCallback(() => {
+    suppressNextClickRef.current = true;
+    console.log('[handleSessionDragStart] Armed click suppression');
+  }, []);
+
   // Handle session drag-and-drop between days
   const handleSessionDragEnd = useCallback((result: DropResult) => {
     // CRITICAL: Set drag end timestamp IMMEDIATELY at the top (synchronous via ref)
     // This ensures onClick handlers see it BEFORE React re-renders
     lastDragEndRef.current = Date.now();
+    
+    // Arm global click suppression and set auto-reset timeout
+    suppressNextClickRef.current = true;
+    if (suppressNextClickTimeoutRef.current) {
+      clearTimeout(suppressNextClickTimeoutRef.current);
+    }
+    suppressNextClickTimeoutRef.current = window.setTimeout(() => {
+      suppressNextClickRef.current = false;
+    }, 800);
     
     if (!result.destination) {
       console.log('[handleSessionDragEnd] No destination - drop cancelled');
@@ -921,7 +966,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
               </div>
 
               {/* Week Rows */}
-              <DragDropContext onDragEnd={handleSessionDragEnd}>
+              <DragDropContext onDragStart={handleSessionDragStart} onDragEnd={handleSessionDragEnd}>
                 <div className="space-y-6">
                   {weeks.map((week, idx) => (
                     <AthleteCalendarWeekRow

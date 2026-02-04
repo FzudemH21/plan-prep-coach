@@ -373,9 +373,9 @@ export function AthleteCalendarDayCell({
                           onClick={(e) => {
                             e.stopPropagation();
                             // Suppress clicks right after drag ends (using ref for synchronous check)
-                            // Increased to 300ms for more reliable suppression
+                            // Increased to 500ms for more reliable suppression on slower devices/trackpads
                             const dragEndTime = lastDragEndRef?.current ?? 0;
-                            if (Date.now() - dragEndTime < 300) return;
+                            if (Date.now() - dragEndTime < 500) return;
                             onSessionClick?.(day.dateString, session.sessionIndex, session.assignmentId || day.assignmentId || '');
                           }}
                           className={cn(
