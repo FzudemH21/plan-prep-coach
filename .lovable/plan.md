@@ -1,98 +1,131 @@
 
-## Goal
-Eliminate the remaining “session opens after drop” behavior in Athlete Calendar drag-and-drop, without breaking normal click-to-open.
+# Plan: Enhance Tests/Events Dialog with Parameters Database Dropdown
 
-## What we know (from your console logs)
-- `handleSessionDragEnd` is firing and moving sessions successfully.
-- Immediately after some drops, `handleSessionClick` fires and opens a session.
-- The click that opens the sheet sometimes targets a different session/day than the one that was dragged (example: drag 2/11 → 2/09, but click opens 2/10). This strongly suggests an “extra click” is being generated after the drag ends, and it lands on whatever is under the cursor at that moment.
-- Our current protection is time-window based (300ms) and is applied in `AthleteCalendarDayCell` only. The fact that `handleSessionClick` still fires means the synthetic/delayed click is occurring after that 300ms window (common on some trackpads and especially touch devices where a click can be synthesized ~300ms later).
-
-## Approach
-Add a “belt + suspenders” suppression strategy that is robust to delayed/synthesized clicks:
-1) **Global capture-phase click eater (most reliable):** after ANY drag completes, swallow exactly the next `click` event at the window/document level in capture phase. This prevents React’s delegated `onClick` from ever firing, regardless of which session/day ends up under the cursor.
-2) **Keep local suppression, but increase slightly:** keep the existing `lastDragEndRef` time check in `AthleteCalendarDayCell`, increase it from 300ms → 500ms (or 600ms) as a backup.
-3) **Guard at the final entry-point:** add the same suppression check at the start of `handleSessionClick` in `AthleteCalendarView.tsx`. This guarantees that even if some future UI path calls `handleSessionClick` without the per-card suppression, the sheet still won’t open right after a drop.
-
-This combination is intentionally redundant: the global capture listener handles the intermittent cases; the local and entry-point checks prevent regressions.
+## Summary
+Update the "Manage Tests/Events" dialog so that when adding a Test, the "Test Method" field becomes a searchable dropdown populated from your Athleticism Database V2 (Parameters Database). Users can select an existing parameter or create a new one using the same dialog as in the Athleticism Database page.
 
 ---
 
-## Files & changes
+## Current Behavior
+- When type is "Test" and mode is "Create New", there's a plain text input for "Test Method"
+- Users type free-form test names like "1RM Back Squat"
+- No connection to the Parameters Database
 
-### 1) `src/components/athletes/AthleteCalendarView.tsx`
-#### A. Add refs for global suppression
-Add:
-- `const suppressNextClickRef = useRef(false);`
-- `const suppressNextClickTimeoutRef = useRef<number | null>(null);`
-
-#### B. Install a capture-phase click listener (once)
-Add a `useEffect` that:
-- `window.addEventListener('click', handler, true)` (capture phase)
-- In the handler:
-  - If `suppressNextClickRef.current` is `true`:
-    - set it to `false`
-    - `event.preventDefault()`
-    - `event.stopPropagation()`
-    - optionally call `(event as any).stopImmediatePropagation?.()` for extra safety
-- Cleanup on unmount.
-
-This ensures the “post-drop click” never reaches React.
-
-#### C. Mark suppression on drag end (and optionally drag start)
-In `handleSessionDragEnd`:
-- Keep `lastDragEndRef.current = Date.now()` at the very top.
-- Add:
-  - `suppressNextClickRef.current = true;`
-  - Clear any existing timeout and set a new one to auto-reset after ~800ms (so a future real click isn’t swallowed if, for some reason, no click is generated after the drop).
-
-Optional extra-hardening:
-- Also set `suppressNextClickRef.current = true` inside `DragDropContext onDragStart` so the suppression is armed as soon as a drag begins. (Then the next click after the drag gesture will be swallowed no matter what.)
-
-Update `DragDropContext` usage:
-- Add `onDragStart={() => { suppressNextClickRef.current = true; }}`
-
-#### D. Guard `handleSessionClick` itself
-At the very top of `handleSessionClick`:
-- If `Date.now() - lastDragEndRef.current < 600` then return without opening the sheet.
-
-This is a final safety net.
+## New Behavior
+- When type is "Test", the "Test Method" field becomes a searchable dropdown
+- The dropdown lists all parameters from the Athleticism Database V2, grouped by category
+- A "Create New Parameter" option appears at the bottom of the dropdown
+- Clicking "Create New Parameter" opens the `AddParameterDialogV2` dialog
+- Newly created parameters are immediately available for selection
+- Events remain unchanged (still a text input)
 
 ---
 
-### 2) `src/components/athletes/AthleteCalendarDayCell.tsx`
-#### A. Increase the per-card suppression window slightly
-Change:
-- `if (Date.now() - dragEndTime < 300) return;`
-to:
-- `if (Date.now() - dragEndTime < 500) return;` (or 600ms)
+## Technical Changes
 
-This helps in cases where the click comes a bit after 300ms, and it aligns with the fact that some devices synthesize clicks around 300ms.
+### File 1: `src/components/microcycle-planning/CombinedTestEventDialog.tsx`
 
-No other behavioral change needed here, since the global capture listener will do the heavy lifting.
+**New Props:**
+```text
++ allParameters?: ParameterV2[]
++ toolboxEntries?: ToolboxEntry[]
++ onAddParameter?: (parameter: {...}) => void
+```
 
----
+**UI Changes:**
+1. Replace the "Test Method" text Input with a Command/Popover component (searchable dropdown)
+2. Group parameters by category in the dropdown
+3. Add "Create New Parameter" button at the bottom
+4. Show unit next to each parameter name (e.g., "1RM Front Squat (kg)")
+5. Add state for the nested `AddParameterDialogV2`
 
-## Why this should fix it
-- The intermittent opening is caused by an extra click event after drag completion.
-- Timing-based suppression can fail when that click is delayed (300ms is right on the edge for touch-like synthesized clicks).
-- A capture-phase listener prevents the click from ever reaching React, regardless of delay and regardless of which element ends up under the cursor.
-- The extra guards ensure we don’t regress later if other components trigger session opening.
-
----
-
-## Testing checklist (acceptance)
-1) Drag a session and drop it onto another day repeatedly (try fast drops and slower drops).
-   - Expected: session moves; sheet does not open.
-2) Drag and drop onto a day with many sessions and onto an empty day.
-   - Expected: no sheet open.
-3) Immediately after dropping, try to click a session intentionally.
-   - Expected: the first click right after the drop may be swallowed; a second click should open normally.
-4) Confirm normal (non-drag) clicking on session cards still opens the sheet reliably.
+**Logic Changes:**
+- When a parameter is selected, store both the parameter ID and name
+- When "Create New Parameter" is clicked, open `AddParameterDialogV2`
+- After a new parameter is added, select it automatically
 
 ---
 
-## Notes / small UX tradeoff
-Swallowing the “next click” after a drag means that if a user intentionally tries to click immediately after dropping, that one click may be ignored. In practice this feels far better than the sheet randomly opening on drop, and the user can click again immediately.
+### File 2: `src/components/microcycle-planning/TrainingDayCell.tsx`
+- Import `useParametersDataV2` hook
+- Import `useToolboxData` hook
+- Pass `allParameters`, `toolboxEntries`, and `onAddParameter` to `CombinedTestEventDialog`
 
-If you prefer, we can narrow the behavior further (e.g., only swallow clicks within the calendar grid container rather than globally), but global capture is the most reliable fix with the least complexity.
+---
+
+### File 3: `src/components/microcycle-planning/MasterPlannerColumn.tsx`
+- Import `useParametersDataV2` hook
+- Import `useToolboxData` hook
+- Pass `allParameters`, `toolboxEntries`, and `onAddParameter` to `CombinedTestEventDialog`
+
+---
+
+### File 4: `src/components/microcycle-planning/WorkoutSessionSheet.tsx`
+- Import `useParametersDataV2` hook
+- Import `useToolboxData` hook
+- Pass `allParameters`, `toolboxEntries`, and `onAddParameter` to `CombinedTestEventDialog`
+
+---
+
+### File 5: `src/components/athletes/AthleteCalendarDayCell.tsx`
+- Import `useParametersDataV2` hook
+- Import `useToolboxData` hook
+- Pass `allParameters`, `toolboxEntries`, and `onAddParameter` to `CombinedTestEventDialog`
+
+---
+
+## UI Design (Test Method Dropdown)
+
+```text
++------------------------------------------+
+| Test Method                              |
+| +--------------------------------------+ |
+| | Search parameters...                 | |
+| +--------------------------------------+ |
+| | Strength                             | |
+| |   1RM Front Squat (kg)               | |
+| |   1RM Back Squat (kg)                | |
+| | Speed                                | |
+| |   100m Sprint Time (s)               | |
+| |   10m Sprint Time (s)                | |
+| | Power                                | |
+| |   Vertical Jump Height (cm)          | |
+| +--------------------------------------+ |
+| | + Create New Parameter               | |
+| +--------------------------------------+ |
++------------------------------------------+
+```
+
+---
+
+## Data Flow
+
+```text
+1. User opens "Manage Tests/Events" dialog
+2. Dialog fetches parameters from useParametersDataV2
+3. User selects a parameter from dropdown OR clicks "Create New Parameter"
+4. If creating new: AddParameterDialogV2 opens
+5. New parameter is added to the database
+6. Dialog auto-selects the new parameter
+7. User clicks "Add" to schedule the test
+```
+
+---
+
+## Files Modified (Summary)
+
+| File | Change |
+|------|--------|
+| `CombinedTestEventDialog.tsx` | Add parameter dropdown, nested AddParameterDialogV2 |
+| `TrainingDayCell.tsx` | Pass parameters data to dialog |
+| `MasterPlannerColumn.tsx` | Pass parameters data to dialog |
+| `WorkoutSessionSheet.tsx` | Pass parameters data to dialog |
+| `AthleteCalendarDayCell.tsx` | Pass parameters data to dialog |
+
+---
+
+## Scope Notes
+- Events creation remains unchanged (free-form text input)
+- The "Select Existing" mode for tests still shows SubGoals from the macrocycle (for tests already scheduled in the plan)
+- The "Create New" mode now uses the parameters dropdown instead of free-text
+- Both Training Calendar and Athlete Calendar get the same enhancement
