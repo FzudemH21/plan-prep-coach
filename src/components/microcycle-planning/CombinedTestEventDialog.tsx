@@ -50,6 +50,8 @@ interface CombinedTestEventDialogProps {
     name: string; 
     isNew: boolean;
     comments?: string;
+    goalValue?: number;
+    unit?: string;
   }) => void;
   onDelete: (type: 'test' | 'event', name: string) => void;
   onUpdateComment?: (type: 'test' | 'event', id: string, comments: string) => void;
@@ -86,6 +88,8 @@ export function CombinedTestEventDialog({
   const [newComments, setNewComments] = useState('');
   const [parameterDropdownOpen, setParameterDropdownOpen] = useState(false);
   const [addParameterDialogOpen, setAddParameterDialogOpen] = useState(false);
+  const [goalValue, setGoalValue] = useState('');
+  const [selectedParameterUnit, setSelectedParameterUnit] = useState('');
   
   const items = type === 'test' ? existingTests : existingEvents;
   const hasItems = items.length > 0;
@@ -111,6 +115,7 @@ export function CombinedTestEventDialog({
 
   const handleParameterSelect = (param: ParameterV2) => {
     setNewName(param.name);
+    setSelectedParameterUnit(param.unit || '');
     setParameterDropdownOpen(false);
   };
 
@@ -145,7 +150,9 @@ export function CombinedTestEventDialog({
         id: `${type}-${Date.now()}`,
         name: newName.trim(),
         isNew: true,
-        comments: newComments.trim() || undefined
+        comments: newComments.trim() || undefined,
+        goalValue: type === 'test' && goalValue ? parseFloat(goalValue) : undefined,
+        unit: type === 'test' ? selectedParameterUnit || undefined : undefined,
       });
     }
     handleClose();
@@ -153,6 +160,8 @@ export function CombinedTestEventDialog({
 
   const handleClose = () => {
     onOpenChange(false);
+    setGoalValue('');
+    setSelectedParameterUnit('');
     setSelectedId('');
     setNewName('');
     setNewComments('');
@@ -502,6 +511,25 @@ export function CombinedTestEventDialog({
                 )}
               </div>
               
+              {/* Goal Value field - only for tests */}
+              {type === 'test' && (
+                <div className="space-y-2">
+                  <Label htmlFor="goalValue">
+                    Goal Value
+                    {selectedParameterUnit && (
+                      <span className="text-xs text-muted-foreground ml-2">({selectedParameterUnit})</span>
+                    )}
+                  </Label>
+                  <Input
+                    id="goalValue"
+                    type="number"
+                    placeholder="e.g., 120"
+                    value={goalValue}
+                    onChange={(e) => setGoalValue(e.target.value)}
+                  />
+                </div>
+              )}
+
               {/* Comments field */}
               <div className="space-y-2">
                 <Label htmlFor="comments">
@@ -546,6 +574,7 @@ export function CombinedTestEventDialog({
           allParameters={allParameters}
           toolboxEntries={toolboxEntries}
           onAdd={handleAddNewParameter}
+          containerClassName="z-[200]"
         />
       )}
     </Dialog>
