@@ -1,235 +1,158 @@
 
+## Goal
+Fix two athlete-calendar bugs:
 
-# Fix: Intensity Decoupling for Multi-Session Days + Drag-and-Drop Session Movement
+1) **Multi-session intensity decoupling (overview day square):** Changing the *day* intensity from the calendar overview must **not** modify any *session* intensity when the day has 2+ sessions.
 
-## Summary
-
-This plan fixes two issues in the Athlete Calendar:
-
-1. **Day Intensity Updating Session Intensities**: When changing the day intensity via the calendar overview, all sessions on that day have their displayed intensity changed. For multi-session days, the day intensity should be independent of per-session intensities.
-
-2. **Drag-and-Drop Not Moving Sessions**: Dropping a session onto another day opens the session detail sheet instead of moving it. The session remains on its original day.
+2) **Drag/drop sessions (calendar overview):** Dragging works, but **dropping opens the session sheet and doesn’t move the session**. We need sessions to actually move day-to-day, and dropping should not trigger a “click-to-open” side-effect.
 
 ---
 
-## Root Cause Analysis
+## Findings (what’s currently happening)
 
-### Issue 1: Intensity Coupling
+### A) Why day-intensity changes session intensity (multi-session)
+In `AthleteCalendarView.tsx`, session cards are built like this:
 
-**Current Behavior**:
-- `handleDayIntensityChange` correctly updates only `trainingDays` and `dailyIntensityData`
-- However, when building the calendar view (`calendarDays` in AthleteCalendarView.tsx), ALL sessions on a day are assigned the same `dayIntensity` (lines 268, 337)
-- There is no per-session intensity storage in the calendar overview
+- `dayIntensity` is computed from `editing.dailyIntensityData` / `editing.trainingDays`
+- each session’s `intensity` is computed as:
+  - `editing.sessionIntensities[${date}-${idx}] ?? dayIntensity`
 
-**Why This Appears Broken**:
-- The visual update is immediate because all sessions share the day's intensity in the view
-- There's no separate `sessionIntensities` data structure for multi-session days
+So if `sessionIntensities` **doesn’t have explicit values** for session 0/1, both sessions “inherit” `dayIntensity`. When you change day intensity, the UI recomputes and both sessions appear to change.
 
-**Solution**:
-For multi-session days, we need to store and display per-session intensities. Currently there's a partial implementation using `parameterValues[sessionIntensityKey]` for cached assignments (lines 380-384), but:
-1. The live editing path doesn't check this
-2. The key format isn't consistent
+Also, in `AthleteCalendarDayCell.tsx`, the “day intensity square” is currently rendered from `day.sessions[0].intensity` (session 0), not from an actual day-intensity field. On a multi-session day this is conceptually wrong and amplifies the confusion.
 
-### Issue 2: Drag-and-Drop Not Working
+### B) Why dropping opens the session and doesn’t move it
+There are two underlying issues:
 
-**Current Behavior**:
-- `handleSessionDragEnd` receives `result.source.index` (the visual position in the list: 0, 1, 2...)
-- It passes this directly to `handleMoveSession(sourceDayDate, sourceIndex, destDayDate)`
-- But `handleMoveSession` expects the actual `sessionIndex` from the exercise data
+1) **Click-suppression uses React state**, not a ref:
+   - `AthleteCalendarView` stores `lastDragEndTimestamp` in state and passes it down.
+   - On drop, `setLastDragEndTimestamp(Date.now())` runs, but React won’t re-render and propagate the new prop **before the click event fires**.
+   - Result: the session card’s `onClick` still sees the *old* timestamp and opens the sheet.
 
-**The Bug**:
-The `draggableId` contains the actual session index embedded in it:
-```
-draggableId = `${assignment.id}-${dateString}-${sessionIdx}`
-```
-For example: `"abc123-2026-02-10-0"` (session index is `0`)
-
-But `handleSessionDragEnd` uses `result.source.index` instead of parsing the actual session index from the `draggableId`.
-
-**Additional Issue**:
-The click-suppression logic in `AthleteCalendarDayCell` updates `lastDragEndTime.current` every render when `!isDragging && draggingOver === null`. This causes false positives where clicks get suppressed even without dragging.
+2) **Drop targets are incomplete / too narrow**:
+   - `AthleteCalendarDayCell` only renders a `<Droppable>` when `hasTraining` is true.
+   - Dropping onto an empty day (or onto a part of the card outside the droppable area) can yield `destination = null`, so no move happens.
+   - When no move happens, the click opens the session sheet, making it feel like “drop = open”.
 
 ---
 
-## Files to Modify
+## Fix approach (high-level)
+### 1) Make multi-session session intensities truly independent
+- Add a **day-level intensity** to `AthleteCalendarDay` and render the overview square from it (not from session 0).
+- Ensure that whenever a day has **2+ sessions**, `useAthleteCalendarEditing` guarantees `sessionIntensities` has entries for **every session index**, initialized once (default = current day intensity), without overwriting later.
+- Ensure move/add/delete session operations **also move/shift** entries in `sessionIntensities`.
 
-| File | Changes |
-|------|---------|
-| `src/components/athletes/AthleteCalendarView.tsx` | Fix `handleSessionDragEnd` to parse session index from `draggableId`; Add per-session intensity lookup for live editing |
-| `src/hooks/useAthleteCalendarEditing.ts` | Add `sessionIntensities` state for per-session intensity storage; Update `handleDayIntensityChange` to NOT cascade to multi-session days |
-
----
-
-## Technical Details
-
-### Fix 1: Parse Session Index from DraggableId
-
-**File**: `src/components/athletes/AthleteCalendarView.tsx`
-**Location**: `handleSessionDragEnd` (lines 478-492)
-
-The `draggableId` format is: `${assignmentId}-${dateString}-${sessionIndex}`
-
-Extract the session index by parsing the draggableId:
-
-```typescript
-const handleSessionDragEnd = useCallback((result: DropResult) => {
-  if (!result.destination) return;
-  
-  const sourceDayDate = result.source.droppableId;
-  const destDayDate = result.destination.droppableId;
-  
-  // Parse session index from draggableId
-  // Format: "assignmentId-YYYY-MM-DD-sessionIndex"
-  const draggableId = result.draggableId;
-  const parts = draggableId.split('-');
-  // Last part is the session index
-  const sourceSessionIndex = parseInt(parts[parts.length - 1], 10);
-  
-  // Same day, same position - no change needed
-  if (sourceDayDate === destDayDate) return;
-  
-  // Validate parsed index
-  if (isNaN(sourceSessionIndex)) {
-    console.error('[handleSessionDragEnd] Could not parse session index from draggableId:', draggableId);
-    return;
-  }
-  
-  // Use the hook's handler for moving sessions
-  editing.handleMoveSession(sourceDayDate, sourceSessionIndex, destDayDate);
-  
-  toast({
-    title: "Session moved",
-    description: `Moved to ${format(new Date(destDayDate), 'MMM d')}`,
-  });
-}, [editing, toast]);
-```
-
-### Fix 2: Per-Session Intensity for Multi-Session Days
-
-**File**: `src/hooks/useAthleteCalendarEditing.ts`
-
-1. Add a new state for per-session intensities:
-```typescript
-const [sessionIntensities, setSessionIntensities] = useState<Record<string, IntensityLevel>>({});
-// Key format: "dayDate-sessionIndex" -> IntensityLevel
-```
-
-2. Update `handleDayIntensityChange` to NOT update session intensities for multi-session days:
-```typescript
-const handleDayIntensityChange = useCallback((dayDate: string, intensity: IntensityLevel) => {
-  // Always update day-level intensity
-  setTrainingDays(prev =>
-    prev.map(day => day.date === dayDate ? { ...day, intensity } : day)
-  );
-  setDailyIntensityData(prev =>
-    prev.map(di => di.date === dayDate ? { ...di, intensity } : di)
-  );
-  
-  // For single-session days, also sync the session intensity
-  const sessionCount = daySplitStates[dayDate] ?? 1;
-  if (sessionCount === 1) {
-    setSessionIntensities(prev => ({
-      ...prev,
-      [`${dayDate}-0`]: intensity
-    }));
-  }
-  // For multi-session days, session intensities remain independent
-}, [daySplitStates]);
-```
-
-3. Update `handleSessionIntensityChange` to store per-session intensity:
-```typescript
-const handleSessionIntensityChange = useCallback((dayDate: string, sessionIndex: number, intensity: IntensityLevel) => {
-  const sessionCount = daySplitStates[dayDate] ?? 1;
-  
-  // Store per-session intensity
-  setSessionIntensities(prev => ({
-    ...prev,
-    [`${dayDate}-${sessionIndex}`]: intensity
-  }));
-  
-  // For single session days, also sync to day intensity
-  if (sessionCount === 1) {
-    setTrainingDays(prev =>
-      prev.map(day => day.date === dayDate ? { ...day, intensity } : day)
-    );
-    setDailyIntensityData(prev =>
-      prev.map(di => di.date === dayDate ? { ...di, intensity } : di)
-    );
-  }
-}, [daySplitStates]);
-```
-
-4. Export `sessionIntensities` from the hook's return value.
-
-5. Include `sessionIntensities` in the auto-save payload.
-
-**File**: `src/components/athletes/AthleteCalendarView.tsx`
-
-Update the session building logic to use per-session intensities when available:
-
-```typescript
-// Inside the calendarDays useMemo, when building sessions:
-let sessionIntensity = dayIntensity;
-const perSessionKey = `${dateString}-${sessionIdx}`;
-if (editing.sessionIntensities?.[perSessionKey]) {
-  sessionIntensity = editing.sessionIntensities[perSessionKey];
-}
-
-sessions.push({
-  // ...
-  intensity: sessionIntensity,
-});
-```
-
-### Fix 3: Click Suppression Logic
-
-**File**: `src/components/athletes/AthleteCalendarDayCell.tsx`
-
-The current click suppression logic sets `lastDragEndTime.current = Date.now()` on every render when `!isDragging && draggingOver === null`. This causes clicks to be suppressed even when no drag occurred.
-
-Fix: Only set the timestamp when transitioning FROM dragging TO not dragging:
-
-```typescript
-// Inside the Draggable render function
-{(draggableProvided, draggableSnapshot) => {
-  // Track state transition for click suppression
-  const wasDraggingRef = useRef(false);
-  
-  useEffect(() => {
-    if (draggableSnapshot.isDragging) {
-      wasDraggingRef.current = true;
-    } else if (wasDraggingRef.current) {
-      // Just stopped dragging
-      lastDragEndTime.current = Date.now();
-      wasDraggingRef.current = false;
-    }
-  }, [draggableSnapshot.isDragging]);
-  
-  // ... rest of render
-}}
-```
-
-Alternative simpler fix - check if the snapshot indicates a completed drag:
-```typescript
-// Only suppress if we were actually dragging recently
-// The isDragging->false transition is what matters
-```
+### 2) Make drag/drop reliable and prevent “drop opens sheet”
+- Replace `lastDragEndTimestamp` state with a **ref** that updates synchronously (`lastDragEndRef.current = Date.now()`), and pass that ref down so the click handler sees it immediately.
+- Render a `<Droppable>` for **every day cell**, including empty days, and make the droppable cover the **whole day card** (or at least the full content area) so “drop anywhere in the day” is recognized.
 
 ---
 
-## Summary of Changes
+## Concrete code changes (by file)
 
-1. **Parse draggableId correctly** in `handleSessionDragEnd` to get the actual session index
-2. **Add per-session intensity storage** (`sessionIntensities` state) for multi-session days
-3. **Decouple day/session intensity** for multi-session days in both handlers
-4. **Fix click suppression** to only trigger after actual drag operations
+### A) `src/components/athletes/AthleteCalendarView.tsx`
+1) **Stop using state for drag-end suppression**
+   - Replace:
+     - `const [lastDragEndTimestamp, setLastDragEndTimestamp] = useState(0);`
+   - With:
+     - `const lastDragEndRef = useRef(0);`
+   - Update `handleSessionDragEnd`:
+     - set `lastDragEndRef.current = Date.now()` at the **top** of the handler (even if `destination` is null or same-day).
+
+2) **Pass the ref down**
+   - Change props passed to `AthleteCalendarWeekRow` from `lastDragEndTimestamp={...}` to `lastDragEndRef={lastDragEndRef}`.
+
+3) **Add explicit day intensity to calendar day objects**
+   - Extend `AthleteCalendarDay` shape returned in `calendarDays` to include `intensity: dayIntensity`.
+   - This lets the overview day-square represent the true day intensity even if session 0 differs.
+
+4) (Optional cleanup) **Avoid duplicate toasts**
+   - Currently `editing.handleMoveSession` also toasts, and `handleSessionDragEnd` toasts too.
+   - Choose one place for the toast (preferably the UI layer: `AthleteCalendarView`) and remove/disable the other to prevent double messages.
 
 ---
 
-## Expected Outcome
+### B) `src/components/athletes/AthleteCalendarWeekRow.tsx`
+- Update prop interface and passthrough:
+  - Replace `lastDragEndTimestamp?: number` with `lastDragEndRef?: React.MutableRefObject<number>` (or a suitably typed ref).
+- Pass it to `AthleteCalendarDayCell`.
 
-1. **Drag-and-Drop**: Sessions can be dragged to different days; the session moves with all its exercises and data
-2. **Intensity Independence**: On multi-session days, changing the day intensity only affects the day indicator; individual session intensities remain unchanged
-3. **No Accidental Opens**: Click suppression only activates after actual drag operations, preventing false positive session opens
+---
 
+### C) `src/components/athletes/AthleteCalendarDayCell.tsx`
+1) **Render droppable for every day**
+   - Move `<Droppable>` so it wraps the day content even when there are no sessions.
+   - Ensure the droppable container has a usable height (e.g. `min-h-[100px]`) and covers the part of the card users naturally drop onto.
+   - Add a “Drop here” hint when `isDraggingOver` and the day is empty (copy the TrainingDayCell pattern).
+
+2) **Use day-level intensity for the day square**
+   - Update the clickable intensity square to use `day.intensity` (new field) rather than `day.sessions[0].intensity`.
+   - Highlight selected intensity in the popover based on `day.intensity`.
+
+3) **Use ref-based click suppression**
+   - Replace `lastDragEndTimestamp` usage with `lastDragEndRef.current` in the session card `onClick`:
+     - if `Date.now() - lastDragEndRef.current < 200`, do nothing.
+   - This will reliably prevent “drop triggers click” without waiting for re-render.
+
+---
+
+### D) `src/hooks/useAthleteCalendarEditing.ts`
+1) **Guarantee `sessionIntensities` exists for multi-session days**
+   - Add a `useEffect` that runs when `daySplitStates`, `dailyIntensityData`, or `trainingDays` changes:
+     - For each day where `sessionCount > 1`, ensure keys:
+       - `${dayDate}-0` ... `${dayDate}-${sessionCount-1}`
+     - Initialize missing keys to that day’s current intensity (from `dailyIntensityData` or `trainingDays`).
+     - Do not overwrite existing keys.
+
+2) **Upsert dailyIntensity/trainingDays for out-of-range dates**
+   - Update `handleDayIntensityChange` so that if a `dailyIntensityData` entry for `dayDate` doesn’t exist, it is created (same for `trainingDays` day record if needed).
+   - This keeps day intensity consistent when users create/move sessions outside the original assignment range.
+
+3) **Move/shift session intensity when sessions move**
+   - In `handleMoveSession`:
+     - Move the source session intensity key to destination key.
+     - Shift intensity keys down for source day indices `> sourceSessionIndex`.
+     - Initialize destination intensity if missing (prefer: moved value; else source day intensity; else day intensity).
+
+4) **Shift session intensity when sessions are deleted**
+   - In `handleDeleteSession`:
+     - Remove `${dayDate}-${sessionIndex}`
+     - Shift keys for indices above it down by 1
+     - Optionally clean up keys when a day becomes 0 sessions.
+
+5) **Initialize per-session intensity when adding a session**
+   - In `handleAddSession`:
+     - Use `prev[dayDate] ?? 0` (not `?? 1`) to avoid creating “2 sessions by default” for previously-untracked dates.
+     - When transitioning to 2+ sessions, ensure session 0 and the new session get initialized to current day intensity.
+
+---
+
+## Acceptance tests (what to verify after implementation)
+
+### Drag/drop
+1) Drag a session from a day with sessions → drop onto an **empty day**:
+   - session appears on the target day
+   - source day session count decrements
+   - **session sheet does not open**
+
+2) Drag a session → drop onto a day that already has sessions:
+   - session is appended as a new session (current behavior)
+   - **session sheet does not open**
+
+3) Drag a session → drop outside any day:
+   - session snaps back
+   - **session sheet does not open** (click suppression should still prevent it)
+
+### Intensity
+1) Create a day with 2 sessions. Set session intensities differently (in the sheet).
+2) In calendar overview, change the **day intensity square**:
+   - the day square updates
+   - each session’s intensity indicator stays unchanged
+3) Open each session sheet after changing day intensity:
+   - per-session intensity is preserved
+   - day intensity reflects the new day setting
+
+---
+
+## Scope note
+This plan keeps “drop position within a day” out of scope (we append moved sessions to the end of the destination day), matching the existing move behavior. If you want true reordering within a day based on drop index, we can add that after the base move is stable.
