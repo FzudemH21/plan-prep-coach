@@ -1,131 +1,172 @@
 
-# Plan: Enhance Tests/Events Dialog with Parameters Database Dropdown ✅ COMPLETED
+# Plan: Fix Dialog Z-Index and Add Goal Value for Tests
 
 ## Summary
-Updated the "Manage Tests/Events" dialog so that when adding a Test, the "Test Method" field becomes a searchable dropdown populated from the Athleticism Database V2 (Parameters Database). Users can select an existing parameter or create a new one using the same dialog as in the Athleticism Database page.
+Two fixes needed for the Manage Tests/Events dialog:
+1. **Z-index layering**: The "Add New Parameter" dialog opens behind the parent dialog
+2. **Missing goal value**: When adding a test, there's no option to set a target/goal value
 
 ---
 
-## Current Behavior
-- When type is "Test" and mode is "Create New", there's a plain text input for "Test Method"
-- Users type free-form test names like "1RM Back Squat"
-- No connection to the Parameters Database
+## Issue 1: Z-Index Layering Problem
 
-## New Behavior
-- When type is "Test", the "Test Method" field becomes a searchable dropdown
-- The dropdown lists all parameters from the Athleticism Database V2, grouped by category
-- A "Create New Parameter" option appears at the bottom of the dropdown
-- Clicking "Create New Parameter" opens the `AddParameterDialogV2` dialog
-- Newly created parameters are immediately available for selection
-- Events remain unchanged (still a text input)
+### Root Cause
+- `CombinedTestEventDialog` uses `z-[150]` for overlay and `z-[160]` for content
+- The nested `AddParameterDialogV2` uses the default Dialog component which has `z-[100]` for overlay and `z-[110]` for content
+- Since 110 < 160, the child dialog appears behind the parent
 
----
+### Solution
+Modify `AddParameterDialogV2` to use higher z-index values when rendered as a nested dialog. Add a `zIndexOverride` prop that allows parent components to specify higher z-index values.
 
-## Technical Changes
+### Implementation
 
-### File 1: `src/components/microcycle-planning/CombinedTestEventDialog.tsx`
+**File: `src/components/goals/AddParameterDialogV2.tsx`**
 
-**New Props:**
-```text
-+ allParameters?: ParameterV2[]
-+ toolboxEntries?: ToolboxEntry[]
-+ onAddParameter?: (parameter: {...}) => void
+1. Add new optional prop:
+```typescript
+interface AddParameterDialogV2Props {
+  // ... existing props
+  containerClassName?: string; // Allow custom z-index for nested dialogs
+}
 ```
 
-**UI Changes:**
-1. Replace the "Test Method" text Input with a Command/Popover component (searchable dropdown)
-2. Group parameters by category in the dropdown
-3. Add "Create New Parameter" button at the bottom
-4. Show unit next to each parameter name (e.g., "1RM Front Squat (kg)")
-5. Add state for the nested `AddParameterDialogV2`
+2. Apply custom className to DialogContent:
+```typescript
+<DialogContent className={cn(
+  "w-[calc(100%-2rem)] max-w-[600px] max-h-[85vh] overflow-hidden flex flex-col mx-4 sm:mx-auto",
+  containerClassName
+)}>
+```
 
-**Logic Changes:**
-- When a parameter is selected, store both the parameter ID and name
-- When "Create New Parameter" is clicked, open `AddParameterDialogV2`
-- After a new parameter is added, select it automatically
+**File: `src/components/microcycle-planning/CombinedTestEventDialog.tsx`**
 
----
+Pass higher z-index to the nested dialog:
+```typescript
+<AddParameterDialogV2
+  open={addParameterDialogOpen}
+  onOpenChange={setAddParameterDialogOpen}
+  allParameters={allParameters}
+  toolboxEntries={toolboxEntries}
+  onAdd={handleAddNewParameter}
+  containerClassName="z-[200]" // Higher than parent's z-[160]
+/>
+```
 
-### File 2: `src/components/microcycle-planning/TrainingDayCell.tsx`
-- Import `useParametersDataV2` hook
-- Import `useToolboxData` hook
-- Pass `allParameters`, `toolboxEntries`, and `onAddParameter` to `CombinedTestEventDialog`
-
----
-
-### File 3: `src/components/microcycle-planning/MasterPlannerColumn.tsx`
-- Import `useParametersDataV2` hook
-- Import `useToolboxData` hook
-- Pass `allParameters`, `toolboxEntries`, and `onAddParameter` to `CombinedTestEventDialog`
+Also need to ensure the Portal renders the overlay correctly. Alternative approach: wrap the AddParameterDialogV2 in its own DialogPortal with explicit higher z-index overlay.
 
 ---
 
-### File 4: `src/components/microcycle-planning/WorkoutSessionSheet.tsx`
-- Import `useParametersDataV2` hook
-- Import `useToolboxData` hook
-- Pass `allParameters`, `toolboxEntries`, and `onAddParameter` to `CombinedTestEventDialog`
+## Issue 2: Add Goal Value Field for Tests
+
+### Current Behavior
+When creating a new test, only "Test Method" (parameter name) and "Comments" fields are available.
+
+### New Behavior
+When creating a new test, add:
+- **Goal Value**: Input field for the target value (e.g., "120")
+- **Unit**: Auto-filled from the selected parameter (e.g., "kg")
+
+### Implementation
+
+**File: `src/components/microcycle-planning/CombinedTestEventDialog.tsx`**
+
+1. Add new state variables:
+```typescript
+const [goalValue, setGoalValue] = useState<string>('');
+const [selectedParameterUnit, setSelectedParameterUnit] = useState<string>('');
+```
+
+2. Update `handleParameterSelect` to also capture the unit:
+```typescript
+const handleParameterSelect = (param: ParameterV2) => {
+  setNewName(param.name);
+  setSelectedParameterUnit(param.unit || '');
+  setParameterDropdownOpen(false);
+};
+```
+
+3. Add Goal Value input field (shown only when type is 'test'):
+```tsx
+{type === 'test' && (
+  <div className="space-y-2">
+    <Label htmlFor="goalValue">
+      Goal Value
+      {selectedParameterUnit && (
+        <span className="text-xs text-muted-foreground ml-2">({selectedParameterUnit})</span>
+      )}
+    </Label>
+    <Input
+      id="goalValue"
+      type="number"
+      placeholder="e.g., 120"
+      value={goalValue}
+      onChange={(e) => setGoalValue(e.target.value)}
+    />
+  </div>
+)}
+```
+
+4. Update `onSelect` callback interface to include `goalValue`:
+```typescript
+onSelect: (selected: { 
+  type: 'test' | 'event';
+  id: string; 
+  name: string; 
+  isNew: boolean;
+  comments?: string;
+  goalValue?: number;  // NEW
+  unit?: string;       // NEW
+}) => void;
+```
+
+5. Update `handleConfirm` to pass the goal value:
+```typescript
+onSelect({
+  type,
+  id: `${type}-${Date.now()}`,
+  name: newName.trim(),
+  isNew: true,
+  comments: newComments.trim() || undefined,
+  goalValue: goalValue ? parseFloat(goalValue) : undefined,
+  unit: selectedParameterUnit || undefined,
+});
+```
+
+6. Reset states in `handleClose`:
+```typescript
+setGoalValue('');
+setSelectedParameterUnit('');
+```
 
 ---
 
-### File 5: `src/components/athletes/AthleteCalendarDayCell.tsx`
-- Import `useParametersDataV2` hook
-- Import `useToolboxData` hook
-- Pass `allParameters`, `toolboxEntries`, and `onAddParameter` to `CombinedTestEventDialog`
+## Files Modified
+
+| File | Changes |
+|------|---------|
+| `AddParameterDialogV2.tsx` | Add `containerClassName` prop for z-index override |
+| `CombinedTestEventDialog.tsx` | 1. Pass higher z-index to nested dialog. 2. Add goal value input field. 3. Update onSelect interface. 4. Store and pass selected parameter unit. |
 
 ---
 
-## UI Design (Test Method Dropdown)
+## UI Layout After Changes
 
 ```text
 +------------------------------------------+
 | Test Method                              |
-| +--------------------------------------+ |
-| | Search parameters...                 | |
-| +--------------------------------------+ |
-| | Strength                             | |
-| |   1RM Front Squat (kg)               | |
-| |   1RM Back Squat (kg)                | |
-| | Speed                                | |
-| |   100m Sprint Time (s)               | |
-| |   10m Sprint Time (s)                | |
-| | Power                                | |
-| |   Vertical Jump Height (cm)          | |
-| +--------------------------------------+ |
-| | + Create New Parameter               | |
-| +--------------------------------------+ |
+| [Dropdown: Select a parameter...]        |
++------------------------------------------+
+| Goal Value (kg)                          |
+| [Input: e.g., 120]                       |
++------------------------------------------+
+| Comments (Optional)                      |
+| [Textarea: Add notes...]                 |
 +------------------------------------------+
 ```
 
 ---
 
-## Data Flow
+## Expected Outcome
 
-```text
-1. User opens "Manage Tests/Events" dialog
-2. Dialog fetches parameters from useParametersDataV2
-3. User selects a parameter from dropdown OR clicks "Create New Parameter"
-4. If creating new: AddParameterDialogV2 opens
-5. New parameter is added to the database
-6. Dialog auto-selects the new parameter
-7. User clicks "Add" to schedule the test
-```
-
----
-
-## Files Modified (Summary)
-
-| File | Change |
-|------|--------|
-| `CombinedTestEventDialog.tsx` | Add parameter dropdown, nested AddParameterDialogV2 |
-| `TrainingDayCell.tsx` | Pass parameters data to dialog |
-| `MasterPlannerColumn.tsx` | Pass parameters data to dialog |
-| `WorkoutSessionSheet.tsx` | Pass parameters data to dialog |
-| `AthleteCalendarDayCell.tsx` | Pass parameters data to dialog |
-
----
-
-## Scope Notes
-- Events creation remains unchanged (free-form text input)
-- The "Select Existing" mode for tests still shows SubGoals from the macrocycle (for tests already scheduled in the plan)
-- The "Create New" mode now uses the parameters dropdown instead of free-text
-- Both Training Calendar and Athlete Calendar get the same enhancement
+1. **Z-index fixed**: When clicking "Create New Parameter", the AddParameterDialogV2 appears in front of (on top of) the Manage Tests/Events dialog
+2. **Goal value available**: When adding a test, users can specify a target/goal value with the unit automatically shown from the selected parameter
