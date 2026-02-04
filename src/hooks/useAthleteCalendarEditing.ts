@@ -488,6 +488,42 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     }
     setSupersets(newSupersets);
     
+    // CRITICAL FIX: Move session intensity with the session
+    // This preserves the original session's intensity instead of inheriting destination day intensity
+    setSessionIntensities(prev => {
+      const newIntensities = { ...prev };
+      const sourceKey = `${sourceDayDate}-${sourceSessionIndex}`;
+      const destKey = `${destDayDate}-${newSessionIndex}`;
+      
+      // Get the source day's default intensity for fallback
+      const sourceDay = trainingDays.find(d => d.date === sourceDayDate);
+      const sourceDayIntensity = dailyIntensityData.find(d => d.date === sourceDayDate)?.intensity || 
+        sourceDay?.intensity || 
+        'moderate';
+      
+      // Preserve the session's original intensity (or fall back to source day intensity)
+      const movedIntensity = newIntensities[sourceKey] || sourceDayIntensity;
+      
+      // Set on destination
+      newIntensities[destKey] = movedIntensity as IntensityLevel;
+      
+      // Remove from source
+      delete newIntensities[sourceKey];
+      
+      // Shift remaining source day session intensities down
+      const sourceCount = daySplitStates[sourceDayDate] || 0;
+      for (let i = sourceSessionIndex + 1; i < sourceCount; i++) {
+        const oldKey = `${sourceDayDate}-${i}`;
+        const newKey = `${sourceDayDate}-${i - 1}`;
+        if (newIntensities[oldKey] !== undefined) {
+          newIntensities[newKey] = newIntensities[oldKey];
+          delete newIntensities[oldKey];
+        }
+      }
+      
+      return newIntensities;
+    });
+    
     // Update daySplitStates
     setDaySplitStates(prev => {
       const newStates = { ...prev };
@@ -561,7 +597,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       title: "Session moved", 
       description: `Moved to ${new Date(destDayDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` 
     });
-  }, [exerciseDistribution, sessionSections, supersets, daySplitStates, trainingDays, toast]);
+  }, [exerciseDistribution, sessionSections, supersets, daySplitStates, trainingDays, dailyIntensityData, sessionIntensities, toast]);
 
   const handleCopySession = useCallback((dayDate: string, sessionIndex: number) => {
     const sessionExercises = exerciseDistribution.filter(
