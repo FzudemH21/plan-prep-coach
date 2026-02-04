@@ -1,112 +1,114 @@
 
-# Plan: Fix Dialog Z-Index and Add Goal Value for Tests
+
+# Plan: Fix Add Button Bug + Add Baseline Value for Tests
 
 ## Summary
-Two fixes needed for the Manage Tests/Events dialog:
-1. **Z-index layering**: The "Add New Parameter" dialog opens behind the parent dialog
-2. **Missing goal value**: When adding a test, there's no option to set a target/goal value
+
+Two issues to address:
+1. **Bug Fix**: The "Add" button is grayed out/disabled even when filling in test/event fields
+2. **Feature**: Add "Baseline Value" field for tests that auto-populates from athlete's existing parameter value
 
 ---
 
-## Issue 1: Z-Index Layering Problem
+## Issue 1: Add Button Bug (Critical)
 
 ### Root Cause
-- `CombinedTestEventDialog` uses `z-[150]` for overlay and `z-[160]` for content
-- The nested `AddParameterDialogV2` uses the default Dialog component which has `z-[100]` for overlay and `z-[110]` for content
-- Since 110 < 160, the child dialog appears behind the parent
-
-### Solution
-Modify `AddParameterDialogV2` to use higher z-index values when rendered as a nested dialog. Add a `zIndexOverride` prop that allows parent components to specify higher z-index values.
-
-### Implementation
-
-**File: `src/components/goals/AddParameterDialogV2.tsx`**
-
-1. Add new optional prop:
+The disabled logic on line 558-561 checks:
 ```typescript
-interface AddParameterDialogV2Props {
-  // ... existing props
-  containerClassName?: string; // Allow custom z-index for nested dialogs
+disabled={
+  (mode === 'select' && !selectedId) || 
+  (mode === 'create' && !newName.trim())
 }
 ```
 
-2. Apply custom className to DialogContent:
+**The problem**: When `hasItems` is `false` (no existing tests/events), the UI displays the create form (line 391), but the `mode` state stays at `'select'` (the default from line 85).
+
+So the first condition `(mode === 'select' && !selectedId)` is always `true`, keeping the button disabled.
+
+### Solution
+Update the disabled logic to account for the scenario where `!hasItems` but `mode` is still `'select'`:
+
 ```typescript
-<DialogContent className={cn(
-  "w-[calc(100%-2rem)] max-w-[600px] max-h-[85vh] overflow-hidden flex flex-col mx-4 sm:mx-auto",
-  containerClassName
-)}>
+disabled={
+  (mode === 'select' && hasItems && !selectedId) || 
+  ((mode === 'create' || !hasItems) && !newName.trim())
+}
 ```
 
-**File: `src/components/microcycle-planning/CombinedTestEventDialog.tsx`**
-
-Pass higher z-index to the nested dialog:
-```typescript
-<AddParameterDialogV2
-  open={addParameterDialogOpen}
-  onOpenChange={setAddParameterDialogOpen}
-  allParameters={allParameters}
-  toolboxEntries={toolboxEntries}
-  onAdd={handleAddNewParameter}
-  containerClassName="z-[200]" // Higher than parent's z-[160]
-/>
-```
-
-Also need to ensure the Portal renders the overlay correctly. Alternative approach: wrap the AddParameterDialogV2 in its own DialogPortal with explicit higher z-index overlay.
+Alternatively, force `mode` to `'create'` when there are no items. Either approach works.
 
 ---
 
-## Issue 2: Add Goal Value Field for Tests
+## Issue 2: Baseline Value Feature
 
-### Current Behavior
-When creating a new test, only "Test Method" (parameter name) and "Comments" fields are available.
+### Current State
+- Tests have a "Goal Value" field (just implemented)
+- No "Baseline Value" field exists
+- No athlete context is passed to the dialog
 
-### New Behavior
-When creating a new test, add:
-- **Goal Value**: Input field for the target value (e.g., "120")
-- **Unit**: Auto-filled from the selected parameter (e.g., "kg")
+### Requirements
+1. Add a "Baseline Value" input field (optional, user can override)
+2. When a parameter is selected AND an athlete is in context, auto-fill baseline value from athlete's existing performance parameter value
+3. In the Training Programming Wizard: athlete context comes from the selected athlete in macrocycle
+4. In the Athlete Calendar: athlete context comes from the currently viewed athlete
 
-### Implementation
+### Data Flow for Baseline Value
 
-**File: `src/components/microcycle-planning/CombinedTestEventDialog.tsx`**
+```text
+Selected Parameter (e.g., "1RM Back Squat")
+          |
+          v
+Look up athlete's AthletePerformanceParameter
+where athleticismParameterId matches parameter.id
+          |
+          v
+Get latest value from values[] array (sorted by recordedAt)
+          |
+          v
+Pre-fill "Baseline Value" input
+```
 
-1. Add new state variables:
+### New Props for CombinedTestEventDialog
+
 ```typescript
-const [goalValue, setGoalValue] = useState<string>('');
-const [selectedParameterUnit, setSelectedParameterUnit] = useState<string>('');
+interface CombinedTestEventDialogProps {
+  // ... existing props
+  
+  // NEW: For baseline auto-population
+  selectedAthleteId?: string;
+  athletePerformanceParameters?: AthletePerformanceParameter[];
+}
 ```
 
-2. Update `handleParameterSelect` to also capture the unit:
-```typescript
-const handleParameterSelect = (param: ParameterV2) => {
-  setNewName(param.name);
-  setSelectedParameterUnit(param.unit || '');
-  setParameterDropdownOpen(false);
-};
+### UI Changes
+
+```text
++------------------------------------------+
+| Test Method                              |
+| [Dropdown: Select a parameter...]        |
++------------------------------------------+
+| Baseline Value (kg)                      |
+| [Input: 100] <-- auto-filled from athlete|
++------------------------------------------+
+| Goal Value (kg)                          |
+| [Input: 120] <-- manual entry            |
++------------------------------------------+
+| Comments (Optional)                      |
+| [Textarea: Add notes...]                 |
++------------------------------------------+
 ```
 
-3. Add Goal Value input field (shown only when type is 'test'):
-```tsx
-{type === 'test' && (
-  <div className="space-y-2">
-    <Label htmlFor="goalValue">
-      Goal Value
-      {selectedParameterUnit && (
-        <span className="text-xs text-muted-foreground ml-2">({selectedParameterUnit})</span>
-      )}
-    </Label>
-    <Input
-      id="goalValue"
-      type="number"
-      placeholder="e.g., 120"
-      value={goalValue}
-      onChange={(e) => setGoalValue(e.target.value)}
-    />
-  </div>
-)}
-```
+### Logic for Auto-Fill
 
-4. Update `onSelect` callback interface to include `goalValue`:
+When `handleParameterSelect` is called:
+1. Set `newName` and `selectedParameterUnit` (existing)
+2. NEW: If `selectedAthleteId` and `athletePerformanceParameters` are provided:
+   - Find the `AthletePerformanceParameter` where `athleticismParameterId === param.id`
+   - Get the latest value (last item in sorted values array)
+   - Set `baselineValue` state to that value
+
+### Update onSelect Interface
+
 ```typescript
 onSelect: (selected: { 
   type: 'test' | 'event';
@@ -114,12 +116,96 @@ onSelect: (selected: {
   name: string; 
   isNew: boolean;
   comments?: string;
-  goalValue?: number;  // NEW
-  unit?: string;       // NEW
+  goalValue?: number;
+  baselineValue?: number;  // NEW
+  unit?: string;
 }) => void;
 ```
 
-5. Update `handleConfirm` to pass the goal value:
+---
+
+## Files to Modify
+
+| File | Changes |
+|------|---------|
+| `CombinedTestEventDialog.tsx` | 1. Fix disabled logic for Add button. 2. Add baselineValue state. 3. Add Baseline Value input field. 4. Auto-fill logic when parameter selected. 5. Update onSelect to pass baselineValue. |
+| `TrainingDayCell.tsx` | Pass `selectedAthleteId` and `athletePerformanceParameters` props |
+| `MasterPlannerColumn.tsx` | Pass `selectedAthleteId` and `athletePerformanceParameters` props |
+| `WorkoutSessionSheet.tsx` | Pass `selectedAthleteId` and `athletePerformanceParameters` props |
+| `AthleteCalendarDayCell.tsx` | Pass the current athlete's ID and performance parameters |
+
+---
+
+## Implementation Details
+
+### File 1: CombinedTestEventDialog.tsx
+
+**New props:**
+```typescript
+selectedAthleteId?: string;
+athletePerformanceParameters?: AthletePerformanceParameter[];
+```
+
+**New state:**
+```typescript
+const [baselineValue, setBaselineValue] = useState('');
+```
+
+**Updated handleParameterSelect:**
+```typescript
+const handleParameterSelect = (param: ParameterV2) => {
+  setNewName(param.name);
+  setSelectedParameterUnit(param.unit || '');
+  setParameterDropdownOpen(false);
+  
+  // Auto-fill baseline value from athlete's data
+  if (selectedAthleteId && athletePerformanceParameters) {
+    const athleteParam = athletePerformanceParameters.find(
+      pp => pp.athleticismParameterId === param.id
+    );
+    if (athleteParam && athleteParam.values.length > 0) {
+      // Get latest value (sorted by recordedAt)
+      const sortedValues = [...athleteParam.values].sort(
+        (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+      );
+      setBaselineValue(sortedValues[0].value);
+    } else {
+      setBaselineValue('');
+    }
+  }
+};
+```
+
+**New UI field (after Test Method dropdown, before Goal Value):**
+```tsx
+{type === 'test' && (
+  <div className="space-y-2">
+    <Label htmlFor="baselineValue">
+      Baseline Value
+      {selectedParameterUnit && (
+        <span className="text-xs text-muted-foreground ml-2">({selectedParameterUnit})</span>
+      )}
+    </Label>
+    <Input
+      id="baselineValue"
+      type="number"
+      placeholder={selectedAthleteId ? "Auto-filled from athlete data" : "e.g., 100"}
+      value={baselineValue}
+      onChange={(e) => setBaselineValue(e.target.value)}
+    />
+  </div>
+)}
+```
+
+**Fixed disabled logic:**
+```typescript
+disabled={
+  (mode === 'select' && hasItems && !selectedId) || 
+  ((mode === 'create' || !hasItems) && !newName.trim())
+}
+```
+
+**Updated handleConfirm:**
 ```typescript
 onSelect({
   type,
@@ -127,46 +213,54 @@ onSelect({
   name: newName.trim(),
   isNew: true,
   comments: newComments.trim() || undefined,
-  goalValue: goalValue ? parseFloat(goalValue) : undefined,
-  unit: selectedParameterUnit || undefined,
+  goalValue: type === 'test' && goalValue ? parseFloat(goalValue) : undefined,
+  baselineValue: type === 'test' && baselineValue ? parseFloat(baselineValue) : undefined,
+  unit: type === 'test' ? selectedParameterUnit || undefined : undefined,
 });
 ```
 
-6. Reset states in `handleClose`:
+**Reset in handleClose:**
 ```typescript
-setGoalValue('');
-setSelectedParameterUnit('');
+setBaselineValue('');
 ```
 
----
+### Files 2-5: Parent Components
 
-## Files Modified
+Each parent component needs to:
+1. Import `AthletePerformanceParameter` type
+2. Pass the athlete context to the dialog
 
-| File | Changes |
-|------|---------|
-| `AddParameterDialogV2.tsx` | Add `containerClassName` prop for z-index override |
-| `CombinedTestEventDialog.tsx` | 1. Pass higher z-index to nested dialog. 2. Add goal value input field. 3. Update onSelect interface. 4. Store and pass selected parameter unit. |
+For **Training Calendar** components (TrainingDayCell, MasterPlannerColumn, WorkoutSessionSheet):
+- Get `selectedAthleteId` from wizard context/props
+- Get `athletePerformanceParameters` using `useAthletes().athletePerformanceParameters` or filter by athlete
 
----
-
-## UI Layout After Changes
-
-```text
-+------------------------------------------+
-| Test Method                              |
-| [Dropdown: Select a parameter...]        |
-+------------------------------------------+
-| Goal Value (kg)                          |
-| [Input: e.g., 120]                       |
-+------------------------------------------+
-| Comments (Optional)                      |
-| [Textarea: Add notes...]                 |
-+------------------------------------------+
-```
+For **AthleteCalendarDayCell**:
+- The `athleteId` is already available in props
+- Pass the athlete's performance parameters
 
 ---
 
-## Expected Outcome
+## Testing Checklist
 
-1. **Z-index fixed**: When clicking "Create New Parameter", the AddParameterDialogV2 appears in front of (on top of) the Manage Tests/Events dialog
-2. **Goal value available**: When adding a test, users can specify a target/goal value with the unit automatically shown from the selected parameter
+1. **Add Button Bug Fix**:
+   - Open Manage Tests/Events dialog when there are NO existing tests
+   - Type in a test name
+   - Verify "Add" button becomes clickable
+
+2. **Baseline Value - Manual Entry**:
+   - Open dialog, select a parameter
+   - Verify Baseline Value field appears
+   - Enter a value manually
+   - Click Add and verify value is passed
+
+3. **Baseline Value - Auto-Fill** (in wizard with athlete selected):
+   - Select an athlete who has recorded values for a parameter
+   - Open Manage Tests/Events
+   - Select that parameter from dropdown
+   - Verify Baseline Value auto-fills with athlete's latest recorded value
+
+4. **Events Unchanged**:
+   - Switch to Event type
+   - Verify no Baseline/Goal Value fields appear
+   - Verify Add button works correctly
+
