@@ -22,6 +22,8 @@ import {
 import { CombinedTestEventDialog } from '@/components/microcycle-planning/CombinedTestEventDialog';
 import { ExerciseDistribution } from '@/types/microcycle-planning';
 import { SubGoal, Event } from '@/types/training';
+import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
+import { useToolboxData } from '@/hooks/useToolboxData';
 
 export interface AthleteCalendarSession {
   id: string;
@@ -109,6 +111,10 @@ export function AthleteCalendarDayCell({
 }: AthleteCalendarDayCellProps) {
   const [testEventDialogOpen, setTestEventDialogOpen] = useState(false);
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
+  
+  // Parameters database hook for test method dropdown
+  const { data: parametersData, addParameter } = useParametersDataV2();
+  const { data: toolboxData } = useToolboxData();
   
   const hasTraining = day.sessions.length > 0;
   const isTestDay = day.testNames && day.testNames.length > 0;
@@ -567,6 +573,15 @@ export function AthleteCalendarDayCell({
         scheduledEventNames={day.eventNames || []}
         onSelect={handleTestEventSelect}
         onDelete={handleTestEventDelete}
+        allParameters={parametersData.parameters}
+        toolboxEntries={toolboxData?.entries || []}
+        onAddParameter={(param) => {
+          addParameter({
+            name: param.name,
+            unit: param.unit,
+            category: param.category,
+          });
+        }}
       />
     </>
   );

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -15,10 +15,27 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Trophy, Calendar, X, ChevronDown } from 'lucide-react';
+import { Plus, Trophy, Calendar, X, ChevronDown, Check } from 'lucide-react';
 import { SubGoal, Event } from '@/types/training';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ParameterV2 } from '@/types/parametersV2';
+import { ToolboxEntry } from '@/types/toolbox';
+import { AddParameterDialogV2 } from '@/components/goals/AddParameterDialogV2';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 
 interface CombinedTestEventDialogProps {
   open: boolean;
@@ -36,6 +53,16 @@ interface CombinedTestEventDialogProps {
   }) => void;
   onDelete: (type: 'test' | 'event', name: string) => void;
   onUpdateComment?: (type: 'test' | 'event', id: string, comments: string) => void;
+  // New props for parameters database integration
+  allParameters?: ParameterV2[];
+  toolboxEntries?: ToolboxEntry[];
+  onAddParameter?: (parameter: {
+    name: string;
+    unit?: string;
+    category?: string;
+    interactions: { targetParameterId: string; direction: string; strength: string }[];
+    methods: { methodId: string; rationale?: string }[];
+  }) => void;
 }
 
 export function CombinedTestEventDialog({
@@ -48,15 +75,57 @@ export function CombinedTestEventDialog({
   onSelect,
   onDelete,
   onUpdateComment,
+  allParameters = [],
+  toolboxEntries = [],
+  onAddParameter,
 }: CombinedTestEventDialogProps) {
   const [type, setType] = useState<'test' | 'event'>('test');
   const [mode, setMode] = useState<'select' | 'create'>('select');
   const [selectedId, setSelectedId] = useState<string>('');
   const [newName, setNewName] = useState('');
   const [newComments, setNewComments] = useState('');
+  const [parameterDropdownOpen, setParameterDropdownOpen] = useState(false);
+  const [addParameterDialogOpen, setAddParameterDialogOpen] = useState(false);
   
   const items = type === 'test' ? existingTests : existingEvents;
   const hasItems = items.length > 0;
+
+  // Group parameters by category for the dropdown
+  const parametersByCategory = useMemo(() => {
+    const grouped: Record<string, ParameterV2[]> = {};
+    allParameters.forEach((param) => {
+      const cat = param.category || 'Other';
+      if (!grouped[cat]) {
+        grouped[cat] = [];
+      }
+      grouped[cat].push(param);
+    });
+    // Sort each group alphabetically
+    Object.keys(grouped).forEach((cat) => {
+      grouped[cat].sort((a, b) => a.name.localeCompare(b.name));
+    });
+    return grouped;
+  }, [allParameters]);
+
+  const categoryOrder = ['strength', 'speed', 'power', 'endurance', 'mobility', 'technique', 'body_composition', 'other'];
+
+  const handleParameterSelect = (param: ParameterV2) => {
+    setNewName(param.name);
+    setParameterDropdownOpen(false);
+  };
+
+  const handleAddNewParameter = (parameter: {
+    name: string;
+    unit?: string;
+    category?: string;
+    interactions: any[];
+    methods: any[];
+  }) => {
+    onAddParameter?.(parameter);
+    // Auto-select the new parameter name
+    setNewName(parameter.name);
+    setAddParameterDialogOpen(false);
+  };
 
   const handleConfirm = () => {
     if (mode === 'select' && selectedId) {
@@ -316,17 +385,121 @@ export function CombinedTestEventDialog({
                 <Label htmlFor="name">
                   {type === 'test' ? 'Test Method' : 'Event Name'}
                 </Label>
-                <Input
-                  id="name"
-                  placeholder={type === 'test' ? 'e.g., 1RM Back Squat' : 'e.g., Regional Competition'}
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && newComments.trim() === '' && newName.trim()) {
-                      handleConfirm();
-                    }
-                  }}
-                />
+                
+                {/* Test: Show parameter dropdown if parameters are available */}
+                {type === 'test' && allParameters.length > 0 ? (
+                  <Popover open={parameterDropdownOpen} onOpenChange={setParameterDropdownOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={parameterDropdownOpen}
+                        className="w-full justify-between font-normal h-10"
+                      >
+                        <span className={cn(!newName && "text-muted-foreground")}>
+                          {newName || "Select a parameter..."}
+                        </span>
+                        <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0 bg-popover z-[300]" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search parameters..." />
+                        <CommandList className="max-h-[300px]">
+                          <CommandEmpty>No parameters found.</CommandEmpty>
+                          {/* Render categories in order */}
+                          {categoryOrder
+                            .filter(cat => parametersByCategory[cat]?.length > 0)
+                            .map((cat) => (
+                              <CommandGroup 
+                                key={cat} 
+                                heading={cat.charAt(0).toUpperCase() + cat.slice(1).replace('_', ' ')}
+                              >
+                                {parametersByCategory[cat].map((param) => (
+                                  <CommandItem
+                                    key={param.id}
+                                    value={param.name}
+                                    onSelect={() => handleParameterSelect(param)}
+                                    className="cursor-pointer"
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        newName === param.name ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    {param.name}
+                                    {param.unit && (
+                                      <span className="text-muted-foreground ml-1">({param.unit})</span>
+                                    )}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            ))}
+                          {/* Categories not in order */}
+                          {Object.keys(parametersByCategory)
+                            .filter(cat => !categoryOrder.includes(cat))
+                            .sort()
+                            .map((cat) => (
+                              <CommandGroup 
+                                key={cat} 
+                                heading={cat.charAt(0).toUpperCase() + cat.slice(1)}
+                              >
+                                {parametersByCategory[cat].map((param) => (
+                                  <CommandItem
+                                    key={param.id}
+                                    value={param.name}
+                                    onSelect={() => handleParameterSelect(param)}
+                                    className="cursor-pointer"
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        newName === param.name ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    {param.name}
+                                    {param.unit && (
+                                      <span className="text-muted-foreground ml-1">({param.unit})</span>
+                                    )}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            ))}
+                        </CommandList>
+                        {/* Create New Parameter option */}
+                        {onAddParameter && (
+                          <div className="border-t p-2">
+                            <Button
+                              variant="ghost"
+                              className="w-full justify-start"
+                              onClick={() => {
+                                setParameterDropdownOpen(false);
+                                setAddParameterDialogOpen(true);
+                              }}
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              Create New Parameter
+                            </Button>
+                          </div>
+                        )}
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  /* Event or no parameters: Show regular input */
+                  <Input
+                    id="name"
+                    placeholder={type === 'test' ? 'e.g., 1RM Back Squat' : 'e.g., Regional Competition'}
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && newComments.trim() === '' && newName.trim()) {
+                        handleConfirm();
+                      }
+                    }}
+                  />
+                )}
               </div>
               
               {/* Comments field */}
@@ -364,6 +537,17 @@ export function CombinedTestEventDialog({
         </DialogFooter>
       </DialogContent>
       </DialogPortal>
+
+      {/* Nested Add Parameter Dialog */}
+      {onAddParameter && (
+        <AddParameterDialogV2
+          open={addParameterDialogOpen}
+          onOpenChange={setAddParameterDialogOpen}
+          allParameters={allParameters}
+          toolboxEntries={toolboxEntries}
+          onAdd={handleAddNewParameter}
+        />
+      )}
     </Dialog>
   );
 }
