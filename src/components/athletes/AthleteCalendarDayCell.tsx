@@ -354,8 +354,8 @@ export function AthleteCalendarDayCell({
                 ref={droppableProvided.innerRef}
                 {...droppableProvided.droppableProps}
                 className={cn(
-                  "space-y-2",
-                  droppableSnapshot.isDraggingOver && "bg-primary/5 rounded-md p-1"
+                  "space-y-2 min-h-[80px] flex-1",
+                  droppableSnapshot.isDraggingOver && "bg-primary/5 rounded-md p-2 border-2 border-dashed border-primary/30"
                 )}
               >
                 {day.sessions.map((session, idx) => (
@@ -373,8 +373,9 @@ export function AthleteCalendarDayCell({
                           onClick={(e) => {
                             e.stopPropagation();
                             // Suppress clicks right after drag ends (using ref for synchronous check)
+                            // Increased to 300ms for more reliable suppression
                             const dragEndTime = lastDragEndRef?.current ?? 0;
-                            if (Date.now() - dragEndTime < 200) return;
+                            if (Date.now() - dragEndTime < 300) return;
                             onSessionClick?.(day.dateString, session.sessionIndex, session.assignmentId || day.assignmentId || '');
                           }}
                           className={cn(
