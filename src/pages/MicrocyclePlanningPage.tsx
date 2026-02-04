@@ -2389,26 +2389,79 @@ export default function MicrocyclePlanningPage() {
   ) => {
     // Update trainingDays
     setTrainingDays(prev => {
-      const updated = prev.map(td => {
-        if (td.date === dayDate) {
-          if (type === 'test') {
-            const existingTests = td.testNames || [];
-            return {
-              ...td,
-              isTestDay: true,
-              testNames: [...existingTests, testEventName]
-            };
-          } else {
-            const existingEvents = td.eventNames || [];
-            return {
-              ...td,
-              isEventDay: true,
-              eventNames: [...existingEvents, testEventName]
-            };
+      const existingDayIndex = prev.findIndex(td => td.date === dayDate);
+      
+      let updated: TrainingDay[];
+      
+      if (existingDayIndex >= 0) {
+        // Day exists - update it
+        updated = prev.map(td => {
+          if (td.date === dayDate) {
+            if (type === 'test') {
+              const existingTests = td.testNames || [];
+              return {
+                ...td,
+                isTestDay: true,
+                testNames: [...existingTests, testEventName]
+              };
+            } else {
+              const existingEvents = td.eventNames || [];
+              return {
+                ...td,
+                isEventDay: true,
+                eventNames: [...existingEvents, testEventName]
+              };
+            }
+          }
+          return td;
+        });
+      } else {
+        // Day doesn't exist - create new TrainingDay
+        const dateObj = parseISO(dayDate);
+        const dayOfWeek = dateObj.getDay();
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        
+        // Find which microcycle this date belongs to based on date position
+        let targetMicrocycleId = '';
+        if (currentMesocycle && currentMesocycle.microcycles.length > 0) {
+          // Calculate which microcycle based on weeks since mesocycle start
+          const mesoStart = new Date(currentMesocycle.startDate);
+          const daysSinceStart = Math.floor((dateObj.getTime() - mesoStart.getTime()) / (1000 * 60 * 60 * 24));
+          
+          // Find microcycle by accumulating durations
+          let accumulatedDays = 0;
+          for (const micro of currentMesocycle.microcycles) {
+            accumulatedDays += micro.duration;
+            if (daysSinceStart < accumulatedDays) {
+              targetMicrocycleId = micro.id;
+              break;
+            }
+          }
+          // Fallback to first microcycle if not found
+          if (!targetMicrocycleId) {
+            targetMicrocycleId = currentMesocycle.microcycles[0].id;
           }
         }
-        return td;
-      });
+        
+        const newDay: TrainingDay = {
+          date: dayDate,
+          dayOfWeek,
+          dayName: dayNames[dayOfWeek],
+          mesocycleId: currentMesocycle?.id || '',
+          microcycleId: targetMicrocycleId,
+          isTestDay: type === 'test',
+          isEventDay: type === 'event',
+          isTrainingDay: true,
+          testNames: type === 'test' ? [testEventName] : undefined,
+          eventNames: type === 'event' ? [testEventName] : undefined,
+          intensity: 'moderate',
+          sessions: 1,
+          sessionNames: ['Session 1']
+        };
+        
+        updated = [...prev, newDay];
+      }
+      
       localStorage.setItem('trainingDays', JSON.stringify(updated));
       return updated;
     });
