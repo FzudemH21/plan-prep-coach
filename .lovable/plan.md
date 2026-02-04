@@ -1,184 +1,98 @@
 
+## Goal
+Eliminate the remaining “session opens after drop” behavior in Athlete Calendar drag-and-drop, without breaking normal click-to-open.
 
-# Plan: Fix Session Drag-and-Drop Issues
+## What we know (from your console logs)
+- `handleSessionDragEnd` is firing and moving sessions successfully.
+- Immediately after some drops, `handleSessionClick` fires and opens a session.
+- The click that opens the sheet sometimes targets a different session/day than the one that was dragged (example: drag 2/11 → 2/09, but click opens 2/10). This strongly suggests an “extra click” is being generated after the drag ends, and it lands on whatever is under the cursor at that moment.
+- Our current protection is time-window based (300ms) and is applied in `AthleteCalendarDayCell` only. The fact that `handleSessionClick` still fires means the synthetic/delayed click is occurring after that 300ms window (common on some trackpads and especially touch devices where a click can be synthesized ~300ms later).
 
-## Summary
+## Approach
+Add a “belt + suspenders” suppression strategy that is robust to delayed/synthesized clicks:
+1) **Global capture-phase click eater (most reliable):** after ANY drag completes, swallow exactly the next `click` event at the window/document level in capture phase. This prevents React’s delegated `onClick` from ever firing, regardless of which session/day ends up under the cursor.
+2) **Keep local suppression, but increase slightly:** keep the existing `lastDragEndRef` time check in `AthleteCalendarDayCell`, increase it from 300ms → 500ms (or 600ms) as a backup.
+3) **Guard at the final entry-point:** add the same suppression check at the start of `handleSessionClick` in `AthleteCalendarView.tsx`. This guarantees that even if some future UI path calls `handleSessionClick` without the per-card suppression, the sheet still won’t open right after a drop.
 
-This plan fixes three remaining issues with the athlete calendar drag-and-drop:
-
-1. **Moved session loses its intensity** - Session takes the destination day's intensity instead of keeping its own
-2. **Intermittent session opening after drop** - Click suppression not 100% reliable
-3. **Drop zone too small** - Must hover very close to existing sessions to drop
-
----
-
-## Root Cause Analysis
-
-### Issue 1: Session Intensity Not Preserved on Move
-
-In `handleMoveSession` (lines 422-564 of `useAthleteCalendarEditing.ts`), the function moves:
-- Exercises to new day/session ✓
-- Session sections ✓
-- Supersets ✓
-- Day split states ✓
-- Training days / session names ✓
-
-**BUT it does NOT move the `sessionIntensities` entry.** The source session's intensity key (`${sourceDayDate}-${sourceSessionIndex}`) is left in place while the destination key (`${destDayDate}-${newSessionIndex}`) is never set.
-
-Then, the `useEffect` that initializes missing session intensities (lines 1457-1484) runs and sets the moved session's intensity to the destination day's intensity (because the key doesn't exist).
-
-### Issue 2: Intermittent Click Suppression Failure
-
-The `lastDragEndRef.current = Date.now()` is set at the very top of `handleSessionDragEnd` (line 510), which is correct. However, looking at the browser event order:
-
-1. `onDragEnd` fires (sets ref)
-2. `onClick` fires (checks ref)
-
-The timing should work, but the issue may be:
-- The click event is already queued before `onDragEnd` finishes
-- In some cases, the browser processes events in a different order
-- The 200ms window may be too short for slower interactions
-
-**Fix**: Increase the suppression window to 300ms and ensure the ref is set even earlier (if possible via `onDragStart` as a backup).
-
-### Issue 3: Drop Zone Too Small
-
-For days WITH sessions, the `<Droppable>` wrapper (lines 351-476 of `AthleteCalendarDayCell.tsx`) only covers the `<div className="space-y-2">` containing the session list. This means:
-- The area above the sessions (header with date/intensity) is NOT droppable
-- The area below the sessions (if any padding) is NOT droppable
-- Users must hover directly over the session cards
-
-**Fix**: Move the `<Droppable>` higher up to wrap the entire training content area, or at minimum add padding/min-height to the droppable container.
+This combination is intentionally redundant: the global capture listener handles the intermittent cases; the local and entry-point checks prevent regressions.
 
 ---
 
-## Implementation Plan
+## Files & changes
 
-### File 1: `src/hooks/useAthleteCalendarEditing.ts`
+### 1) `src/components/athletes/AthleteCalendarView.tsx`
+#### A. Add refs for global suppression
+Add:
+- `const suppressNextClickRef = useRef(false);`
+- `const suppressNextClickTimeoutRef = useRef<number | null>(null);`
 
-**Change: Move session intensity with the session**
+#### B. Install a capture-phase click listener (once)
+Add a `useEffect` that:
+- `window.addEventListener('click', handler, true)` (capture phase)
+- In the handler:
+  - If `suppressNextClickRef.current` is `true`:
+    - set it to `false`
+    - `event.preventDefault()`
+    - `event.stopPropagation()`
+    - optionally call `(event as any).stopImmediatePropagation?.()` for extra safety
+- Cleanup on unmount.
 
-In `handleMoveSession`, after updating supersets (around line 489), add logic to:
+This ensures the “post-drop click” never reaches React.
 
-1. Get the source session's intensity: `sessionIntensities[`${sourceDayDate}-${sourceSessionIndex}`]`
-2. Set it on the destination: `sessionIntensities[`${destDayDate}-${newSessionIndex}`]`
-3. Remove the source key
-4. Shift remaining source day intensities down (for sessions after the moved one)
+#### C. Mark suppression on drag end (and optionally drag start)
+In `handleSessionDragEnd`:
+- Keep `lastDragEndRef.current = Date.now()` at the very top.
+- Add:
+  - `suppressNextClickRef.current = true;`
+  - Clear any existing timeout and set a new one to auto-reset after ~800ms (so a future real click isn’t swallowed if, for some reason, no click is generated after the drop).
 
-```typescript
-// Move session intensity to destination
-setSessionIntensities(prev => {
-  const newIntensities = { ...prev };
-  const sourceKey = `${sourceDayDate}-${sourceSessionIndex}`;
-  const destKey = `${destDayDate}-${newSessionIndex}`;
-  
-  // Preserve the session's original intensity (or fall back to source day intensity)
-  const movedIntensity = newIntensities[sourceKey] || 
-    (trainingDays.find(d => d.date === sourceDayDate)?.intensity as IntensityLevel) || 
-    'moderate';
-  
-  // Set on destination
-  newIntensities[destKey] = movedIntensity;
-  
-  // Remove from source
-  delete newIntensities[sourceKey];
-  
-  // Shift remaining source day session intensities down
-  const sourceCount = daySplitStates[sourceDayDate] || 0;
-  for (let i = sourceSessionIndex + 1; i < sourceCount; i++) {
-    const oldKey = `${sourceDayDate}-${i}`;
-    const newKey = `${sourceDayDate}-${i - 1}`;
-    if (newIntensities[oldKey] !== undefined) {
-      newIntensities[newKey] = newIntensities[oldKey];
-      delete newIntensities[oldKey];
-    }
-  }
-  
-  return newIntensities;
-});
-```
+Optional extra-hardening:
+- Also set `suppressNextClickRef.current = true` inside `DragDropContext onDragStart` so the suppression is armed as soon as a drag begins. (Then the next click after the drag gesture will be swallowed no matter what.)
 
-**Add `sessionIntensities` to the dependency array** of `handleMoveSession`.
+Update `DragDropContext` usage:
+- Add `onDragStart={() => { suppressNextClickRef.current = true; }}`
+
+#### D. Guard `handleSessionClick` itself
+At the very top of `handleSessionClick`:
+- If `Date.now() - lastDragEndRef.current < 600` then return without opening the sheet.
+
+This is a final safety net.
 
 ---
 
-### File 2: `src/components/athletes/AthleteCalendarDayCell.tsx`
+### 2) `src/components/athletes/AthleteCalendarDayCell.tsx`
+#### A. Increase the per-card suppression window slightly
+Change:
+- `if (Date.now() - dragEndTime < 300) return;`
+to:
+- `if (Date.now() - dragEndTime < 500) return;` (or 600ms)
 
-**Change 1: Expand droppable area for days with sessions**
+This helps in cases where the click comes a bit after 300ms, and it aligns with the fact that some devices synthesize clicks around 300ms.
 
-Currently (lines 351-476), the `<Droppable>` wraps only the session list. We need to make the entire training content area droppable.
-
-Move the `<Droppable>` to wrap the full content area (everything below the header), and add `min-height` and padding to ensure a reasonable drop target:
-
-```tsx
-{hasTraining ? (
-  <Droppable droppableId={day.dateString} type="session">
-    {(droppableProvided, droppableSnapshot) => (
-      <div 
-        ref={droppableProvided.innerRef}
-        {...droppableProvided.droppableProps}
-        className={cn(
-          "space-y-2 min-h-[80px] flex-1", // Added min-height and flex-1
-          droppableSnapshot.isDraggingOver && "bg-primary/5 rounded-md p-1 border-2 border-dashed border-primary/30"
-        )}
-      >
-        {/* Session cards... */}
-      </div>
-    )}
-  </Droppable>
-) : (
-  /* Empty day droppable - already good */
-)}
-```
-
-**Change 2: Increase click suppression window**
-
-In the session card `onClick` handler (lines 373-378), increase the suppression window from 200ms to 300ms:
-
-```tsx
-onClick={(e) => {
-  e.stopPropagation();
-  const dragEndTime = lastDragEndRef?.current ?? 0;
-  if (Date.now() - dragEndTime < 300) return; // Increased from 200
-  onSessionClick?.(day.dateString, session.sessionIndex, session.assignmentId || day.assignmentId || '');
-}}
-```
+No other behavioral change needed here, since the global capture listener will do the heavy lifting.
 
 ---
 
-### File 3: `src/components/athletes/AthleteCalendarView.tsx`
-
-**Change: Track drag start for backup suppression**
-
-Add a `lastDragStartRef` that's set when dragging begins. This provides a backup check:
-
-```tsx
-const lastDragStartRef = useRef<number>(0);
-
-// In the DragDropContext:
-<DragDropContext 
-  onDragStart={() => { lastDragStartRef.current = Date.now(); }}
-  onDragEnd={handleSessionDragEnd}
->
-```
-
-Then pass both refs down if needed, though the main fix is the 300ms window.
+## Why this should fix it
+- The intermittent opening is caused by an extra click event after drag completion.
+- Timing-based suppression can fail when that click is delayed (300ms is right on the edge for touch-like synthesized clicks).
+- A capture-phase listener prevents the click from ever reaching React, regardless of delay and regardless of which element ends up under the cursor.
+- The extra guards ensure we don’t regress later if other components trigger session opening.
 
 ---
 
-## Summary of Changes
-
-| File | Change |
-|------|--------|
-| `useAthleteCalendarEditing.ts` | Move `sessionIntensities` entry when session is moved; shift remaining source keys down |
-| `AthleteCalendarDayCell.tsx` | Add `min-h-[80px]` and visual feedback to droppable; increase click suppression to 300ms |
-| `AthleteCalendarView.tsx` | (Optional) Track drag start for backup suppression |
+## Testing checklist (acceptance)
+1) Drag a session and drop it onto another day repeatedly (try fast drops and slower drops).
+   - Expected: session moves; sheet does not open.
+2) Drag and drop onto a day with many sessions and onto an empty day.
+   - Expected: no sheet open.
+3) Immediately after dropping, try to click a session intentionally.
+   - Expected: the first click right after the drop may be swallowed; a second click should open normally.
+4) Confirm normal (non-drag) clicking on session cards still opens the sheet reliably.
 
 ---
 
-## Expected Outcome
+## Notes / small UX tradeoff
+Swallowing the “next click” after a drag means that if a user intentionally tries to click immediately after dropping, that one click may be ignored. In practice this feels far better than the sheet randomly opening on drop, and the user can click again immediately.
 
-1. **Session intensity preserved**: When dragging a session to another day, it keeps its original intensity instead of inheriting the destination day's intensity
-2. **No accidental session opens**: The 300ms suppression window reliably prevents clicks after drops
-3. **Easier dropping**: The full training content area is droppable, not just the session cards themselves; visual feedback (dashed border) shows when hovering over a valid drop zone
-
+If you prefer, we can narrow the behavior further (e.g., only swallow clicks within the calendar grid container rather than globally), but global capture is the most reliable fix with the least complexity.
