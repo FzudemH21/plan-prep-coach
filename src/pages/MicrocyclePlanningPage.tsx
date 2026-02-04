@@ -66,12 +66,19 @@ export default function MicrocyclePlanningPage() {
   const [splitStates, setSplitStates] = useState<Record<string, boolean>>({});
   const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
-  const { athletes } = useAthletes();
+  const { athletes, athletePerformanceParameters } = useAthletes();
   const { saveCurrentSession } = useTrainingPrograms();
   
   // Resolve athlete name from selectedAthleteId
-  const selectedAthlete = athletes.find(a => a.id === macrocycleData?.selectedAthleteId);
+  const selectedAthleteId = macrocycleData?.selectedAthleteId;
+  const selectedAthlete = athletes.find(a => a.id === selectedAthleteId);
   const athleteName = selectedAthlete ? getAthleteDisplayName(selectedAthlete) : undefined;
+  
+  // Filter athlete performance parameters for the selected athlete
+  const selectedAthletePerformanceParameters = useMemo(() => {
+    if (!selectedAthleteId) return [];
+    return athletePerformanceParameters.filter(pp => pp.athleteId === selectedAthleteId);
+  }, [athletePerformanceParameters, selectedAthleteId]);
   const [clearMesocycleDialogOpen, setClearMesocycleDialogOpen] = useState(false);
   const [clearMicrocycleDialog, setClearMicrocycleDialog] = useState<{
     isOpen: boolean;
@@ -3148,6 +3155,8 @@ export default function MicrocyclePlanningPage() {
               onDistributionChange={(dist) => setExerciseDistribution(dist as ExerciseDistribution[])}
               onAddSession={handleAddSession}
               daySplitStates={daySplitStates}
+              selectedAthleteId={selectedAthleteId}
+              athletePerformanceParameters={selectedAthletePerformanceParameters}
             />
         </>
       )}

@@ -22,6 +22,7 @@ import { MethodSelectionDialog } from './MethodSelectionDialog';
 import { ExerciseDetailDialog } from '@/components/shared/ExerciseDetailDialog';
 import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import { toggleSuperset, cleanupSupersetsOnExerciseDelete } from '@/utils/supersetUtils';
+import { AthletePerformanceParameter } from '@/types/athlete';
 
 // Local interface for internal use - compatible with WeekRow, TrainingDayCell etc.
 interface ExerciseDistribution {
@@ -94,6 +95,9 @@ interface TrainingCalendarViewProps {
   onAddSession?: (dayDate: string) => void;
   // Day split states for creating empty sessions
   daySplitStates?: Record<string, number>;
+  // Athlete context for baseline value auto-fill
+  selectedAthleteId?: string;
+  athletePerformanceParameters?: AthletePerformanceParameter[];
 }
 
 export interface CalendarDay {
@@ -157,6 +161,8 @@ export function TrainingCalendarView({
   onDistributionChange,
   onAddSession,
   daySplitStates,
+  selectedAthleteId,
+  athletePerformanceParameters,
 }: TrainingCalendarViewProps) {
   const { toast } = useToast();
   const { data: toolboxData } = useToolboxData();
@@ -1057,6 +1063,8 @@ export function TrainingCalendarView({
                 
                 toast({ title: "Exercise changed", description: `Changed to ${newExercise.exerciseName}` });
               }}
+              selectedAthleteId={selectedAthleteId}
+              athletePerformanceParameters={athletePerformanceParameters}
             />
           ) : (
             /* Calendar View */
@@ -1117,6 +1125,8 @@ export function TrainingCalendarView({
                     onMoveSessionUp={onMoveSessionUp}
                     onMoveSessionDown={onMoveSessionDown}
                     onAddSession={onAddSession}
+                    selectedAthleteId={selectedAthleteId}
+                    athletePerformanceParameters={athletePerformanceParameters}
                   />
                 ))}
               </div>
@@ -1178,6 +1188,8 @@ export function TrainingCalendarView({
               .filter(td => td.microcycleId === trainingDay.microcycleId)
               .map(td => td.date);
           })()}
+          selectedAthleteId={selectedAthleteId}
+          athletePerformanceParameters={athletePerformanceParameters}
         />
       )}
 

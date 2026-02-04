@@ -19,6 +19,7 @@ import { getSupersetLabelFromMapping } from '@/utils/supersetUtils';
 import { getMethodSessionIndex, getModuloSessionIndex } from '@/utils/sessionIndexUtils';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
+import { AthletePerformanceParameter } from '@/types/athlete';
 import {
   Table,
   TableBody,
@@ -201,6 +202,9 @@ interface MasterPlannerColumnProps {
     exerciseId: string,
     newExercise: { exerciseId: string; exerciseName: string; libraryId: string }
   ) => void;
+  // Athlete context for baseline value auto-fill
+  selectedAthleteId?: string;
+  athletePerformanceParameters?: AthletePerformanceParameter[];
 }
 
 // Helper to format parameter names nicely
@@ -519,6 +523,8 @@ export function MasterPlannerColumn({
   allExerciseDistribution,
   onOpenExerciseDetail,
   onExerciseChange,
+  selectedAthleteId,
+  athletePerformanceParameters,
 }: MasterPlannerColumnProps) {
   const [dayIntensityPopoverOpen, setDayIntensityPopoverOpen] = useState(false);
   const [sessionIntensityPopovers, setSessionIntensityPopovers] = useState<Record<number, boolean>>({});
@@ -1993,6 +1999,8 @@ export function MasterPlannerColumn({
             category: param.category,
           });
         }}
+        selectedAthleteId={selectedAthleteId}
+        athletePerformanceParameters={athletePerformanceParameters}
       />
       
       {/* Exercise Library Popup for changing exercise via three-dot menu */}
