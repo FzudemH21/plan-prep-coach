@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -59,6 +60,8 @@ interface AddParameterDialogV2Props {
     interactions: PendingInteraction[];
     methods: PendingMethod[];
   }) => void;
+  /** Custom z-index class for nested dialog scenarios */
+  containerClassName?: string;
 }
 
 export function AddParameterDialogV2({
@@ -67,6 +70,7 @@ export function AddParameterDialogV2({
   allParameters,
   toolboxEntries,
   onAdd,
+  containerClassName,
 }: AddParameterDialogV2Props) {
   const [name, setName] = useState('');
   const [unit, setUnit] = useState('');
@@ -234,7 +238,10 @@ export function AddParameterDialogV2({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="w-[calc(100%-2rem)] max-w-[600px] max-h-[85vh] overflow-hidden flex flex-col mx-4 sm:mx-auto">
+      <DialogContent className={cn(
+        "w-[calc(100%-2rem)] max-w-[600px] max-h-[85vh] overflow-hidden flex flex-col mx-4 sm:mx-auto",
+        containerClassName
+      )}>
         <DialogHeader className="shrink-0">
           <DialogTitle>Add New Parameter</DialogTitle>
         </DialogHeader>
