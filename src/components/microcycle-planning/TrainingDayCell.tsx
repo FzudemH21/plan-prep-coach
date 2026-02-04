@@ -22,6 +22,7 @@ import {
 import { CombinedTestEventDialog } from './CombinedTestEventDialog';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
+import { AthletePerformanceParameter } from '@/types/athlete';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -94,6 +95,9 @@ interface TrainingDayCellProps {
   onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
   getIntensityColor?: (intensity: IntensityLevel) => string;
   intensityLevels?: IntensityLevel[];
+  // Athlete context for baseline value auto-fill
+  selectedAthleteId?: string;
+  athletePerformanceParameters?: AthletePerformanceParameter[];
 }
 
 export function TrainingDayCell({ 
@@ -118,7 +122,9 @@ export function TrainingDayCell({
   dailyIntensityData,
   onIntensityChange,
   getIntensityColor,
-  intensityLevels
+  intensityLevels,
+  selectedAthleteId,
+  athletePerformanceParameters
 }: TrainingDayCellProps) {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [isHovering, setIsHovering] = useState(false);
@@ -660,6 +666,8 @@ export function TrainingDayCell({
             category: param.category,
           });
         }}
+        selectedAthleteId={selectedAthleteId}
+        athletePerformanceParameters={athletePerformanceParameters}
       />
     </>
   );

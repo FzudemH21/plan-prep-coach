@@ -33,6 +33,7 @@ import { toggleSuperset, getSupersetLabelFromMapping, cleanupSupersetsOnExercise
 import { getMethodSessionIndex, getModuloSessionIndex } from '@/utils/sessionIndexUtils';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
+import { AthletePerformanceParameter } from '@/types/athlete';
 
 interface ExerciseDistribution {
   id?: string;
@@ -126,6 +127,9 @@ interface WorkoutSessionSheetProps {
   // When true, use AdHocMethodSelectionDialog instead of MethodSelectionDialog
   // Allows selecting from all toolbox methods instead of periodization-configured methods
   isAdHocSession?: boolean;
+  // Athlete context for baseline value auto-fill
+  selectedAthleteId?: string;
+  athletePerformanceParameters?: AthletePerformanceParameter[];
 }
 
 export function WorkoutSessionSheet({
@@ -168,6 +172,8 @@ export function WorkoutSessionSheet({
   microcycleDates,
   useExternalIntensityOnly = false,
   isAdHocSession = false,
+  selectedAthleteId,
+  athletePerformanceParameters,
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
   const { libraries, updateExerciseInLibrary } = useCustomLibraries();
@@ -2697,6 +2703,8 @@ export function WorkoutSessionSheet({
             category: param.category,
           });
         }}
+        selectedAthleteId={selectedAthleteId}
+        athletePerformanceParameters={athletePerformanceParameters}
       />
 
       {/* Delete Section Confirmation Dialog */}

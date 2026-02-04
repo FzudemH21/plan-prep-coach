@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { TrainingDayCell } from './TrainingDayCell';
+import { AthletePerformanceParameter } from '@/types/athlete';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -63,6 +64,9 @@ interface WeekRowProps {
   onMoveSessionUp?: (dayDate: string, sessionIndex: number) => void;
   onMoveSessionDown?: (dayDate: string, sessionIndex: number) => void;
   onAddSession?: (dayDate: string) => void;
+  // Athlete context for baseline value auto-fill
+  selectedAthleteId?: string;
+  athletePerformanceParameters?: AthletePerformanceParameter[];
 }
 
 export function WeekRow({
@@ -93,6 +97,8 @@ export function WeekRow({
   onMoveSessionUp,
   onMoveSessionDown,
   onAddSession,
+  selectedAthleteId,
+  athletePerformanceParameters,
 }: WeekRowProps) {
   const [isWeekHovering, setIsWeekHovering] = useState(false);
   const weekStartDate = week[0]?.dateString;
@@ -176,6 +182,8 @@ export function WeekRow({
             onMoveSessionUp={onMoveSessionUp}
             onMoveSessionDown={onMoveSessionDown}
             onAddSession={onAddSession}
+            selectedAthleteId={selectedAthleteId}
+            athletePerformanceParameters={athletePerformanceParameters}
           />
         ))}
       </div>
