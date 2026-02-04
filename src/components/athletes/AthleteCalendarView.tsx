@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, isSameMonth, isWithinInterval, parseISO } from 'date-fns';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { Button } from '@/components/ui/button';
@@ -87,8 +87,9 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number>(1); // 1=Monday
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
   
-  // Drag end timestamp for click suppression in child components
-  const [lastDragEndTimestamp, setLastDragEndTimestamp] = useState<number>(0);
+  // Ref-based drag end timestamp for SYNCHRONOUS click suppression
+  // State was too slow - React re-render happens AFTER onClick fires
+  const lastDragEndRef = useRef<number>(0);
 
   const { programs, getProgram } = useTrainingPrograms();
   const athleteData = useAthletes();
@@ -409,6 +410,21 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         });
       }
 
+      // Compute day-level intensity for the overview square
+      // This is SEPARATE from session intensities for multi-session days
+      let dayIntensityForSquare: IntensityLevel = 'moderate';
+      if (selectedAssignmentId) {
+        const liveDayIntensity = editing.dailyIntensityData.find(
+          (d: any) => d.date === dateString
+        );
+        const liveTrainingDay = editing.trainingDays.find((td: any) => td.date === dateString);
+        if (liveDayIntensity?.intensity) {
+          dayIntensityForSquare = liveDayIntensity.intensity as IntensityLevel;
+        } else if (liveTrainingDay?.intensity) {
+          dayIntensityForSquare = liveTrainingDay.intensity;
+        }
+      }
+
       return {
         date,
         dateString,
@@ -418,6 +434,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         eventNames: eventNames.length > 0 ? eventNames : undefined,
         assignmentId,
         programName,
+        intensity: dayIntensityForSquare, // NEW: Explicit day-level intensity
       };
     });
   }, [currentDate, viewMode, assignments, assignmentDataCache, selectedAssignmentId, editing.exerciseDistribution, editing.daySplitStates, editing.trainingDays, editing.dailyIntensityData, editing.sessionIntensities]);
@@ -488,7 +505,14 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
 
   // Handle session drag-and-drop between days
   const handleSessionDragEnd = useCallback((result: DropResult) => {
-    if (!result.destination) return;
+    // CRITICAL: Set drag end timestamp IMMEDIATELY at the top (synchronous via ref)
+    // This ensures onClick handlers see it BEFORE React re-renders
+    lastDragEndRef.current = Date.now();
+    
+    if (!result.destination) {
+      console.log('[handleSessionDragEnd] No destination - drop cancelled');
+      return;
+    }
     
     const sourceDayDate = result.source.droppableId;
     const destDayDate = result.destination.droppableId;
@@ -501,7 +525,10 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     const sourceSessionIndex = parseInt(parts[parts.length - 1], 10);
     
     // Same day - no move needed (could add reordering later)
-    if (sourceDayDate === destDayDate) return;
+    if (sourceDayDate === destDayDate) {
+      console.log('[handleSessionDragEnd] Same day, no move');
+      return;
+    }
     
     // Validate parsed index
     if (isNaN(sourceSessionIndex)) {
@@ -516,17 +543,9 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
       draggableId
     });
     
-    // Use the hook's handler for moving sessions
+    // Use the hook's handler for moving sessions (which also toasts)
     editing.handleMoveSession(sourceDayDate, sourceSessionIndex, destDayDate);
-    
-    // Set the drag end timestamp for click suppression in child components
-    setLastDragEndTimestamp(Date.now());
-    
-    toast({
-      title: "Session moved",
-      description: `Moved to ${format(new Date(destDayDate), 'MMM d')}`,
-    });
-  }, [editing, toast]);
+  }, [editing]);
 
   const handleAssignProgram = useCallback((assignment: Omit<AthleteCalendarAssignment, 'id' | 'createdAt'>) => {
     // Create the assignment and get the new ID
@@ -937,8 +956,8 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                       // Intensity editing
                       intensityLevels={intensityLevels}
                       onIntensityChange={editing.handleDayIntensityChange}
-                      // Drag end timestamp for click suppression
-                      lastDragEndTimestamp={lastDragEndTimestamp}
+                      // Ref-based drag end timestamp for click suppression
+                      lastDragEndRef={lastDragEndRef}
                     />
                   ))}
                 </div>

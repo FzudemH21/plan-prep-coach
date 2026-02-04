@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import React from 'react';
 import { AthleteCalendarDayCell, AthleteCalendarDay } from './AthleteCalendarDayCell';
 import { Button } from '@/components/ui/button';
 import { MoreVertical, Copy, Trash2, ClipboardPaste } from 'lucide-react';
@@ -58,8 +59,8 @@ interface AthleteCalendarWeekRowProps {
   // Intensity editing
   intensityLevels?: IntensityLevel[];
   onIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
-  // Drag end timestamp for click suppression
-  lastDragEndTimestamp?: number;
+  // Ref-based drag end timestamp for click suppression (sync update, not state)
+  lastDragEndRef?: React.MutableRefObject<number>;
 }
 
 export function AthleteCalendarWeekRow({
@@ -88,7 +89,7 @@ export function AthleteCalendarWeekRow({
   availableEvents,
   intensityLevels,
   onIntensityChange,
-  lastDragEndTimestamp,
+  lastDragEndRef,
 }: AthleteCalendarWeekRowProps) {
   const weekStartDate = format(week[0].date, 'yyyy-MM-dd');
   const hasExercisesInWeek = week.some(day => day.sessions.length > 0);
@@ -172,7 +173,7 @@ export function AthleteCalendarWeekRow({
             availableEvents={availableEvents}
             intensityLevels={intensityLevels}
             onIntensityChange={onIntensityChange}
-            lastDragEndTimestamp={lastDragEndTimestamp}
+            lastDragEndRef={lastDragEndRef}
           />
         ))}
       </div>

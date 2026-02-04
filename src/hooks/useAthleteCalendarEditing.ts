@@ -1454,6 +1454,35 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     // For multi-session days, session intensity is independent
   }, [daySplitStates]);
 
+  // === Ensure sessionIntensities exist for multi-session days ===
+  // When a day has 2+ sessions, each session should have its own intensity entry
+  // so that changing day intensity doesn't affect them
+  useEffect(() => {
+    const updates: Record<string, IntensityLevel> = {};
+    
+    Object.entries(daySplitStates).forEach(([dayDate, sessionCount]) => {
+      if (sessionCount > 1) {
+        // Find the day's current intensity
+        const dayIntensity = dailyIntensityData.find(d => d.date === dayDate)?.intensity 
+          || trainingDays.find(d => d.date === dayDate)?.intensity 
+          || ('moderate' as IntensityLevel);
+        
+        // Ensure each session has an intensity entry (if missing)
+        for (let sessionIdx = 0; sessionIdx < sessionCount; sessionIdx++) {
+          const key = `${dayDate}-${sessionIdx}`;
+          if (sessionIntensities[key] === undefined) {
+            updates[key] = dayIntensity as IntensityLevel;
+          }
+        }
+      }
+    });
+    
+    // Only update if there are missing entries
+    if (Object.keys(updates).length > 0) {
+      setSessionIntensities(prev => ({ ...prev, ...updates }));
+    }
+  }, [daySplitStates, dailyIntensityData, trainingDays, sessionIntensities]);
+
   // === Session Naming Handlers ===
   
   const handleSessionNameChange = useCallback((dayDate: string, sessionIndex: number, newName: string) => {

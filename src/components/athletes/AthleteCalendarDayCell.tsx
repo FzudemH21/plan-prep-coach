@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { format, isToday } from 'date-fns';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +41,7 @@ export interface AthleteCalendarDay {
   eventNames?: string[];
   assignmentId?: string;
   programName?: string;
+  intensity?: IntensityLevel; // NEW: Day-level intensity for the overview square
 }
 
 interface CopiedDayInfo {
@@ -79,8 +80,8 @@ interface AthleteCalendarDayCellProps {
   // Intensity editing
   intensityLevels?: IntensityLevel[];
   onIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
-  // Drag end timestamp for click suppression
-  lastDragEndTimestamp?: number;
+  // Ref-based drag end timestamp for click suppression (sync update, not state)
+  lastDragEndRef?: React.MutableRefObject<number>;
 }
 
 export function AthleteCalendarDayCell({
@@ -104,7 +105,7 @@ export function AthleteCalendarDayCell({
   availableEvents = [],
   intensityLevels,
   onIntensityChange,
-  lastDragEndTimestamp = 0,
+  lastDragEndRef,
 }: AthleteCalendarDayCellProps) {
   const [testEventDialogOpen, setTestEventDialogOpen] = useState(false);
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
@@ -154,21 +155,21 @@ export function AthleteCalendarDayCell({
               {format(day.date, 'd')}
             </div>
 
-            {/* First Session Intensity Indicator - Clickable */}
-            {hasTraining && day.sessions[0]?.intensity && getIntensityColor && intensityLevels && onIntensityChange ? (
+            {/* Day Intensity Indicator - Clickable (uses day.intensity, NOT session 0 intensity) */}
+            {hasTraining && day.intensity && getIntensityColor && intensityLevels && onIntensityChange ? (
               <Popover open={intensityPopoverOpen} onOpenChange={setIntensityPopoverOpen}>
                 <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
                   <button 
                     className={cn(
                       "w-5 h-5 rounded-sm border transition-all hover:scale-110 cursor-pointer shrink-0",
-                      getIntensityColor(day.sessions[0].intensity)
+                      getIntensityColor(day.intensity)
                     )}
-                    title={`Intensity: ${day.sessions[0].intensity.replace('-', ' ')}`}
+                    title={`Day Intensity: ${day.intensity.replace('-', ' ')}`}
                   />
                 </PopoverTrigger>
                 <PopoverContent className="w-48 p-2 z-[100]" align="end">
                   <div className="space-y-1">
-                    <p className="text-xs font-medium mb-2 text-muted-foreground">Select Intensity</p>
+                    <p className="text-xs font-medium mb-2 text-muted-foreground">Select Day Intensity</p>
                     {intensityLevels.map((level) => (
                       <button
                         key={level}
@@ -179,7 +180,7 @@ export function AthleteCalendarDayCell({
                         }}
                         className={cn(
                           "w-full flex items-center gap-2 p-2 rounded hover:bg-accent transition-colors text-left",
-                          level === day.sessions[0]?.intensity && "bg-accent"
+                          level === day.intensity && "bg-accent"
                         )}
                       >
                         <div className={cn("w-3 h-3 rounded-sm border shrink-0", getIntensityColor(level))} />
@@ -189,13 +190,13 @@ export function AthleteCalendarDayCell({
                   </div>
                 </PopoverContent>
               </Popover>
-            ) : hasTraining && day.sessions[0]?.intensity && getIntensityColor ? (
+            ) : hasTraining && day.intensity && getIntensityColor ? (
               <div
                 className={cn(
                   "w-5 h-5 rounded-sm border shrink-0",
-                  getIntensityColor(day.sessions[0].intensity)
+                  getIntensityColor(day.intensity)
                 )}
-                title={`Intensity: ${day.sessions[0].intensity.replace('-', ' ')}`}
+                title={`Day Intensity: ${day.intensity.replace('-', ' ')}`}
               />
             ) : null}
           </div>
@@ -371,8 +372,9 @@ export function AthleteCalendarDayCell({
                           style={draggableProvided.draggableProps.style}
                           onClick={(e) => {
                             e.stopPropagation();
-                            // Suppress clicks right after drag ends (using parent-provided timestamp)
-                            if (Date.now() - lastDragEndTimestamp < 200) return;
+                            // Suppress clicks right after drag ends (using ref for synchronous check)
+                            const dragEndTime = lastDragEndRef?.current ?? 0;
+                            if (Date.now() - dragEndTime < 200) return;
                             onSessionClick?.(day.dateString, session.sessionIndex, session.assignmentId || day.assignmentId || '');
                           }}
                           className={cn(
@@ -473,62 +475,84 @@ export function AthleteCalendarDayCell({
             )}
           </Droppable>
         ) : (
-          /* Empty Day - Show Add Dropdown */
-          <div className="flex flex-col items-center justify-center h-[calc(100%-40px)] gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-7 w-7"
-                  title="Add to calendar"
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="center" className="z-[100] bg-background">
-                <DropdownMenuItem onClick={() => onDayClick?.(day.date)}>
-                  <CalendarPlus className="mr-2 h-4 w-4" />
-                  Assign Program
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onAddSession?.(day.date)}>
-                  <Dumbbell className="mr-2 h-4 w-4" />
-                  Add Session
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            
-            {/* Paste buttons for empty days */}
-            {copiedDay && onPasteDay && (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPasteDay(day.dateString);
-                }}
-                className="h-6 px-2 text-xs opacity-0 group-hover/day:opacity-100 transition-opacity"
+          /* Empty Day - Wrap with Droppable so sessions can be dropped here */
+          <Droppable droppableId={day.dateString} type="session">
+            {(droppableProvided, droppableSnapshot) => (
+              <div 
+                ref={droppableProvided.innerRef}
+                {...droppableProvided.droppableProps}
+                className={cn(
+                  "flex flex-col items-center justify-center h-[calc(100%-40px)] gap-2 min-h-[80px]",
+                  droppableSnapshot.isDraggingOver && "bg-primary/10 rounded-md border-2 border-dashed border-primary/40"
+                )}
               >
-                <Copy className="h-3 w-3 mr-1" />
-                Paste Day
-              </Button>
+                {droppableSnapshot.isDraggingOver ? (
+                  /* Drop hint when dragging over empty day */
+                  <div className="text-xs text-primary font-medium">
+                    Drop session here
+                  </div>
+                ) : (
+                  /* Normal empty day content */
+                  <>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7"
+                          title="Add to calendar"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="center" className="z-[100] bg-background">
+                        <DropdownMenuItem onClick={() => onDayClick?.(day.date)}>
+                          <CalendarPlus className="mr-2 h-4 w-4" />
+                          Assign Program
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onAddSession?.(day.date)}>
+                          <Dumbbell className="mr-2 h-4 w-4" />
+                          Add Session
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    
+                    {/* Paste buttons for empty days */}
+                    {copiedDay && onPasteDay && (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onPasteDay(day.dateString);
+                        }}
+                        className="h-6 px-2 text-xs opacity-0 group-hover/day:opacity-100 transition-opacity"
+                      >
+                        <Copy className="h-3 w-3 mr-1" />
+                        Paste Day
+                      </Button>
+                    )}
+                    
+                    {copiedSession && onPasteSession && !copiedDay && (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onPasteSession(day.dateString);
+                        }}
+                        className="h-6 px-2 text-xs opacity-0 group-hover/day:opacity-100 transition-opacity"
+                      >
+                        <Copy className="h-3 w-3 mr-1" />
+                        Paste Session
+                      </Button>
+                    )}
+                  </>
+                )}
+                {droppableProvided.placeholder}
+              </div>
             )}
-            
-            {copiedSession && onPasteSession && !copiedDay && (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPasteSession(day.dateString);
-                }}
-                className="h-6 px-2 text-xs opacity-0 group-hover/day:opacity-100 transition-opacity"
-              >
-                <Copy className="h-3 w-3 mr-1" />
-                Paste Session
-              </Button>
-            )}
-          </div>
+          </Droppable>
         )}
       </div>
 
