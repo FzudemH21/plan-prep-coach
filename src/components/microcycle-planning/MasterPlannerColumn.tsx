@@ -17,6 +17,8 @@ import { ToolboxDatabase } from '@/types/toolbox';
 import { SessionSection, SupersetMapping } from '@/types/microcycle-planning';
 import { getSupersetLabelFromMapping } from '@/utils/supersetUtils';
 import { getMethodSessionIndex, getModuloSessionIndex } from '@/utils/sessionIndexUtils';
+import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
+import { useToolboxData } from '@/hooks/useToolboxData';
 import {
   Table,
   TableBody,
@@ -530,6 +532,10 @@ export function MasterPlannerColumn({
     sectionId: string;
     exerciseId: string;
   } | null>(null);
+  
+  // Parameters database hook for test method dropdown
+  const { data: parametersData, addParameter } = useParametersDataV2();
+  const { data: parametersToolboxData } = useToolboxData();
   
   const toggleExerciseCollapse = (exerciseId: string) => {
     setExpandedExercises(prev => ({
@@ -1977,6 +1983,15 @@ export function MasterPlannerColumn({
           } else {
             onUpdateEventComment?.(id, comments);
           }
+        }}
+        allParameters={parametersData.parameters}
+        toolboxEntries={parametersToolboxData?.entries || []}
+        onAddParameter={(param) => {
+          addParameter({
+            name: param.name,
+            unit: param.unit,
+            category: param.category,
+          });
         }}
       />
       

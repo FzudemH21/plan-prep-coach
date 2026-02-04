@@ -20,6 +20,8 @@ import {
   HoverCardContent,
 } from '@/components/ui/hover-card';
 import { CombinedTestEventDialog } from './CombinedTestEventDialog';
+import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
+import { useToolboxData } from '@/hooks/useToolboxData';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -123,6 +125,10 @@ export function TrainingDayCell({
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
   const [combinedDialogOpen, setCombinedDialogOpen] = useState(false);
   const lastDragEndTime = useRef<number>(0);
+  
+  // Parameters database hook for test method dropdown
+  const { data: parametersData, addParameter } = useParametersDataV2();
+  const { data: toolboxData } = useToolboxData();
   const hasTraining = day.sessions.length > 0;
   const isTestDay = day.trainingDay?.isTestDay;
   const isEventDay = day.trainingDay?.isEventDay;
@@ -644,6 +650,15 @@ export function TrainingDayCell({
           } else {
             onUpdateEventComment?.(id, comments);
           }
+        }}
+        allParameters={parametersData.parameters}
+        toolboxEntries={toolboxData?.entries || []}
+        onAddParameter={(param) => {
+          addParameter({
+            name: param.name,
+            unit: param.unit,
+            category: param.category,
+          });
         }}
       />
     </>

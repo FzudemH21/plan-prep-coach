@@ -31,6 +31,8 @@ import { ToolboxDatabase } from '@/types/toolbox';
 import { cn } from '@/lib/utils';
 import { toggleSuperset, getSupersetLabelFromMapping, cleanupSupersetsOnExerciseDelete } from '@/utils/supersetUtils';
 import { getMethodSessionIndex, getModuloSessionIndex } from '@/utils/sessionIndexUtils';
+import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
+import { useToolboxData } from '@/hooks/useToolboxData';
 
 interface ExerciseDistribution {
   id?: string;
@@ -185,6 +187,10 @@ export function WorkoutSessionSheet({
   const [isTestEventDialogOpen, setIsTestEventDialogOpen] = useState(false);
   const [testsEventsExpanded, setTestsEventsExpanded] = useState(true);
   const [sectionToDelete, setSectionToDelete] = useState<string | null>(null);
+  
+  // Parameters database hook for test method dropdown
+  const { data: parametersData, addParameter } = useParametersDataV2();
+  const { data: parametersToolboxData } = useToolboxData();
   
   // Exercise detail dialog state
   const [detailExercise, setDetailExercise] = useState<WorkoutExercise | null>(null);
@@ -2681,6 +2687,15 @@ export function WorkoutSessionSheet({
           } else {
             onUpdateEventComment?.(id, comments);
           }
+        }}
+        allParameters={parametersData.parameters}
+        toolboxEntries={parametersToolboxData?.entries || []}
+        onAddParameter={(param) => {
+          addParameter({
+            name: param.name,
+            unit: param.unit,
+            category: param.category,
+          });
         }}
       />
 
