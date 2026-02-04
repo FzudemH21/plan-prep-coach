@@ -22,6 +22,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { ParameterV2 } from '@/types/parametersV2';
 import { ToolboxEntry } from '@/types/toolbox';
 import { AddParameterDialogV2 } from '@/components/goals/AddParameterDialogV2';
+import { AthletePerformanceParameter } from '@/types/athlete';
 import {
   Command,
   CommandEmpty,
@@ -51,6 +52,7 @@ interface CombinedTestEventDialogProps {
     isNew: boolean;
     comments?: string;
     goalValue?: number;
+    baselineValue?: number;
     unit?: string;
   }) => void;
   onDelete: (type: 'test' | 'event', name: string) => void;
@@ -65,6 +67,9 @@ interface CombinedTestEventDialogProps {
     interactions: { targetParameterId: string; direction: string; strength: string }[];
     methods: { methodId: string; rationale?: string }[];
   }) => void;
+  // New props for baseline auto-population
+  selectedAthleteId?: string;
+  athletePerformanceParameters?: AthletePerformanceParameter[];
 }
 
 export function CombinedTestEventDialog({
@@ -80,6 +85,8 @@ export function CombinedTestEventDialog({
   allParameters = [],
   toolboxEntries = [],
   onAddParameter,
+  selectedAthleteId,
+  athletePerformanceParameters = [],
 }: CombinedTestEventDialogProps) {
   const [type, setType] = useState<'test' | 'event'>('test');
   const [mode, setMode] = useState<'select' | 'create'>('select');
@@ -89,6 +96,7 @@ export function CombinedTestEventDialog({
   const [parameterDropdownOpen, setParameterDropdownOpen] = useState(false);
   const [addParameterDialogOpen, setAddParameterDialogOpen] = useState(false);
   const [goalValue, setGoalValue] = useState('');
+  const [baselineValue, setBaselineValue] = useState('');
   const [selectedParameterUnit, setSelectedParameterUnit] = useState('');
   
   const items = type === 'test' ? existingTests : existingEvents;
@@ -117,6 +125,24 @@ export function CombinedTestEventDialog({
     setNewName(param.name);
     setSelectedParameterUnit(param.unit || '');
     setParameterDropdownOpen(false);
+    
+    // Auto-fill baseline value from athlete's data
+    if (selectedAthleteId && athletePerformanceParameters.length > 0) {
+      const athleteParam = athletePerformanceParameters.find(
+        pp => pp.athleticismParameterId === param.id
+      );
+      if (athleteParam && athleteParam.values.length > 0) {
+        // Get latest value (sorted by recordedAt)
+        const sortedValues = [...athleteParam.values].sort(
+          (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+        );
+        setBaselineValue(sortedValues[0].value);
+      } else {
+        setBaselineValue('');
+      }
+    } else {
+      setBaselineValue('');
+    }
   };
 
   const handleAddNewParameter = (parameter: {
@@ -152,6 +178,7 @@ export function CombinedTestEventDialog({
         isNew: true,
         comments: newComments.trim() || undefined,
         goalValue: type === 'test' && goalValue ? parseFloat(goalValue) : undefined,
+        baselineValue: type === 'test' && baselineValue ? parseFloat(baselineValue) : undefined,
         unit: type === 'test' ? selectedParameterUnit || undefined : undefined,
       });
     }
@@ -161,6 +188,7 @@ export function CombinedTestEventDialog({
   const handleClose = () => {
     onOpenChange(false);
     setGoalValue('');
+    setBaselineValue('');
     setSelectedParameterUnit('');
     setSelectedId('');
     setNewName('');
@@ -511,6 +539,25 @@ export function CombinedTestEventDialog({
                 )}
               </div>
               
+              {/* Baseline Value field - only for tests */}
+              {type === 'test' && (
+                <div className="space-y-2">
+                  <Label htmlFor="baselineValue">
+                    Baseline Value
+                    {selectedParameterUnit && (
+                      <span className="text-xs text-muted-foreground ml-2">({selectedParameterUnit})</span>
+                    )}
+                  </Label>
+                  <Input
+                    id="baselineValue"
+                    type="number"
+                    placeholder={selectedAthleteId ? "Auto-filled from athlete data" : "e.g., 100"}
+                    value={baselineValue}
+                    onChange={(e) => setBaselineValue(e.target.value)}
+                  />
+                </div>
+              )}
+
               {/* Goal Value field - only for tests */}
               {type === 'test' && (
                 <div className="space-y-2">
@@ -556,8 +603,8 @@ export function CombinedTestEventDialog({
           <Button 
             onClick={handleConfirm}
             disabled={
-              (mode === 'select' && !selectedId) || 
-              (mode === 'create' && !newName.trim())
+              (mode === 'select' && hasItems && !selectedId) || 
+              ((mode === 'create' || !hasItems) && !newName.trim())
             }
           >
             Add
