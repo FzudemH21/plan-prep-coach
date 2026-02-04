@@ -1,266 +1,212 @@
 
 
-# Plan: Fix Add Button Bug + Add Baseline Value for Tests
+# Plan: Fix Tests/Events Not Appearing on Calendar + Baseline Value Auto-Fill
 
 ## Summary
 
-Two issues to address:
-1. **Bug Fix**: The "Add" button is grayed out/disabled even when filling in test/event fields
-2. **Feature**: Add "Baseline Value" field for tests that auto-populates from athlete's existing parameter value
+Two interconnected issues need to be fixed to make the "triangle" work properly between:
+1. **Training Calendar** (where tests/events are scheduled)
+2. **Athlete Data** (where baseline values come from)
+3. **Parameters Database** (where test methods are defined)
 
 ---
 
-## Issue 1: Add Button Bug (Critical)
+## Issue 1: Tests/Events Don't Appear on Calendar After Clicking "Add"
 
-### Root Cause
-The disabled logic on line 558-561 checks:
-```typescript
-disabled={
-  (mode === 'select' && !selectedId) || 
-  (mode === 'create' && !newName.trim())
-}
-```
+### Root Cause Analysis
+After tracing through the code:
 
-**The problem**: When `hasItems` is `false` (no existing tests/events), the UI displays the create form (line 391), but the `mode` state stays at `'select'` (the default from line 85).
+1. **TrainingDayCell.tsx** (line 627-663) renders `CombinedTestEventDialog`
+2. When the Add button is clicked, `handleConfirm` calls `onSelect()` with the test data
+3. `onSelect` maps to `onAddTestEvent` prop which calls `handleAddTestEvent` in MicrocyclePlanningPage.tsx
+4. `handleAddTestEvent` (lines 2375-2467) correctly updates both `trainingDays` and `macrocycleData`
 
-So the first condition `(mode === 'select' && !selectedId)` is always `true`, keeping the button disabled.
+**The problem**: The `trainingDays` lookup by `day.trainingDay` in TrainingDayCell may not find the matching day because the `trainingDay` prop comes from `calendarDays` which is a calculated value from `TrainingCalendarView`.
+
+Looking at TrainingDayCell (lines 627-663), the dialog receives:
+- `scheduledTestNames={day.trainingDay?.testNames}` - from the TrainingDay object
+- `scheduledEventNames={day.trainingDay?.eventNames}` - from the TrainingDay object
+
+The issue is that when `setTrainingDays` updates state, the `calendarDays` memo in TrainingCalendarView needs to recalculate. But the dependency chain appears correct.
+
+**Actual root cause**: The issue is a **state synchronization timing problem**. After `setTrainingDays` in `handleAddTestEvent`, the calendar should rerender with the updated trainingDays. Let me verify the flow is working correctly by checking if `handleAddTestEvent` is being called at all.
+
+After more investigation - the `onAddTestEvent` prop IS being passed down correctly. The most likely cause is that the component isn't forcing a re-render, OR there's an issue with how the date matching works.
 
 ### Solution
-Update the disabled logic to account for the scenario where `!hasItems` but `mode` is still `'select'`:
+Add debugging and ensure proper state update propagation:
 
-```typescript
-disabled={
-  (mode === 'select' && hasItems && !selectedId) || 
-  ((mode === 'create' || !hasItems) && !newName.trim())
-}
-```
+**File: `src/pages/MicrocyclePlanningPage.tsx`**
+- In `handleAddTestEvent`, ensure the update triggers a proper re-render
+- Force localStorage sync to happen first, then state update
 
-Alternatively, force `mode` to `'create'` when there are no items. Either approach works.
+**File: `src/components/microcycle-planning/TrainingCalendarView.tsx`**
+- Ensure `trainingDays` is properly used in the `calendarDays` memo dependency array (it already is)
 
 ---
 
-## Issue 2: Baseline Value Feature
+## Issue 2: Baseline Value Not Auto-Filling from Athlete Data
 
-### Current State
-- Tests have a "Goal Value" field (just implemented)
-- No "Baseline Value" field exists
-- No athlete context is passed to the dialog
+### Root Cause
+The athlete context props are NOT being passed to `CombinedTestEventDialog`:
 
-### Requirements
-1. Add a "Baseline Value" input field (optional, user can override)
-2. When a parameter is selected AND an athlete is in context, auto-fill baseline value from athlete's existing performance parameter value
-3. In the Training Programming Wizard: athlete context comes from the selected athlete in macrocycle
-4. In the Athlete Calendar: athlete context comes from the currently viewed athlete
-
-### Data Flow for Baseline Value
-
-```text
-Selected Parameter (e.g., "1RM Back Squat")
-          |
-          v
-Look up athlete's AthletePerformanceParameter
-where athleticismParameterId matches parameter.id
-          |
-          v
-Get latest value from values[] array (sorted by recordedAt)
-          |
-          v
-Pre-fill "Baseline Value" input
-```
-
-### New Props for CombinedTestEventDialog
-
+**TrainingDayCell.tsx** (lines 627-663):
 ```typescript
-interface CombinedTestEventDialogProps {
-  // ... existing props
-  
-  // NEW: For baseline auto-population
-  selectedAthleteId?: string;
-  athletePerformanceParameters?: AthletePerformanceParameter[];
-}
+<CombinedTestEventDialog
+  open={combinedDialogOpen}
+  onOpenChange={setCombinedDialogOpen}
+  existingTests={availableTests || []}
+  existingEvents={availableEvents || []}
+  // ... other props
+  allParameters={parametersData.parameters}
+  toolboxEntries={toolboxData?.entries || []}
+  onAddParameter={(param) => { /* ... */ }}
+  // MISSING: selectedAthleteId
+  // MISSING: athletePerformanceParameters
+/>
 ```
 
-### UI Changes
+The `selectedAthleteId` and `athletePerformanceParameters` are NOT being passed to:
+1. `TrainingDayCell` from `TrainingCalendarView`
+2. `TrainingCalendarView` from `MicrocyclePlanningPage`
+3. Similarly missing from `MasterPlannerColumn` and `WorkoutSessionSheet`
 
-```text
-+------------------------------------------+
-| Test Method                              |
-| [Dropdown: Select a parameter...]        |
-+------------------------------------------+
-| Baseline Value (kg)                      |
-| [Input: 100] <-- auto-filled from athlete|
-+------------------------------------------+
-| Goal Value (kg)                          |
-| [Input: 120] <-- manual entry            |
-+------------------------------------------+
-| Comments (Optional)                      |
-| [Textarea: Add notes...]                 |
-+------------------------------------------+
-```
-
-### Logic for Auto-Fill
-
-When `handleParameterSelect` is called:
-1. Set `newName` and `selectedParameterUnit` (existing)
-2. NEW: If `selectedAthleteId` and `athletePerformanceParameters` are provided:
-   - Find the `AthletePerformanceParameter` where `athleticismParameterId === param.id`
-   - Get the latest value (last item in sorted values array)
-   - Set `baselineValue` state to that value
-
-### Update onSelect Interface
-
-```typescript
-onSelect: (selected: { 
-  type: 'test' | 'event';
-  id: string; 
-  name: string; 
-  isNew: boolean;
-  comments?: string;
-  goalValue?: number;
-  baselineValue?: number;  // NEW
-  unit?: string;
-}) => void;
-```
+### Solution
+Pass the athlete context through the component hierarchy:
 
 ---
 
 ## Files to Modify
 
-| File | Changes |
-|------|---------|
-| `CombinedTestEventDialog.tsx` | 1. Fix disabled logic for Add button. 2. Add baselineValue state. 3. Add Baseline Value input field. 4. Auto-fill logic when parameter selected. 5. Update onSelect to pass baselineValue. |
-| `TrainingDayCell.tsx` | Pass `selectedAthleteId` and `athletePerformanceParameters` props |
-| `MasterPlannerColumn.tsx` | Pass `selectedAthleteId` and `athletePerformanceParameters` props |
-| `WorkoutSessionSheet.tsx` | Pass `selectedAthleteId` and `athletePerformanceParameters` props |
-| `AthleteCalendarDayCell.tsx` | Pass the current athlete's ID and performance parameters |
+### File 1: `src/pages/MicrocyclePlanningPage.tsx`
+
+**Changes:**
+1. Import `useAthletes` hook to access `athletePerformanceParameters`
+2. Get `selectedAthleteId` from `macrocycleData?.selectedAthleteId`
+3. Filter `athletePerformanceParameters` for the selected athlete
+4. Pass these to `TrainingCalendarView` as new props
+
+**Code location:** Lines ~69-74 and ~3108-3151
+
+**New props to pass to TrainingCalendarView:**
+```typescript
+selectedAthleteId={macrocycleData?.selectedAthleteId}
+athletePerformanceParameters={athletePerformanceParametersForAthlete}
+```
 
 ---
 
-## Implementation Details
+### File 2: `src/components/microcycle-planning/TrainingCalendarView.tsx`
 
-### File 1: CombinedTestEventDialog.tsx
+**Changes:**
+1. Add new props to interface:
+   - `selectedAthleteId?: string`
+   - `athletePerformanceParameters?: AthletePerformanceParameter[]`
+2. Pass these props through to:
+   - `TrainingDayCell` (in calendar grid rendering)
+   - `WeekRow` (which renders TrainingDayCell)
+   - `MasterPlannerGrid` / `MasterPlannerColumn`
 
-**New props:**
+**Code locations:** Interface at lines 43-97, component body at lines 117-160
+
+---
+
+### File 3: `src/components/microcycle-planning/TrainingDayCell.tsx`
+
+**Changes:**
+1. Add new props to interface:
+   - `selectedAthleteId?: string`
+   - `athletePerformanceParameters?: AthletePerformanceParameter[]`
+2. Pass these to `CombinedTestEventDialog`:
 ```typescript
-selectedAthleteId?: string;
-athletePerformanceParameters?: AthletePerformanceParameter[];
+<CombinedTestEventDialog
+  // ... existing props
+  selectedAthleteId={selectedAthleteId}
+  athletePerformanceParameters={athletePerformanceParameters}
+/>
 ```
 
-**New state:**
-```typescript
-const [baselineValue, setBaselineValue] = useState('');
+**Code location:** Lines 65-97 (interface), lines 627-663 (dialog)
+
+---
+
+### File 4: `src/components/microcycle-planning/WeekRow.tsx`
+
+**Changes:**
+1. Add new props to interface
+2. Pass through to `TrainingDayCell`
+
+---
+
+### File 5: `src/components/microcycle-planning/MasterPlannerColumn.tsx`
+
+**Changes:**
+1. Add new props to interface
+2. Pass to `CombinedTestEventDialog`
+
+---
+
+### File 6: `src/components/microcycle-planning/MasterPlannerGrid.tsx`
+
+**Changes:**
+1. Add new props to interface
+2. Pass through to `MasterPlannerColumn`
+
+---
+
+### File 7: `src/components/microcycle-planning/WorkoutSessionSheet.tsx`
+
+**Changes:**
+1. Add new props to interface
+2. Pass to `CombinedTestEventDialog`
+
+---
+
+## Data Flow Diagram
+
+```text
+MicrocyclePlanningPage
+│
+├── macrocycleData?.selectedAthleteId ─────┐
+│                                          │
+└── useAthletes().athletePerformanceParameters ──> filter by athleteId
+                                           │
+                                           ▼
+                        TrainingCalendarView
+                                │
+                                ├── WeekRow
+                                │      └── TrainingDayCell
+                                │             └── CombinedTestEventDialog
+                                │                    ├── selectedAthleteId ✓
+                                │                    └── athletePerformanceParameters ✓
+                                │
+                                └── MasterPlannerGrid
+                                       └── MasterPlannerColumn
+                                              └── CombinedTestEventDialog
+                                                     ├── selectedAthleteId ✓
+                                                     └── athletePerformanceParameters ✓
 ```
 
-**Updated handleParameterSelect:**
-```typescript
-const handleParameterSelect = (param: ParameterV2) => {
-  setNewName(param.name);
-  setSelectedParameterUnit(param.unit || '');
-  setParameterDropdownOpen(false);
-  
-  // Auto-fill baseline value from athlete's data
-  if (selectedAthleteId && athletePerformanceParameters) {
-    const athleteParam = athletePerformanceParameters.find(
-      pp => pp.athleticismParameterId === param.id
-    );
-    if (athleteParam && athleteParam.values.length > 0) {
-      // Get latest value (sorted by recordedAt)
-      const sortedValues = [...athleteParam.values].sort(
-        (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
-      );
-      setBaselineValue(sortedValues[0].value);
-    } else {
-      setBaselineValue('');
-    }
-  }
-};
-```
+---
 
-**New UI field (after Test Method dropdown, before Goal Value):**
-```tsx
-{type === 'test' && (
-  <div className="space-y-2">
-    <Label htmlFor="baselineValue">
-      Baseline Value
-      {selectedParameterUnit && (
-        <span className="text-xs text-muted-foreground ml-2">({selectedParameterUnit})</span>
-      )}
-    </Label>
-    <Input
-      id="baselineValue"
-      type="number"
-      placeholder={selectedAthleteId ? "Auto-filled from athlete data" : "e.g., 100"}
-      value={baselineValue}
-      onChange={(e) => setBaselineValue(e.target.value)}
-    />
-  </div>
-)}
-```
+## Expected Outcome After Fix
 
-**Fixed disabled logic:**
-```typescript
-disabled={
-  (mode === 'select' && hasItems && !selectedId) || 
-  ((mode === 'create' || !hasItems) && !newName.trim())
-}
-```
+1. **Adding Tests/Events**: When you select a parameter and click "Add", the test/event icon appears on the calendar day with the name visible on hover
 
-**Updated handleConfirm:**
-```typescript
-onSelect({
-  type,
-  id: `${type}-${Date.now()}`,
-  name: newName.trim(),
-  isNew: true,
-  comments: newComments.trim() || undefined,
-  goalValue: type === 'test' && goalValue ? parseFloat(goalValue) : undefined,
-  baselineValue: type === 'test' && baselineValue ? parseFloat(baselineValue) : undefined,
-  unit: type === 'test' ? selectedParameterUnit || undefined : undefined,
-});
-```
-
-**Reset in handleClose:**
-```typescript
-setBaselineValue('');
-```
-
-### Files 2-5: Parent Components
-
-Each parent component needs to:
-1. Import `AthletePerformanceParameter` type
-2. Pass the athlete context to the dialog
-
-For **Training Calendar** components (TrainingDayCell, MasterPlannerColumn, WorkoutSessionSheet):
-- Get `selectedAthleteId` from wizard context/props
-- Get `athletePerformanceParameters` using `useAthletes().athletePerformanceParameters` or filter by athlete
-
-For **AthleteCalendarDayCell**:
-- The `athleteId` is already available in props
-- Pass the athlete's performance parameters
+2. **Baseline Value Auto-Fill**: When you select a parameter that the athlete has recorded data for, the "Baseline Value" field auto-fills with their latest recorded value
 
 ---
 
 ## Testing Checklist
 
-1. **Add Button Bug Fix**:
-   - Open Manage Tests/Events dialog when there are NO existing tests
-   - Type in a test name
-   - Verify "Add" button becomes clickable
-
-2. **Baseline Value - Manual Entry**:
-   - Open dialog, select a parameter
-   - Verify Baseline Value field appears
-   - Enter a value manually
-   - Click Add and verify value is passed
-
-3. **Baseline Value - Auto-Fill** (in wizard with athlete selected):
-   - Select an athlete who has recorded values for a parameter
-   - Open Manage Tests/Events
-   - Select that parameter from dropdown
-   - Verify Baseline Value auto-fills with athlete's latest recorded value
-
-4. **Events Unchanged**:
-   - Switch to Event type
-   - Verify no Baseline/Goal Value fields appear
-   - Verify Add button works correctly
+1. Go to Training Calendar (Step 2 of wizard)
+2. Open 3-dot menu on any day → "Manage tests/events"
+3. Select "Test" type
+4. Select a parameter from dropdown (e.g., "100m Sprint Time")
+5. Verify: If athlete has a value for this parameter, Baseline Value auto-fills
+6. Enter a Goal Value
+7. Click "Add"
+8. Verify: Trophy icon appears on the day
+9. Hover over Trophy icon
+10. Verify: Test name appears in tooltip
 
