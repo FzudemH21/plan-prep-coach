@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -101,6 +101,16 @@ export function CombinedTestEventDialog({
   
   const items = type === 'test' ? existingTests : existingEvents;
   const hasItems = items.length > 0;
+  
+  // Derived boolean: treat "no existing items" as create context
+  const isCreateContext = mode === 'create' || !hasItems;
+
+  // Auto-set mode to 'create' when dialog opens with no items
+  useEffect(() => {
+    if (open && !hasItems) {
+      setMode('create');
+    }
+  }, [open, hasItems]);
 
   // Group parameters by category for the dropdown
   const parametersByCategory = useMemo(() => {
@@ -159,7 +169,8 @@ export function CombinedTestEventDialog({
   };
 
   const handleConfirm = () => {
-    if (mode === 'select' && selectedId) {
+    if (!isCreateContext && selectedId) {
+      // Select existing item mode
       const item = items.find(i => i.id === selectedId);
       if (item) {
         onSelect({
@@ -170,7 +181,8 @@ export function CombinedTestEventDialog({
           comments: (item as any).comments
         });
       }
-    } else if (mode === 'create' && newName.trim()) {
+    } else if (isCreateContext && newName.trim()) {
+      // Create new item mode (or no existing items)
       onSelect({
         type,
         id: `${type}-${Date.now()}`,
@@ -603,8 +615,8 @@ export function CombinedTestEventDialog({
           <Button 
             onClick={handleConfirm}
             disabled={
-              (mode === 'select' && hasItems && !selectedId) || 
-              ((mode === 'create' || !hasItems) && !newName.trim())
+              (!isCreateContext && !selectedId) || 
+              (isCreateContext && !newName.trim())
             }
           >
             Add
