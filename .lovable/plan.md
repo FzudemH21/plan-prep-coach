@@ -1,127 +1,69 @@
 
-# Plan: Implement Test/Event Functionality in Athlete Calendar
+# Plan: Fix Master Planner Test/Event Functionality and Synchronization
 
 ## Summary
 
-Port the working test/event functionality from the Programming Wizard to the Athlete Calendar, including:
-1. Fix the bug where adding tests/events doesn't work when the day entry doesn't exist
-2. Enable baseline value auto-fill from the athlete's performance parameters
-3. Pass athlete context through the component hierarchy
+The Master Planner view in both the **Athlete Calendar** and the **Training Programming Wizard** needs to have test/event functionality working identically to the Calendar View. This includes:
+- Baseline value auto-fill from athlete performance parameters
+- Adding tests/events and displaying icons
+- Perfect synchronization between Master Planner and Calendar View
 
 ---
 
-## Issue Analysis
+## Root Cause Analysis
 
-### Issue 1: Tests/Events Not Appearing
-The `handleAddTestEvent` function in `useAthleteCalendarEditing.ts` has the **same bug** we just fixed in the Programming Wizard:
+### Issue 1: Athlete Calendar Master Planner Missing Props
 
-```typescript
-// Current code (line 1225-1242)
-setTrainingDays(prev =>
-  prev.map(day => {
-    if (day.date !== dayDate) return day;  // Only updates EXISTING days
-    // ...
-  })
-);
-```
+The `MasterPlannerGrid` component in `AthleteCalendarView.tsx` (lines 910-951) is **missing critical props**:
 
-If the day doesn't exist in `trainingDays`, the `.map()` returns the same array unchanged.
+**Missing props:**
+- `onAddTestEvent` - handler for adding tests/events
+- `onDeleteTestEvent` - handler for deleting tests/events  
+- `onUpdateTestComment` - handler for updating test comments
+- `onUpdateEventComment` - handler for updating event comments
+- `availableTests` - list of available tests from program
+- `availableEvents` - list of available events from program
+- `selectedAthleteId` - athlete ID for baseline auto-fill
+- `athletePerformanceParameters` - athlete's performance data for auto-fill
 
-### Issue 2: Missing Athlete Context for Baseline Auto-Fill
-The `CombinedTestEventDialog` in `AthleteCalendarDayCell.tsx` (lines 567-585) is **not receiving** the athlete context props:
+Compare with the Calendar View (lines 1007-1010) where athlete props ARE passed to `AthleteCalendarWeekRow`.
 
-```typescript
-<CombinedTestEventDialog
-  open={testEventDialogOpen}
-  // ... existing props
-  // MISSING: selectedAthleteId
-  // MISSING: athletePerformanceParameters
-/>
-```
+### Issue 2: Programming Wizard Already Has Props
 
-Since we're in the Athlete Calendar, we already have the athlete - we just need to pass it down!
+The Programming Wizard's `TrainingCalendarView` already correctly passes all props including `selectedAthleteId` and `athletePerformanceParameters` to both `MasterPlannerGrid` (lines 1066-1067) and `WeekRow` (lines 1128-1129).
+
+The `MasterPlannerColumn` already passes these to `CombinedTestEventDialog` (lines 2002-2003).
+
+**So why isn't baseline fill working?**
+
+The `selectedAthleteId` comes from `macrocycleData?.selectedAthleteId` - this requires an athlete to be selected during program creation. If no athlete was selected, this will be `undefined` and baseline auto-fill won't work.
 
 ---
 
-## Files to Modify
+## Implementation Plan
 
-### File 1: `src/hooks/useAthleteCalendarEditing.ts`
+### File 1: `src/components/athletes/AthleteCalendarView.tsx`
 
-**Location:** Lines 1217-1244
+**Location:** Lines 910-951 (MasterPlannerGrid component)
 
-**Change:** Update `handleAddTestEvent` to create a new day entry when one doesn't exist (same pattern as the fix in `MicrocyclePlanningPage.tsx`)
+**Add the missing props to MasterPlannerGrid:**
 
-**Updated logic:**
 ```typescript
-const handleAddTestEvent = useCallback((
-  dayDate: string,
-  type: 'test' | 'event',
-  id: string,
-  name: string,
-  isNew: boolean,
-  comments?: string
-) => {
-  setTrainingDays(prev => {
-    const existingDayIndex = prev.findIndex(td => td.date === dayDate);
-    
-    if (existingDayIndex >= 0) {
-      // Day exists - update it
-      return prev.map(day => {
-        if (day.date !== dayDate) return day;
-        if (type === 'test') {
-          const testNames = [...(day.testNames || [])];
-          if (!testNames.includes(name)) testNames.push(name);
-          return { ...day, testNames, isTestDay: true };
-        } else {
-          const eventNames = [...(day.eventNames || [])];
-          if (!eventNames.includes(name)) eventNames.push(name);
-          return { ...day, eventNames, isEventDay: true };
-        }
-      });
-    } else {
-      // Day doesn't exist - create new TrainingDay
-      const parsedDate = new Date(dayDate);
-      const dayOfWeek = parsedDate.getDay();
-      const dayName = parsedDate.toLocaleDateString('en-US', { weekday: 'long' });
-      
-      const newDay: TrainingDay = {
-        date: dayDate,
-        dayOfWeek,
-        dayName,
-        mesocycleId: selectedAssignment?.assignedMesocycles[0]?.id || '',
-        microcycleId: '',
-        isTestDay: type === 'test',
-        isEventDay: type === 'event',
-        isTrainingDay: true,
-        testNames: type === 'test' ? [name] : undefined,
-        eventNames: type === 'event' ? [name] : undefined,
-        intensity: 'moderate',
-        sessions: 0,
-        sessionNames: [],
-      };
-      
-      return [...prev, newDay];
-    }
-  });
-  toast({ title: `${type === 'test' ? 'Test' : 'Event'} added`, description: name });
-}, [toast, selectedAssignment]);
-```
-
----
-
-### File 2: `src/components/athletes/AthleteCalendarView.tsx`
-
-**Changes:**
-1. Get athlete performance parameters using `useAthletes` hook
-2. Pass `athleteId` and `athletePerformanceParameters` to `AthleteCalendarWeekRow`
-
-**Location:** Around lines 972-1006 (where AthleteCalendarWeekRow is rendered)
-
-**New props to add:**
-```typescript
-<AthleteCalendarWeekRow
-  // ... existing props
-  athleteId={athlete.id}
+<MasterPlannerGrid
+  // ... existing props ...
+  onCopyDay={editing.handleCopyDay}
+  onClearDay={editing.handleClearDay}
+  onPasteDay={editing.handlePasteDay}
+  copiedDay={editing.copiedDay}
+  onAddSession={editing.handleAddSession}
+  allExerciseDistribution={editing.exerciseDistribution}
+  onExerciseChange={editing.handleExerciseChange}
+  // ADD THESE MISSING PROPS:
+  onAddTestEvent={editing.handleAddTestEvent}
+  onDeleteTestEvent={editing.handleDeleteTestEvent}
+  availableTests={[]}  // No program-level tests in athlete context
+  availableEvents={[]} // No program-level events in athlete context
+  selectedAthleteId={athlete.id}
   athletePerformanceParameters={athleteData.athletePerformanceParameters.filter(
     p => p.athleteId === athlete.id
   )}
@@ -130,90 +72,70 @@ const handleAddTestEvent = useCallback((
 
 ---
 
-### File 3: `src/components/athletes/AthleteCalendarWeekRow.tsx`
+## Technical Details
 
-**Changes:**
-1. Add new props to interface:
-   - `athleteId?: string`
-   - `athletePerformanceParameters?: AthletePerformanceParameter[]`
-2. Pass these through to `AthleteCalendarDayCell`
+### Why No `availableTests`/`availableEvents`?
 
-**Location:** Lines 31-64 (interface), lines 154-177 (rendering)
+In the Athlete Calendar context:
+- Tests and events are created ad-hoc per assignment, not from a program template
+- The `CombinedTestEventDialog` handles creating new tests/events via the parameter dropdown
+- Passing empty arrays is correct - the dialog will show the "Create" mode
 
----
+### Why the Fix Will Work
 
-### File 4: `src/components/athletes/AthleteCalendarDayCell.tsx`
+1. **Athlete Calendar Master Planner:**
+   - Adding `selectedAthleteId={athlete.id}` enables baseline auto-fill
+   - Adding `athletePerformanceParameters` provides the athlete's historical data
+   - Adding `onAddTestEvent={editing.handleAddTestEvent}` connects the dialog to the state update
+   - The `handleAddTestEvent` in `useAthleteCalendarEditing.ts` already correctly creates new `TrainingDay` entries
 
-**Changes:**
-1. Add new props to interface:
-   - `athleteId?: string`
-   - `athletePerformanceParameters?: AthletePerformanceParameter[]`
-2. Pass these to `CombinedTestEventDialog`:
-   ```typescript
-   <CombinedTestEventDialog
-     // ... existing props
-     selectedAthleteId={athleteId}
-     athletePerformanceParameters={athletePerformanceParameters}
-   />
-   ```
+2. **Programming Wizard:**
+   - Already has all props correctly wired
+   - If baseline fill isn't working, it means no athlete was selected for the program
+   - This is expected behavior - baseline fill only works when an athlete is associated
 
-**Location:** Lines 60-87 (interface), lines 567-585 (dialog)
+### Synchronization Guarantee
 
----
+Both views share the same data sources:
+- **Programming Wizard:** Both Master Planner and Calendar View use the same `trainingDays` state from `MicrocyclePlanningPage.tsx`
+- **Athlete Calendar:** Both Master Planner and Calendar View use the same `trainingDays` state from `useAthleteCalendarEditing` hook
 
-## Data Flow Diagram
-
-```text
-AthleteCalendarView
-│
-├── athlete.id (from props) ────────────────────┐
-│                                               │
-└── athleteData.athletePerformanceParameters ───┼──> filter by athlete.id
-                                                │
-                                                ▼
-                          AthleteCalendarWeekRow
-                                    │
-                                    └── AthleteCalendarDayCell
-                                           │
-                                           └── CombinedTestEventDialog
-                                                  ├── selectedAthleteId ✓
-                                                  └── athletePerformanceParameters ✓
-```
+When you add a test/event in either view, the state update triggers a re-render of both views, keeping them synchronized.
 
 ---
 
-## Technical Notes
+## Files Modified
 
-- The Athlete Calendar already has access to `athlete.id` through props
-- The `useAthletes()` hook provides `athletePerformanceParameters` which we filter for the current athlete
-- The `CombinedTestEventDialog` already has the baseline auto-fill logic (we just fixed/verified this for the Programming Wizard)
-- The `isCreateContext` fix we just made to the dialog will work here too
-
----
-
-## Expected Outcome
-
-1. **Adding Tests/Events**: When you select a parameter and click "Add" in the Athlete Calendar, the test/event icon appears on the calendar day
-
-2. **Baseline Value Auto-Fill**: When you select a parameter that the athlete has recorded data for, the "Baseline Value" field auto-fills with their latest recorded value
-
-3. **Icon Visibility**: Trophy icon for tests, Calendar icon for events appear on the day cells
-
-4. **Tooltip on Hover**: Hovering over icons shows the test/event names
+| File | Changes |
+|------|---------|
+| `src/components/athletes/AthleteCalendarView.tsx` | Add missing test/event and athlete props to `MasterPlannerGrid` |
 
 ---
 
 ## Testing Checklist
 
-1. Navigate to Athlete Database
-2. Select an athlete
-3. Go to "Athlete Calendar" tab
-4. Click 3-dot menu on any day -> "Manage tests/events"
-5. Select a parameter (test) the athlete has baseline data for
-6. Verify: Baseline Value auto-fills from athlete's performance parameters
-7. Enter a Goal Value
-8. Click "Add"
-9. Verify: Toast shows "Test added"
-10. Verify: Trophy icon appears on the day
-11. Hover over Trophy icon
-12. Verify: Test name appears in tooltip
+### Athlete Calendar Master Planner:
+1. Navigate to Athlete Database → Select an athlete → Athlete Calendar
+2. Switch to Master Planner view (toggle button)
+3. Click 3-dot menu on any day header → "Manage tests/events"
+4. Verify: Parameter dropdown is populated
+5. Select a parameter the athlete has data for
+6. Verify: Baseline Value auto-fills from athlete's recorded data
+7. Enter a Goal Value and click "Add"
+8. Verify: Toast shows "Test added"
+9. Verify: Trophy icon appears on the day
+10. Switch to Calendar View → Verify icon is also visible there
+
+### Programming Wizard Master Planner:
+1. Navigate to Microcycle Planning → Step 2 → Master Planner view
+2. Click 3-dot menu on any day header → "Manage tests/events"
+3. Select a parameter and add a test
+4. Verify: Trophy icon appears on the day
+5. Switch to Calendar View → Verify icon is also visible there
+6. (Note: Baseline fill only works if athlete was selected during program creation)
+
+### Synchronization Test:
+1. In Calendar View, add a test to Day X
+2. Switch to Master Planner → Verify test icon appears on Day X
+3. In Master Planner, add an event to Day Y
+4. Switch to Calendar View → Verify event icon appears on Day Y
