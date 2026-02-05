@@ -1,166 +1,68 @@
 
+## Goal (confirming scope)
+Yes — this is about the **Programming Wizard → Microcycle Planning → Step 2 “Training Calendar”** (route `/microcycle`), not the Athlete Calendar.
 
-# Plan: Fix Tests/Events Not Appearing on Calendar
+## What’s actually still broken (root cause)
+Even though the “Add” button is now clickable, in the **“no existing tests/events yet”** case the dialog still has an internal state mismatch:
 
-## Summary
+- When there are **no existing items** (`hasItems === false`), the UI correctly shows the **Create** form.
+- But the dialog’s internal state still defaults to `mode === 'select'`.
+- When you click **Add**, `handleConfirm()` currently only creates something if `mode === 'create'`.
+- Result: the dialog closes, but **never calls `onSelect()`**, so:
+  - `onAddTestEvent()` never runs
+  - `handleAddTestEvent()` never updates `trainingDays`
+  - therefore **no icon can appear** (because the calendar cell only renders icons when `trainingDay.testNames/eventNames` exist)
 
-The test/event icons are not appearing because the `handleAddTestEvent` function uses `.map()` which only updates existing entries. If the training day doesn't exist in the `trainingDays` array, no update occurs.
+This matches your symptom precisely: “Add is clickable, but nothing happens.”
 
----
+## Fix (once and for all)
+Make the dialog treat **“no existing items”** as **Create mode**, not just for the disabled state (we already adjusted disabled), but also for the **confirm action**.
 
-## Root Cause
+### File to change
+- `src/components/microcycle-planning/CombinedTestEventDialog.tsx`
 
-In `handleAddTestEvent` (MicrocyclePlanningPage.tsx lines 2391-2414):
+### Implementation steps
+1. **Introduce a single source of truth** for confirm logic:
+   - Add a derived boolean:
+     - `const isCreateContext = mode === 'create' || !hasItems;`
 
-```typescript
-setTrainingDays(prev => {
-  const updated = prev.map(td => {
-    if (td.date === dayDate) {
-      // update logic
-    }
-    return td;
-  });
-  // ...
-});
-```
+2. **Update `handleConfirm()`** to use the derived boolean:
+   - If `isCreateContext`:
+     - require `newName.trim()`
+     - call `onSelect({ ... isNew: true, goalValue, baselineValue, unit, comments })`
+   - Else (true select mode):
+     - require `selectedId`
+     - call `onSelect({ ... isNew: false })`
+   - Then close/reset as it already does.
 
-The `.map()` function iterates through existing entries. If no entry with matching `date === dayDate` exists, no changes are made and the returned array is identical to the input.
+3. **(Optional but recommended) Auto-set the mode when dialog opens**
+   - Add an effect:
+     - When `open === true` and `!hasItems`, set `mode` to `'create'`
+   - This prevents future confusion and keeps the UI state consistent with what’s shown.
 
----
+4. **Keep the existing disabled logic**, but refactor it to reuse `isCreateContext` (prevents future regressions):
+   - `disabled={(!isCreateContext && hasItems && !selectedId) || (isCreateContext && !newName.trim())}`
 
-## Solution
+## Why this will make the icon appear
+Once `onSelect()` fires correctly:
+- `TrainingDayCell.tsx` calls `onAddTestEvent(...)`
+- `MicrocyclePlanningPage.tsx → handleAddTestEvent(...)` updates/creates the `TrainingDay` entry (your latest diff already handles the “day doesn’t exist” case)
+- `TrainingCalendarView.tsx` recomputes `calendarDays` and sets `trainingDay` for that date
+- `TrainingDayCell.tsx` sees `day.trainingDay.testNames/eventNames` and renders:
+  - Trophy badge for tests
+  - Calendar badge for events
+  - HoverCard tooltip containing the scheduled names
 
-Modify `handleAddTestEvent` to:
-1. Check if the day already exists in `trainingDays`
-2. If it exists, update it (current behavior)
-3. If it doesn't exist, create a new TrainingDay entry with proper data
+## Verification checklist (end-to-end)
+In `/microcycle` Step 2:
+1. Pick a day → 3-dot menu → “Manage tests/events”
+2. Select a parameter (test) or type an event name
+3. Click **Add**
+4. Confirm you now see at least one of:
+   - Toast: “Test added” / “Event added”
+   - Trophy/Calendar icon on that day cell
+5. Hover the icon and confirm the tooltip lists the scheduled test/event name
 
----
-
-## Implementation
-
-### File: `src/pages/MicrocyclePlanningPage.tsx`
-
-**Location:** Lines 2390-2414
-
-**Current code:**
-```typescript
-setTrainingDays(prev => {
-  const updated = prev.map(td => {
-    if (td.date === dayDate) {
-      // update logic
-    }
-    return td;
-  });
-  localStorage.setItem('trainingDays', JSON.stringify(updated));
-  return updated;
-});
-```
-
-**Updated code:**
-```typescript
-setTrainingDays(prev => {
-  const existingDayIndex = prev.findIndex(td => td.date === dayDate);
-  
-  let updated: TrainingDay[];
-  
-  if (existingDayIndex >= 0) {
-    // Day exists - update it
-    updated = prev.map(td => {
-      if (td.date === dayDate) {
-        if (type === 'test') {
-          const existingTests = td.testNames || [];
-          return {
-            ...td,
-            isTestDay: true,
-            testNames: [...existingTests, testEventName]
-          };
-        } else {
-          const existingEvents = td.eventNames || [];
-          return {
-            ...td,
-            isEventDay: true,
-            eventNames: [...existingEvents, testEventName]
-          };
-        }
-      }
-      return td;
-    });
-  } else {
-    // Day doesn't exist - create new TrainingDay
-    const dateObj = parseISO(dayDate);
-    const dayOfWeek = dateObj.getDay();
-    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    
-    // Find which microcycle this date belongs to
-    let targetMicrocycleId = '';
-    if (currentMesocycle) {
-      for (const micro of currentMesocycle.microcycles) {
-        // Find microcycle by checking if date falls within its range
-        // For simplicity, use the current mesocycle ID as fallback
-        targetMicrocycleId = micro.id;
-        break;
-      }
-    }
-    
-    const newDay: TrainingDay = {
-      date: dayDate,
-      dayOfWeek,
-      dayName: dayNames[dayOfWeek],
-      mesocycleId: currentMesocycle?.id || '',
-      microcycleId: targetMicrocycleId,
-      isTestDay: type === 'test',
-      isEventDay: type === 'event',
-      isTrainingDay: true,
-      testNames: type === 'test' ? [testEventName] : undefined,
-      eventNames: type === 'event' ? [testEventName] : undefined,
-      intensity: 'moderate',
-      sessions: 1,
-      sessionNames: ['Session 1']
-    };
-    
-    updated = [...prev, newDay];
-  }
-  
-  localStorage.setItem('trainingDays', JSON.stringify(updated));
-  return updated;
-});
-```
-
----
-
-## Technical Details
-
-The fix ensures that:
-
-1. **Existing days are updated**: When a matching day is found, the existing update logic applies
-2. **Missing days are created**: When no matching day exists, a new TrainingDay is created with:
-   - Proper date and dayOfWeek calculated from the ISO date string
-   - mesocycleId from the current mesocycle context
-   - microcycleId from the first microcycle (can be refined if needed)
-   - Default values for intensity, sessions, and sessionNames
-   - The test/event name properly set in testNames or eventNames array
-
----
-
-## Testing Checklist
-
-1. Navigate to Training Calendar (Step 2)
-2. Open 3-dot menu on any day → "Manage tests/events"
-3. Select "Test" type
-4. Select a parameter from dropdown
-5. Enter a Goal Value
-6. Click "Add"
-7. Verify: Toast shows "Test added"
-8. Verify: Trophy icon appears on the calendar day
-9. Hover over Trophy icon
-10. Verify: Test name appears in tooltip/popover
-
----
-
-## Files Modified
-
-| File | Changes |
-|------|---------|
-| `src/pages/MicrocyclePlanningPage.tsx` | Update `handleAddTestEvent` to create new TrainingDay entries when day doesn't exist |
-
+## Notes / edge cases covered
+- Works whether you have **0 existing tests/events** or many.
+- Fix applies everywhere this dialog is used (Training Calendar day cell, Master Planner column, Workout Session Sheet).
