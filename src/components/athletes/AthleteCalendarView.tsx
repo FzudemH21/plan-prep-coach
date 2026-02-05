@@ -948,6 +948,14 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 onAddSession={editing.handleAddSession}
                 allExerciseDistribution={editing.exerciseDistribution}
                 onExerciseChange={editing.handleExerciseChange}
+                onAddTestEvent={editing.handleAddTestEvent}
+                onDeleteTestEvent={editing.handleDeleteTestEvent}
+                availableTests={[]}
+                availableEvents={[]}
+                selectedAthleteId={athlete.id}
+                athletePerformanceParameters={athleteData.athletePerformanceParameters.filter(
+                  p => p.athleteId === athlete.id
+                )}
               />
             )
           ) : (
