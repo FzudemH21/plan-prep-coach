@@ -1003,6 +1003,11 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                       onIntensityChange={editing.handleDayIntensityChange}
                       // Ref-based drag end timestamp for click suppression
                       lastDragEndRef={lastDragEndRef}
+                      // Athlete context for baseline auto-fill
+                      athleteId={athlete.id}
+                      athletePerformanceParameters={athleteData.athletePerformanceParameters.filter(
+                        p => p.athleteId === athlete.id
+                      )}
                     />
                   ))}
                 </div>

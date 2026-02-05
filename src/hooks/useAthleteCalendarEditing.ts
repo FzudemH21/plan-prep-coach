@@ -1222,26 +1222,54 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     isNew: boolean,
     comments?: string
   ) => {
-    setTrainingDays(prev =>
-      prev.map(day => {
-        if (day.date !== dayDate) return day;
-        if (type === 'test') {
-          const testNames = [...(day.testNames || [])];
-          if (!testNames.includes(name)) {
-            testNames.push(name);
+    setTrainingDays(prev => {
+      const existingDayIndex = prev.findIndex(td => td.date === dayDate);
+      
+      if (existingDayIndex >= 0) {
+        // Day exists - update it
+        return prev.map(day => {
+          if (day.date !== dayDate) return day;
+          if (type === 'test') {
+            const testNames = [...(day.testNames || [])];
+            if (!testNames.includes(name)) {
+              testNames.push(name);
+            }
+            return { ...day, testNames, isTestDay: true };
+          } else {
+            const eventNames = [...(day.eventNames || [])];
+            if (!eventNames.includes(name)) {
+              eventNames.push(name);
+            }
+            return { ...day, eventNames, isEventDay: true };
           }
-          return { ...day, testNames, isTestDay: true };
-        } else {
-          const eventNames = [...(day.eventNames || [])];
-          if (!eventNames.includes(name)) {
-            eventNames.push(name);
-          }
-          return { ...day, eventNames, isEventDay: true };
-        }
-      })
-    );
+        });
+      } else {
+        // Day doesn't exist - create new TrainingDay
+        const parsedDate = new Date(dayDate);
+        const dayOfWeek = parsedDate.getDay();
+        const dayName = parsedDate.toLocaleDateString('en-US', { weekday: 'long' });
+        
+        const newDay: TrainingDay = {
+          date: dayDate,
+          dayOfWeek,
+          dayName,
+          mesocycleId: selectedAssignment?.assignedMesocycles[0]?.id || '',
+          microcycleId: '',
+          isTestDay: type === 'test',
+          isEventDay: type === 'event',
+          isTrainingDay: true,
+          testNames: type === 'test' ? [name] : undefined,
+          eventNames: type === 'event' ? [name] : undefined,
+          intensity: 'moderate',
+          sessions: 0,
+          sessionNames: [],
+        };
+        
+        return [...prev, newDay];
+      }
+    });
     toast({ title: `${type === 'test' ? 'Test' : 'Event'} added`, description: name });
-  }, [toast]);
+  }, [toast, selectedAssignment]);
 
   const handleDeleteTestEvent = useCallback((dayDate: string, type: 'test' | 'event', name: string) => {
     setTrainingDays(prev =>

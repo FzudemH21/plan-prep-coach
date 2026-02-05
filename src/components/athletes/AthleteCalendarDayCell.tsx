@@ -24,6 +24,7 @@ import { ExerciseDistribution } from '@/types/microcycle-planning';
 import { SubGoal, Event } from '@/types/training';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
+import { AthletePerformanceParameter } from '@/types/athlete';
 
 export interface AthleteCalendarSession {
   id: string;
@@ -84,6 +85,9 @@ interface AthleteCalendarDayCellProps {
   onIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
   // Ref-based drag end timestamp for click suppression (sync update, not state)
   lastDragEndRef?: React.MutableRefObject<number>;
+  // Athlete context for baseline auto-fill
+  athleteId?: string;
+  athletePerformanceParameters?: AthletePerformanceParameter[];
 }
 
 export function AthleteCalendarDayCell({
@@ -108,6 +112,8 @@ export function AthleteCalendarDayCell({
   intensityLevels,
   onIntensityChange,
   lastDragEndRef,
+  athleteId,
+  athletePerformanceParameters,
 }: AthleteCalendarDayCellProps) {
   const [testEventDialogOpen, setTestEventDialogOpen] = useState(false);
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
@@ -575,6 +581,8 @@ export function AthleteCalendarDayCell({
         onDelete={handleTestEventDelete}
         allParameters={parametersData.parameters}
         toolboxEntries={toolboxData?.entries || []}
+        selectedAthleteId={athleteId}
+        athletePerformanceParameters={athletePerformanceParameters}
         onAddParameter={(param) => {
           addParameter({
             name: param.name,

@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ExerciseDistribution, SessionSection } from '@/types/microcycle-planning';
 import { SubGoal, Event, IntensityLevel } from '@/types/training';
+import { AthletePerformanceParameter } from '@/types/athlete';
 
 interface CopiedWeekInfo {
   exercises: ExerciseDistribution[];
@@ -61,6 +62,9 @@ interface AthleteCalendarWeekRowProps {
   onIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
   // Ref-based drag end timestamp for click suppression (sync update, not state)
   lastDragEndRef?: React.MutableRefObject<number>;
+  // Athlete context for baseline auto-fill
+  athleteId?: string;
+  athletePerformanceParameters?: AthletePerformanceParameter[];
 }
 
 export function AthleteCalendarWeekRow({
@@ -90,6 +94,8 @@ export function AthleteCalendarWeekRow({
   intensityLevels,
   onIntensityChange,
   lastDragEndRef,
+  athleteId,
+  athletePerformanceParameters,
 }: AthleteCalendarWeekRowProps) {
   const weekStartDate = format(week[0].date, 'yyyy-MM-dd');
   const hasExercisesInWeek = week.some(day => day.sessions.length > 0);
@@ -174,6 +180,8 @@ export function AthleteCalendarWeekRow({
             intensityLevels={intensityLevels}
             onIntensityChange={onIntensityChange}
             lastDragEndRef={lastDragEndRef}
+            athleteId={athleteId}
+            athletePerformanceParameters={athletePerformanceParameters}
           />
         ))}
       </div>
