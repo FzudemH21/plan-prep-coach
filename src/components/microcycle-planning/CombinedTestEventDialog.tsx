@@ -212,7 +212,7 @@ export function CombinedTestEventDialog({
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogPortal>
-        <DialogOverlay className="z-[150] bg-black/80" />
+        <DialogOverlay className="z-[150] bg-black/30" />
         <DialogContent className="sm:max-w-[500px] z-[160]" onClick={(e) => e.stopPropagation()}>
         <DialogHeader>
           <DialogTitle>Manage Tests/Events</DialogTitle>
