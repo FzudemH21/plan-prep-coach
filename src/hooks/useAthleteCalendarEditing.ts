@@ -791,20 +791,53 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   }, [exerciseDistribution, sessionSections, supersets, trainingDays, daySplitStates, toast]);
 
   const handleClearDay = useCallback((dayDate: string) => {
-    setExerciseDistribution(prev => prev.filter(ex => ex.dayDate !== dayDate));
-    setSessionSections(prev => prev.filter(s => s.dayDate !== dayDate));
-    setSupersets(prev => {
-      const newSupersets = { ...prev };
-      delete newSupersets[dayDate];
-      return newSupersets;
-    });
-    setDaySplitStates(prev => ({ ...prev, [dayDate]: 0 }));
-    setTrainingDays(prev =>
-      prev.map(day => day.date === dayDate ? { ...day, sessions: 0, sessionNames: [] } : day)
+    // Compute new state values for immediate save
+    const newExercises = exerciseDistribution.filter(ex => ex.dayDate !== dayDate);
+    const newSections = sessionSections.filter(s => s.dayDate !== dayDate);
+    const newSupersets = { ...supersets };
+    delete newSupersets[dayDate];
+    const newDaySplitStates = { ...daySplitStates, [dayDate]: 0 };
+    const newTrainingDays = trainingDays.map(day => 
+      day.date === dayDate ? { ...day, sessions: 0, sessionNames: [] } : day
     );
-    
+
+    // Update React state
+    setExerciseDistribution(newExercises);
+    setSessionSections(newSections);
+    setSupersets(newSupersets);
+    setDaySplitStates(newDaySplitStates);
+    setTrainingDays(newTrainingDays);
+
+    // IMMEDIATE localStorage write (bypass debounce)
+    if (selectedAssignmentId) {
+      const storageKey = `athlete-assignment-${selectedAssignmentId}`;
+      const savePayload = {
+        exerciseDistribution: newExercises,
+        sessionSections: newSections,
+        supersets: newSupersets,
+        parameterValues,
+        dailyIntensity: dailyIntensityData,
+        trainingDays: newTrainingDays,
+        daySplitStates: newDaySplitStates,
+        sessionIntensities,
+        lastModified: new Date().toISOString(),
+      };
+      localStorage.setItem(storageKey, JSON.stringify(savePayload));
+      lastSavedStateRef.current = JSON.stringify({
+        exerciseDistribution: newExercises,
+        sessionSections: newSections,
+        supersets: newSupersets,
+        parameterValues,
+        dailyIntensity: dailyIntensityData,
+        trainingDays: newTrainingDays,
+        daySplitStates: newDaySplitStates,
+        sessionIntensities,
+      });
+      console.log('[handleClearDay] Immediate save completed');
+    }
+
     toast({ title: "Day cleared" });
-  }, [toast]);
+  }, [exerciseDistribution, sessionSections, supersets, daySplitStates, trainingDays, dailyIntensityData, parameterValues, sessionIntensities, selectedAssignmentId, toast]);
 
   const handlePasteDay = useCallback((targetDate: string) => {
     if (!copiedDay) return;
@@ -977,33 +1010,62 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   }, [exerciseDistribution, sessionSections, supersets, trainingDays, toast]);
 
   const handleClearWeek = useCallback((weekStartDate: string) => {
-    const startDate = new Date(weekStartDate);
+    const startDateVal = new Date(weekStartDate);
     const weekDates: string[] = [];
     for (let i = 0; i < 7; i++) {
-      weekDates.push(format(addDays(startDate, i), 'yyyy-MM-dd'));
+      weekDates.push(format(addDays(startDateVal, i), 'yyyy-MM-dd'));
     }
 
-    setExerciseDistribution(prev => prev.filter(ex => !weekDates.includes(ex.dayDate)));
-    setSessionSections(prev => prev.filter(s => !weekDates.includes(s.dayDate)));
-    setSupersets(prev => {
-      const newSupersets = { ...prev };
-      weekDates.forEach(d => delete newSupersets[d]);
-      return newSupersets;
-    });
-    setDaySplitStates(prev => {
-      const newStates = { ...prev };
-      weekDates.forEach(d => { newStates[d] = 0; });
-      return newStates;
-    });
-    setTrainingDays(prev =>
-      prev.map(day => weekDates.includes(day.date) 
-        ? { ...day, sessions: 0, sessionNames: [] } 
+    // Compute new state values for immediate save
+    const newExercises = exerciseDistribution.filter(ex => !weekDates.includes(ex.dayDate));
+    const newSections = sessionSections.filter(s => !weekDates.includes(s.dayDate));
+    const newSupersets = { ...supersets };
+    weekDates.forEach(d => delete newSupersets[d]);
+    const newDaySplitStates = { ...daySplitStates };
+    weekDates.forEach(d => { newDaySplitStates[d] = 0; });
+    const newTrainingDays = trainingDays.map(day =>
+      weekDates.includes(day.date)
+        ? { ...day, sessions: 0, sessionNames: [] }
         : day
-      )
     );
 
+    // Update React state
+    setExerciseDistribution(newExercises);
+    setSessionSections(newSections);
+    setSupersets(newSupersets);
+    setDaySplitStates(newDaySplitStates);
+    setTrainingDays(newTrainingDays);
+
+    // IMMEDIATE localStorage write (bypass debounce)
+    if (selectedAssignmentId) {
+      const storageKey = `athlete-assignment-${selectedAssignmentId}`;
+      const savePayload = {
+        exerciseDistribution: newExercises,
+        sessionSections: newSections,
+        supersets: newSupersets,
+        parameterValues,
+        dailyIntensity: dailyIntensityData,
+        trainingDays: newTrainingDays,
+        daySplitStates: newDaySplitStates,
+        sessionIntensities,
+        lastModified: new Date().toISOString(),
+      };
+      localStorage.setItem(storageKey, JSON.stringify(savePayload));
+      lastSavedStateRef.current = JSON.stringify({
+        exerciseDistribution: newExercises,
+        sessionSections: newSections,
+        supersets: newSupersets,
+        parameterValues,
+        dailyIntensity: dailyIntensityData,
+        trainingDays: newTrainingDays,
+        daySplitStates: newDaySplitStates,
+        sessionIntensities,
+      });
+      console.log('[handleClearWeek] Immediate save completed');
+    }
+
     toast({ title: "Week cleared" });
-  }, [toast]);
+  }, [exerciseDistribution, sessionSections, supersets, daySplitStates, trainingDays, dailyIntensityData, parameterValues, sessionIntensities, selectedAssignmentId, toast]);
 
   const handlePasteWeek = useCallback((targetWeekStartDate: string) => {
     if (!copiedWeek) return;
@@ -1605,8 +1667,20 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   const allAssignmentDays = useMemo((): CalendarDay[] => {
     if (!selectedAssignment) return [];
     
-    return trainingDays.map(trainingDay => {
-      const dateStr = trainingDay.date;
+    // Collect all dates from all data sources (continuous workout stream model)
+    const trainingDayDates = new Set(trainingDays.map(td => td.date));
+    const allDates = new Set(trainingDayDates);
+    
+    // Include dates from exerciseDistribution not in trainingDays
+    exerciseDistribution.forEach(ex => allDates.add(ex.dayDate));
+    
+    // Include dates from daySplitStates not in trainingDays
+    Object.keys(daySplitStates).forEach(dateStr => allDates.add(dateStr));
+    
+    const sortedDates = Array.from(allDates).sort();
+    
+    return sortedDates.map(dateStr => {
+      const trainingDay = trainingDays.find(td => td.date === dateStr);
       const dayExercises = exerciseDistribution.filter(e => e.dayDate === dateStr);
       const hasExplicitSplitState = dateStr in daySplitStates;
       const daySessions = hasExplicitSplitState 
@@ -1619,18 +1693,33 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         sessions.push({
           id: `${dateStr}-${sessionIdx}`,
           sessionIndex: sessionIdx,
-          sessionName: trainingDay.sessionNames?.[sessionIdx] || `Session ${sessionIdx + 1}`,
+          sessionName: trainingDay?.sessionNames?.[sessionIdx] || `Session ${sessionIdx + 1}`,
           exercises: sessionExercises,
           methods: [...new Set(sessionExercises.map(e => e.methodId))],
-          sessionIntensity: trainingDay.intensity,
+          sessionIntensity: trainingDay?.intensity,
         });
       }
+      
+      // Create synthetic trainingDay for dates outside the original range
+      const effectiveTrainingDay: TrainingDay = trainingDay || {
+        date: dateStr,
+        dayOfWeek: new Date(dateStr).getDay(),
+        dayName: format(new Date(dateStr), 'EEEE'),
+        mesocycleId: selectedAssignment.assignedMesocycles[0]?.id || '',
+        microcycleId: '',
+        isTestDay: false,
+        isEventDay: false,
+        isTrainingDay: daySessions > 0,
+        intensity: 'moderate' as IntensityLevel,
+        sessions: daySessions,
+        sessionNames: [],
+      };
       
       return {
         date: new Date(dateStr),
         dateString: dateStr,
         isCurrentMonth: true,
-        trainingDay,
+        trainingDay: effectiveTrainingDay,
         sessions: daySessions > 0 ? sessions : [],
         totalExercises: dayExercises.length,
       };

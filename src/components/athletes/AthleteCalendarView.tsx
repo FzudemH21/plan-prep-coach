@@ -701,9 +701,22 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           const shiftedExercises = program.exerciseDistribution 
             ? shiftExerciseDates(program.exerciseDistribution, normalizedOriginalStart, normalizedNewStart)
             : [];
+          
+          // Get daily intensity data - try program object first, then global localStorage key
+          let sourceDailyIntensity = program.dailyIntensityData;
+          if (!sourceDailyIntensity || sourceDailyIntensity.length === 0) {
+            try {
+              const globalIntensity = localStorage.getItem('dailyIntensityData');
+              if (globalIntensity) {
+                sourceDailyIntensity = JSON.parse(globalIntensity);
+              }
+            } catch (e) {
+              console.warn('[handleAssignProgram] Error reading global dailyIntensityData:', e);
+            }
+          }
             
-          const shiftedDailyIntensity = program.dailyIntensityData
-            ? shiftDailyIntensityDates(program.dailyIntensityData, normalizedOriginalStart, normalizedNewStart)
+          const shiftedDailyIntensity = sourceDailyIntensity
+            ? shiftDailyIntensityDates(sourceDailyIntensity, normalizedOriginalStart, normalizedNewStart)
             : [];
             
           const shiftedSections = program.sessionSections
