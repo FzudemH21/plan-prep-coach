@@ -1,27 +1,33 @@
 
 
-# Fix: Tests Not Adding to Calendar (No Icon Appearing)
+# Fix Three Athlete Calendar Regressions
 
-## Root Cause
+## Issue 1: Adding a test to a day deletes the session
 
-The `isCreateContext` variable in `CombinedTestEventDialog.tsx` evaluates to `false` when there are existing tests in the program (`existingTests.length > 0`), because `mode` defaults to `'select'` and `hasItems` is `true`.
+**Root cause**: In the `calendarDays` memo in `AthleteCalendarView.tsx` (lines 243-307), when a test is added via `handleAddTestEvent`, a `liveTrainingDay` entry is created with `testNames` but `sessions: 0`. The memo sees `hasTestsOrEvents = true`, sets `hasLiveData = true`, and enters the live editing path. It then sets `usedLiveEditingState = true`, which **blocks** the fallback cached path from rendering sessions that belong to other assignments for that day. Since the live path has no session data (`liveSplitState` is undefined or 0 for this date in the selected assignment), no sessions are rendered.
 
-When the user clicks "Add" for a test, `handleConfirm` takes the "select existing" branch which requires a `selectedId` -- but there is no radio group for tests (correctly removed). Since `selectedId` is empty, the function does nothing silently.
+**Fix in `src/components/athletes/AthleteCalendarView.tsx`** (lines ~257-258):
+- Only set `usedLiveEditingState = true` when the live path has actual session or exercise data (not just tests/events).
+- Always collect tests/events from live state regardless.
+- This allows the cached path to still render sessions from other assignments when the live path only contributed test/event markers.
 
-## The Fix
+## Issue 2: "Remove Assignment" button still in day menu
 
-**File: `src/components/microcycle-planning/CombinedTestEventDialog.tsx`**
+**Root cause**: Lines 340-355 in `AthleteCalendarDayCell.tsx` still render the "Remove assignment" menu item. Per the design decision (continuous workout stream model), this should be removed.
 
-**Line 108** -- Update the `isCreateContext` definition to always treat tests as "create" context:
+**Fix in `src/components/athletes/AthleteCalendarDayCell.tsx`**: Remove the "Remove assignment" DropdownMenuItem block (lines 340-355).
 
-```typescript
-// Before:
-const isCreateContext = mode === 'create' || !hasItems;
+## Issue 3: Copy Week / Clear Week menu not always visible
 
-// After:
-const isCreateContext = type === 'test' || mode === 'create' || !hasItems;
-```
+**Root cause**: In `AthleteCalendarWeekRow.tsx`, lines 117 and 123 conditionally show "Copy week" and "Clear week" only when `hasExercisesInWeek` is true. Per the design decision, these should always be enabled (weeks may contain only test markers or events).
 
-This single-line change ensures that for tests, the `handleConfirm` function always takes the "create new" branch (line 186), which uses `newName` from the parameter dropdown -- exactly the unified flow that was intended.
+**Fix in `src/components/athletes/AthleteCalendarWeekRow.tsx`**:
+- Line 117: Remove `hasExercisesInWeek &&` condition from "Copy week"
+- Line 123: Remove `hasExercisesInWeek &&` condition from "Clear week"
 
-No other files need to change. The handler in `MicrocyclePlanningPage.tsx` and the icon rendering in `TrainingDayCell.tsx` are both correct -- the problem is solely that `handleConfirm` silently exits without calling `onSelect`.
+## Files to edit
+
+1. `src/components/athletes/AthleteCalendarView.tsx` -- calendarDays memo fix
+2. `src/components/athletes/AthleteCalendarDayCell.tsx` -- remove "Remove assignment" menu item
+3. `src/components/athletes/AthleteCalendarWeekRow.tsx` -- always show Copy/Clear week options
+
