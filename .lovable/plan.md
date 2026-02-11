@@ -1,33 +1,27 @@
 
 
-# Restore Baseline & Goal Fields for Scheduled Tests
+# Fix: Tests Not Adding to Calendar (No Icon Appearing)
 
-## What happened
-The overlay styling fix overwrote the scheduled tests section in `CombinedTestEventDialog.tsx`, reverting it back to only showing a Comments field. The Baseline and Goal inputs need to be re-added.
+## Root Cause
 
-## Changes
+The `isCreateContext` variable in `CombinedTestEventDialog.tsx` evaluates to `false` when there are existing tests in the program (`existingTests.length > 0`), because `mode` defaults to `'select'` and `hasItems` is `true`.
 
-### File: `src/components/microcycle-planning/CombinedTestEventDialog.tsx`
+When the user clicks "Add" for a test, `handleConfirm` takes the "select existing" branch which requires a `selectedId` -- but there is no radio group for tests (correctly removed). Since `selectedId` is empty, the function does nothing silently.
 
-**1. Add `onUpdateTestValues` prop to the interface (around line 59)**
+## The Fix
 
-Add after `onUpdateComment`:
+**File: `src/components/microcycle-planning/CombinedTestEventDialog.tsx`**
+
+**Line 108** -- Update the `isCreateContext` definition to always treat tests as "create" context:
+
+```typescript
+// Before:
+const isCreateContext = mode === 'create' || !hasItems;
+
+// After:
+const isCreateContext = type === 'test' || mode === 'create' || !hasItems;
 ```
-onUpdateTestValues?: (testId: string, updates: { preTestValue?: number; goalValue?: number; comments?: string }) => void;
-```
 
-Destructure it in the component function (around line 84).
+This single-line change ensures that for tests, the `handleConfirm` function always takes the "create new" branch (line 186), which uses `newName` from the parameter dropdown -- exactly the unified flow that was intended.
 
-**2. Expand the scheduled test CollapsibleContent (lines 258-276)**
-
-Replace the current Comments-only section with:
-- **Unit display**: Resolve unit from `allParameters` via `testData.parameterLinkedId`, show in brackets after the test name (line 240).
-- **Baseline Value input**: Pre-filled from athlete performance data (lookup `athletePerformanceParameters` by `parameterLinkedId`) or from `testData.preTestValue`. Calls `onUpdateTestValues` on change.
-- **Goal Value input**: Pre-filled from `testData.goalValue`. Calls `onUpdateTestValues` on change.
-- **Comments textarea**: Updated to use `onUpdateTestValues` instead of `onUpdateComment` for tests.
-
-**3. No additional prop threading needed**
-
-The `onUpdateTestValues` callback was already added and threaded through all parent components (`MicrocyclePlanningPage`, `TrainingCalendarView`, `TrainingDayCell`, `MasterPlannerColumn`, `WorkoutSessionSheet`) in the earlier round. We just need to add the prop to the interface and use it in the scheduled tests UI -- the parent wiring should already be passing it.
-
-If the parent wiring was also lost, we will re-thread `onUpdateTestValues` through the same component chain as before.
+No other files need to change. The handler in `MicrocyclePlanningPage.tsx` and the icon rendering in `TrainingDayCell.tsx` are both correct -- the problem is solely that `handleConfirm` silently exits without calling `onSelect`.
