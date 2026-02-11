@@ -105,7 +105,7 @@ export function CombinedTestEventDialog({
   const hasItems = items.length > 0;
   
   // Derived boolean: treat "no existing items" as create context
-  const isCreateContext = mode === 'create' || !hasItems;
+  const isCreateContext = type === 'test' || mode === 'create' || !hasItems;
 
   // Auto-set mode to 'create' when dialog opens with no items
   useEffect(() => {
@@ -172,13 +172,13 @@ export function CombinedTestEventDialog({
 
   const handleConfirm = () => {
     if (!isCreateContext && selectedId) {
-      // Select existing item mode
+      // Select existing item mode (events only - tests always use create context)
       const item = items.find(i => i.id === selectedId);
       if (item) {
         onSelect({
           type,
           id: item.id,
-          name: type === 'test' ? (item as SubGoal).testMethod : (item as Event).name,
+          name: (item as Event).name,
           isNew: false,
           comments: (item as any).comments
         });
