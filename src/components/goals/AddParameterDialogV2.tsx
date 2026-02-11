@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import {
   Dialog,
+  DialogPortal,
+  DialogOverlay,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -238,10 +240,12 @@ export function AddParameterDialogV2({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className={cn(
-        "w-[calc(100%-2rem)] max-w-[600px] max-h-[85vh] overflow-hidden flex flex-col mx-4 sm:mx-auto",
-        containerClassName
-      )}>
+      <DialogPortal>
+        <DialogOverlay className="z-[190] bg-black/40" />
+        <DialogContent className={cn(
+          "w-[calc(100%-2rem)] max-w-[600px] max-h-[85vh] overflow-hidden flex flex-col mx-4 sm:mx-auto z-[200]",
+          containerClassName
+        )}>
         <DialogHeader className="shrink-0">
           <DialogTitle>Add New Parameter</DialogTitle>
         </DialogHeader>
@@ -690,6 +694,7 @@ export function AddParameterDialogV2({
           </Button>
         </DialogFooter>
       </DialogContent>
+      </DialogPortal>
     </Dialog>
   );
 }
