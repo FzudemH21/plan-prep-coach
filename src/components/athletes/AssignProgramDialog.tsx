@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
-import { format, differenceInDays } from 'date-fns';
+import { format, differenceInDays, addDays } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar } from '@/components/ui/calendar';
 import { Badge } from '@/components/ui/badge';
@@ -31,9 +32,10 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { AlertTriangle, CalendarIcon, ChevronDown, ChevronRight } from 'lucide-react';
+import { AlertTriangle, CalendarIcon, ChevronDown, ChevronRight, Trophy } from 'lucide-react';
 import { TrainingProgram } from '@/hooks/useTrainingPrograms';
-import { AthleteCalendarAssignment, AssignedMesocycle, AssignedMicrocycle } from '@/types/athlete';
+import { AthleteCalendarAssignment, AssignedMesocycle, AssignedMicrocycle, AthletePerformanceParameter, ReviewedSubGoal, ReviewedEvent } from '@/types/athlete';
+import { SubGoal, Event as TrainingEvent } from '@/types/training';
 import { recalculateMesocycleDates } from '@/utils/dateShifting';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -45,6 +47,7 @@ interface AssignProgramDialogProps {
   selectedDate: Date;
   onAssign: (assignment: Omit<AthleteCalendarAssignment, 'id' | 'createdAt'>) => void;
   athleteId: string;
+  athletePerformanceParameters?: AthletePerformanceParameter[];
 }
 
 export function AssignProgramDialog({
@@ -54,6 +57,7 @@ export function AssignProgramDialog({
   selectedDate,
   onAssign,
   athleteId,
+  athletePerformanceParameters = [],
 }: AssignProgramDialogProps) {
   const { toast } = useToast();
   
@@ -62,6 +66,8 @@ export function AssignProgramDialog({
   const [selectedMesocycleIds, setSelectedMesocycleIds] = useState<string[]>([]);
   const [selectedMicrocycleIds, setSelectedMicrocycleIds] = useState<string[]>([]);
   const [expandedMesocycles, setExpandedMesocycles] = useState<string[]>([]);
+  const [reviewedSubGoals, setReviewedSubGoals] = useState<ReviewedSubGoal[]>([]);
+  const [reviewedEvents, setReviewedEvents] = useState<ReviewedEvent[]>([]);
 
   // Reset state when dialog opens/closes
   useEffect(() => {
@@ -71,6 +77,8 @@ export function AssignProgramDialog({
       setSelectedMesocycleIds([]);
       setSelectedMicrocycleIds([]);
       setExpandedMesocycles([]);
+      setReviewedSubGoals([]);
+      setReviewedEvents([]);
     }
   }, [open, selectedDate]);
 
@@ -121,6 +129,77 @@ export function AssignProgramDialog({
       setExpandedMesocycles(mesoIds);
     }
   }, [programMesocycles]);
+
+  // Extract and shift tests/events from program when program or start date changes
+  useEffect(() => {
+    if (!selectedProgram?.macrocycleData) {
+      setReviewedSubGoals([]);
+      setReviewedEvents([]);
+      return;
+    }
+
+    const macro = selectedProgram.macrocycleData;
+    const originalStartDate = selectedProgram.duration?.startDate 
+      ? new Date(selectedProgram.duration.startDate) 
+      : null;
+    
+    const dayOffset = originalStartDate 
+      ? differenceInDays(startDate, originalStartDate)
+      : 0;
+
+    // Process sub-goals (tests)
+    const subGoals: SubGoal[] = macro.subGoals || [];
+    const reviewed: ReviewedSubGoal[] = subGoals.map(sg => {
+      // Shift scheduled dates
+      const shiftedDates = (sg.testDates || []).map(d => {
+        const shifted = addDays(new Date(d), dayOffset);
+        return shifted.toISOString();
+      });
+
+      // Auto-fill baseline from athlete performance data
+      let baseline = sg.preTestValue || 0;
+      if (sg.parameterLinkedId && athletePerformanceParameters.length > 0) {
+        const athleteParam = athletePerformanceParameters.find(
+          pp => pp.athleticismParameterId === sg.parameterLinkedId
+        );
+        if (athleteParam && athleteParam.values.length > 0) {
+          const sorted = [...athleteParam.values].sort(
+            (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+          );
+          baseline = parseFloat(sorted[0].value) || baseline;
+        }
+      }
+
+      return {
+        id: sg.id,
+        testMethod: sg.testMethod,
+        baselineValue: baseline,
+        goalValue: sg.goalValue || 0,
+        unit: sg.unit || '',
+        comments: sg.comments || '',
+        scheduledDates: shiftedDates,
+        parameterLinkedId: sg.parameterLinkedId,
+      };
+    });
+
+    // Process events
+    const events: TrainingEvent[] = macro.events || [];
+    const reviewedEvts: ReviewedEvent[] = events.map(evt => {
+      const shiftedDates = (evt.eventDates || []).map(d => {
+        const shifted = addDays(new Date(d), dayOffset);
+        return shifted.toISOString();
+      });
+      return {
+        id: evt.id,
+        name: evt.name,
+        comments: evt.comments || '',
+        scheduledDates: shiftedDates,
+      };
+    });
+
+    setReviewedSubGoals(reviewed);
+    setReviewedEvents(reviewedEvts);
+  }, [selectedProgram, startDate, athletePerformanceParameters]);
 
   // Check for date mismatch
   const dateMismatchWarning = useMemo(() => {
@@ -239,6 +318,8 @@ export function AssignProgramDialog({
       selectedMesocycleIds,
       selectedMicrocycleIds,
       assignedMesocycles: finalMesocycles,
+      reviewedSubGoals: reviewedSubGoals.length > 0 ? reviewedSubGoals : undefined,
+      reviewedEvents: reviewedEvents.length > 0 ? reviewedEvents : undefined,
     };
     
     onAssign(assignment);
@@ -409,6 +490,107 @@ export function AssignProgramDialog({
                       </Collapsible>
                     );
                   })}
+                </div>
+              </div>
+            )}
+
+            {/* Step 4: Review Tests & Events */}
+            {selectedProgram && (reviewedSubGoals.length > 0 || reviewedEvents.length > 0) && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">4. Review Tests & Events</Label>
+                <div className="border rounded-lg divide-y">
+                  {reviewedSubGoals.map((sg, idx) => (
+                    <div key={sg.id} className="p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Trophy className="h-4 w-4 text-amber-600 shrink-0" />
+                        <span className="text-sm font-medium">
+                          {sg.testMethod}{sg.unit ? ` [${sg.unit}]` : ''}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Baseline</Label>
+                          <Input
+                            type="number"
+                            value={sg.baselineValue || ''}
+                            onChange={(e) => {
+                              const updated = [...reviewedSubGoals];
+                              updated[idx] = { ...sg, baselineValue: parseFloat(e.target.value) || 0 };
+                              setReviewedSubGoals(updated);
+                            }}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Goal</Label>
+                          <Input
+                            type="number"
+                            value={sg.goalValue || ''}
+                            onChange={(e) => {
+                              const updated = [...reviewedSubGoals];
+                              updated[idx] = { ...sg, goalValue: parseFloat(e.target.value) || 0 };
+                              setReviewedSubGoals(updated);
+                            }}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Comments</Label>
+                        <Input
+                          value={sg.comments || ''}
+                          onChange={(e) => {
+                            const updated = [...reviewedSubGoals];
+                            updated[idx] = { ...sg, comments: e.target.value };
+                            setReviewedSubGoals(updated);
+                          }}
+                          className="h-8 text-sm"
+                          placeholder="Notes..."
+                        />
+                      </div>
+                      {sg.scheduledDates.length > 0 && (
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <span className="text-xs text-muted-foreground">Dates:</span>
+                          {sg.scheduledDates.map((d, di) => (
+                            <Badge key={di} variant="secondary" className="text-xs">
+                              {format(new Date(d), 'MMM d, yyyy')}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {reviewedEvents.map((evt, idx) => (
+                    <div key={evt.id} className="p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <CalendarIcon className="h-4 w-4 text-blue-600 shrink-0" />
+                        <span className="text-sm font-medium">{evt.name}</span>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Comments</Label>
+                        <Input
+                          value={evt.comments || ''}
+                          onChange={(e) => {
+                            const updated = [...reviewedEvents];
+                            updated[idx] = { ...evt, comments: e.target.value };
+                            setReviewedEvents(updated);
+                          }}
+                          className="h-8 text-sm"
+                          placeholder="Notes..."
+                        />
+                      </div>
+                      {evt.scheduledDates.length > 0 && (
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <span className="text-xs text-muted-foreground">Dates:</span>
+                          {evt.scheduledDates.map((d, di) => (
+                            <Badge key={di} variant="secondary" className="text-xs">
+                              {format(new Date(d), 'MMM d, yyyy')}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

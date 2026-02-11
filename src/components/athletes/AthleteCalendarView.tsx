@@ -1034,6 +1034,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         selectedDate={selectedDate || new Date()}
         onAssign={handleAssignProgram}
         athleteId={athlete.id}
+        athletePerformanceParameters={athleteData.getAthletePerformanceParameters(athlete.id)}
       />
 
       {/* Delete Confirmation */}

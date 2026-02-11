@@ -360,7 +360,7 @@ export function CombinedTestEventDialog({
             </ToggleGroup>
           </div>
 
-          {hasItems && (
+          {hasItems && type === 'event' && (
             <>
               {/* Mode toggle */}
               <div className="space-y-2">
@@ -398,12 +398,8 @@ export function CombinedTestEventDialog({
                 <ScrollArea className="h-[250px] rounded-md border p-4">
                   <RadioGroup value={selectedId} onValueChange={setSelectedId}>
                     {items.map((item) => {
-                      const name = type === 'test' 
-                        ? (item as SubGoal).testMethod 
-                        : (item as Event).name;
-                      const description = type === 'test'
-                        ? (item as SubGoal).description
-                        : (item as Event).description;
+                      const name = (item as Event).name;
+                      const description = (item as Event).description;
                         
                       return (
                         <div key={item.id} className="flex items-start space-x-2 py-2">
@@ -428,7 +424,7 @@ export function CombinedTestEventDialog({
             </>
           )}
 
-          {(mode === 'create' || !hasItems) && (
+          {(type === 'test' || mode === 'create' || !hasItems) && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name">
@@ -615,8 +611,9 @@ export function CombinedTestEventDialog({
           <Button 
             onClick={handleConfirm}
             disabled={
-              (!isCreateContext && !selectedId) || 
-              (isCreateContext && !newName.trim())
+              type === 'test' 
+                ? !newName.trim()
+                : ((!isCreateContext && !selectedId) || (isCreateContext && !newName.trim()))
             }
           >
             Add
