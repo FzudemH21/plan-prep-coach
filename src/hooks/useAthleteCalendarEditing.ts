@@ -1608,7 +1608,10 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     return trainingDays.map(trainingDay => {
       const dateStr = trainingDay.date;
       const dayExercises = exerciseDistribution.filter(e => e.dayDate === dateStr);
-      const daySessions = daySplitStates[dateStr] || (trainingDay.intensity === 'off' ? 0 : 1);
+      const hasExplicitSplitState = dateStr in daySplitStates;
+      const daySessions = hasExplicitSplitState 
+        ? daySplitStates[dateStr] 
+        : (dayExercises.length > 0 ? 1 : 0);
       
       const sessions = [];
       for (let sessionIdx = 0; sessionIdx < Math.max(daySessions, 1); sessionIdx++) {
