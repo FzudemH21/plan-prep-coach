@@ -57,6 +57,7 @@ interface CombinedTestEventDialogProps {
   }) => void;
   onDelete: (type: 'test' | 'event', name: string) => void;
   onUpdateComment?: (type: 'test' | 'event', id: string, comments: string) => void;
+  onUpdateTestValues?: (testId: string, updates: { preTestValue?: number; goalValue?: number; comments?: string }) => void;
   // New props for parameters database integration
   allParameters?: ParameterV2[];
   toolboxEntries?: ToolboxEntry[];
@@ -82,6 +83,7 @@ export function CombinedTestEventDialog({
   onSelect,
   onDelete,
   onUpdateComment,
+  onUpdateTestValues,
   allParameters = [],
   toolboxEntries = [],
   onAddParameter,
@@ -229,6 +231,11 @@ export function CombinedTestEventDialog({
               <div className="space-y-2">
                 {scheduledTestNames.map((testName, idx) => {
                   const testData = existingTests.find(t => t.testMethod === testName);
+                  // Resolve unit from parameters database
+                  const linkedParam = testData?.parameterLinkedId 
+                    ? allParameters.find(p => p.id === testData.parameterLinkedId)
+                    : null;
+                  const displayUnit = linkedParam?.unit || testData?.unit || '';
                   
                   return (
                     <Collapsible key={`test-${idx}`}>
@@ -237,7 +244,10 @@ export function CombinedTestEventDialog({
                           <CollapsibleTrigger asChild>
                             <button className="flex items-center gap-2 flex-1 text-left hover:opacity-80">
                               <Trophy className="h-4 w-4 text-amber-600 shrink-0" />
-                              <span className="text-sm font-medium">{testName}</span>
+                              <span className="text-sm font-medium">
+                                {testName}
+                                {displayUnit && <span className="text-muted-foreground font-normal"> [{displayUnit}]</span>}
+                              </span>
                               <ChevronDown className="h-3 w-3 ml-auto" />
                             </button>
                           </CollapsibleTrigger>
@@ -256,22 +266,71 @@ export function CombinedTestEventDialog({
                         </div>
                         
                         <CollapsibleContent>
-                          <div className="px-3 pb-3 pt-1">
-                            <Label htmlFor={`scheduled-test-comment-${idx}`} className="text-xs text-muted-foreground mb-1">
-                              Comments:
-                            </Label>
-                            <Textarea
-                              id={`scheduled-test-comment-${idx}`}
-                              value={testData?.comments || ""}
-                              onChange={(e) => {
-                                if (testData?.id && onUpdateComment) {
-                                  onUpdateComment('test', testData.id, e.target.value);
-                                }
-                              }}
-                              placeholder="Add notes about this test..."
-                              rows={2}
-                              className="text-xs mt-1"
-                            />
+                          <div className="px-3 pb-3 pt-1 space-y-3">
+                            {/* Baseline & Goal Values */}
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1">
+                                <Label htmlFor={`scheduled-test-baseline-${idx}`} className="text-xs text-muted-foreground">
+                                  Baseline{displayUnit ? ` (${displayUnit})` : ''}
+                                </Label>
+                                <Input
+                                  id={`scheduled-test-baseline-${idx}`}
+                                  type="number"
+                                  value={testData?.preTestValue ?? ''}
+                                  onChange={(e) => {
+                                    if (testData?.id && onUpdateTestValues) {
+                                      onUpdateTestValues(testData.id, { 
+                                        preTestValue: e.target.value ? parseFloat(e.target.value) : undefined 
+                                      });
+                                    }
+                                  }}
+                                  placeholder="Baseline"
+                                  className="h-8 text-xs"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label htmlFor={`scheduled-test-goal-${idx}`} className="text-xs text-muted-foreground">
+                                  Goal{displayUnit ? ` (${displayUnit})` : ''}
+                                </Label>
+                                <Input
+                                  id={`scheduled-test-goal-${idx}`}
+                                  type="number"
+                                  value={testData?.goalValue ?? ''}
+                                  onChange={(e) => {
+                                    if (testData?.id && onUpdateTestValues) {
+                                      onUpdateTestValues(testData.id, { 
+                                        goalValue: e.target.value ? parseFloat(e.target.value) : undefined 
+                                      });
+                                    }
+                                  }}
+                                  placeholder="Goal"
+                                  className="h-8 text-xs"
+                                />
+                              </div>
+                            </div>
+                            
+                            {/* Comments */}
+                            <div className="space-y-1">
+                              <Label htmlFor={`scheduled-test-comment-${idx}`} className="text-xs text-muted-foreground">
+                                Comments
+                              </Label>
+                              <Textarea
+                                id={`scheduled-test-comment-${idx}`}
+                                value={testData?.comments || ""}
+                                onChange={(e) => {
+                                  if (testData?.id) {
+                                    if (onUpdateTestValues) {
+                                      onUpdateTestValues(testData.id, { comments: e.target.value });
+                                    } else if (onUpdateComment) {
+                                      onUpdateComment('test', testData.id, e.target.value);
+                                    }
+                                  }
+                                }}
+                                placeholder="Add notes about this test..."
+                                rows={2}
+                                className="text-xs"
+                              />
+                            </div>
                           </div>
                         </CollapsibleContent>
                       </div>

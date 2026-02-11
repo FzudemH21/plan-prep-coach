@@ -2628,6 +2628,26 @@ export default function MicrocyclePlanningPage() {
     }
   };
 
+  // Handle update test values (baseline, goal, comments)
+  const handleUpdateTestValues = (testId: string, updates: { preTestValue?: number; goalValue?: number; comments?: string }) => {
+    const savedData = localStorage.getItem('macrocycleData');
+    if (savedData) {
+      try {
+        const data = JSON.parse(savedData);
+        const updatedSubGoals = (data.subGoals || []).map((sg: any) =>
+          sg.id === testId ? { ...sg, ...updates } : sg
+        );
+        data.subGoals = updatedSubGoals;
+        localStorage.setItem('macrocycleData', JSON.stringify(data));
+        setMacrocycleData(data);
+        const event = new Event('macrocycle-data-updated');
+        window.dispatchEvent(event);
+      } catch (error) {
+        console.error('Error updating test values:', error);
+      }
+    }
+  };
+
   // Handle update event comment
   const handleUpdateEventComment = (eventId: string, comments: string) => {
     const savedData = localStorage.getItem('macrocycleData');
@@ -3194,6 +3214,7 @@ export default function MicrocyclePlanningPage() {
               parameterValues={parameterValues}
               onSaveParameters={handleSaveParameters}
               onUpdateTestComment={handleUpdateTestComment}
+              onUpdateTestValues={handleUpdateTestValues}
               onUpdateEventComment={handleUpdateEventComment}
               copiedSection={copiedSection}
               onCopySection={handleCopySection}

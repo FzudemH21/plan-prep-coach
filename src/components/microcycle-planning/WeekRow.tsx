@@ -54,6 +54,7 @@ interface WeekRowProps {
   onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean, comments?: string) => void;
   onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event', name: string) => void;
   onUpdateTestComment?: (testId: string, comments: string) => void;
+  onUpdateTestValues?: (testId: string, updates: { preTestValue?: number; goalValue?: number; comments?: string }) => void;
   onUpdateEventComment?: (eventId: string, comments: string) => void;
   availableTests?: SubGoal[];
   availableEvents?: Event[];
@@ -87,6 +88,7 @@ export function WeekRow({
   onAddTestEvent,
   onDeleteTestEvent,
   onUpdateTestComment,
+  onUpdateTestValues,
   onUpdateEventComment,
   availableTests,
   availableEvents,
@@ -171,6 +173,7 @@ export function WeekRow({
             onAddTestEvent={onAddTestEvent}
             onDeleteTestEvent={onDeleteTestEvent}
             onUpdateTestComment={onUpdateTestComment}
+            onUpdateTestValues={onUpdateTestValues}
             onUpdateEventComment={onUpdateEventComment}
             copiedDay={copiedDay}
             availableTests={availableTests}

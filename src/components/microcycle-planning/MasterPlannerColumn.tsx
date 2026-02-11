@@ -179,6 +179,7 @@ interface MasterPlannerColumnProps {
   onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean, comments?: string) => void;
   onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event', name: string) => void;
   onUpdateTestComment?: (testId: string, comments: string) => void;
+  onUpdateTestValues?: (testId: string, updates: { preTestValue?: number; goalValue?: number; comments?: string }) => void;
   onUpdateEventComment?: (eventId: string, comments: string) => void;
   availableTests?: SubGoal[];
   availableEvents?: Event[];
@@ -517,6 +518,7 @@ export function MasterPlannerColumn({
   onAddTestEvent,
   onDeleteTestEvent,
   onUpdateTestComment,
+  onUpdateTestValues,
   onUpdateEventComment,
   availableTests,
   availableEvents,
@@ -1990,6 +1992,7 @@ export function MasterPlannerColumn({
             onUpdateEventComment?.(id, comments);
           }
         }}
+        onUpdateTestValues={onUpdateTestValues}
         allParameters={parametersData.parameters}
         toolboxEntries={parametersToolboxData?.entries || []}
         onAddParameter={(param) => {

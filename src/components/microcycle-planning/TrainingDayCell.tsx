@@ -77,6 +77,7 @@ interface TrainingDayCellProps {
   onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean, comments?: string) => void;
   onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event', name: string) => void;
   onUpdateTestComment?: (testId: string, comments: string) => void;
+  onUpdateTestValues?: (testId: string, updates: { preTestValue?: number; goalValue?: number; comments?: string }) => void;
   onUpdateEventComment?: (eventId: string, comments: string) => void;
   copiedDay?: { exercises: ExerciseDistribution[]; sourceDate: string } | null;
   
@@ -112,6 +113,7 @@ export function TrainingDayCell({
   onAddTestEvent,
   onDeleteTestEvent,
   onUpdateTestComment,
+  onUpdateTestValues,
   onUpdateEventComment,
   copiedDay,
   onMoveSessionUp,
@@ -657,6 +659,7 @@ export function TrainingDayCell({
             onUpdateEventComment?.(id, comments);
           }
         }}
+        onUpdateTestValues={onUpdateTestValues}
         allParameters={parametersData.parameters}
         toolboxEntries={toolboxData?.entries || []}
         onAddParameter={(param) => {
