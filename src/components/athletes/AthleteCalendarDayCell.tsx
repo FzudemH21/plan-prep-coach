@@ -337,22 +337,6 @@ export function AthleteCalendarDayCell({
                   </DropdownMenuItem>
                 )}
                 
-                {/* Remove Assignment (only if assigned) */}
-                {day.assignmentId && onDeleteAssignment && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteAssignment(day.assignmentId!);
-                      }}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Remove assignment
-                    </DropdownMenuItem>
-                  </>
-                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

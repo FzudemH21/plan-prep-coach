@@ -114,13 +114,13 @@ export function AthleteCalendarWeekRow({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="z-[100]">
-                {onCopyWeek && hasExercisesInWeek && (
+                {onCopyWeek && (
                   <DropdownMenuItem onClick={() => onCopyWeek(weekStartDate)}>
                     <Copy className="mr-2 h-4 w-4" />
                     Copy week
                   </DropdownMenuItem>
                 )}
-                {onClearWeek && hasExercisesInWeek && (
+                {onClearWeek && (
                   <DropdownMenuItem 
                     onClick={() => onClearWeek(weekStartDate)}
                     className="text-destructive focus:text-destructive"

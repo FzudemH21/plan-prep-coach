@@ -254,8 +254,21 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         const hasTestsOrEvents = (liveTrainingDay?.testNames?.length ?? 0) > 0 || (liveTrainingDay?.eventNames?.length ?? 0) > 0;
         const hasLiveData = hasLiveExercises || hasLiveSessions || hasTestsOrEvents;
         
+        // Always collect tests/events from live state
+        if (hasTestsOrEvents && liveTrainingDay) {
+          if (liveTrainingDay.testNames?.length > 0) {
+            testNames = [...testNames, ...liveTrainingDay.testNames];
+          }
+          if (liveTrainingDay.eventNames?.length > 0) {
+            eventNames = [...eventNames, ...liveTrainingDay.eventNames];
+          }
+        }
+        
         if (hasLiveData) {
-          usedLiveEditingState = true;
+          // Only block cached path when live state has actual session/exercise data
+          if (hasLiveExercises || hasLiveSessions) {
+            usedLiveEditingState = true;
+          }
           const selectedAssignment = assignments.find(a => a.id === selectedAssignmentId);
           assignmentId = selectedAssignmentId;
           programName = selectedAssignment?.programName;
@@ -269,13 +282,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             dayIntensity = liveDayIntensity.intensity as IntensityLevel;
           }
           
-          // Collect test/event names from live data
-          if (liveTrainingDay?.testNames?.length > 0) {
-            testNames = [...testNames, ...liveTrainingDay.testNames];
-          }
-          if (liveTrainingDay?.eventNames?.length > 0) {
-            eventNames = [...eventNames, ...liveTrainingDay.eventNames];
-          }
+          // Tests/events already collected above
           
           // FIX: Use actual splitState value - 0 means no sessions (cleared day)
           // Only render sessions if we have exercises OR splitState > 0
