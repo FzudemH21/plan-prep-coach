@@ -77,6 +77,7 @@ interface TrainingCalendarViewProps {
     parameters: Record<string, string | number>
   ) => void;
   onUpdateTestComment?: (testId: string, comments: string) => void;
+  onUpdateTestValues?: (testId: string, updates: { preTestValue?: number; goalValue?: number; comments?: string }) => void;
   onUpdateEventComment?: (eventId: string, comments: string) => void;
   copiedSection?: { exercises: ExerciseDistribution[]; sections: any[]; sourceSectionId: string; sourceDayDate: string; sourceSessionIndex: number } | null;
   onCopySection?: (sectionId: string) => void;
@@ -147,6 +148,7 @@ export function TrainingCalendarView({
   parameterValues = {},
   onSaveParameters,
   onUpdateTestComment,
+  onUpdateTestValues,
   onUpdateEventComment,
   copiedSection,
   onCopySection,
@@ -1042,6 +1044,7 @@ export function TrainingCalendarView({
               onAddTestEvent={onAddTestEvent}
               onDeleteTestEvent={onDeleteTestEvent}
               onUpdateTestComment={onUpdateTestComment}
+              onUpdateTestValues={onUpdateTestValues}
               onUpdateEventComment={onUpdateEventComment}
               availableTests={availableTests}
               availableEvents={availableEvents}
@@ -1115,6 +1118,7 @@ export function TrainingCalendarView({
                     onAddTestEvent={onAddTestEvent}
                     onDeleteTestEvent={onDeleteTestEvent}
                     onUpdateTestComment={onUpdateTestComment}
+                    onUpdateTestValues={onUpdateTestValues}
                     onUpdateEventComment={onUpdateEventComment}
                     availableTests={availableTests}
                     availableEvents={availableEvents}
@@ -1164,6 +1168,7 @@ export function TrainingCalendarView({
           onAddTestEvent={onAddTestEvent}
           onDeleteTestEvent={onDeleteTestEvent}
           onUpdateTestComment={onUpdateTestComment}
+          onUpdateTestValues={onUpdateTestValues}
           onUpdateEventComment={onUpdateEventComment}
           copiedSession={copiedSession}
           copiedSection={copiedSection}

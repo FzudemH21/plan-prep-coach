@@ -101,6 +101,7 @@ interface WorkoutSessionSheetProps {
   onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean, comments?: string) => void;
   onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event', name: string) => void;
   onUpdateTestComment?: (testId: string, comments: string) => void;
+  onUpdateTestValues?: (testId: string, updates: { preTestValue?: number; goalValue?: number; comments?: string }) => void;
   onUpdateEventComment?: (eventId: string, comments: string) => void;
   copiedSession?: { exercises: ExerciseDistribution[]; sections?: any[]; sourceDate: string; sessionIndex: number } | null;
   copiedSection?: { exercises: ExerciseDistribution[]; sections: any[]; sourceSectionId: string; sourceDayDate: string; sourceSessionIndex: number } | null;
@@ -154,6 +155,7 @@ export function WorkoutSessionSheet({
   onAddTestEvent,
   onDeleteTestEvent,
   onUpdateTestComment,
+  onUpdateTestValues,
   onUpdateEventComment,
   copiedSession,
   copiedSection,
@@ -2694,6 +2696,7 @@ export function WorkoutSessionSheet({
             onUpdateEventComment?.(id, comments);
           }
         }}
+        onUpdateTestValues={onUpdateTestValues}
         allParameters={parametersData.parameters}
         toolboxEntries={parametersToolboxData?.entries || []}
         onAddParameter={(param) => {
