@@ -917,6 +917,16 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
               <MasterPlannerGrid
                 calendarDays={editing.allAssignmentDays}
                 selectedDayOfWeek={selectedDayOfWeek}
+                onSessionClick={(dayDate, sessionIndex) => {
+                  if (selectedAssignmentId) {
+                    setSelectedSessionInfo({
+                      dayDate,
+                      sessionIndex,
+                      assignmentId: selectedAssignmentId,
+                    });
+                    setSessionSheetOpen(true);
+                  }
+                }}
                 getIntensityColor={getIntensityColor}
                 dailyIntensityData={editing.dailyIntensityData}
                 parameterValues={editing.parameterValues}
