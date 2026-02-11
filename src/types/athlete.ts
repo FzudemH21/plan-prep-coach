@@ -157,4 +157,26 @@ export interface AthleteCalendarAssignment {
   // Metadata
   createdAt: string;
   notes?: string;
+  
+  // Reviewed tests & events (from Step 4)
+  reviewedSubGoals?: ReviewedSubGoal[];
+  reviewedEvents?: ReviewedEvent[];
+}
+
+export interface ReviewedSubGoal {
+  id: string;
+  testMethod: string;
+  baselineValue: number;
+  goalValue: number;
+  unit: string;
+  comments?: string;
+  scheduledDates: string[];
+  parameterLinkedId?: string;
+}
+
+export interface ReviewedEvent {
+  id: string;
+  name: string;
+  comments?: string;
+  scheduledDates: string[];
 }
