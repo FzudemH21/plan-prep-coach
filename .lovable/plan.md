@@ -1,52 +1,52 @@
 
 
-# Fix Clear Week/Day, Master Planner Sync, and Tests/Events Clearing
+# Fix: Program Assignment Not Displaying After Creation
 
-## Problems Found
+## Root Cause
 
-### 1. Clear Week fails: Timezone bug
-`handleClearWeek` uses `new Date(weekStartDate)` which parses "2025-02-09" as UTC midnight. In western timezones, this becomes Feb 8 evening, so the generated `weekDates` array is shifted by one day. No exercises match those wrong dates, so nothing gets cleared.
+The last edit introduced `hasExplicitEditingState` (line 257) which sets `usedLiveEditingState = true` whenever the editing hook has ANY state for a date (even empty/cleared). This correctly prevents cleared days from falling back to stale cache. However, it has a critical side effect:
 
-Same timezone bug exists in `handleCopyWeek`.
-
-### 2. Clear Day/Week don't remove tests and events
-Both `handleClearDay` and `handleClearWeek` clear sessions, exercises, sections, and supersets, but they do NOT clear `testNames` and `eventNames` from the `trainingDays` entries. So test/event markers remain on the calendar after clearing, making it appear as if the clear didn't work.
-
-### 3. Master Planner shows no sessions: Timezone bug
-The `allAssignmentDays` memo creates Date objects with `new Date(dateStr)` (line 1719). The `MasterPlannerGrid` then filters by `getDay(day.date)` to match the selected weekday. Due to UTC parsing, all dates shift back one day in western timezones, so day-of-week filtering fails -- Monday sessions appear under Sunday's column (or not at all).
-
-## Technical Changes
-
-### File: `src/hooks/useAthleteCalendarEditing.ts`
-
-**A. Fix `handleClearWeek` (line 1013) -- local-safe date parsing + clear tests/events:**
-Replace `new Date(weekStartDate)` with split-based local date construction:
+Line 320-321:
 ```typescript
-const [y, m, d] = weekStartDate.split('-').map(Number);
-const startDateVal = new Date(y, m - 1, d);
-```
-Also update the `trainingDays` mapping to clear `testNames`, `eventNames`, `isTestDay`, `isEventDay`:
-```typescript
-{ ...day, sessions: 0, sessionNames: [], testNames: [], eventNames: [], isTestDay: false, isEventDay: false }
+if (!usedLiveEditingState) {
+  // Find assignments that overlap with this date
+  const dayAssignments = assignments.filter(...)
 ```
 
-**B. Fix `handleCopyWeek` (line 967) -- same timezone fix:**
-Replace `new Date(weekStartDate)` with local-safe parsing.
+When `usedLiveEditingState = true`, the ENTIRE cached path is skipped -- including rendering of OTHER assignments that overlap the same date. So when a new program is assigned, its data is saved to cache but never rendered because the selected (old) assignment's editing state blocks the cached path.
 
-**C. Fix `handleClearDay` (line 800) -- clear tests/events:**
-Update the `trainingDays` mapping to also clear `testNames`, `eventNames`, `isTestDay`, `isEventDay`.
+Additionally, `handleAssignProgram` never calls `setSelectedAssignmentId(newAssignment.id)`, so the new assignment is never auto-selected (the auto-select effect only fires when no assignment is selected).
 
-**D. Fix `allAssignmentDays` (line 1706, 1719) -- local-safe Date creation:**
-Replace `new Date(dateStr)` with:
+## Fix (single file)
+
+### File: `src/components/athletes/AthleteCalendarView.tsx`
+
+**Change 1**: Modify the cached path (line 320) to always run for NON-selected assignments, even when `usedLiveEditingState` is true. Replace the simple `if (!usedLiveEditingState)` guard with logic that:
+- Skips the selected assignment (already handled by live editing path above)
+- Still processes all other assignments from cache
+
 ```typescript
-const [y, m, d] = dateStr.split('-').map(Number);
-// use new Date(y, m - 1, d) for the date field
+// Always check cached assignments for NON-selected assignments
+// The live editing path above only handles the selectedAssignmentId
+{
+  const dayAssignments = assignments.filter(assignment => {
+    // Skip the selected assignment - already handled by live editing state above
+    if (assignment.id === selectedAssignmentId && usedLiveEditingState) return false;
+    const assignmentStart = new Date(assignment.startDate);
+    const assignmentEnd = new Date(assignment.endDate);
+    return isWithinInterval(date, { start: assignmentStart, end: assignmentEnd });
+  });
+  // ... rest of cached rendering unchanged
+}
 ```
-This ensures `getDay()` returns the correct weekday for Master Planner filtering.
 
-## Expected Outcomes
-- Clear Week correctly identifies and removes all exercises, sections, supersets, tests, and events for the 7 target dates
-- Clear Day removes tests and events in addition to sessions/exercises
-- Master Planner displays sessions on the correct weekday columns, matching the Calendar View
-- All changes persist immediately to localStorage
+**Change 2**: In `handleAssignProgram` (after line 774), auto-select the newly created assignment so its editing state loads immediately:
 
+```typescript
+setSelectedAssignmentId(newAssignment.id);
+```
+
+## Expected Outcome
+- Newly assigned programs immediately appear on the calendar
+- Multiple overlapping assignments all render correctly
+- Cleared days still respect the live editing state (no stale cache regression)
