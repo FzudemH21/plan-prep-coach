@@ -1,68 +1,52 @@
 
 
-# Fix Athlete Calendar: Clear Week, Review Tests/Events, Master Planner Sync, and Intensities
+# Fix Clear Week/Day, Master Planner Sync, and Tests/Events Clearing
 
-## Issues to Fix
+## Problems Found
 
-### 1. Clear Week not working
-**Root cause**: `handleClearWeek` in `useAthleteCalendarEditing.ts` updates React state but relies on the debounced auto-save (300ms delay) to persist to localStorage. Per the architecture memory, clear operations should perform **immediate localStorage writes** and update `lastSavedStateRef` to bypass debounce. Additionally, the `assignmentDataCache` in `AthleteCalendarView.tsx` must be invalidated so the calendar re-reads the updated storage.
+### 1. Clear Week fails: Timezone bug
+`handleClearWeek` uses `new Date(weekStartDate)` which parses "2025-02-09" as UTC midnight. In western timezones, this becomes Feb 8 evening, so the generated `weekDates` array is shifted by one day. No exercises match those wrong dates, so nothing gets cleared.
 
-**Fix**: In `handleClearWeek` (and `handleClearDay` for consistency), after updating state, perform an immediate `localStorage.setItem` write and update `lastSavedStateRef.current`. Also expose an `invalidateCache` callback or event that `AthleteCalendarView.tsx` can react to. Alternatively, the simpler approach: after state updates in `handleClearWeek`, schedule an immediate save that bypasses debounce by reading current state + applying the clear.
+Same timezone bug exists in `handleCopyWeek`.
 
-### 2. Review Tests and Events in AssignProgramDialog shows duplicate entries
-**Root cause**: The current implementation (lines 502-561 in `AssignProgramDialog.tsx`) renders each `reviewedSubGoal` as a separate entry. When the same test appears multiple times (on different dates), they show as separate rows. The user wants:
-- Tests deduplicated by test method name
-- Each unique test shows its scheduled dates as clickable badges
-- Clicking a date badge opens a calendar popover to change the date
-- X-ing out a date removes it; if all dates removed, the test disappears entirely
+### 2. Clear Day/Week don't remove tests and events
+Both `handleClearDay` and `handleClearWeek` clear sessions, exercises, sections, and supersets, but they do NOT clear `testNames` and `eventNames` from the `trainingDays` entries. So test/event markers remain on the calendar after clearing, making it appear as if the clear didn't work.
 
-**Fix**: Refactor the "Step 4: Review Tests & Events" section:
-- Group `reviewedSubGoals` by `testMethod` (or `parameterLinkedId`) so each unique test appears once
-- Display scheduled dates as interactive badges with X buttons
-- Add a calendar popover on each date badge to allow date changes
-- When all dates for a test are removed, remove the test from `reviewedSubGoals`
-- Same pattern for events
+### 3. Master Planner shows no sessions: Timezone bug
+The `allAssignmentDays` memo creates Date objects with `new Date(dateStr)` (line 1719). The `MasterPlannerGrid` then filters by `getDay(day.date)` to match the selected weekday. Due to UTC parsing, all dates shift back one day in western timezones, so day-of-week filtering fails -- Monday sessions appear under Sunday's column (or not at all).
 
-### 3. Intensity mismatch - assigned program intensities don't match source
-**Root cause**: In `buildTrainingDaysFromAssignment` (line 138), the fallback intensity is `(meso.intensity || micro.intensity || 'moderate')`. This uses the mesocycle-level intensity rather than the per-day intensity that was stored in the program. When the assignment data is first created (in `AthleteCalendarView.tsx` `handleAssignProgram`), the daily intensity data from the source program should be date-shifted and stored. If the source program has per-day intensity overrides (stored in `dailyIntensityData` in localStorage), those need to be properly shifted and included in the assignment snapshot.
+## Technical Changes
 
-**Fix**: In `AthleteCalendarView.tsx` where the assignment is saved to localStorage (the `handleAssignProgram` callback), ensure the source program's `dailyIntensityData` is read from localStorage, date-shifted, and stored in the assignment snapshot. The `loadAssignmentForEditing` already reads `storedDailyIntensity` and uses it, so the issue is at assignment creation time.
+### File: `src/hooks/useAthleteCalendarEditing.ts`
 
-### 4. Master Planner still shows "no session" when Calendar View shows sessions
-**Root cause**: The `allAssignmentDays` memo (line 1617) uses `Math.max(daySessions, 1)` to build the sessions array even when `daySessions` is 0, but then filters with `daySessions > 0 ? sessions : []` on line 1634. However, the issue is that `daySplitStates` may not contain entries for all dates. When `hasExplicitSplitState` is false and `dayExercises.length > 0`, it correctly returns 1. But the `trainingDays` array may not include dates outside the original assignment range where content was pasted.
+**A. Fix `handleClearWeek` (line 1013) -- local-safe date parsing + clear tests/events:**
+Replace `new Date(weekStartDate)` with split-based local date construction:
+```typescript
+const [y, m, d] = weekStartDate.split('-').map(Number);
+const startDateVal = new Date(y, m - 1, d);
+```
+Also update the `trainingDays` mapping to clear `testNames`, `eventNames`, `isTestDay`, `isEventDay`:
+```typescript
+{ ...day, sessions: 0, sessionNames: [], testNames: [], eventNames: [], isTestDay: false, isEventDay: false }
+```
 
-The Calendar View handles this via a broader date scanning approach (checks all dates in the visible range), while the Master Planner only iterates `trainingDays` which is limited to the original assignment's date range. If workouts are pasted outside this range, the Master Planner won't see them.
+**B. Fix `handleCopyWeek` (line 967) -- same timezone fix:**
+Replace `new Date(weekStartDate)` with local-safe parsing.
 
-**Fix**: Extend `allAssignmentDays` to also include dates from `exerciseDistribution` and `daySplitStates` that aren't in `trainingDays`, creating synthetic entries for them. This aligns with the "continuous workout stream" model.
+**C. Fix `handleClearDay` (line 800) -- clear tests/events:**
+Update the `trainingDays` mapping to also clear `testNames`, `eventNames`, `isTestDay`, `isEventDay`.
 
-## Technical Plan
-
-### File 1: `src/hooks/useAthleteCalendarEditing.ts`
-
-1. **Fix `handleClearWeek`** (lines 979-1006): After state updates, perform an immediate localStorage write. Read current state, apply the clear transformations, build the save payload, write to localStorage, and update `lastSavedStateRef.current`.
-
-2. **Fix `allAssignmentDays`** (lines 1605-1638): Extend to include dates from `exerciseDistribution` and `daySplitStates` that are not already in `trainingDays`. For these extra dates, create synthetic `trainingDay` entries so the Master Planner sees all content.
-
-### File 2: `src/components/athletes/AssignProgramDialog.tsx`
-
-3. **Refactor "Step 4: Review Tests & Events"** (lines 497-596):
-   - Group `reviewedSubGoals` by `testMethod` + `parameterLinkedId` to deduplicate
-   - Render each unique test once with: Baseline, Goal, Comments fields
-   - Render scheduled dates as clickable Badge components with X buttons
-   - Each date badge gets a Popover with a Calendar for changing the date
-   - Removing all dates removes the test from the list
-   - Same treatment for events
-
-### File 3: `src/components/athletes/AthleteCalendarView.tsx`
-
-4. **Fix intensity data at assignment creation time** (in `handleAssignProgram`): When creating assignment snapshot, read the source program's `dailyIntensityData` from localStorage, date-shift it, and include it in the saved snapshot. This ensures per-day intensity overrides from the source program are preserved.
-
-5. **Invalidate `assignmentDataCache`** after clear week/day operations to force the calendar to re-read updated localStorage data.
+**D. Fix `allAssignmentDays` (line 1706, 1719) -- local-safe Date creation:**
+Replace `new Date(dateStr)` with:
+```typescript
+const [y, m, d] = dateStr.split('-').map(Number);
+// use new Date(y, m - 1, d) for the date field
+```
+This ensures `getDay()` returns the correct weekday for Master Planner filtering.
 
 ## Expected Outcomes
-- Clear Week removes all sessions/exercises for the week and persists immediately
-- Review Tests/Events shows deduplicated tests with interactive date badges and calendar popovers
-- Assigned program intensities match the source program's per-day settings
-- Master Planner shows the same sessions as the Calendar View, including content pasted outside the original date range
-- All changes sync bidirectionally between Master Planner and Calendar View
+- Clear Week correctly identifies and removes all exercises, sections, supersets, tests, and events for the 7 target dates
+- Clear Day removes tests and events in addition to sessions/exercises
+- Master Planner displays sessions on the correct weekday columns, matching the Calendar View
+- All changes persist immediately to localStorage
 
