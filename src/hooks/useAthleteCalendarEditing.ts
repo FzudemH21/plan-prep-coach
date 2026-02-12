@@ -798,7 +798,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     delete newSupersets[dayDate];
     const newDaySplitStates = { ...daySplitStates, [dayDate]: 0 };
     const newTrainingDays = trainingDays.map(day => 
-      day.date === dayDate ? { ...day, sessions: 0, sessionNames: [] } : day
+      day.date === dayDate ? { ...day, sessions: 0, sessionNames: [], testNames: [], eventNames: [], isTestDay: false, isEventDay: false } : day
     );
 
     // Update React state
@@ -964,7 +964,8 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   // === Week Management Handlers ===
 
   const handleCopyWeek = useCallback((weekStartDate: string) => {
-    const startDate = new Date(weekStartDate);
+    const [sy, sm, sd] = weekStartDate.split('-').map(Number);
+    const startDate = new Date(sy, sm - 1, sd);
     const weekDates: string[] = [];
     for (let i = 0; i < 7; i++) {
       weekDates.push(format(addDays(startDate, i), 'yyyy-MM-dd'));
@@ -1010,7 +1011,8 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   }, [exerciseDistribution, sessionSections, supersets, trainingDays, toast]);
 
   const handleClearWeek = useCallback((weekStartDate: string) => {
-    const startDateVal = new Date(weekStartDate);
+    const [cy, cm, cd] = weekStartDate.split('-').map(Number);
+    const startDateVal = new Date(cy, cm - 1, cd);
     const weekDates: string[] = [];
     for (let i = 0; i < 7; i++) {
       weekDates.push(format(addDays(startDateVal, i), 'yyyy-MM-dd'));
@@ -1025,7 +1027,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     weekDates.forEach(d => { newDaySplitStates[d] = 0; });
     const newTrainingDays = trainingDays.map(day =>
       weekDates.includes(day.date)
-        ? { ...day, sessions: 0, sessionNames: [] }
+        ? { ...day, sessions: 0, sessionNames: [], testNames: [], eventNames: [], isTestDay: false, isEventDay: false }
         : day
     );
 
@@ -1703,8 +1705,8 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       // Create synthetic trainingDay for dates outside the original range
       const effectiveTrainingDay: TrainingDay = trainingDay || {
         date: dateStr,
-        dayOfWeek: new Date(dateStr).getDay(),
-        dayName: format(new Date(dateStr), 'EEEE'),
+        dayOfWeek: (() => { const [py, pm, pd] = dateStr.split('-').map(Number); return new Date(py, pm - 1, pd).getDay(); })(),
+        dayName: (() => { const [py, pm, pd] = dateStr.split('-').map(Number); return format(new Date(py, pm - 1, pd), 'EEEE'); })(),
         mesocycleId: selectedAssignment.assignedMesocycles[0]?.id || '',
         microcycleId: '',
         isTestDay: false,
@@ -1716,7 +1718,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       };
       
       return {
-        date: new Date(dateStr),
+        date: (() => { const [py, pm, pd] = dateStr.split('-').map(Number); return new Date(py, pm - 1, pd); })(),
         dateString: dateStr,
         isCurrentMonth: true,
         trainingDay: effectiveTrainingDay,
