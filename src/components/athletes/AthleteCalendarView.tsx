@@ -252,6 +252,9 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         const hasLiveExercises = liveExercises.length > 0;
         const hasLiveSessions = liveSplitState !== undefined && liveSplitState > 0;
         const hasTestsOrEvents = (liveTrainingDay?.testNames?.length ?? 0) > 0 || (liveTrainingDay?.eventNames?.length ?? 0) > 0;
+        // CRITICAL: If liveSplitState is defined (even as 0), the editing hook has authoritative state
+        // for this date. We MUST use it and NOT fall through to stale cache.
+        const hasExplicitEditingState = liveSplitState !== undefined || liveTrainingDay !== undefined;
         const hasLiveData = hasLiveExercises || hasLiveSessions || hasTestsOrEvents;
         
         // Always collect tests/events from live state
@@ -264,9 +267,10 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           }
         }
         
-        if (hasLiveData) {
-          // Only block cached path when live state has actual session/exercise data
-          if (hasLiveExercises || hasLiveSessions) {
+        if (hasLiveData || hasExplicitEditingState) {
+          // Block cached path whenever the editing hook has state for this date
+          // This includes cleared days (splitState=0) which must NOT fall through to stale cache
+          if (hasExplicitEditingState || hasLiveExercises || hasLiveSessions) {
             usedLiveEditingState = true;
           }
           const selectedAssignment = assignments.find(a => a.id === selectedAssignmentId);
