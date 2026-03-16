@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, LayoutGrid, Columns } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, startOfWeek, endOfWeek, addWeeks, subWeeks, isSameMonth, parseISO, isSameDay } from 'date-fns';
+import { useCalendarGrid, groupDaysIntoWeeks } from '@/hooks/useCalendarGrid';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MasterPlannerGrid } from './MasterPlannerGrid';
 import { cn } from '@/lib/utils';
@@ -272,25 +273,12 @@ export function TrainingCalendarView({
     return grouped;
   }, [exerciseDistribution]);
 
+  // Shared calendar grid date range calculation
+  const { dateRange: calendarDateRange } = useCalendarGrid(currentDate, viewMode);
+
   // Calculate calendar days based on view mode
   const calendarDays = useMemo(() => {
-    const start = startOfWeek(currentDate, { weekStartsOn: 1 });
-    let end: Date;
-
-    switch (viewMode) {
-      case '1week':
-        end = endOfWeek(currentDate, { weekStartsOn: 1 });
-        break;
-      case '2week':
-        end = endOfWeek(addWeeks(currentDate, 1), { weekStartsOn: 1 });
-        break;
-      case '4week':
-      default:
-        end = endOfWeek(addWeeks(currentDate, 3), { weekStartsOn: 1 });
-        break;
-    }
-
-    const days = eachDayOfInterval({ start, end });
+    const days = calendarDateRange;
 
     return days.map(date => {
       const dateString = format(date, 'yyyy-MM-dd');
@@ -352,16 +340,10 @@ export function TrainingCalendarView({
         totalExercises: exercises.length,
       };
     });
-  }, [currentDate, viewMode, exercisesByDate, trainingDays, sessionDataVersion, daySplitStates]);
+  }, [calendarDateRange, currentDate, exercisesByDate, trainingDays, sessionDataVersion, daySplitStates]);
 
   // Group days into weeks
-  const weeks = useMemo(() => {
-    const result: CalendarDay[][] = [];
-    for (let i = 0; i < calendarDays.length; i += 7) {
-      result.push(calendarDays.slice(i, i + 7));
-    }
-    return result;
-  }, [calendarDays]);
+  const weeks = useMemo(() => groupDaysIntoWeeks(calendarDays), [calendarDays]);
 
   // Calculate all days in the viewed mesocycle for Master Planner view
   const allMesocycleDays = useMemo((): CalendarDay[] => {

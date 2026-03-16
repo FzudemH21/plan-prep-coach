@@ -67,7 +67,7 @@ interface AthleteCalendarWeekRowProps {
   athletePerformanceParameters?: AthletePerformanceParameter[];
 }
 
-export function AthleteCalendarWeekRow({
+export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow({
   week,
   weekIdx,
   onSessionClick,
@@ -187,4 +187,4 @@ export function AthleteCalendarWeekRow({
       </div>
     </div>
   );
-}
+});

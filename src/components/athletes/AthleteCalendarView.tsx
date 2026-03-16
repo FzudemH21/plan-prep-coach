@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, isSameMonth, isWithinInterval, parseISO } from 'date-fns';
+import { useCalendarGrid, groupDaysIntoWeeks } from '@/hooks/useCalendarGrid';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -202,29 +203,16 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     };
   }, [editing.selectedAssignment]);
 
+  // Shared calendar grid date range calculation
+  const { dateRange: calendarDateRange } = useCalendarGrid(currentDate, viewMode);
+
   // Calculate calendar days based on view mode (for calendar view)
   // IMPORTANT: For the currently selected assignment, read from live editing state
   // to ensure immediate visual feedback after paste/copy operations
   const calendarDays = useMemo((): AthleteCalendarDay[] => {
     if (viewMode === 'master') return [];
-    
-    const start = startOfWeek(currentDate, { weekStartsOn: 1 });
-    let end: Date;
 
-    switch (viewMode) {
-      case '1week':
-        end = endOfWeek(currentDate, { weekStartsOn: 1 });
-        break;
-      case '2week':
-        end = endOfWeek(addWeeks(currentDate, 1), { weekStartsOn: 1 });
-        break;
-      case '4week':
-      default:
-        end = endOfWeek(addWeeks(currentDate, 3), { weekStartsOn: 1 });
-        break;
-    }
-
-    const days = eachDayOfInterval({ start, end });
+    const days = calendarDateRange;
 
     return days.map(date => {
       const dateString = format(date, 'yyyy-MM-dd');
@@ -471,16 +459,10 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         intensity: dayIntensityForSquare, // NEW: Explicit day-level intensity
       };
     });
-  }, [currentDate, viewMode, assignments, assignmentDataCache, selectedAssignmentId, editing.exerciseDistribution, editing.daySplitStates, editing.trainingDays, editing.dailyIntensityData, editing.sessionIntensities]);
+  }, [calendarDateRange, viewMode, assignments, assignmentDataCache, selectedAssignmentId, editing.exerciseDistribution, editing.daySplitStates, editing.trainingDays, editing.dailyIntensityData, editing.sessionIntensities]);
 
   // Group days into weeks
-  const weeks = useMemo(() => {
-    const result: AthleteCalendarDay[][] = [];
-    for (let i = 0; i < calendarDays.length; i += 7) {
-      result.push(calendarDays.slice(i, i + 7));
-    }
-    return result;
-  }, [calendarDays]);
+  const weeks = useMemo(() => groupDaysIntoWeeks(calendarDays), [calendarDays]);
 
   // Calculate date range display
   const dateRangeDisplay = useMemo(() => {

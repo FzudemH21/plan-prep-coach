@@ -56,7 +56,7 @@ interface WorkoutExerciseCardProps {
   onOpenChangeLibrary?: () => void;
 }
 
-export function WorkoutExerciseCard({
+export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
   exercise,
   isInSuperset,
   supersetLabel,
@@ -609,4 +609,4 @@ export function WorkoutExerciseCard({
       </div>
     </Card>
   );
-}
+});

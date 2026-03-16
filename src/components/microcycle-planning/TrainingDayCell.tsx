@@ -101,12 +101,12 @@ interface TrainingDayCellProps {
   athletePerformanceParameters?: AthletePerformanceParameter[];
 }
 
-export function TrainingDayCell({ 
-  day, 
-  onSessionClick, 
+export const TrainingDayCell = React.memo(function TrainingDayCell({
+  day,
+  onSessionClick,
   onDeleteSession,
-  onCopySession, 
-  onPasteSession, 
+  onCopySession,
+  onPasteSession,
   copiedSession,
   onCopyDay,
   onClearDay,
@@ -663,4 +663,13 @@ export function TrainingDayCell({
       />
     </>
   );
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison: only re-render when visually relevant props change
+  return (
+    prevProps.day.dateString === nextProps.day.dateString &&
+    prevProps.day.sessions.length === nextProps.day.sessions.length &&
+    prevProps.day.totalExercises === nextProps.day.totalExercises &&
+    (prevProps.copiedSession == null) === (nextProps.copiedSession == null) &&
+    (prevProps.copiedDay == null) === (nextProps.copiedDay == null)
+  );
+});

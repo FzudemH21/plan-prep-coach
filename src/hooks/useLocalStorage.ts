@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Custom event name used to synchronize multiple useLocalStorage instances
@@ -18,6 +18,8 @@ import { useEffect, useState } from "react";
  *   - Every instance listens for the sync event and updates its React state
  *     from localStorage when another instance has written a newer value.
  *   - The storage event is also handled so cross-tab changes are reflected.
+ *   - A ref prevents each instance from reacting to its own sync event,
+ *     avoiding a spurious re-render cycle caused by synchronous dispatchEvent.
  */
 const SAME_PAGE_SYNC_EVENT = "useLocalStorage:sync";
 
@@ -31,6 +33,9 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
     }
   });
 
+  // Track whether this instance is currently writing, to skip its own sync event
+  const isWritingRef = useRef(false);
+
   // Write to localStorage — but only when the serialized value actually
   // differs from what is already stored. After writing, notify all other
   // instances on this page so they can pull the updated value.
@@ -39,10 +44,12 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
       const serialized = JSON.stringify(storedValue);
       const current = window.localStorage.getItem(key);
       if (current !== serialized) {
+        isWritingRef.current = true;
         window.localStorage.setItem(key, serialized);
         window.dispatchEvent(
           new CustomEvent(SAME_PAGE_SYNC_EVENT, { detail: { key } })
         );
+        isWritingRef.current = false;
       }
     } catch {}
   }, [key, storedValue]);
@@ -52,6 +59,7 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
   //   - Other browser tabs / windows (native "storage" event)
   useEffect(() => {
     const handleSamePageSync = (event: Event) => {
+      if (isWritingRef.current) return; // Skip own writes
       const { detail } = event as CustomEvent<{ key: string }>;
       if (detail.key !== key) return;
       try {
