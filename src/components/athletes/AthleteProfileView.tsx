@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -494,6 +495,23 @@ export function AthleteProfileView({
                 </p>
               )}
             </div>
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-2 pt-4 border-t">
+              <Label>Notes</Label>
+              {isEditing ? (
+                <Textarea
+                  value={displayValue('notes') || ''}
+                  onChange={(e) => updateField('notes', e.target.value || undefined)}
+                  placeholder="Notizen zum Athleten..."
+                  className="min-h-[100px] resize-y"
+                />
+              ) : (
+                <p className="text-sm whitespace-pre-wrap">
+                  {athlete.notes || <span className="text-muted-foreground">No notes</span>}
+                </p>
+              )}
             </div>
 
             {/* Groups - At Bottom */}

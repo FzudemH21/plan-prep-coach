@@ -690,6 +690,12 @@ export default function MesocyclePage() {
           id: sg.id,
           description: sg.description || sg.name || 'Unknown'
         }))}
+        notes={macrocycleData?.planNotes}
+        onNotesChange={(notes) => {
+          const updated = { ...macrocycleData, planNotes: notes };
+          setMacrocycleData(updated);
+          localStorage.setItem('macrocycleData', JSON.stringify(updated));
+        }}
       />
     );
   };

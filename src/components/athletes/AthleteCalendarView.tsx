@@ -178,7 +178,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   const currentMesocycleFromAssignment = useMemo(() => {
     if (!editing.selectedAssignment) return undefined;
     
-    const meso = editing.selectedAssignment.assignedMesocycles[0];
+    const meso = (editing.selectedAssignment.assignedMesocycles || [])[0];
     if (!meso) return undefined;
     
     return {
@@ -191,7 +191,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
       endDate: new Date(meso.endDate),
       duration: meso.duration,
       intensity: meso.intensity as any,
-      microcycles: meso.microcycles.map(m => ({
+      microcycles: (meso.microcycles || []).map(m => ({
         id: m.id,
         name: m.name,
         duration: m.duration,
@@ -680,8 +680,12 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         // If still no valid date, show error and cleanup
         if (!originalStartDate) {
           console.error('[handleAssignProgram] Could not determine original start date');
-          // Cleanup the created assignment - silently fail and remove broken assignment
           athleteData.deleteCalendarAssignment(newAssignment.id);
+          toast({
+            title: "Assignment failed",
+            description: "Could not determine the program's start date. Please ensure the program has valid training data.",
+            variant: "destructive",
+          });
           return;
         }
         
@@ -737,9 +741,22 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             ? shiftTrainingDaysDates(program.trainingDays, normalizedOriginalStart, normalizedNewStart)
             : [];
             
-          const shiftedDaySplitStates = program.daySplitStates
-            ? shiftDaySplitStatesDates(program.daySplitStates, normalizedOriginalStart, normalizedNewStart)
-            : {};
+          // Derive split states from daySplitStates if available, otherwise
+          // fall back to trainingDays.sessions so programs saved before the
+          // daySplitStates field existed still show sessions after assignment.
+          const sourceSplitStates =
+            program.daySplitStates && Object.keys(program.daySplitStates).length > 0
+              ? program.daySplitStates
+              : (program.trainingDays ?? []).reduce<Record<string, number>>((acc, day) => {
+                  acc[day.date] = day.sessions ?? (day.intensity === 'off' ? 0 : 1);
+                  return acc;
+                }, {});
+
+          const shiftedDaySplitStates = shiftDaySplitStatesDates(
+            sourceSplitStates,
+            normalizedOriginalStart,
+            normalizedNewStart
+          );
           
           // Save shifted data to localStorage
           const storageKey = `athlete-assignment-${newAssignment.id}`;
@@ -774,8 +791,12 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           }));
         } catch (shiftError) {
           console.error('[handleAssignProgram] Error shifting dates:', shiftError);
-          // Cleanup the created assignment on error
           athleteData.deleteCalendarAssignment(newAssignment.id);
+          toast({
+            title: "Assignment failed",
+            description: "An error occurred while processing the program data. Please try again.",
+            variant: "destructive",
+          });
           return;
         }
       } else {
@@ -816,18 +837,18 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
       <Card>
         <CardHeader className="pb-4">
           {/* Navigation and Controls Row */}
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             {/* Left: Title with Calendar Icon */}
-            <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-primary" />
-              <span className="text-base font-semibold">Athlete Calendar</span>
-              <span className="text-sm text-muted-foreground ml-2">
+            <div className="flex items-center gap-2 min-w-0 shrink">
+              <Calendar className="h-5 w-5 text-primary shrink-0" />
+              <span className="text-base font-semibold whitespace-nowrap">Athlete Calendar</span>
+              <span className="text-sm text-muted-foreground ml-1 truncate">
                 {dateRangeDisplay}
               </span>
             </div>
 
             {/* Center/Right: Controls */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
               {/* View Mode Toggle (Calendar vs Master Planner) */}
               <ToggleGroup type="single" value={isMasterMode ? 'master' : 'calendar'} onValueChange={(v) => {
                 if (v === 'master') {
@@ -917,7 +938,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           </div>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           {isMasterMode ? (
             // Master Planner Grid
             assignments.length === 0 ? (
@@ -994,9 +1015,9 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             )
           ) : (
             // Calendar View
-            <>
+            <div className="min-w-[756px]">
               {/* Day Headers */}
-              <div className="grid grid-cols-7 gap-2 mb-4">
+              <div className="grid grid-cols-7 gap-1.5 mb-3">
                 {weekDayHeaders.map(day => (
                   <div
                     key={day}
@@ -1009,7 +1030,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
 
               {/* Week Rows */}
               <DragDropContext onDragStart={handleSessionDragStart} onDragEnd={handleSessionDragEnd}>
-                <div className="space-y-6">
+                <div className="space-y-4">
                   {weeks.map((week, idx) => (
                     <AthleteCalendarWeekRow
                       key={`week-${idx}`}
@@ -1054,7 +1075,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                   ))}
                 </div>
               </DragDropContext>
-            </>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -1121,9 +1142,9 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             // Find the correct microcycleIndex from trainingDays for this date
             const trainingDay = editing.trainingDays.find(td => td.date === selectedSessionInfo.dayDate);
             if (trainingDay?.mesocycleId && trainingDay?.microcycleId) {
-              const meso = editing.selectedAssignment?.assignedMesocycles.find(m => m.id === trainingDay.mesocycleId);
+              const meso = editing.selectedAssignment?.assignedMesocycles?.find(m => m.id === trainingDay.mesocycleId);
               if (meso) {
-                const idx = meso.microcycles.findIndex(mic => mic.id === trainingDay.microcycleId);
+                const idx = (meso.microcycles || []).findIndex(mic => mic.id === trainingDay.microcycleId);
                 if (idx >= 0) return idx;
               }
             }

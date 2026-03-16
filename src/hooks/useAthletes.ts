@@ -42,7 +42,10 @@ const migrateData = (data: LegacyAthleteDatabase | AthleteDatabase): AthleteData
     
     return {
       groups: data.groups || [],
-      athletes: data.athletes || [],
+      athletes: (data.athletes || []).map(a => ({
+        ...a,
+        groupIds: a.groupIds ?? [],
+      })),
       biometricDefinitions: data.parameterDefinitions || [],
       athleteBiometrics: migratedBiometrics,
       athletePerformanceParameters: [],
@@ -58,7 +61,10 @@ const migrateData = (data: LegacyAthleteDatabase | AthleteDatabase): AthleteData
   
   return {
     groups: data.groups || [],
-    athletes: data.athletes || [],
+    athletes: (data.athletes || []).map(a => ({
+      ...a,
+      groupIds: a.groupIds ?? [],
+    })),
     biometricDefinitions: (data as AthleteDatabase).biometricDefinitions || [],
     athleteBiometrics: biometrics,
     athletePerformanceParameters: (data as AthleteDatabase).athletePerformanceParameters || [],

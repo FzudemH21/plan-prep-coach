@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { format } from 'date-fns';
-import { Info, User, Calendar, Target, Trophy, ChevronDown, ChevronUp, Layers } from 'lucide-react';
+import { Info, User, Calendar, Target, Trophy, ChevronDown, ChevronUp, Layers, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface TrainingPlanOverviewProps {
@@ -18,6 +19,8 @@ interface TrainingPlanOverviewProps {
   primaryGoal?: string;
   subGoals?: Array<{ id: string; description: string }>;
   defaultCollapsed?: boolean;
+  notes?: string;
+  onNotesChange?: (notes: string) => void;
 }
 
 export function TrainingPlanOverview({
@@ -31,6 +34,8 @@ export function TrainingPlanOverview({
   primaryGoal,
   subGoals = [],
   defaultCollapsed = false,
+  notes,
+  onNotesChange,
 }: TrainingPlanOverviewProps) {
   const [isOpen, setIsOpen] = useState(!defaultCollapsed);
   const [showAllSubGoals, setShowAllSubGoals] = useState(false);
@@ -151,8 +156,8 @@ export function TrainingPlanOverview({
                     </Badge>
                   ))}
                   {hiddenCount > 0 && !showAllSubGoals && (
-                    <Badge 
-                      variant="outline" 
+                    <Badge
+                      variant="outline"
                       className="text-xs cursor-pointer hover:bg-muted"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -163,8 +168,8 @@ export function TrainingPlanOverview({
                     </Badge>
                   )}
                   {showAllSubGoals && uniqueSubGoals.length > MAX_VISIBLE_SUBGOALS && (
-                    <Badge 
-                      variant="outline" 
+                    <Badge
+                      variant="outline"
                       className="text-xs cursor-pointer hover:bg-muted"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -175,6 +180,26 @@ export function TrainingPlanOverview({
                     </Badge>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Notes */}
+            {(notes !== undefined || onNotesChange) && (
+              <div>
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  <FileText className="h-3 w-3" /> Notes
+                </Label>
+                {onNotesChange ? (
+                  <Textarea
+                    value={notes || ''}
+                    onChange={(e) => onNotesChange(e.target.value)}
+                    placeholder="Notizen, Überlegungen, Ideen zum Plan..."
+                    className="mt-1 min-h-[80px] resize-y text-sm"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : notes ? (
+                  <p className="text-sm mt-1 whitespace-pre-wrap">{notes}</p>
+                ) : null}
               </div>
             )}
           </CardContent>

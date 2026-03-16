@@ -146,7 +146,7 @@ export function AthleteCalendarDayCell({
     <>
       <div
         className={cn(
-          "min-h-[140px] border rounded-lg p-3 transition-all relative group/day",
+          "min-h-[140px] border rounded-lg p-2 transition-all relative group/day overflow-hidden",
           "bg-card",
           !hasTraining && "cursor-default",
           isSpecialDay && "border-red-500 border-2"
@@ -375,19 +375,19 @@ export function AthleteCalendarDayCell({
                             onSessionClick?.(day.dateString, session.sessionIndex, session.assignmentId || day.assignmentId || '');
                           }}
                           className={cn(
-                            "p-2 rounded-md bg-primary/10 border border-primary/20 transition-all cursor-pointer hover:bg-primary/15",
+                            "p-2 rounded-md bg-primary/10 border border-primary/20 transition-all cursor-pointer hover:bg-primary/15 overflow-hidden",
                             draggableSnapshot.isDragging && "shadow-lg ring-2 ring-primary opacity-90"
                           )}
                         >
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-1.5">
+                          <div className="flex items-center justify-between gap-1 mb-1 min-w-0">
+                            <div className="flex items-center gap-1 min-w-0 flex-1">
                               {/* Drag Handle */}
-                              <div {...draggableProvided.dragHandleProps} className="cursor-grab active:cursor-grabbing">
+                              <div {...draggableProvided.dragHandleProps} className="cursor-grab active:cursor-grabbing shrink-0">
                                 <GripVertical className="h-3 w-3 text-muted-foreground hover:text-primary" />
                               </div>
-                              <Dumbbell className="h-3 w-3 text-primary" />
+                              <Dumbbell className="h-3 w-3 text-primary shrink-0" />
                               <span
-                                className="text-xs font-medium text-primary truncate max-w-[80px]"
+                                className="text-xs font-medium text-primary truncate min-w-0 flex-1"
                                 title={session.sessionName}
                               >
                                 {session.sessionName}
@@ -397,7 +397,7 @@ export function AthleteCalendarDayCell({
                               {session.intensity && getIntensityColor && (
                                 <div
                                   className={cn(
-                                    "w-3.5 h-3.5 rounded-sm border shrink-0",
+                                    "w-3 h-3 rounded-sm border shrink-0",
                                     getIntensityColor(session.intensity)
                                   )}
                                   title={`Session intensity: ${session.intensity.replace('-', ' ')}`}
@@ -405,12 +405,7 @@ export function AthleteCalendarDayCell({
                               )}
                             </div>
 
-                            <div className="flex items-center gap-1">
-                              {/* Exercise Count Badge */}
-                              <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
-                                {session.exerciseCount}
-                              </Badge>
-                              
+                            <div className="flex items-center gap-0.5 shrink-0">
                               {/* Session Menu */}
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>

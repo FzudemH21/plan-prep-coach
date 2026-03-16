@@ -155,7 +155,7 @@ export function AthleteCalendarWeekRow({
       </div>
 
       {/* Days Grid */}
-      <div className="grid grid-cols-7 gap-2">
+      <div className="grid grid-cols-7 gap-1.5">
         {week.map(day => (
           <AthleteCalendarDayCell
             key={day.dateString}

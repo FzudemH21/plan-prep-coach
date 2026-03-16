@@ -380,18 +380,18 @@ export function TrainingDayCell({
                           onSessionClick?.(day.dateString, session.sessionIndex, session.exercises);
                         }}
                         className={cn(
-                          "p-2 rounded-md bg-primary/10 border border-primary/20 transition-all cursor-pointer hover:bg-primary/15",
+                          "p-2 rounded-md bg-primary/10 border border-primary/20 transition-all cursor-pointer hover:bg-primary/15 overflow-hidden",
                           snapshot.isDragging && "shadow-lg ring-2 ring-primary opacity-90"
                         )}
                       >
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-1.5">
-                            <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing">
+                        <div className="flex items-center justify-between mb-1 min-w-0">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
+                            <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing shrink-0">
                               <GripVertical className="h-3 w-3 text-muted-foreground hover:text-primary" />
                             </div>
-                            <Dumbbell className="h-3 w-3 text-primary" />
-                            <span 
-                              className="text-xs font-medium text-primary truncate max-w-[120px]"
+                            <Dumbbell className="h-3 w-3 text-primary shrink-0" />
+                            <span
+                              className="text-xs font-medium text-primary truncate min-w-0 flex-1"
                               title={session.sessionName || `Session ${idx + 1}`}
                             >
                               {session.sessionName || `Session ${idx + 1}`}
@@ -487,10 +487,6 @@ export function TrainingDayCell({
                           </p>
                         )}
 
-                        {/* Exercise Count */}
-                        <p className="text-xs text-muted-foreground ml-5">
-                          {session.exercises.length} {session.exercises.length === 1 ? 'exercise' : 'exercises'}
-                        </p>
                       </div>
                       );
                     }}
@@ -500,13 +496,6 @@ export function TrainingDayCell({
               </div>
             )}
           </Droppable>
-
-          {/* Multiple Sessions Summary */}
-          {day.sessions.length > 1 && (
-            <p className="text-xs text-muted-foreground text-center pt-1 border-t">
-              {day.sessions.length} sessions • {day.totalExercises} total exercises
-            </p>
-          )}
 
           {/* Add Session Button - shown on hover */}
           {isHovering && onAddSession && (

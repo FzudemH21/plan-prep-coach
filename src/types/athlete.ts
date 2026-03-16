@@ -31,6 +31,7 @@ export interface Athlete {
   isArchived: boolean;
   createdAt: string;
   updatedAt: string;
+  notes?: string;
 }
 
 // Helper to get display name

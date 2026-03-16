@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(where npx:*)",
+      "Bash(cmd /c \"dir C:\\\\Users\\\\Hanik\\\\plan-prep-coach\\\\node_modules\\\\.bin\\\\vite* 2>&1\")",
+      "Bash(cmd /c \"dir C:\\\\Users\\\\Hanik\\\\plan-prep-coach\\\\node_modules 2>&1 | head -5\")",
+      "Bash(cmd /c \"where bun 2>&1\")",
+      "Bash(cmd /c \"C:\\\\Windows\\\\System32\\\\where.exe node 2>&1 & C:\\\\Windows\\\\System32\\\\where.exe npm 2>&1 & C:\\\\Windows\\\\System32\\\\where.exe bun 2>&1\")",
+      "Bash(cmd /c \"echo %PATH%\")",
+      "Bash(tr ';' '\\\\n')",
+      "Bash(echo $PATH)",
+      "Bash(env)",
+      "Read(//c/Users/Hanik/AppData/Local/**)",
+      "Read(//c/Users/Hanik/**)",
+      "Bash(\"/c/Program Files/nodejs/npm.cmd\" install --prefix /c/Users/Hanik/plan-prep-coach)",
+      "Bash(where npm:*)",
+      "Bash(where node:*)",
+      "Skill(gsd:map-codebase)",
+      "Bash(grep:*)",
+      "Bash(node:*)",
+      "Bash(git add:*)",
+      "Bash(git config:*)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

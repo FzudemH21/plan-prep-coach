@@ -57,6 +57,7 @@ export default function MacrocyclePage() {
   const [athleteDropdownOpen, setAthleteDropdownOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [planName, setPlanName] = useState<string>("");
+  const [planNotes, setPlanNotes] = useState<string>("");
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
   
   // New state for plan duration and multiple SMART goals
@@ -228,6 +229,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       try {
         const data = JSON.parse(savedData);
         setPlanName(data.planName || "");
+        setPlanNotes(data.planNotes || "");
         setSelectedAthleteId(data.selectedAthleteId || null);
         
         // Load new planDuration if exists
@@ -245,6 +247,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           setSmartGoals(data.smartGoals.map((g: any) => ({
             ...g,
             id: g.id || generateId(),
+            percentChange: g.percentChange ?? 0,
           })));
         }
         
@@ -334,6 +337,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     
     const macrocycleData = {
       planName,
+      planNotes,
       selectedAthleteId,
       planDuration,
       smartGoals,
@@ -350,7 +354,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       lastUpdated: new Date().toISOString()
     };
     localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
-  }, [planName, selectedAthleteId, planDuration, smartGoals, smartGoal, subGoals, events, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest, selectedEvent, selectedMethods, manuallyAddedMethods]);
+  }, [planName, planNotes, selectedAthleteId, planDuration, smartGoals, smartGoal, subGoals, events, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest, selectedEvent, selectedMethods, manuallyAddedMethods]);
 
   // Save step whenever it changes (step persistence)
   useEffect(() => {
@@ -1110,6 +1114,24 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         </CardContent>
       </Card>
 
+      {/* Notes / Brainstorming */}
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center space-x-2">
+            <FileText className="h-5 w-5" />
+            <span>Notes & Brainstorming</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Textarea
+            value={planNotes}
+            onChange={(e) => setPlanNotes(e.target.value)}
+            placeholder="Notizen, Überlegungen, Ideen zum Plan..."
+            className="min-h-[120px] resize-y"
+          />
+        </CardContent>
+      </Card>
+
       {/* Two Column Layout: SMART Goals (left) + Plan Duration (right) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: SMART Goals List */}
@@ -1153,11 +1175,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium truncate">{goal.description}</span>
-                      <Badge 
-                        variant={goal.percentChange < 0 ? "destructive" : "default"}
+                      <Badge
+                        variant={(goal.percentChange ?? 0) < 0 ? "destructive" : "default"}
                         className="shrink-0"
                       >
-                        {goal.percentChange > 0 ? "+" : ""}{goal.percentChange.toFixed(1)}%
+                        {(goal.percentChange ?? 0) > 0 ? "+" : ""}{(goal.percentChange ?? 0).toFixed(1)}%
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground mt-1">
@@ -1434,11 +1456,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">
                           {goal.baselineValue} {goal.unit} → {goal.desiredValue} {goal.unit}
-                          <Badge 
-                            variant={goal.percentChange > 0 ? "default" : "secondary"}
+                          <Badge
+                            variant={(goal.percentChange ?? 0) > 0 ? "default" : "secondary"}
                             className="text-xs ml-2"
                           >
-                            {goal.percentChange > 0 ? "+" : ""}{goal.percentChange.toFixed(1)}%
+                            {(goal.percentChange ?? 0) > 0 ? "+" : ""}{(goal.percentChange ?? 0).toFixed(1)}%
                           </Badge>
                         </div>
                       </div>
@@ -2641,6 +2663,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       };
       const macrocycleData = {
         planName,
+        planNotes,
         selectedAthleteId,
         planDuration,
         smartGoals,
@@ -2762,6 +2785,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
               };
               const macrocycleData = {
                 planName,
+                planNotes,
                 selectedAthleteId,
                 planDuration,
                 smartGoals,

@@ -359,23 +359,24 @@ export function AssignProgramDialog({
     onAssign(assignment);
   };
 
-  // Filter programs that have at least one session/exercise
+  // Filter programs that have mesocycle data and some training content
   const availablePrograms = programs.filter(p => {
     // Must have mesocycle data
     if (!p.mesocycleData) return false;
     // Handle both formats: direct array or { mesocycles: [...] } object
-    const mesocycles = Array.isArray(p.mesocycleData) 
-      ? p.mesocycleData 
+    const mesocycles = Array.isArray(p.mesocycleData)
+      ? p.mesocycleData
       : p.mesocycleData.mesocycles;
     if (!Array.isArray(mesocycles) || mesocycles.length === 0) return false;
-    
-    // CRITICAL: Require at least one exercise in the training calendar
-    // This ensures the program actually has workout content to copy
-    if (!p.exerciseDistribution || !Array.isArray(p.exerciseDistribution) || p.exerciseDistribution.length === 0) {
-      return false;
-    }
-    
-    return true;
+
+    // Accept if the program has any training content:
+    // exercises, training days, day split states, or daily intensity
+    const hasExercises = Array.isArray(p.exerciseDistribution) && p.exerciseDistribution.length > 0;
+    const hasTrainingDays = Array.isArray(p.trainingDays) && p.trainingDays.length > 0;
+    const hasDaySplitStates = p.daySplitStates && Object.keys(p.daySplitStates).length > 0;
+    const hasDailyIntensity = Array.isArray(p.dailyIntensityData) && p.dailyIntensityData.length > 0;
+
+    return hasExercises || hasTrainingDays || hasDaySplitStates || hasDailyIntensity;
   });
 
   return (

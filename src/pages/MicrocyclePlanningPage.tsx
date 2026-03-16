@@ -209,11 +209,32 @@ export default function MicrocyclePlanningPage() {
       setExerciseDistribution(JSON.parse(savedDistribution));
     }
 
-    // Load saved day split states
+    // Load saved day split states and backfill any missing entries from trainingDays
     const savedDaySplitStates = localStorage.getItem('daySplitStates');
-    if (savedDaySplitStates) {
-      setDaySplitStates(JSON.parse(savedDaySplitStates));
+    const parsedSplitStates: Record<string, number> = savedDaySplitStates
+      ? JSON.parse(savedDaySplitStates)
+      : {};
+
+    // For every training day that has no explicit split state yet,
+    // derive the default from day.sessions or the intensity heuristic.
+    // This ensures Step 2 shows sessions even for days that were never
+    // manually touched (copy/paste/add-session) in Step 1.
+    if (savedTrainingDays) {
+      const loadedDays: any[] = JSON.parse(savedTrainingDays);
+      loadedDays.forEach((day: any) => {
+        if (parsedSplitStates[day.date] === undefined) {
+          const defaultSessions =
+            day.sessions !== undefined
+              ? day.sessions
+              : day.intensity === 'off'
+              ? 0
+              : 1;
+          parsedSplitStates[day.date] = defaultSessions;
+        }
+      });
     }
+
+    setDaySplitStates(parsedSplitStates);
 
     // Load saved session sections
     const savedSessionSections = localStorage.getItem('sessionSections');
@@ -666,9 +687,9 @@ export default function MicrocyclePlanningPage() {
     }
     
     if (!cellData) return 1;
-    
+
     // Get the method's toolbox entries
-    const methodEntries = toolboxData.entries.filter(
+    const methodEntries = (toolboxData?.entries || []).filter(
       entry => `${entry.category} → ${entry.subCategory}` === methodId
     );
     
@@ -1033,10 +1054,12 @@ export default function MicrocyclePlanningPage() {
       );
       
       // Remove session intensity from localStorage
-      const mesocycleId = currentMesocycle.id;
-      const sessionIntensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`;
-      localStorage.removeItem(sessionIntensityKey);
-      
+      const mesocycleId = currentMesocycle?.id;
+      if (mesocycleId) {
+        const sessionIntensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`;
+        localStorage.removeItem(sessionIntensityKey);
+      }
+
       // Update split state to 0
       setDaySplitStates(prev => ({
         ...prev,
@@ -1112,10 +1135,12 @@ export default function MicrocyclePlanningPage() {
     }));
     
     // Clean up session intensity from localStorage
-    const mesocycleId = currentMesocycle.id;
-    const sessionIntensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`;
-    localStorage.removeItem(sessionIntensityKey);
-    
+    const mesocycleId = currentMesocycle?.id;
+    if (mesocycleId) {
+      const sessionIntensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`;
+      localStorage.removeItem(sessionIntensityKey);
+    }
+
     toast({
       title: "Session deleted",
       description: "The session has been removed successfully",
@@ -1151,6 +1176,7 @@ export default function MicrocyclePlanningPage() {
 
   // Handle clearing all data for a microcycle
   const handleClearMicrocycleData = (microcycleId: string) => {
+    if (!mesocycles[currentMesocycleIndex]) return;
     const microcycle = mesocycles[currentMesocycleIndex].microcycles.find(m => m.id === microcycleId);
     if (!microcycle) return;
     
@@ -1221,6 +1247,7 @@ export default function MicrocyclePlanningPage() {
 
   // Handle changing session intensity
   const handleSessionIntensityChange = (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => {
+    if (!currentMesocycle) return;
     const mesocycleId = currentMesocycle.id;
     
     // Store session-specific intensity in localStorage
@@ -1262,6 +1289,7 @@ export default function MicrocyclePlanningPage() {
 
   // Handle changing day intensity (only for single-session days)
   const handleDayIntensityChange = (dayDate: string, intensity: IntensityLevel) => {
+    if (!currentMesocycle) return;
     const mesocycleId = currentMesocycle.id;
     
     // Update day intensity in trainingDays (syncs with calendar view)
@@ -2360,11 +2388,13 @@ export default function MicrocyclePlanningPage() {
     });
     
     // Clean up session intensity and comments from localStorage
-    const mesocycleId = currentMesocycle.id;
+    const mesocycleId = currentMesocycle?.id;
     const maxSessions = daySplitStates[dayDate] ?? 0;
-    for (let i = 0; i < maxSessions; i++) {
-      localStorage.removeItem(`sessionIntensity_${mesocycleId}_${dayDate}_${i}`);
-      localStorage.removeItem(`workoutSessions_${mesocycleId}_${dayDate}_${i}`);
+    if (mesocycleId) {
+      for (let i = 0; i < maxSessions; i++) {
+        localStorage.removeItem(`sessionIntensity_${mesocycleId}_${dayDate}_${i}`);
+        localStorage.removeItem(`workoutSessions_${mesocycleId}_${dayDate}_${i}`);
+      }
     }
     
     const parts = [];
@@ -3082,6 +3112,12 @@ export default function MicrocyclePlanningPage() {
           id: sg.id,
           description: sg.description || sg.name || 'Unknown'
         }))}
+        notes={macrocycleData?.planNotes}
+        onNotesChange={(notes) => {
+          const updated = { ...macrocycleData, planNotes: notes };
+          setMacrocycleData(updated);
+          localStorage.setItem('macrocycleData', JSON.stringify(updated));
+        }}
       />
     );
   };

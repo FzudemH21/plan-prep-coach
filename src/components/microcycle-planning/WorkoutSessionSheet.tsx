@@ -256,7 +256,7 @@ export function WorkoutSessionSheet({
                   console.log('[buildSectionsFromExercises] Toolbox-sourced exercise, using blank params:', ex.exerciseName);
                   
                   // Get method parameters from toolbox
-                  const methodParts = ex.methodId.split(' - ');
+                  const methodParts = (ex.methodId ?? '').split(' - ');
                   const toolboxCategory = methodParts[0];
                   const toolboxSubCategory = methodParts.length > 1 ? methodParts.slice(1).join(' - ') : '';
                   
@@ -284,7 +284,7 @@ export function WorkoutSessionSheet({
                     const paramName = entry.parameterName;
                     
                     // Add unit if quantitative
-                    if (entry.parameterType === 'quantitative' && entry.options.length > 0) {
+                    if (entry.parameterType === 'quantitative' && entry.options?.length > 0) {
                       blankParameters[`${paramName}_unit`] = entry.options[0];
                     }
                     
@@ -445,7 +445,7 @@ export function WorkoutSessionSheet({
                 if (toolboxData) {
                   // Parse methodId to match toolbox category/subCategory structure
                   // e.g., "Lower Body Resistance Training - Strength" -> category: "Lower Body Resistance Training", subCategory: "Strength"
-                  const methodParts = ex.methodId.split(' - ');
+                  const methodParts = (ex.methodId ?? '').split(' - ');
                   const methodCategory = methodParts[0];
                   const methodSubCategory = methodParts.length > 1 ? methodParts.slice(1).join(' - ') : '';
                   
@@ -513,7 +513,7 @@ export function WorkoutSessionSheet({
         console.log('[buildSectionsFromExercises FALLBACK] Toolbox-sourced exercise, using blank params:', ex.exerciseName);
         
         // Get method parameters from toolbox
-        const methodParts = ex.methodId.split(' - ');
+        const methodParts = (ex.methodId ?? '').split(' - ');
         const toolboxCategory = methodParts[0];
         const toolboxSubCategory = methodParts.length > 1 ? methodParts.slice(1).join(' - ') : '';
         
@@ -541,7 +541,7 @@ export function WorkoutSessionSheet({
           const paramName = entry.parameterName;
           
           // Add unit if quantitative
-          if (entry.parameterType === 'quantitative' && entry.options.length > 0) {
+          if (entry.parameterType === 'quantitative' && entry.options?.length > 0) {
             blankParameters[`${paramName}_unit`] = entry.options[0];
           }
           
@@ -693,7 +693,7 @@ export function WorkoutSessionSheet({
       if (toolboxData) {
         // Parse methodId to match toolbox category/subCategory structure
         // e.g., "Lower Body Resistance Training - Strength" -> category: "Lower Body Resistance Training", subCategory: "Strength"
-        const methodParts = ex.methodId.split(' - ');
+        const methodParts = (ex.methodId ?? '').split(' - ');
         const methodCategory = methodParts[0];
         const methodSubCategory = methodParts.length > 1 ? methodParts.slice(1).join(' - ') : '';
         
