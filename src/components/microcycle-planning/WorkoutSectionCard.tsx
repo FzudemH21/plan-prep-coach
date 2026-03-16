@@ -7,93 +7,71 @@ import { Textarea } from '@/components/ui/textarea';
 import { WorkoutSection, WorkoutExercise } from '@/types/workout';
 import { WorkoutExerciseCard } from './WorkoutExerciseCard';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
-import { cn } from '@/lib/utils';
-import { ToolboxDatabase, ToolboxEntry } from '@/types/toolbox';
-import { ParameterVisibilityOverrides } from './ParameterVisibilityPopover';
+import { ToolboxEntry } from '@/types/toolbox';
+import { useWorkoutSession } from './WorkoutSessionContext';
 
 interface WorkoutSectionCardProps {
+  // Section-specific data (different per instance)
   section: WorkoutSection;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
-  onParameterChange: (exerciseId: string, paramName: string, value: string | number) => void;
-  onUnitChange: (exerciseId: string, paramName: string, unit: string) => void;
-  onToggleSuperset: (exerciseId1: string, exerciseId2: string, sectionId: string) => void;
-  onDuplicateExercise: (exerciseId: string) => void;
-  onDeleteExercise: (exerciseId: string) => void;
   onAddExercise: () => void;
   onRenameSection: (newName: string) => void;
   onDeleteSection: () => void;
   onDuplicateSection: () => void;
-  getSupersetLabel: (exerciseId: string) => string | undefined;
   sectionDragHandleProps?: any;
-  onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
-  onExerciseEachSideChange?: (exerciseId: string, eachSide: boolean) => void;
-  onSectionCommentsChange?: (sectionId: string, comments: string) => void;
-  toolboxData?: ToolboxDatabase;
-  visibilityOverrides?: ParameterVisibilityOverrides;
-  onVisibilityChange?: (paramName: string, visible: boolean) => void;
-  onShowAllParams?: () => void;
-  onResetParamsToDefaults?: () => void;
-  onAutoCalculateWeightChange?: (exerciseId: string, value: boolean) => void;
-  onAutoCalculateTargetHRChange?: (exerciseId: string, value: boolean) => void;
-  // Exercise detail dialog
-  onOpenExerciseDetail?: (exercise: WorkoutExercise) => void;
-  // Change exercise handlers
-  onChangeExercise?: (exerciseId: string, newExercise: { 
-    exerciseId: string; 
-    exerciseName: string; 
-    libraryId: string;
-    videoUrl?: string;
-    description?: string;
-  }) => void;
-  onOpenChangeLibrary?: (exerciseId: string) => void;
 }
 
 export function WorkoutSectionCard({
   section,
   isCollapsed,
   onToggleCollapse,
-  onParameterChange,
-  onUnitChange,
-  onToggleSuperset,
-  onDuplicateExercise,
-  onDeleteExercise,
   onAddExercise,
   onRenameSection,
   onDeleteSection,
   onDuplicateSection,
-  getSupersetLabel,
   sectionDragHandleProps,
-  onExerciseNotesChange,
-  onExerciseEachSideChange,
-  onSectionCommentsChange,
-  toolboxData,
-  visibilityOverrides,
-  onVisibilityChange,
-  onShowAllParams,
-  onResetParamsToDefaults,
-  onAutoCalculateWeightChange,
-  onAutoCalculateTargetHRChange,
-  onOpenExerciseDetail,
-  onChangeExercise,
-  onOpenChangeLibrary,
 }: WorkoutSectionCardProps) {
+  // Pull shared callbacks from context instead of individual props
+  const {
+    onParameterChange,
+    onUnitChange,
+    onToggleSuperset,
+    onDuplicateExercise,
+    onDeleteExercise,
+    getSupersetLabel,
+    onExerciseNotesChange,
+    onExerciseEachSideChange,
+    onSectionCommentsChange,
+    toolboxData,
+    visibilityOverrides,
+    onVisibilityChange,
+    onShowAllParams,
+    onResetParamsToDefaults,
+    onAutoCalculateWeightChange,
+    onAutoCalculateTargetHRChange,
+    onOpenExerciseDetail,
+    onChangeExercise,
+    onOpenChangeLibrary,
+  } = useWorkoutSession();
+
   // Helper to get toolbox params for an exercise based on method
   const getToolboxParamsForExercise = (exercise: WorkoutExercise): ToolboxEntry[] => {
     if (!toolboxData?.entries) return [];
-    
+
     const methodId = exercise.methodId; // e.g., "Lower Body Resistance Training - Strength"
-    
+
     return toolboxData.entries.filter(entry => {
       // Build the full method identifier from toolbox entry
-      const toolboxMethodId = entry.subCategory 
+      const toolboxMethodId = entry.subCategory
         ? `${entry.category} - ${entry.subCategory}`
         : entry.category;
-      
+
       // Match parameters by method only - exercise categories don't affect parameter visibility
       return toolboxMethodId === methodId;
     });
   };
+
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(section.name);
   // Track collapsed exercises
@@ -139,7 +117,7 @@ export function WorkoutSectionCard({
         >
           {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </Button>
-        
+
         {/* Editable Section Name with Pencil Icon */}
         {isEditing ? (
           <Input
@@ -155,15 +133,15 @@ export function WorkoutSectionCard({
           />
         ) : (
           <div className="flex items-center gap-1 flex-1">
-            <h3 
+            <h3
               className="font-semibold text-sm cursor-pointer hover:text-primary transition-colors"
               onClick={() => setIsEditing(true)}
             >
               {section.name}
             </h3>
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               className="h-5 w-5 p-0 hover:bg-transparent"
               onClick={() => setIsEditing(true)}
             >
@@ -171,11 +149,11 @@ export function WorkoutSectionCard({
             </Button>
           </div>
         )}
-        
+
         <span className="text-xs text-muted-foreground">
           {section.exercises.length} {section.exercises.length === 1 ? 'exercise' : 'exercises'}
         </span>
-        
+
         {/* Section Delete Menu */}
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
@@ -198,7 +176,7 @@ export function WorkoutSectionCard({
               <Copy className="h-4 w-4 mr-2" />
               Duplicate Section
             </DropdownMenuItem>
-            <DropdownMenuItem 
+            <DropdownMenuItem
               onClick={onDeleteSection}
               className="text-destructive focus:text-destructive"
             >
@@ -248,14 +226,14 @@ export function WorkoutSectionCard({
                     // Group exercises by superset
                     const exerciseGroups: Array<{ exercises: typeof section.exercises; supersetLabel?: string }> = [];
                     const processed = new Set<string>();
-                    
+
                     section.exercises.forEach((exercise) => {
                       if (processed.has(exercise.id)) return;
-                      
+
                       const supersetLabel = getSupersetLabel(exercise.id);
                       if (supersetLabel) {
                         // Find all exercises with the same superset label
-                        const supersetExercises = section.exercises.filter(ex => 
+                        const supersetExercises = section.exercises.filter(ex =>
                           getSupersetLabel(ex.id) === supersetLabel
                         );
                         exerciseGroups.push({
@@ -270,7 +248,7 @@ export function WorkoutSectionCard({
                         processed.add(exercise.id);
                       }
                     });
-                    
+
                     return exerciseGroups.map((group, groupIndex) => {
                       if (group.supersetLabel) {
                         // Superset group - render with visual pairing
@@ -320,7 +298,7 @@ export function WorkoutSectionCard({
                                         </div>
                                       )}
                                     </Draggable>
-                                    
+
                                     {/* Chain icon between superset exercises */}
                                     {exIndex < group.exercises.length - 1 && (
                                       <div className="flex justify-center -my-1 relative z-10">
@@ -362,7 +340,7 @@ export function WorkoutSectionCard({
                         const exercise = group.exercises[0];
                         const exerciseIndex = section.exercises.indexOf(exercise);
                         const nextExercise = section.exercises[exerciseIndex + 1];
-                        
+
                         return (
                           <React.Fragment key={exercise.id}>
                             <Draggable draggableId={exercise.id} index={exerciseIndex}>
@@ -404,7 +382,7 @@ export function WorkoutSectionCard({
                                 </div>
                               )}
                             </Draggable>
-                            
+
                             {/* Chain icon between non-superset exercises */}
                             {nextExercise && (
                               <div className="flex justify-center -my-2 relative z-10">

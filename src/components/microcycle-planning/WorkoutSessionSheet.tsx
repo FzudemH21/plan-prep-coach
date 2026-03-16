@@ -15,6 +15,7 @@ import { WorkoutSection, WorkoutExercise, WorkoutSession, SupersetMapping } from
 import { IntensityLevel } from '@/types/training';
 import { TrainingDay } from '@/types/daily-intensity';
 import { WorkoutSectionCard } from './WorkoutSectionCard';
+import { WorkoutSessionProvider, WorkoutSessionContextValue } from './WorkoutSessionContext';
 import { WorkoutArrangementSidebar } from './WorkoutArrangementSidebar';
 import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
 import { MethodSelectionDialog } from './MethodSelectionDialog';
@@ -1877,6 +1878,34 @@ export function WorkoutSessionSheet({
     element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
+  // Stable callbacks for visibility overrides (used in context value)
+  const handleVisibilityChange = React.useCallback((paramName: string, visible: boolean) => {
+    setParameterVisibilityOverrides(prev => ({
+      ...prev,
+      [paramName]: visible
+    }));
+  }, []);
+
+  const handleShowAllParams = React.useCallback(() => {
+    const allParamNames = new Set<string>();
+    workoutSections.forEach(s => {
+      s.exercises.forEach(ex => {
+        Object.keys(ex.parameters || {}).forEach(key => {
+          if (!key.endsWith('_unit') && !/_set\d+$/i.test(key)) {
+            allParamNames.add(key);
+          }
+        });
+      });
+    });
+    const allVisible: ParameterVisibilityOverrides = {};
+    allParamNames.forEach(name => { allVisible[name] = true; });
+    setParameterVisibilityOverrides(allVisible);
+  }, [workoutSections]);
+
+  const handleResetParamsToDefaults = React.useCallback(() => {
+    setParameterVisibilityOverrides({});
+  }, []);
+
   const handleAddSection = () => {
     const newSectionNumber = workoutSections.length + 1;
     const newSection: WorkoutSection = {
@@ -2086,7 +2115,52 @@ export function WorkoutSessionSheet({
     });
   };
 
+  // Build context value for WorkoutSessionProvider (avoids deep prop drilling to WorkoutSectionCard)
+  const sessionContextValue: WorkoutSessionContextValue = useMemo(() => ({
+    onParameterChange: handleParameterChange,
+    onUnitChange: handleUnitChange,
+    onToggleSuperset: handleToggleSuperset,
+    onDuplicateExercise: handleDuplicateExercise,
+    onDeleteExercise: handleDeleteExercise,
+    getSupersetLabel,
+    onExerciseNotesChange: handleExerciseNotesChange,
+    onExerciseEachSideChange: handleExerciseEachSideChange,
+    onSectionCommentsChange: handleSectionCommentsChange,
+    toolboxData: toolboxData,
+    visibilityOverrides: parameterVisibilityOverrides,
+    onVisibilityChange: handleVisibilityChange,
+    onShowAllParams: handleShowAllParams,
+    onResetParamsToDefaults: handleResetParamsToDefaults,
+    onAutoCalculateWeightChange: handleAutoCalculateWeightChange,
+    onAutoCalculateTargetHRChange: handleAutoCalculateTargetHRChange,
+    onOpenExerciseDetail: handleOpenExerciseDetail,
+    onChangeExercise: handleChangeExercise,
+    onOpenChangeLibrary: handleOpenChangeLibrary,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [
+    handleParameterChange,
+    handleUnitChange,
+    handleToggleSuperset,
+    handleDuplicateExercise,
+    handleDeleteExercise,
+    getSupersetLabel,
+    handleExerciseNotesChange,
+    handleExerciseEachSideChange,
+    handleSectionCommentsChange,
+    toolboxData,
+    parameterVisibilityOverrides,
+    handleVisibilityChange,
+    handleShowAllParams,
+    handleResetParamsToDefaults,
+    handleAutoCalculateWeightChange,
+    handleAutoCalculateTargetHRChange,
+    handleOpenExerciseDetail,
+    handleChangeExercise,
+    handleOpenChangeLibrary,
+  ]);
+
   return (
+    <WorkoutSessionProvider value={sessionContextValue}>
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-[95vw] max-h-[95vh] w-full h-full flex flex-col p-0">
         <DialogHeader className="p-6 pb-4 border-b">
@@ -2493,52 +2567,11 @@ export function WorkoutSessionSheet({
                                     [section.id]: !prev[section.id]
                                   }))
                                 }
-                                onParameterChange={handleParameterChange}
-                                onUnitChange={handleUnitChange}
-                                onToggleSuperset={(ex1, ex2, sectionId) => handleToggleSuperset(ex1, ex2, sectionId)}
-                                onDuplicateExercise={handleDuplicateExercise}
-                                onDeleteExercise={handleDeleteExercise}
                                 onAddExercise={() => handleAddExercise(section.id)}
                                 onRenameSection={(newName) => handleRenameSection(section.id, newName)}
                                 onDeleteSection={() => handleDeleteSection(section.id)}
                                 onDuplicateSection={() => handleDuplicateSection(section.id)}
-                                getSupersetLabel={getSupersetLabel}
                                 sectionDragHandleProps={provided.dragHandleProps}
-                                onExerciseNotesChange={handleExerciseNotesChange}
-                                onExerciseEachSideChange={handleExerciseEachSideChange}
-                                onSectionCommentsChange={handleSectionCommentsChange}
-                                toolboxData={toolboxData}
-                                visibilityOverrides={parameterVisibilityOverrides}
-                                onVisibilityChange={(paramName, visible) => {
-                                  setParameterVisibilityOverrides(prev => ({
-                                    ...prev,
-                                    [paramName]: visible
-                                  }));
-                                }}
-                                onShowAllParams={() => {
-                                  // Get all unique displayable params across all exercises
-                                  const allParamNames = new Set<string>();
-                                  workoutSections.forEach(s => {
-                                    s.exercises.forEach(ex => {
-                                      Object.keys(ex.parameters || {}).forEach(key => {
-                                        if (!key.endsWith('_unit') && !/_set\d+$/i.test(key)) {
-                                          allParamNames.add(key);
-                                        }
-                                      });
-                                    });
-                                  });
-                                  const allVisible: ParameterVisibilityOverrides = {};
-                                  allParamNames.forEach(name => { allVisible[name] = true; });
-                                  setParameterVisibilityOverrides(allVisible);
-                                }}
-                                onResetParamsToDefaults={() => {
-                                  setParameterVisibilityOverrides({});
-                                }}
-                                onAutoCalculateWeightChange={handleAutoCalculateWeightChange}
-                                onAutoCalculateTargetHRChange={handleAutoCalculateTargetHRChange}
-                                onOpenExerciseDetail={handleOpenExerciseDetail}
-                                onChangeExercise={(exerciseId, newEx) => handleChangeExercise(exerciseId, newEx)}
-                                onOpenChangeLibrary={handleOpenChangeLibrary}
                               />
                             </div>
                           )}
@@ -2705,5 +2738,6 @@ export function WorkoutSessionSheet({
         />
       )}
     </Dialog>
+    </WorkoutSessionProvider>
   );
 }
