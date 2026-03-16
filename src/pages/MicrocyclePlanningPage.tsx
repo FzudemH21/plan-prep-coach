@@ -19,7 +19,6 @@ import { ExtendedMesocycle, Microcycle } from '@/features/planner/types';
 import { TrainingDay } from '@/types/daily-intensity';
 import { CellData, ExerciseSelection, SessionSection, SupersetMapping, ExerciseDistribution } from '@/types/microcycle-planning';
 import { IntensityLevel } from '@/types/training';
-import { useAthleticismData } from '@/hooks/useAthleticismData';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { format, addDays, differenceInDays, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -64,7 +63,6 @@ export default function MicrocyclePlanningPage() {
   const [dailyIntensityData, setDailyIntensityData] = useState<any[]>([]);
   const [daySplitStates, setDaySplitStates] = useState<Record<string, number>>({});
   const [splitStates, setSplitStates] = useState<Record<string, boolean>>({});
-  const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
   const { athletes, athletePerformanceParameters } = useAthletes();
   const { saveCurrentSession } = useTrainingPrograms();

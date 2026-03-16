@@ -23,7 +23,6 @@ import {
   getUniqueTrainingMethods
 } from "@/data/trainingData";
 import { useDisplayMode } from "@/contexts/DisplayModeContext";
-import { useAthleticismData } from "@/hooks/useAthleticismData";
 import { useParametersDataV2 } from "@/hooks/useParametersDataV2";
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
 import { format, parseISO, addDays } from "date-fns";
@@ -50,7 +49,6 @@ export default function MacrocyclePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { saveCurrentSession } = useTrainingPrograms();
-  const { data: athleticismData } = useAthleticismData();
   const { data: parametersDataV2, addParameter: addAthleticismParameter, addInteraction: addParameterInteraction } = useParametersDataV2();
   const { data: toolboxData } = useToolboxData();
   const { athletes, groups, getAthletePerformanceParameters, addPerformanceParameter, getAthleteBiometrics, biometricDefinitions } = useAthletes();
@@ -381,43 +379,14 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     }
   }, [smartGoals, parametersDataV2.parameterMethods]);
 
-  const normalizeForComparison = (str: string): string => {
-    return str.toLowerCase()
-      .replace(/–/g, '-')  // Replace em dash with regular dash
-      .replace(/\s+/g, ' ') // Normalize spaces
-      .trim();
-  };
-
-  // Helper function to get unique sub-goals from athleticism database
+  // Helper function to get unique sub-goals from athleticism database (v1 removed - returns empty)
   const getSubGoalsFromAthleticismDB = (): string[] => {
-    const subGoalSet = new Set<string>();
-    athleticismData.entries.forEach(entry => {
-      const formatted = `${entry.overarchingGoal} - ${entry.subGoal}`;
-      subGoalSet.add(formatted);
-    });
-    return Array.from(subGoalSet).sort();
+    return [];
   };
 
-  // Helper function to get qualities for a sub-goal from athleticism database
-  const getQualitiesForSubGoalFromDB = (subGoalLabel: string): string[] => {
-    const parts = subGoalLabel.split(' - ');
-    if (parts.length < 2) return [];
-    
-    const overarchingGoal = parts[0].trim();
-    const subGoal = parts[1].trim();
-    
-    // Normalize for comparison
-    const normalizedOverarching = normalizeForComparison(overarchingGoal);
-    const normalizedSubGoal = normalizeForComparison(subGoal);
-    
-    return Array.from(new Set(
-      athleticismData.entries
-        .filter(entry => 
-          normalizeForComparison(entry.overarchingGoal) === normalizedOverarching && 
-          normalizeForComparison(entry.subGoal) === normalizedSubGoal
-        )
-        .map(entry => entry.quality)
-    ));
+  // Helper function to get qualities for a sub-goal from athleticism database (v1 removed - returns empty)
+  const getQualitiesForSubGoalFromDB = (_subGoalLabel: string): string[] => {
+    return [];
   };
 
   // Helper function to format loading recommendations as sentences
@@ -433,68 +402,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     return parts.join(', ');
   };
 
-  // Helper function to get methods with their sub-goals and qualities (for reversed Step 5 view)
+  // Helper function to get methods with their sub-goals and qualities (v1 removed - returns empty)
   const getMethodsWithSubGoalsAndQualities = () => {
-    const methodsMap = new Map<string, {
-      subGoals: Set<string>;
-      qualitiesWithRecommendations: Array<{
-        subGoal: string;
-        quality: string;
-        recommendations: string;
-      }>;
-    }>();
-
-    // Get all selected methods from qualities
-    qualities.forEach(quality => {
-      const methods = quality.methods || [];
-      const [subGoalId, qualityName] = quality.id.split('::');
-      const subGoal = subGoals.find(sg => sg.id === subGoalId);
-      
-      if (subGoal && qualityName) {
-        const subGoalDescription = subGoal.description;
-        const parts = subGoalDescription.split(' - ');
-        
-        if (parts.length >= 2) {
-          const overarchingGoal = parts[0].trim();
-          const subGoalName = parts[1].trim();
-          
-          // Find matching entry in athleticism database
-          const athleticismEntry = athleticismData.entries.find(entry =>
-            normalizeForComparison(entry.overarchingGoal) === normalizeForComparison(overarchingGoal) &&
-            normalizeForComparison(entry.subGoal) === normalizeForComparison(subGoalName) &&
-            normalizeForComparison(entry.quality) === normalizeForComparison(qualityName)
-          );
-
-          methods.forEach(method => {
-            if (!methodsMap.has(method)) {
-              methodsMap.set(method, {
-                subGoals: new Set(),
-                qualitiesWithRecommendations: []
-              });
-            }
-            
-            const methodData = methodsMap.get(method)!;
-            methodData.subGoals.add(subGoalDescription);
-            
-            // Get loading recommendations for this method from athleticism database
-            const recommendations = athleticismEntry?.loadingRecommendations?.[method] || {};
-            const formattedRecommendations = formatLoadingRecommendations(recommendations);
-            
-            methodData.qualitiesWithRecommendations.push({
-              subGoal: subGoalDescription,
-              quality: qualityName,
-              recommendations: formattedRecommendations
-            });
-          });
-        }
-      }
-    });
-
-    return Array.from(methodsMap.entries()).map(([method, data]) => ({
-      method,
-      subGoals: Array.from(data.subGoals),
-      qualitiesWithRecommendations: data.qualitiesWithRecommendations
-    }));
+    return [];
   };
 
   // Auto-populate qualities when sub-goals change
@@ -568,26 +478,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         
         if (subGoal && qualityName) {
           const existing = prevMethods[quality.id];
-          const parts = subGoal.description.split(' - ');
-          
-          if (parts.length >= 2) {
-            const overarchingGoal = parts[0].trim();
-            const subGoalName = parts[1].trim();
-            
-            // Get recommended methods from athleticism database
-            const normalizedOverarching = normalizeForComparison(overarchingGoal);
-            const normalizedSubGoal = normalizeForComparison(subGoalName);
-            const normalizedQuality = normalizeForComparison(qualityName);
-            
-            const recommendedMethods = Array.from(new Set(
-              athleticismData.entries
-                .filter(entry => 
-                  normalizeForComparison(entry.overarchingGoal) === normalizedOverarching && 
-                  normalizeForComparison(entry.subGoal) === normalizedSubGoal &&
-                  normalizeForComparison(entry.quality) === normalizedQuality
-                )
-                .flatMap(entry => entry.mappedMethods)
-            ));
+          if (true) {
+            // v1 athleticism database removed - no auto-populated recommended methods
+            const recommendedMethods: string[] = [];
             
             // If the sub-goal description has changed, reset to recommended methods
             const hasSubGoalChanged = existing && existing.subGoalLabel !== subGoal.description;

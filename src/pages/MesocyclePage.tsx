@@ -24,7 +24,6 @@ import IntensityScale from '@/components/mesocycle/IntensityScale';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ExtendedMesocycle, Mesocycle, Microcycle, Plan, Intensity } from '@/features/planner/types';
 import { DailyIntensity, TrainingDay } from '@/types/daily-intensity';
-import { useAthleticismData } from '@/hooks/useAthleticismData';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useDragFill } from '@/hooks/useDragFill';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
@@ -205,7 +204,6 @@ export default function MesocyclePage() {
     });
   };
   
-  const { data: athleticismData } = useAthleticismData();
   const { data: toolboxData } = useToolboxData();
   const { data: parametersDataV2 } = useParametersDataV2();
   const { dragState, startDrag, endDrag, addToSelection, clearSelection, fillCells } = useDragFill();
@@ -1236,26 +1234,10 @@ export default function MesocyclePage() {
 
 
   // Helper functions for sub-goal and method management
+  // v1 athleticism database removed - sub-goals come directly from macrocycle data
   const getSubGoalsFromAthleticismDB = useMemo(() => {
-    const subGoalsMap = new Map<string, string>();
-    
-    // Get selected sub-goal descriptions from macrocycle data
-    const selectedSubGoalDescriptions = new Set(
-      macrocycleData?.subGoals?.map((sg: any) => normalizeForComparison(sg.description)) || []
-    );
-    
-    athleticismData.entries.forEach(entry => {
-      const formattedSubGoal = `${entry.overarchingGoal} - ${entry.subGoal}`;
-      const normalizedDescription = normalizeForComparison(formattedSubGoal);
-      
-      // Only include sub-goals that were selected in macrocycle planning
-      if (selectedSubGoalDescriptions.has(normalizedDescription)) {
-        subGoalsMap.set(entry.subGoal, formattedSubGoal);
-      }
-    });
-    
-    return Array.from(subGoalsMap.values());
-  }, [athleticismData, macrocycleData]);
+    return macrocycleData?.subGoals?.map((sg: any) => sg.description) || [];
+  }, [macrocycleData]);
 
   const getMethodsForAllocatedSubGoals = useMemo(() => {
     if (!macrocycleData) return [];
@@ -1374,43 +1356,8 @@ export default function MesocyclePage() {
   }, [orderedGroupedMethods]);
 
   // Helper function to get methods with loading recommendations for a specific sub-goal
-  const getMethodsWithRecommendationsForSubGoal = useMemo(() => {
-    return (subGoal: string) => {
-      const methodsWithRecommendations: Array<{
-        method: string;
-        recommendations: Record<string, any>;
-      }> = [];
-
-      // Find all athleticism entries that match this sub-goal
-      athleticismData.entries.forEach(entry => {
-        const formattedSubGoal = `${entry.overarchingGoal} - ${entry.subGoal}`;
-        if (normalizeForComparison(formattedSubGoal) === normalizeForComparison(subGoal)) {
-          // Add all methods from this entry with their recommendations
-          entry.mappedMethods.forEach(method => {
-            const recommendations = entry.loadingRecommendations[method] || {};
-            
-            // Check if we already have this method, if so merge recommendations
-            const existingMethod = methodsWithRecommendations.find(m => m.method === method);
-            if (existingMethod) {
-              // Merge recommendations (keep existing if there's a conflict)
-              Object.entries(recommendations).forEach(([key, value]) => {
-                if (!existingMethod.recommendations[key]) {
-                  existingMethod.recommendations[key] = value;
-                }
-              });
-            } else {
-              methodsWithRecommendations.push({
-                method,
-                recommendations
-              });
-            }
-          });
-        }
-      });
-
-      return methodsWithRecommendations;
-    };
-  }, [athleticismData]);
+  // v1 athleticism database removed - always returns empty
+  const getMethodsWithRecommendationsForSubGoal = useMemo(() => (_subGoal: string) => [], []);
 
   // Helper function to format loading recommendations into readable text
   const formatLoadingRecommendations = (recommendations: Record<string, any>): string => {

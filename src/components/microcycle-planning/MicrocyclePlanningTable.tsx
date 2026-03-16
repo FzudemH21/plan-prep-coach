@@ -9,7 +9,6 @@ import { ChevronDown, ChevronRight, ChevronLeft, Link, Unlink, Trash2, ArrowLeft
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { useToolboxData } from '@/hooks/useToolboxData';
-import { useAthleticismData } from '@/hooks/useAthleticismData';
 import { useToast } from '@/hooks/use-toast';
 import { ExerciseSelectionCell } from './ExerciseSelectionCell';
 import { ExerciseCopyDialog } from './ExerciseCopyDialog';
@@ -40,7 +39,6 @@ interface MicrocyclePlanningTableProps {
 
 export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], parameterValues = {}, methodParametersMap = {}, onExerciseSelectionChange, getParametersForCell }: MicrocyclePlanningTableProps) {
   const { data: toolboxData } = useToolboxData();
-  const { data: athleticismData } = useAthleticismData();
   const { toast } = useToast();
   const [planningState, setPlanningState] = useState<MicrocyclePlanningState>({
     cellData: {},
@@ -114,45 +112,8 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], para
   };
 
   // Helper function to get methods with loading recommendations for a specific sub-goal
-  const getMethodsWithRecommendationsForSubGoal = useMemo(() => {
-    return (subGoal: string) => {
-      if (!athleticismData?.entries) return [];
-      
-      const methodsWithRecommendations: Array<{
-        method: string;
-        recommendations: Record<string, any>;
-      }> = [];
-
-      // Find all athleticism entries that match this sub-goal
-      athleticismData.entries.forEach(entry => {
-        const formattedSubGoal = `${entry.overarchingGoal} - ${entry.subGoal}`;
-        if (normalizeForComparison(formattedSubGoal) === normalizeForComparison(subGoal)) {
-          // Add all methods from this entry with their recommendations
-          entry.mappedMethods.forEach(method => {
-            const recommendations = entry.loadingRecommendations[method] || {};
-            
-            // Check if we already have this method, if so merge recommendations
-            const existingMethod = methodsWithRecommendations.find(m => m.method === method);
-            if (existingMethod) {
-              // Merge recommendations (keep existing if there's a conflict)
-              Object.entries(recommendations).forEach(([key, value]) => {
-                if (!existingMethod.recommendations[key]) {
-                  existingMethod.recommendations[key] = value;
-                }
-              });
-            } else {
-              methodsWithRecommendations.push({
-                method,
-                recommendations
-              });
-            }
-          });
-        }
-      });
-
-      return methodsWithRecommendations;
-    };
-  }, [athleticismData]);
+  // v1 athleticism database removed - always returns empty
+  const getMethodsWithRecommendationsForSubGoal = useMemo(() => (_subGoal: string) => [], []);
 
   // Helper function to format loading recommendations into readable text
   const formatLoadingRecommendations = (recommendations: Record<string, any>): string => {
@@ -203,30 +164,12 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], para
       hasMultipleSessions: boolean;
     }> = [];
     
-    // Get all methods allocated to this mesocycle
+    // Get all methods for this mesocycle (v1 athleticism filtering removed - use all selected methods)
     const mesocycle = mesocycles.find(m => m.id === mesocycleId);
     if (!mesocycle) return [];
-    
-    const allocatedMethods = selectedMethods.filter(method => {
-      // Check if this method is allocated to this mesocycle via its sub-goals
-      if (!mesocycle.allocatedSubGoals) return false;
-      
-      // Try to find this method in athleticism data for any of the allocated sub-goals
-      return mesocycle.allocatedSubGoals.some(subGoal => {
-        if (!athleticismData?.entries) return false;
-        
-        return athleticismData.entries.some(entry => {
-          const formattedSubGoal = `${entry.overarchingGoal} - ${entry.subGoal}`;
-          if (normalizeForComparison(formattedSubGoal) !== normalizeForComparison(subGoal)) {
-            return false;
-          }
-          return entry.mappedMethods.includes(method);
-        });
-      });
-    });
-    
-    // For each allocated method, get its parameters
-    allocatedMethods.forEach(methodName => {
+
+    // For each selected method, get its parameters
+    selectedMethods.forEach(methodName => {
       const methodParams = parameterValues[mesocycleId]?.[microcycleIndex]?.[methodName];
       if (!methodParams) return;
       
@@ -292,7 +235,7 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], para
     });
     
     return methodsData;
-  }, [parameterValues, mesocycles, selectedMethods, athleticismData, methodParametersMap, toolboxData]);
+  }, [parameterValues, mesocycles, selectedMethods, methodParametersMap, toolboxData]);
 
   // Helper functions (moved before useMemos that use them)
   const isMicrocycleGrouped = (mesocycleId: string, microcycleId: string) => {
