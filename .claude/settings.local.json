@@ -21,7 +21,9 @@
       "Bash(node:*)",
       "Bash(git add:*)",
       "Bash(git config:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(find:*)",
+      "Bash(npm run:*)"
     ]
   }
 }

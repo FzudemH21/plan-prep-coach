@@ -260,8 +260,6 @@ export default function MicrocyclePlanningPage() {
     const savedMicrocyclePlanningState = localStorage.getItem('microcyclePlanningState');
     if (savedMicrocyclePlanningState) {
       const planningState = JSON.parse(savedMicrocyclePlanningState);
-      console.log('[MicrocyclePlanningPage] Loaded microcyclePlanningState:', planningState);
-      
       // Clean corrupted categoryName values from cellData
       const cleanedCellData: Record<string, CellData> = {};
       let hasCorruption = false;
@@ -269,7 +267,6 @@ export default function MicrocyclePlanningPage() {
       Object.entries(planningState.cellData || {}).forEach(([cellId, cellData]: [string, any]) => {
         if (isCorruptedCategoryName(cellData.categoryName)) {
           hasCorruption = true;
-          console.log('[MicrocyclePlanningPage] Cleaning corrupted categoryName:', cellData.categoryName, 'in cell:', cellId);
           cleanedCellData[cellId] = { ...cellData, categoryName: undefined };
         } else {
           cleanedCellData[cellId] = cellData;
@@ -280,7 +277,6 @@ export default function MicrocyclePlanningPage() {
       if (hasCorruption) {
         const updatedPlanningState = { ...planningState, cellData: cleanedCellData };
         localStorage.setItem('microcyclePlanningState', JSON.stringify(updatedPlanningState));
-        console.log('[MicrocyclePlanningPage] Saved cleaned microcyclePlanningState');
       }
       
       // Use cellData from Step 6 as the source of truth
@@ -292,7 +288,6 @@ export default function MicrocyclePlanningPage() {
       if (savedExerciseSelection) {
         setExerciseSelectionData(JSON.parse(savedExerciseSelection));
       }
-      console.log('[MicrocyclePlanningPage] No microcyclePlanningState found, using legacy exerciseSelectionData');
     }
   }, []);
 
@@ -313,7 +308,6 @@ export default function MicrocyclePlanningPage() {
     });
     
     if (needsUpdate) {
-      console.log('[MicrocyclePlanningPage] Syncing intensity from dailyIntensityData to trainingDays');
       setTrainingDays(prev => 
         prev.map(day => {
           const correctIntensity = intensityMap.get(day.date);
@@ -344,14 +338,12 @@ export default function MicrocyclePlanningPage() {
       // Check if mesocycle is valid
       if (!validMesocycleIds.has(cellData.mesocycleId)) {
         hasInvalidData = true;
-        console.log('[Step1] Removed invalid cell - mesocycle not found:', cellId);
         return;
       }
 
       // Check if microcycle is valid (if specified)
       if (cellData.microcycleId && !validMicrocycleIds.has(cellData.microcycleId)) {
         hasInvalidData = true;
-        console.log('[Step1] Removed invalid cell - microcycle not found:', cellId);
         return;
       }
 
@@ -384,7 +376,6 @@ export default function MicrocyclePlanningPage() {
   // Save exercise distribution to localStorage
   useEffect(() => {
     localStorage.setItem('exerciseDistribution', JSON.stringify(exerciseDistribution));
-    console.log('[MicrocyclePlanningPage] Saved exerciseDistribution:', exerciseDistribution.length, 'exercises');
   }, [exerciseDistribution]);
 
   // Save day split states to localStorage
@@ -480,7 +471,6 @@ export default function MicrocyclePlanningPage() {
     });
 
     if (changed) {
-      console.log('[Microcycle] Enriched trainingDays with test/event names.');
       setTrainingDays(updated);
       localStorage.setItem('trainingDays', JSON.stringify(updated));
     }
@@ -542,7 +532,6 @@ export default function MicrocyclePlanningPage() {
       }
     });
     
-    console.log('[Step1] Groups with microcycle allocations:', Array.from(groups));
     return groups;
   }, [currentMesocycle, exerciseSelectionData]);
 
@@ -572,7 +561,6 @@ export default function MicrocyclePlanningPage() {
       
       // Skip mesocycle-level if this method group has ANY microcycle-specific allocations
       if (isMesocycleLevel && groupsWithMicrocycleAllocations.has(groupKey)) {
-        console.log('[Step1] Suppressed meso-level cell:', { methodId: fullMethodId, groupKey });
         return;
       }
       
@@ -2749,8 +2737,7 @@ export default function MicrocyclePlanningPage() {
 
   const handleSessionDragEnd = (result: DropResult) => {
     const { source, destination, draggableId } = result;
-    console.log('[DnD] onDragEnd', { source, destination, draggableId });
-    
+
     // If dropped outside a valid droppable or no movement, do nothing
     if (!destination || 
         (source.droppableId === destination.droppableId && source.index === destination.index)) {
@@ -2781,10 +2768,6 @@ export default function MicrocyclePlanningPage() {
     // Case 2: Moving to a different day
     const draggedSessionIndex = getSessionIndexByPosition(sourceDateString, source.index);
     if (draggedSessionIndex == null) {
-      console.warn('[DnD] Could not resolve dragged sessionIndex from source position.', {
-        sourceDateString,
-        sourceIndex: source.index
-      });
       return;
     }
 
@@ -2812,8 +2795,6 @@ export default function MicrocyclePlanningPage() {
       return;
     }
     
-    console.log(`Reordering sessions in ${dayDate}: moving from ${fromIndex} to ${toIndex} (total: ${sessionsCount})`);
-    
     // Build positions array and reorder to create index mapping
     const positions = Array.from({ length: sessionsCount }, (_, i) => i);
     const [moved] = positions.splice(fromIndex, 1);
@@ -2824,8 +2805,6 @@ export default function MicrocyclePlanningPage() {
     positions.forEach((oldIdx, newIdx) => {
       indexMap.set(oldIdx, newIdx);
     });
-    
-    console.log('Index mapping:', Array.from(indexMap.entries()));
     
     // 1. Update exerciseDistribution
     setExerciseDistribution(prev => 
@@ -3220,7 +3199,6 @@ export default function MicrocyclePlanningPage() {
       
       {currentStep === 2 && currentMesocycle && (
         <>
-          {console.log('[Step 2] Rendering calendar with', exerciseDistribution.length, 'exercises')}
             <TrainingCalendarView
               exerciseDistribution={exerciseDistribution}
               trainingDays={currentMesocycleDays}

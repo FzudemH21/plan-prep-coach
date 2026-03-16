@@ -534,7 +534,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     if (hasChanges || Object.keys(qualitiesBySubGoal).length !== Object.keys(newQualitiesBySubGoal).length) {
       setQualitiesBySubGoal(newQualitiesBySubGoal);
     }
-  }, [subGoals, subGoals.map(sg => sg.description).join('|')]);
+  }, [subGoals]);
 
   // Sync qualities array from qualitiesBySubGoal changes
   useEffect(() => {
@@ -555,7 +555,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     if (hasChanges) {
       setQualities(allQualities);
     }
-  }, [JSON.stringify(qualitiesBySubGoal)]);
+  }, [qualitiesBySubGoal]);
 
   // Auto-populate training methods when qualities change
   useEffect(() => {
@@ -624,11 +624,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       
       return prevMethods;
     });
-  }, [
-    JSON.stringify(qualities.map(q => ({ id: q.id, name: q.name }))),
-    JSON.stringify(subGoals.map(sg => ({ id: sg.id, description: sg.description }))),
-    JSON.stringify(qualitiesBySubGoal)
-  ]);
+  }, [qualities, subGoals, qualitiesBySubGoal]);
 
   const addQualityToSubGoal = (subGoalId: string, quality: string) => {
     setQualitiesBySubGoal(prev => {

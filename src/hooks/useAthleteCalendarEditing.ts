@@ -199,7 +199,6 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     
     // CRITICAL: Prevent re-loading the same assignment (main fix for flicker/disappear)
     if (lastLoadedAssignmentIdRef.current === assignmentId) {
-      console.log('[loadAssignmentForEditing] Already loaded, skipping:', assignmentId);
       return;
     }
     
@@ -249,18 +248,11 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
           sessionIntensities: storedSessionIntensities,
         });
         lastSavedStateRef.current = loadedFingerprint;
-        
-        console.log('[loadAssignmentForEditing] Loaded data:', {
-          exercises: storedExercises.length,
-          sections: storedSections.length,
-          dailyIntensity: storedDailyIntensity.length,
-        });
       } catch (e) {
         console.error('Failed to parse saved assignment data:', e);
         initializeFromAssignment(assignment);
       }
     } else {
-      console.log('[loadAssignmentForEditing] No saved data found, initializing from assignment');
       initializeFromAssignment(assignment);
     }
     
@@ -334,7 +326,6 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       
       localStorage.setItem(storageKey, JSON.stringify(dataToSave));
       lastSavedStateRef.current = stateFingerprint;
-      console.log('[Auto-save] Saved assignment data');
     }, 300);
     
     // Cleanup timeout on unmount or deps change
@@ -833,7 +824,6 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         daySplitStates: newDaySplitStates,
         sessionIntensities,
       });
-      console.log('[handleClearDay] Immediate save completed');
     }
 
     toast({ title: "Day cleared" });
@@ -841,12 +831,6 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
 
   const handlePasteDay = useCallback((targetDate: string) => {
     if (!copiedDay) return;
-    
-    console.log('[handlePasteDay] Starting paste:', {
-      sourceDate: copiedDay.sourceDate,
-      targetDate,
-      exerciseCount: copiedDay.exercises.length,
-    });
     
     // Clear target day first (overwrite behavior)
     setExerciseDistribution(prev => prev.filter(ex => ex.dayDate !== targetDate));
@@ -950,11 +934,6 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       } else {
         return [...prev, { date: targetDate, intensity }].sort((a, b) => a.date.localeCompare(b.date));
       }
-    });
-    
-    console.log('[handlePasteDay] Paste complete:', {
-      pastedExercises: pastedExercises.length,
-      pastedSections: pastedSections.length,
     });
     
     toast({ title: "Day pasted", description: `${pastedExercises.length} exercise(s) pasted` });
@@ -1063,7 +1042,6 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         daySplitStates: newDaySplitStates,
         sessionIntensities,
       });
-      console.log('[handleClearWeek] Immediate save completed');
     }
 
     toast({ title: "Week cleared" });
@@ -1071,13 +1049,6 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
 
   const handlePasteWeek = useCallback((targetWeekStartDate: string) => {
     if (!copiedWeek) return;
-
-    console.log('[handlePasteWeek] Starting paste:', {
-      sourceWeek: copiedWeek.weekStartDate,
-      targetWeek: targetWeekStartDate,
-      exerciseCount: copiedWeek.exercises.length,
-      sectionCount: copiedWeek.sections.length,
-    });
 
     const sourceStart = new Date(copiedWeek.weekStartDate);
     const targetStart = new Date(targetWeekStartDate);
@@ -1172,13 +1143,6 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         sessions: Math.max(currentSplit, newMaxSession),
         sessionNames: newNames,
       };
-    });
-
-    console.log('[handlePasteWeek] Updates prepared:', {
-      pastedExercises: pastedExercises.length,
-      pastedSections: pastedSections.length,
-      daySplitUpdates: Object.keys(newDaySplitUpdates),
-      trainingDayUpdates: Object.keys(newTrainingDayUpdates),
     });
 
     // Apply updates

@@ -75,7 +75,6 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
         
         // If version is outdated, start fresh (removes old built-in libraries)
         if (!parsed.version || parsed.version < '3.0.0') {
-          console.log('Upgrading to version 3.0.0 - starting with clean slate');
           setData(DEFAULT_DATA);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_DATA));
         } else {
@@ -102,7 +101,6 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
       setData(newData);
-      console.log('Saved libraries data:', newData);
     } catch (error) {
       console.error('Error saving custom libraries:', error);
       toast({
@@ -152,7 +150,6 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
       lastUpdated: new Date().toISOString()
     };
 
-    console.log('Adding library:', newLibrary);
     saveData(newData);
     return newLibrary;
   };

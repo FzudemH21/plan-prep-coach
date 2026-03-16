@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -305,16 +305,16 @@ function EnhancedEditableTable<T extends Record<string, any>>({
     columnName: ''
   });
 
-  const handleSort = (columnKey: string) => {
+  const handleSort = useCallback((columnKey: string) => {
     const newDirection = filterState.sortColumn === columnKey && filterState.sortDirection === 'asc' ? 'desc' : 'asc';
     onFilterChange({
       ...filterState,
       sortColumn: columnKey,
       sortDirection: newDirection
     });
-  };
+  }, [filterState, onFilterChange]);
 
-  const handleColumnFilter = (columnKey: string, values: string[]) => {
+  const handleColumnFilter = useCallback((columnKey: string, values: string[]) => {
     const newColumnFilters = { ...filterState.columnFilters };
     if (values.length === 0) {
       delete newColumnFilters[columnKey];
@@ -325,15 +325,15 @@ function EnhancedEditableTable<T extends Record<string, any>>({
       ...filterState,
       columnFilters: newColumnFilters,
     });
-  };
+  }, [filterState, onFilterChange]);
 
-  const handleColumnSort = (columnKey: string, direction: 'asc' | 'desc') => {
+  const handleColumnSort = useCallback((columnKey: string, direction: 'asc' | 'desc') => {
     onFilterChange({
       ...filterState,
       sortColumn: columnKey,
       sortDirection: direction
     });
-  };
+  }, [filterState, onFilterChange]);
 
   const renderColumnFilter = (column: TableColumn) => {
     const selectedValues = filterState.columnFilters[column.key] || [];
@@ -372,43 +372,43 @@ function EnhancedEditableTable<T extends Record<string, any>>({
     }
   };
 
-  const clearAllFilters = () => {
+  const clearAllFilters = useCallback(() => {
     onFilterChange({
       ...filterState,
       search: '',
       columnFilters: {},
     });
-  };
+  }, [filterState, onFilterChange]);
 
-  const handleDeleteColumn = () => {
+  const handleDeleteColumn = useCallback(() => {
     if (!columnManagement) return;
-    
+
     columnManagement.onDeleteColumn(deleteDialog.columnKey);
     toast({
       title: "Column Deleted",
       description: `Column "${deleteDialog.columnName}" has been deleted.`
     });
     setDeleteDialog({ isOpen: false, columnKey: '', columnName: '' });
-  };
+  }, [columnManagement, deleteDialog, toast]);
 
-  const handleRenameColumn = (newLabel: string) => {
+  const handleRenameColumn = useCallback((newLabel: string) => {
     if (!columnManagement) return;
-    
+
     columnManagement.onUpdateColumn(renameDialog.columnKey, { label: newLabel });
     toast({
       title: "Column Renamed",
       description: `Column renamed to "${newLabel}".`
     });
     setRenameDialog({ isOpen: false, columnKey: '', currentName: '' });
-  };
+  }, [columnManagement, renameDialog, toast]);
 
-  const openRenameDialog = (columnKey: string, currentName: string) => {
+  const openRenameDialog = useCallback((columnKey: string, currentName: string) => {
     setRenameDialog({ isOpen: true, columnKey, currentName });
-  };
+  }, []);
 
-  const openDeleteDialog = (columnKey: string, columnName: string) => {
+  const openDeleteDialog = useCallback((columnKey: string, columnName: string) => {
     setDeleteDialog({ isOpen: true, columnKey, columnName });
-  };
+  }, []);
 
   const hasActiveFilters = filterState.search || Object.keys(filterState.columnFilters).length > 0;
 

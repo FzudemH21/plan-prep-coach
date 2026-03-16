@@ -280,7 +280,6 @@ export default function MesocyclePage() {
     
     if (savedMacrocycleData) {
       const data = JSON.parse(savedMacrocycleData);
-      console.log('DEBUG: Loaded macrocycle data:', data);
       setMacrocycleData(data);
       
       // Calculate total weeks from date range - prioritize planDuration over legacy smartGoal
@@ -305,7 +304,6 @@ export default function MesocyclePage() {
         try {
           const savedMesocycles = JSON.parse(savedMesocycleData);
           if (savedMesocycles.mesocycles && savedMesocycles.mesocycles.length > 0) {
-            console.log('DEBUG: Loading saved mesocycles with allocatedSubGoals:', savedMesocycles);
             // Convert date strings back to Date objects (localStorage serializes dates as strings)
             const mesocyclesWithDates = savedMesocycles.mesocycles.map((meso: any) => ({
               ...meso,
@@ -328,15 +326,6 @@ export default function MesocyclePage() {
                 duration: Math.ceil(totalDays / 7)
               };
             });
-            
-            console.log('DEBUG: Recalculated mesocycles:', recalculatedMesocycles.map((m: any) => ({
-              name: m.name,
-              microcycleCount: m.microcycles?.length,
-              totalDays: m.microcycles?.reduce((s: number, mc: any) => s + (mc.duration || 7), 0),
-              startDate: m.startDate,
-              endDate: m.endDate,
-              weeks: m.weeks
-            })));
             
             setMesocycles(recalculatedMesocycles);
             setMesocycleLength(4);
@@ -400,7 +389,6 @@ export default function MesocyclePage() {
       try {
         const parsed = JSON.parse(savedParameterValues);
         setParameterValues(parsed);
-        console.log('DEBUG: Loaded parameter values:', parsed);
       } catch (e) {
         console.error('Failed to load parameter values:', e);
       }
@@ -414,7 +402,6 @@ export default function MesocyclePage() {
       try {
         const parsed = JSON.parse(savedMethods);
         setManuallyAddedMethods(parsed);
-        console.log('DEBUG: Loaded manually added methods:', parsed);
       } catch (e) {
         console.error('Failed to load manually added methods:', e);
       }
@@ -428,7 +415,6 @@ export default function MesocyclePage() {
       try {
         const parsed = JSON.parse(savedCategorySplitStates);
         setCategorySplitStates(parsed);
-        console.log('DEBUG: Loaded category split states:', parsed);
       } catch (e) {
         console.error('Failed to load category split states:', e);
       }
@@ -449,7 +435,6 @@ export default function MesocyclePage() {
       try {
         const parsed = JSON.parse(savedMethodAllocations);
         setMethodAllocations(parsed);
-        console.log('DEBUG: Loaded method allocations:', parsed);
       } catch (e) {
         console.error('Failed to load method allocations:', e);
       }
@@ -470,7 +455,6 @@ export default function MesocyclePage() {
       try {
         const parsed = JSON.parse(savedTrainingDays);
         setTrainingDays(parsed);
-        console.log('DEBUG: Loaded training days:', parsed);
       } catch (e) {
         console.error('Failed to load training days:', e);
       }
@@ -485,7 +469,6 @@ export default function MesocyclePage() {
         const parsed = JSON.parse(savedDailyIntensity);
         setDailyIntensityData(parsed);
         setIsIntensityDataLoaded(true);
-        console.log('DEBUG: Loaded daily intensity data:', parsed);
       } catch (e) {
         console.error('Failed to load daily intensity data:', e);
         setIsIntensityDataLoaded(true);
@@ -498,7 +481,6 @@ export default function MesocyclePage() {
   // Save mesocycle data to localStorage for microcycle planning
   useEffect(() => {
     if (mesocycles.length > 0) {
-      console.log('DEBUG: Saving mesocycles to localStorage:', mesocycles.map(m => ({ id: m.id, allocatedSubGoals: m.allocatedSubGoals })));
       localStorage.setItem('mesocycleData', JSON.stringify({ mesocycles }));
     }
   }, [mesocycles]);
@@ -1635,7 +1617,6 @@ export default function MesocyclePage() {
         initialAllocations[method] = [...allMesocycleIds];
       });
       setMethodAllocations(initialAllocations);
-      console.log('DEBUG: Auto-initialized method allocations:', initialAllocations);
     }
   }, [getMethodsForAllocatedSubGoals, mesocycles]);
 
@@ -2438,14 +2419,10 @@ export default function MesocyclePage() {
         return normalizeForComparison(entry.category) === normalizeForComparison(category);
       });
       
-      if (matchingEntries.length > 0 && matchingEntries.some(entry => entry.isFrequencyParameter === true)) {
-        console.debug(`[hasValidFrequencyParameter] Category-only fallback succeeded for method "${methodName}" using category "${category}"`);
-      }
     }
-    
-    // If still no matches found, log for debugging
+
+    // If still no matches found, return false
     if (matchingEntries.length === 0) {
-      console.debug(`[hasValidFrequencyParameter] No matches found for method "${methodName}"`);
       return false;
     }
     
@@ -2471,16 +2448,11 @@ export default function MesocyclePage() {
 
   // Drag fill handlers (hooks must be at component level)
   const handleDragStart = useCallback((cellId: string, value: string | number) => {
-    console.log('Drag started from cell:', cellId, 'with value:', value);
     startDrag(cellId, value);
   }, [startDrag]);
 
   const handleDragEnd = useCallback(() => {
-    console.log('Drag ended. Selected cells:', Array.from(dragState.selectedCells));
-    console.log('Source value:', dragState.sourceValue);
-    
     fillCells((cellId: string, value: string | number) => {
-      console.log('Filling cell:', cellId, 'with value:', value);
       const [mesocycleId, microcycleIndex, methodName, sessionIndex, parameterName] = cellId.split('::');
       if (mesocycleId && microcycleIndex !== undefined && methodName && sessionIndex !== undefined && parameterName) {
         updateParameterValue(mesocycleId, parseInt(microcycleIndex), methodName, parameterName, value, parseInt(sessionIndex));
@@ -4035,49 +4007,30 @@ export default function MesocyclePage() {
     // Create maps to store dates with their names
     const testDateMap = new Map<string, string>();
     
-    console.log('DEBUG: macrocycleData.subGoals:', JSON.stringify(macrocycleData.subGoals, null, 2));
-    
     macrocycleData.subGoals?.forEach((sg: any, idx: number) => {
-      console.log(`DEBUG: SubGoal ${idx}:`, sg);
-      console.log(`DEBUG: SubGoal ${idx} properties:`, Object.keys(sg));
-      
       // Try multiple possible property names for test name
       const testName = sg.testMethod || sg.name || sg.testName || sg.method || sg.description || "Test";
-      console.log(`DEBUG: SubGoal ${idx} extracted testName:`, testName);
-      
+
       if (sg.testDates) {
-        console.log(`DEBUG: SubGoal ${idx} testDates:`, sg.testDates);
         sg.testDates?.forEach((dateStr: string) => {
           testDateMap.set(dateStr, testName);
-          console.log(`DEBUG: Added test "${testName}" for date ${dateStr}`);
         });
       }
     });
-    
+
     const eventDateMap = new Map<string, string>();
-    
-    console.log('DEBUG: macrocycleData.events:', JSON.stringify(macrocycleData.events, null, 2));
-    
+
     macrocycleData.events?.forEach((e: any, idx: number) => {
-      console.log(`DEBUG: Event ${idx}:`, e);
-      console.log(`DEBUG: Event ${idx} properties:`, Object.keys(e));
-      
       // Try multiple possible property names for event name
       const eventName = e.name || e.eventName || e.title || e.description || "Event";
-      console.log(`DEBUG: Event ${idx} extracted eventName:`, eventName);
-      
+
       if (e.eventDates) {
-        console.log(`DEBUG: Event ${idx} eventDates:`, e.eventDates);
         e.eventDates?.forEach((dateStr: string) => {
           eventDateMap.set(dateStr, eventName);
-          console.log(`DEBUG: Added event "${eventName}" for date ${dateStr}`);
         });
       }
     });
-    
-    console.log('DEBUG: Final testDateMap:', testDateMap);
-    console.log('DEBUG: Final eventDateMap:', eventDateMap);
-    
+
     let currentDate = new Date(planStartDate);
     
     mesocycles.forEach((meso, mesoIndex) => {
@@ -4094,10 +4047,6 @@ export default function MesocyclePage() {
           const eventName = eventDateMap.get(dateStr);
           const isTestDay = !!testName;
           const isEventDay = !!eventName;
-          
-          if (isTestDay || isEventDay) {
-            console.log(`DEBUG: Found special day ${dateStr} - isTestDay: ${isTestDay}, isEventDay: ${isEventDay}, testName: ${testName}, eventName: ${eventName}`);
-          }
           
           days.push({
             date: dateStr,
@@ -4148,12 +4097,9 @@ export default function MesocyclePage() {
     
     // If no structure change, don't regenerate (preserve existing intensities)
     if (!hasStructureChange && dailyIntensityData.length > 0) {
-      console.log('DEBUG: Skipping intensity regeneration - no structure change');
       return;
     }
-    
-    console.log('DEBUG: Regenerating intensity data - structure changed');
-    
+
     // Generate new intensities, preserving existing ones
     const newIntensities = days.map(day => 
       existingIntensities[day.date] || {

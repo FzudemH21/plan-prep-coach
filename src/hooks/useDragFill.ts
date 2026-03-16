@@ -74,7 +74,6 @@ export function useDragFill(): DragFillHook {
 
   const fillCells = useCallback((onFill: (cellId: string, value: string | number) => void) => {
     if ((dragState.sourceValue === null || dragState.sourceValue === undefined) || !dragState.sourceCell) {
-      console.log('No source value or cell to fill from');
       return;
     }
 
@@ -82,14 +81,10 @@ export function useDragFill(): DragFillHook {
       cellId => cellId !== dragState.sourceCell
     );
 
-    console.log('Cells to fill:', cellsToFill);
-    console.log('Source value to copy:', dragState.sourceValue);
-
     // Simple fill logic - just copy the source value to all selected cells
     const sourceValue = dragState.sourceValue;
-    
+
     cellsToFill.forEach(cellId => {
-      console.log('Copying value', sourceValue, 'to cell', cellId);
       onFill(cellId, sourceValue);
     });
   }, [dragState]);

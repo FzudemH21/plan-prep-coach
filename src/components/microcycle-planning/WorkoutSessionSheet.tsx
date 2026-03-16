@@ -219,18 +219,6 @@ export function WorkoutSessionSheet({
     return {};
   });
 
-  // DEBUG: Log parameterValues structure
-  console.log('[WorkoutSessionSheet] Props received:', {
-    mesocycleId,
-    microcycleIndex,
-    dayDate,
-    sessionIndex,
-    exercisesCount: exercises.length,
-    parameterValuesTopLevelKeys: Object.keys(parameterValues),
-    parameterValuesForMeso: parameterValues[mesocycleId] ? Object.keys(parameterValues[mesocycleId]) : 'NOT FOUND',
-    parameterValuesForMicro: parameterValues[mesocycleId]?.[microcycleIndex] ? Object.keys(parameterValues[mesocycleId][microcycleIndex]) : 'NOT FOUND',
-  });
-
   // Helper function to build sections from exercises - accepts parameterValues explicitly to avoid stale closure
   const buildSectionsFromExercises = (
     exercisesList: ExerciseDistribution[],
@@ -253,8 +241,6 @@ export function WorkoutSessionSheet({
                 // If this exercise was added via ad-hoc dialog (parameterSource === 'toolbox'),
                 // skip periodization lookup entirely and build blank parameters from toolbox
                 if ((ex as any).parameterSource === 'toolbox') {
-                  console.log('[buildSectionsFromExercises] Toolbox-sourced exercise, using blank params:', ex.exerciseName);
-                  
                   // Get method parameters from toolbox
                   const methodParts = (ex.methodId ?? '').split(' - ');
                   const toolboxCategory = methodParts[0];
@@ -366,16 +352,6 @@ export function WorkoutSessionSheet({
                 const chronologicalSessionIndex = sessionCount > 0 
                   ? getModuloSessionIndex(rawChronologicalIndex, sessionCount)
                   : rawChronologicalIndex;
-                
-                console.log('[WorkoutSessionSheet] Session index calculation:', {
-                  exerciseName: ex.exerciseName,
-                  methodId: ex.methodId,
-                  categoryName: ex.categoryName,
-                  rawChronologicalIndex,
-                  sessionCount,
-                  chronologicalSessionIndex,
-                  fullMethodKey,
-                });
                 
                 // Try chronological session index FIRST for split methods, then fallback to session 0
                 const storedParams = 
@@ -510,8 +486,6 @@ export function WorkoutSessionSheet({
       // If this exercise was added via ad-hoc dialog (parameterSource === 'toolbox'),
       // skip periodization lookup entirely and build blank parameters from toolbox
       if ((ex as any).parameterSource === 'toolbox') {
-        console.log('[buildSectionsFromExercises FALLBACK] Toolbox-sourced exercise, using blank params:', ex.exerciseName);
-        
         // Get method parameters from toolbox
         const methodParts = (ex.methodId ?? '').split(' - ');
         const toolboxCategory = methodParts[0];
@@ -808,7 +782,6 @@ export function WorkoutSessionSheet({
             
             if (existing) {
               // Preserve existing state (parameters, notes, parameterSource, etc.) - don't overwrite with rebuilt values
-              console.log('[WorkoutSessionSheet] Preserving existing params for:', newEx.exerciseName, newEx.id);
               return {
                 ...newEx,
                 parameters: existing.parameters,
@@ -822,7 +795,6 @@ export function WorkoutSessionSheet({
             
             if (isFreshlyAdded) {
               // Freshly added via ad-hoc dialog - skip rebuild, keep blank params from handleAdHocMethodSelected
-              console.log('[WorkoutSessionSheet] Skipping rebuild for freshly added exercise:', newEx.exerciseName, newEx.id);
               return newEx;
             }
             
@@ -962,7 +934,6 @@ export function WorkoutSessionSheet({
 
       // Load supersets - prioritize prop, then localStorage
       if (supersetsProp && supersetsProp[dayDate]?.[sessionIndex]) {
-        console.log('[WorkoutSessionSheet] Using supersets from Step 1 prop');
         setSupersets(supersetsProp);
       } else {
         const supersetsKey = `workoutSupersets_${mesocycleId}_${dayDate}_${sessionIndex}`;
@@ -1048,11 +1019,9 @@ export function WorkoutSessionSheet({
   };
 
   const handleDragEnd = (result: DropResult) => {
-    console.log('🎯 Drag end:', result);
     const { source, destination, type } = result;
 
     if (!destination) {
-      console.log('❌ No destination - drag cancelled');
       return;
     }
 
@@ -1513,14 +1482,6 @@ export function WorkoutSessionSheet({
       return categoryMatch && subCategoryMatch;
     }) || [];
 
-    console.log('[handleAdHocMethodSelected] Matching:', {
-      methodId,
-      toolboxCategory,
-      toolboxSubCategory,
-      foundEntries: methodEntries.length,
-      initialParametersKeys: Object.keys(initialParameters)
-    });
-
     // Find set parameter from multiple sources
     const setParamEntry = methodEntries.find(e => e.isSetParameter);
     const setParamName = setParamEntry?.parameterName || 
@@ -1562,7 +1523,6 @@ export function WorkoutSessionSheet({
       
       // FALLBACK: If no toolbox entries found, create structure from initialParameters
       if (methodEntries.length === 0 && Object.keys(initialParameters).length > 0) {
-        console.log('[handleAdHocMethodSelected] Using fallback from initialParameters');
         Object.keys(initialParameters).forEach(paramName => {
           if (/^sets?$/i.test(paramName)) {
             params[paramName] = setCount;

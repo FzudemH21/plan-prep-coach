@@ -172,14 +172,6 @@ export function useAthletes() {
         values: [],
       });
     }
-    if (weightDef) {
-      newBiometrics.push({
-        id: generateId(),
-        athleteId,
-        biometricDefinitionId: weightDef.id,
-        values: [],
-      });
-    }
     
     setData((prev) => {
       const migrated = migrateData(prev);

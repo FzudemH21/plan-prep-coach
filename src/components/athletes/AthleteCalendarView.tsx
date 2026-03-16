@@ -103,7 +103,6 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
-        console.log('[Global Click Suppression] Swallowed post-drag click');
       }
     };
     window.addEventListener('click', handler, true); // Capture phase
@@ -524,12 +523,9 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   const handleSessionClick = useCallback((dayDate: string, sessionIndex: number, assignmentId: string) => {
     // FINAL SAFETY NET: Reject clicks within 600ms of last drag end
     if (Date.now() - lastDragEndRef.current < 600) {
-      console.log('[handleSessionClick] Suppressed - too close to drag end');
       return;
     }
-    
-    console.log('[handleSessionClick] Clicked:', { dayDate, sessionIndex, assignmentId });
-    
+
     // Use the provided assignmentId directly (no guessing)
     if (assignmentId) {
       // Set the selected assignment BEFORE opening the sheet
@@ -547,7 +543,6 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   // Handle drag start - arm click suppression immediately
   const handleSessionDragStart = useCallback(() => {
     suppressNextClickRef.current = true;
-    console.log('[handleSessionDragStart] Armed click suppression');
   }, []);
 
   // Handle session drag-and-drop between days
@@ -566,23 +561,21 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     }, 800);
     
     if (!result.destination) {
-      console.log('[handleSessionDragEnd] No destination - drop cancelled');
       return;
     }
-    
+
     const sourceDayDate = result.source.droppableId;
     const destDayDate = result.destination.droppableId;
-    
+
     // Parse session index from draggableId
     // Format: "assignmentId-YYYY-MM-DD-sessionIndex"
     const draggableId = result.draggableId;
     const parts = draggableId.split('-');
     // Last part is the session index
     const sourceSessionIndex = parseInt(parts[parts.length - 1], 10);
-    
+
     // Same day - no move needed (could add reordering later)
     if (sourceDayDate === destDayDate) {
-      console.log('[handleSessionDragEnd] Same day, no move');
       return;
     }
     
@@ -591,13 +584,6 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
       console.error('[handleSessionDragEnd] Could not parse session index from draggableId:', draggableId);
       return;
     }
-    
-    console.log('[handleSessionDragEnd] Moving session:', {
-      sourceDayDate,
-      sourceSessionIndex,
-      destDayDate,
-      draggableId
-    });
     
     // Use the hook's handler for moving sessions (which also toasts)
     editing.handleMoveSession(sourceDayDate, sourceSessionIndex, destDayDate);
@@ -627,14 +613,6 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
       }
       
       if (program) {
-        console.log('[handleAssignProgram] Program found:', {
-          id: program.id,
-          name: program.name,
-          exerciseCount: program.exerciseDistribution?.length || 0,
-          hasSessionSections: !!program.sessionSections,
-          hasDailyIntensity: !!program.dailyIntensityData?.length,
-        });
-        
         // Compute a robust originalStartDate from the earliest valid date in program data
         // Order of precedence: trainingDays > exerciseDistribution > dailyIntensityData > duration.startDate
         let originalStartDate: Date | null = null;
@@ -719,7 +697,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 sourceDailyIntensity = JSON.parse(globalIntensity);
               }
             } catch (e) {
-              console.warn('[handleAssignProgram] Error reading global dailyIntensityData:', e);
+              // ignore
             }
           }
             
@@ -772,16 +750,6 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             copiedAt: new Date().toISOString(),
           };
           
-          console.log('[handleAssignProgram] Saving assignment data:', {
-            storageKey,
-            exerciseCount: shiftedExercises.length,
-            sectionsCount: Array.isArray(shiftedSections) ? shiftedSections.length : Object.keys(shiftedSections).length,
-            dailyIntensityCount: shiftedDailyIntensity.length,
-            originalStartDate: normalizedOriginalStart.toISOString(),
-            newStartDate: normalizedNewStart.toISOString(),
-            dayOffset: Math.round((normalizedNewStart.getTime() - normalizedOriginalStart.getTime()) / (1000 * 60 * 60 * 24)),
-          });
-          
           localStorage.setItem(storageKey, JSON.stringify(dataToSave));
           
           // Update cache immediately
@@ -799,11 +767,9 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           });
           return;
         }
-      } else {
-        console.warn('[handleAssignProgram] Program not found:', assignment.programId);
       }
     }
-    
+
     setShowAssignDialog(false);
     setSelectedDate(null);
   }, [athlete.id, athleteData, getProgram]);

@@ -344,9 +344,6 @@ export function useTrainingPrograms() {
       }
     }
     keysToRemove.forEach(key => localStorage.removeItem(key));
-    
-    console.log('[clearSession] Cleared all session data:', 
-      staticKeysToRemove.length + keysToRemove.length, 'keys');
   }, []);
 
   // Update program status

@@ -160,7 +160,6 @@ function migrateSetParameter(entries: ToolboxEntry[]): ToolboxEntry[] {
       paramNameLower.includes('contacts per session');
     
     if (isSetLike && entry.parameterType === 'quantitative') {
-      console.log('[useToolboxData] Marking as set parameter:', entry.parameterName);
       return { ...entry, isSetParameter: true };
     }
     
