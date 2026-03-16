@@ -35,6 +35,13 @@ export interface CustomLibraryData {
   version: string;
 }
 
+export interface BulkImportPayload {
+  /** New columns to add. The `id` field is pre-assigned by the caller. */
+  newColumns: LibraryColumn[];
+  /** Exercises to add. `data` keys must be valid column ids (existing or from newColumns). */
+  exercises: Array<Omit<CustomExercise, 'id'>>;
+}
+
 interface CustomLibrariesContextType {
   data: CustomLibraryData;
   isLoading: boolean;
@@ -49,6 +56,8 @@ interface CustomLibrariesContextType {
   updateColumnInLibrary: (libraryId: string, columnId: string, updates: Partial<LibraryColumn>) => void;
   deleteColumnFromLibrary: (libraryId: string, columnId: string) => void;
   reorderColumnsInLibrary: (libraryId: string, columnIds: string[]) => void;
+  /** Atomically add new columns and exercises in a single state update. */
+  bulkImportToLibrary: (libraryId: string, payload: BulkImportPayload) => void;
 }
 
 const CustomLibrariesContext = createContext<CustomLibrariesContextType | undefined>(undefined);
@@ -323,6 +332,31 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
     saveData(newData);
   };
 
+  const bulkImportToLibrary = (libraryId: string, payload: BulkImportPayload) => {
+    const baseTs = Date.now();
+    const newExercises: CustomExercise[] = payload.exercises.map((ex, index) => ({
+      ...ex,
+      id: `${baseTs + index}`,
+    }));
+
+    const newData: CustomLibraryData = {
+      ...data,
+      libraries: data.libraries.map(lib =>
+        lib.id === libraryId
+          ? {
+              ...lib,
+              columns: [...lib.columns, ...payload.newColumns],
+              exercises: [...lib.exercises, ...newExercises],
+              lastUpdated: new Date().toISOString(),
+            }
+          : lib
+      ),
+      lastUpdated: new Date().toISOString(),
+    };
+
+    saveData(newData);
+  };
+
   const value: CustomLibrariesContextType = {
     data,
     isLoading,
@@ -336,7 +370,8 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
     addColumnToLibrary,
     updateColumnInLibrary,
     deleteColumnFromLibrary,
-    reorderColumnsInLibrary
+    reorderColumnsInLibrary,
+    bulkImportToLibrary,
   };
 
   return (

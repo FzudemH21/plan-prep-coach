@@ -8,13 +8,14 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Edit2, MoreHorizontal, Filter, RotateCcw, FileText } from 'lucide-react';
-import { useCustomLibraries, CustomLibrary, CustomExercise, LibraryColumn } from '@/hooks/useCustomLibraries';
+import { Plus, Trash2, Edit2, MoreHorizontal, Filter, RotateCcw, FileText, Upload } from 'lucide-react';
+import { useCustomLibraries, CustomLibrary, CustomExercise, LibraryColumn, BulkImportPayload } from '@/hooks/useCustomLibraries';
 import { useToast } from '@/hooks/use-toast';
 import { CustomLibraryColumnFilter } from './CustomLibraryColumnFilter';
 import { ColumnDeleteDialog } from '@/components/shared/ColumnDeleteDialog';
 import { ColumnRenameDialog } from '@/components/shared/ColumnRenameDialog';
 import { ExerciseDetailDialog } from '@/components/shared/ExerciseDetailDialog';
+import { BulkImportDialog } from './BulkImportDialog';
 
 interface DynamicLibraryTableProps {
   library: CustomLibrary;
@@ -58,13 +59,14 @@ interface ExerciseDetailState {
 }
 
 export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
-  const { 
-    addExerciseToLibrary, 
-    updateExerciseInLibrary, 
+  const {
+    addExerciseToLibrary,
+    updateExerciseInLibrary,
     deleteExerciseFromLibrary,
     addColumnToLibrary,
     updateColumnInLibrary,
-    deleteColumnFromLibrary
+    deleteColumnFromLibrary,
+    bulkImportToLibrary,
   } = useCustomLibraries();
   const { toast } = useToast();
 
@@ -107,6 +109,45 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
     exercise: null
   });
   const [isCreatingNewExercise, setIsCreatingNewExercise] = useState(false);
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+
+  const handleBulkImport = (
+    rows: Array<Record<string, string>>,
+    newColumnDefs: Array<Omit<LibraryColumn, 'id'>>
+  ) => {
+    // Assign deterministic ids to new columns so exercise rows can reference them.
+    const baseTs = Date.now();
+    const newColumns: LibraryColumn[] = newColumnDefs.map((col, index) => ({
+      ...col,
+      id: `column_${baseTs + index}`,
+    }));
+
+    // Remap "__new__<headerName>" interim keys in rows to the real column ids.
+    const nameToId: Record<string, string> = {};
+    newColumns.forEach(col => { nameToId[col.name] = col.id; });
+
+    const exercises: Array<Omit<CustomExercise, 'id'>> = rows.map(row => {
+      const data: Record<string, string> = {};
+      Object.entries(row).forEach(([key, value]) => {
+        if (key.startsWith('__new__')) {
+          const colName = key.slice(7);
+          const realId = nameToId[colName];
+          if (realId) data[realId] = value;
+        } else {
+          data[key] = value;
+        }
+      });
+      return { data };
+    });
+
+    const payload: BulkImportPayload = { newColumns, exercises };
+    bulkImportToLibrary(library.id, payload);
+
+    toast({
+      title: "Import complete",
+      description: `${exercises.length} exercise${exercises.length !== 1 ? 's' : ''} imported successfully${newColumns.length > 0 ? ` (${newColumns.length} new column${newColumns.length !== 1 ? 's' : ''} created)` : ''}.`,
+    });
+  };
 
   const handleCellEdit = (exerciseId: string, columnId: string, value: string) => {
     const exercise = safeLibrary.exercises.find(ex => ex.id === exerciseId);
@@ -453,6 +494,10 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
               <RotateCcw className="h-4 w-4 mr-2" />
               Reset Filters
             </Button>
+            <Button onClick={() => setIsBulkImportOpen(true)} variant="outline" size="sm">
+              <Upload className="h-4 w-4 mr-2" />
+              Import CSV
+            </Button>
           </div>
           
           <div className="flex items-center space-x-4 text-sm text-muted-foreground">
@@ -637,6 +682,14 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
           setIsCreatingNewExercise(false);
           toast({ title: "Success", description: "Exercise added successfully" });
         }}
+      />
+
+      {/* Bulk Import Dialog */}
+      <BulkImportDialog
+        isOpen={isBulkImportOpen}
+        onClose={() => setIsBulkImportOpen(false)}
+        library={safeLibrary}
+        onImport={handleBulkImport}
       />
     </>
   );
