@@ -95,14 +95,11 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
   }));
 
   const templatesGroup: NavGroup = {
-    title: "Templates & Library",
+    title: "Templates & Libraries",
     icon: FileText,
     path: "/templates",
     items: [
       { title: "Training Programs", path: "/templates/programs", icon: Calendar },
-      { title: "Athleticism Database", path: "/templates/athleticism", icon: Activity },
-      { title: "Athleticism Database (v2)", path: "/templates/athleticism-v2", icon: Activity },
-      { title: "Training Toolbox", path: "/templates/toolbox", icon: Wrench },
     ],
     subGroups: [
       {
@@ -257,7 +254,46 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
             Athlete Database
           </Button>
 
-          {/* Templates & Library Group */}
+          {/* Athleticism Database - standalone */}
+          <Button
+            variant="ghost"
+            className={cn(
+              "w-full justify-start h-10",
+              isActive("/templates/athleticism") && "bg-accent text-accent-foreground font-medium"
+            )}
+            onClick={() => handleNavigate("/templates/athleticism")}
+          >
+            <Activity className="h-4 w-4 mr-2" />
+            Athleticism Database
+          </Button>
+
+          {/* Training Toolbox - standalone */}
+          <Button
+            variant="ghost"
+            className={cn(
+              "w-full justify-start h-10",
+              isActive("/templates/toolbox") && "bg-accent text-accent-foreground font-medium"
+            )}
+            onClick={() => handleNavigate("/templates/toolbox")}
+          >
+            <Wrench className="h-4 w-4 mr-2" />
+            Training Toolbox
+          </Button>
+
+          {/* Parameter Database - standalone */}
+          <Button
+            variant="ghost"
+            className={cn(
+              "w-full justify-start h-10",
+              isActive("/parameter-database") && "bg-accent text-accent-foreground font-medium"
+            )}
+            onClick={() => handleNavigate("/parameter-database")}
+          >
+            <Target className="h-4 w-4 mr-2" />
+            Parameter Database
+          </Button>
+
+          {/* Templates & Libraries Group */}
           {renderNavGroup(templatesGroup, "templates")}
 
           {/* Analytics - standalone */}

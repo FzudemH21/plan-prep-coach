@@ -22,10 +22,12 @@ Du bist mein Sparringspartner für Planung, Diskussion und Prompts für Claude C
 | 🔴 Jetzt | Notizfeld Athletenprofil | ✅ Erledigt |
 | 🔴 Jetzt | Bulk Import Übungen (CSV/Excel) | ✅ Erledigt |
 | 🔴 Jetzt | Bulk Import Fixes (3-Schritt-Flow, Description optional, konsistente Speicherung) | ✅ Erledigt |
-| 🟡 Bald | KI-Autopilot im Wizard (Vorschläge & Vorausfüllen von Intensitäten, Methoden, Übungen) | ⬜ Offen |
-| 🟡 Bald | Coach-Profil / Brain-Picking (einmaliges Philosophie-Setup-Interview, fließt in KI-Vorschläge ein) | ⬜ Offen |
-| 🟡 Bald | Accumulated Context (KI lernt aus bisherigen Plänen des Trainers für bessere Vorschläge) | ⬜ Offen |
-| 🟡 Bald | Spracheingabe für Coach (Athletenbeschreibung per Sprache, Web Speech API + Anthropic API) | ⬜ Offen |
+| 🔴 Jetzt | Dynamisches Übungsdetail-Modal (Spalten aus Datenbank, keine hardcodierten Felder, direkt editierbar) | ✅ Erledigt |
+| 🟡 Bald | Coach-Profil & Onboarding (KI-Gespräch zum Kennenlernen der Coaching-Philosophie, KI stellt Folgefragen, Ergebnis wird als Coach-Profil gespeichert und reviewbar) | ⬜ Offen |
+| 🟡 Bald | Plan-Uploads für Coach-Profil (Excel, PDF, Word und andere Dateien hochladbar, Coach gibt Kontext dazu, KI extrahiert Muster und reichert Coach-Profil an) | ⬜ Offen |
+| 🟡 Bald | KI-Autopilot im Wizard (Vorschläge & Vorausfüllen von Intensitäten, Methoden, Übungen basierend auf Coach-Profil) | ⬜ Offen |
+| 🟡 Bald | Accumulated Context (automatischer Abgleich KI-Vorschlag vs. finaler Plan, KI fragt dosiert nach bei signifikanten Abweichungen – max. 1-2 pro Plan, skipbar, Antworten fließen als Begründungen in Kontext ein) | ⬜ Offen |
+| 🟡 Bald | Spracheingabe für Coach (Athletenbeschreibung per Sprache im Athletenprofil und Wizard-Start, Web Speech API + Anthropic API) | ⬜ Offen |
 | 🟡 Bald | Masterplaner-Ansicht Athletenkalender (Tag 1, Tag 2... pro Wochentag) | ⬜ Offen |
 | 🟡 Bald | Tests & Events im Athletenkalender + Sync mit Wizard | ⬜ Offen |
 | 🟡 Bald | Dokumente hochladen + Freigabe für Athleten | ⬜ Offen |

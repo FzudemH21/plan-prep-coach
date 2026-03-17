@@ -144,15 +144,17 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
       return description ? { data, description } : { data };
     });
 
-    const payload: BulkImportPayload = { newColumns, exercises };
-    bulkImportToLibrary(library.id, payload);
-
-    // Rename the first (name) column if the CSV used a different label.
-    // This keeps the table header in sync with the coach's own terminology.
+    // Rename the first (name) column atomically inside the bulk import if the CSV
+    // used a different label — doing it as a separate updateColumnInLibrary call
+    // would read stale state and overwrite the just-imported exercises.
     const firstColumn = safeLibrary.columns[0];
-    if (firstColumn && nameColumnLabel && nameColumnLabel !== firstColumn.name) {
-      updateColumnInLibrary(library.id, firstColumn.id, { name: nameColumnLabel });
-    }
+    const firstColumnRename =
+      firstColumn && nameColumnLabel && nameColumnLabel !== firstColumn.name
+        ? { id: firstColumn.id, name: nameColumnLabel }
+        : undefined;
+
+    const payload: BulkImportPayload = { newColumns, exercises, firstColumnRename };
+    bulkImportToLibrary(library.id, payload);
 
     toast({
       title: "Import complete",

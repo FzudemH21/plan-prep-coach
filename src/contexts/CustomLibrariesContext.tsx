@@ -40,6 +40,8 @@ export interface BulkImportPayload {
   newColumns: LibraryColumn[];
   /** Exercises to add. `data` keys must be valid column ids (existing or from newColumns). */
   exercises: Array<Omit<CustomExercise, 'id'>>;
+  /** Optional: rename an existing column atomically with the import (avoids stale-closure overwrite). */
+  firstColumnRename?: { id: string; name: string };
 }
 
 interface CustomLibrariesContextType {
@@ -145,8 +147,7 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
       ...library,
       id: uniqueSlug,
       columns: library.columns || [
-        { id: 'exercise', name: 'Exercise', type: 'text', required: true },
-        { id: 'description', name: 'Description', type: 'textarea', required: false }
+        { id: 'exercise', name: 'Exercise', type: 'text', required: true }
       ],
       exercises: [],
       createdAt: new Date().toISOString(),
@@ -345,7 +346,14 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
         lib.id === libraryId
           ? {
               ...lib,
-              columns: [...lib.columns, ...payload.newColumns],
+              columns: [
+                ...lib.columns.map(col =>
+                  payload.firstColumnRename && col.id === payload.firstColumnRename.id
+                    ? { ...col, name: payload.firstColumnRename.name }
+                    : col
+                ),
+                ...payload.newColumns,
+              ],
               exercises: [...lib.exercises, ...newExercises],
               lastUpdated: new Date().toISOString(),
             }
