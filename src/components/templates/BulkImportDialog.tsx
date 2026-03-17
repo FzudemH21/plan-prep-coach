@@ -1,11 +1,12 @@
-import { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Upload, AlertCircle } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Upload, AlertCircle, ChevronLeft } from 'lucide-react';
 import { LibraryColumn, CustomLibrary } from '@/hooks/useCustomLibraries';
 
 // ---------------------------------------------------------------------------
@@ -37,7 +38,6 @@ function parseCSVLine(line: string): string[] {
 }
 
 function parseCSV(text: string): { headers: string[]; rows: string[][] } {
-  // Normalise line endings
   const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(l => l.trim());
   if (lines.length === 0) return { headers: [], rows: [] };
   const headers = parseCSVLine(lines[0]);
@@ -52,7 +52,6 @@ function parseCSV(text: string): { headers: string[]; rows: string[][] } {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Auto-detect which CSV header is most likely the exercise name. */
 function detectNameColumn(headers: string[]): string {
   const nameKeywords = ['name', 'exercise', 'exercise name', 'exercisename', 'übung', 'übungsname', 'titel', 'title'];
   const found = headers.find(h => nameKeywords.includes(h.toLowerCase().trim()));
@@ -60,7 +59,7 @@ function detectNameColumn(headers: string[]): string {
 }
 
 // ---------------------------------------------------------------------------
-// Column mapping types
+// Types
 // ---------------------------------------------------------------------------
 
 type MappingAction = 'skip' | 'create' | string; // string = existing column id
@@ -78,17 +77,53 @@ interface BulkImportDialogProps {
   isOpen: boolean;
   onClose: () => void;
   library: CustomLibrary;
-  /**
-   * Called when the user confirms.
-   * - newColumns must be added to library first.
-   * - nameColumnLabel is the CSV header the user designated as the exercise name;
-   *   the caller can use it to rename the first library column if it differs.
-   */
   onImport: (
     rows: Array<Record<string, string>>,
     newColumns: Array<Omit<LibraryColumn, 'id'>>,
     nameColumnLabel: string,
   ) => void;
+}
+
+// ---------------------------------------------------------------------------
+// Step indicator
+// ---------------------------------------------------------------------------
+
+const STEP_LABELS = ['Columns', 'Name', 'Mapping'] as const;
+
+function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
+  return (
+    <div className="flex items-center justify-center gap-1 px-6 py-3 border-b bg-muted/30">
+      {([1, 2, 3] as const).map((s, i) => (
+        <React.Fragment key={s}>
+          <div className="flex flex-col items-center gap-0.5">
+            <div
+              className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold transition-colors ${
+                s === step
+                  ? 'bg-primary text-primary-foreground'
+                  : s < step
+                  ? 'bg-primary/25 text-primary'
+                  : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              {s}
+            </div>
+            <span
+              className={`text-[10px] whitespace-nowrap ${
+                s === step ? 'text-primary font-medium' : 'text-muted-foreground'
+              }`}
+            >
+              {STEP_LABELS[i]}
+            </span>
+          </div>
+          {s < 3 && (
+            <div
+              className={`h-px w-10 mb-3.5 transition-colors ${s < step ? 'bg-primary/40' : 'bg-muted'}`}
+            />
+          )}
+        </React.Fragment>
+      ))}
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -98,38 +133,36 @@ interface BulkImportDialogProps {
 export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImportDialogProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [fileName, setFileName] = useState<string>('');
-  const [parseError, setParseError] = useState<string>('');
+  // File state
+  const [fileName, setFileName] = useState('');
+  const [parseError, setParseError] = useState('');
   const [fileHeaders, setFileHeaders] = useState<string[]>([]);
   const [fileRows, setFileRows] = useState<string[][]>([]);
-  /** Mappings for all columns EXCEPT the name column (handled by nameColumnHeader). */
-  const [mappings, setMappings] = useState<ColumnMapping[]>([]);
   const [isExcelFile, setIsExcelFile] = useState(false);
-  /** Which CSV header maps to the exercise name (first library column). */
-  const [nameColumnHeader, setNameColumnHeader] = useState<string>('');
 
-  // Derived
-  const previewRows = fileRows.slice(0, 3);
-  const importableRowCount = fileRows.length;
+  // Step state
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [activeHeaders, setActiveHeaders] = useState<Set<string>>(new Set());
+  const [nameColumnHeader, setNameColumnHeader] = useState('');
+  const [mappings, setMappings] = useState<ColumnMapping[]>([]);
 
-  // ------------------------------------------------------------------
-  // Auto-map: match file header → existing library column (case-insensitive)
-  // Excludes the name column header (handled separately).
-  // ------------------------------------------------------------------
-  const buildDefaultMappings = useCallback(
-    (headers: string[], nameHeader: string): ColumnMapping[] => {
-      return headers
-        .filter(header => header !== nameHeader)
-        .map(header => {
-          const match = library.columns.slice(1).find(
-            col => col.name.toLowerCase() === header.toLowerCase()
-          );
-          return {
-            fileHeader: header,
-            action: match ? match.id : 'create',
-          };
-        });
-    },
+  // Ordered list of active headers (preserves CSV order)
+  const activeHeadersOrdered = fileHeaders.filter(h => activeHeaders.has(h));
+
+  // Non-name library columns available as mapping targets
+  const nonNameLibraryColumns = library.columns.slice(1);
+
+  // Build default mappings for active non-name headers
+  const buildMappings = useCallback(
+    (headers: string[], nameHeader: string): ColumnMapping[] =>
+      headers
+        .filter(h => h !== nameHeader)
+        .map(h => {
+          const match = library.columns
+            .slice(1)
+            .find(col => col.name.toLowerCase() === h.toLowerCase());
+          return { fileHeader: h, action: match ? match.id : 'create' };
+        }),
     [library.columns]
   );
 
@@ -144,9 +177,11 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
     setParseError('');
     setFileHeaders([]);
     setFileRows([]);
+    setActiveHeaders(new Set());
+    setNameColumnHeader('');
     setMappings([]);
     setIsExcelFile(false);
-    setNameColumnHeader('');
+    setStep(1);
 
     const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
 
@@ -163,46 +198,47 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
     const reader = new FileReader();
     reader.onload = ev => {
       const text = ev.target?.result;
-      if (typeof text !== 'string') {
-        setParseError('Could not read file.');
-        return;
-      }
+      if (typeof text !== 'string') { setParseError('Could not read file.'); return; }
       try {
         const { headers, rows } = parseCSV(text);
         if (headers.length === 0) {
           setParseError('The file appears to be empty or has no headers.');
           return;
         }
-        const detectedName = detectNameColumn(headers);
         setFileHeaders(headers);
         setFileRows(rows);
-        setNameColumnHeader(detectedName);
-        setMappings(buildDefaultMappings(headers, detectedName));
+        setActiveHeaders(new Set(headers));
+        setNameColumnHeader(detectNameColumn(headers));
+        setStep(1);
       } catch {
         setParseError('Failed to parse CSV. Please check the file format.');
       }
     };
     reader.readAsText(file);
-
-    // Reset input so the same file can be re-selected after clearing
     e.target.value = '';
   };
 
   // ------------------------------------------------------------------
-  // Name column change — rebuild non-name mappings
+  // Step navigation
   // ------------------------------------------------------------------
-  const handleNameColumnChange = (newNameHeader: string) => {
-    setNameColumnHeader(newNameHeader);
-    setMappings(buildDefaultMappings(fileHeaders, newNameHeader));
+  const goToStep2 = () => {
+    // If detected name column was deactivated, re-detect from active set
+    if (!activeHeaders.has(nameColumnHeader)) {
+      setNameColumnHeader(detectNameColumn(activeHeadersOrdered));
+    }
+    setStep(2);
+  };
+
+  const goToStep3 = () => {
+    setMappings(buildMappings(activeHeadersOrdered, nameColumnHeader));
+    setStep(3);
   };
 
   // ------------------------------------------------------------------
   // Mapping change
   // ------------------------------------------------------------------
   const setMappingAction = (index: number, action: MappingAction) => {
-    setMappings(prev =>
-      prev.map((m, i) => (i === index ? { ...m, action } : m))
-    );
+    setMappings(prev => prev.map((m, i) => (i === index ? { ...m, action } : m)));
   };
 
   // ------------------------------------------------------------------
@@ -210,40 +246,29 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
   // ------------------------------------------------------------------
   const handleConfirm = () => {
     const nameLibraryColumnId = library.columns[0]?.id ?? '';
-
-    // 1. Build header→key map
     const newColumnDefs: Array<Omit<LibraryColumn, 'id'>> = [];
     const headerToKey: Record<string, string> = {};
 
-    // Name column always maps to the first library column
     if (nameColumnHeader && nameLibraryColumnId) {
       headerToKey[nameColumnHeader] = nameLibraryColumnId;
     }
 
-    // Additional columns from the mapping table
     mappings.forEach(mapping => {
       if (mapping.action === 'skip') return;
       if (mapping.action === 'create') {
         headerToKey[mapping.fileHeader] = `__new__${mapping.fileHeader}`;
-        newColumnDefs.push({
-          name: mapping.fileHeader,
-          type: 'text',
-          required: false,
-        });
+        newColumnDefs.push({ name: mapping.fileHeader, type: 'text', required: false });
       } else {
         headerToKey[mapping.fileHeader] = mapping.action;
       }
     });
 
-    // 2. Build rows, skip rows where name is empty
     const importedRows: Array<Record<string, string>> = fileRows
       .map(row => {
         const record: Record<string, string> = {};
         fileHeaders.forEach((header, i) => {
           const key = headerToKey[header];
-          if (key) {
-            record[key] = row[i] ?? '';
-          }
+          if (key) record[key] = row[i] ?? '';
         });
         return record;
       })
@@ -261,20 +286,34 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
     setParseError('');
     setFileHeaders([]);
     setFileRows([]);
+    setActiveHeaders(new Set());
+    setNameColumnHeader('');
     setMappings([]);
     setIsExcelFile(false);
-    setNameColumnHeader('');
+    setStep(1);
     onClose();
   };
 
   // ------------------------------------------------------------------
+  // Derived counts
+  // ------------------------------------------------------------------
+  const nameColIndex = fileHeaders.indexOf(nameColumnHeader);
+  const validRowCount =
+    nameColIndex >= 0
+      ? fileRows.filter(row => (row[nameColIndex] ?? '').trim() !== '').length
+      : 0;
+
+  const canProceedStep1 = activeHeaders.size > 0;
+  const canProceedStep2 = nameColumnHeader !== '' && activeHeaders.has(nameColumnHeader);
+
+  const hasFile = fileHeaders.length > 0;
+
+  // ------------------------------------------------------------------
   // Render helpers
   // ------------------------------------------------------------------
-  const nonNameLibraryColumns = library.columns.slice(1);
-
-  const renderMappingSelect = (mapping: ColumnMapping, index: number) => (
+  const renderMappingAction = (mapping: ColumnMapping, index: number) => (
     <Select value={mapping.action} onValueChange={v => setMappingAction(index, v)}>
-      <SelectTrigger className="w-52">
+      <SelectTrigger className="w-56">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -293,36 +332,118 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
     </Select>
   );
 
-  const renderActionBadge = (action: MappingAction) => {
-    if (action === 'skip') return <Badge variant="secondary">Skip</Badge>;
-    if (action === 'create') return <Badge className="bg-green-100 text-green-800 border-green-200">New column</Badge>;
-    const col = library.columns.find(c => c.id === action);
-    return <Badge variant="outline">{col ? `→ ${col.name}` : action}</Badge>;
-  };
+  // ------------------------------------------------------------------
+  // Step content
+  // ------------------------------------------------------------------
 
-  // How many rows will actually be imported (name column non-empty)
-  const nameColIndex = fileHeaders.indexOf(nameColumnHeader);
-  const validRowCount = nameColIndex >= 0
-    ? fileRows.filter(row => (row[nameColIndex] ?? '').trim() !== '').length
-    : 0;
+  const renderStep1 = () => (
+    <div className="space-y-4">
+      <div>
+        <p className="text-sm font-semibold mb-1">Which columns do you want to import?</p>
+        <p className="text-xs text-muted-foreground mb-4">
+          Uncheck any columns you want to skip.
+        </p>
+        <div className="space-y-2">
+          {fileHeaders.map(header => (
+            <div key={header} className="flex items-center gap-3 py-1.5 px-3 rounded-md hover:bg-muted/40">
+              <Checkbox
+                id={`col-${header}`}
+                checked={activeHeaders.has(header)}
+                onCheckedChange={checked => {
+                  setActiveHeaders(prev => {
+                    const next = new Set(prev);
+                    if (checked) next.add(header); else next.delete(header);
+                    return next;
+                  });
+                }}
+              />
+              <Label htmlFor={`col-${header}`} className="font-mono text-sm cursor-pointer">
+                {header}
+              </Label>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {activeHeaders.size} of {fileHeaders.length} column{fileHeaders.length !== 1 ? 's' : ''} selected
+      </p>
+    </div>
+  );
 
-  const canImport = nameColumnHeader !== '' && validRowCount > 0;
+  const renderStep2 = () => (
+    <div className="space-y-4">
+      <div>
+        <p className="text-sm font-semibold mb-1">Which column contains the exercise name?</p>
+        <p className="text-xs text-muted-foreground mb-4">
+          This is the only required field. Rows with an empty name will be skipped.
+        </p>
+        <RadioGroup value={nameColumnHeader} onValueChange={setNameColumnHeader} className="space-y-2">
+          {activeHeadersOrdered.map(header => (
+            <div key={header} className="flex items-center gap-3 py-1.5 px-3 rounded-md hover:bg-muted/40">
+              <RadioGroupItem value={header} id={`name-${header}`} />
+              <Label htmlFor={`name-${header}`} className="font-mono text-sm cursor-pointer">
+                {header}
+              </Label>
+            </div>
+          ))}
+        </RadioGroup>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {validRowCount} row{validRowCount !== 1 ? 's' : ''} will be imported
+        {fileRows.length - validRowCount > 0 &&
+          ` (${fileRows.length - validRowCount} skipped — empty name)`}
+      </p>
+    </div>
+  );
+
+  const renderStep3 = () => (
+    <div className="space-y-4">
+      <div>
+        <p className="text-sm font-semibold mb-1">How should each column be imported?</p>
+        <p className="text-xs text-muted-foreground mb-4">
+          Map each column to an existing library column, or create a new one.
+        </p>
+        {mappings.length === 0 ? (
+          <p className="text-sm text-muted-foreground italic">
+            No additional columns to map — only the name column is active.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {mappings.map((mapping, index) => (
+              <div key={mapping.fileHeader} className="flex items-center gap-3">
+                <span className="flex-1 font-mono text-sm truncate" title={mapping.fileHeader}>
+                  {mapping.fileHeader}
+                </span>
+                {renderMappingAction(mapping, index)}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {validRowCount} row{validRowCount !== 1 ? 's' : ''} will be imported
+      </p>
+    </div>
+  );
 
   // ------------------------------------------------------------------
   // Render
   // ------------------------------------------------------------------
   return (
     <Dialog open={isOpen} onOpenChange={open => { if (!open) handleClose(); }}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0">
+      <DialogContent className="max-w-xl max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0">
         <DialogHeader className="px-6 pt-6 pb-4">
           <DialogTitle>
-            {fileName ? `Map Columns from "${fileName}"` : 'Import CSV'}
+            {!hasFile ? 'Import CSV' : `Import from "${fileName}"`}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 space-y-6 py-2">
+        {/* Step indicator — only when file is loaded */}
+        {hasFile && <StepIndicator step={step} />}
+
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4">
           {/* File upload area */}
-          {fileHeaders.length === 0 && !isExcelFile && (
+          {!hasFile && !isExcelFile && (
             <div
               className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-10 text-center cursor-pointer hover:border-primary/50 transition-colors"
               onClick={() => fileInputRef.current?.click()}
@@ -330,24 +451,6 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
               <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
               <p className="text-sm font-medium mb-1">Click to upload a CSV file</p>
               <p className="text-xs text-muted-foreground">Excel files (.xlsx, .xls) require conversion to CSV first</p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-            </div>
-          )}
-
-          {/* Re-upload button when file already loaded */}
-          {(fileHeaders.length > 0 || isExcelFile) && (
-            <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                <Upload className="h-4 w-4 mr-2" />
-                Choose different file
-              </Button>
-              <span className="text-sm text-muted-foreground">{fileName}</span>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -379,137 +482,62 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
             </div>
           )}
 
-          {/* Unified column mapping table — all CSV columns in one list */}
-          {fileHeaders.length > 0 && (
-            <div>
-              <div className="flex items-baseline gap-2 mb-3">
-                <h3 className="text-sm font-semibold">
-                  Column Mapping
-                </h3>
-                <span className="text-sm font-normal text-muted-foreground">
-                  ({fileHeaders.length} column{fileHeaders.length !== 1 ? 's' : ''} found)
-                </span>
-              </div>
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[100px]">Name column</TableHead>
-                      <TableHead>File Column</TableHead>
-                      <TableHead>Map to Library Column</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <RadioGroup value={nameColumnHeader} onValueChange={handleNameColumnChange}>
-                      {fileHeaders.map(header => {
-                        const isName = header === nameColumnHeader;
-                        const mappingIndex = mappings.findIndex(m => m.fileHeader === header);
-                        const mapping = mappings[mappingIndex];
-                        return (
-                          <TableRow
-                            key={header}
-                            className={isName ? 'bg-primary/5' : undefined}
-                          >
-                            <TableCell className="text-center">
-                              <RadioGroupItem value={header} id={`name-radio-${header}`} />
-                            </TableCell>
-                            <TableCell>
-                              <span className="font-mono text-sm">{header}</span>
-                              {isName && (
-                                <span className="ml-2 text-xs text-muted-foreground">
-                                  — required, empty rows skipped
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {isName ? (
-                                <span className="text-sm text-muted-foreground italic">
-                                  Exercise name
-                                </span>
-                              ) : (
-                                mapping !== undefined
-                                  ? renderMappingSelect(mapping, mappingIndex)
-                                  : null
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {isName ? (
-                                <Badge className="bg-primary/10 text-primary border-primary/20">
-                                  Name
-                                </Badge>
-                              ) : (
-                                mapping !== undefined ? renderActionBadge(mapping.action) : null
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </RadioGroup>
-                  </TableBody>
-                </Table>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Mark which column contains the exercise name — this is the only required field.
-              </p>
-            </div>
-          )}
+          {/* Step content */}
+          {hasFile && step === 1 && renderStep1()}
+          {hasFile && step === 2 && renderStep2()}
+          {hasFile && step === 3 && renderStep3()}
 
-          {/* Data preview */}
-          {previewRows.length > 0 && (
-            <div>
-              <h3 className="text-sm font-semibold mb-3">
-                Data Preview
-                <span className="font-normal text-muted-foreground ml-2">
-                  (first {previewRows.length} of {importableRowCount} row{importableRowCount !== 1 ? 's' : ''})
-                </span>
-              </h3>
-              <div className="border rounded-lg overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {fileHeaders.map(h => (
-                        <TableHead
-                          key={h}
-                          className={`font-mono text-xs whitespace-nowrap${h === nameColumnHeader ? ' bg-primary/5 font-semibold' : ''}`}
-                        >
-                          {h}
-                          {h === nameColumnHeader && (
-                            <span className="ml-1 text-primary text-[10px]">(name)</span>
-                          )}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {previewRows.map((row, rowIndex) => (
-                      <TableRow key={rowIndex}>
-                        {fileHeaders.map((h, colIndex) => (
-                          <TableCell
-                            key={colIndex}
-                            className={`text-sm max-w-[200px] truncate${h === nameColumnHeader ? ' font-medium' : ''}`}
-                          >
-                            {row[colIndex] ?? ''}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
+          {/* Hidden file input for re-upload */}
+          {hasFile && (
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              className="hidden"
+              onChange={handleFileChange}
+            />
           )}
         </div>
 
-        <DialogFooter className="px-6 py-4 border-t">
-          <Button variant="outline" onClick={handleClose}>
-            Cancel
-          </Button>
-          {fileHeaders.length > 0 && (
-            <Button onClick={handleConfirm} disabled={!canImport}>
-              Import {validRowCount} row{validRowCount !== 1 ? 's' : ''}
+        <DialogFooter className="px-6 py-4 border-t flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleClose}>
+              Cancel
             </Button>
-          )}
+            {hasFile && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Change file
+              </Button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {hasFile && step > 1 && (
+              <Button variant="outline" onClick={() => setStep((step - 1) as 1 | 2 | 3)}>
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Back
+              </Button>
+            )}
+            {hasFile && step === 1 && (
+              <Button onClick={goToStep2} disabled={!canProceedStep1}>
+                Next
+              </Button>
+            )}
+            {hasFile && step === 2 && (
+              <Button onClick={goToStep3} disabled={!canProceedStep2}>
+                Next
+              </Button>
+            )}
+            {hasFile && step === 3 && (
+              <Button onClick={handleConfirm} disabled={validRowCount === 0}>
+                Import {validRowCount} row{validRowCount !== 1 ? 's' : ''}
+              </Button>
+            )}
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

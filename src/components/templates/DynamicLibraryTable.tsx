@@ -163,9 +163,16 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
   const handleCellEdit = (exerciseId: string, columnId: string, value: string) => {
     const exercise = safeLibrary.exercises.find(ex => ex.id === exerciseId);
     if (exercise) {
-      updateExerciseInLibrary(library.id, exerciseId, {
-        data: { ...(exercise.data || {}), [columnId]: value }
-      });
+      if (columnId === 'description') {
+        // Description is a special field on the exercise, not stored in data
+        updateExerciseInLibrary(library.id, exerciseId, {
+          description: value || undefined,
+        });
+      } else {
+        updateExerciseInLibrary(library.id, exerciseId, {
+          data: { ...(exercise.data || {}), [columnId]: value },
+        });
+      }
     }
     setEditingCell(null);
   };
@@ -279,7 +286,11 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
   };
 
   const renderCell = (exercise: CustomExercise, column: LibraryColumn, isFirstColumn: boolean) => {
-    const value = (exercise.data || {})[column.id] || '';
+    // 'description' is stored as a special field (exercise.description), not in exercise.data
+    const value =
+      column.id === 'description'
+        ? (exercise.description ?? (exercise.data || {})['description'] ?? '')
+        : (exercise.data || {})[column.id] || '';
     const isEditing = editingCell?.exerciseId === exercise.id && editingCell?.columnId === column.id;
 
     if (isEditing) {
