@@ -32,7 +32,7 @@ Du bist mein Sparringspartner für Planung, Diskussion und Prompts für Claude C
 | 🟡 Bald | Tests & Events im Athletenkalender + Sync mit Wizard | ⬜ Offen |
 | 🟡 Bald | Dokumente hochladen + Freigabe für Athleten | ⬜ Offen |
 | 🟡 Bald | Programming-Templates für Trainingsmethoden | ⬜ Offen |
-| 🟡 Bald | Spalten verschieben in Datenbanken (Drag & Drop) | ⬜ Offen |
+| 🟡 Bald | Spalten verschieben in Datenbanken (Drag & Drop) | ✅ Erledigt |
 | 🟠 Später | Goal Management + Testbenachrichtigungen | ⬜ Offen |
 | 🟠 Später | Datumsunabhängiger Plan (Template-Modus) | ⬜ Offen |
 | 🔵 Zukunft | Athleten-App (mobil, separat) | ⬜ Offen |
