@@ -601,7 +601,7 @@ export function MasterPlannerColumn({
 
   // Get sections for this day and session
   const getSectionsForSession = useCallback((sessionIndex: number): SessionSection[] => {
-    if (!sessionSections) {
+    if (!sessionSections || !Array.isArray(sessionSections)) {
       return [];
     }
     const filtered = sessionSections
@@ -626,7 +626,8 @@ export function MasterPlannerColumn({
   }, [currentMesocycle, day.dateString]);
 
   // Helper to normalize method keys for consistent lookup
-  const normalizeMethodKey = (key: string): string => {
+  const normalizeMethodKey = (key: string | undefined): string => {
+    if (!key) return '';
     return key.replace(/ Tier/g, '-Tier').replace(/ tier/g, '-tier');
   };
 

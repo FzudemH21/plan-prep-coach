@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { DisplayModeProvider } from "@/contexts/DisplayModeContext";
 import { CustomLibrariesProvider } from "@/contexts/CustomLibrariesContext";
@@ -38,6 +38,7 @@ const App = () => (
               <Route path="/templates" element={<TemplatesPage />} />
               <Route path="/templates/programs" element={<TrainingProgramsPage />} />
               <Route path="/templates/athleticism" element={<AthleticismDatabaseV2 />} />
+              <Route path="/templates/athleticism-v2" element={<Navigate to="/templates/athleticism" replace />} />
               <Route path="/templates/toolbox" element={<ToolboxDatabase />} />
               
               <Route path="/templates/libraries/:libraryName" element={<LibraryPage />} />

@@ -237,7 +237,8 @@ export default function MicrocyclePlanningPage() {
     // Load saved session sections
     const savedSessionSections = localStorage.getItem('sessionSections');
     if (savedSessionSections) {
-      setSessionSections(JSON.parse(savedSessionSections));
+      const parsed = JSON.parse(savedSessionSections);
+      setSessionSections(Array.isArray(parsed) ? parsed : []);
     }
 
     // Load saved supersets
