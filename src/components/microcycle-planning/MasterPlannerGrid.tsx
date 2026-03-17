@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { getDay } from 'date-fns';
 import { MasterPlannerColumn } from './MasterPlannerColumn';
 import { IntensityLevel, SubGoal, Event } from '@/types/training';
@@ -136,9 +136,10 @@ interface MasterPlannerGridProps {
   // Athlete context for baseline value auto-fill
   selectedAthleteId?: string;
   athletePerformanceParameters?: AthletePerformanceParameter[];
+  weeksToDisplay?: number;
+  onWeeksToDisplayChange?: (n: number) => void;
 }
 
-const WEEKS_OPTIONS = [1, 2, 4] as const;
 const DEFAULT_WEEKS_DISPLAY = 4;
 
 export function MasterPlannerGrid({
@@ -193,9 +194,11 @@ export function MasterPlannerGrid({
   onExerciseChange,
   selectedAthleteId,
   athletePerformanceParameters,
+  weeksToDisplay: weeksToDisplayProp,
+  onWeeksToDisplayChange,
 }: MasterPlannerGridProps) {
   const [startWeekOffset, setStartWeekOffset] = useState(0);
-  const [weeksToDisplay, setWeeksToDisplay] = useState(DEFAULT_WEEKS_DISPLAY);
+  const weeksToDisplay = weeksToDisplayProp ?? DEFAULT_WEEKS_DISPLAY;
 
   // Filter days that match the selected day of week
   // getDay returns 0=Sunday, 1=Monday, etc.
@@ -217,10 +220,8 @@ export function MasterPlannerGrid({
   const canGoBack = startWeekOffset > 0;
   const canGoForward = startWeekOffset + weeksToDisplay < totalWeeksInMesocycle;
 
-  // Reset offset when mesocycle changes
-  useMemo(() => {
-    setStartWeekOffset(0);
-  }, [currentMesocycle?.id]);
+  // Reset offset when mesocycle or weeks-per-view changes
+  useEffect(() => { setStartWeekOffset(0); }, [currentMesocycle?.id, weeksToDisplay]);
 
   if (filteredDays.length === 0) {
     return (
@@ -234,24 +235,6 @@ export function MasterPlannerGrid({
     <div className="w-full">
       {/* Week Navigation - always show indicator, buttons only for 6+ weeks */}
       <div className="flex items-center justify-between mb-2 px-2">
-        {/* Weeks-per-view selector */}
-        <div className="flex items-center gap-1 bg-muted rounded-lg p-1 shrink-0">
-          {WEEKS_OPTIONS.map(w => (
-            <Button
-              key={w}
-              variant={weeksToDisplay === w ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => {
-                setWeeksToDisplay(w);
-                setStartWeekOffset(0);
-              }}
-              className="h-7 px-3 text-xs"
-            >
-              {w}W
-            </Button>
-          ))}
-        </div>
-
         {hasMoreWeeks ? (
           <>
             <Button

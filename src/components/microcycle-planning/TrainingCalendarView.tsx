@@ -172,6 +172,7 @@ export function TrainingCalendarView({
   const { libraries, updateExerciseInLibrary } = useCustomLibraries();
   const [viewMode, setViewMode] = useState<ViewMode>('4week');
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number>(1); // 1=Monday
+  const [masterWeeksToDisplay, setMasterWeeksToDisplay] = useState(4);
   const [currentDate, setCurrentDate] = useState<Date>(currentMesocycle.startDate);
   const [selectedSession, setSelectedSession] = useState<{
     dayDate: string;
@@ -560,33 +561,20 @@ export function TrainingCalendarView({
                 </Button>
               </div>
 
-              {/* Week view toggle - only show in Calendar mode */}
-              {viewMode !== 'master' && (
-                <div className="flex gap-1 border rounded-md p-1">
-                  <Button
-                    variant={viewMode === '1week' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode('1week')}
-                    className="h-8 px-3"
-                  >
-                    1W
-                  </Button>
-                  <Button
-                    variant={viewMode === '2week' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode('2week')}
-                    className="h-8 px-3"
-                  >
-                    2W
-                  </Button>
-                  <Button
-                    variant={viewMode === '4week' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode('4week')}
-                    className="h-8 px-3"
-                  >
-                    4W
-                  </Button>
+              {/* Week view toggle - only show in Master Planner mode */}
+              {viewMode === 'master' && (
+                <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+                  {([1, 2, 4] as const).map(w => (
+                    <Button
+                      key={w}
+                      variant={masterWeeksToDisplay === w ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setMasterWeeksToDisplay(w)}
+                      className="h-7 px-3 text-xs"
+                    >
+                      {w}W
+                    </Button>
+                  ))}
                 </div>
               )}
 
@@ -689,6 +677,8 @@ export function TrainingCalendarView({
               currentMesocycle={viewedMesocycle}
               trainingDays={trainingDays}
               toolboxData={toolboxData}
+              weeksToDisplay={masterWeeksToDisplay}
+              onWeeksToDisplayChange={setMasterWeeksToDisplay}
               onParameterChange={onSaveParameters ? (dayDate, sessionIndex, methodId, categoryName, paramName, value) => {
                 const trainingDay = trainingDays.find(td => td.date === dayDate);
                 const microcycleId = trainingDay?.microcycleId;

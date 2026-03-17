@@ -86,6 +86,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   
   // Master planner state
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number>(1); // 1=Monday
+  const [masterWeeksToDisplay, setMasterWeeksToDisplay] = useState(4);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
   
   // Ref-based drag end timestamp for SYNCHRONOUS click suppression
@@ -818,6 +819,21 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
               {/* Master Planner specific controls */}
               {isMasterMode && (
                 <>
+                  {/* Weeks-per-view toggle */}
+                  <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+                    {([1, 2, 4] as const).map(w => (
+                      <Button
+                        key={w}
+                        variant={masterWeeksToDisplay === w ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => setMasterWeeksToDisplay(w)}
+                        className="h-7 px-3 text-xs"
+                      >
+                        {w}W
+                      </Button>
+                    ))}
+                  </div>
+
                   {/* Day of Week Selector */}
                   <Select 
                     value={selectedDayOfWeek.toString()} 
@@ -855,21 +871,6 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
               {/* Calendar view controls */}
               {!isMasterMode && (
                 <>
-                  {/* View Mode Selector */}
-                  <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
-                    {(['1week', '2week', '4week'] as const).map((mode) => (
-                      <Button
-                        key={mode}
-                        variant={viewMode === mode ? 'default' : 'ghost'}
-                        size="sm"
-                        onClick={() => setViewMode(mode)}
-                        className="h-7 px-3 text-xs"
-                      >
-                        {mode === '1week' ? '1W' : mode === '2week' ? '2W' : '4W'}
-                      </Button>
-                    ))}
-                  </div>
-
                   {/* Navigation */}
                   <Button variant="outline" size="icon" onClick={handlePrevious}>
                     <ChevronLeft className="h-4 w-4" />
@@ -919,6 +920,8 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 currentMesocycle={currentMesocycleFromAssignment}
                 trainingDays={editing.trainingDays}
                 toolboxData={toolboxData}
+                weeksToDisplay={masterWeeksToDisplay}
+                onWeeksToDisplayChange={setMasterWeeksToDisplay}
                 onParameterChange={editing.handleParameterChange}
                 sessionSections={editing.sessionSections}
                 supersets={editing.supersets}
