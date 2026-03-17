@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Database, FileText, ArrowLeft, Target, Wrench, Activity, Plus, Edit2, Trash2, Calendar } from "lucide-react";
+import { FileText, ArrowLeft, Target, Activity, Plus, Edit2, Trash2, Calendar } from "lucide-react";
 import { AddLibraryDialog } from "@/components/templates/AddLibraryDialog";
 import { EditLibraryDialog } from "@/components/templates/EditLibraryDialog";
 import { useCustomLibraries, CustomLibrary } from "@/hooks/useCustomLibraries";
@@ -104,48 +104,6 @@ export default function TemplatesPage() {
             </p>
             <div className="flex items-center justify-between">
               <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">Manage Plans</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/templates/athleticism")}>
-          <CardHeader>
-            <div className="flex items-center space-x-3">
-              <Database className="h-8 w-8 text-primary" />
-              <div>
-                <CardTitle>Athleticism Database</CardTitle>
-                <CardDescription>Sprint ability training methods & loading</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">
-              Comprehensive reverse-engineered database mapping training qualities to specific methods with detailed loading recommendations.
-            </p>
-            <div className="flex items-center justify-between">
-              <span className="text-xs bg-secondary px-2 py-1 rounded">Editable</span>
-              <span className="text-xs text-muted-foreground">63 entries</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/templates/toolbox")}>
-          <CardHeader>
-            <div className="flex items-center space-x-3">
-              <Wrench className="h-8 w-8 text-primary" />
-              <div>
-                <CardTitle>Training Toolbox</CardTitle>
-                <CardDescription>All training method parameters</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">
-              Complete database of training method parameters with predefined options for systematic program design.
-            </p>
-            <div className="flex items-center justify-between">
-              <span className="text-xs bg-secondary px-2 py-1 rounded">Editable</span>
-              <span className="text-xs text-muted-foreground">300+ parameters</span>
             </div>
           </CardContent>
         </Card>

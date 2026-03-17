@@ -8,8 +8,9 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Edit2, MoreHorizontal, Filter, RotateCcw, FileText, Upload } from 'lucide-react';
+import { Plus, Trash2, Edit2, MoreHorizontal, Filter, RotateCcw, FileText, Upload, GripVertical } from 'lucide-react';
 import { useCustomLibraries, CustomLibrary, CustomExercise, LibraryColumn, BulkImportPayload } from '@/hooks/useCustomLibraries';
+import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { CustomLibraryColumnFilter } from './CustomLibraryColumnFilter';
 import { ColumnDeleteDialog } from '@/components/shared/ColumnDeleteDialog';
@@ -66,6 +67,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
     addColumnToLibrary,
     updateColumnInLibrary,
     deleteColumnFromLibrary,
+    reorderColumnsInLibrary,
     bulkImportToLibrary,
   } = useCustomLibraries();
   const { toast } = useToast();
@@ -109,6 +111,8 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
   });
   const [isCreatingNewExercise, setIsCreatingNewExercise] = useState(false);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+  const [draggedColId, setDraggedColId] = useState<string | null>(null);
+  const [dragOverColId, setDragOverColId] = useState<string | null>(null);
 
   const handleBulkImport = (
     rows: Array<Record<string, string>>,
@@ -390,15 +394,63 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
     );
   };
 
+  const handleColumnDrop = (targetColumnId: string) => {
+    if (!draggedColId || draggedColId === targetColumnId) return;
+    const cols = safeLibrary.columns;
+    const draggedIdx = cols.findIndex(c => c.id === draggedColId);
+    const targetIdx = cols.findIndex(c => c.id === targetColumnId);
+    // Both must be non-first columns
+    if (draggedIdx <= 0 || targetIdx <= 0) return;
+    const newOrder = [...cols];
+    const [removed] = newOrder.splice(draggedIdx, 1);
+    newOrder.splice(targetIdx, 0, removed);
+    reorderColumnsInLibrary(library.id, newOrder.map(c => c.id));
+    setDraggedColId(null);
+    setDragOverColId(null);
+  };
+
   const renderColumnHeader = (column: LibraryColumn, isFirstColumn: boolean = false) => {
+    const isDragging = draggedColId === column.id;
+    const isDragOver = !isFirstColumn && dragOverColId === column.id;
+
     return (
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <TableHead className="cursor-pointer relative group bg-background">
+          <TableHead
+            className={cn(
+              "cursor-pointer relative group bg-background select-none",
+              isDragging && "opacity-40",
+              isDragOver && "border-l-2 border-primary bg-primary/5"
+            )}
+            draggable={!isFirstColumn}
+            onDragStart={!isFirstColumn ? (e) => {
+              e.dataTransfer.effectAllowed = 'move';
+              setDraggedColId(column.id);
+            } : undefined}
+            onDragOver={!isFirstColumn ? (e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+              if (draggedColId && draggedColId !== column.id) {
+                setDragOverColId(column.id);
+              }
+            } : undefined}
+            onDragLeave={!isFirstColumn ? () => setDragOverColId(null) : undefined}
+            onDrop={!isFirstColumn ? (e) => {
+              e.preventDefault();
+              handleColumnDrop(column.id);
+            } : undefined}
+            onDragEnd={() => {
+              setDraggedColId(null);
+              setDragOverColId(null);
+            }}
+          >
             <div className="flex items-center justify-between">
-              <span className="font-medium">
-                {column.name}
-              </span>
+              <div className="flex items-center gap-1">
+                {!isFirstColumn && (
+                  <GripVertical className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity cursor-grab" />
+                )}
+                <span className="font-medium">{column.name}</span>
+              </div>
               <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <CustomLibraryColumnFilter
                   column={column.id}
@@ -416,7 +468,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
           </TableHead>
         </ContextMenuTrigger>
         <ContextMenuContent>
-          <ContextMenuItem 
+          <ContextMenuItem
             key={`rename-${column.id}`}
             onSelect={() => {
               setTimeout(() => {
@@ -431,7 +483,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
             <Edit2 className="h-4 w-4 mr-2" />
             Rename Column
           </ContextMenuItem>
-          <ContextMenuItem 
+          <ContextMenuItem
             key={`add-${column.id}`}
             onSelect={() => {
               setTimeout(() => {
@@ -442,9 +494,8 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
             <Plus className="h-4 w-4 mr-2" />
             Add Column
           </ContextMenuItem>
-          {/* Only show delete for non-first columns */}
           {!isFirstColumn && (
-            <ContextMenuItem 
+            <ContextMenuItem
               key={`delete-${column.id}`}
               onSelect={() => {
                 setTimeout(() => {
