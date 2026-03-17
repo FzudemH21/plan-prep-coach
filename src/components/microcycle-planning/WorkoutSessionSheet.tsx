@@ -294,7 +294,7 @@ export function WorkoutSessionSheet({
                   }
                   
                   return {
-                    id: (ex as any).id || `${ex.exerciseId}-${idx}`,
+                    id: (ex as any).id || ex.exerciseId,
                     exerciseId: ex.exerciseId,
                     exerciseName: ex.exerciseName,
                     methodId: ex.methodId,
@@ -308,7 +308,7 @@ export function WorkoutSessionSheet({
                     parameterSource: 'toolbox' as const,
                   };
                 }
-                
+
                 // ===== PERIODIZATION-SOURCED EXERCISES: Use method periodization table =====
                 // Priority lookup: category-specific first (for split methods), then base method
                 const hasValidCategory = ex.categoryName && 
@@ -448,7 +448,7 @@ export function WorkoutSessionSheet({
                 const existingAutoHR = (ex as any).autoCalculateTargetHR;
                 
                 return {
-                  id: (ex as any).id || `${ex.exerciseId}-${idx}`,
+                  id: (ex as any).id || ex.exerciseId,
                   exerciseId: ex.exerciseId,
                   exerciseName: ex.exerciseName,
                   methodId: ex.methodId,
@@ -539,7 +539,7 @@ export function WorkoutSessionSheet({
         }
         
         sectionsMap.get(sectionName)!.push({
-          id: (ex as any).id || `${ex.exerciseId}-${index}`,
+          id: (ex as any).id || ex.exerciseId,
           exerciseId: ex.exerciseId,
           exerciseName: ex.exerciseName,
           methodId: ex.methodId,
@@ -694,7 +694,7 @@ export function WorkoutSessionSheet({
       const existingAutoHR = (ex as any).autoCalculateTargetHR;
       
       sectionsMap.get(sectionName)!.push({
-        id: `${ex.exerciseId}-${index}`,
+        id: (ex as any).id || ex.exerciseId,
         exerciseId: ex.exerciseId,
         exerciseName: ex.exerciseName,
         methodId: ex.methodId,

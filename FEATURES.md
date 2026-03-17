@@ -36,6 +36,8 @@ Du bist mein Sparringspartner für Planung, Diskussion und Prompts für Claude C
 | 🟠 Später | Goal Management + Testbenachrichtigungen | ⬜ Offen |
 | 🟠 Später | Datumsunabhängiger Plan (Template-Modus) | ⬜ Offen |
 | 🔵 Zukunft | Athleten-App (mobil, separat) | ⬜ Offen |
+| 🔵 Zukunft | Athlete Management System (eigenständiger Bereich: Athletenprofile, Fortschrittstracking, Kommunikation, Wearable-Daten) | ⬜ Offen |
+| 🔵 Zukunft | KI-Wissensbasis + Coach-Philosophie kombiniert (KI hat eigene sportwissenschaftliche Wissensbasis, Coach-Profil ergänzt diese, bei Abweichungen vom wissenschaftlichen Konsens markiert die KI das – Lerneffekt für unerfahrene Coaches) | ⬜ Offen |
 | 🔵 Zukunft | Wearable & App Integrationen (Oura, Whoop, Apple Fitness, VBT) | ⬜ Offen |
 | 🔵 Zukunft | SaaS & Monetarisierung (Login, Pakete, Stripe) | ⬜ Offen |
 | 🔵 Zukunft | Buchungssystem (Athleten buchen beim Coach) + Coach-Kalender | ⬜ Offen |
