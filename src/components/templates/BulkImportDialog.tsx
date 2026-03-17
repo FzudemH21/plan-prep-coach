@@ -1,10 +1,10 @@
 import { useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Upload, AlertCircle } from 'lucide-react';
 import { LibraryColumn, CustomLibrary } from '@/hooks/useCustomLibraries';
 
@@ -379,57 +379,79 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
             </div>
           )}
 
-          {/* Name column selector */}
+          {/* Unified column mapping table — all CSV columns in one list */}
           {fileHeaders.length > 0 && (
-            <div className="space-y-2 rounded-lg border bg-muted/40 px-4 py-3">
-              <Label className="text-sm font-semibold">
-                Which column contains the exercise name?
-              </Label>
-              <Select value={nameColumnHeader} onValueChange={handleNameColumnChange}>
-                <SelectTrigger className="max-w-xs">
-                  <SelectValue placeholder="Select column…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {fileHeaders.map(h => (
-                    <SelectItem key={h} value={h}>{h}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                This is the only required field. Rows where this column is empty will be skipped.
-              </p>
-            </div>
-          )}
-
-          {/* Column mapping table — additional columns only */}
-          {mappings.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold mb-3">
-                Additional Columns
-                <span className="font-normal text-muted-foreground ml-2">
-                  ({mappings.length} column{mappings.length !== 1 ? 's' : ''} found)
+              <div className="flex items-baseline gap-2 mb-3">
+                <h3 className="text-sm font-semibold">
+                  Column Mapping
+                </h3>
+                <span className="text-sm font-normal text-muted-foreground">
+                  ({fileHeaders.length} column{fileHeaders.length !== 1 ? 's' : ''} found)
                 </span>
-              </h3>
+              </div>
               <div className="border rounded-lg overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-[100px]">Name column</TableHead>
                       <TableHead>File Column</TableHead>
                       <TableHead>Map to Library Column</TableHead>
                       <TableHead>Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {mappings.map((mapping, index) => (
-                      <TableRow key={mapping.fileHeader}>
-                        <TableCell className="font-mono text-sm">{mapping.fileHeader}</TableCell>
-                        <TableCell>{renderMappingSelect(mapping, index)}</TableCell>
-                        <TableCell>{renderActionBadge(mapping.action)}</TableCell>
-                      </TableRow>
-                    ))}
+                    <RadioGroup value={nameColumnHeader} onValueChange={handleNameColumnChange}>
+                      {fileHeaders.map(header => {
+                        const isName = header === nameColumnHeader;
+                        const mappingIndex = mappings.findIndex(m => m.fileHeader === header);
+                        const mapping = mappings[mappingIndex];
+                        return (
+                          <TableRow
+                            key={header}
+                            className={isName ? 'bg-primary/5' : undefined}
+                          >
+                            <TableCell className="text-center">
+                              <RadioGroupItem value={header} id={`name-radio-${header}`} />
+                            </TableCell>
+                            <TableCell>
+                              <span className="font-mono text-sm">{header}</span>
+                              {isName && (
+                                <span className="ml-2 text-xs text-muted-foreground">
+                                  — required, empty rows skipped
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {isName ? (
+                                <span className="text-sm text-muted-foreground italic">
+                                  Exercise name
+                                </span>
+                              ) : (
+                                mapping !== undefined
+                                  ? renderMappingSelect(mapping, mappingIndex)
+                                  : null
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {isName ? (
+                                <Badge className="bg-primary/10 text-primary border-primary/20">
+                                  Name
+                                </Badge>
+                              ) : (
+                                mapping !== undefined ? renderActionBadge(mapping.action) : null
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </RadioGroup>
                   </TableBody>
                 </Table>
               </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Mark which column contains the exercise name — this is the only required field.
+              </p>
             </div>
           )}
 

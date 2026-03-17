@@ -73,10 +73,9 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
   // Ensure library has proper structure with defaults
   const safeLibrary = {
     ...library,
-    columns: library.columns || [
-      { id: 'exercise', name: 'Exercise', type: 'text' as const, required: true },
-      { id: 'description', name: 'Description', type: 'textarea' as const, required: false }
-    ],
+    columns: library.columns?.length
+      ? library.columns
+      : [{ id: 'exercise', name: 'Exercise', type: 'text' as const, required: true }],
     exercises: library.exercises || []
   };
   
@@ -129,16 +128,20 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
 
     const exercises: Array<Omit<CustomExercise, 'id'>> = rows.map(row => {
       const data: Record<string, string> = {};
+      let description: string | undefined;
       Object.entries(row).forEach(([key, value]) => {
         if (key.startsWith('__new__')) {
           const colName = key.slice(7);
           const realId = nameToId[colName];
           if (realId) data[realId] = value;
+        } else if (key === 'description') {
+          // 'description' is a special field on the exercise, not a data column
+          description = value || undefined;
         } else {
           data[key] = value;
         }
       });
-      return { data };
+      return description ? { data, description } : { data };
     });
 
     const payload: BulkImportPayload = { newColumns, exercises };
