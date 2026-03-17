@@ -69,11 +69,17 @@ const getYouTubeThumbnail = (videoId: string): string => {
   return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
 };
 
-// Detect if a column represents a video field
+// Detect if a column represents a video field (role takes priority, name-based as fallback)
 const isVideoColumn = (column: LibraryColumn): boolean => {
+  if (column.role === 'video') return true;
   const nameLower = column.name.toLowerCase();
   const idLower = column.id.toLowerCase();
   return nameLower.includes('video') || idLower.includes('video');
+};
+
+// Detect if a column is the designated description field
+const isDescriptionColumn = (column: LibraryColumn): boolean => {
+  return column.role === 'description';
 };
 
 export function ExerciseDetailDialog({
@@ -140,8 +146,14 @@ export function ExerciseDetailDialog({
   // Get columns from props or library
   const columns = propColumns || library?.columns || [];
 
-  // Columns to display: all except the first (name) column
-  const displayColumns = columns.slice(1);
+  // Columns to display: all except the first (name) column, sorted so video comes first, description second
+  const displayColumns = React.useMemo(() => {
+    const cols = columns.slice(1);
+    const videoCols = cols.filter(c => isVideoColumn(c));
+    const descCols = cols.filter(c => !isVideoColumn(c) && isDescriptionColumn(c));
+    const others = cols.filter(c => !isVideoColumn(c) && !isDescriptionColumn(c));
+    return [...videoCols, ...descCols, ...others];
+  }, [columns]);
 
   // Check if any column represents a video field
   const hasVideoColInLib = displayColumns.some(isVideoColumn);

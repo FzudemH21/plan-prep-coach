@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { Upload, AlertCircle, ChevronLeft } from 'lucide-react';
+import { Upload, AlertCircle, ChevronLeft, Video, FileText } from 'lucide-react';
 import { LibraryColumn, CustomLibrary } from '@/hooks/useCustomLibraries';
 
 // ---------------------------------------------------------------------------
@@ -81,6 +81,7 @@ interface BulkImportDialogProps {
     rows: Array<Record<string, string>>,
     newColumns: Array<Omit<LibraryColumn, 'id'>>,
     nameColumnLabel: string,
+    existingColumnRoleUpdates: Array<{ id: string; role: 'video' | 'description' }>,
   ) => void;
 }
 
@@ -88,12 +89,12 @@ interface BulkImportDialogProps {
 // Step indicator
 // ---------------------------------------------------------------------------
 
-const STEP_LABELS = ['Columns', 'Name', 'Mapping'] as const;
+const STEP_LABELS = ['Columns', 'Name', 'Special Fields', 'Mapping'] as const;
 
-function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
+function StepIndicator({ step }: { step: 1 | 2 | 3 | 4 }) {
   return (
     <div className="flex items-center justify-center gap-1 px-6 py-3 border-b bg-muted/30">
-      {([1, 2, 3] as const).map((s, i) => (
+      {([1, 2, 3, 4] as const).map((s, i) => (
         <React.Fragment key={s}>
           <div className="flex flex-col items-center gap-0.5">
             <div
@@ -115,9 +116,9 @@ function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
               {STEP_LABELS[i]}
             </span>
           </div>
-          {s < 3 && (
+          {s < 4 && (
             <div
-              className={`h-px w-10 mb-3.5 transition-colors ${s < step ? 'bg-primary/40' : 'bg-muted'}`}
+              className={`h-px w-8 mb-3.5 transition-colors ${s < step ? 'bg-primary/40' : 'bg-muted'}`}
             />
           )}
         </React.Fragment>
@@ -141,9 +142,11 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
   const [isExcelFile, setIsExcelFile] = useState(false);
 
   // Step state
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [activeHeaders, setActiveHeaders] = useState<Set<string>>(new Set());
   const [nameColumnHeader, setNameColumnHeader] = useState('');
+  const [videoColumnHeader, setVideoColumnHeader] = useState('');
+  const [descriptionColumnHeader, setDescriptionColumnHeader] = useState('');
   const [mappings, setMappings] = useState<ColumnMapping[]>([]);
 
   // Ordered list of active headers (preserves CSV order)
@@ -230,8 +233,12 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
   };
 
   const goToStep3 = () => {
-    setMappings(buildMappings(activeHeadersOrdered, nameColumnHeader));
     setStep(3);
+  };
+
+  const goToStep4 = () => {
+    setMappings(buildMappings(activeHeadersOrdered, nameColumnHeader));
+    setStep(4);
   };
 
   // ------------------------------------------------------------------
@@ -247,6 +254,7 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
   const handleConfirm = () => {
     const nameLibraryColumnId = library.columns[0]?.id ?? '';
     const newColumnDefs: Array<Omit<LibraryColumn, 'id'>> = [];
+    const existingColumnRoleUpdates: Array<{ id: string; role: 'video' | 'description' }> = [];
     const headerToKey: Record<string, string> = {};
 
     if (nameColumnHeader && nameLibraryColumnId) {
@@ -255,11 +263,24 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
 
     mappings.forEach(mapping => {
       if (mapping.action === 'skip') return;
+
+      const isVideoHeader = videoColumnHeader && mapping.fileHeader === videoColumnHeader;
+      const isDescHeader = descriptionColumnHeader && mapping.fileHeader === descriptionColumnHeader;
+      const role = isVideoHeader ? 'video' : isDescHeader ? 'description' : undefined;
+
       if (mapping.action === 'create') {
         headerToKey[mapping.fileHeader] = `__new__${mapping.fileHeader}`;
-        newColumnDefs.push({ name: mapping.fileHeader, type: 'text', required: false });
+        newColumnDefs.push({
+          name: mapping.fileHeader,
+          type: role === 'description' ? 'textarea' : 'text',
+          required: false,
+          ...(role && { role }),
+        });
       } else {
         headerToKey[mapping.fileHeader] = mapping.action;
+        if (role) {
+          existingColumnRoleUpdates.push({ id: mapping.action, role });
+        }
       }
     });
 
@@ -274,7 +295,7 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
       })
       .filter(record => (record[nameLibraryColumnId] ?? '').trim() !== '');
 
-    onImport(importedRows, newColumnDefs, nameColumnHeader);
+    onImport(importedRows, newColumnDefs, nameColumnHeader, existingColumnRoleUpdates);
     handleClose();
   };
 
@@ -288,6 +309,8 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
     setFileRows([]);
     setActiveHeaders(new Set());
     setNameColumnHeader('');
+    setVideoColumnHeader('');
+    setDescriptionColumnHeader('');
     setMappings([]);
     setIsExcelFile(false);
     setStep(1);
@@ -396,7 +419,83 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
     </div>
   );
 
-  const renderStep3 = () => (
+  const renderStep3 = () => {
+    const nonNameHeaders = activeHeadersOrdered.filter(h => h !== nameColumnHeader);
+    return (
+      <div className="space-y-5">
+        <div>
+          <p className="text-sm font-semibold mb-1">Do any columns contain special fields?</p>
+          <p className="text-xs text-muted-foreground mb-4">
+            Both are optional. Marked columns get special display treatment in the exercise detail view — video columns show an embedded player, description columns appear prominently.
+          </p>
+        </div>
+
+        {nonNameHeaders.length === 0 ? (
+          <p className="text-sm text-muted-foreground italic">
+            No additional columns available — only the name column is active.
+          </p>
+        ) : (
+          <>
+            {/* Video column */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Video className="h-4 w-4 text-muted-foreground" />
+                Video URL column
+                <span className="text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Select
+                value={videoColumnHeader || '__none__'}
+                onValueChange={v => setVideoColumnHeader(v === '__none__' ? '' : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">
+                    <span className="text-muted-foreground">None</span>
+                  </SelectItem>
+                  {nonNameHeaders
+                    .filter(h => h !== descriptionColumnHeader)
+                    .map(h => (
+                      <SelectItem key={h} value={h}>{h}</SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Description column */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                Description column
+                <span className="text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Select
+                value={descriptionColumnHeader || '__none__'}
+                onValueChange={v => setDescriptionColumnHeader(v === '__none__' ? '' : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">
+                    <span className="text-muted-foreground">None</span>
+                  </SelectItem>
+                  {nonNameHeaders
+                    .filter(h => h !== videoColumnHeader)
+                    .map(h => (
+                      <SelectItem key={h} value={h}>{h}</SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  const renderStep4 = () => (
     <div className="space-y-4">
       <div>
         <p className="text-sm font-semibold mb-1">How should each column be imported?</p>
@@ -409,14 +508,27 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
           </p>
         ) : (
           <div className="space-y-2">
-            {mappings.map((mapping, index) => (
-              <div key={mapping.fileHeader} className="flex items-center gap-3">
-                <span className="flex-1 font-mono text-sm truncate" title={mapping.fileHeader}>
-                  {mapping.fileHeader}
-                </span>
-                {renderMappingAction(mapping, index)}
-              </div>
-            ))}
+            {mappings.map((mapping, index) => {
+              const isSpecial =
+                (videoColumnHeader && mapping.fileHeader === videoColumnHeader) ||
+                (descriptionColumnHeader && mapping.fileHeader === descriptionColumnHeader);
+              return (
+                <div key={mapping.fileHeader} className="flex items-center gap-3">
+                  <span
+                    className="flex-1 font-mono text-sm truncate"
+                    title={mapping.fileHeader}
+                  >
+                    {mapping.fileHeader}
+                    {isSpecial && (
+                      <Badge variant="secondary" className="ml-2 text-[10px] py-0 font-normal">
+                        {videoColumnHeader && mapping.fileHeader === videoColumnHeader ? 'video' : 'description'}
+                      </Badge>
+                    )}
+                  </span>
+                  {renderMappingAction(mapping, index)}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -486,6 +598,7 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
           {hasFile && step === 1 && renderStep1()}
           {hasFile && step === 2 && renderStep2()}
           {hasFile && step === 3 && renderStep3()}
+          {hasFile && step === 4 && renderStep4()}
 
           {/* Hidden file input for re-upload */}
           {hasFile && (
@@ -517,7 +630,7 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
           </div>
           <div className="flex items-center gap-2">
             {hasFile && step > 1 && (
-              <Button variant="outline" onClick={() => setStep((step - 1) as 1 | 2 | 3)}>
+              <Button variant="outline" onClick={() => setStep((step - 1) as 1 | 2 | 3 | 4)}>
                 <ChevronLeft className="h-4 w-4 mr-1" />
                 Back
               </Button>
@@ -533,6 +646,11 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
               </Button>
             )}
             {hasFile && step === 3 && (
+              <Button onClick={goToStep4}>
+                Next
+              </Button>
+            )}
+            {hasFile && step === 4 && (
               <Button onClick={handleConfirm} disabled={validRowCount === 0}>
                 Import {validRowCount} row{validRowCount !== 1 ? 's' : ''}
               </Button>

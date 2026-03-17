@@ -8,6 +8,7 @@ export interface LibraryColumn {
   required: boolean;
   options?: string[];
   width?: number;
+  role?: 'video' | 'description';
 }
 
 export interface CustomLibrary {
@@ -42,6 +43,8 @@ export interface BulkImportPayload {
   exercises: Array<Omit<CustomExercise, 'id'>>;
   /** Optional: rename an existing column atomically with the import (avoids stale-closure overwrite). */
   firstColumnRename?: { id: string; name: string };
+  /** Optional: assign video/description roles to existing columns atomically with the import. */
+  columnRoleUpdates?: Array<{ id: string; role: 'video' | 'description' }>;
 }
 
 interface CustomLibrariesContextType {
@@ -347,11 +350,17 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
           ? {
               ...lib,
               columns: [
-                ...lib.columns.map(col =>
-                  payload.firstColumnRename && col.id === payload.firstColumnRename.id
-                    ? { ...col, name: payload.firstColumnRename.name }
-                    : col
-                ),
+                ...lib.columns.map(col => {
+                  let updated = col;
+                  if (payload.firstColumnRename && col.id === payload.firstColumnRename.id) {
+                    updated = { ...updated, name: payload.firstColumnRename.name };
+                  }
+                  const roleUpdate = payload.columnRoleUpdates?.find(r => r.id === col.id);
+                  if (roleUpdate) {
+                    updated = { ...updated, role: roleUpdate.role };
+                  }
+                  return updated;
+                }),
                 ...payload.newColumns,
               ],
               exercises: [...lib.exercises, ...newExercises],

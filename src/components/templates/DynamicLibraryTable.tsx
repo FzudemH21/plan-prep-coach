@@ -118,6 +118,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
     rows: Array<Record<string, string>>,
     newColumnDefs: Array<Omit<LibraryColumn, 'id'>>,
     nameColumnLabel: string,
+    existingColumnRoleUpdates: Array<{ id: string; role: 'video' | 'description' }> = [],
   ) => {
     // Assign deterministic ids to new columns so exercise rows can reference them.
     const baseTs = Date.now();
@@ -157,7 +158,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
         ? { id: firstColumn.id, name: nameColumnLabel }
         : undefined;
 
-    const payload: BulkImportPayload = { newColumns, exercises, firstColumnRename };
+    const payload: BulkImportPayload = { newColumns, exercises, firstColumnRename, columnRoleUpdates: existingColumnRoleUpdates };
     bulkImportToLibrary(library.id, payload);
 
     toast({
