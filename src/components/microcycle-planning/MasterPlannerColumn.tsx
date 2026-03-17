@@ -709,8 +709,8 @@ export function MasterPlannerColumn({
       microcycleParams?.[normalizedMethodId]?.[0] ||
       {};
 
-    const methodParts = exercise.methodId.split(' - ');
-    const methodMain = methodParts[0] || exercise.methodId;
+    const methodParts = (exercise.methodId || '').split(' - ');
+    const methodMain = methodParts[0] || '';
     const methodSubCategory = methodParts[1] || '';
 
     // Get toolbox entries for metadata enrichment
@@ -808,8 +808,8 @@ export function MasterPlannerColumn({
 
       // Also check toolbox entries for quantitative params with %1RM or %maxHR options
       if (toolboxData) {
-        const methodParts = exercise.methodId.split(' - ');
-        const methodMain = methodParts[0] || exercise.methodId;
+        const methodParts = (exercise.methodId || '').split(' - ');
+        const methodMain = methodParts[0] || '';
         const methodSubCategory = methodParts[1] || '';
 
         const toolboxEntries = toolboxData.entries.filter(entry => {
