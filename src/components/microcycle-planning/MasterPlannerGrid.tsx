@@ -217,7 +217,7 @@ export function MasterPlannerGrid({
   // Apply pagination for mesocycles with more than 6 weeks
   const filteredDays = useMemo(() => {
     return allMatchingDays.slice(startWeekOffset, startWeekOffset + weeksToDisplay);
-  }, [allMatchingDays, startWeekOffset]);
+  }, [allMatchingDays, startWeekOffset, weeksToDisplay]);
 
   const totalWeeksInMesocycle = allMatchingDays.length;
   const hasMoreWeeks = totalWeeksInMesocycle > weeksToDisplay;
