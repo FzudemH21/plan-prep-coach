@@ -9,6 +9,13 @@ import { SessionSection, SupersetMapping } from '@/types/microcycle-planning';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { AthletePerformanceParameter } from '@/types/athlete';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -138,7 +145,8 @@ interface MasterPlannerGridProps {
   athletePerformanceParameters?: AthletePerformanceParameter[];
 }
 
-const MAX_WEEKS_DISPLAY = 6;
+const WEEKS_OPTIONS = [1, 2, 4, 6, 8] as const;
+const DEFAULT_WEEKS_DISPLAY = 6;
 
 export function MasterPlannerGrid({
   calendarDays,
@@ -194,6 +202,7 @@ export function MasterPlannerGrid({
   athletePerformanceParameters,
 }: MasterPlannerGridProps) {
   const [startWeekOffset, setStartWeekOffset] = useState(0);
+  const [weeksToDisplay, setWeeksToDisplay] = useState(DEFAULT_WEEKS_DISPLAY);
 
   // Filter days that match the selected day of week
   // getDay returns 0=Sunday, 1=Monday, etc.
@@ -207,13 +216,13 @@ export function MasterPlannerGrid({
 
   // Apply pagination for mesocycles with more than 6 weeks
   const filteredDays = useMemo(() => {
-    return allMatchingDays.slice(startWeekOffset, startWeekOffset + MAX_WEEKS_DISPLAY);
+    return allMatchingDays.slice(startWeekOffset, startWeekOffset + weeksToDisplay);
   }, [allMatchingDays, startWeekOffset]);
 
   const totalWeeksInMesocycle = allMatchingDays.length;
-  const hasMoreWeeks = totalWeeksInMesocycle > MAX_WEEKS_DISPLAY;
+  const hasMoreWeeks = totalWeeksInMesocycle > weeksToDisplay;
   const canGoBack = startWeekOffset > 0;
-  const canGoForward = startWeekOffset + MAX_WEEKS_DISPLAY < totalWeeksInMesocycle;
+  const canGoForward = startWeekOffset + weeksToDisplay < totalWeeksInMesocycle;
 
   // Reset offset when mesocycle changes
   useMemo(() => {
@@ -232,6 +241,30 @@ export function MasterPlannerGrid({
     <div className="w-full">
       {/* Week Navigation - always show indicator, buttons only for 6+ weeks */}
       <div className="flex items-center justify-between mb-2 px-2">
+        {/* Weeks-per-view selector */}
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-xs text-muted-foreground whitespace-nowrap">Show:</span>
+          <Select
+            value={String(weeksToDisplay)}
+            onValueChange={(v) => {
+              const n = Number(v);
+              setWeeksToDisplay(n);
+              setStartWeekOffset(0);
+            }}
+          >
+            <SelectTrigger className="h-7 w-20 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {WEEKS_OPTIONS.map(w => (
+                <SelectItem key={w} value={String(w)} className="text-xs">
+                  {w} {w === 1 ? 'week' : 'weeks'}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         {hasMoreWeeks ? (
           <>
             <Button
@@ -245,12 +278,12 @@ export function MasterPlannerGrid({
               Previous
             </Button>
             <span className="text-xs text-muted-foreground">
-              Weeks {startWeekOffset + 1}-{Math.min(startWeekOffset + MAX_WEEKS_DISPLAY, totalWeeksInMesocycle)} of {totalWeeksInMesocycle}
+              Weeks {startWeekOffset + 1}-{Math.min(startWeekOffset + weeksToDisplay, totalWeeksInMesocycle)} of {totalWeeksInMesocycle}
             </span>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setStartWeekOffset(prev => Math.min(totalWeeksInMesocycle - MAX_WEEKS_DISPLAY, prev + 1))}
+              onClick={() => setStartWeekOffset(prev => Math.min(totalWeeksInMesocycle - weeksToDisplay, prev + 1))}
               disabled={!canGoForward}
               className="h-7"
             >

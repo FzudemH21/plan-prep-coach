@@ -991,28 +991,60 @@ export function WorkoutSessionSheet({
     });
   }, [mesocycleId, microcycleIndex, sessionIndex, parameterValues]);
 
-  const getSupersetLabel = (exerciseId: string): string | undefined => {
-    // Use shared utility for consistent A1/B1/C1 format
-    const label = getSupersetLabelFromMapping(
+  // Resolve the plain exerciseId (library id) for a given internal workout exercise id.
+  // Needed because supersets may be stored with the plain exerciseId when exercises lack
+  // a unique distribution `id`, while internally we use a composite id.
+  const resolvePlainExerciseId = (internalId: string): string | undefined => {
+    const match = exercises.find(ex => {
+      const mapped = (ex as any).id || ex.exerciseId;
+      return mapped === internalId;
+    });
+    if (match && match.exerciseId !== internalId) {
+      return match.exerciseId;
+    }
+    return undefined;
+  };
+
+  const getSupersetLabel = (internalId: string): string | undefined => {
+    // Primary lookup by internal id
+    let label = getSupersetLabelFromMapping(
       supersetsProp || supersets,
       dayDate,
       sessionIndex,
-      exerciseId
+      internalId
     );
+    // Fallback: try plain exerciseId for cross-context compatibility.
+    // Handles the case where supersets were stored with exerciseId (no distribution id)
+    // but the internal workout exercise id has a composite format.
+    if (!label) {
+      const plainId = resolvePlainExerciseId(internalId);
+      if (plainId) {
+        label = getSupersetLabelFromMapping(
+          supersetsProp || supersets,
+          dayDate,
+          sessionIndex,
+          plainId
+        );
+      }
+    }
     return label ?? undefined;
   };
 
-  const getSupersetPartners = (exerciseId: string): string[] => {
+  const getSupersetPartners = (internalId: string): string[] => {
     // Use supersetsProp (from Step 1) as primary source, fallback to local state
     const sessionSupersets = (supersetsProp || supersets)?.[dayDate]?.[sessionIndex];
     if (!sessionSupersets) return [];
-    
+
+    // Helper: check both internalId and plain exerciseId
+    const plainId = resolvePlainExerciseId(internalId);
+    const idsToCheck = plainId ? [internalId, plainId] : [internalId];
+
     // Check all sections (including unsectioned)
-    for (const [sectionId, sectionSupersets] of Object.entries(sessionSupersets)) {
-      for (const [supersetId, exerciseIds] of Object.entries(sectionSupersets)) {
-        if (exerciseIds.includes(exerciseId)) {
-          // Return all OTHER exercises in the same superset
-          return exerciseIds.filter(id => id !== exerciseId);
+    for (const [, sectionSupersets] of Object.entries(sessionSupersets)) {
+      for (const [, exerciseIds] of Object.entries(sectionSupersets)) {
+        const matchedId = idsToCheck.find(id => exerciseIds.includes(id));
+        if (matchedId) {
+          return exerciseIds.filter(id => id !== matchedId);
         }
       }
     }
