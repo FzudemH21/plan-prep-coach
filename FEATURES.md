@@ -28,7 +28,7 @@ Du bist mein Sparringspartner für Planung, Diskussion und Prompts für Claude C
 | 🟡 Bald | KI-Autopilot im Wizard (Vorschläge & Vorausfüllen von Intensitäten, Methoden, Übungen basierend auf Coach-Profil) | ⬜ Offen |
 | 🟡 Bald | Accumulated Context (automatischer Abgleich KI-Vorschlag vs. finaler Plan, KI fragt dosiert nach bei signifikanten Abweichungen – max. 1-2 pro Plan, skipbar, Antworten fließen als Begründungen in Kontext ein) | ⬜ Offen |
 | 🟡 Bald | Spracheingabe für Coach (Athletenbeschreibung per Sprache im Athletenprofil und Wizard-Start, Web Speech API + Anthropic API) | ⬜ Offen |
-| 🟡 Bald | Masterplaner-Ansicht Athletenkalender (Tag 1, Tag 2... pro Wochentag) | ⬜ Offen |
+| 🟡 Bald | Masterplaner-Ansicht Athletenkalender (Tag 1, Tag 2... pro Wochentag) | ✅ Erledigt |
 | 🟡 Bald | Tests & Events im Athletenkalender + Sync mit Wizard | ⬜ Offen |
 | 🟡 Bald | Dokumente hochladen + Freigabe für Athleten | ⬜ Offen |
 | 🟡 Bald | Programming-Templates für Trainingsmethoden | ⬜ Offen |
