@@ -9,13 +9,6 @@ import { SessionSection, SupersetMapping } from '@/types/microcycle-planning';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { AthletePerformanceParameter } from '@/types/athlete';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -145,8 +138,8 @@ interface MasterPlannerGridProps {
   athletePerformanceParameters?: AthletePerformanceParameter[];
 }
 
-const WEEKS_OPTIONS = [1, 2, 4, 6, 8] as const;
-const DEFAULT_WEEKS_DISPLAY = 6;
+const WEEKS_OPTIONS = [1, 2, 4] as const;
+const DEFAULT_WEEKS_DISPLAY = 4;
 
 export function MasterPlannerGrid({
   calendarDays,
@@ -242,27 +235,21 @@ export function MasterPlannerGrid({
       {/* Week Navigation - always show indicator, buttons only for 6+ weeks */}
       <div className="flex items-center justify-between mb-2 px-2">
         {/* Weeks-per-view selector */}
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs text-muted-foreground whitespace-nowrap">Show:</span>
-          <Select
-            value={String(weeksToDisplay)}
-            onValueChange={(v) => {
-              const n = Number(v);
-              setWeeksToDisplay(n);
-              setStartWeekOffset(0);
-            }}
-          >
-            <SelectTrigger className="h-7 w-20 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {WEEKS_OPTIONS.map(w => (
-                <SelectItem key={w} value={String(w)} className="text-xs">
-                  {w} {w === 1 ? 'week' : 'weeks'}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex items-center gap-1 bg-muted rounded-lg p-1 shrink-0">
+          {WEEKS_OPTIONS.map(w => (
+            <Button
+              key={w}
+              variant={weeksToDisplay === w ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => {
+                setWeeksToDisplay(w);
+                setStartWeekOffset(0);
+              }}
+              className="h-7 px-3 text-xs"
+            >
+              {w}W
+            </Button>
+          ))}
         </div>
 
         {hasMoreWeeks ? (
