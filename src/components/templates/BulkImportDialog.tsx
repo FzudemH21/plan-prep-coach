@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -48,6 +49,17 @@ function parseCSV(text: string): { headers: string[]; rows: string[][] } {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Auto-detect which CSV header is most likely the exercise name. */
+function detectNameColumn(headers: string[]): string {
+  const nameKeywords = ['name', 'exercise', 'exercise name', 'exercisename', 'übung', 'übungsname', 'titel', 'title'];
+  const found = headers.find(h => nameKeywords.includes(h.toLowerCase().trim()));
+  return found ?? headers[0] ?? '';
+}
+
+// ---------------------------------------------------------------------------
 // Column mapping types
 // ---------------------------------------------------------------------------
 
@@ -81,8 +93,11 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
   const [parseError, setParseError] = useState<string>('');
   const [fileHeaders, setFileHeaders] = useState<string[]>([]);
   const [fileRows, setFileRows] = useState<string[][]>([]);
+  /** Mappings for all columns EXCEPT the name column (handled by nameColumnHeader). */
   const [mappings, setMappings] = useState<ColumnMapping[]>([]);
   const [isExcelFile, setIsExcelFile] = useState(false);
+  /** Which CSV header maps to the exercise name (first library column). */
+  const [nameColumnHeader, setNameColumnHeader] = useState<string>('');
 
   // Derived
   const previewRows = fileRows.slice(0, 3);
@@ -90,18 +105,21 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
 
   // ------------------------------------------------------------------
   // Auto-map: match file header → existing library column (case-insensitive)
+  // Excludes the name column header (handled separately).
   // ------------------------------------------------------------------
   const buildDefaultMappings = useCallback(
-    (headers: string[]): ColumnMapping[] => {
-      return headers.map(header => {
-        const match = library.columns.find(
-          col => col.name.toLowerCase() === header.toLowerCase()
-        );
-        return {
-          fileHeader: header,
-          action: match ? match.id : 'create',
-        };
-      });
+    (headers: string[], nameHeader: string): ColumnMapping[] => {
+      return headers
+        .filter(header => header !== nameHeader)
+        .map(header => {
+          const match = library.columns.slice(1).find(
+            col => col.name.toLowerCase() === header.toLowerCase()
+          );
+          return {
+            fileHeader: header,
+            action: match ? match.id : 'create',
+          };
+        });
     },
     [library.columns]
   );
@@ -119,6 +137,7 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
     setFileRows([]);
     setMappings([]);
     setIsExcelFile(false);
+    setNameColumnHeader('');
 
     const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
 
@@ -145,9 +164,11 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
           setParseError('The file appears to be empty or has no headers.');
           return;
         }
+        const detectedName = detectNameColumn(headers);
         setFileHeaders(headers);
         setFileRows(rows);
-        setMappings(buildDefaultMappings(headers));
+        setNameColumnHeader(detectedName);
+        setMappings(buildDefaultMappings(headers, detectedName));
       } catch {
         setParseError('Failed to parse CSV. Please check the file format.');
       }
@@ -156,6 +177,14 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
 
     // Reset input so the same file can be re-selected after clearing
     e.target.value = '';
+  };
+
+  // ------------------------------------------------------------------
+  // Name column change — rebuild non-name mappings
+  // ------------------------------------------------------------------
+  const handleNameColumnChange = (newNameHeader: string) => {
+    setNameColumnHeader(newNameHeader);
+    setMappings(buildDefaultMappings(fileHeaders, newNameHeader));
   };
 
   // ------------------------------------------------------------------
@@ -171,13 +200,18 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
   // Confirm import
   // ------------------------------------------------------------------
   const handleConfirm = () => {
-    // 1. Collect new columns to create
+    const nameLibraryColumnId = library.columns[0]?.id ?? '';
+
+    // 1. Build header→key map
     const newColumnDefs: Array<Omit<LibraryColumn, 'id'>> = [];
-    // Map: file header → key to use inside each row record
-    // For existing columns: use the real column id directly
-    // For new columns: use "__new__<headerName>" so the parent can resolve by name
     const headerToKey: Record<string, string> = {};
 
+    // Name column always maps to the first library column
+    if (nameColumnHeader && nameLibraryColumnId) {
+      headerToKey[nameColumnHeader] = nameLibraryColumnId;
+    }
+
+    // Additional columns from the mapping table
     mappings.forEach(mapping => {
       if (mapping.action === 'skip') return;
       if (mapping.action === 'create') {
@@ -188,22 +222,23 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
           required: false,
         });
       } else {
-        // Existing column id
         headerToKey[mapping.fileHeader] = mapping.action;
       }
     });
 
-    // 2. Build rows using the resolved keys
-    const importedRows: Array<Record<string, string>> = fileRows.map(row => {
-      const record: Record<string, string> = {};
-      fileHeaders.forEach((header, i) => {
-        const key = headerToKey[header];
-        if (key) {
-          record[key] = row[i] ?? '';
-        }
-      });
-      return record;
-    });
+    // 2. Build rows, skip rows where name is empty
+    const importedRows: Array<Record<string, string>> = fileRows
+      .map(row => {
+        const record: Record<string, string> = {};
+        fileHeaders.forEach((header, i) => {
+          const key = headerToKey[header];
+          if (key) {
+            record[key] = row[i] ?? '';
+          }
+        });
+        return record;
+      })
+      .filter(record => (record[nameLibraryColumnId] ?? '').trim() !== '');
 
     onImport(importedRows, newColumnDefs);
     handleClose();
@@ -219,12 +254,15 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
     setFileRows([]);
     setMappings([]);
     setIsExcelFile(false);
+    setNameColumnHeader('');
     onClose();
   };
 
   // ------------------------------------------------------------------
   // Render helpers
   // ------------------------------------------------------------------
+  const nonNameLibraryColumns = library.columns.slice(1);
+
   const renderMappingSelect = (mapping: ColumnMapping, index: number) => (
     <Select value={mapping.action} onValueChange={v => setMappingAction(index, v)}>
       <SelectTrigger className="w-52">
@@ -237,7 +275,7 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
         <SelectItem value="create">
           <span className="text-green-600 font-medium">Create as new column</span>
         </SelectItem>
-        {library.columns.map(col => (
+        {nonNameLibraryColumns.map(col => (
           <SelectItem key={col.id} value={col.id}>
             {col.name}
           </SelectItem>
@@ -253,21 +291,27 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
     return <Badge variant="outline">{col ? `→ ${col.name}` : action}</Badge>;
   };
 
-  const hasValidMappings = mappings.some(m => m.action !== 'skip');
+  // How many rows will actually be imported (name column non-empty)
+  const nameColIndex = fileHeaders.indexOf(nameColumnHeader);
+  const validRowCount = nameColIndex >= 0
+    ? fileRows.filter(row => (row[nameColIndex] ?? '').trim() !== '').length
+    : 0;
+
+  const canImport = nameColumnHeader !== '' && validRowCount > 0;
 
   // ------------------------------------------------------------------
   // Render
   // ------------------------------------------------------------------
   return (
     <Dialog open={isOpen} onOpenChange={open => { if (!open) handleClose(); }}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-4">
           <DialogTitle>
             {fileName ? `Map Columns from "${fileName}"` : 'Import CSV'}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 space-y-6 py-2">
           {/* File upload area */}
           {fileHeaders.length === 0 && !isExcelFile && (
             <div
@@ -326,82 +370,113 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
             </div>
           )}
 
-          {/* Column mapping table */}
+          {/* Name column selector */}
           {fileHeaders.length > 0 && (
-            <>
-              <div>
-                <h3 className="text-sm font-semibold mb-3">
-                  Column Mapping
-                  <span className="font-normal text-muted-foreground ml-2">
-                    ({fileHeaders.length} column{fileHeaders.length !== 1 ? 's' : ''} found)
-                  </span>
-                </h3>
-                <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>File Column</TableHead>
-                        <TableHead>Map to Library Column</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {mappings.map((mapping, index) => (
-                        <TableRow key={mapping.fileHeader}>
-                          <TableCell className="font-mono text-sm">{mapping.fileHeader}</TableCell>
-                          <TableCell>{renderMappingSelect(mapping, index)}</TableCell>
-                          <TableCell>{renderActionBadge(mapping.action)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
+            <div className="space-y-2 rounded-lg border bg-muted/40 px-4 py-3">
+              <Label className="text-sm font-semibold">
+                Which column contains the exercise name?
+              </Label>
+              <Select value={nameColumnHeader} onValueChange={handleNameColumnChange}>
+                <SelectTrigger className="max-w-xs">
+                  <SelectValue placeholder="Select column…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {fileHeaders.map(h => (
+                    <SelectItem key={h} value={h}>{h}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                This is the only required field. Rows where this column is empty will be skipped.
+              </p>
+            </div>
+          )}
 
-              {/* Data preview */}
-              {previewRows.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold mb-3">
-                    Data Preview
-                    <span className="font-normal text-muted-foreground ml-2">
-                      (first {previewRows.length} of {importableRowCount} row{importableRowCount !== 1 ? 's' : ''})
-                    </span>
-                  </h3>
-                  <div className="border rounded-lg overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          {fileHeaders.map(h => (
-                            <TableHead key={h} className="font-mono text-xs">{h}</TableHead>
-                          ))}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {previewRows.map((row, rowIndex) => (
-                          <TableRow key={rowIndex}>
-                            {fileHeaders.map((_, colIndex) => (
-                              <TableCell key={colIndex} className="text-sm max-w-[200px] truncate">
-                                {row[colIndex] ?? ''}
-                              </TableCell>
-                            ))}
-                          </TableRow>
+          {/* Column mapping table — additional columns only */}
+          {mappings.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold mb-3">
+                Additional Columns
+                <span className="font-normal text-muted-foreground ml-2">
+                  ({mappings.length} column{mappings.length !== 1 ? 's' : ''} found)
+                </span>
+              </h3>
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>File Column</TableHead>
+                      <TableHead>Map to Library Column</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {mappings.map((mapping, index) => (
+                      <TableRow key={mapping.fileHeader}>
+                        <TableCell className="font-mono text-sm">{mapping.fileHeader}</TableCell>
+                        <TableCell>{renderMappingSelect(mapping, index)}</TableCell>
+                        <TableCell>{renderActionBadge(mapping.action)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+
+          {/* Data preview */}
+          {previewRows.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold mb-3">
+                Data Preview
+                <span className="font-normal text-muted-foreground ml-2">
+                  (first {previewRows.length} of {importableRowCount} row{importableRowCount !== 1 ? 's' : ''})
+                </span>
+              </h3>
+              <div className="border rounded-lg overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      {fileHeaders.map(h => (
+                        <TableHead
+                          key={h}
+                          className={`font-mono text-xs whitespace-nowrap${h === nameColumnHeader ? ' bg-primary/5 font-semibold' : ''}`}
+                        >
+                          {h}
+                          {h === nameColumnHeader && (
+                            <span className="ml-1 text-primary text-[10px]">(name)</span>
+                          )}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {previewRows.map((row, rowIndex) => (
+                      <TableRow key={rowIndex}>
+                        {fileHeaders.map((h, colIndex) => (
+                          <TableCell
+                            key={colIndex}
+                            className={`text-sm max-w-[200px] truncate${h === nameColumnHeader ? ' font-medium' : ''}`}
+                          >
+                            {row[colIndex] ?? ''}
+                          </TableCell>
                         ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-              )}
-            </>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
           )}
         </div>
 
-        <DialogFooter className="mt-6">
+        <DialogFooter className="px-6 py-4 border-t">
           <Button variant="outline" onClick={handleClose}>
             Cancel
           </Button>
           {fileHeaders.length > 0 && (
-            <Button onClick={handleConfirm} disabled={!hasValidMappings}>
-              Import {importableRowCount} row{importableRowCount !== 1 ? 's' : ''}
+            <Button onClick={handleConfirm} disabled={!canImport}>
+              Import {validRowCount} row{validRowCount !== 1 ? 's' : ''}
             </Button>
           )}
         </DialogFooter>
