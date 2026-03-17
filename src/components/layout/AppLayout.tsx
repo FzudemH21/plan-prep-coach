@@ -1,8 +1,18 @@
 import { useState } from "react";
-import { Outlet } from "react-router-dom";
+import { useNavigate, Outlet } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Bot, FileText, Settings, Menu } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Bot, FileText, Settings, Menu, FlaskConical, Trash2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { loadSeedData } from "@/utils/seedData";
+import { clearAllAppCache } from "@/utils/clearCache";
 import { NavigationSidebar } from "./NavigationSidebar";
 
 interface AppLayoutProps {
@@ -12,6 +22,20 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const [showAIAgent, setShowAIAgent] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  const handleLoadSeedData = () => {
+    loadSeedData();
+    toast({ title: "Demo-Plan geladen", description: "Der Demo-Trainingsplan wurde in den aktiven Plan geladen." });
+    navigate('/macrocycle');
+  };
+
+  const handleClearData = () => {
+    clearAllAppCache();
+    toast({ title: "Daten gelöscht", description: "Alle App-Daten wurden aus dem Cache entfernt." });
+    navigate('/');
+  };
 
   return (
     <div className="min-h-screen w-full bg-background overflow-x-hidden">
@@ -50,9 +74,24 @@ export function AppLayout({ children }: AppLayoutProps) {
                 Export
               </Button>
 
-            <Button variant="outline" size="sm">
-              <Settings className="h-4 w-4" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleLoadSeedData}>
+                  <FlaskConical className="h-4 w-4 mr-2" />
+                  Demo-Plan laden
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleClearData} className="text-destructive focus:text-destructive">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Alle Daten löschen
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>
