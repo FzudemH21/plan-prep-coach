@@ -216,7 +216,7 @@ export default function TemplatesPage() {
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancel</AlertDialogCancel>
                               <AlertDialogAction
-                                onClick={() => handleDeleteLibrary(library)}
+                                onClick={(e) => { e.stopPropagation(); handleDeleteLibrary(library); }}
                                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                               >
                                 Delete

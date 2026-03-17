@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
@@ -30,6 +31,13 @@ export default function LibraryPage() {
   const { libraries, isLoading } = useCustomLibraries();
 
   const library = findLibraryBySlug(libraries, libraryName || '');
+
+  // Auto-redirect to the overview when the library no longer exists (e.g. deleted)
+  useEffect(() => {
+    if (!isLoading && !library) {
+      navigate('/templates', { replace: true });
+    }
+  }, [isLoading, library, navigate]);
 
   if (isLoading) {
     return (
