@@ -78,8 +78,17 @@ interface BulkImportDialogProps {
   isOpen: boolean;
   onClose: () => void;
   library: CustomLibrary;
-  /** Called when the user confirms. newColumns must be added to library first. */
-  onImport: (rows: Array<Record<string, string>>, newColumns: Array<Omit<LibraryColumn, 'id'>>) => void;
+  /**
+   * Called when the user confirms.
+   * - newColumns must be added to library first.
+   * - nameColumnLabel is the CSV header the user designated as the exercise name;
+   *   the caller can use it to rename the first library column if it differs.
+   */
+  onImport: (
+    rows: Array<Record<string, string>>,
+    newColumns: Array<Omit<LibraryColumn, 'id'>>,
+    nameColumnLabel: string,
+  ) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -240,7 +249,7 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
       })
       .filter(record => (record[nameLibraryColumnId] ?? '').trim() !== '');
 
-    onImport(importedRows, newColumnDefs);
+    onImport(importedRows, newColumnDefs, nameColumnHeader);
     handleClose();
   };
 

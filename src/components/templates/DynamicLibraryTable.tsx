@@ -113,7 +113,8 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
 
   const handleBulkImport = (
     rows: Array<Record<string, string>>,
-    newColumnDefs: Array<Omit<LibraryColumn, 'id'>>
+    newColumnDefs: Array<Omit<LibraryColumn, 'id'>>,
+    nameColumnLabel: string,
   ) => {
     // Assign deterministic ids to new columns so exercise rows can reference them.
     const baseTs = Date.now();
@@ -142,6 +143,13 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
 
     const payload: BulkImportPayload = { newColumns, exercises };
     bulkImportToLibrary(library.id, payload);
+
+    // Rename the first (name) column if the CSV used a different label.
+    // This keeps the table header in sync with the coach's own terminology.
+    const firstColumn = safeLibrary.columns[0];
+    if (firstColumn && nameColumnLabel && nameColumnLabel !== firstColumn.name) {
+      updateColumnInLibrary(library.id, firstColumn.id, { name: nameColumnLabel });
+    }
 
     toast({
       title: "Import complete",
