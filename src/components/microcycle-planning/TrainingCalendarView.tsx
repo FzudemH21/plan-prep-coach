@@ -346,17 +346,21 @@ export function TrainingCalendarView({
   // Group days into weeks
   const weeks = useMemo(() => groupDaysIntoWeeks(calendarDays), [calendarDays]);
 
-  // Calculate all days in the viewed mesocycle for Master Planner view
+  // Calculate all days across ALL mesocycles for Master Planner view
+  // (mirrors AthleteCalendarView which spans the full assignment, not just one mesocycle)
   const allMesocycleDays = useMemo((): CalendarDay[] => {
     if (viewMode !== 'master') return [];
 
-    // Ensure dates are Date objects (handle string dates from localStorage serialization)
-    const start = viewedMesocycle.startDate instanceof Date 
-      ? viewedMesocycle.startDate 
-      : new Date(viewedMesocycle.startDate);
-    const end = viewedMesocycle.endDate instanceof Date 
-      ? viewedMesocycle.endDate 
-      : new Date(viewedMesocycle.endDate);
+    const allMesos = mesocycles.length > 0 ? mesocycles : [viewedMesocycle];
+    const toDate = (d: Date | string) => d instanceof Date ? d : new Date(d);
+    const start = allMesos.reduce((earliest, m) => {
+      const s = toDate(m.startDate);
+      return s < earliest ? s : earliest;
+    }, toDate(allMesos[0].startDate));
+    const end = allMesos.reduce((latest, m) => {
+      const e = toDate(m.endDate);
+      return e > latest ? e : latest;
+    }, toDate(allMesos[0].endDate));
     const days = eachDayOfInterval({ start, end });
 
     return days.map(date => {
@@ -416,7 +420,7 @@ export function TrainingCalendarView({
         totalExercises: exercises.length,
       };
     });
-  }, [viewMode, viewedMesocycle, exercisesByDate, trainingDays, dailyIntensityData, daySplitStates]);
+  }, [viewMode, mesocycles, viewedMesocycle, exercisesByDate, trainingDays, dailyIntensityData, daySplitStates]);
 
   const handlePrevious = () => {
     setCurrentDate(prev => subWeeks(prev, 1));
