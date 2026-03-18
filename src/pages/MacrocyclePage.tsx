@@ -51,7 +51,7 @@ export default function MacrocyclePage() {
   const { saveCurrentSession } = useTrainingPrograms();
   const { data: parametersDataV2, addParameter: addAthleticismParameter, addInteraction: addParameterInteraction } = useParametersDataV2();
   const { data: toolboxData } = useToolboxData();
-  const { athletes, groups, getAthletePerformanceParameters, addPerformanceParameter, getAthleteBiometrics, biometricDefinitions } = useAthletes();
+  const { athletes, groups, getAthletePerformanceParameters, addPerformanceParameter, getAthleteBiometrics, biometricDefinitions, getAthleteCalendarAssignments } = useAthletes();
   const [athleteDropdownOpen, setAthleteDropdownOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [planName, setPlanName] = useState<string>("");
@@ -349,10 +349,12 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       selectedEvent,
       selectedMethods: Array.from(selectedMethods),
       manuallyAddedMethods, // Save manually added methods
+      athleteExistingTests: athleteExistingTestsAndEvents.tests,
+      athleteExistingEvents: athleteExistingTestsAndEvents.events,
       lastUpdated: new Date().toISOString()
     };
     localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
-  }, [planName, planNotes, selectedAthleteId, planDuration, smartGoals, smartGoal, subGoals, events, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest, selectedEvent, selectedMethods, manuallyAddedMethods]);
+  }, [planName, planNotes, selectedAthleteId, planDuration, smartGoals, smartGoal, subGoals, events, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest, selectedEvent, selectedMethods, manuallyAddedMethods, athleteExistingTestsAndEvents]);
 
   // Save step whenever it changes (step persistence)
   useEffect(() => {
@@ -691,7 +693,28 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const progress = (currentStep / totalSteps) * 100;
 
   const selectedAthlete = selectedAthleteId ? athletes.find(a => a.id === selectedAthleteId) : null;
-  
+
+  // Derive athlete's existing tests & events from their calendar assignments
+  const athleteExistingTestsAndEvents = useMemo(() => {
+    if (!selectedAthleteId) return { tests: [], events: [] };
+    const assignments = getAthleteCalendarAssignments(selectedAthleteId);
+    const tests: Array<{ testMethod: string; testDates: string[] }> = [];
+    const events: Array<{ name: string; eventDates: string[] }> = [];
+    assignments.forEach(assignment => {
+      (assignment.reviewedSubGoals || []).forEach(sg => {
+        if (sg.scheduledDates && sg.scheduledDates.length > 0) {
+          tests.push({ testMethod: sg.testMethod || 'Test', testDates: sg.scheduledDates });
+        }
+      });
+      (assignment.reviewedEvents || []).forEach(ev => {
+        if (ev.scheduledDates && ev.scheduledDates.length > 0) {
+          events.push({ name: ev.name || 'Event', eventDates: ev.scheduledDates });
+        }
+      });
+    });
+    return { tests, events };
+  }, [selectedAthleteId, getAthleteCalendarAssignments]);
+
   // Get athlete performance parameters for the Add Goal dialog
   const athletePerformanceParams = selectedAthleteId ? getAthletePerformanceParameters(selectedAthleteId) : [];
   const athleticismParameters = parametersDataV2?.parameters || [];
@@ -1680,19 +1703,27 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                       const dateStr = format(date, 'yyyy-MM-dd');
                       
                       // Check sub-goals for scheduled tests
-                      const scheduledSubGoalTests = subGoals.filter(sg => 
+                      const scheduledSubGoalTests = subGoals.filter(sg =>
                         sg.testDates?.some(testDate => testDate === dateStr)
                       );
-                      
+
                       // Check primary SMART goals for scheduled tests
-                      const scheduledSmartGoalTests = smartGoals.filter(goal => 
+                      const scheduledSmartGoalTests = smartGoals.filter(goal =>
                         goal.testDates?.some(testDate => testDate === dateStr)
                       );
-                      
-                      const scheduledEvents = events.filter(e => 
+
+                      const scheduledEvents = events.filter(e =>
                         e.eventDates?.some(eventDate => eventDate === dateStr)
                       );
-                      
+
+                      // Athlete's existing tests & events (from calendar assignments)
+                      const athleteExistingTestsOnDay = athleteExistingTestsAndEvents.tests.filter(t =>
+                        t.testDates?.some(td => td === dateStr)
+                      );
+                      const athleteExistingEventsOnDay = athleteExistingTestsAndEvents.events.filter(e =>
+                        e.eventDates?.some(ed => ed === dateStr)
+                      );
+
                       // Combined check for any scheduled tests
                       const hasScheduledTests = scheduledSubGoalTests.length > 0 || scheduledSmartGoalTests.length > 0;
 
@@ -1768,7 +1799,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                         date > planDuration.startDate && date < planDuration.endDate;
 
                       // Determine styling based on date type (scheduled items take priority)
-                      // Priority: Combined items > Events > Primary SMART goals > Sub-goal tests > Date range styling
+                      // Priority: Combined items > Events > Primary SMART goals > Sub-goal tests > Athlete existing > Date range styling
+                      const hasAthleteExisting = athleteExistingTestsOnDay.length > 0 || athleteExistingEventsOnDay.length > 0;
                       let dateStyle = '';
                       if (scheduledSmartGoalTests.length > 0 && scheduledEvents.length > 0) {
                         // Primary goal + event combined - amber to orange gradient
@@ -1788,6 +1820,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                       } else if (scheduledSubGoalTests.length > 0) {
                         // Sub-goal tests only - black circle
                         dateStyle = 'bg-foreground text-background rounded-full font-bold';
+                      } else if (hasAthleteExisting) {
+                        // Athlete's existing tests/events - purple ring indicator
+                        dateStyle = 'ring-2 ring-purple-500 text-purple-700 dark:text-purple-300 font-bold rounded-full';
                       } else if (isStartDate || isEndDate) {
                         dateStyle = 'bg-[hsl(142_76%_36%)] text-white font-bold rounded-[4px]';
                       } else if (isMiddleDate) {
@@ -1807,7 +1842,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                       );
 
                       // If there are scheduled items, show hover card
-                      if (hasScheduledTests || scheduledEvents.length > 0) {
+                      if (hasScheduledTests || scheduledEvents.length > 0 || hasAthleteExisting) {
                         return (
                           <HoverCard>
                             <HoverCardTrigger asChild>
@@ -1854,6 +1889,24 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                                       <div className="font-medium flex items-center gap-1">
                                         <span className="text-orange-500">📅</span>
                                         {event.name}
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {/* Athlete existing tests */}
+                                  {athleteExistingTestsOnDay.map((t, index) => (
+                                    <div key={`ath-test-${index}`} className="text-xs">
+                                      <div className="font-medium flex items-center gap-1 text-purple-600 dark:text-purple-400">
+                                        <span>🏅</span>
+                                        {t.testMethod || 'Test'} <span className="font-normal text-muted-foreground">(Athlete)</span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {/* Athlete existing events */}
+                                  {athleteExistingEventsOnDay.map((e, index) => (
+                                    <div key={`ath-event-${index}`} className="text-xs">
+                                      <div className="font-medium flex items-center gap-1 text-purple-600 dark:text-purple-400">
+                                        <span>📌</span>
+                                        {e.name || 'Event'} <span className="font-normal text-muted-foreground">(Athlete)</span>
                                       </div>
                                     </div>
                                   ))}
@@ -2566,6 +2619,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         selectedEvent,
         selectedMethods: Array.from(selectedMethods),
         manuallyAddedMethods,
+        athleteExistingTests: athleteExistingTestsAndEvents.tests,
+        athleteExistingEvents: athleteExistingTestsAndEvents.events,
         completedAt: new Date().toISOString()
       };
       localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
@@ -2688,6 +2743,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                 selectedEvent,
                 selectedMethods: Array.from(selectedMethods),
                 manuallyAddedMethods,
+                athleteExistingTests: athleteExistingTestsAndEvents.tests,
+                athleteExistingEvents: athleteExistingTestsAndEvents.events,
                 completedAt: new Date().toISOString()
               };
               localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));

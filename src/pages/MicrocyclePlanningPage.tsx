@@ -419,6 +419,14 @@ export default function MicrocyclePlanningPage() {
         testMap.set(dateStr, [...existing, name]);
       });
     });
+    // Include athlete's existing tests from calendar assignments
+    (macrocycleData.athleteExistingTests || []).forEach((t: any) => {
+      const name = t.testMethod || 'Test';
+      (t.testDates || []).forEach((dateStr: string) => {
+        const existing = testMap.get(dateStr) || [];
+        if (!existing.includes(name)) testMap.set(dateStr, [...existing, name]);
+      });
+    });
 
     const eventMap = new Map<string, string[]>();
     (macrocycleData.events || []).forEach((e: any) => {
@@ -426,6 +434,14 @@ export default function MicrocyclePlanningPage() {
       (e.eventDates || []).forEach((dateStr: string) => {
         const existing = eventMap.get(dateStr) || [];
         eventMap.set(dateStr, [...existing, name]);
+      });
+    });
+    // Include athlete's existing events from calendar assignments
+    (macrocycleData.athleteExistingEvents || []).forEach((e: any) => {
+      const name = e.name || 'Event';
+      (e.eventDates || []).forEach((dateStr: string) => {
+        const existing = eventMap.get(dateStr) || [];
+        if (!existing.includes(name)) eventMap.set(dateStr, [...existing, name]);
       });
     });
 

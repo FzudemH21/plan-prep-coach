@@ -736,7 +736,7 @@ export default function MesocyclePage() {
   // Get tests in date range with their names and individual dates
   const getTestsInRange = (start: Date, end: Date): TestDetail[] => {
     const testMap = new Map<string, { goal?: string; dates: Date[] }>();
-    
+
     macrocycleData?.subGoals?.forEach((sg: any) => {
       const testName = sg.testMethod || sg.description || 'Test';
       sg.testDates?.forEach((td: string) => {
@@ -751,9 +751,25 @@ export default function MesocyclePage() {
         }
       });
     });
-    
-    return Array.from(testMap.entries()).map(([name, data]) => ({ 
-      name, 
+
+    // Include athlete's existing tests from calendar assignments
+    macrocycleData?.athleteExistingTests?.forEach((t: any) => {
+      const testName = t.testMethod || 'Test';
+      t.testDates?.forEach((td: string) => {
+        const testDate = new Date(td);
+        if (testDate >= start && testDate <= end) {
+          const existing = testMap.get(testName);
+          if (existing) {
+            existing.dates.push(testDate);
+          } else {
+            testMap.set(testName, { dates: [testDate] });
+          }
+        }
+      });
+    });
+
+    return Array.from(testMap.entries()).map(([name, data]) => ({
+      name,
       goal: data.goal,
       dates: data.dates.sort((a, b) => a.getTime() - b.getTime())
     }));
@@ -762,7 +778,7 @@ export default function MesocyclePage() {
   // Get events in date range with their names and individual dates
   const getEventsInRange = (start: Date, end: Date): EventDetail[] => {
     const eventMap = new Map<string, Date[]>();
-    
+
     macrocycleData?.events?.forEach((e: any) => {
       const eventName = e.name || 'Event';
       e.eventDates?.forEach((ed: string) => {
@@ -777,9 +793,25 @@ export default function MesocyclePage() {
         }
       });
     });
-    
-    return Array.from(eventMap.entries()).map(([name, dates]) => ({ 
-      name, 
+
+    // Include athlete's existing events from calendar assignments
+    macrocycleData?.athleteExistingEvents?.forEach((e: any) => {
+      const eventName = e.name || 'Event';
+      e.eventDates?.forEach((ed: string) => {
+        const eventDate = new Date(ed);
+        if (eventDate >= start && eventDate <= end) {
+          const existing = eventMap.get(eventName);
+          if (existing) {
+            existing.push(eventDate);
+          } else {
+            eventMap.set(eventName, [eventDate]);
+          }
+        }
+      });
+    });
+
+    return Array.from(eventMap.entries()).map(([name, dates]) => ({
+      name,
       dates: dates.sort((a, b) => a.getTime() - b.getTime())
     }));
   };
@@ -1084,8 +1116,8 @@ export default function MesocyclePage() {
                   }
                 }}
                 onCopyMesocycle={copyMesocycleIntensity}
-                subGoals={macrocycleData?.subGoals}
-                events={macrocycleData?.events}
+                subGoals={[...(macrocycleData?.subGoals || []), ...(macrocycleData?.athleteExistingTests || []).map((t: any) => ({ testDates: t.testDates, testMethod: t.testMethod }))]}
+                events={[...(macrocycleData?.events || []), ...(macrocycleData?.athleteExistingEvents || []).map((e: any) => ({ eventDates: e.eventDates, name: e.name }))]}
                 planStartDate={planStartDate}
               />
             </div>
@@ -3965,6 +3997,14 @@ export default function MesocyclePage() {
       }
     });
 
+    // Also include athlete's existing tests
+    macrocycleData.athleteExistingTests?.forEach((t: any) => {
+      const testName = t.testMethod || 'Test';
+      t.testDates?.forEach((dateStr: string) => {
+        if (!testDateMap.has(dateStr)) testDateMap.set(dateStr, testName);
+      });
+    });
+
     const eventDateMap = new Map<string, string>();
 
     macrocycleData.events?.forEach((e: any, idx: number) => {
@@ -3976,6 +4016,14 @@ export default function MesocyclePage() {
           eventDateMap.set(dateStr, eventName);
         });
       }
+    });
+
+    // Also include athlete's existing events
+    macrocycleData.athleteExistingEvents?.forEach((e: any) => {
+      const eventName = e.name || 'Event';
+      e.eventDates?.forEach((dateStr: string) => {
+        if (!eventDateMap.has(dateStr)) eventDateMap.set(dateStr, eventName);
+      });
     });
 
     let currentDate = new Date(planStartDate);
@@ -4234,27 +4282,43 @@ export default function MesocyclePage() {
 
   // Helper functions for tooltips
   const getTestsForDate = (date: string): string[] => {
-    if (!macrocycleData?.subGoals) return [];
-    
-    return macrocycleData.subGoals
-      .filter((subGoal: any) => 
-        subGoal.testDates?.some((testDate: string) => 
+    const wizardTests = (macrocycleData?.subGoals || [])
+      .filter((subGoal: any) =>
+        subGoal.testDates?.some((testDate: string) =>
           new Date(testDate).toISOString().split('T')[0] === date
         )
       )
       .map((subGoal: any) => subGoal.testMethod || subGoal.description || 'Test');
+
+    const athleteTests = (macrocycleData?.athleteExistingTests || [])
+      .filter((t: any) =>
+        t.testDates?.some((td: string) =>
+          new Date(td).toISOString().split('T')[0] === date
+        )
+      )
+      .map((t: any) => t.testMethod || 'Test');
+
+    return [...wizardTests, ...athleteTests.filter((t: string) => !wizardTests.includes(t))];
   };
 
   const getEventsForDate = (date: string): string[] => {
-    if (!macrocycleData?.events) return [];
-    
-    return macrocycleData.events
-      .filter((event: any) => 
-        event.eventDates?.some((eventDate: string) => 
+    const wizardEvents = (macrocycleData?.events || [])
+      .filter((event: any) =>
+        event.eventDates?.some((eventDate: string) =>
           new Date(eventDate).toISOString().split('T')[0] === date
         )
       )
       .map((event: any) => event.name || 'Event');
+
+    const athleteEvents = (macrocycleData?.athleteExistingEvents || [])
+      .filter((e: any) =>
+        e.eventDates?.some((ed: string) =>
+          new Date(ed).toISOString().split('T')[0] === date
+        )
+      )
+      .map((e: any) => e.name || 'Event');
+
+    return [...wizardEvents, ...athleteEvents.filter((e: string) => !wizardEvents.includes(e))];
   };
 
   const getTooltipContent = (day: TrainingDay): string => {
