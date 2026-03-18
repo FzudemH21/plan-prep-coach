@@ -326,20 +326,30 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const athleteExistingTestsAndEvents = useMemo(() => {
     if (!selectedAthleteId) return { tests: [], events: [] };
     const assignments = getAthleteCalendarAssignments(selectedAthleteId);
+    console.log('[athleteExistingTestsAndEvents] athleteId:', selectedAthleteId);
+    console.log('[athleteExistingTestsAndEvents] assignments:', assignments.length, assignments.map(a => ({
+      id: a.id,
+      programName: a.programName,
+      reviewedSubGoals: a.reviewedSubGoals?.length ?? 'undefined',
+      reviewedEvents: a.reviewedEvents?.length ?? 'undefined',
+    })));
     const tests: Array<{ testMethod: string; testDates: string[] }> = [];
     const events: Array<{ name: string; eventDates: string[] }> = [];
     assignments.forEach(assignment => {
       (assignment.reviewedSubGoals || []).forEach(sg => {
+        console.log('[athleteExistingTestsAndEvents] reviewedSubGoal:', sg.testMethod, 'scheduledDates:', sg.scheduledDates);
         if (sg.scheduledDates && sg.scheduledDates.length > 0) {
           tests.push({ testMethod: sg.testMethod || 'Test', testDates: sg.scheduledDates });
         }
       });
       (assignment.reviewedEvents || []).forEach(ev => {
+        console.log('[athleteExistingTestsAndEvents] reviewedEvent:', ev.name, 'scheduledDates:', ev.scheduledDates);
         if (ev.scheduledDates && ev.scheduledDates.length > 0) {
           events.push({ name: ev.name || 'Event', eventDates: ev.scheduledDates });
         }
       });
     });
+    console.log('[athleteExistingTestsAndEvents] result → tests:', tests, 'events:', events);
     return { tests, events };
   }, [selectedAthleteId, getAthleteCalendarAssignments]);
 
@@ -1731,6 +1741,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                       const athleteExistingEventsOnDay = athleteExistingTestsAndEvents.events.filter(e =>
                         e.eventDates?.some(ed => ed.startsWith(dateStr))
                       );
+                      if (athleteExistingTestsOnDay.length > 0 || athleteExistingEventsOnDay.length > 0) {
+                        console.log('[Day] athlete items on', dateStr, '→ tests:', athleteExistingTestsOnDay, 'events:', athleteExistingEventsOnDay);
+                      }
 
                       const handleClick = (e: any) => {
                         dayProps?.onClick?.(e);
