@@ -1717,11 +1717,12 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                       );
 
                       // Athlete's existing tests & events (from calendar assignments)
+                      // Use startsWith to handle both 'yyyy-MM-dd' and ISO strings ('yyyy-MM-ddT...')
                       const athleteExistingTestsOnDay = athleteExistingTestsAndEvents.tests.filter(t =>
-                        t.testDates?.some(td => td === dateStr)
+                        t.testDates?.some(td => td.startsWith(dateStr))
                       );
                       const athleteExistingEventsOnDay = athleteExistingTestsAndEvents.events.filter(e =>
-                        e.eventDates?.some(ed => ed === dateStr)
+                        e.eventDates?.some(ed => ed.startsWith(dateStr))
                       );
 
                       // Combined check for any scheduled tests

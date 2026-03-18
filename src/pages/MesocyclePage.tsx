@@ -3998,10 +3998,12 @@ export default function MesocyclePage() {
     });
 
     // Also include athlete's existing tests
+    // Normalize ISO strings to yyyy-MM-dd to match the map lookup key
     macrocycleData.athleteExistingTests?.forEach((t: any) => {
       const testName = t.testMethod || 'Test';
       t.testDates?.forEach((dateStr: string) => {
-        if (!testDateMap.has(dateStr)) testDateMap.set(dateStr, testName);
+        const normalized = dateStr.split('T')[0];
+        if (!testDateMap.has(normalized)) testDateMap.set(normalized, testName);
       });
     });
 
@@ -4019,10 +4021,12 @@ export default function MesocyclePage() {
     });
 
     // Also include athlete's existing events
+    // Normalize ISO strings to yyyy-MM-dd to match the map lookup key
     macrocycleData.athleteExistingEvents?.forEach((e: any) => {
       const eventName = e.name || 'Event';
       e.eventDates?.forEach((dateStr: string) => {
-        if (!eventDateMap.has(dateStr)) eventDateMap.set(dateStr, eventName);
+        const normalized = dateStr.split('T')[0];
+        if (!eventDateMap.has(normalized)) eventDateMap.set(normalized, eventName);
       });
     });
 

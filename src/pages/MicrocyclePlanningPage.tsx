@@ -420,11 +420,13 @@ export default function MicrocyclePlanningPage() {
       });
     });
     // Include athlete's existing tests from calendar assignments
+    // Normalize ISO strings (yyyy-MM-ddT...) to yyyy-MM-dd to match trainingDay.date format
     (macrocycleData.athleteExistingTests || []).forEach((t: any) => {
       const name = t.testMethod || 'Test';
       (t.testDates || []).forEach((dateStr: string) => {
-        const existing = testMap.get(dateStr) || [];
-        if (!existing.includes(name)) testMap.set(dateStr, [...existing, name]);
+        const normalized = dateStr.split('T')[0];
+        const existing = testMap.get(normalized) || [];
+        if (!existing.includes(name)) testMap.set(normalized, [...existing, name]);
       });
     });
 
@@ -437,11 +439,13 @@ export default function MicrocyclePlanningPage() {
       });
     });
     // Include athlete's existing events from calendar assignments
+    // Normalize ISO strings (yyyy-MM-ddT...) to yyyy-MM-dd to match trainingDay.date format
     (macrocycleData.athleteExistingEvents || []).forEach((e: any) => {
       const name = e.name || 'Event';
       (e.eventDates || []).forEach((dateStr: string) => {
-        const existing = eventMap.get(dateStr) || [];
-        if (!existing.includes(name)) eventMap.set(dateStr, [...existing, name]);
+        const normalized = dateStr.split('T')[0];
+        const existing = eventMap.get(normalized) || [];
+        if (!existing.includes(name)) eventMap.set(normalized, [...existing, name]);
       });
     });
 
