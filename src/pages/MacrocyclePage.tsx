@@ -679,10 +679,12 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
 
   const clearAllScheduledItems = () => {
     // Count total scheduled items
-    const totalTests = subGoals.reduce((sum, sg) => sum + (sg.testDates?.length || 0), 0);
+    const totalSubGoalTests = subGoals.reduce((sum, sg) => sum + (sg.testDates?.length || 0), 0);
+    const totalSmartGoalTests = smartGoals.reduce((sum, g) => sum + (g.testDates?.length || 0), 0);
+    const totalTests = totalSubGoalTests + totalSmartGoalTests;
     const totalEvents = events.reduce((sum, e) => sum + (e.eventDates?.length || 0), 0);
     const total = totalTests + totalEvents;
-    
+
     if (total === 0) {
       toast({
         title: "Nothing to clear",
@@ -691,13 +693,17 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       });
       return;
     }
-    
-    // Clear all test dates
+
+    // Clear all test dates from sub-goals and smart goals
     setSubGoals(prev => prev.map(sg => ({
       ...sg,
       testDates: []
     })));
-    
+    setSmartGoals(prev => prev.map(g => ({
+      ...g,
+      testDates: []
+    })));
+
     // Clear all event dates
     setEvents(prev => prev.map(e => ({
       ...e,
@@ -1572,6 +1578,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                               onClick={() => {
                                 setSelectedEvent(selectedEvent === event.id ? null : event.id);
                                 setSelectedTest(null);
+                                setSelectedSmartGoal(null);
                               }}
                             >
                               <div className="flex items-center gap-2">
@@ -1725,9 +1732,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                         e.eventDates?.some(ed => ed.startsWith(dateStr))
                       );
 
-                      // Combined check for any scheduled tests
-                      const hasScheduledTests = scheduledSubGoalTests.length > 0 || scheduledSmartGoalTests.length > 0;
-
                       const handleClick = (e: any) => {
                         dayProps?.onClick?.(e);
                         e.preventDefault();
@@ -1799,31 +1803,21 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                       const isMiddleDate = planDuration.startDate && planDuration.endDate &&
                         date > planDuration.startDate && date < planDuration.endDate;
 
-                      // Determine styling based on date type (scheduled items take priority)
-                      // Priority: Combined items > Events > Primary SMART goals > Sub-goal tests > Athlete existing > Date range styling
-                      const hasAthleteExisting = athleteExistingTestsOnDay.length > 0 || athleteExistingEventsOnDay.length > 0;
+                      // Unified visual system:
+                      // Green squares = start/end, Orange squares = any tests, Circles = any events
+                      // Athlete existing tests/events look the same as own tests/events
+                      const hasAnyTests = scheduledSubGoalTests.length > 0 || scheduledSmartGoalTests.length > 0 || athleteExistingTestsOnDay.length > 0;
+                      const hasAnyEvents = scheduledEvents.length > 0 || athleteExistingEventsOnDay.length > 0;
                       let dateStyle = '';
-                      if (scheduledSmartGoalTests.length > 0 && scheduledEvents.length > 0) {
-                        // Primary goal + event combined - amber to orange gradient
-                        dateStyle = 'bg-gradient-to-r from-[hsl(38_92%_50%)] to-orange-500 text-white rounded-full font-bold';
-                      } else if (scheduledSubGoalTests.length > 0 && scheduledEvents.length > 0) {
-                        // Sub-goal + event combined
-                        dateStyle = 'bg-gradient-to-r from-foreground to-orange-500 text-white rounded-full font-bold';
-                      } else if (scheduledSmartGoalTests.length > 0 && scheduledSubGoalTests.length > 0) {
-                        // Both primary and sub-goal tests - amber square (primary takes precedence)
-                        dateStyle = 'bg-[hsl(38_92%_50%)] text-white font-bold rounded-[4px]';
-                      } else if (scheduledEvents.length > 0) {
+                      if (hasAnyTests && hasAnyEvents) {
+                        // Tests + events on same day - orange square (tests take priority in shape)
+                        dateStyle = 'bg-orange-500 text-white font-bold rounded-[4px]';
+                      } else if (hasAnyTests) {
+                        // Tests only - orange square
+                        dateStyle = 'bg-orange-500 text-white font-bold rounded-[4px]';
+                      } else if (hasAnyEvents) {
                         // Events only - orange circle
                         dateStyle = 'bg-orange-500 text-white rounded-full font-bold';
-                      } else if (scheduledSmartGoalTests.length > 0) {
-                        // Primary SMART goal tests only - amber square (matches Step 1)
-                        dateStyle = 'bg-[hsl(38_92%_50%)] text-white font-bold rounded-[4px]';
-                      } else if (scheduledSubGoalTests.length > 0) {
-                        // Sub-goal tests only - black circle
-                        dateStyle = 'bg-foreground text-background rounded-full font-bold';
-                      } else if (hasAthleteExisting) {
-                        // Athlete's existing tests/events - purple ring indicator
-                        dateStyle = 'ring-2 ring-purple-500 text-purple-700 dark:text-purple-300 font-bold rounded-full';
                       } else if (isStartDate || isEndDate) {
                         dateStyle = 'bg-[hsl(142_76%_36%)] text-white font-bold rounded-[4px]';
                       } else if (isMiddleDate) {
@@ -1843,7 +1837,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                       );
 
                       // If there are scheduled items, show hover card
-                      if (hasScheduledTests || scheduledEvents.length > 0 || hasAthleteExisting) {
+                      if (hasAnyTests || hasAnyEvents) {
                         return (
                           <HoverCard>
                             <HoverCardTrigger asChild>
@@ -1896,8 +1890,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                                   {/* Athlete existing tests */}
                                   {athleteExistingTestsOnDay.map((t, index) => (
                                     <div key={`ath-test-${index}`} className="text-xs">
-                                      <div className="font-medium flex items-center gap-1 text-purple-600 dark:text-purple-400">
-                                        <span>🏅</span>
+                                      <div className="font-medium flex items-center gap-1">
+                                        <span className="text-orange-500">📋</span>
                                         {t.testMethod || 'Test'} <span className="font-normal text-muted-foreground">(Athlete)</span>
                                       </div>
                                     </div>
@@ -1905,8 +1899,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                                   {/* Athlete existing events */}
                                   {athleteExistingEventsOnDay.map((e, index) => (
                                     <div key={`ath-event-${index}`} className="text-xs">
-                                      <div className="font-medium flex items-center gap-1 text-purple-600 dark:text-purple-400">
-                                        <span>📌</span>
+                                      <div className="font-medium flex items-center gap-1">
+                                        <span className="text-orange-500">📅</span>
                                         {e.name || 'Event'} <span className="font-normal text-muted-foreground">(Athlete)</span>
                                       </div>
                                     </div>
