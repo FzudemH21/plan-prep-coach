@@ -322,6 +322,27 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     }
   }, []);
 
+  // Derive athlete's existing tests & events from their calendar assignments
+  const athleteExistingTestsAndEvents = useMemo(() => {
+    if (!selectedAthleteId) return { tests: [], events: [] };
+    const assignments = getAthleteCalendarAssignments(selectedAthleteId);
+    const tests: Array<{ testMethod: string; testDates: string[] }> = [];
+    const events: Array<{ name: string; eventDates: string[] }> = [];
+    assignments.forEach(assignment => {
+      (assignment.reviewedSubGoals || []).forEach(sg => {
+        if (sg.scheduledDates && sg.scheduledDates.length > 0) {
+          tests.push({ testMethod: sg.testMethod || 'Test', testDates: sg.scheduledDates });
+        }
+      });
+      (assignment.reviewedEvents || []).forEach(ev => {
+        if (ev.scheduledDates && ev.scheduledDates.length > 0) {
+          events.push({ name: ev.name || 'Event', eventDates: ev.scheduledDates });
+        }
+      });
+    });
+    return { tests, events };
+  }, [selectedAthleteId, getAthleteCalendarAssignments]);
+
   // Save data whenever form data changes (continuous saving)
   useEffect(() => {
     // Always include planDuration dates in legacy smartGoal for backward compatibility
@@ -693,27 +714,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const progress = (currentStep / totalSteps) * 100;
 
   const selectedAthlete = selectedAthleteId ? athletes.find(a => a.id === selectedAthleteId) : null;
-
-  // Derive athlete's existing tests & events from their calendar assignments
-  const athleteExistingTestsAndEvents = useMemo(() => {
-    if (!selectedAthleteId) return { tests: [], events: [] };
-    const assignments = getAthleteCalendarAssignments(selectedAthleteId);
-    const tests: Array<{ testMethod: string; testDates: string[] }> = [];
-    const events: Array<{ name: string; eventDates: string[] }> = [];
-    assignments.forEach(assignment => {
-      (assignment.reviewedSubGoals || []).forEach(sg => {
-        if (sg.scheduledDates && sg.scheduledDates.length > 0) {
-          tests.push({ testMethod: sg.testMethod || 'Test', testDates: sg.scheduledDates });
-        }
-      });
-      (assignment.reviewedEvents || []).forEach(ev => {
-        if (ev.scheduledDates && ev.scheduledDates.length > 0) {
-          events.push({ name: ev.name || 'Event', eventDates: ev.scheduledDates });
-        }
-      });
-    });
-    return { tests, events };
-  }, [selectedAthleteId, getAthleteCalendarAssignments]);
 
   // Get athlete performance parameters for the Add Goal dialog
   const athletePerformanceParams = selectedAthleteId ? getAthletePerformanceParameters(selectedAthleteId) : [];
