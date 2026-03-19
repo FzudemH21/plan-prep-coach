@@ -94,6 +94,9 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   
   // Debounce timer for auto-save
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Pending save payload - used to flush on unmount before debounce fires
+  const pendingSaveRef = useRef<{ payload: object; fingerprint: string; assignmentId: string } | null>(null);
   
   // Copy/paste state
   const [copiedSession, setCopiedSession] = useState<CopiedSession | null>(null);
@@ -311,23 +314,28 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
-    
+
+    // Track pending save so flush-on-unmount can save it synchronously
+    pendingSaveRef.current = { payload: savePayload, fingerprint: stateFingerprint, assignmentId: selectedAssignmentId };
+
     // DEBOUNCE: Wait 300ms before saving to prevent rapid-fire writes
     saveTimeoutRef.current = setTimeout(() => {
       // Re-check guards in case something changed during debounce
       if (loadingAssignmentIdRef.current !== null) return;
       if (loadedAssignmentIdRef.current !== selectedAssignmentId) return;
-      
+
       const storageKey = `athlete-assignment-${selectedAssignmentId}`;
       const dataToSave = {
         ...savePayload,
         lastModified: new Date().toISOString(),
       };
-      
+
       localStorage.setItem(storageKey, JSON.stringify(dataToSave));
+      console.log('[autoSave] saved to localStorage:', storageKey, 'trainingDays.length:', savePayload.trainingDays.length);
       lastSavedStateRef.current = stateFingerprint;
+      pendingSaveRef.current = null; // Clear pending after successful save
     }, 300);
-    
+
     // Cleanup timeout on unmount or deps change
     return () => {
       if (saveTimeoutRef.current) {
@@ -347,8 +355,25 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     sessionIntensities,
   ]);
 
+  // Flush-on-unmount: if a debounced save is pending when the component unmounts,
+  // save synchronously so data is never lost (e.g. user adds test then navigates away
+  // within the 300ms debounce window)
+  useEffect(() => {
+    return () => {
+      const pending = pendingSaveRef.current;
+      if (pending) {
+        const storageKey = `athlete-assignment-${pending.assignmentId}`;
+        localStorage.setItem(storageKey, JSON.stringify({
+          ...pending.payload,
+          lastModified: new Date().toISOString(),
+        }));
+        pendingSaveRef.current = null;
+      }
+    };
+  }, []); // empty deps - only runs on unmount
+
   // === Session Management Handlers ===
-  
+
   const handleAddSession = useCallback((dayDate: string) => {
     setDaySplitStates(prev => {
       const currentSessions = prev[dayDate] ?? 1;
@@ -1250,8 +1275,10 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     isNew: boolean,
     comments?: string
   ) => {
+    console.log('[handleAddTestEvent] called:', { dayDate, type, id, name, isNew, comments });
     setTrainingDays(prev => {
       const existingDayIndex = prev.findIndex(td => td.date === dayDate);
+      console.log('[handleAddTestEvent] existingDayIndex:', existingDayIndex, 'trainingDays.length:', prev.length);
       
       if (existingDayIndex >= 0) {
         // Day exists - update it
@@ -1296,6 +1323,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         return [...prev, newDay];
       }
     });
+    console.log('[handleAddTestEvent] state updated, toast firing');
     toast({ title: `${type === 'test' ? 'Test' : 'Event'} added`, description: name });
   }, [toast, selectedAssignment]);
 
