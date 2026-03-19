@@ -25,7 +25,7 @@ import {
 import { useDisplayMode } from "@/contexts/DisplayModeContext";
 import { useParametersDataV2 } from "@/hooks/useParametersDataV2";
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
-import { format, parseISO, addDays } from "date-fns";
+import { format, parseISO, addDays, differenceInDays } from "date-fns";
 import { useAthletes } from "@/hooks/useAthletes";
 import { getAthleteDisplayName, Athlete } from "@/types/athlete";
 import { cn } from "@/lib/utils";
@@ -48,7 +48,7 @@ export default function MacrocyclePage() {
   const { displayMode } = useDisplayMode();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { saveCurrentSession } = useTrainingPrograms();
+  const { saveCurrentSession, getProgram } = useTrainingPrograms();
   const { data: parametersDataV2, addParameter: addAthleticismParameter, addInteraction: addParameterInteraction } = useParametersDataV2();
   const { data: toolboxData } = useToolboxData();
   const { athletes, groups, getAthletePerformanceParameters, addPerformanceParameter, getAthleteBiometrics, biometricDefinitions, getAthleteCalendarAssignments } = useAthletes();
@@ -336,22 +336,49 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     const tests: Array<{ testMethod: string; testDates: string[] }> = [];
     const events: Array<{ name: string; eventDates: string[] }> = [];
     assignments.forEach(assignment => {
-      (assignment.reviewedSubGoals || []).forEach(sg => {
-        console.log('[athleteExistingTestsAndEvents] reviewedSubGoal:', sg.testMethod, 'scheduledDates:', sg.scheduledDates);
-        if (sg.scheduledDates && sg.scheduledDates.length > 0) {
-          tests.push({ testMethod: sg.testMethod || 'Test', testDates: sg.scheduledDates });
+      console.log('[athleteExistingTestsAndEvents] assignment object:', JSON.parse(JSON.stringify(assignment)));
+
+      if (assignment.reviewedSubGoals !== undefined || assignment.reviewedEvents !== undefined) {
+        // Primary path: assignment was created with reviewedSubGoals/reviewedEvents
+        (assignment.reviewedSubGoals || []).forEach(sg => {
+          if (sg.scheduledDates && sg.scheduledDates.length > 0) {
+            tests.push({ testMethod: sg.testMethod || 'Test', testDates: sg.scheduledDates });
+          }
+        });
+        (assignment.reviewedEvents || []).forEach(ev => {
+          if (ev.scheduledDates && ev.scheduledDates.length > 0) {
+            events.push({ name: ev.name || 'Event', eventDates: ev.scheduledDates });
+          }
+        });
+      } else {
+        // Fallback path: old assignment without reviewedSubGoals/reviewedEvents –
+        // read directly from the program's macrocycleData and apply date offset
+        const program = getProgram(assignment.programId);
+        const macro = program?.macrocycleData;
+        console.log('[athleteExistingTestsAndEvents] fallback → program:', program?.name, 'macro subGoals:', macro?.subGoals?.length ?? 0, 'events:', macro?.events?.length ?? 0);
+        if (macro) {
+          const originalStart = assignment.originalStartDate ? new Date(assignment.originalStartDate) : null;
+          const assignedStart = new Date(assignment.startDate);
+          const dayOffset = originalStart ? differenceInDays(assignedStart, originalStart) : 0;
+
+          (macro.subGoals || []).forEach(sg => {
+            const shiftedDates = (sg.testDates || []).map(d => addDays(new Date(d), dayOffset).toISOString());
+            if (shiftedDates.length > 0) {
+              tests.push({ testMethod: sg.testMethod || 'Test', testDates: shiftedDates });
+            }
+          });
+          (macro.events || []).forEach(ev => {
+            const shiftedDates = (ev.eventDates || []).map(d => addDays(new Date(d), dayOffset).toISOString());
+            if (shiftedDates.length > 0) {
+              events.push({ name: ev.name || 'Event', eventDates: shiftedDates });
+            }
+          });
         }
-      });
-      (assignment.reviewedEvents || []).forEach(ev => {
-        console.log('[athleteExistingTestsAndEvents] reviewedEvent:', ev.name, 'scheduledDates:', ev.scheduledDates);
-        if (ev.scheduledDates && ev.scheduledDates.length > 0) {
-          events.push({ name: ev.name || 'Event', eventDates: ev.scheduledDates });
-        }
-      });
+      }
     });
     console.log('[athleteExistingTestsAndEvents] result → tests:', tests, 'events:', events);
     return { tests, events };
-  }, [selectedAthleteId, getAthleteCalendarAssignments]);
+  }, [selectedAthleteId, getAthleteCalendarAssignments, getProgram]);
 
   // Save data whenever form data changes (continuous saving)
   useEffect(() => {
