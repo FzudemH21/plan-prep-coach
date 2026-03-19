@@ -71,6 +71,8 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   const [daySplitStates, setDaySplitStates] = useState<Record<string, number>>({});
   // Per-session intensity storage for multi-session days (key: "dayDate-sessionIndex")
   const [sessionIntensities, setSessionIntensities] = useState<Record<string, IntensityLevel>>({});
+  // Test/Event days - stored independently of trainingDays so any calendar day can have them
+  const [testEventDays, setTestEventDays] = useState<Record<string, { testNames: string[]; eventNames: string[] }>>({});
   
   // Flag to prevent auto-save during initial load
   const [isInitializing, setIsInitializing] = useState(false);
@@ -169,18 +171,19 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     setSessionSections([]);
     setSupersets({});
     setParameterValues({});
-    
+    setTestEventDays({});
+
     // Build initial daySplitStates (1 session per training day)
     const splitStates: Record<string, number> = {};
     days.forEach(day => {
       splitStates[day.date] = day.intensity === 'off' ? 0 : 1;
     });
     setDaySplitStates(splitStates);
-    
+
     // Build daily intensity
     const intensities = days.map(d => ({ date: d.date, intensity: d.intensity }));
     setDailyIntensityData(intensities);
-    
+
     // Set fingerprint for the initialized state
     const initFingerprint = JSON.stringify({
       exerciseDistribution: [],
@@ -190,6 +193,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       dailyIntensity: intensities,
       trainingDays: days,
       daySplitStates: splitStates,
+      testEventDays: {},
     });
     lastSavedStateRef.current = initFingerprint;
   }, [buildTrainingDaysFromAssignment]);
@@ -224,7 +228,8 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         const storedDailyIntensity = parsed.dailyIntensity || [];
         const storedDaySplitStates = parsed.daySplitStates || {};
         const storedSessionIntensities = parsed.sessionIntensities || {};
-        
+        const storedTestEventDays = parsed.testEventDays || {};
+
         setExerciseDistribution(storedExercises);
         setSessionSections(storedSections);
         setSupersets(storedSupersets);
@@ -232,13 +237,14 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         setDailyIntensityData(storedDailyIntensity);
         setDaySplitStates(storedDaySplitStates);
         setSessionIntensities(storedSessionIntensities);
-        
+        setTestEventDays(storedTestEventDays);
+
         // Build training days using stored intensity data
-        const days = parsed.trainingDays?.length > 0 
-          ? parsed.trainingDays 
+        const days = parsed.trainingDays?.length > 0
+          ? parsed.trainingDays
           : buildTrainingDaysFromAssignment(assignment, storedDailyIntensity);
         setTrainingDays(days);
-        
+
         // Set the fingerprint to match loaded data so we don't immediately re-save
         const loadedFingerprint = JSON.stringify({
           exerciseDistribution: storedExercises,
@@ -249,6 +255,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
           trainingDays: days,
           daySplitStates: storedDaySplitStates,
           sessionIntensities: storedSessionIntensities,
+          testEventDays: storedTestEventDays,
         });
         lastSavedStateRef.current = loadedFingerprint;
       } catch (e) {
@@ -300,6 +307,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       trainingDays,
       daySplitStates,
       sessionIntensities,
+      testEventDays,
     };
     
     // ROBUST FINGERPRINT: Full content comparison (not just counts)
@@ -353,6 +361,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     trainingDays,
     daySplitStates,
     sessionIntensities,
+    testEventDays,
   ]);
 
   // Flush-on-unmount: if a debounced save is pending when the component unmounts,
@@ -1276,70 +1285,42 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     comments?: string
   ) => {
     console.log('[handleAddTestEvent] called:', { dayDate, type, id, name, isNew, comments });
-    setTrainingDays(prev => {
-      const existingDayIndex = prev.findIndex(td => td.date === dayDate);
-      console.log('[handleAddTestEvent] existingDayIndex:', existingDayIndex, 'trainingDays.length:', prev.length);
-      
-      if (existingDayIndex >= 0) {
-        // Day exists - update it
-        return prev.map(day => {
-          if (day.date !== dayDate) return day;
-          if (type === 'test') {
-            const testNames = [...(day.testNames || [])];
-            if (!testNames.includes(name)) {
-              testNames.push(name);
-            }
-            return { ...day, testNames, isTestDay: true };
-          } else {
-            const eventNames = [...(day.eventNames || [])];
-            if (!eventNames.includes(name)) {
-              eventNames.push(name);
-            }
-            return { ...day, eventNames, isEventDay: true };
-          }
-        });
+    setTestEventDays(prev => {
+      const existing = prev[dayDate] || { testNames: [], eventNames: [] };
+      if (type === 'test') {
+        if (existing.testNames.includes(name)) return prev;
+        return { ...prev, [dayDate]: { ...existing, testNames: [...existing.testNames, name] } };
       } else {
-        // Day doesn't exist - create new TrainingDay
-        const parsedDate = new Date(dayDate);
-        const dayOfWeek = parsedDate.getDay();
-        const dayName = parsedDate.toLocaleDateString('en-US', { weekday: 'long' });
-        
-        const newDay: TrainingDay = {
-          date: dayDate,
-          dayOfWeek,
-          dayName,
-          mesocycleId: selectedAssignment?.assignedMesocycles[0]?.id || '',
-          microcycleId: '',
-          isTestDay: type === 'test',
-          isEventDay: type === 'event',
-          isTrainingDay: true,
-          testNames: type === 'test' ? [name] : undefined,
-          eventNames: type === 'event' ? [name] : undefined,
-          intensity: 'moderate',
-          sessions: 0,
-          sessionNames: [],
-        };
-        
-        return [...prev, newDay];
+        if (existing.eventNames.includes(name)) return prev;
+        return { ...prev, [dayDate]: { ...existing, eventNames: [...existing.eventNames, name] } };
       }
     });
-    console.log('[handleAddTestEvent] state updated, toast firing');
+    console.log('[handleAddTestEvent] testEventDays updated, toast firing');
     toast({ title: `${type === 'test' ? 'Test' : 'Event'} added`, description: name });
-  }, [toast, selectedAssignment]);
+  }, [toast]);
 
   const handleDeleteTestEvent = useCallback((dayDate: string, type: 'test' | 'event', name: string) => {
-    setTrainingDays(prev =>
-      prev.map(day => {
-        if (day.date !== dayDate) return day;
-        if (type === 'test') {
-          const testNames = (day.testNames || []).filter(t => t !== name);
-          return { ...day, testNames, isTestDay: testNames.length > 0 };
-        } else {
-          const eventNames = (day.eventNames || []).filter(e => e !== name);
-          return { ...day, eventNames, isEventDay: eventNames.length > 0 };
+    setTestEventDays(prev => {
+      const existing = prev[dayDate];
+      if (!existing) return prev;
+      if (type === 'test') {
+        const testNames = existing.testNames.filter(t => t !== name);
+        if (testNames.length === 0 && existing.eventNames.length === 0) {
+          const updated = { ...prev };
+          delete updated[dayDate];
+          return updated;
         }
-      })
-    );
+        return { ...prev, [dayDate]: { ...existing, testNames } };
+      } else {
+        const eventNames = existing.eventNames.filter(e => e !== name);
+        if (existing.testNames.length === 0 && eventNames.length === 0) {
+          const updated = { ...prev };
+          delete updated[dayDate];
+          return updated;
+        }
+        return { ...prev, [dayDate]: { ...existing, eventNames } };
+      }
+    });
     toast({ title: `${type === 'test' ? 'Test' : 'Event'} removed` });
   }, [toast]);
 
@@ -1730,6 +1711,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     trainingDays,
     daySplitStates,
     sessionIntensities,
+    testEventDays,
     copiedSession,
     copiedDay,
     copiedWeek,

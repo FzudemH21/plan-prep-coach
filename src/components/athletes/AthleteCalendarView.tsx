@@ -239,20 +239,25 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         // A day has live content if: exercises exist OR splitState > 0 OR has tests/events
         const hasLiveExercises = liveExercises.length > 0;
         const hasLiveSessions = liveSplitState !== undefined && liveSplitState > 0;
-        const hasTestsOrEvents = (liveTrainingDay?.testNames?.length ?? 0) > 0 || (liveTrainingDay?.eventNames?.length ?? 0) > 0;
+        // Read tests/events from dedicated testEventDays state (independent of trainingDays)
+        const liveTestEvent = editing.testEventDays?.[dateString];
+        const hasTestsOrEvents = (liveTestEvent?.testNames?.length ?? 0) > 0 || (liveTestEvent?.eventNames?.length ?? 0) > 0
+          || (liveTrainingDay?.testNames?.length ?? 0) > 0 || (liveTrainingDay?.eventNames?.length ?? 0) > 0;
         // CRITICAL: If liveSplitState is defined (even as 0), the editing hook has authoritative state
         // for this date. We MUST use it and NOT fall through to stale cache.
-        const hasExplicitEditingState = liveSplitState !== undefined || liveTrainingDay !== undefined;
+        const hasExplicitEditingState = liveSplitState !== undefined || liveTrainingDay !== undefined || liveTestEvent !== undefined;
         const hasLiveData = hasLiveExercises || hasLiveSessions || hasTestsOrEvents;
-        
-        // Always collect tests/events from live state
-        if (hasTestsOrEvents && liveTrainingDay) {
-          if (liveTrainingDay.testNames?.length > 0) {
-            testNames = [...testNames, ...liveTrainingDay.testNames];
-          }
-          if (liveTrainingDay.eventNames?.length > 0) {
-            eventNames = [...eventNames, ...liveTrainingDay.eventNames];
-          }
+
+        // Always collect tests/events from live state (testEventDays takes priority, trainingDays as legacy fallback)
+        if (liveTestEvent?.testNames?.length > 0) {
+          testNames = [...testNames, ...liveTestEvent.testNames];
+        } else if (liveTrainingDay?.testNames?.length > 0) {
+          testNames = [...testNames, ...liveTrainingDay.testNames];
+        }
+        if (liveTestEvent?.eventNames?.length > 0) {
+          eventNames = [...eventNames, ...liveTestEvent.eventNames];
+        } else if (liveTrainingDay?.eventNames?.length > 0) {
+          eventNames = [...eventNames, ...liveTrainingDay.eventNames];
         }
         
         if (hasLiveData || hasExplicitEditingState) {
@@ -338,11 +343,16 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
               dayIntensity = liveDayIntensity.intensity as IntensityLevel;
             }
             
-            // Collect test/event names from live data
-            if (liveTrainingDay?.testNames?.length > 0) {
+            // Collect test/event names from live data (testEventDays takes priority)
+            const fallbackTestEvent = editing.testEventDays?.[dateString];
+            if (fallbackTestEvent?.testNames?.length > 0) {
+              testNames = [...testNames, ...fallbackTestEvent.testNames];
+            } else if (liveTrainingDay?.testNames?.length > 0) {
               testNames = [...testNames, ...liveTrainingDay.testNames];
             }
-            if (liveTrainingDay?.eventNames?.length > 0) {
+            if (fallbackTestEvent?.eventNames?.length > 0) {
+              eventNames = [...eventNames, ...fallbackTestEvent.eventNames];
+            } else if (liveTrainingDay?.eventNames?.length > 0) {
               eventNames = [...eventNames, ...liveTrainingDay.eventNames];
             }
             
@@ -460,7 +470,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         intensity: dayIntensityForSquare, // NEW: Explicit day-level intensity
       };
     });
-  }, [calendarDateRange, viewMode, assignments, assignmentDataCache, selectedAssignmentId, editing.exerciseDistribution, editing.daySplitStates, editing.trainingDays, editing.dailyIntensityData, editing.sessionIntensities]);
+  }, [calendarDateRange, viewMode, assignments, assignmentDataCache, selectedAssignmentId, editing.exerciseDistribution, editing.daySplitStates, editing.trainingDays, editing.dailyIntensityData, editing.sessionIntensities, editing.testEventDays]);
 
   // Group days into weeks
   const weeks = useMemo(() => groupDaysIntoWeeks(calendarDays), [calendarDays]);
