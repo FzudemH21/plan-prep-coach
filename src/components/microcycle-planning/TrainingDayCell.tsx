@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Dumbbell, Trophy, Calendar, GripVertical, MoreVertical, Copy, Trash2, ChevronDown, ArrowUp, ArrowDown, Plus } from 'lucide-react';
-import { IntensityLevel, SubGoal, Event } from '@/types/training';
+import { IntensityLevel } from '@/types/training';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import {
@@ -19,9 +19,8 @@ import {
   HoverCardTrigger,
   HoverCardContent,
 } from '@/components/ui/hover-card';
-import { CombinedTestEventDialog } from './CombinedTestEventDialog';
-import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
-import { useToolboxData } from '@/hooks/useToolboxData';
+import { CalendarEventDialog } from '@/components/shared/CalendarEventDialog';
+import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { AthletePerformanceParameter } from '@/types/athlete';
 
 interface ExerciseDistribution {
@@ -70,33 +69,33 @@ interface TrainingDayCellProps {
   onCopySession?: (dayDate: string, sessionIndex: number) => void;
   onPasteSession?: (dayDate: string) => void;
   copiedSession?: { exercises: ExerciseDistribution[]; sourceDate: string; sessionIndex: number } | null;
-  
+
   // Day-level operations
   onCopyDay?: (dayDate: string) => void;
   onClearDay?: (dayDate: string) => void;
+  // Legacy test/event props — kept for backward compat but ignored; hook handles storage internally
   onAddTestEvent?: (dayDate: string, type: 'test' | 'event', testEventId: string, testEventName: string, isNew: boolean, comments?: string) => void;
   onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event', name: string) => void;
   onUpdateTestComment?: (testId: string, comments: string) => void;
   onUpdateTestValues?: (testId: string, updates: { preTestValue?: number; goalValue?: number; comments?: string }) => void;
   onUpdateEventComment?: (eventId: string, comments: string) => void;
   copiedDay?: { exercises: ExerciseDistribution[]; sourceDate: string } | null;
-  
+  // Legacy — ignored
+  availableTests?: unknown[];
+  availableEvents?: unknown[];
+
   // Session reordering
   onMoveSessionUp?: (dayDate: string, sessionIndex: number) => void;
   onMoveSessionDown?: (dayDate: string, sessionIndex: number) => void;
-  
+
   // Add session functionality
   onAddSession?: (dayDate: string) => void;
-  
-  // Test/Event selection from macrocycle
-  availableTests?: SubGoal[];
-  availableEvents?: Event[];
-  
+
   dailyIntensityData?: any[];
   onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
   getIntensityColor?: (intensity: IntensityLevel) => string;
   intensityLevels?: IntensityLevel[];
-  // Athlete context for baseline value auto-fill
+  // Athlete context — used to scope tests/events in the new storage
   selectedAthleteId?: string;
   athletePerformanceParameters?: AthletePerformanceParameter[];
 }
@@ -110,36 +109,35 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
   copiedSession,
   onCopyDay,
   onClearDay,
-  onAddTestEvent,
-  onDeleteTestEvent,
-  onUpdateTestComment,
-  onUpdateTestValues,
-  onUpdateEventComment,
   copiedDay,
   onMoveSessionUp,
   onMoveSessionDown,
   onAddSession,
-  availableTests,
-  availableEvents,
   dailyIntensityData,
   onIntensityChange,
   getIntensityColor,
   intensityLevels,
   selectedAthleteId,
-  athletePerformanceParameters
+  athletePerformanceParameters,
 }: TrainingDayCellProps) {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [isHovering, setIsHovering] = useState(false);
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
-  const [combinedDialogOpen, setCombinedDialogOpen] = useState(false);
+  const [calendarEventDialogOpen, setCalendarEventDialogOpen] = useState(false);
   const lastDragEndTime = useRef<number>(0);
-  
-  // Parameters database hook for test method dropdown
-  const { data: parametersData, addParameter } = useParametersDataV2();
-  const { data: toolboxData } = useToolboxData();
+
+  // New independent tests/events storage
+  const { getEventsForDate, addEvent, deleteEvent } = useCalendarEvents();
+  // Use a stable athlete key: when no athlete is selected we use a fixed
+  // per-program key derived from the day's mesocycleId so tests persist
+  const eventsAthleteKey = selectedAthleteId || `program-${day.trainingDay?.mesocycleId || 'default'}`;
+  const calendarEvents = getEventsForDate(eventsAthleteKey, day.dateString);
+  const calendarTests = calendarEvents.filter(e => e.type === 'test');
+  const calendarEventItems = calendarEvents.filter(e => e.type === 'event');
+
   const hasTraining = day.sessions.length > 0;
-  const isTestDay = day.trainingDay?.isTestDay;
-  const isEventDay = day.trainingDay?.isEventDay;
+  const isTestDay = calendarTests.length > 0;
+  const isEventDay = calendarEventItems.length > 0;
   const isRestDay = !hasTraining && day.trainingDay?.isTrainingDay === false;
   const isTodayDate = isToday(day.date);
   const isSpecialDay = isTestDay || isEventDay;
@@ -152,8 +150,8 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
 
   // Compute display label with fallback
   const displayLabel =
-    day.trainingDay?.testNames?.[0] ??
-    day.trainingDay?.eventNames?.[0] ??
+    calendarTests[0]?.title ??
+    calendarEventItems[0]?.title ??
     (isTestDay ? 'Test' : isEventDay ? 'Event' : '');
 
   return (
@@ -237,7 +235,7 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
 
         {/* Status Icons with Hover Tooltips */}
         <div className="flex gap-1 items-start">
-          {day.trainingDay?.testNames && day.trainingDay.testNames.length > 0 && (
+          {isTestDay && (
             <HoverCard openDelay={100}>
               <HoverCardTrigger asChild>
                 <div className="cursor-pointer">
@@ -246,27 +244,32 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
                   </Badge>
                 </div>
               </HoverCardTrigger>
-              <HoverCardContent 
-                className="w-auto max-w-xs p-3 z-[200]" 
-                side="top" 
+              <HoverCardContent
+                className="w-auto max-w-xs p-3 z-[200]"
+                side="top"
                 align="center"
                 sideOffset={5}
               >
                 <div className="space-y-1">
                   <p className="text-xs font-semibold text-foreground">
-                    {day.trainingDay.testNames.length > 1 ? 'Tests:' : 'Test:'}
+                    {calendarTests.length > 1 ? 'Tests:' : 'Test:'}
                   </p>
                   <div className="text-xs text-muted-foreground space-y-0.5">
-                    {day.trainingDay.testNames.map((testName, idx) => (
-                      <div key={idx}>• {testName}</div>
+                    {calendarTests.map(ev => (
+                      <div key={ev.id}>
+                        • {ev.title}
+                        {ev.notes && (
+                          <span className="ml-1 text-muted-foreground/70">({ev.notes})</span>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>
               </HoverCardContent>
             </HoverCard>
           )}
-          
-          {day.trainingDay?.eventNames && day.trainingDay.eventNames.length > 0 && (
+
+          {isEventDay && (
             <HoverCard openDelay={100}>
               <HoverCardTrigger asChild>
                 <div className="cursor-pointer">
@@ -275,27 +278,32 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
                   </Badge>
                 </div>
               </HoverCardTrigger>
-              <HoverCardContent 
-                className="w-auto max-w-xs p-3 z-[200]" 
-                side="top" 
+              <HoverCardContent
+                className="w-auto max-w-xs p-3 z-[200]"
+                side="top"
                 align="center"
                 sideOffset={5}
               >
                 <div className="space-y-1">
                   <p className="text-xs font-semibold text-foreground">
-                    {day.trainingDay.eventNames.length > 1 ? 'Events:' : 'Event:'}
+                    {calendarEventItems.length > 1 ? 'Events:' : 'Event:'}
                   </p>
                   <div className="text-xs text-muted-foreground space-y-0.5">
-                    {day.trainingDay.eventNames.map((eventName, idx) => (
-                      <div key={idx}>• {eventName}</div>
+                    {calendarEventItems.map(ev => (
+                      <div key={ev.id}>
+                        • {ev.title}
+                        {ev.notes && (
+                          <span className="ml-1 text-muted-foreground/70">({ev.notes})</span>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>
               </HoverCardContent>
             </HoverCard>
           )}
-          
-          {/* Day-level Menu (3-dot) - moved here from absolute position */}
+
+          {/* Day-level Menu (3-dot) */}
           {day.isCurrentMonth && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -311,9 +319,9 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
                   <Copy className="mr-2 h-4 w-4" />
                   Copy day
                 </DropdownMenuItem>
-                
+
                 {hasTraining && (
-                  <DropdownMenuItem 
+                  <DropdownMenuItem
                     onClick={(e) => {
                       e.stopPropagation();
                       onClearDay?.(day.dateString);
@@ -324,12 +332,12 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
                     Clear day
                   </DropdownMenuItem>
                 )}
-                
+
                 <DropdownMenuSeparator />
-                
+
                 <DropdownMenuItem onClick={(e) => {
                   e.stopPropagation();
-                  setCombinedDialogOpen(true);
+                  setCalendarEventDialogOpen(true);
                 }}>
                   <Trophy className="mr-2 h-4 w-4" />
                   Manage tests/events
@@ -620,56 +628,22 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
       )}
     </div>
 
-    {/* Combined Test/Event Dialog */}
-      <CombinedTestEventDialog
-        open={combinedDialogOpen}
-        onOpenChange={setCombinedDialogOpen}
-        existingTests={availableTests || []}
-        existingEvents={availableEvents || []}
-        scheduledTestNames={day.trainingDay?.testNames}
-        scheduledEventNames={day.trainingDay?.eventNames}
-        onSelect={(selected) => {
-          onAddTestEvent?.(
-            day.dateString, 
-            selected.type, 
-            selected.id, 
-            selected.name, 
-            selected.isNew,
-            selected.comments
-          );
+    {/* Calendar Test/Event Dialog */}
+      <CalendarEventDialog
+        open={calendarEventDialogOpen}
+        onOpenChange={setCalendarEventDialogOpen}
+        date={day.dateString}
+        events={calendarEvents}
+        onAdd={(type, title, notes) => {
+          addEvent(eventsAthleteKey, { date: day.dateString, type, title, notes });
         }}
-        onDelete={(type, name) => {
-          onDeleteTestEvent?.(day.dateString, type, name);
+        onDelete={(eventId) => {
+          deleteEvent(eventsAthleteKey, eventId);
         }}
-        onUpdateComment={(type, id, comments) => {
-          if (type === 'test') {
-            onUpdateTestComment?.(id, comments);
-          } else {
-            onUpdateEventComment?.(id, comments);
-          }
-        }}
-        onUpdateTestValues={onUpdateTestValues}
-        allParameters={parametersData.parameters}
-        toolboxEntries={toolboxData?.entries || []}
-        onAddParameter={(param) => {
-          addParameter({
-            name: param.name,
-            unit: param.unit,
-            category: param.category,
-          });
-        }}
-        selectedAthleteId={selectedAthleteId}
-        athletePerformanceParameters={athletePerformanceParameters}
       />
     </>
   );
-}, (prevProps, nextProps) => {
-  // Custom comparison: only re-render when visually relevant props change
-  return (
-    prevProps.day.dateString === nextProps.day.dateString &&
-    prevProps.day.sessions.length === nextProps.day.sessions.length &&
-    prevProps.day.totalExercises === nextProps.day.totalExercises &&
-    (prevProps.copiedSession == null) === (nextProps.copiedSession == null) &&
-    (prevProps.copiedDay == null) === (nextProps.copiedDay == null)
-  );
 });
+// Note: No custom comparison - the component uses useCalendarEvents internally,
+// which updates React state via useLocalStorage when events change. A custom memo
+// comparison would prevent those re-renders from showing updated test/event badges.

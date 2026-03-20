@@ -19,11 +19,9 @@ import {
   HoverCardTrigger,
   HoverCardContent,
 } from '@/components/ui/hover-card';
-import { CombinedTestEventDialog } from '@/components/microcycle-planning/CombinedTestEventDialog';
+import { CalendarEventDialog } from '@/components/shared/CalendarEventDialog';
+import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { ExerciseDistribution } from '@/types/microcycle-planning';
-import { SubGoal, Event } from '@/types/training';
-import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
-import { useToolboxData } from '@/hooks/useToolboxData';
 import { AthletePerformanceParameter } from '@/types/athlete';
 
 export interface AthleteCalendarSession {
@@ -75,17 +73,12 @@ interface AthleteCalendarDayCellProps {
   onCopySession?: (dayDate: string, sessionIndex: number) => void;
   onDeleteSession?: (dayDate: string, sessionIndex: number) => void;
   onPasteSession?: (dayDate: string) => void;
-  // Test/Event operations
-  onAddTestEvent?: (dayDate: string, type: 'test' | 'event', id: string, name: string, isNew: boolean, comments?: string) => void;
-  onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event', name: string) => void;
-  availableTests?: SubGoal[];
-  availableEvents?: Event[];
   // Intensity editing
   intensityLevels?: IntensityLevel[];
   onIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
   // Ref-based drag end timestamp for click suppression (sync update, not state)
   lastDragEndRef?: React.MutableRefObject<number>;
-  // Athlete context for baseline auto-fill
+  // Athlete context — required for tests/events storage
   athleteId?: string;
   athletePerformanceParameters?: AthletePerformanceParameter[];
 }
@@ -105,10 +98,6 @@ export function AthleteCalendarDayCell({
   onCopySession,
   onDeleteSession,
   onPasteSession,
-  onAddTestEvent,
-  onDeleteTestEvent,
-  availableTests = [],
-  availableEvents = [],
   intensityLevels,
   onIntensityChange,
   lastDragEndRef,
@@ -117,30 +106,20 @@ export function AthleteCalendarDayCell({
 }: AthleteCalendarDayCellProps) {
   const [testEventDialogOpen, setTestEventDialogOpen] = useState(false);
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
-  
-  // Parameters database hook for test method dropdown
-  const { data: parametersData, addParameter } = useParametersDataV2();
-  const { data: toolboxData } = useToolboxData();
-  
+
+  // New independent tests/events storage
+  const { getEventsForDate, addEvent, deleteEvent } = useCalendarEvents();
+  const calendarEvents = athleteId
+    ? getEventsForDate(athleteId, day.dateString)
+    : [];
+  const calendarTests = calendarEvents.filter(e => e.type === 'test');
+  const calendarEventItems = calendarEvents.filter(e => e.type === 'event');
+
   const hasTraining = day.sessions.length > 0;
-  const isTestDay = day.testNames && day.testNames.length > 0;
-  const isEventDay = day.eventNames && day.eventNames.length > 0;
+  const isTestDay = calendarTests.length > 0;
+  const isEventDay = calendarEventItems.length > 0;
   const isTodayDate = isToday(day.date);
   const isSpecialDay = isTestDay || isEventDay;
-
-  const handleTestEventSelect = (selected: {
-    type: 'test' | 'event';
-    id: string;
-    name: string;
-    isNew: boolean;
-    comments?: string;
-  }) => {
-    onAddTestEvent?.(day.dateString, selected.type, selected.id, selected.name, selected.isNew, selected.comments);
-  };
-
-  const handleTestEventDelete = (type: 'test' | 'event', name: string) => {
-    onDeleteTestEvent?.(day.dateString, type, name);
-  };
 
   return (
     <>
@@ -232,11 +211,16 @@ export function AthleteCalendarDayCell({
                 >
                   <div className="space-y-1">
                     <p className="text-xs font-semibold text-foreground">
-                      {day.testNames!.length > 1 ? 'Tests:' : 'Test:'}
+                      {calendarTests.length > 1 ? 'Tests:' : 'Test:'}
                     </p>
                     <div className="text-xs text-muted-foreground space-y-0.5">
-                      {day.testNames!.map((testName, idx) => (
-                        <div key={idx}>• {testName}</div>
+                      {calendarTests.map(ev => (
+                        <div key={ev.id}>
+                          • {ev.title}
+                          {ev.notes && (
+                            <span className="ml-1 text-muted-foreground/70">({ev.notes})</span>
+                          )}
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -261,11 +245,16 @@ export function AthleteCalendarDayCell({
                 >
                   <div className="space-y-1">
                     <p className="text-xs font-semibold text-foreground">
-                      {day.eventNames!.length > 1 ? 'Events:' : 'Event:'}
+                      {calendarEventItems.length > 1 ? 'Events:' : 'Event:'}
                     </p>
                     <div className="text-xs text-muted-foreground space-y-0.5">
-                      {day.eventNames!.map((eventName, idx) => (
-                        <div key={idx}>• {eventName}</div>
+                      {calendarEventItems.map(ev => (
+                        <div key={ev.id}>
+                          • {ev.title}
+                          {ev.notes && (
+                            <span className="ml-1 text-muted-foreground/70">({ev.notes})</span>
+                          )}
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -322,20 +311,18 @@ export function AthleteCalendarDayCell({
                 )}
                 
                 {/* Separator before test/event management */}
-                {(hasTraining || copiedDay) && onAddTestEvent && <DropdownMenuSeparator />}
-                
+                {(hasTraining || copiedDay) && <DropdownMenuSeparator />}
+
                 {/* Manage Tests/Events */}
-                {onAddTestEvent && (
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setTestEventDialogOpen(true);
-                    }}
-                  >
-                    <Settings className="mr-2 h-4 w-4" />
-                    Manage tests/events
-                  </DropdownMenuItem>
-                )}
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setTestEventDialogOpen(true);
+                  }}
+                >
+                  <Settings className="mr-2 h-4 w-4" />
+                  Manage tests/events
+                </DropdownMenuItem>
                 
               </DropdownMenuContent>
             </DropdownMenu>
@@ -549,25 +536,20 @@ export function AthleteCalendarDayCell({
       </div>
 
       {/* Test/Event Dialog */}
-      <CombinedTestEventDialog
+      <CalendarEventDialog
         open={testEventDialogOpen}
         onOpenChange={setTestEventDialogOpen}
-        existingTests={availableTests}
-        existingEvents={availableEvents}
-        scheduledTestNames={day.testNames || []}
-        scheduledEventNames={day.eventNames || []}
-        onSelect={handleTestEventSelect}
-        onDelete={handleTestEventDelete}
-        allParameters={parametersData.parameters}
-        toolboxEntries={toolboxData?.entries || []}
-        selectedAthleteId={athleteId}
-        athletePerformanceParameters={athletePerformanceParameters}
-        onAddParameter={(param) => {
-          addParameter({
-            name: param.name,
-            unit: param.unit,
-            category: param.category,
-          });
+        date={day.dateString}
+        events={calendarEvents}
+        onAdd={(type, title, notes) => {
+          if (athleteId) {
+            addEvent(athleteId, { date: day.dateString, type, title, notes });
+          }
+        }}
+        onDelete={(eventId) => {
+          if (athleteId) {
+            deleteEvent(athleteId, eventId);
+          }
         }}
       />
     </>

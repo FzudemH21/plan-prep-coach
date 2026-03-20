@@ -220,8 +220,6 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
 
       // Extract session data for this specific day
       const sessions: AthleteCalendarSession[] = [];
-      let testNames: string[] = [];
-      let eventNames: string[] = [];
       let assignmentId: string | undefined;
       let programName: string | undefined;
       let usedLiveEditingState = false;
@@ -234,42 +232,21 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         );
         const liveSplitState = editing.daySplitStates[dateString];
         const liveTrainingDay = editing.trainingDays.find((td: any) => td.date === dateString);
-        
-        // FIX: Proper check for live data - don't use isTrainingDay alone since cleared days still exist
-        // A day has live content if: exercises exist OR splitState > 0 OR has tests/events
+
         const hasLiveExercises = liveExercises.length > 0;
         const hasLiveSessions = liveSplitState !== undefined && liveSplitState > 0;
-        // Read tests/events from dedicated testEventDays state (independent of trainingDays)
-        const liveTestEvent = editing.testEventDays?.[dateString];
-        const hasTestsOrEvents = (liveTestEvent?.testNames?.length ?? 0) > 0 || (liveTestEvent?.eventNames?.length ?? 0) > 0
-          || (liveTrainingDay?.testNames?.length ?? 0) > 0 || (liveTrainingDay?.eventNames?.length ?? 0) > 0;
         // CRITICAL: If liveSplitState is defined (even as 0), the editing hook has authoritative state
-        // for this date. We MUST use it and NOT fall through to stale cache.
-        const hasExplicitEditingState = liveSplitState !== undefined || liveTrainingDay !== undefined || liveTestEvent !== undefined;
-        const hasLiveData = hasLiveExercises || hasLiveSessions || hasTestsOrEvents;
+        const hasExplicitEditingState = liveSplitState !== undefined || liveTrainingDay !== undefined;
+        const hasLiveData = hasLiveExercises || hasLiveSessions;
 
-        // Always collect tests/events from live state (testEventDays takes priority, trainingDays as legacy fallback)
-        if (liveTestEvent?.testNames?.length > 0) {
-          testNames = [...testNames, ...liveTestEvent.testNames];
-        } else if (liveTrainingDay?.testNames?.length > 0) {
-          testNames = [...testNames, ...liveTrainingDay.testNames];
-        }
-        if (liveTestEvent?.eventNames?.length > 0) {
-          eventNames = [...eventNames, ...liveTestEvent.eventNames];
-        } else if (liveTrainingDay?.eventNames?.length > 0) {
-          eventNames = [...eventNames, ...liveTrainingDay.eventNames];
-        }
-        
         if (hasLiveData || hasExplicitEditingState) {
-          // Block cached path whenever the editing hook has state for this date
-          // This includes cleared days (splitState=0) which must NOT fall through to stale cache
           if (hasExplicitEditingState || hasLiveExercises || hasLiveSessions) {
             usedLiveEditingState = true;
           }
           const selectedAssignment = assignments.find(a => a.id === selectedAssignmentId);
           assignmentId = selectedAssignmentId;
           programName = selectedAssignment?.programName;
-          
+
           // Get day intensity from live dailyIntensity data, fall back to trainingDays intensity
           let dayIntensity: IntensityLevel = liveTrainingDay?.intensity || 'moderate';
           const liveDayIntensity = editing.dailyIntensityData.find(
@@ -278,11 +255,8 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           if (liveDayIntensity?.intensity) {
             dayIntensity = liveDayIntensity.intensity as IntensityLevel;
           }
-          
-          // Tests/events already collected above
-          
+
           // FIX: Use actual splitState value - 0 means no sessions (cleared day)
-          // Only render sessions if we have exercises OR splitState > 0
           const numSessions = liveSplitState ?? 0;
           if (numSessions > 0 || hasLiveExercises) {
             const sessionCount = numSessions > 0 ? numSessions : 1;
@@ -292,11 +266,10 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
               const exerciseCount = liveExercises.filter(
                 (ex: any) => ex.sessionIndex === sessionIdx
               ).length;
-              
-              // Use per-session intensity if available, otherwise fall back to day intensity
+
               const perSessionKey = `${dateString}-${sessionIdx}`;
               const sessionIntensity = editing.sessionIntensities?.[perSessionKey] ?? dayIntensity;
-              
+
               sessions.push({
                 id: sessionId,
                 sessionIndex: sessionIdx,
@@ -323,9 +296,8 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           assignmentId = assignment.id;
           programName = assignment.programName;
 
-          // For the selected assignment being edited, use LIVE editing state
           const isEditingAssignment = assignment.id === selectedAssignmentId;
-          
+
           if (isEditingAssignment) {
             // Use live editing state for immediate updates
             const liveExercises = editing.exerciseDistribution.filter(
@@ -333,8 +305,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             );
             const liveSplitState = editing.daySplitStates[dateString];
             const liveTrainingDay = editing.trainingDays.find((td: any) => td.date === dateString);
-            
-            // Get day intensity from live dailyIntensity data, fall back to trainingDays intensity
+
             let dayIntensity: IntensityLevel = liveTrainingDay?.intensity || 'moderate';
             const liveDayIntensity = editing.dailyIntensityData.find(
               (d: any) => d.date === dateString
@@ -342,25 +313,11 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             if (liveDayIntensity?.intensity) {
               dayIntensity = liveDayIntensity.intensity as IntensityLevel;
             }
-            
-            // Collect test/event names from live data (testEventDays takes priority)
-            const fallbackTestEvent = editing.testEventDays?.[dateString];
-            if (fallbackTestEvent?.testNames?.length > 0) {
-              testNames = [...testNames, ...fallbackTestEvent.testNames];
-            } else if (liveTrainingDay?.testNames?.length > 0) {
-              testNames = [...testNames, ...liveTrainingDay.testNames];
-            }
-            if (fallbackTestEvent?.eventNames?.length > 0) {
-              eventNames = [...eventNames, ...fallbackTestEvent.eventNames];
-            } else if (liveTrainingDay?.eventNames?.length > 0) {
-              eventNames = [...eventNames, ...liveTrainingDay.eventNames];
-            }
-            
-            // FIX: Proper check for training day - exercises OR splitState > 0
+
             const hasExercises = liveExercises.length > 0;
             const numSessions = liveSplitState ?? 0;
             const isTrainingDay = hasExercises || numSessions > 0;
-            
+
             if (isTrainingDay) {
               const sessionCount = numSessions > 0 ? numSessions : 1;
               for (let sessionIdx = 0; sessionIdx < sessionCount; sessionIdx++) {
@@ -369,11 +326,10 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 const exerciseCount = liveExercises.filter(
                   (ex: any) => ex.sessionIndex === sessionIdx
                 ).length;
-                
-                // Use per-session intensity if available, otherwise fall back to day intensity
+
                 const perSessionKey = `${dateString}-${sessionIdx}`;
                 const sessionIntensity = editing.sessionIntensities?.[perSessionKey] ?? dayIntensity;
-                
+
                 sessions.push({
                   id: sessionId,
                   sessionIndex: sessionIdx,
@@ -389,7 +345,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             const cachedData = assignmentDataCache[assignment.id];
             const trainingDay = cachedData?.trainingDays?.find((td: any) => td.date === dateString);
             const numSessions = cachedData?.daySplitStates?.[dateString] ?? trainingDay?.sessions ?? 1;
-            
+
             let dayIntensity: IntensityLevel = 'moderate';
             if (cachedData?.dailyIntensity) {
               const storedDayIntensity = cachedData.dailyIntensity.find(
@@ -399,17 +355,10 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 dayIntensity = storedDayIntensity.intensity as IntensityLevel;
               }
             }
-            
-            if (trainingDay?.testNames?.length > 0) {
-              testNames = [...testNames, ...trainingDay.testNames];
-            }
-            if (trainingDay?.eventNames?.length > 0) {
-              eventNames = [...eventNames, ...trainingDay.eventNames];
-            }
-            
+
             const hasExercises = cachedData?.exerciseDistribution?.some((ex: any) => ex.dayDate === dateString);
             const isTrainingDay = hasExercises || trainingDay?.isTrainingDay;
-            
+
             if (isTrainingDay) {
               for (let sessionIdx = 0; sessionIdx < numSessions; sessionIdx++) {
                 const sessionId = `${assignment.id}-${dateString}-${sessionIdx}`;
@@ -420,7 +369,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                     (ex: any) => ex.dayDate === dateString && ex.sessionIndex === sessionIdx
                   ).length;
                 }
-                
+
                 let sessionIntensity = dayIntensity;
                 if (trainingDay?.mesocycleId && cachedData?.parameterValues) {
                   const sessionIntensityKey = `sessionIntensity_${trainingDay.mesocycleId}_${dateString}_${sessionIdx}`;
@@ -428,7 +377,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                     sessionIntensity = cachedData.parameterValues[sessionIntensityKey] as IntensityLevel;
                   }
                 }
-                
+
                 sessions.push({
                   id: sessionId,
                   sessionIndex: sessionIdx,
@@ -463,14 +412,12 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         dateString,
         isCurrentMonth: isSameMonth(date, currentDate),
         sessions,
-        testNames: testNames.length > 0 ? testNames : undefined,
-        eventNames: eventNames.length > 0 ? eventNames : undefined,
         assignmentId,
         programName,
-        intensity: dayIntensityForSquare, // NEW: Explicit day-level intensity
+        intensity: dayIntensityForSquare,
       };
     });
-  }, [calendarDateRange, viewMode, assignments, assignmentDataCache, selectedAssignmentId, editing.exerciseDistribution, editing.daySplitStates, editing.trainingDays, editing.dailyIntensityData, editing.sessionIntensities, editing.testEventDays]);
+  }, [calendarDateRange, viewMode, assignments, assignmentDataCache, selectedAssignmentId, editing.exerciseDistribution, editing.daySplitStates, editing.trainingDays, editing.dailyIntensityData, editing.sessionIntensities]);
 
   // Group days into weeks
   const weeks = useMemo(() => groupDaysIntoWeeks(calendarDays), [calendarDays]);
@@ -964,10 +911,6 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 onAddSession={editing.handleAddSession}
                 allExerciseDistribution={editing.exerciseDistribution}
                 onExerciseChange={editing.handleExerciseChange}
-                onAddTestEvent={editing.handleAddTestEvent}
-                onDeleteTestEvent={editing.handleDeleteTestEvent}
-                availableTests={[]}
-                availableEvents={[]}
                 selectedAthleteId={athlete.id}
                 athletePerformanceParameters={athleteData.athletePerformanceParameters.filter(
                   p => p.athleteId === athlete.id
@@ -1017,11 +960,6 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                       onCopySession={editing.handleCopySession}
                       onDeleteSession={editing.handleDeleteSession}
                       onPasteSession={editing.handlePasteSession}
-                      // Test/Event operations
-                      onAddTestEvent={editing.handleAddTestEvent}
-                      onDeleteTestEvent={editing.handleDeleteTestEvent}
-                      availableTests={[]}
-                      availableEvents={[]}
                       // Intensity editing
                       intensityLevels={intensityLevels}
                       onIntensityChange={editing.handleDayIntensityChange}

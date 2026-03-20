@@ -3234,11 +3234,7 @@ export default function MicrocyclePlanningPage() {
               copiedWeek={copiedWeek}
               onCopyDay={handleCopyDay}
               onClearDay={handleClearDay}
-              onAddTestEvent={handleAddTestEvent}
-              onDeleteTestEvent={handleDeleteTestEvent}
               copiedDay={copiedDay}
-              availableTests={macrocycleData?.subGoals || []}
-              availableEvents={macrocycleData?.events || []}
               dailyIntensityData={dailyIntensityData}
               onIntensityChange={handleIntensityChange}
               onSessionIntensityChange={handleSessionIntensityChange}

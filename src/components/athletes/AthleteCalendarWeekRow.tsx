@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ExerciseDistribution, SessionSection } from '@/types/microcycle-planning';
-import { SubGoal, Event, IntensityLevel } from '@/types/training';
+import { IntensityLevel } from '@/types/training';
 import { AthletePerformanceParameter } from '@/types/athlete';
 
 interface CopiedWeekInfo {
@@ -52,11 +52,11 @@ interface AthleteCalendarWeekRowProps {
   onCopySession?: (dayDate: string, sessionIndex: number) => void;
   onDeleteSession?: (dayDate: string, sessionIndex: number) => void;
   onPasteSession?: (dayDate: string) => void;
-  // Test/Event operations
+  // Test/Event operations — kept for backward compat but no longer forwarded (hook handles internally)
   onAddTestEvent?: (dayDate: string, type: 'test' | 'event', id: string, name: string, isNew: boolean, comments?: string) => void;
   onDeleteTestEvent?: (dayDate: string, type: 'test' | 'event', name: string) => void;
-  availableTests?: SubGoal[];
-  availableEvents?: Event[];
+  availableTests?: unknown[];
+  availableEvents?: unknown[];
   // Intensity editing
   intensityLevels?: IntensityLevel[];
   onIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
@@ -87,10 +87,6 @@ export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow
   onCopySession,
   onDeleteSession,
   onPasteSession,
-  onAddTestEvent,
-  onDeleteTestEvent,
-  availableTests,
-  availableEvents,
   intensityLevels,
   onIntensityChange,
   lastDragEndRef,
@@ -173,10 +169,6 @@ export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow
             onCopySession={onCopySession}
             onDeleteSession={onDeleteSession}
             onPasteSession={onPasteSession}
-            onAddTestEvent={onAddTestEvent}
-            onDeleteTestEvent={onDeleteTestEvent}
-            availableTests={availableTests}
-            availableEvents={availableEvents}
             intensityLevels={intensityLevels}
             onIntensityChange={onIntensityChange}
             lastDragEndRef={lastDragEndRef}
