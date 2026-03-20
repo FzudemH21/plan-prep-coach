@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { addDays, format, isWithinInterval, startOfDay } from "date-fns";
 import { Trophy, CalendarDays } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 
 interface SubGoal {
   testDates?: string[];
@@ -26,16 +27,19 @@ interface MesocycleCalendarProps {
   totalWeeks?: number;
   subGoals?: SubGoal[];
   events?: Event[];
+  athleteId?: string;
 }
 
-export default function MesocycleCalendar({ 
-  mesocycles, 
-  startDate = new Date(), 
-  showFullPlan = false, 
+export default function MesocycleCalendar({
+  mesocycles,
+  startDate = new Date(),
+  showFullPlan = false,
   totalWeeks = 0,
   subGoals = [],
-  events = []
+  events = [],
+  athleteId,
 }: MesocycleCalendarProps) {
+  const { getEventsForDate: getCalendarEventsForDate } = useCalendarEvents();
   // Calculate dates for all mesocycles and their microcycles
   const calculateMesocycleDates = () => {
     let currentDate = startOfDay(startDate);
@@ -124,22 +128,32 @@ export default function MesocycleCalendar({
     return trainingWeeks;
   };
 
-  // Get tests for a specific date
+  // Get tests for a specific date (combines legacy subGoals + new calendarEvents)
   const getTestsForDate = (date: Date): string[] => {
-    if (!subGoals || subGoals.length === 0) return [];
     const dateStr = format(date, 'yyyy-MM-dd');
-    return subGoals
+    const legacy = (subGoals || [])
       .filter(sg => sg.testDates?.some(td => td.startsWith(dateStr)))
       .map(sg => sg.testMethod || sg.description || 'Test');
+    const fromCalendar = athleteId
+      ? getCalendarEventsForDate(athleteId, dateStr)
+          .filter(e => e.type === 'test')
+          .map(e => e.title)
+      : [];
+    return [...legacy, ...fromCalendar];
   };
 
-  // Get events for a specific date
+  // Get events for a specific date (combines legacy events + new calendarEvents)
   const getEventsForDate = (date: Date): string[] => {
-    if (!events || events.length === 0) return [];
     const dateStr = format(date, 'yyyy-MM-dd');
-    return events
+    const legacy = (events || [])
       .filter(e => e.eventDates?.some(ed => ed.startsWith(dateStr)))
       .map(e => e.name || 'Event');
+    const fromCalendar = athleteId
+      ? getCalendarEventsForDate(athleteId, dateStr)
+          .filter(e => e.type === 'event')
+          .map(e => e.title)
+      : [];
+    return [...legacy, ...fromCalendar];
   };
 
   // Custom day component

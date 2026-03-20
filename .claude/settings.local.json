@@ -23,7 +23,9 @@
       "Bash(git config:*)",
       "Bash(npx tsc:*)",
       "Bash(find:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(git commit:*)",
+      "Bash(npx vite:*)"
     ]
   }
 }
