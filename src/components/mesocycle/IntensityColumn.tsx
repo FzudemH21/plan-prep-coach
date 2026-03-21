@@ -6,6 +6,8 @@ import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/h
 import { Badge } from '@/components/ui/badge';
 import { Trophy, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CalendarEvent } from '@/hooks/useCalendarEvents';
+import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 
 interface IntensityColumnProps {
   day: TrainingDay;
@@ -16,6 +18,7 @@ interface IntensityColumnProps {
   isLastDayOfMesocycle: boolean;
   intensityLevels: IntensityLevel[];
   getIntensityColor: (intensity: IntensityLevel) => string;
+  calendarEventsForDay?: CalendarEvent[];
 }
 
 // Helper to get subtle intensity-tinted background for day headers
@@ -41,8 +44,35 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
   isLastDayOfMicrocycle,
   isLastDayOfMesocycle,
   intensityLevels,
-  getIntensityColor
+  getIntensityColor,
+  calendarEventsForDay = [],
 }) => {
+  const { data: parametersData } = useParametersDataV2();
+  const parameters = parametersData?.parameters ?? [];
+
+  const hookTests = calendarEventsForDay.filter(e => e.type === 'test');
+  const hookEventItems = calendarEventsForDay.filter(e => e.type === 'event');
+  const hasTests = day.isTestDay || hookTests.length > 0;
+  const hasEvents = day.isEventDay || hookEventItems.length > 0;
+
+  // Live name lookup for hook tests: parameterId → name, fallback to title
+  const getTestName = (ev: CalendarEvent): string => {
+    if (ev.parameterId) {
+      const param = parameters.find(p => p.id === ev.parameterId);
+      if (param) return param.name;
+    }
+    return ev.title;
+  };
+
+  // Merge test/event names from both sources for tooltips
+  const allTestNames = [
+    ...(day.testNames || []),
+    ...hookTests.map(getTestName),
+  ];
+  const allEventNames = [
+    ...(day.eventNames || []),
+    ...hookEventItems.map(e => e.title),
+  ];
   const chartHeight = 200; // Fixed chart area height
   
   // Calculate column height based on intensity level (full band heights)
@@ -117,18 +147,26 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
   };
 
   const dayHeader = (
-    <div className={cn(
-      "relative h-16 text-center text-xs rounded-md border border-border w-full mb-2 flex flex-col items-center justify-center",
-      day.isTestDay ? 'bg-blue-100 border-blue-300' : 
-      day.isEventDay ? 'bg-orange-100 border-orange-300' : 
-      getSubtleIntensityBg(intensity)
-    )}>
+    <div
+      className={cn(
+        "relative h-16 text-center text-xs rounded-md border border-border w-full mb-2 flex flex-col items-center justify-center",
+        !hasTests && !hasEvents && getSubtleIntensityBg(intensity),
+        hasTests && !hasEvents && 'bg-amber-50 border-amber-400 dark:bg-amber-950/20',
+        !hasTests && hasEvents && 'bg-blue-50 border-blue-400 dark:bg-blue-950/20',
+      )}
+      style={hasTests && hasEvents ? {
+        border: '1px solid transparent',
+        backgroundImage: 'linear-gradient(hsl(var(--card)), hsl(var(--card))), linear-gradient(to right, #f59e0b 50%, #3b82f6 50%)',
+        backgroundOrigin: 'padding-box, border-box',
+        backgroundClip: 'padding-box, border-box',
+      } : undefined}
+    >
       <div className="font-medium">{format(new Date(day.date), 'MMM d')}</div>
       <div className="text-xs">{day.dayName}</div>
-      
+
       {/* Test/Event Icons with Hover Cards */}
       <div className="absolute -top-1 -right-1 flex gap-0.5">
-        {day.testNames && day.testNames.length > 0 && (
+        {allTestNames.length > 0 && (
           <HoverCard openDelay={100}>
             <HoverCardTrigger asChild>
               <div className="cursor-pointer">
@@ -137,18 +175,18 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
                 </Badge>
               </div>
             </HoverCardTrigger>
-            <HoverCardContent 
-              className="w-auto max-w-xs p-3 z-[200]" 
-              side="top" 
+            <HoverCardContent
+              className="w-auto max-w-xs p-3 z-[200]"
+              side="top"
               align="center"
               sideOffset={5}
             >
               <div className="space-y-1">
                 <p className="text-xs font-semibold text-foreground">
-                  {day.testNames.length > 1 ? 'Tests:' : 'Test:'}
+                  {allTestNames.length > 1 ? 'Tests:' : 'Test:'}
                 </p>
                 <div className="text-xs text-muted-foreground space-y-0.5">
-                  {day.testNames.map((testName, idx) => (
+                  {allTestNames.map((testName, idx) => (
                     <div key={idx}>• {testName}</div>
                   ))}
                 </div>
@@ -156,8 +194,8 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
             </HoverCardContent>
           </HoverCard>
         )}
-        
-        {day.eventNames && day.eventNames.length > 0 && (
+
+        {allEventNames.length > 0 && (
           <HoverCard openDelay={100}>
             <HoverCardTrigger asChild>
               <div className="cursor-pointer">
@@ -166,18 +204,18 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
                 </Badge>
               </div>
             </HoverCardTrigger>
-            <HoverCardContent 
-              className="w-auto max-w-xs p-3 z-[200]" 
-              side="top" 
+            <HoverCardContent
+              className="w-auto max-w-xs p-3 z-[200]"
+              side="top"
               align="center"
               sideOffset={5}
             >
               <div className="space-y-1">
                 <p className="text-xs font-semibold text-foreground">
-                  {day.eventNames.length > 1 ? 'Events:' : 'Event:'}
+                  {allEventNames.length > 1 ? 'Events:' : 'Event:'}
                 </p>
                 <div className="text-xs text-muted-foreground space-y-0.5">
-                  {day.eventNames.map((eventName, idx) => (
+                  {allEventNames.map((eventName, idx) => (
                     <div key={idx}>• {eventName}</div>
                   ))}
                 </div>
@@ -210,10 +248,10 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
         {generateGridLines()}
         
         {/* Intensity column */}
-        <div 
+        <div
           className={`absolute bottom-0 w-full rounded-t transition-all duration-300 border-2 z-20 ${getIntensityColor(intensity)} ${
-            day.isTestDay ? 'border-blue-400' :
-            day.isEventDay ? 'border-orange-400' : 'border-transparent'
+            hasTests ? 'border-amber-400' :
+            hasEvents ? 'border-blue-400' : 'border-transparent'
           }`}
           style={{ height: `${actualHeight}px` }}
         />

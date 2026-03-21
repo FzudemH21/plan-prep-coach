@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -28,7 +27,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { ArrowLeft, Plus, Search, Edit2, Trash2, Download, Upload, ArrowUpDown, ArrowUp, ArrowDown, Filter, X } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Download, Upload, ArrowUpDown, ArrowUp, ArrowDown, Filter, X } from 'lucide-react';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useToast } from '@/hooks/use-toast';
@@ -40,7 +39,6 @@ type SortColumn = 'category' | 'parameter';
 type SortDirection = 'asc' | 'desc';
 
 export default function AthleticismDatabaseV2() {
-  const navigate = useNavigate();
   const { toast } = useToast();
   const {
     data,
@@ -250,13 +248,10 @@ export default function AthleticismDatabaseV2() {
       <div className="border-b bg-card">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/templates')}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
             <div>
-              <h1 className="text-xl font-semibold">Athleticism Database (v2)</h1>
+              <h1 className="text-xl font-semibold">Parameter Database</h1>
               <p className="text-sm text-muted-foreground">
-                Unified parameters with interactions and training methods
+                Parameters with interactions and training methods
               </p>
             </div>
           </div>

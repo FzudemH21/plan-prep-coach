@@ -35,6 +35,8 @@ import { useToolboxData } from "@/hooks/useToolboxData";
 import { AlertTriangle, ArrowLeft } from "lucide-react";
 import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
+import { useCalendarEvents } from "@/hooks/useCalendarEvents";
+import { TEST_COLOR, EVENT_COLOR, testEventGradient } from "@/lib/eventColors";
 
 // Type for manually added methods with rationale
 interface ManuallyAddedMethod {
@@ -49,6 +51,7 @@ export default function MacrocyclePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { saveCurrentSession, getProgram } = useTrainingPrograms();
+  const { getEventsForDate } = useCalendarEvents();
   const { data: parametersDataV2, addParameter: addAthleticismParameter, addInteraction: addParameterInteraction } = useParametersDataV2();
   const { data: toolboxData } = useToolboxData();
   const { athletes, groups, getAthletePerformanceParameters, addPerformanceParameter, getAthleteBiometrics, biometricDefinitions, getAthleteCalendarAssignments } = useAthletes();
@@ -1843,32 +1846,47 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                       const isMiddleDate = planDuration.startDate && planDuration.endDate &&
                         date > planDuration.startDate && date < planDuration.endDate;
 
-                      // Unified visual system:
-                      // Green squares = start/end, Orange squares = any tests, Circles = any events
-                      // Athlete existing tests/events look the same as own tests/events
-                      const hasAnyTests = scheduledSubGoalTests.length > 0 || scheduledSmartGoalTests.length > 0 || athleteExistingTestsOnDay.length > 0;
-                      const hasAnyEvents = scheduledEvents.length > 0 || athleteExistingEventsOnDay.length > 0;
-                      let dateStyle = '';
+                      // Combine both sources: plan-state tests/events + calendarEvents hook (athlete-bound)
+                      const hasPlanTests = scheduledSubGoalTests.length > 0 || scheduledSmartGoalTests.length > 0 || athleteExistingTestsOnDay.length > 0;
+                      const hasPlanEvents = scheduledEvents.length > 0 || athleteExistingEventsOnDay.length > 0;
+                      const hookItems = selectedAthleteId ? getEventsForDate(selectedAthleteId, dateStr) : [];
+                      const hasHookTests = hookItems.some(e => e.type === 'test');
+                      const hasHookEvents = hookItems.some(e => e.type === 'event');
+
+                      // Unified: treat both sources equally
+                      const hasAnyTests = hasPlanTests || hasHookTests;
+                      const hasAnyEvents = hasPlanEvents || hasHookEvents;
+
+                      // Circle style — same amber/blue for both sources
+                      let circleClass = '';
+                      let circleInlineStyle: React.CSSProperties | undefined;
                       if (hasAnyTests && hasAnyEvents) {
-                        // Tests + events on same day - orange square (tests take priority in shape)
-                        dateStyle = 'bg-orange-500 text-white font-bold rounded-[4px]';
+                        circleClass = 'rounded-full text-white font-bold';
+                        circleInlineStyle = { background: testEventGradient() };
                       } else if (hasAnyTests) {
-                        // Tests only - orange square
-                        dateStyle = 'bg-orange-500 text-white font-bold rounded-[4px]';
+                        circleClass = 'rounded-full text-white font-bold';
+                        circleInlineStyle = { background: TEST_COLOR };
                       } else if (hasAnyEvents) {
-                        // Events only - orange circle
-                        dateStyle = 'bg-orange-500 text-white rounded-full font-bold';
-                      } else if (isStartDate || isEndDate) {
-                        dateStyle = 'bg-[hsl(142_76%_36%)] text-white font-bold rounded-[4px]';
-                      } else if (isMiddleDate) {
-                        dateStyle = 'bg-muted text-foreground';
+                        circleClass = 'rounded-full text-white font-bold';
+                        circleInlineStyle = { background: EVENT_COLOR };
+                      }
+
+                      // Start/end/middle styles only apply when no test/event circle
+                      let dateStyle = '';
+                      if (!circleInlineStyle) {
+                        if (isStartDate || isEndDate) {
+                          dateStyle = 'bg-[hsl(142_76%_36%)] text-white font-bold rounded-[4px]';
+                        } else if (isMiddleDate) {
+                          dateStyle = 'bg-muted text-foreground';
+                        }
                       }
 
                       const dayContent = (
-                        <button 
+                        <button
                           {...dayProps}
                           onClick={handleClick}
-                          className={`relative h-9 w-9 p-0 font-normal flex items-center justify-center ${dateStyle} ${dayProps.className || ''}`}
+                          className={`relative h-9 w-9 p-0 font-normal flex items-center justify-center ${dateStyle} ${circleClass} ${dayProps.className || ''}`}
+                          style={circleInlineStyle}
                         >
                           <span>
                             {date.getDate()}

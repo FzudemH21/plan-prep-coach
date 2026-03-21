@@ -13,6 +13,7 @@ import { useTrainingPrograms, TrainingProgram } from '@/hooks/useTrainingProgram
 import { useAthletes } from '@/hooks/useAthletes';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useAthleteCalendarEditing } from '@/hooks/useAthleteCalendarEditing';
+import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import {
   shiftExerciseDates,
   shiftDailyIntensityDates,
@@ -120,6 +121,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   const athleteData = useAthletes();
   const { data: toolboxData } = useToolboxData();
   const { toast } = useToast();
+  const { addEvent: addCalendarEvent } = useCalendarEvents();
 
   const assignments = useMemo(() => {
     return athleteData.getAthleteCalendarAssignments(athlete.id);
@@ -691,7 +693,31 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           };
           
           localStorage.setItem(storageKey, JSON.stringify(dataToSave));
-          
+
+          // Transfer tests & events to calendarEvents (one entry per scheduled date)
+          (assignment.reviewedSubGoals || []).forEach(sg => {
+            sg.scheduledDates.forEach(d => {
+              addCalendarEvent(athlete.id, {
+                type: 'test',
+                title: sg.testMethod,
+                date: format(new Date(d), 'yyyy-MM-dd'),
+                parameterId: sg.parameterLinkedId || undefined,
+                targetValue: sg.goalValue ? String(sg.goalValue) : undefined,
+                notes: sg.comments || undefined,
+              });
+            });
+          });
+          (assignment.reviewedEvents || []).forEach(evt => {
+            evt.scheduledDates.forEach(d => {
+              addCalendarEvent(athlete.id, {
+                type: 'event',
+                title: evt.name,
+                date: format(new Date(d), 'yyyy-MM-dd'),
+                notes: evt.comments || undefined,
+              });
+            });
+          });
+
           // Update cache immediately
           setAssignmentDataCache(prev => ({
             ...prev,
@@ -712,7 +738,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
 
     setShowAssignDialog(false);
     setSelectedDate(null);
-  }, [athlete.id, athleteData, getProgram]);
+  }, [athlete.id, athleteData, getProgram, addCalendarEvent]);
 
   const handleDeleteAssignment = () => {
     if (deleteAssignment) {

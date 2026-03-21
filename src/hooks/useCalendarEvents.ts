@@ -6,6 +6,8 @@ export interface CalendarEvent {
   type: 'test' | 'event';
   title: string;
   notes?: string;
+  parameterId?: string;  // Links to ParameterV2.id in Parameter Database
+  targetValue?: string;  // Goal value for the test (stored); baseline is loaded live from athlete profile
 }
 
 type CalendarEventsStore = Record<string, CalendarEvent[]>;

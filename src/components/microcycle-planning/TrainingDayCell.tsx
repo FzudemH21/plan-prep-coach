@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/hover-card';
 import { CalendarEventDialog } from '@/components/shared/CalendarEventDialog';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
+import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { AthletePerformanceParameter } from '@/types/athlete';
 
 interface ExerciseDistribution {
@@ -128,6 +129,8 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
 
   // New independent tests/events storage
   const { getEventsForDate, addEvent, deleteEvent } = useCalendarEvents();
+  const { data: parametersData } = useParametersDataV2();
+  const parameters = parametersData?.parameters ?? [];
   // Use a stable athlete key: when no athlete is selected we use a fixed
   // per-program key derived from the day's mesocycleId so tests persist
   const eventsAthleteKey = selectedAthleteId || `program-${day.trainingDay?.mesocycleId || 'default'}`;
@@ -148,11 +151,13 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
   // Get primary method name (first method from first session)
   const primaryMethod = day.sessions[0]?.methods[0]?.split(' - ')[0] || '';
 
-  // Compute display label with fallback
-  const displayLabel =
-    calendarTests[0]?.title ??
-    calendarEventItems[0]?.title ??
-    (isTestDay ? 'Test' : isEventDay ? 'Event' : '');
+  // Compute display label with fallback — use live parameterId lookup for tests
+  const firstTest = calendarTests[0];
+  const displayLabel = firstTest
+    ? (firstTest.parameterId
+        ? (parameters.find(p => p.id === firstTest.parameterId)?.name ?? firstTest.title)
+        : firstTest.title)
+    : calendarEventItems[0]?.title ?? (isTestDay ? 'Test' : isEventDay ? 'Event' : '');
 
   return (
     <>
@@ -163,8 +168,15 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
         "min-h-[140px] border rounded-lg p-3 transition-all relative",
         day.isCurrentMonth ? "bg-card" : "bg-muted/30",
         !hasTraining && "cursor-default",
-        isSpecialDay && "border-red-500 border-2"
+        isTestDay && !isEventDay && "border-2 border-amber-500",
+        !isTestDay && isEventDay && "border-2 border-blue-500",
       )}
+      style={isTestDay && isEventDay ? {
+        border: '2px solid transparent',
+        backgroundImage: 'linear-gradient(hsl(var(--card)), hsl(var(--card))), linear-gradient(to right, #f59e0b 50%, #3b82f6 50%)',
+        backgroundOrigin: 'padding-box, border-box',
+        backgroundClip: 'padding-box, border-box',
+      } : undefined}
     >
 
       {/* Day Number + Test/Event Name */}
@@ -255,14 +267,22 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
                     {calendarTests.length > 1 ? 'Tests:' : 'Test:'}
                   </p>
                   <div className="text-xs text-muted-foreground space-y-0.5">
-                    {calendarTests.map(ev => (
-                      <div key={ev.id}>
-                        • {ev.title}
-                        {ev.notes && (
-                          <span className="ml-1 text-muted-foreground/70">({ev.notes})</span>
-                        )}
-                      </div>
-                    ))}
+                    {calendarTests.map(ev => {
+                      const displayName = ev.parameterId
+                        ? (parameters.find(p => p.id === ev.parameterId)?.name ?? ev.title)
+                        : ev.title;
+                      return (
+                        <div key={ev.id}>
+                          • {displayName}
+                          {ev.targetValue && (
+                            <span className="ml-1 text-muted-foreground/70">→ {ev.targetValue}</span>
+                          )}
+                          {ev.notes && (
+                            <span className="ml-1 text-muted-foreground/70">({ev.notes})</span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </HoverCardContent>
@@ -634,12 +654,13 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
         onOpenChange={setCalendarEventDialogOpen}
         date={day.dateString}
         events={calendarEvents}
-        onAdd={(type, title, notes) => {
-          addEvent(eventsAthleteKey, { date: day.dateString, type, title, notes });
+        onAdd={(type, title, notes, parameterId, targetValue) => {
+          addEvent(eventsAthleteKey, { date: day.dateString, type, title, notes, parameterId, targetValue });
         }}
         onDelete={(eventId) => {
           deleteEvent(eventsAthleteKey, eventId);
         }}
+        athletePerformanceParameters={athletePerformanceParameters}
       />
     </>
   );

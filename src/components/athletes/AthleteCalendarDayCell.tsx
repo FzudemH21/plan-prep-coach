@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/hover-card';
 import { CalendarEventDialog } from '@/components/shared/CalendarEventDialog';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
+import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { ExerciseDistribution } from '@/types/microcycle-planning';
 import { AthletePerformanceParameter } from '@/types/athlete';
 
@@ -109,6 +110,8 @@ export function AthleteCalendarDayCell({
 
   // New independent tests/events storage
   const { getEventsForDate, addEvent, deleteEvent } = useCalendarEvents();
+  const { data: parametersData } = useParametersDataV2();
+  const parameters = parametersData?.parameters ?? [];
   const calendarEvents = athleteId
     ? getEventsForDate(athleteId, day.dateString)
     : [];
@@ -128,8 +131,15 @@ export function AthleteCalendarDayCell({
           "min-h-[140px] border rounded-lg p-2 transition-all relative group/day overflow-hidden",
           "bg-card",
           !hasTraining && "cursor-default",
-          isSpecialDay && "border-red-500 border-2"
+          isTestDay && !isEventDay && "border-2 border-amber-500",
+          !isTestDay && isEventDay && "border-2 border-blue-500",
         )}
+        style={isTestDay && isEventDay ? {
+          border: '2px solid transparent',
+          backgroundImage: 'linear-gradient(hsl(var(--card)), hsl(var(--card))), linear-gradient(to right, #f59e0b 50%, #3b82f6 50%)',
+          backgroundOrigin: 'padding-box, border-box',
+          backgroundClip: 'padding-box, border-box',
+        } : undefined}
       >
         {/* Day Number + Status Icons */}
         <div className="flex items-start justify-between mb-2">
@@ -214,14 +224,23 @@ export function AthleteCalendarDayCell({
                       {calendarTests.length > 1 ? 'Tests:' : 'Test:'}
                     </p>
                     <div className="text-xs text-muted-foreground space-y-0.5">
-                      {calendarTests.map(ev => (
-                        <div key={ev.id}>
-                          • {ev.title}
-                          {ev.notes && (
-                            <span className="ml-1 text-muted-foreground/70">({ev.notes})</span>
-                          )}
-                        </div>
-                      ))}
+                      {calendarTests.map(ev => {
+                        const param = ev.parameterId ? parameters.find(p => p.id === ev.parameterId) : undefined;
+                        const displayName = param?.name ?? ev.title;
+                        return (
+                          <div key={ev.id}>
+                            • {displayName}
+                            {ev.targetValue && (
+                              <span className="ml-1 text-muted-foreground/70">
+                                → {ev.targetValue}{param?.unit ? ` ${param.unit}` : ''}
+                              </span>
+                            )}
+                            {ev.notes && (
+                              <span className="ml-1 text-muted-foreground/70">({ev.notes})</span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </HoverCardContent>
@@ -541,9 +560,9 @@ export function AthleteCalendarDayCell({
         onOpenChange={setTestEventDialogOpen}
         date={day.dateString}
         events={calendarEvents}
-        onAdd={(type, title, notes) => {
+        onAdd={(type, title, notes, parameterId, targetValue) => {
           if (athleteId) {
-            addEvent(athleteId, { date: day.dateString, type, title, notes });
+            addEvent(athleteId, { date: day.dateString, type, title, notes, parameterId, targetValue });
           }
         }}
         onDelete={(eventId) => {
@@ -551,6 +570,7 @@ export function AthleteCalendarDayCell({
             deleteEvent(athleteId, eventId);
           }
         }}
+        athletePerformanceParameters={athletePerformanceParameters}
       />
     </>
   );

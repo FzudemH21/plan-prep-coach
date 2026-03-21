@@ -46,6 +46,7 @@ import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info
 import { ResourcesDialog } from "@/components/mesocycle/ResourcesDialog";
 import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
+import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 import { format, addWeeks, differenceInWeeks, addDays, differenceInDays } from "date-fns";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 import { IntensityLevel } from "@/types/training";
@@ -210,7 +211,11 @@ export default function MesocyclePage() {
   const { toast } = useToast();
   const { athletes } = useAthletes();
   const { saveCurrentSession } = useTrainingPrograms();
-  
+  const { getEventsForAthlete } = useCalendarEvents();
+  const athleteCalendarEvents = macrocycleData?.selectedAthleteId
+    ? getEventsForAthlete(macrocycleData.selectedAthleteId)
+    : [];
+
   // Resolve athlete name from selectedAthleteId
   const selectedAthlete = athletes.find(a => a.id === macrocycleData?.selectedAthleteId);
   const athleteName = selectedAthlete ? getAthleteDisplayName(selectedAthlete) : undefined;
@@ -733,86 +738,61 @@ export default function MesocyclePage() {
     dates: Date[];
   }
 
-  // Get tests in date range with their names and individual dates
+  // Get tests in date range — combines calendarEvents (athlete-bound) + plan-state (wizard-assigned)
   const getTestsInRange = (start: Date, end: Date): TestDetail[] => {
-    const testMap = new Map<string, { goal?: string; dates: Date[] }>();
-
+    const testMap = new Map<string, Date[]>();
+    const addTest = (name: string, d: Date) => {
+      const existing = testMap.get(name);
+      if (existing) existing.push(d);
+      else testMap.set(name, [d]);
+    };
+    // Source 1: calendarEvents (athlete-bound)
+    athleteCalendarEvents
+      .filter(e => e.type === 'test')
+      .forEach(e => {
+        const d = new Date(e.date);
+        if (d >= start && d <= end) addTest(e.title, d);
+      });
+    // Source 2: plan-state (wizard-assigned sub-goal tests)
     macrocycleData?.subGoals?.forEach((sg: any) => {
-      const testName = sg.testMethod || sg.description || 'Test';
+      const name = sg.testMethod || sg.description || 'Test';
       sg.testDates?.forEach((td: string) => {
-        const testDate = new Date(td);
-        if (testDate >= start && testDate <= end) {
-          const existing = testMap.get(testName);
-          if (existing) {
-            existing.dates.push(testDate);
-          } else {
-            testMap.set(testName, { goal: sg.goal, dates: [testDate] });
-          }
-        }
+        const d = new Date(td);
+        if (d >= start && d <= end) addTest(name, d);
       });
     });
-
-    // Include athlete's existing tests from calendar assignments
-    macrocycleData?.athleteExistingTests?.forEach((t: any) => {
-      const testName = t.testMethod || 'Test';
-      t.testDates?.forEach((td: string) => {
-        const testDate = new Date(td);
-        if (testDate >= start && testDate <= end) {
-          const existing = testMap.get(testName);
-          if (existing) {
-            existing.dates.push(testDate);
-          } else {
-            testMap.set(testName, { dates: [testDate] });
-          }
-        }
-      });
-    });
-
-    return Array.from(testMap.entries()).map(([name, data]) => ({
+    return Array.from(testMap.entries()).map(([name, dates]) => ({
       name,
-      goal: data.goal,
-      dates: data.dates.sort((a, b) => a.getTime() - b.getTime())
+      dates: dates.sort((a, b) => a.getTime() - b.getTime()),
     }));
   };
 
-  // Get events in date range with their names and individual dates
+  // Get events in date range — combines calendarEvents (athlete-bound) + plan-state (wizard-assigned)
   const getEventsInRange = (start: Date, end: Date): EventDetail[] => {
     const eventMap = new Map<string, Date[]>();
-
+    const addEvent = (name: string, d: Date) => {
+      const existing = eventMap.get(name);
+      if (existing) existing.push(d);
+      else eventMap.set(name, [d]);
+    };
+    // Source 1: calendarEvents (athlete-bound)
+    athleteCalendarEvents
+      .filter(e => e.type === 'event')
+      .forEach(e => {
+        const d = new Date(e.date);
+        if (d >= start && d <= end) addEvent(e.title, d);
+      });
+    // Source 2: plan-state (wizard-assigned events)
     macrocycleData?.events?.forEach((e: any) => {
-      const eventName = e.name || 'Event';
+      const name = e.name || 'Event';
       e.eventDates?.forEach((ed: string) => {
-        const eventDate = new Date(ed);
-        if (eventDate >= start && eventDate <= end) {
-          const existing = eventMap.get(eventName);
-          if (existing) {
-            existing.push(eventDate);
-          } else {
-            eventMap.set(eventName, [eventDate]);
-          }
-        }
+        const d = new Date(ed);
+        if (d >= start && d <= end) addEvent(name, d);
       });
     });
-
-    // Include athlete's existing events from calendar assignments
-    macrocycleData?.athleteExistingEvents?.forEach((e: any) => {
-      const eventName = e.name || 'Event';
-      e.eventDates?.forEach((ed: string) => {
-        const eventDate = new Date(ed);
-        if (eventDate >= start && eventDate <= end) {
-          const existing = eventMap.get(eventName);
-          if (existing) {
-            existing.push(eventDate);
-          } else {
-            eventMap.set(eventName, [eventDate]);
-          }
-        }
-      });
-    });
-
     return Array.from(eventMap.entries()).map(([name, dates]) => ({
       name,
-      dates: dates.sort((a, b) => a.getTime() - b.getTime())
+      dates: dates.sort((a, b) => a.getTime() - b.getTime()),
     }));
   };
 
@@ -1475,60 +1455,59 @@ export default function MesocyclePage() {
   };
 
   // Helper function to get tests and events scheduled within a mesocycle's date range
+  // Combines calendarEvents (athlete-bound) + plan-state (wizard-assigned smart goals, sub-goals, events)
   const getTestsAndEventsForMesocycle = useCallback((mesocycle: ExtendedMesocycle) => {
-    const tests: Array<{ name: string; date: Date; goal?: string }> = [];
-    const events: Array<{ name: string; date: Date }> = [];
-    
-    if (!macrocycleData) return { tests, events };
-    
     const mesoStart = mesocycle.startDate;
     const mesoEnd = mesocycle.endDate;
-    
-    // Get tests from sub-goals
-    if (macrocycleData.subGoals && Array.isArray(macrocycleData.subGoals)) {
-      macrocycleData.subGoals.forEach((subGoal: any) => {
-        if (subGoal.testDates && Array.isArray(subGoal.testDates)) {
-          subGoal.testDates.forEach((testDate: string) => {
-            const date = new Date(testDate);
-            if (date >= mesoStart && date <= mesoEnd) {
-              tests.push({
-                name: subGoal.test || subGoal.description || 'Test',
-                date,
-                goal: subGoal.goal
-              });
-            }
-          });
-        }
+    const testMap = new Map<string, Date[]>();
+    const eventMap = new Map<string, Date[]>();
+    const addTest = (name: string, d: Date) => {
+      const ex = testMap.get(name); if (ex) ex.push(d); else testMap.set(name, [d]);
+    };
+    const addEvent = (name: string, d: Date) => {
+      const ex = eventMap.get(name); if (ex) ex.push(d); else eventMap.set(name, [d]);
+    };
+    // Source 1: calendarEvents (athlete-bound)
+    athleteCalendarEvents.forEach(e => {
+      const d = new Date(e.date);
+      if (d >= mesoStart && d <= mesoEnd) {
+        if (e.type === 'test') addTest(e.title, d);
+        else addEvent(e.title, d);
+      }
+    });
+    // Source 2: plan-state smart goal tests (scheduled directly on a SmartGoal)
+    macrocycleData?.smartGoals?.forEach((sg: any) => {
+      const name = sg.description || 'Test';
+      sg.testDates?.forEach((td: string) => {
+        const d = new Date(td);
+        if (d >= mesoStart && d <= mesoEnd) addTest(name, d);
       });
-    }
-    
-    // Get events
-    if (macrocycleData.events && Array.isArray(macrocycleData.events)) {
-      macrocycleData.events.forEach((event: any) => {
-        if (event.eventDates && Array.isArray(event.eventDates)) {
-          event.eventDates.forEach((eventDate: string) => {
-            const date = new Date(eventDate);
-            if (date >= mesoStart && date <= mesoEnd) {
-              events.push({
-                name: event.name || 'Event',
-                date
-              });
-            }
-          });
-        } else if (event.date) {
-          const date = new Date(event.date);
-          if (date >= mesoStart && date <= mesoEnd) {
-            events.push({
-              name: event.name || 'Event',
-              date
-            });
-          }
-        }
+    });
+    // Source 3: plan-state sub-goal tests
+    macrocycleData?.subGoals?.forEach((sg: any) => {
+      const name = sg.testMethod || sg.description || 'Test';
+      sg.testDates?.forEach((td: string) => {
+        const d = new Date(td);
+        if (d >= mesoStart && d <= mesoEnd) addTest(name, d);
       });
-    }
-    
+    });
+    // Source 4: plan-state events
+    macrocycleData?.events?.forEach((e: any) => {
+      const name = e.name || 'Event';
+      e.eventDates?.forEach((ed: string) => {
+        const d = new Date(ed);
+        if (d >= mesoStart && d <= mesoEnd) addEvent(name, d);
+      });
+    });
+    // Emit one entry per (name, date) so the tooltip groups all dates correctly
+    const tests = Array.from(testMap.entries()).flatMap(([name, dates]) =>
+      dates.map(date => ({ name, date }))
+    );
+    const events = Array.from(eventMap.entries()).flatMap(([name, dates]) =>
+      dates.map(date => ({ name, date }))
+    );
     return { tests, events };
-  }, [macrocycleData]);
+  }, [athleteCalendarEvents, macrocycleData]);
 
   // Toggle method allocation for a specific mesocycle
   const toggleMethodAllocation = useCallback((methodName: string, mesocycleId: string) => {
@@ -1739,10 +1718,10 @@ export default function MesocyclePage() {
                       {(tests.length > 0 || events.length > 0) && (() => {
                         // Group tests by name
                         const groupedTests = tests.reduce((acc, test) => {
-                          if (!acc[test.name]) acc[test.name] = { goal: test.goal, dates: [] };
+                          if (!acc[test.name]) acc[test.name] = { dates: [] };
                           acc[test.name].dates.push(test.date);
                           return acc;
-                        }, {} as Record<string, { goal?: string; dates: Date[] }>);
+                        }, {} as Record<string, { dates: Date[] }>);
                         
                         // Group events by name
                         const groupedEvents = events.reduce((acc, event) => {
@@ -1768,7 +1747,7 @@ export default function MesocyclePage() {
                                       <p className="text-xs font-semibold">Tests:</p>
                                       {Object.entries(groupedTests).map(([name, data]) => (
                                         <div key={name} className="text-xs text-muted-foreground">
-                                          <div>• {data.goal ? `${data.goal}: ` : ''}{name}</div>
+                                          <div>• {name}</div>
                                           <div className="pl-2 text-[10px]">
                                             {data.dates.sort((a, b) => a.getTime() - b.getTime()).map(d => format(d, 'MMM d')).join(', ')}
                                           </div>
@@ -3327,7 +3306,7 @@ export default function MesocyclePage() {
                                                   <p className="text-xs font-semibold">Tests:</p>
                                                   {testDetails.map((test, i) => (
                                                     <div key={i} className="text-xs text-muted-foreground">
-                                                      <div>• {test.goal ? `${test.goal}: ` : ''}{test.name}</div>
+                                                      <div>• {test.name}</div>
                                                       <div className="pl-2 text-[10px]">
                                                         {test.dates.map(d => format(d, 'MMM d')).join(', ')}
                                                       </div>
@@ -4920,6 +4899,7 @@ export default function MesocyclePage() {
                               isLastDayOfMesocycle={isLastDayOfMeso}
                               intensityLevels={intensityLevels}
                               getIntensityColor={getIntensityColor}
+                              calendarEventsForDay={athleteCalendarEvents.filter(e => e.date === day.date)}
                             />
                           );
                         })}

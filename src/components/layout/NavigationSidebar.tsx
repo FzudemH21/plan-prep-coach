@@ -20,7 +20,6 @@ import {
   Dumbbell,
   Zap,
   Wrench,
-  Activity,
   Library
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -254,19 +253,6 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
             Athlete Database
           </Button>
 
-          {/* Athleticism Database - standalone */}
-          <Button
-            variant="ghost"
-            className={cn(
-              "w-full justify-start h-10",
-              isActive("/templates/athleticism") && "bg-accent text-accent-foreground font-medium"
-            )}
-            onClick={() => handleNavigate("/templates/athleticism")}
-          >
-            <Activity className="h-4 w-4 mr-2" />
-            Athleticism Database
-          </Button>
-
           {/* Training Toolbox - standalone */}
           <Button
             variant="ghost"
@@ -285,9 +271,9 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
             variant="ghost"
             className={cn(
               "w-full justify-start h-10",
-              isActive("/parameter-database") && "bg-accent text-accent-foreground font-medium"
+              isActive("/templates/athleticism") && "bg-accent text-accent-foreground font-medium"
             )}
-            onClick={() => handleNavigate("/parameter-database")}
+            onClick={() => handleNavigate("/templates/athleticism")}
           >
             <Target className="h-4 w-4 mr-2" />
             Parameter Database

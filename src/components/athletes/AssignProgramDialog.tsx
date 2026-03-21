@@ -32,7 +32,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { AlertTriangle, CalendarIcon, ChevronDown, ChevronRight, Trophy, X } from 'lucide-react';
+import { AlertTriangle, CalendarIcon, ChevronDown, ChevronRight, Plus, Trophy, X } from 'lucide-react';
 import { TrainingProgram } from '@/hooks/useTrainingPrograms';
 import { AthleteCalendarAssignment, AssignedMesocycle, AssignedMicrocycle, AthletePerformanceParameter, ReviewedSubGoal, ReviewedEvent } from '@/types/athlete';
 import { SubGoal, Event as TrainingEvent } from '@/types/training';
@@ -583,57 +583,79 @@ export function AssignProgramDialog({
                           placeholder="Notes..."
                         />
                       </div>
-                      {sg.scheduledDates.length > 0 && (
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-xs text-muted-foreground">Dates:</span>
-                          {sg.scheduledDates.map((d, di) => (
-                            <Popover key={di}>
-                              <div className="flex items-center">
-                                <PopoverTrigger asChild>
-                                  <Badge 
-                                    variant="secondary" 
-                                    className="text-xs cursor-pointer hover:bg-secondary/80 gap-1 pr-1"
-                                  >
-                                    {format(new Date(d), 'MMM d, yyyy')}
-                                  </Badge>
-                                </PopoverTrigger>
-                                <button
-                                  className="ml-0.5 p-0.5 rounded-full hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
-                                  onClick={() => {
-                                    const newDates = sg.scheduledDates.filter((_, i) => i !== di);
-                                    if (newDates.length === 0) {
-                                      setReviewedSubGoals(prev => prev.filter((_, i) => i !== idx));
-                                    } else {
-                                      const updated = [...reviewedSubGoals];
-                                      updated[idx] = { ...sg, scheduledDates: newDates };
-                                      setReviewedSubGoals(updated);
-                                    }
-                                  }}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs text-muted-foreground">Dates:</span>
+                        {sg.scheduledDates.map((d, di) => (
+                          <Popover key={di}>
+                            <div className="flex items-center">
+                              <PopoverTrigger asChild>
+                                <Badge
+                                  variant="secondary"
+                                  className="text-xs cursor-pointer hover:bg-secondary/80 gap-1 pr-1"
                                 >
-                                  <X className="h-3 w-3" />
-                                </button>
-                              </div>
-                              <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                  mode="single"
-                                  selected={new Date(d)}
-                                  onSelect={(newDate) => {
-                                    if (newDate) {
-                                      const updated = [...reviewedSubGoals];
-                                      const newDates = [...sg.scheduledDates];
-                                      newDates[di] = newDate.toISOString();
-                                      updated[idx] = { ...sg, scheduledDates: newDates };
-                                      setReviewedSubGoals(updated);
-                                    }
-                                  }}
-                                  initialFocus
-                                  className={cn("p-3 pointer-events-auto")}
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          ))}
-                        </div>
-                      )}
+                                  {format(new Date(d), 'MMM d, yyyy')}
+                                </Badge>
+                              </PopoverTrigger>
+                              <button
+                                className="ml-0.5 p-0.5 rounded-full hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
+                                onClick={() => {
+                                  const newDates = sg.scheduledDates.filter((_, i) => i !== di);
+                                  const updated = [...reviewedSubGoals];
+                                  updated[idx] = { ...sg, scheduledDates: newDates };
+                                  setReviewedSubGoals(updated);
+                                }}
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={new Date(d)}
+                                onSelect={(newDate) => {
+                                  if (newDate) {
+                                    const updated = [...reviewedSubGoals];
+                                    const newDates = [...sg.scheduledDates];
+                                    newDates[di] = newDate.toISOString();
+                                    updated[idx] = { ...sg, scheduledDates: newDates };
+                                    setReviewedSubGoals(updated);
+                                  }
+                                }}
+                                initialFocus
+                                className={cn("p-3 pointer-events-auto")}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        ))}
+                        {/* Add new date */}
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button
+                              className="p-0.5 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                              title="Add date"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              onSelect={(newDate) => {
+                                if (newDate) {
+                                  const updated = [...reviewedSubGoals];
+                                  updated[idx] = {
+                                    ...sg,
+                                    scheduledDates: [...sg.scheduledDates, newDate.toISOString()],
+                                  };
+                                  setReviewedSubGoals(updated);
+                                }
+                              }}
+                              initialFocus
+                              className={cn("p-3 pointer-events-auto")}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
                     </div>
                   ))}
                   {reviewedEvents.map((evt, idx) => (
