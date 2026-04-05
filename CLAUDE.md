@@ -178,6 +178,20 @@ Makrozyklus
 
 ---
 
+## Sessions & Kalender-Prinzip
+
+### Sessions sind Sessions
+- Es gibt keinen Unterschied zwischen "Programm-Sessions" und manuell hinzugefügten Sessions
+- Wenn ein Trainingsplan zugewiesen wird, werden die Sessions fragmentiert und als normale Kalender-Sessions übernommen
+- Ab dem Moment der Zuweisung haben alle Sessions dieselben Eigenschaften und dasselbe Verhalten, unabhängig von ihrer Herkunft
+- Bestehende Sessions werden beim Zuweisen eines Programms NIEMALS überschrieben – neue Sessions werden immer hinzugefügt
+
+### Storage-Änderungen
+- Bei jeder Änderung der Storage-Struktur immer einen Migrations-Fallback einbauen damit bestehende Daten (alte Athleten, alte Pläne) korrekt funktionieren
+- Niemals annehmen dass localStorage-Daten im neuesten Format vorliegen
+
+---
+
 ## Wichtige Hinweise für Claude Code
 - Immer erst den bestehenden Code verstehen bevor Änderungen gemacht werden
 - Bei komplexen Features: erst planen, dann implementieren

@@ -60,7 +60,8 @@ export function AssignProgramDialog({
   athletePerformanceParameters = [],
 }: AssignProgramDialogProps) {
   const { toast } = useToast();
-  
+
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [selectedProgramId, setSelectedProgramId] = useState<string>('');
   const [startDate, setStartDate] = useState<Date>(selectedDate);
   const [selectedMesocycleIds, setSelectedMesocycleIds] = useState<string[]>([]);
@@ -72,6 +73,7 @@ export function AssignProgramDialog({
   // Reset state when dialog opens/closes
   useEffect(() => {
     if (open) {
+      setCurrentStep(1);
       setStartDate(selectedDate);
       setSelectedProgramId('');
       setSelectedMesocycleIds([]);
@@ -379,18 +381,62 @@ export function AssignProgramDialog({
     return hasExercises || hasTrainingDays || hasDaySplitStates || hasDailyIntensity;
   });
 
+  const STEPS = [
+    { number: 1, label: 'Program & Date' },
+    { number: 2, label: 'Mesozyklen' },
+    { number: 3, label: 'Tests & Events' },
+  ] as const;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh]">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Assign Training Program</DialogTitle>
         </DialogHeader>
-        
-        <ScrollArea className="max-h-[calc(90vh-140px)] pr-4">
-          <div className="space-y-6 py-4">
-            {/* Step 1: Select Program */}
+
+        {/* Step indicator */}
+        <div className="flex items-center justify-center gap-0 py-2">
+          {STEPS.map((step, i) => (
+            <div key={step.number} className="flex items-center">
+              <div className="flex flex-col items-center gap-1">
+                <div
+                  className={cn(
+                    'flex items-center justify-center w-8 h-8 rounded-full text-sm font-semibold transition-colors',
+                    currentStep === step.number
+                      ? 'bg-primary text-primary-foreground'
+                      : currentStep > step.number
+                        ? 'bg-primary/20 text-primary'
+                        : 'bg-muted text-muted-foreground'
+                  )}
+                >
+                  {step.number}
+                </div>
+                <span
+                  className={cn(
+                    'text-xs whitespace-nowrap',
+                    currentStep === step.number ? 'text-foreground font-medium' : 'text-muted-foreground'
+                  )}
+                >
+                  {step.label}
+                </span>
+              </div>
+              {i < STEPS.length - 1 && (
+                <div
+                  className={cn(
+                    'h-px w-16 mb-5 mx-1 transition-colors',
+                    currentStep > step.number ? 'bg-primary' : 'bg-muted'
+                  )}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Step 1: Program & Start Date */}
+        {currentStep === 1 && (
+          <div className="space-y-5 py-2 min-h-[280px]">
             <div className="space-y-2">
-              <Label className="text-sm font-medium">1. Select Program</Label>
+              <Label className="text-sm font-medium">Program</Label>
               <Select value={selectedProgramId} onValueChange={setSelectedProgramId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Choose a training program..." />
@@ -418,9 +464,8 @@ export function AssignProgramDialog({
               </Select>
             </div>
 
-            {/* Step 2: Select Start Date */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium">2. Start Date</Label>
+              <Label className="text-sm font-medium">Start Date</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-full justify-start text-left font-normal">
@@ -434,34 +479,40 @@ export function AssignProgramDialog({
                     selected={startDate}
                     onSelect={(date) => date && setStartDate(date)}
                     initialFocus
-                    className={cn("p-3 pointer-events-auto")}
+                    className={cn('p-3 pointer-events-auto')}
                   />
                 </PopoverContent>
               </Popover>
             </div>
 
-            {/* Date Mismatch Warning */}
             {dateMismatchWarning && (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
-                  <strong>Date mismatch:</strong> This program was originally created for {dateMismatchWarning.originalStart} - {dateMismatchWarning.originalEnd} ({dateMismatchWarning.daysDiff} days difference). Dates will be shifted to match your selection.
+                  <strong>Date mismatch:</strong> This program was originally created for{' '}
+                  {dateMismatchWarning.originalStart} – {dateMismatchWarning.originalEnd}{' '}
+                  ({dateMismatchWarning.daysDiff} days difference). Dates will be shifted.
                 </AlertDescription>
               </Alert>
             )}
+          </div>
+        )}
 
-            {/* Step 3: Select Mesocycles & Microcycles */}
-            {selectedProgram && programMesocycles.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">3. Select Mesocycles & Microcycles</Label>
+        {/* Step 2: Mesocycles & Microcycles */}
+        {currentStep === 2 && (
+          <div className="py-2 min-h-[280px]">
+            {programMesocycles.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No mesocycles found in this program.</p>
+            ) : (
+              <ScrollArea className="h-[300px] pr-3">
                 <div className="border rounded-lg divide-y">
                   {programMesocycles.map(meso => {
                     const isExpanded = expandedMesocycles.includes(meso.id);
                     const isMesoSelected = selectedMesocycleIds.includes(meso.id);
-                    const selectedMicroCount = meso.microcycles.filter(mc => 
+                    const selectedMicroCount = meso.microcycles.filter(mc =>
                       selectedMicrocycleIds.includes(mc.id)
                     ).length;
-                    
+
                     return (
                       <Collapsible key={meso.id} open={isExpanded}>
                         <div className="p-3">
@@ -471,7 +522,7 @@ export function AssignProgramDialog({
                               checked={isMesoSelected}
                               onCheckedChange={() => toggleMesocycle(meso.id)}
                             />
-                            <CollapsibleTrigger 
+                            <CollapsibleTrigger
                               className="flex-1 flex items-center gap-2 hover:bg-muted/50 rounded p-1 -m-1"
                               onClick={() => toggleExpanded(meso.id)}
                             >
@@ -480,7 +531,7 @@ export function AssignProgramDialog({
                               ) : (
                                 <ChevronRight className="h-4 w-4 text-muted-foreground" />
                               )}
-                              <label 
+                              <label
                                 htmlFor={`meso-${meso.id}`}
                                 className="flex-1 text-sm font-medium cursor-pointer"
                               >
@@ -526,13 +577,21 @@ export function AssignProgramDialog({
                     );
                   })}
                 </div>
-              </div>
+              </ScrollArea>
             )}
+          </div>
+        )}
 
-            {/* Step 4: Review Tests & Events */}
-            {selectedProgram && (reviewedSubGoals.length > 0 || reviewedEvents.length > 0) && (
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">4. Review Tests & Events</Label>
+        {/* Step 3: Tests & Events */}
+        {currentStep === 3 && (
+          <div className="py-2 min-h-[280px]">
+            {reviewedSubGoals.length === 0 && reviewedEvents.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-[260px] text-center gap-2">
+                <Trophy className="h-8 w-8 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">No tests or events defined in this program.</p>
+              </div>
+            ) : (
+              <ScrollArea className="h-[300px] pr-3">
                 <div className="border rounded-lg divide-y">
                   {reviewedSubGoals.map((sg, idx) => (
                     <div key={`test-${sg.testMethod}-${sg.parameterLinkedId || idx}`} className="p-3 space-y-2">
@@ -622,12 +681,11 @@ export function AssignProgramDialog({
                                   }
                                 }}
                                 initialFocus
-                                className={cn("p-3 pointer-events-auto")}
+                                className={cn('p-3 pointer-events-auto')}
                               />
                             </PopoverContent>
                           </Popover>
                         ))}
-                        {/* Add new date */}
                         <Popover>
                           <PopoverTrigger asChild>
                             <button
@@ -651,13 +709,14 @@ export function AssignProgramDialog({
                                 }
                               }}
                               initialFocus
-                              className={cn("p-3 pointer-events-auto")}
+                              className={cn('p-3 pointer-events-auto')}
                             />
                           </PopoverContent>
                         </Popover>
                       </div>
                     </div>
                   ))}
+
                   {reviewedEvents.map((evt, idx) => (
                     <div key={`event-${evt.name}-${idx}`} className="p-3 space-y-2">
                       <div className="flex items-center gap-2">
@@ -677,106 +736,114 @@ export function AssignProgramDialog({
                           placeholder="Notes..."
                         />
                       </div>
-                      {evt.scheduledDates.length > 0 && (
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-xs text-muted-foreground">Dates:</span>
-                          {evt.scheduledDates.map((d, di) => (
-                            <Popover key={di}>
-                              <div className="flex items-center">
-                                <PopoverTrigger asChild>
-                                  <Badge 
-                                    variant="secondary" 
-                                    className="text-xs cursor-pointer hover:bg-secondary/80 gap-1 pr-1"
-                                  >
-                                    {format(new Date(d), 'MMM d, yyyy')}
-                                  </Badge>
-                                </PopoverTrigger>
-                                <button
-                                  className="ml-0.5 p-0.5 rounded-full hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
-                                  onClick={() => {
-                                    const newDates = evt.scheduledDates.filter((_, i) => i !== di);
-                                    if (newDates.length === 0) {
-                                      setReviewedEvents(prev => prev.filter((_, i) => i !== idx));
-                                    } else {
-                                      const updated = [...reviewedEvents];
-                                      updated[idx] = { ...evt, scheduledDates: newDates };
-                                      setReviewedEvents(updated);
-                                    }
-                                  }}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs text-muted-foreground">Dates:</span>
+                        {evt.scheduledDates.map((d, di) => (
+                          <Popover key={di}>
+                            <div className="flex items-center">
+                              <PopoverTrigger asChild>
+                                <Badge
+                                  variant="secondary"
+                                  className="text-xs cursor-pointer hover:bg-secondary/80 gap-1 pr-1"
                                 >
-                                  <X className="h-3 w-3" />
-                                </button>
-                              </div>
-                              <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                  mode="single"
-                                  selected={new Date(d)}
-                                  onSelect={(newDate) => {
-                                    if (newDate) {
-                                      const updated = [...reviewedEvents];
-                                      const newDates = [...evt.scheduledDates];
-                                      newDates[di] = newDate.toISOString();
-                                      updated[idx] = { ...evt, scheduledDates: newDates };
-                                      setReviewedEvents(updated);
-                                    }
-                                  }}
-                                  initialFocus
-                                  className={cn("p-3 pointer-events-auto")}
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          ))}
-                        </div>
-                      )}
+                                  {format(new Date(d), 'MMM d, yyyy')}
+                                </Badge>
+                              </PopoverTrigger>
+                              <button
+                                className="ml-0.5 p-0.5 rounded-full hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
+                                onClick={() => {
+                                  const newDates = evt.scheduledDates.filter((_, i) => i !== di);
+                                  const updated = [...reviewedEvents];
+                                  updated[idx] = { ...evt, scheduledDates: newDates };
+                                  setReviewedEvents(updated);
+                                }}
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={new Date(d)}
+                                onSelect={(newDate) => {
+                                  if (newDate) {
+                                    const updated = [...reviewedEvents];
+                                    const newDates = [...evt.scheduledDates];
+                                    newDates[di] = newDate.toISOString();
+                                    updated[idx] = { ...evt, scheduledDates: newDates };
+                                    setReviewedEvents(updated);
+                                  }
+                                }}
+                                initialFocus
+                                className={cn('p-3 pointer-events-auto')}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        ))}
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button
+                              className="p-0.5 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                              title="Add date"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              onSelect={(newDate) => {
+                                if (newDate) {
+                                  const updated = [...reviewedEvents];
+                                  updated[idx] = {
+                                    ...evt,
+                                    scheduledDates: [...evt.scheduledDates, newDate.toISOString()],
+                                  };
+                                  setReviewedEvents(updated);
+                                }
+                              }}
+                              initialFocus
+                              className={cn('p-3 pointer-events-auto')}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-
-            {/* Preview */}
-            {finalMesocycles.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Preview</Label>
-                <div className="p-4 bg-muted rounded-lg space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Program:</span>
-                    <span className="text-sm font-medium">{selectedProgram?.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Start Date:</span>
-                    <span className="text-sm font-medium">{format(startDate, 'MMM d, yyyy')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">End Date:</span>
-                    <span className="text-sm font-medium">{format(endDate, 'MMM d, yyyy')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Duration:</span>
-                    <span className="text-sm font-medium">
-                      {finalMesocycles.reduce((sum, m) => sum + m.duration, 0)} days
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Mesocycles:</span>
-                    <span className="text-sm font-medium">{finalMesocycles.length}</span>
-                  </div>
-                </div>
-              </div>
+              </ScrollArea>
             )}
           </div>
-        </ScrollArea>
+        )}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleAssign}
-            disabled={!selectedProgram || finalMesocycles.length === 0}
-          >
-            Assign Program
-          </Button>
+        <DialogFooter className="gap-2">
+          {/* Left side: Cancel (step 1) or Back (steps 2–3) */}
+          {currentStep === 1 ? (
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={() => setCurrentStep((s) => (s - 1) as 1 | 2 | 3)}>
+              Back
+            </Button>
+          )}
+
+          {/* Right side: Next or Assign */}
+          {currentStep < 3 ? (
+            <Button
+              onClick={() => setCurrentStep((s) => (s + 1) as 1 | 2 | 3)}
+              disabled={currentStep === 1 ? !selectedProgramId : finalMesocycles.length === 0}
+            >
+              Next
+            </Button>
+          ) : (
+            <Button
+              onClick={handleAssign}
+              disabled={!selectedProgram || finalMesocycles.length === 0}
+            >
+              Assign Program
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

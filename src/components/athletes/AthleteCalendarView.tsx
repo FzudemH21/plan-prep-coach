@@ -141,28 +141,32 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     
     const cache: Record<string, any> = {};
     let hasNewData = false;
-    
+
     assignments.forEach(assignment => {
       // Check if already cached
       if (assignmentDataCache[assignment.id]) {
         cache[assignment.id] = assignmentDataCache[assignment.id];
         return;
       }
-      
+
+      // New assignment ID not yet in cache — mark as new regardless of localStorage
+      hasNewData = true;
+
       const storageKey = `athlete-assignment-${assignment.id}`;
       try {
         const savedData = localStorage.getItem(storageKey);
         if (savedData) {
           cache[assignment.id] = JSON.parse(savedData);
-          hasNewData = true;
         }
       } catch (e) {
         // Ignore parse errors
       }
     });
-    
+
+    console.log('[CACHE-EFFECT] assignments:', assignments.map(a => a.id), '| cache keys:', Object.keys(cache), '| hasNewData:', hasNewData);
     // Only update if we found new data
     if (hasNewData || Object.keys(cache).length !== Object.keys(assignmentDataCache).length) {
+      console.log('[CACHE-EFFECT] updating cache');
       setAssignmentDataCache(cache);
     }
   }, [assignments]); // intentionally exclude assignmentDataCache to prevent infinite loop
@@ -176,6 +180,65 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
 
   // Use the editing hook for master planner functionality
   const editing = useAthleteCalendarEditing(selectedAssignmentId, assignments);
+
+  // Wrapper: clear day in editing state AND patch assignmentDataCache so non-selected
+  // assignment rendering (cache path) immediately reflects the cleared state.
+  const handleClearDay = useCallback((dayDate: string) => {
+    editing.handleClearDay(dayDate);
+    if (!selectedAssignmentId) return;
+    setAssignmentDataCache(prev => {
+      const current = prev[selectedAssignmentId];
+      if (!current) return prev;
+      return {
+        ...prev,
+        [selectedAssignmentId]: {
+          ...current,
+          daySplitStates: { ...(current.daySplitStates || {}), [dayDate]: 0 },
+          trainingDays: (current.trainingDays || []).map((d: any) =>
+            d.date === dayDate
+              ? { ...d, sessions: 0, sessionNames: [], testNames: [], eventNames: [], isTestDay: false, isEventDay: false }
+              : d
+          ),
+          exerciseDistribution: (current.exerciseDistribution || []).filter((ex: any) => ex.dayDate !== dayDate),
+          sessionSections: (current.sessionSections || []).filter((s: any) => s.dayDate !== dayDate),
+        },
+      };
+    });
+  }, [editing.handleClearDay, selectedAssignmentId]);
+
+  // Wrapper: clear week in editing state AND patch assignmentDataCache.
+  const handleClearWeek = useCallback((weekStartDate: string) => {
+    editing.handleClearWeek(weekStartDate);
+    if (!selectedAssignmentId) return;
+    const [cy, cm, cd] = weekStartDate.split('-').map(Number);
+    const startDateVal = new Date(cy, cm - 1, cd);
+    const weekDates: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(startDateVal);
+      d.setDate(d.getDate() + i);
+      weekDates.push(format(d, 'yyyy-MM-dd'));
+    }
+    setAssignmentDataCache(prev => {
+      const current = prev[selectedAssignmentId];
+      if (!current) return prev;
+      const clearedSplitStates = { ...(current.daySplitStates || {}) };
+      weekDates.forEach(date => { clearedSplitStates[date] = 0; });
+      return {
+        ...prev,
+        [selectedAssignmentId]: {
+          ...current,
+          daySplitStates: clearedSplitStates,
+          trainingDays: (current.trainingDays || []).map((d: any) =>
+            weekDates.includes(d.date)
+              ? { ...d, sessions: 0, sessionNames: [], testNames: [], eventNames: [], isTestDay: false, isEventDay: false }
+              : d
+          ),
+          exerciseDistribution: (current.exerciseDistribution || []).filter((ex: any) => !weekDates.includes(ex.dayDate)),
+          sessionSections: (current.sessionSections || []).filter((s: any) => !weekDates.includes(s.dayDate)),
+        },
+      };
+    });
+  }, [editing.handleClearWeek, selectedAssignmentId]);
 
   // Build mesocycle from assignment for MasterPlannerGrid
   const currentMesocycleFromAssignment = useMemo(() => {
@@ -258,10 +321,15 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             dayIntensity = liveDayIntensity.intensity as IntensityLevel;
           }
 
-          // FIX: Use actual splitState value - 0 means no sessions (cleared day)
-          const numSessions = liveSplitState ?? 0;
-          if (numSessions > 0 || hasLiveExercises) {
-            const sessionCount = numSessions > 0 ? numSessions : 1;
+          // FIX: Use actual splitState value - 0 means cleared day.
+          // Fall back to liveTrainingDay.sessions when daySplitStates hasn't been initialised yet.
+          const numSessions = liveSplitState ?? liveTrainingDay?.sessions ?? 0;
+          // Suppress ghost sessions: if dailyIntensityData says 'off' and there are no
+          // actual exercises, the day is a rest day – regardless of what daySplitStates
+          // says (can be corrupted to 1 by the fallback merge path).
+          const effectiveNumSessions = dayIntensity === 'off' && !hasLiveExercises ? 0 : numSessions;
+          if (effectiveNumSessions > 0 || hasLiveExercises) {
+            const sessionCount = effectiveNumSessions > 0 ? effectiveNumSessions : 1;
             for (let sessionIdx = 0; sessionIdx < sessionCount; sessionIdx++) {
               const sessionId = `${selectedAssignmentId}-${dateString}-${sessionIdx}`;
               const sessionName = liveTrainingDay?.sessionNames?.[sessionIdx] || `Session ${sessionIdx + 1}`;
@@ -285,15 +353,19 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         }
       }
 
-      // If not using live editing state, fall back to assignment range filtering
-      if (!usedLiveEditingState) {
-        // Find assignments that overlap with this date
+      // Always render cached assignments for non-selected assignments.
+      // The live editing path above only handles selectedAssignmentId.
+      // Skip selectedAssignmentId here only if live editing already handled it —
+      // otherwise (usedLiveEditingState=false) it still needs to run through this path.
+      {
         const dayAssignments = assignments.filter(assignment => {
+          if (assignment.id === selectedAssignmentId && usedLiveEditingState) return false;
           const assignmentStart = new Date(assignment.startDate);
           const assignmentEnd = new Date(assignment.endDate);
           return isWithinInterval(date, { start: assignmentStart, end: assignmentEnd });
         });
 
+        if (dayAssignments.length > 0) console.log('[RENDER-RANGE]', dateString, 'assignments covering date:', dayAssignments.map(a => a.id.slice(-6) + '(' + a.programName + ')'));
         dayAssignments.forEach(assignment => {
           assignmentId = assignment.id;
           programName = assignment.programName;
@@ -317,7 +389,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             }
 
             const hasExercises = liveExercises.length > 0;
-            const numSessions = liveSplitState ?? 0;
+            const numSessions = liveSplitState ?? liveTrainingDay?.sessions ?? 0;
             const isTrainingDay = hasExercises || numSessions > 0;
 
             if (isTrainingDay) {
@@ -359,7 +431,9 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             }
 
             const hasExercises = cachedData?.exerciseDistribution?.some((ex: any) => ex.dayDate === dateString);
-            const isTrainingDay = hasExercises || trainingDay?.isTrainingDay;
+            const splitState = cachedData?.daySplitStates?.[dateString];
+            const isTrainingDay = hasExercises || trainingDay?.isTrainingDay || (splitState !== undefined && splitState > 0);
+            if (dateString <= '2025-12-31') console.log('[RENDER-CACHE]', dateString, 'assignId:', assignment.id.slice(-6), '| cachedData?', !!cachedData, '| splitState:', splitState, '| trainingDay?', !!trainingDay, '| hasExercises:', hasExercises, '| isTrainingDay:', isTrainingDay);
 
             if (isTrainingDay) {
               for (let sessionIdx = 0; sessionIdx < numSessions; sessionIdx++) {
@@ -532,11 +606,20 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   }, [editing]);
 
   const handleAssignProgram = useCallback((assignment: Omit<AthleteCalendarAssignment, 'id' | 'createdAt'>) => {
-    // Create the assignment and get the new ID
-    const newAssignment = athleteData.createCalendarAssignment(athlete.id, assignment);
-    
-    // Copy program workout data with shifted dates
-    if (newAssignment && assignment.programId) {
+    console.log('[ASSIGN] handleAssignProgram called, programId:', assignment.programId, 'startDate:', assignment.startDate, 'endDate:', assignment.endDate, 'assignedMesocycles:', assignment.assignedMesocycles?.length);
+
+    // When an assignment is already active, merge program sessions into it instead of
+    // creating a separate assignment. This keeps all sessions equal regardless of origin.
+    const mergeIntoExisting = !!selectedAssignmentId;
+
+    // Create the assignment record only when there is no existing assignment to merge into
+    const newAssignment = mergeIntoExisting
+      ? null
+      : athleteData.createCalendarAssignment(athlete.id, assignment);
+    console.log('[ASSIGN] mergeIntoExisting:', mergeIntoExisting, '| newAssignment:', newAssignment?.id ?? 'none');
+
+    // Process program workout data with shifted dates
+    if ((mergeIntoExisting || newAssignment) && assignment.programId) {
       // Read directly from localStorage to ensure we get latest data (bypasses stale React state)
       let program: TrainingProgram | null = null;
       try {
@@ -555,21 +638,30 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
       }
       
       if (program) {
-        // Compute a robust originalStartDate from the earliest valid date in program data
+        // Compute a robust originalStartDate from the earliest valid date in SELECTED mesocycles' data.
+        // Filter by selectedMesocycleIds so that assigning only meso 2 anchors the shift to meso 2's
+        // own start, not the whole program's start. Without this, sessions land at
+        // D2 + meso2_offset_within_program instead of D2.
         // Order of precedence: trainingDays > exerciseDistribution > dailyIntensityData > duration.startDate
         let originalStartDate: Date | null = null;
-        
-        // Try trainingDays first
+
+        const selectedMesoIdsForOrigin = new Set(assignment.selectedMesocycleIds || []);
+
+        // Try trainingDays first (filtered to selected mesocycles when IDs are available)
         if (program.trainingDays && Array.isArray(program.trainingDays) && program.trainingDays.length > 0) {
-          const validDates = program.trainingDays
+          const relevantDays = selectedMesoIdsForOrigin.size > 0
+            ? program.trainingDays.filter((d: any) => !d.mesocycleId || selectedMesoIdsForOrigin.has(d.mesocycleId))
+            : program.trainingDays;
+          const source = relevantDays.length > 0 ? relevantDays : program.trainingDays;
+          const validDates = source
             .map((d: any) => new Date(d.date))
             .filter((d: Date) => !isNaN(d.getTime()));
           if (validDates.length > 0) {
             originalStartDate = new Date(Math.min(...validDates.map(d => d.getTime())));
           }
         }
-        
-        // Try exerciseDistribution
+
+        // Try exerciseDistribution (no mesocycleId on exercises; validDates filter below handles selection)
         if (!originalStartDate && program.exerciseDistribution && program.exerciseDistribution.length > 0) {
           const validDates = program.exerciseDistribution
             .map((ex: any) => new Date(ex.dayDate))
@@ -578,10 +670,14 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             originalStartDate = new Date(Math.min(...validDates.map(d => d.getTime())));
           }
         }
-        
-        // Try dailyIntensityData
+
+        // Try dailyIntensityData (filtered to selected mesocycles when IDs are available)
         if (!originalStartDate && program.dailyIntensityData && program.dailyIntensityData.length > 0) {
-          const validDates = program.dailyIntensityData
+          const relevantIntensity = selectedMesoIdsForOrigin.size > 0
+            ? program.dailyIntensityData.filter((di: any) => !di.mesocycleId || selectedMesoIdsForOrigin.has(di.mesocycleId))
+            : program.dailyIntensityData;
+          const source = relevantIntensity.length > 0 ? relevantIntensity : program.dailyIntensityData;
+          const validDates = source
             .map((di: any) => new Date(di.date))
             .filter((d: Date) => !isNaN(d.getTime()));
           if (validDates.length > 0) {
@@ -677,55 +773,207 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             normalizedOriginalStart,
             normalizedNewStart
           );
-          
-          // Save shifted data to localStorage
-          const storageKey = `athlete-assignment-${newAssignment.id}`;
-          const dataToSave = {
-            exerciseDistribution: shiftedExercises,
-            sessionSections: shiftedSections,
-            supersets: shiftedSupersets,
-            parameterValues: program.parameterValues || {},
-            dailyIntensity: shiftedDailyIntensity,
-            trainingDays: shiftedTrainingDays,
-            daySplitStates: shiftedDaySplitStates,
-            copiedFromProgram: program.id,
-            copiedAt: new Date().toISOString(),
-          };
-          
-          localStorage.setItem(storageKey, JSON.stringify(dataToSave));
+
+          // Build validDates by filtering shiftedTrainingDays by selected
+          // mesocycle/microcycle IDs. Training days carry mesocycleId and
+          // microcycleId AND are shifted with the same offset as exercises —
+          // so their dates are the reliable source of truth for which dates
+          // belong to the selected mesos/micros.
+          //
+          // The previous approach (building validDates from assignedMesocycles
+          // startDate/endDate) was wrong because assignedMesocycles dates are
+          // recalculated to start from the assignment date, while exercises are
+          // shifted relative to the FULL program's earliest date. This caused a
+          // date mismatch for partial meso/micro selections.
+          const selectedMesoIds = new Set(assignment.selectedMesocycleIds || []);
+          const selectedMicroIds = new Set(assignment.selectedMicrocycleIds || []);
+
+          // A training day passes the filter when:
+          // - it has a mesocycleId that is in selectedMesoIds, OR it has no
+          //   mesocycleId (old data — include unconditionally to stay safe)
+          // - same rule for microcycleId
+          const filteredTrainingDays = shiftedTrainingDays.filter(td => {
+            const mesoOk = !td.mesocycleId || selectedMesoIds.size === 0 || selectedMesoIds.has(td.mesocycleId);
+            const microOk = !td.microcycleId || selectedMicroIds.size === 0 || selectedMicroIds.has(td.microcycleId);
+            return mesoOk && microOk;
+          });
+
+          // Build validDates from the filtered training days.
+          let validDates = new Set<string>(filteredTrainingDays.map((td: any) => td.date));
+
+          // Fallback for old programs whose training days carry no meso/micro IDs:
+          // derive valid dates from the recalculated assignedMesocycles date ranges.
+          // This path may be slightly off for partial selections but avoids data loss.
+          if (validDates.size === 0 && (assignment.assignedMesocycles || []).length > 0) {
+            console.log('[ASSIGN] No training days with meso/micro IDs found — falling back to assignedMesocycles date ranges');
+            assignment.assignedMesocycles.forEach(meso => {
+              const mesoStart = new Date(meso.startDate);
+              const mesoEnd = new Date(meso.endDate);
+              eachDayOfInterval({ start: mesoStart, end: mesoEnd }).forEach(day => {
+                validDates.add(format(day, 'yyyy-MM-dd'));
+              });
+            });
+          }
+
+          console.log('[ASSIGN] validDates size:', validDates.size, '| filteredTrainingDays:', filteredTrainingDays.length, '| sample dates:', Array.from(validDates).slice(0, 5));
+
+          // Filter all shifted data to validDates.
+          // If validDates is still empty, skip filtering (include everything).
+          const filteredExercises = validDates.size > 0
+            ? shiftedExercises.filter(ex => validDates.has(ex.dayDate))
+            : shiftedExercises;
+          const filteredSections = validDates.size > 0
+            ? shiftedSections.filter(s => validDates.has(s.dayDate))
+            : shiftedSections;
+          const filteredSupersets = validDates.size > 0
+            ? Object.fromEntries(Object.entries(shiftedSupersets).filter(([d]) => validDates.has(d)))
+            : shiftedSupersets;
+          const filteredDailyIntensity = validDates.size > 0
+            ? shiftedDailyIntensity.filter(di => validDates.has(di.date))
+            : shiftedDailyIntensity;
+          const filteredDaySplitStates = validDates.size > 0
+            ? Object.fromEntries(Object.entries(shiftedDaySplitStates).filter(([d]) => validDates.has(d)))
+            : shiftedDaySplitStates;
+
+          console.log('[ASSIGN] after filter — exercises:', filteredExercises.length, '| sections:', filteredSections.length, '| daySplitStates keys:', Object.keys(filteredDaySplitStates).length);
+
+          // Fallback: if the program had no daySplitStates or trainingDays stored,
+          // build them from the assignment's already-shifted mesocycles so the
+          // calendar can always display sessions for a non-selected assignment
+          // via the cache rendering path (which relies on these fields).
+          let finalDaySplitStates = filteredDaySplitStates;
+          let finalTrainingDays = filteredTrainingDays;
+
+          if (Object.keys(finalDaySplitStates).length === 0 && assignment.assignedMesocycles?.length > 0) {
+            const splitStates: Record<string, number> = {};
+            const trainingDaysList: any[] = [];
+
+            // Build a lookup from shiftedDailyIntensity for per-day overrides
+            const dailyIntensityLookup = new Map<string, string>();
+            shiftedDailyIntensity.forEach((di: any) => {
+              if (di.date && di.intensity) dailyIntensityLookup.set(di.date, di.intensity);
+            });
+
+            assignment.assignedMesocycles.forEach(meso => {
+              const mesoStart = new Date(meso.startDate);
+              const mesoEnd = new Date(meso.endDate);
+              const allDays = eachDayOfInterval({ start: mesoStart, end: mesoEnd });
+              let microOffset = 0;
+              (meso.microcycles || []).forEach(micro => {
+                const microIntensity = (micro.intensity || meso.intensity || 'moderate') as string;
+                for (let i = 0; i < micro.duration; i++) {
+                  const day = allDays[microOffset + i];
+                  if (!day) continue;
+                  const dateString = format(day, 'yyyy-MM-dd');
+                  // Per-day intensity overrides microcycle intensity
+                  const intensity = dailyIntensityLookup.get(dateString) || microIntensity;
+                  const numSessions = intensity === 'off' ? 0 : 1;
+                  splitStates[dateString] = numSessions;
+                  trainingDaysList.push({
+                    date: dateString,
+                    dayOfWeek: day.getDay(),
+                    dayName: format(day, 'EEEE'),
+                    mesocycleId: meso.id,
+                    microcycleId: micro.id,
+                    isTestDay: false,
+                    isEventDay: false,
+                    isTrainingDay: intensity !== 'off',
+                    intensity,
+                    sessions: numSessions,
+                    sessionNames: numSessions > 0 ? ['Session 1'] : [],
+                  });
+                }
+                microOffset += micro.duration;
+              });
+            });
+
+            finalDaySplitStates = splitStates;
+            if (finalTrainingDays.length === 0) {
+              finalTrainingDays = trainingDaysList;
+            }
+            console.log('[ASSIGN] built daySplitStates from mesocycles, keys:', Object.keys(finalDaySplitStates).length, 'sample:', Object.entries(finalDaySplitStates).slice(0, 3));
+          } else {
+            console.log('[ASSIGN] daySplitStates from program data, keys:', Object.keys(finalDaySplitStates).length);
+          }
+          console.log('[ASSIGN] finalTrainingDays.length:', finalTrainingDays.length, 'finalDaySplitStates keys:', Object.keys(finalDaySplitStates).length);
 
           // Transfer tests & events to calendarEvents (one entry per scheduled date)
-          (assignment.reviewedSubGoals || []).forEach(sg => {
-            sg.scheduledDates.forEach(d => {
-              addCalendarEvent(athlete.id, {
-                type: 'test',
-                title: sg.testMethod,
-                date: format(new Date(d), 'yyyy-MM-dd'),
-                parameterId: sg.parameterLinkedId || undefined,
-                targetValue: sg.goalValue ? String(sg.goalValue) : undefined,
-                notes: sg.comments || undefined,
+          const transferTestsEvents = () => {
+            try {
+              (assignment.reviewedSubGoals || []).forEach(sg => {
+                sg.scheduledDates.forEach(d => {
+                  addCalendarEvent(athlete.id, {
+                    type: 'test',
+                    title: sg.testMethod,
+                    date: format(new Date(d), 'yyyy-MM-dd'),
+                    parameterId: sg.parameterLinkedId || undefined,
+                    targetValue: sg.goalValue ? String(sg.goalValue) : undefined,
+                    notes: sg.comments || undefined,
+                  });
+                });
               });
-            });
-          });
-          (assignment.reviewedEvents || []).forEach(evt => {
-            evt.scheduledDates.forEach(d => {
-              addCalendarEvent(athlete.id, {
-                type: 'event',
-                title: evt.name,
-                date: format(new Date(d), 'yyyy-MM-dd'),
-                notes: evt.comments || undefined,
+              (assignment.reviewedEvents || []).forEach(evt => {
+                evt.scheduledDates.forEach(d => {
+                  addCalendarEvent(athlete.id, {
+                    type: 'event',
+                    title: evt.name,
+                    date: format(new Date(d), 'yyyy-MM-dd'),
+                    notes: evt.comments || undefined,
+                  });
+                });
               });
-            });
-          });
+            } catch (evtError) {
+              console.error('[handleAssignProgram] Error transferring tests/events:', evtError);
+            }
+          };
 
-          // Update cache immediately
-          setAssignmentDataCache(prev => ({
-            ...prev,
-            [newAssignment.id]: dataToSave,
-          }));
+          if (mergeIntoExisting) {
+            // MERGE PATH: add program sessions into the current active assignment
+            console.log('[ASSIGN] merging into existing assignment:', selectedAssignmentId);
+            editing.mergeSessionData(
+              filteredExercises,
+              filteredSections,
+              filteredSupersets,
+              finalTrainingDays,
+              finalDaySplitStates,
+              filteredDailyIntensity,
+            );
+            transferTestsEvents();
+          } else if (newAssignment) {
+            // CREATE PATH: save to new assignment key and switch to it
+            const storageKey = `athlete-assignment-${newAssignment.id}`;
+            const dataToSave = {
+              exerciseDistribution: filteredExercises,
+              sessionSections: filteredSections,
+              supersets: filteredSupersets,
+              parameterValues: program.parameterValues || {},
+              dailyIntensity: filteredDailyIntensity,
+              trainingDays: finalTrainingDays,
+              daySplitStates: finalDaySplitStates,
+              copiedFromProgram: program.id,
+              copiedAt: new Date().toISOString(),
+            };
+
+            localStorage.setItem(storageKey, JSON.stringify(dataToSave));
+            console.log('[ASSIGN] saved to localStorage key:', storageKey, '| daySplitStates keys:', Object.keys(dataToSave.daySplitStates).length, '| trainingDays:', dataToSave.trainingDays.length);
+
+            transferTestsEvents();
+
+            // Update cache immediately
+            console.log('[ASSIGN] calling setAssignmentDataCache for:', newAssignment.id);
+            setAssignmentDataCache(prev => ({
+              ...prev,
+              [newAssignment.id]: dataToSave,
+            }));
+
+            // Auto-select the new assignment so its editing state loads immediately
+            setSelectedAssignmentId(newAssignment.id);
+          }
         } catch (shiftError) {
           console.error('[handleAssignProgram] Error shifting dates:', shiftError);
-          athleteData.deleteCalendarAssignment(newAssignment.id);
+          if (newAssignment) {
+            athleteData.deleteCalendarAssignment(newAssignment.id);
+          }
           toast({
             title: "Assignment failed",
             description: "An error occurred while processing the program data. Please try again.",
@@ -738,7 +986,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
 
     setShowAssignDialog(false);
     setSelectedDate(null);
-  }, [athlete.id, athleteData, getProgram, addCalendarEvent]);
+  }, [athlete.id, athleteData, getProgram, addCalendarEvent, selectedAssignmentId, editing.mergeSessionData]);
 
   const handleDeleteAssignment = () => {
     if (deleteAssignment) {
@@ -931,7 +1179,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 onPasteSession={editing.handlePasteSession}
                 copiedSession={editing.copiedSession}
                 onCopyDay={editing.handleCopyDay}
-                onClearDay={editing.handleClearDay}
+                onClearDay={handleClearDay}
                 onPasteDay={editing.handlePasteDay}
                 copiedDay={editing.copiedDay}
                 onAddSession={editing.handleAddSession}
@@ -974,12 +1222,12 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                       // Week operations
                       copiedWeek={editing.copiedWeek}
                       onCopyWeek={editing.handleCopyWeek}
-                      onClearWeek={editing.handleClearWeek}
+                      onClearWeek={handleClearWeek}
                       onPasteWeek={editing.handlePasteWeek}
                       // Day operations
                       copiedDay={editing.copiedDay}
                       onCopyDay={editing.handleCopyDay}
-                      onClearDay={editing.handleClearDay}
+                      onClearDay={handleClearDay}
                       onPasteDay={editing.handlePasteDay}
                       // Session operations
                       copiedSession={editing.copiedSession}
@@ -1090,6 +1338,11 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             });
           }}
           dailyIntensityData={editing.dailyIntensityData}
+          sessionNameFromState={(() => {
+            const trainingDay = editing.trainingDays.find(td => td.date === selectedSessionInfo.dayDate);
+            return trainingDay?.sessionNames?.[selectedSessionInfo.sessionIndex] || `Session ${selectedSessionInfo.sessionIndex + 1}`;
+          })()}
+          onRenameSession={editing.handleSessionNameChange}
           onIntensityChange={editing.handleDayIntensityChange}
           onSessionIntensityChange={editing.handleSessionIntensityChange}
           getIntensityColor={getIntensityColor}

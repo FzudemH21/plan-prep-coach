@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Bot, FileText, Settings, Menu, FlaskConical, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { loadSeedData } from "@/utils/seedData";
+import { loadSeedData, loadDemoPlan2026, loadExerciseLibrarySeedData } from "@/utils/seedData";
 import { clearAllAppCache } from "@/utils/clearCache";
 import { NavigationSidebar } from "./NavigationSidebar";
 
@@ -27,8 +27,9 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const handleLoadSeedData = () => {
     loadSeedData();
-    toast({ title: "Demo-Plan geladen", description: "Der Demo-Trainingsplan wurde in den aktiven Plan geladen." });
-    navigate('/macrocycle');
+    loadDemoPlan2026();
+    loadExerciseLibrarySeedData();
+    toast({ title: "Demo-Daten geladen", description: "Sprint Performance Demo + Demo Plan 2026 + Exercise Library wurden geladen." });
   };
 
   const handleClearData = () => {

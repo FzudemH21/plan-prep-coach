@@ -289,6 +289,34 @@ export function AthleteCalendarDayCell({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48 z-[100]">
+                {/* Assign Program */}
+                {onDayClick && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDayClick(day.date);
+                    }}
+                  >
+                    <CalendarPlus className="mr-2 h-4 w-4" />
+                    Assign program
+                  </DropdownMenuItem>
+                )}
+
+                {/* Add Session */}
+                {onAddSession && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAddSession(day.date);
+                    }}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add session
+                  </DropdownMenuItem>
+                )}
+
+                {(onDayClick || onAddSession) && <DropdownMenuSeparator />}
+
                 {/* Copy Day */}
                 {onCopyDay && hasTraining && (
                   <DropdownMenuItem
@@ -302,6 +330,19 @@ export function AthleteCalendarDayCell({
                   </DropdownMenuItem>
                 )}
                 
+                {/* Paste Session */}
+                {onPasteSession && copiedSession && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPasteSession(day.dateString);
+                    }}
+                  >
+                    <ClipboardPaste className="mr-2 h-4 w-4" />
+                    Paste session ({copiedSession.exercises.length})
+                  </DropdownMenuItem>
+                )}
+
                 {/* Paste Day */}
                 {onPasteDay && copiedDay && (
                   <DropdownMenuItem
@@ -420,7 +461,7 @@ export function AthleteCalendarDayCell({
                                   </button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-40 z-[100]">
-                                  {onCopySession && session.exerciseCount > 0 && (
+                                  {onCopySession && (
                                     <DropdownMenuItem
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -454,6 +495,22 @@ export function AthleteCalendarDayCell({
                 ))}
                 {droppableProvided.placeholder}
             
+                {/* Paste Day Button (below existing sessions) */}
+                {copiedDay && onPasteDay && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPasteDay(day.dateString);
+                    }}
+                    className="w-full h-7 text-xs opacity-0 group-hover/day:opacity-100 transition-opacity"
+                  >
+                    <Copy className="h-3 w-3 mr-1" />
+                    Paste Day ({copiedDay.exercises.length})
+                  </Button>
+                )}
+
                 {/* Paste Session Button (below existing sessions) */}
                 {copiedSession && onPasteSession && (
                   <Button

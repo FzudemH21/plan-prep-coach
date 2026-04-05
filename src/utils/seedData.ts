@@ -1,7 +1,10 @@
-// Seed data utility – injects a complete demo training plan into localStorage.
+// Seed data utility – injects complete demo training plans into localStorage.
 // All data structures match the current app schema (macrocycleData, mesocycleData,
 // trainingDays, dailyIntensityData, sessionSections, exerciseDistribution, supersets,
 // parameterValues, methodAllocations, daySplitStates).
+//
+// loadSeedData()     → 12-week sprint plan (existing demo)
+// loadDemoPlan2026() → 4-week Demo Plan 2026 (all features: tests, events, mixed sessions)
 
 const MESO_IDS = ['demo-meso-1', 'demo-meso-2', 'demo-meso-3'] as const;
 
@@ -544,4 +547,623 @@ export function loadSeedData(): void {
   store.programs = (store.programs as { id: string }[]).filter((p) => p.id !== programId);
   store.programs.unshift(trainingProgram);
   localStorage.setItem('trainingPrograms', JSON.stringify(store));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Demo Plan 2026 – 4-week plan testing all current features:
+//   • 2 Mesocycles × 2 Weeks • Tests & Events (calendarEvents + trainingDays)
+//   • Mixed sessions (with / without exercises) • Periodization table values
+// ─────────────────────────────────────────────────────────────────────────────
+
+const D2_PROGRAM_ID = 'demo2-program-1';
+const D2_PARAM_ID   = 'demo2-param-sprint';
+const D2_ATHLETE_ID = 'demo2-athlete-1';
+
+const D2_MESO = ['demo2-meso-1', 'demo2-meso-2'] as const;
+const D2_MICRO = [
+  ['demo2-micro-1-1', 'demo2-micro-1-2'],
+  ['demo2-micro-2-1', 'demo2-micro-2-2'],
+] as const;
+
+const D2_METHODS = ['Kraft – Grundübungen', 'Sprint – Beschleunigung'] as const;
+
+const D2_MICRO_INTENSITIES: Record<string, string> = {
+  'demo2-micro-1-1': 'easy',
+  'demo2-micro-1-2': 'moderate',
+  'demo2-micro-2-1': 'hard',
+  'demo2-micro-2-2': 'deload',
+};
+
+function d2SecId(date: string, si: number, label: string): string {
+  return `d2-sec-${date}-${si}-${label}`;
+}
+
+export function loadDemoPlan2026(): void {
+  const now = new Date().toISOString();
+
+  // Plan: 4 weeks starting 2026-04-06 (Monday)
+  const planStart = new Date('2026-04-06T00:00:00.000Z');
+  const planEnd   = addDays(planStart, 27); // 28 days → ends 2026-05-03
+
+  // ── 1. Ensure demo parameter exists in parameters-database-v2 ──────────────
+  {
+    let pdb: { parameters: { id: string }[]; interactions: unknown[]; parameterMethods: unknown[]; lastUpdated: string };
+    try {
+      const raw = localStorage.getItem('parameters-database-v2');
+      pdb = raw ? JSON.parse(raw) : { parameters: [], interactions: [], parameterMethods: [], lastUpdated: now };
+    } catch {
+      pdb = { parameters: [], interactions: [], parameterMethods: [], lastUpdated: now };
+    }
+    if (!pdb.parameters.find((p) => p.id === D2_PARAM_ID)) {
+      pdb.parameters.push({ id: D2_PARAM_ID, name: '100m Sprint Zeit', unit: 's', category: 'speed', createdAt: now });
+      pdb.lastUpdated = now;
+      localStorage.setItem('parameters-database-v2', JSON.stringify(pdb));
+    }
+  }
+
+  // ── 2. Ensure demo athlete exists in athlete-database ──────────────────────
+  let athleteId = D2_ATHLETE_ID;
+  {
+    let adb: { groups: unknown[]; athletes: { id: string; isArchived?: boolean }[]; biometricDefinitions: unknown[]; athleteBiometrics: unknown[]; athletePerformanceParameters: unknown[]; calendarAssignments: unknown[] };
+    try {
+      const raw = localStorage.getItem('athlete-database');
+      adb = raw ? JSON.parse(raw) : { groups: [], athletes: [], biometricDefinitions: [], athleteBiometrics: [], athletePerformanceParameters: [], calendarAssignments: [] };
+    } catch {
+      adb = { groups: [], athletes: [], biometricDefinitions: [], athleteBiometrics: [], athletePerformanceParameters: [], calendarAssignments: [] };
+    }
+    // Use first non-archived athlete if one exists, else create demo athlete
+    const existing = adb.athletes.find((a) => !a.isArchived);
+    if (existing) {
+      athleteId = existing.id;
+    } else if (!adb.athletes.find((a) => a.id === D2_ATHLETE_ID)) {
+      adb.athletes.unshift({
+        id: D2_ATHLETE_ID,
+        firstName: 'Alex',
+        middleName: null,
+        lastName: 'Demo',
+        birthday: '2000-01-01',
+        sex: 'other',
+        sport: 'Leichtathletik',
+        occupation: null,
+        dailyActivityLevel: 'very_active',
+        groupIds: [],
+        isArchived: false,
+        createdAt: now,
+        updatedAt: now,
+        notes: 'Demo-Athlet für Plan Prep Coach',
+      });
+      localStorage.setItem('athlete-database', JSON.stringify(adb));
+    }
+  }
+
+  // ── 3. Key dates ────────────────────────────────────────────────────────────
+  const testDay1  = fmtDate(addDays(planStart, 11)); // Fri Apr 17 – end of Meso 1
+  const testDay2  = fmtDate(addDays(planStart, 25)); // Fri May 1  – end of Meso 2
+  const eventDay1 = fmtDate(addDays(planStart, 7));  // Mon Apr 13 – start of Week 2
+  const eventDay2 = fmtDate(addDays(planStart, 21)); // Mon Apr 27 – start of Week 4
+
+  // ── 4. CalendarEvents for the athlete (tests + events) ────────────────────
+  {
+    let store: Record<string, unknown[]>;
+    try {
+      const raw = localStorage.getItem('calendarEvents');
+      store = raw ? JSON.parse(raw) : {};
+    } catch {
+      store = {};
+    }
+    const existing = ((store[athleteId] || []) as { id: string }[]).filter(
+      (e) => !e.id.startsWith('demo2-ce-'),
+    );
+    store[athleteId] = [
+      ...existing,
+      { id: 'demo2-ce-test-1',  date: testDay1,  type: 'test',  title: '100m Sprint Test',      notes: 'Zwischentest nach Woche 2', parameterId: D2_PARAM_ID, targetValue: '10.5' },
+      { id: 'demo2-ce-test-2',  date: testDay2,  type: 'test',  title: '100m Sprint Test',      notes: 'Abschlusstest Woche 4',     parameterId: D2_PARAM_ID, targetValue: '10.3' },
+      { id: 'demo2-ce-event-1', date: eventDay1, type: 'event', title: 'Trainingslager Beginn', notes: '3-tägiges Intensivlager' },
+      { id: 'demo2-ce-event-2', date: eventDay2, type: 'event', title: 'Stadtmeisterschaften',  notes: 'Saisonhöhepunkt – 100m Final' },
+    ];
+    localStorage.setItem('calendarEvents', JSON.stringify(store));
+  }
+
+  // ── 5. macrocycleData ───────────────────────────────────────────────────────
+  const D2_SG1  = 'demo2-sg-1';
+  const D2_SUB1 = 'demo2-sub-1';
+
+  const macrocycleData = {
+    planName: 'Demo Plan 2026',
+    planNotes: '4-Wochen-Plan zur Demo aller aktuellen Features: Tests, Events, gemischte Sessions, Periodisierungstabelle.',
+    selectedAthleteId: athleteId,
+    planDuration: {
+      startDate: planStart.toISOString(),
+      endDate: planEnd.toISOString(),
+      totalDays: 28,
+      totalWeeks: 4,
+    },
+    smartGoals: [
+      {
+        id: D2_SG1,
+        description: '100m-Zeit auf 10.3 s verbessern (von 10.8 s in 4 Wochen)',
+        baselineValue: 10.8,
+        desiredValue: 10.3,
+        unit: 's',
+        percentChange: -4.6,
+      },
+    ],
+    smartGoal: {
+      id: D2_SG1,
+      description: '100m-Zeit auf 10.3 s verbessern',
+      baselineValue: 10.8,
+      desiredValue: 10.3,
+      unit: 's',
+      percentChange: -4.6,
+      startDate: planStart.toISOString(),
+      endDate: planEnd.toISOString(),
+      totalDays: 28,
+      totalWeeks: 4,
+    },
+    subGoals: [
+      {
+        id: D2_SUB1,
+        parentGoalId: D2_SG1,
+        description: '100m Sprint Zeit messen',
+        testMethod: '100m Sprint Test',
+        preTestValue: 10.8,
+        goalValue: 10.3,
+        unit: 's',
+        percentChange: -4.6,
+        testDates: [testDay1, testDay2],
+        comments: 'Zwischentest Woche 2, Abschlusstest Woche 4',
+        parameterLinkedId: D2_PARAM_ID,
+      },
+    ],
+    events: [
+      {
+        id: 'demo2-ev-1',
+        name: 'Trainingslager Beginn',
+        description: '3-tägiges Intensivlager',
+        eventDates: [eventDay1],
+        comments: 'Beginn Mesozyklus 1 Woche 2',
+      },
+      {
+        id: 'demo2-ev-2',
+        name: 'Stadtmeisterschaften',
+        description: 'Saisonhöhepunkt – 100m Final',
+        eventDates: [eventDay2],
+        comments: 'Letzter Wettkampf der Saison',
+      },
+    ],
+    qualities: [
+      { id: 'd2-q-1', name: 'Maximalkraft',     description: 'Maximale Kraftentfaltung',    methods: [D2_METHODS[0]] },
+      { id: 'd2-q-2', name: 'Beschleunigung',   description: 'Sprintbeschleunigung 0–30 m', methods: [D2_METHODS[1]] },
+    ],
+    qualitiesBySubGoal: {
+      [D2_SUB1]: { label: '100m Sprint Zeit messen', list: ['Maximalkraft', 'Beschleunigung'] },
+    },
+    methodsByQuality: {
+      'd2-q-1': { subGoalLabel: '100m Sprint Zeit messen', qualityName: 'Maximalkraft',   list: [D2_METHODS[0]] },
+      'd2-q-2': { subGoalLabel: '100m Sprint Zeit messen', qualityName: 'Beschleunigung', list: [D2_METHODS[1]] },
+    },
+    selectedTest: null,
+    selectedEvent: null,
+    selectedMethods: [...D2_METHODS],
+    manuallyAddedMethods: [],
+    lastUpdated: now,
+  };
+
+  // ── 6. mesocycleData ────────────────────────────────────────────────────────
+  const mesocycles = [
+    {
+      id: 'demo2-meso-1',
+      name: 'Mesozyklus 1 – Aufbau',
+      weeks: 2,
+      sessionsPerWeek: 3,
+      sessionLength: 75,
+      startDate: planStart.toISOString(),
+      endDate: addDays(planStart, 13).toISOString(),
+      duration: 2,
+      intensity: 'moderate',
+      trainingMethods: [...D2_METHODS],
+      allocatedSubGoals: [D2_SUB1],
+      trainingQualities: ['Maximalkraft', 'Beschleunigung'],
+      microcycles: [
+        { id: 'demo2-micro-1-1', name: 'Woche 1', duration: 7, intensity: 'easy' },
+        { id: 'demo2-micro-1-2', name: 'Woche 2', duration: 7, intensity: 'moderate' },
+      ],
+    },
+    {
+      id: 'demo2-meso-2',
+      name: 'Mesozyklus 2 – Peak & Deload',
+      weeks: 2,
+      sessionsPerWeek: 3,
+      sessionLength: 70,
+      startDate: addDays(planStart, 14).toISOString(),
+      endDate: planEnd.toISOString(),
+      duration: 2,
+      intensity: 'hard',
+      trainingMethods: [...D2_METHODS],
+      allocatedSubGoals: [D2_SUB1],
+      trainingQualities: ['Maximalkraft', 'Beschleunigung'],
+      microcycles: [
+        { id: 'demo2-micro-2-1', name: 'Woche 3', duration: 7, intensity: 'hard' },
+        { id: 'demo2-micro-2-2', name: 'Woche 4 (Deload)', duration: 7, intensity: 'deload' },
+      ],
+    },
+  ];
+
+  // ── 7. trainingDays + dailyIntensityData ────────────────────────────────────
+  // Session names per day-of-week: Mon = Krafttraining, Wed = Sprinttraining, Fri = varies
+  const sessionNameMap: Record<number, string[]> = {
+    0: ['Krafttraining'],      // Mon
+    2: ['Sprinttraining'],     // Wed
+    4: ['Kraft & Sprint'],     // Fri (generic for most weeks)
+  };
+  const week1FriName  = 'Auxiliary Strength';
+  const week2FriName  = '100m Sprint Test';   // test day
+  const week3FriName  = 'Speed Endurance';
+  const week4FriName  = '100m Sprint Test';   // test day
+
+  const trainingDays: unknown[] = [];
+  const dailyIntensityData: unknown[] = [];
+
+  for (let week = 0; week < 4; week++) {
+    const mesoIdx  = Math.floor(week / 2);
+    const microIdx = week % 2;
+    const mesoId   = D2_MESO[mesoIdx];
+    const microId  = D2_MICRO[mesoIdx][microIdx];
+    const microIntensity = D2_MICRO_INTENSITIES[microId];
+
+    for (let d = 0; d < 7; d++) {
+      const date    = addDays(planStart, week * 7 + d);
+      const dateStr = fmtDate(date);
+      const dow     = date.getDay();
+      const dayName = DAY_NAMES[dow];
+
+      const isTraining = dow === 1 || dow === 3 || dow === 5; // Mon/Wed/Fri
+      const intensity  = isTraining ? microIntensity : 'off';
+      const isTestDay  = dateStr === testDay1 || dateStr === testDay2;
+      const isEventDay = dateStr === eventDay1 || dateStr === eventDay2;
+
+      // Determine session name
+      let sessionNames: string[] | undefined;
+      if (isTraining) {
+        if (dow === 5) {
+          // Friday: varies by week
+          const friNames: Record<number, string> = { 0: week1FriName, 1: week2FriName, 2: week3FriName, 3: week4FriName };
+          sessionNames = [friNames[week]];
+        } else {
+          sessionNames = sessionNameMap[dow === 1 ? 0 : 2];
+        }
+      }
+
+      trainingDays.push({
+        date: dateStr,
+        dayOfWeek: dow,
+        dayName,
+        mesocycleId: mesoId,
+        microcycleId: microId,
+        isTestDay,
+        isEventDay,
+        isTrainingDay: isTraining,
+        intensity,
+        sessions: isTraining ? 1 : undefined,
+        sessionNames: sessionNames ?? undefined,
+        testNames:  isTestDay  ? ['100m Sprint Test']   : undefined,
+        eventNames: isEventDay ? (dateStr === eventDay1 ? ['Trainingslager Beginn'] : ['Stadtmeisterschaften']) : undefined,
+      });
+
+      dailyIntensityData.push({
+        date: dateStr,
+        mesocycleId: mesoId,
+        microcycleId: microId,
+        dayOfWeek: dow,
+        intensity,
+        isTestDay,
+        isEventDay,
+      });
+    }
+  }
+
+  // ── 8. daySplitStates ───────────────────────────────────────────────────────
+  const daySplitStates: Record<string, number> = {};
+  for (let week = 0; week < 4; week++) {
+    for (const d of [0, 2, 4]) { // Mon/Wed/Fri offsets from Monday
+      const dateStr = fmtDate(addDays(planStart, week * 7 + d));
+      daySplitStates[dateStr] = 1;
+    }
+  }
+
+  // ── 9. sessionSections ──────────────────────────────────────────────────────
+  // Week 1 Mon, Wed, Fri get full section structure.
+  // Remaining weeks: sections for Mon only (bare structure).
+  const sessionSections: unknown[] = [];
+
+  const addSections = (dateStr: string, si: number, isSprint: boolean) => {
+    if (isSprint) {
+      sessionSections.push(
+        { id: d2SecId(dateStr, si, 'warmup'), dayDate: dateStr, sessionIndex: si, name: 'Warm-up',   order: 0 },
+        { id: d2SecId(dateStr, si, 'sprint'), dayDate: dateStr, sessionIndex: si, name: 'Sprint',     order: 1 },
+        { id: d2SecId(dateStr, si, 'cool'),   dayDate: dateStr, sessionIndex: si, name: 'Cool-down',  order: 2 },
+      );
+    } else {
+      sessionSections.push(
+        { id: d2SecId(dateStr, si, 'warmup'), dayDate: dateStr, sessionIndex: si, name: 'Warm-up',   order: 0 },
+        { id: d2SecId(dateStr, si, 'main'),   dayDate: dateStr, sessionIndex: si, name: 'Hauptarbeit', order: 1 },
+        { id: d2SecId(dateStr, si, 'cool'),   dayDate: dateStr, sessionIndex: si, name: 'Cool-down',  order: 2 },
+      );
+    }
+  };
+
+  for (let week = 0; week < 4; week++) {
+    for (const d of [0, 2, 4]) {
+      const date    = addDays(planStart, week * 7 + d);
+      const dateStr = fmtDate(date);
+      const dow     = date.getDay();
+      const isSprint = dow === 3; // Wednesday
+      if (week === 0) {
+        // Week 1: all three training days get full sections
+        addSections(dateStr, 0, isSprint);
+      } else if (dow === 1) {
+        // Other weeks: Monday gets sections (bare structure, no exercises)
+        addSections(dateStr, 0, false);
+      }
+      // Wed/Fri of weeks 2-4: no pre-defined sections (coach fills in)
+    }
+  }
+
+  // ── 10. exerciseDistribution + supersets ────────────────────────────────────
+  // Full exercises only for Week 1 Monday & Friday to demonstrate the feature.
+  // Week 1 Wednesday and all other days: no pre-filled exercises.
+  const exerciseDistribution: unknown[] = [];
+  const supersets: Record<string, Record<string, Record<string, Record<string, string[]>>>> = {};
+
+  const d2Ex = (
+    id: string, exerciseName: string, methodId: string, categoryName: string,
+    dateStr: string, si: number, order: number, sectionId: string,
+    extras: Record<string, unknown> = {},
+  ) => {
+    exerciseDistribution.push({
+      id,
+      exerciseId: `d2-exlib-${id}`,
+      exerciseName,
+      methodId,
+      categoryName,
+      dayDate: dateStr,
+      sessionIndex: si,
+      order,
+      sectionId,
+      parameterSource: 'periodization' as const,
+      ...extras,
+    });
+  };
+
+  // ─ Week 1 Monday (2026-04-06): Krafttraining Unterkörper (WITH exercises) ─
+  const mon1 = fmtDate(planStart);
+  const secMon1Wu   = d2SecId(mon1, 0, 'warmup');
+  const secMon1Main = d2SecId(mon1, 0, 'main');
+  const secMon1Cool = d2SecId(mon1, 0, 'cool');
+  const SS_MON1 = 'd2-ss-mon1';
+
+  d2Ex('d2-e-mon1-wu1',  'Hip Mobility Circuit', 'warm-up', 'Warm-up', mon1, 0, 0, secMon1Wu, { parameterSource: 'toolbox' });
+  d2Ex('d2-e-mon1-wu2',  'Glute Activation',     'warm-up', 'Warm-up', mon1, 0, 1, secMon1Wu, { parameterSource: 'toolbox' });
+  // Superset: Back Squat + Countermovement Jump (strength–power complex)
+  d2Ex('d2-e-mon1-sq',   'Back Squat',            D2_METHODS[0], 'Kraft', mon1, 0, 0, secMon1Main, { supersetId: SS_MON1 });
+  d2Ex('d2-e-mon1-cmj',  'Countermovement Jump',  D2_METHODS[0], 'Kraft', mon1, 0, 1, secMon1Main, { supersetId: SS_MON1 });
+  d2Ex('d2-e-mon1-rdl',  'Romanian Deadlift',     D2_METHODS[0], 'Kraft', mon1, 0, 2, secMon1Main, {});
+  d2Ex('d2-e-mon1-str',  'Static Stretching',     'cool-down', 'Cool-down', mon1, 0, 0, secMon1Cool, { parameterSource: 'toolbox' });
+
+  supersets[mon1] = { '0': { [secMon1Main]: { [SS_MON1]: ['d2-e-mon1-sq', 'd2-e-mon1-cmj'] } } };
+
+  // ─ Week 1 Friday (2026-04-10): Auxiliary Strength (WITH exercises) ──────────
+  const fri1 = fmtDate(addDays(planStart, 4));
+  const secFri1Wu   = d2SecId(fri1, 0, 'warmup');
+  const secFri1Main = d2SecId(fri1, 0, 'main');
+  const secFri1Cool = d2SecId(fri1, 0, 'cool');
+
+  d2Ex('d2-e-fri1-wu1',  'Foam Rolling',        'warm-up', 'Warm-up', fri1, 0, 0, secFri1Wu, { parameterSource: 'toolbox' });
+  d2Ex('d2-e-fri1-bss',  'Bulgarian Split Squat', D2_METHODS[0], 'Kraft', fri1, 0, 0, secFri1Main, { eachSide: true });
+  d2Ex('d2-e-fri1-nhc',  'Nordic Hamstring Curl', D2_METHODS[0], 'Kraft', fri1, 0, 1, secFri1Main, {});
+  d2Ex('d2-e-fri1-acc',  '30m Beschleunigung',    D2_METHODS[1], 'Sprint', fri1, 0, 2, secFri1Main, { notes: '3 × 30 m · 3 min Pause' });
+  d2Ex('d2-e-fri1-str',  'Hip-Flexor Stretch',    'cool-down', 'Cool-down', fri1, 0, 0, secFri1Cool, { parameterSource: 'toolbox' });
+
+  // Week 1 Wednesday: sessions only, no exercises (demonstrated via sessionSections above)
+
+  // ── 11. parameterValues ─────────────────────────────────────────────────────
+  // pv[mesoId][microcycleIndex][methodName][sessionIndex][paramName] = value
+  type ParamMap = Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>;
+  const pv: ParamMap = {};
+
+  const d2Cfgs: Record<string, Record<string, (string | number)[]>> = {
+    [D2_METHODS[0]]: {
+      'Sätze':              [3, 4, 5, 2],
+      'Wdh.':               [6, 5, 4, 6],
+      'Intensität (% 1RM)': [70, 77, 83, 65],
+      'Pause (min)':        [2.5, 3, 3.5, 2],
+    },
+    [D2_METHODS[1]]: {
+      'Frequenz/Woche': [2, 3, 3, 1],
+      'Wdh.':           [4, 5, 6, 3],
+      'Distanz (m)':    [30, 30, 30, 30],
+      'Pause (min)':    [3, 3, 4, 3],
+    },
+  };
+
+  D2_MESO.forEach((mesoId, mi) => {
+    pv[mesoId] = {};
+    D2_MICRO[mi].forEach((_, microIdx) => {
+      pv[mesoId][microIdx] = {};
+      const weekIdx = mi * 2 + microIdx;
+      D2_METHODS.forEach((method) => {
+        pv[mesoId][microIdx][method] = {
+          0: Object.fromEntries(
+            Object.entries(d2Cfgs[method]).map(([param, vals]) => [param, vals[weekIdx]]),
+          ),
+        };
+      });
+    });
+  });
+
+  // ── 12. methodAllocations ───────────────────────────────────────────────────
+  const methodAllocations: Record<string, string[]> = {
+    [D2_METHODS[0]]: ['demo2-meso-1', 'demo2-meso-2'],
+    [D2_METHODS[1]]: ['demo2-meso-1', 'demo2-meso-2'],
+  };
+
+  // ── 13. Assemble TrainingProgram ────────────────────────────────────────────
+  const trainingProgram = {
+    id: D2_PROGRAM_ID,
+    name: 'Demo Plan 2026',
+    athleteId,
+    athleteName: null, // resolved on load from athlete-database
+    primaryGoal: macrocycleData.smartGoals[0].description,
+    duration: {
+      startDate: planStart.toISOString(),
+      endDate: planEnd.toISOString(),
+      weeks: 4,
+    },
+    createdAt: now,
+    lastModifiedAt: now,
+    status: 'active',
+    macrocycleData,
+    mesocycleData: { mesocycles },
+    trainingDays,
+    exerciseDistribution,
+    parameterValues: pv,
+    dailyIntensityData,
+    daySplitStates,
+    sessionSections,
+    supersets,
+  };
+
+  // ── 14. Write to trainingPrograms store (insert at top) ────────────────────
+  let store: { version: number; programs: { id: string }[] };
+  try {
+    const raw = localStorage.getItem('trainingPrograms');
+    store = raw ? JSON.parse(raw) : { version: 1, programs: [] };
+  } catch {
+    store = { version: 1, programs: [] };
+  }
+  store.programs = store.programs.filter((p) => p.id !== D2_PROGRAM_ID);
+  store.programs.unshift(trainingProgram);
+  localStorage.setItem('trainingPrograms', JSON.stringify(store));
+
+  console.info('[Demo Plan 2026] Loaded – athleteId:', athleteId, '| calendarEvents added for athlete');
+}
+
+// ── Exercise Library Seed Data ───────────────────────────────────────────────
+// Injects 5 demo category libraries with exercises into custom_libraries.
+// Never overwrites existing libraries – merges by library id.
+
+interface SeedLibrary {
+  id: string;
+  name: string;
+  description: string;
+  exercises: string[];
+}
+
+const EXERCISE_SEED_LIBRARIES: SeedLibrary[] = [
+  {
+    id: 'sprint-speed',
+    name: 'Sprint & Speed',
+    description: 'Sprint- und Schnelligkeitsübungen',
+    exercises: ['Lauf ABC (Koordination)', 'Steigerungsläufe', 'Fliegender Sprint 30m', 'Blockstart 10m'],
+  },
+  {
+    id: 'kraft-unterkrper',
+    name: 'Kraft – Unterkörper',
+    description: 'Unterkörper-Kraftübungen',
+    exercises: ['Back Squat', 'Romanian Deadlift', 'Bulgarian Split Squat', 'Hip Thrust'],
+  },
+  {
+    id: 'kraft-oberkrper',
+    name: 'Kraft – Oberkörper',
+    description: 'Oberkörper-Kraftübungen',
+    exercises: ['Bench Press', 'Pull-Up', 'Overhead Press', 'Bent-over Row'],
+  },
+  {
+    id: 'plyometrie',
+    name: 'Plyometrie',
+    description: 'Plyometrische Sprungübungen',
+    exercises: ['Box Jump', 'Depth Jump', 'Broad Jump', 'Single Leg Hop'],
+  },
+  {
+    id: 'stabilitt-mobilitt',
+    name: 'Stabilität & Mobilität',
+    description: 'Stabilitäts- und Mobilitätsübungen',
+    exercises: ['Copenhagen Plank', 'Nordic Hamstring Curl', 'Hip 90/90 Stretch', 'Ankle Mobility'],
+  },
+];
+
+const EXERCISE_LIB_COLUMNS = [
+  { id: 'name', name: 'Übungsname', type: 'text' as const, required: true },
+  { id: 'notes', name: 'Notizen', type: 'textarea' as const, required: false },
+];
+
+export function loadExerciseLibrarySeedData(): void {
+  const STORAGE_KEY = 'custom_libraries';
+  const now = new Date().toISOString();
+
+  let stored: { libraries: any[]; lastUpdated: string; version: string };
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed && parsed.version >= '3.0.0') {
+      stored = parsed;
+    } else {
+      stored = { libraries: [], lastUpdated: now, version: '3.0.0' };
+    }
+  } catch {
+    stored = { libraries: [], lastUpdated: now, version: '3.0.0' };
+  }
+
+  let changed = false;
+  let ts = Date.now();
+
+  for (const lib of EXERCISE_SEED_LIBRARIES) {
+    const existing = stored.libraries.find((l: any) => l.id === lib.id);
+
+    if (!existing) {
+      // Create library with exercises
+      const exercises = lib.exercises.map((name, i) => ({
+        id: String(ts + i),
+        data: { name, notes: '' },
+      }));
+      ts += lib.exercises.length;
+
+      stored.libraries.push({
+        id: lib.id,
+        name: lib.name,
+        type: 'exercise',
+        description: lib.description,
+        columns: EXERCISE_LIB_COLUMNS,
+        exercises,
+        createdAt: now,
+        lastUpdated: now,
+      });
+      changed = true;
+    } else {
+      // Library exists – add only exercises not already present (match by name)
+      const existingNames = new Set(
+        existing.exercises.map((e: any) => (e.data?.name ?? '').toLowerCase())
+      );
+      const toAdd = lib.exercises.filter(n => !existingNames.has(n.toLowerCase()));
+      if (toAdd.length > 0) {
+        existing.exercises.push(
+          ...toAdd.map((name, i) => ({
+            id: String(ts + i),
+            data: { name, notes: '' },
+          }))
+        );
+        ts += toAdd.length;
+        existing.lastUpdated = now;
+        changed = true;
+      }
+    }
+  }
+
+  if (changed) {
+    stored.lastUpdated = now;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+    console.info('[Exercise Library Seed] Loaded', EXERCISE_SEED_LIBRARIES.length, 'libraries');
+  } else {
+    console.info('[Exercise Library Seed] Already up to date – no changes made');
+  }
 }
