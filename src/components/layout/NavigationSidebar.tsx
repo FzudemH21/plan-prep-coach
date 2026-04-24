@@ -21,10 +21,12 @@ import {
   Zap,
   Wrench,
   Library,
-  UserCircle
+  UserCircle,
+  LogOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCustomLibraries } from "@/contexts/CustomLibrariesContext";
+import { useAuth } from "@/hooks/useAuth";
 
 interface NavigationSidebarProps {
   open: boolean;
@@ -57,6 +59,7 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
   const navigate = useNavigate();
   const location = useLocation();
   const { libraries } = useCustomLibraries();
+  const { signOut, user } = useAuth();
   
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     templates: true,
@@ -222,12 +225,12 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="w-72 p-0">
+      <SheetContent side="left" className="w-72 p-0 flex flex-col">
         <SheetHeader className="p-4 border-b">
           <SheetTitle className="text-left">Navigation</SheetTitle>
         </SheetHeader>
         
-        <div className="p-2 space-y-1">
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {/* Home - standalone */}
           <Button
             variant="ghost"
@@ -307,6 +310,25 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
           >
             <BarChart3 className="h-4 w-4 mr-2" />
             Analytics
+          </Button>
+        </div>
+
+        {/* Sign out — pinned to the bottom */}
+        <div className="border-t p-2">
+          {user?.email && (
+            <p className="px-2 py-1 text-xs text-muted-foreground truncate">{user.email}</p>
+          )}
+          <Button
+            variant="ghost"
+            className="w-full justify-start h-10 text-muted-foreground hover:text-destructive"
+            onClick={async () => {
+              await signOut();
+              onOpenChange(false);
+              navigate("/login", { replace: true });
+            }}
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Sign out
           </Button>
         </div>
       </SheetContent>

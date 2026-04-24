@@ -19,9 +19,20 @@ import AthleteDatabase from "./pages/AthleteDatabase";
 import NotFound from "./pages/NotFound";
 import OnboardingPage from "./pages/OnboardingPage";
 import CoachProfilePage from "./pages/CoachProfilePage";
+import LoginPage from "./pages/LoginPage";
+import SignupPage from "./pages/SignupPage";
 import { hasCoachProfile } from "./hooks/useCoachProfile";
+import { useAuth } from "./hooks/useAuth";
 
 const queryClient = new QueryClient();
+
+/** Blocks access until a Supabase session exists; redirects to /login otherwise. */
+function AuthGuard({ children }: { children: React.ReactNode }) {
+  const { session, loading } = useAuth();
+  if (loading) return null; // wait for session hydration — avoids flash redirect
+  if (!session) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
 
 /** Redirects to /onboarding if no coach profile exists yet */
 function HomeGuard() {
@@ -39,31 +50,35 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
-            {/* Onboarding lives outside AppLayout – full-page, standalone */}
+            {/* Public + standalone routes live outside AppLayout and AuthGuard */}
             <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignupPage />} />
               <Route path="/onboarding" element={<OnboardingPage />} />
               <Route
                 path="*"
                 element={
-                  <AppLayout>
-                    <Routes>
-                      <Route path="/" element={<HomeGuard />} />
-                      <Route path="/macrocycle" element={<MacrocyclePage />} />
-                      <Route path="/mesocycle" element={<MesocyclePage />} />
-                      <Route path="/microcycle" element={<MicrocyclePlanningPage />} />
-                      <Route path="/athletes" element={<AthleteDatabase />} />
-                      <Route path="/templates" element={<TemplatesPage />} />
-                      <Route path="/templates/programs" element={<TrainingProgramsPage />} />
-                      <Route path="/templates/athleticism" element={<AthleticismDatabaseV2 />} />
-                      <Route path="/templates/athleticism-v2" element={<Navigate to="/templates/athleticism" replace />} />
-                      <Route path="/templates/toolbox" element={<ToolboxDatabase />} />
-                      <Route path="/templates/libraries/:libraryName" element={<LibraryPage />} />
-                      <Route path="/coach-profile" element={<CoachProfilePage />} />
-                      <Route path="/analytics" element={<div className="text-center py-12">Analytics coming soon...</div>} />
-                      {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                      <Route path="*" element={<NotFound />} />
-                    </Routes>
-                  </AppLayout>
+                  <AuthGuard>
+                    <AppLayout>
+                      <Routes>
+                        <Route path="/" element={<HomeGuard />} />
+                        <Route path="/macrocycle" element={<MacrocyclePage />} />
+                        <Route path="/mesocycle" element={<MesocyclePage />} />
+                        <Route path="/microcycle" element={<MicrocyclePlanningPage />} />
+                        <Route path="/athletes" element={<AthleteDatabase />} />
+                        <Route path="/templates" element={<TemplatesPage />} />
+                        <Route path="/templates/programs" element={<TrainingProgramsPage />} />
+                        <Route path="/templates/athleticism" element={<AthleticismDatabaseV2 />} />
+                        <Route path="/templates/athleticism-v2" element={<Navigate to="/templates/athleticism" replace />} />
+                        <Route path="/templates/toolbox" element={<ToolboxDatabase />} />
+                        <Route path="/templates/libraries/:libraryName" element={<LibraryPage />} />
+                        <Route path="/coach-profile" element={<CoachProfilePage />} />
+                        <Route path="/analytics" element={<div className="text-center py-12">Analytics coming soon...</div>} />
+                        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                        <Route path="*" element={<NotFound />} />
+                      </Routes>
+                    </AppLayout>
+                  </AuthGuard>
                 }
               />
             </Routes>
