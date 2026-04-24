@@ -35,6 +35,7 @@ Claude Chat (browser) is my sparring partner for planning, discussion, and promp
 | 🟡 Soon | Column reordering in databases (drag & drop) | ✅ Done |
 | 🟠 Later | Goal Management + test notifications | ⬜ Open |
 | 🟠 Later | Date-independent plan (template mode) | ⬜ Open |
+| 🟠 Later | Inline Document Viewer (preview PDFs and other supported file types directly inside the app instead of opening a new browser tab) | ⬜ Open |
 | 🔵 Future | Athlete App (mobile, separate) | ⬜ Open |
 | 🔵 Future | Athlete Management System (standalone area: athlete profiles, progress tracking, communication, wearable data. Incl. AI analysis: correlations between completed training and athlete progress — coach can ask how effective a program was, which methods had the greatest effect, etc. Requires compliance tracking, test results, and Supabase.) | ⬜ Open |
 | 🔵 Future | AI knowledge base + coach philosophy combined (AI has its own sports science knowledge base, coach profile supplements it, AI flags deviations from scientific consensus — learning effect for less experienced coaches) | ⬜ Open |
