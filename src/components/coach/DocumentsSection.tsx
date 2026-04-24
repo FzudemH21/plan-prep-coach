@@ -187,30 +187,16 @@ function FolderCard({
 // Document row (click-to-open, handle-to-drag)
 // ─────────────────────────────────────────────
 
-const DOC_DATA_PREFIX = "coachDocData_";
-
-function openOrDownloadDoc(doc: CoachDocument) {
-  const dataUrl = localStorage.getItem(`${DOC_DATA_PREFIX}${doc.id}`);
-  if (!dataUrl) return;
-  if (doc.type.startsWith("image/") || doc.type === "application/pdf") {
-    window.open(dataUrl, "_blank");
-  } else {
-    const a = document.createElement("a");
-    a.href = dataUrl;
-    a.download = doc.name;
-    a.click();
-  }
-}
-
 interface DocRowProps {
   doc: CoachDocument;
+  onOpen: () => void;
   onMove: () => void;
   onDelete: () => void;
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: () => void;
 }
 
-function DocRow({ doc, onMove, onDelete, onDragStart, onDragEnd }: DocRowProps) {
+function DocRow({ doc, onOpen, onMove, onDelete, onDragStart, onDragEnd }: DocRowProps) {
   const dragFromHandle = useRef(false);
 
   return (
@@ -222,7 +208,7 @@ function DocRow({ doc, onMove, onDelete, onDragStart, onDragEnd }: DocRowProps) 
         onDragStart(e);
       }}
       onDragEnd={() => { dragFromHandle.current = false; onDragEnd(); }}
-      onClick={() => openOrDownloadDoc(doc)}
+      onClick={() => onOpen()}
     >
       {/* Drag handle – hover only */}
       <div
@@ -345,7 +331,22 @@ export function DocumentsSection() {
     deleteDocument,
     moveDocument,
     downloadDocument,
+    getDocumentUrl,
   } = useCoachDocuments();
+
+  const handleDocOpen = useCallback(async (doc: CoachDocument) => {
+    const url = await getDocumentUrl(doc.id);
+    if (!url) return;
+    const viewable = doc.type.startsWith("image/") || doc.type === "application/pdf";
+    if (viewable) {
+      window.open(url, "_blank");
+    } else {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = doc.name;
+      a.click();
+    }
+  }, [getDocumentUrl]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -554,6 +555,7 @@ export function DocumentsSection() {
               <DocRow
                 key={doc.id}
                 doc={doc}
+                onOpen={() => handleDocOpen(doc)}
                 onMove={() => setMoveTarget(doc)}
                 onDelete={() => setDeleteTarget({ type: "doc", item: doc })}
                 onDragStart={(e) => handleDocDragStart(e, doc.id)}

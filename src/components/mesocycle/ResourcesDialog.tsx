@@ -61,8 +61,6 @@ import { format } from 'date-fns';
 // Helpers
 // ─────────────────────────────────────────────
 
-const DATA_PREFIX = 'coachDocData_';
-
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -79,21 +77,6 @@ function FileIcon({ type, className }: { type: string; className?: string }) {
   if (type.includes('word') || type.includes('document'))
     return <FileText className={className} />;
   return <File className={className} />;
-}
-
-/** Opens viewable types (PDF, images) in a new tab; others trigger download */
-function openOrDownload(doc: CoachDocument) {
-  const dataUrl = localStorage.getItem(`${DATA_PREFIX}${doc.id}`);
-  if (!dataUrl) return;
-  const viewable = doc.type.startsWith('image/') || doc.type === 'application/pdf';
-  if (viewable) {
-    window.open(dataUrl, '_blank');
-  } else {
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = doc.name;
-    a.click();
-  }
 }
 
 // ─────────────────────────────────────────────
@@ -337,7 +320,22 @@ export const ResourcesDialog: React.FC<ResourcesDialogProps> = ({ open, onOpenCh
     addDocument,
     deleteDocument,
     moveDocument,
+    getDocumentUrl,
   } = useCoachDocuments();
+
+  const handleDocOpen = useCallback(async (doc: CoachDocument) => {
+    const url = await getDocumentUrl(doc.id);
+    if (!url) return;
+    const viewable = doc.type.startsWith('image/') || doc.type === 'application/pdf';
+    if (viewable) {
+      window.open(url, '_blank');
+    } else {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = doc.name;
+      a.click();
+    }
+  }, [getDocumentUrl]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -548,7 +546,7 @@ export const ResourcesDialog: React.FC<ResourcesDialogProps> = ({ open, onOpenCh
                 <DocRow
                   key={doc.id}
                   doc={doc}
-                  onOpen={() => openOrDownload(doc)}
+                  onOpen={() => handleDocOpen(doc)}
                   onMove={() => setMoveTarget(doc)}
                   onDelete={() => setDeleteTarget({ type: 'doc', item: doc })}
                   onDragStart={(e) => handleDocDragStart(e, doc.id)}
