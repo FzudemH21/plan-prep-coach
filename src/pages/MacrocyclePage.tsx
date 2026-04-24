@@ -16,6 +16,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { useToast } from "@/hooks/use-toast";
 import { SmartGoal, SubGoal, TrainableQuality, Event, PlanDuration } from "@/types/training";
 import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2, FileText, Check, ChevronsUpDown, ChevronDown, Pencil, Link, Link2, CheckSquare } from "lucide-react";
+import { ResourcesButton } from "@/components/programs/ResourcesButton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { 
@@ -2703,6 +2704,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
               Back to Library
             </Button>
             <SaveProgramButton />
+            <ResourcesButton />
             <Button variant="outline" size="sm">
               <Bot className="h-4 w-4 mr-2" />
               Ask AI for Help
@@ -2828,6 +2830,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
               Back to Library
             </Button>
             <SaveProgramButton />
+            <ResourcesButton />
             <Button variant="outline" size="sm">
               <Bot className="h-4 w-4 mr-2" />
               Ask AI for Help
@@ -2835,7 +2838,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
             <PlanningNavigationMenu currentPage="macrocycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
           </div>
         </div>
-        
+
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
             <span>Step {currentStep} of {totalSteps}: {stepTitles[currentStep - 1]}</span>

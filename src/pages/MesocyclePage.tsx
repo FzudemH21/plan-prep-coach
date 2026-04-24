@@ -42,8 +42,8 @@ import { CrossMesocycleCopyDialog } from "@/components/ui/cross-mesocycle-copy-d
 import { CrossMesocycleMicrocycleCopyDialog } from "@/components/ui/cross-mesocycle-microcycle-copy-dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy, AlertCircle, FolderOpen, Trophy } from "lucide-react";
-import { ResourcesDialog } from "@/components/mesocycle/ResourcesDialog";
+import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy, AlertCircle, Trophy, LayoutTemplate } from "lucide-react";
+import { ResourcesButton } from "@/components/programs/ResourcesButton";
 import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
@@ -53,6 +53,8 @@ import { IntensityLevel } from "@/types/training";
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
+import { useTemplates, type ProgramTemplate, type TemplateColumn } from '@/hooks/useTemplates';
+import { LoadTemplateDialog, type MethodParam } from '@/components/mesocycle/LoadTemplateDialog';
 
 // Helper function for string normalization - robust canonicalization
 const normalizeForComparison = (str: unknown): string => {
@@ -94,6 +96,7 @@ export default function MesocyclePage() {
   const [methodAllocations, setMethodAllocations] = useState<Record<string, string[]>>({});
   const [isClearParametersDialogOpen, setIsClearParametersDialogOpen] = useState(false);
   const [isClearAllExercisesDialogOpen, setIsClearAllExercisesDialogOpen] = useState(false);
+  const [loadTemplateDialog, setLoadTemplateDialog] = useState<{ open: boolean; methodName: string; lookupName: string }>({ open: false, methodName: '', lookupName: '' });
   
   // Daily intensity planning state
   const [dailyIntensityData, setDailyIntensityData] = useState<DailyIntensity[]>([]);
@@ -140,47 +143,6 @@ export default function MesocyclePage() {
     Record<string, Record<string, boolean>>
   >({});
   
-  // Resources state for Step 4
-  const [isResourcesDialogOpen, setIsResourcesDialogOpen] = useState(false);
-  const [resources, setResources] = useState<Array<{
-    id: string;
-    name: string;
-    displayName: string;
-    type: string;
-    size: number;
-    uploadedAt: Date;
-    url: string;
-  }>>([]);
-  
-  const handleAddResources = useCallback((files: { file: File; displayName: string }[]) => {
-    const newResources = files.map(({ file, displayName }) => ({
-      id: crypto.randomUUID(),
-      name: file.name,
-      displayName: displayName || file.name,
-      type: file.type,
-      size: file.size,
-      uploadedAt: new Date(),
-      url: URL.createObjectURL(file),
-    }));
-    setResources(prev => [...prev, ...newResources]);
-  }, []);
-  
-  const handleDeleteResource = useCallback((id: string) => {
-    setResources(prev => {
-      const resource = prev.find(r => r.id === id);
-      if (resource) {
-        URL.revokeObjectURL(resource.url);
-      }
-      return prev.filter(r => r.id !== id);
-    });
-  }, []);
-
-  const handleRenameResource = useCallback((id: string, displayName: string) => {
-    setResources(prev => prev.map(r => 
-      r.id === id ? { ...r, displayName } : r
-    ));
-  }, []);
-  
   const toggleCategoryCollapse = (category: string) => {
     setCollapsedCategories(prev => {
       const next = new Set(prev);
@@ -211,6 +173,7 @@ export default function MesocyclePage() {
   const { toast } = useToast();
   const { athletes } = useAthletes();
   const { saveCurrentSession } = useTrainingPrograms();
+  const { templates, addTemplate } = useTemplates();
   const { getEventsForAthlete } = useCalendarEvents();
   const athleteCalendarEvents = macrocycleData?.selectedAthleteId
     ? getEventsForAthlete(macrocycleData.selectedAthleteId)
@@ -873,13 +836,17 @@ export default function MesocyclePage() {
   const renderMesocycleSetup = () => (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <CalendarIcon className="h-5 w-5" />
-          <span>Mesocycle Setup</span>
-        </CardTitle>
-        <CardDescription>
-          Configure the structure and duration of your mesocycles.
-        </CardDescription>
+        <div className="flex items-start justify-between">
+          <div>
+            <CardTitle className="flex items-center space-x-2">
+              <CalendarIcon className="h-5 w-5" />
+              <span>Mesocycle Setup</span>
+            </CardTitle>
+            <CardDescription>
+              Configure the structure and duration of your mesocycles.
+            </CardDescription>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="space-y-6 max-w-full">
         {/* Duration Validation Warning */}
@@ -2515,6 +2482,95 @@ export default function MesocyclePage() {
     });
   }, [mesocycles, getParameterValue, updateParameterValue, isMethodAllocatedToMesocycle, isMicrocycleSplit, getCellFrequency]);
 
+  // ── Template loading helpers ──────────────────────────────────────────────
+
+  const totalPlanMicrocycles = useMemo(() =>
+    mesocycles.reduce((sum, meso) => sum + (meso.microcycles?.length ?? 0), 0),
+    [mesocycles],
+  );
+
+  /** Convert wizard method name ("Cat - Sub") to template methodId ("Cat|||Sub") */
+  const getTemplatesForWizardMethod = useCallback((methodName: string): ProgramTemplate[] => {
+    const parts = methodName.split(' - ');
+    const category = parts[0]?.trim() ?? '';
+    const subCategory = parts.slice(1).join(' - ').trim();
+    const methodId = `${category}|||${subCategory}`;
+    return templates.filter(t =>
+      normalizeForComparison(t.methodId) === normalizeForComparison(methodId),
+    );
+  }, [templates]);
+
+  /** Derive MethodParam list for the currently-open load-template dialog */
+  const loadTemplateDialogParams = useMemo((): MethodParam[] => {
+    const mName = loadTemplateDialog.lookupName || loadTemplateDialog.methodName;
+    if (!mName || !toolboxData.entries) return [];
+    return toolboxData.entries
+      .filter(entry => {
+        const entryKey = `${entry.category}${entry.subCategory ? ` - ${entry.subCategory}` : ''}`;
+        return (
+          normalizeForComparison(entryKey) === normalizeForComparison(mName) ||
+          normalizeForComparison(entry.parameterName) === normalizeForComparison(mName)
+        );
+      })
+      .filter(entry => entry.showInGridByDefault !== false)
+      .map(entry => ({
+        parameterName: entry.parameterName,
+        isFrequencyParameter: entry.isFrequencyParameter,
+        isQuantitative: entry.parameterType === 'quantitative',
+        options: entry.options,
+      }));
+  }, [loadTemplateDialog.lookupName, loadTemplateDialog.methodName, toolboxData.entries]);
+
+  const handleLoadTemplate = useCallback((columns: TemplateColumn[]) => {
+    const methodName = loadTemplateDialog.methodName;
+
+    // Flat ordered list of (mesocycleId, microcycleIndex) pairs
+    const flatMicrocycles: Array<{ mesocycleId: string; microcycleIndex: number }> = [];
+    mesocycles.forEach(meso => {
+      (meso.microcycles || []).forEach((_, i) => {
+        flatMicrocycles.push({ mesocycleId: meso.id, microcycleIndex: i });
+      });
+    });
+
+    // Frequency param name for this method (never split into per-session)
+    const methodEntries = toolboxData.entries.filter(
+      entry => `${entry.category} → ${entry.subCategory}` === methodName,
+    );
+    const freqParamName = methodEntries.find(e => e.isFrequencyParameter)?.parameterName ?? null;
+
+    const colsToApply = columns.slice(0, flatMicrocycles.length);
+    const splitUpdates: Record<string, boolean> = {};
+
+    colsToApply.forEach((col, colIndex) => {
+      const { mesocycleId, microcycleIndex } = flatMicrocycles[colIndex];
+      const allHalves = [col.parameters, col.parametersB, col.parametersC, col.parametersD, col.parametersE];
+      const sessionsToFill = col.isSplit ? Math.min(col.splitCount, 5) : 1;
+
+      for (let s = 0; s < sessionsToFill; s++) {
+        const halfParams = allHalves[s] ?? {};
+        Object.entries(halfParams).forEach(([paramName, value]) => {
+          if (!value) return;
+          // Frequency is always a merged cell in the wizard — always session 0
+          const sessionIndex = paramName === freqParamName ? 0 : s;
+          updateParameterValue(mesocycleId, microcycleIndex, methodName, paramName, value, sessionIndex);
+        });
+      }
+
+      if (col.isSplit) {
+        splitUpdates[`${mesocycleId}-${microcycleIndex}`] = true;
+      }
+    });
+
+    if (Object.keys(splitUpdates).length > 0) {
+      setGlobalMicrocycleSplitStates(prev => ({ ...prev, ...splitUpdates }));
+    }
+
+    toast({
+      title: 'Template loaded',
+      description: `Values applied to ${Math.min(columns.length, flatMicrocycles.length)} microcycle(s).`,
+    });
+  }, [loadTemplateDialog.methodName, mesocycles, toolboxData.entries, updateParameterValue, toast]);
+
   // Global keyboard shortcuts for drag-fill UX
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -3026,20 +3082,6 @@ export default function MesocyclePage() {
             </div>
             <div className="flex items-center gap-2">
               <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsResourcesDialogOpen(true)}
-                className="shrink-0"
-              >
-                <FolderOpen className="h-4 w-4 mr-2" />
-                Resources
-                {resources.length > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-5 px-1.5">
-                    {resources.length}
-                  </Badge>
-                )}
-              </Button>
-              <Button
                 variant="destructive"
                 size="sm"
                 onClick={() => setIsClearParametersDialogOpen(true)}
@@ -3382,6 +3424,7 @@ export default function MesocyclePage() {
                                     const baseMethodName = getBaseMethodName(fullMethodName);
                                     const categoryName = getCategoryFromMethodName(fullMethodName);
                                     const isIndented = categoryName !== null;
+                                    const methodTemplates = getTemplatesForWizardMethod(baseMethodName);
                                     
                                     return (
                                       <div key={fullMethodName} className={`border rounded-lg bg-card shadow-sm ${isIndented ? 'border-l-4 border-l-primary/50' : ''}`}>
@@ -3450,6 +3493,18 @@ export default function MesocyclePage() {
                                                        title="Merge categories back together"
                                                      >
                                                        <Columns className="h-4 w-4" />
+                                                     </Button>
+                                                   )}
+                                                   {/* Load Template button - visible for base and category-split rows */}
+                                                   {methodTemplates.length > 0 && (
+                                                     <Button
+                                                       variant="ghost"
+                                                       size="sm"
+                                                       className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground hover:bg-muted"
+                                                       onClick={() => setLoadTemplateDialog({ open: true, methodName: fullMethodName, lookupName: baseMethodName })}
+                                                       title="Load template"
+                                                     >
+                                                       <LayoutTemplate className="h-4 w-4" />
                                                      </Button>
                                                    )}
                                                    {/* Delete button - show on all rows */}
@@ -3582,20 +3637,22 @@ export default function MesocyclePage() {
                                                    )}
                                                    
                                                    <div className="flex items-center gap-1">
-                                                      {frequency > 1 && hasFrequencyParam && (
+                                                      {hasFrequencyParam && (isSplit || (frequency > 1 && frequency <= 10)) && (
                                                          <button
                                                            onClick={() => toggleMicrocycleSplit(meso.id, microcycleIndex)}
-                                                           className="px-1.5 py-0.5 text-[10px] text-current hover:bg-black/20 rounded transition-colors font-medium"
+                                                           className="p-0.5 text-current hover:bg-black/20 rounded transition-colors"
                                                           title={`${isSplit ? 'Merge' : 'Split'} sessions (${frequency}×/wk)`}
                                                         >
-                                                          {isSplit ? 'Merge' : 'Split'}
+                                                          {isSplit ? <Columns className="h-3 w-3" /> : <SplitSquareHorizontal className="h-3 w-3" />}
                                                         </button>
                                                       )}
                                                    </div>
                                                   {isSplit && (
-                                                    <div className="flex gap-0.5 text-[10px]">
+                                                    <div className="flex gap-0.5 text-[10px] w-full">
                                                       {Array.from({ length: sessionsCount }, (_, i) => (
-                                                        <span key={i} className="px-1 bg-black/20 rounded">S{i + 1}</span>
+                                                        <span key={i} className="flex-1 text-center px-1 bg-black/20 rounded">
+                                                          {String.fromCharCode(65 + i)}
+                                                        </span>
                                                       ))}
                                                     </div>
                                                   )}
@@ -3906,15 +3963,17 @@ export default function MesocyclePage() {
                 Select specific exercises for each training method across your mesocycles and microcycles.
               </CardDescription>
             </div>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setIsClearAllExercisesDialogOpen(true)}
-              className="shrink-0"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Clear All Exercises
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setIsClearAllExercisesDialogOpen(true)}
+                className="shrink-0"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Clear All Exercises
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="overflow-x-auto max-w-full">
@@ -4591,13 +4650,17 @@ export default function MesocyclePage() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <CalendarDays className="h-5 w-5" />
-            <span>Step 2: Daily Training Intensity Planning</span>
-          </CardTitle>
-          <CardDescription>
-            Set the training intensity for each training day across all mesocycles and microcycles.
-          </CardDescription>
+          <div className="flex items-start justify-between">
+            <div>
+              <CardTitle className="flex items-center space-x-2">
+                <CalendarDays className="h-5 w-5" />
+                <span>Step 2: Daily Training Intensity Planning</span>
+              </CardTitle>
+              <CardDescription>
+                Set the training intensity for each training day across all mesocycles and microcycles.
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -4943,6 +5006,7 @@ export default function MesocyclePage() {
               Back to Library
             </Button>
             <SaveProgramButton />
+            <ResourcesButton />
             <Button variant="outline" size="sm">
               <Bot className="h-4 w-4 mr-2" />
               Ask AI for Help
@@ -5045,16 +5109,25 @@ export default function MesocyclePage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        
-        {/* Resources Dialog for Step 4 */}
-        <ResourcesDialog
-          open={isResourcesDialogOpen}
-          onOpenChange={setIsResourcesDialogOpen}
-          resources={resources}
-          onAddResources={handleAddResources}
-          onDeleteResource={handleDeleteResource}
-          onRenameResource={handleRenameResource}
+
+        {/* Load Template Dialog */}
+        <LoadTemplateDialog
+          open={loadTemplateDialog.open}
+          onOpenChange={(open) => setLoadTemplateDialog(prev => ({ ...prev, open }))}
+          methodName={loadTemplateDialog.lookupName || loadTemplateDialog.methodName}
+          templates={getTemplatesForWizardMethod(loadTemplateDialog.lookupName || loadTemplateDialog.methodName)}
+          planMicrocycleCount={totalPlanMicrocycles}
+          onLoad={handleLoadTemplate}
+          parameters={loadTemplateDialogParams}
+          onSaveAsNew={(name, columns) => {
+            const mName = loadTemplateDialog.lookupName || loadTemplateDialog.methodName;
+            const parts = mName.split(' - ');
+            const category = parts[0]?.trim() ?? '';
+            const subCategory = parts.slice(1).join(' - ').trim();
+            addTemplate({ name, methodId: `${category}|||${subCategory}`, methodName: mName, columns });
+          }}
         />
+
     </div>
   );
 };

@@ -83,6 +83,12 @@ interface SessionColumnViewProps {
   onMoveSessionDown?: (dayDate: string, sessionIndex: number) => void;
   onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
   onReorderSection?: (sectionId: string, direction: 'up' | 'down') => void;
+  /** Visual hint during drag: 'match' = valid drop, 'no-match' = dim, 'neutral' = no drag active */
+  methodMatchState?: 'match' | 'no-match' | 'neutral';
+  /** Methods assigned to this session in Step 1 — shown as read-only context badges */
+  assignedMethods?: string[];
+  /** Triggered by the inline "+ Add exercise" button; optional sectionId targets a specific section */
+  onAddExerciseInline?: (sectionId?: string) => void;
 }
 
 export function SessionColumnView({
@@ -115,6 +121,9 @@ export function SessionColumnView({
   onMoveSessionDown,
   onExerciseNotesChange,
   onReorderSection,
+  methodMatchState = 'neutral',
+  assignedMethods,
+  onAddExerciseInline,
 }: SessionColumnViewProps) {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionName, setEditingSectionName] = useState('');
@@ -350,7 +359,11 @@ export function SessionColumnView({
 
   return (
     <>
-      <div className="w-80 flex-shrink-0 flex flex-col h-[600px] rounded-lg border bg-muted text-card-foreground shadow-sm">
+      <div className={cn(
+        "w-80 flex-shrink-0 flex flex-col h-[600px] rounded-lg border bg-muted text-card-foreground shadow-sm transition-all duration-150",
+        methodMatchState === 'match' && "ring-2 ring-green-500/60 bg-green-500/5",
+        methodMatchState === 'no-match' && "opacity-50"
+      )}>
         <CardHeader className="pb-3 border-b">
           <div className="space-y-2">
             {/* Session Name and Actions */}
@@ -526,6 +539,21 @@ export function SessionColumnView({
                 {exercises.length} {exercises.length === 1 ? 'exercise' : 'exercises'}
               </span>
             </div>
+
+            {/* Assigned methods from Step 1 — read-only context */}
+            {assignedMethods && assignedMethods.length > 0 && (
+              <div className="flex flex-wrap gap-1 pt-1">
+                {assignedMethods.map(m => (
+                  <span
+                    key={m}
+                    className="inline-flex items-center rounded-md bg-muted/60 border border-border/50 px-2 py-0.5 text-[10px] text-muted-foreground font-medium"
+                    title={m}
+                  >
+                    {m}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </CardHeader>
 
@@ -668,6 +696,18 @@ export function SessionColumnView({
                               <span className="text-sm font-semibold">{section.name}</span>
                             </div>
                             <div className="flex items-center gap-1">
+                              {/* Add exercise to this section */}
+                              {onAddExerciseInline && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 hover:bg-accent"
+                                  onClick={() => onAddExerciseInline(section.id)}
+                                  title="Add exercise to this section"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                              )}
                               {/* Copy Section Button */}
                               {onCopySection && (
                                 <Button

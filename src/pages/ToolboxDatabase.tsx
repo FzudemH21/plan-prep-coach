@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, Search, Download, Upload, Trash2, Edit, Copy, ChevronUp, ChevronDown, AlertCircle } from "lucide-react";
+import { ArrowLeft, Plus, Search, Download, Upload, Trash2, Edit, Copy, ChevronUp, ChevronDown, AlertCircle, LayoutTemplate } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToolboxData } from "@/hooks/useToolboxData";
@@ -17,6 +17,7 @@ import { ToolboxEntry } from "@/types/toolbox";
 import { useToast } from "@/hooks/use-toast";
 import { ParameterManagementDialog } from "@/components/toolbox/ParameterManagementDialog";
 import { ToolboxColumnFilter } from "@/components/toolbox/ToolboxColumnFilter";
+import { MethodTemplatesPanel } from "@/components/toolbox/MethodTemplatesPanel";
 
 type SortOrder = 'asc' | 'desc';
 type SortColumn = 'category' | 'subCategory';
@@ -56,6 +57,7 @@ export default function ToolboxDatabase() {
   });
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isParameterDialogOpen, setIsParameterDialogOpen] = useState(false);
+  const [expandedTemplatesKey, setExpandedTemplatesKey] = useState<string | null>(null);
   const [selectedSubCategory, setSelectedSubCategory] = useState<{ category: string; subCategory: string } | null>(null);
   const [newEntry, setNewEntry] = useState({
     category: "",
@@ -648,67 +650,90 @@ export default function ToolboxDatabase() {
             </TableHeader>
             <TableBody>
               {subCategoryData.map((item) => (
-                <TableRow key={item.key} className="border-b">
-                  <TableCell className="font-medium">{item.category}</TableCell>
-                  <TableCell className="font-medium">{item.subCategory || "-"}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {item.parameters.length} parameter{item.parameters.length !== 1 ? 's' : ''}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {(item.parameters[0]?.exerciseCategories || []).length} categor{(item.parameters[0]?.exerciseCategories || []).length !== 1 ? 'ies' : 'y'}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-1">
-                      {(!hasFrequencyParameter.get(item.key) || !hasSetParameter.get(item.key)) && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="flex items-center">
-                              <AlertCircle className="h-4 w-4 text-destructive" />
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-xs">
-                            <p className="font-semibold mb-1">Missing Parameter Configuration</p>
-                            <div className="text-xs space-y-1">
-                              {!hasFrequencyParameter.get(item.key) && (
-                                <p>• No frequency parameter marked for method periodization table</p>
-                              )}
-                              {!hasSetParameter.get(item.key) && (
-                                <p>• No set parameter marked for exercise detail view</p>
-                              )}
-                              <p className="mt-2 text-muted-foreground">
-                                Click Edit to open parameter management and configure these parameters.
-                              </p>
-                            </div>
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleOpenParameterDialog(item.category, item.subCategory)}
-                        title="Edit Parameters"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleCopySubCategory(item.key)}
-                        title="Copy Sub-Category"
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteSubCategory(item)}
-                        title="Delete Sub-Category"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
+                <>
+                  <TableRow key={item.key} className="border-b">
+                    <TableCell className="font-medium">{item.category}</TableCell>
+                    <TableCell className="font-medium">{item.subCategory || "-"}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {item.parameters.length} parameter{item.parameters.length !== 1 ? 's' : ''}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {(item.parameters[0]?.exerciseCategories || []).length} categor{(item.parameters[0]?.exerciseCategories || []).length !== 1 ? 'ies' : 'y'}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-1">
+                        {(!hasFrequencyParameter.get(item.key) || !hasSetParameter.get(item.key)) && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center">
+                                <AlertCircle className="h-4 w-4 text-destructive" />
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                              <p className="font-semibold mb-1">Missing Parameter Configuration</p>
+                              <div className="text-xs space-y-1">
+                                {!hasFrequencyParameter.get(item.key) && (
+                                  <p>• No frequency parameter marked for method periodization table</p>
+                                )}
+                                {!hasSetParameter.get(item.key) && (
+                                  <p>• No set parameter marked for exercise detail view</p>
+                                )}
+                                <p className="mt-2 text-muted-foreground">
+                                  Click Edit to open parameter management and configure these parameters.
+                                </p>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleOpenParameterDialog(item.category, item.subCategory)}
+                          title="Edit Parameters"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCopySubCategory(item.key)}
+                          title="Copy Sub-Category"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteSubCategory(item)}
+                          title="Delete Sub-Category"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="Templates"
+                          onClick={() => setExpandedTemplatesKey(
+                            expandedTemplatesKey === item.key ? null : item.key
+                          )}
+                        >
+                          <LayoutTemplate className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                  {expandedTemplatesKey === item.key && (
+                    <TableRow key={`${item.key}-templates`}>
+                      <TableCell colSpan={5} className="p-0">
+                        <MethodTemplatesPanel
+                          methodId={item.key}
+                          methodName={item.subCategory}
+                          parameters={item.parameters}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </>
               ))}
             </TableBody>
           </Table>
@@ -743,6 +768,7 @@ export default function ToolboxDatabase() {
           <p className="text-muted-foreground">No sub-categories yet. Click "Add Sub-Category" to get started.</p>
         </div>
       )}
+
     </div>
   );
 }

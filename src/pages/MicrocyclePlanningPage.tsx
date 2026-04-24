@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info, Copy, ChevronDown, Columns, ChevronRight, X, Trash2, Trophy, Calendar, Check } from 'lucide-react';
+import { ResourcesButton } from '@/components/programs/ResourcesButton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { useAthletes } from '@/hooks/useAthletes';
@@ -23,7 +24,7 @@ import { useToolboxData } from '@/hooks/useToolboxData';
 import { format, addDays, differenceInDays, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
-import { TrainingCalendarView, EnhancedExerciseDistribution } from '@/components/microcycle-planning';
+import { TrainingCalendarView, EnhancedExerciseDistribution, MethodSessionArchitecture } from '@/components/microcycle-planning';
 import { DropResult } from '@hello-pangea/dnd';
 import { SaveProgramButton } from '@/components/programs/SaveProgramButton';
 import { useTrainingPrograms } from '@/hooks/useTrainingPrograms';
@@ -121,7 +122,11 @@ export default function MicrocyclePlanningPage() {
   const [sessionSections, setSessionSections] = useState<SessionSection[]>([]);
   const [supersets, setSupersets] = useState<SupersetMapping>({});
 
-  const totalSteps = 2; // Step 1: Exercise Distribution, Step 2: Training Calendar
+  // Step 1 state: method-to-day assignments and available method allocations
+  const [dayMethodAssignments, setDayMethodAssignments] = useState<Record<string, string[]>>({});
+  const [methodAllocations, setMethodAllocations] = useState<Record<string, string[]>>({});
+
+  const totalSteps = 3; // Step 1: Method & Session Architecture, Step 2: Exercise Distribution, Step 3: Training Calendar
 
   // Define intensity levels and color function
   const intensityLevels: IntensityLevel[] = ["off", "deload", "easy", "easy-moderate", "moderate", "moderate-hard", "hard", "extremely-hard"];
@@ -192,8 +197,33 @@ export default function MicrocyclePlanningPage() {
       setTrainingDays(migratedDays);
     }
 
+    // v1→v2 migration: a new Step 1 was inserted, so old step indices shift by +1.
+    // Guard with 'microcyclePlanningVersion' so migration only runs once.
     if (savedMicrocycleStep) {
-      setCurrentStep(parseInt(savedMicrocycleStep, 10));
+      const parsedStep = parseInt(savedMicrocycleStep, 10);
+      if (!isNaN(parsedStep)) {
+        const savedVersion = localStorage.getItem('microcyclePlanningVersion');
+        if (!savedVersion) {
+          // Migrate: shift old step up by 1 (old 1→new 2, old 2→new 3), clamp to [1,3]
+          const migratedStep = Math.min(3, Math.max(1, parsedStep + 1));
+          setCurrentStep(migratedStep);
+          localStorage.setItem('microcyclePlanningVersion', '2');
+        } else {
+          setCurrentStep(Math.min(3, Math.max(1, parsedStep)));
+        }
+      }
+    }
+
+    // Load day→method assignments (written by Step 1)
+    const savedDayMethodAssignments = localStorage.getItem('dayMethodAssignments');
+    if (savedDayMethodAssignments) {
+      try { setDayMethodAssignments(JSON.parse(savedDayMethodAssignments)); } catch { /* ignore */ }
+    }
+
+    // Load method allocations (written by MesocyclePage, read-only here)
+    const savedMethodAllocations = localStorage.getItem('methodAllocations');
+    if (savedMethodAllocations) {
+      try { setMethodAllocations(JSON.parse(savedMethodAllocations)); } catch { /* ignore */ }
     }
 
     const savedDailyIntensity = localStorage.getItem('dailyIntensityData');
@@ -391,6 +421,11 @@ export default function MicrocyclePlanningPage() {
   useEffect(() => {
     localStorage.setItem('supersets', JSON.stringify(supersets));
   }, [supersets]);
+
+  // Save day→method assignments to localStorage
+  useEffect(() => {
+    localStorage.setItem('dayMethodAssignments', JSON.stringify(dayMethodAssignments));
+  }, [dayMethodAssignments]);
 
   // Sync day split states to trainingDays
   useEffect(() => {
@@ -3182,6 +3217,13 @@ export default function MicrocyclePlanningPage() {
           onMoveSessionUp={handleMoveSessionUp}
           onMoveSessionDown={handleMoveSessionDown}
           onUpdateTrainingDay={handleUpdateTrainingDay}
+          dayMethodAssignments={dayMethodAssignments}
+          onExerciseSelectionDataChange={(data) => {
+            setExerciseSelectionData(data);
+            const existing = localStorage.getItem('microcyclePlanningState');
+            const parsed = existing ? JSON.parse(existing) : {};
+            localStorage.setItem('microcyclePlanningState', JSON.stringify({ ...parsed, cellData: data }));
+          }}
         />
       </div>
     );
@@ -3204,6 +3246,7 @@ export default function MicrocyclePlanningPage() {
             Back to Library
           </Button>
           <SaveProgramButton />
+          <ResourcesButton />
           <PlanningNavigationMenu currentPage="microcycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
         </div>
       </div>
@@ -3212,13 +3255,39 @@ export default function MicrocyclePlanningPage() {
 
       {renderTrainingPlanOverview()}
       
-      {currentStep === 1 && renderMesocycleNavigation()}
-      
-      {currentStep === 1 && renderExerciseDistribution()}
-      
-      {currentStep === 2 && currentMesocycle && (
+      {currentStep === 1 && (
+        currentMesocycle ? (
+          <MethodSessionArchitecture
+            mesocycle={currentMesocycle}
+            allMesocycles={mesocycles}
+            trainingDays={trainingDays}
+            methodAllocations={methodAllocations}
+            dayMethodAssignments={dayMethodAssignments}
+            onDayMethodAssignmentsChange={setDayMethodAssignments}
+            sessionSections={sessionSections}
+            onSectionsChange={setSessionSections}
+            exerciseDistribution={exerciseDistribution}
+            daySplitStates={daySplitStates}
+            onDayIntensityChange={handleDayIntensityChange}
+            onSessionIntensityChange={handleSessionIntensityChange}
+            onAddSession={handleAddSession}
+            onRemoveSession={handleRemoveSession}
+            onRenameSession={handleRenameSession}
+            intensityLevels={intensityLevels}
+            getIntensityColor={getIntensityColor}
+          />
+        ) : (
+          <div className="p-8 text-center text-muted-foreground">No mesocycle data available</div>
+        )
+      )}
+
+      {currentStep === 2 && renderMesocycleNavigation()}
+
+      {currentStep === 2 && renderExerciseDistribution()}
+
+      {currentStep === 3 && currentMesocycle && (
         <>
-            <TrainingCalendarView
+          <TrainingCalendarView
               exerciseDistribution={exerciseDistribution}
               trainingDays={currentMesocycleDays}
               currentMesocycle={currentMesocycle}

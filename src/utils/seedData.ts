@@ -547,6 +547,41 @@ export function loadSeedData(): void {
   store.programs = (store.programs as { id: string }[]).filter((p) => p.id !== programId);
   store.programs.unshift(trainingProgram);
   localStorage.setItem('trainingPrograms', JSON.stringify(store));
+
+  // ── Coach-Profil Seed-Daten ──────────────────────────────────────────────
+  // Schreiben wenn: kein Profil vorhanden ODER nur ein Skipped-Profil gesetzt
+  const _existingProfile = localStorage.getItem('coachProfile');
+  const _isSkipped = _existingProfile
+    ? (() => { try { const p = JSON.parse(_existingProfile); return p && p.skipped === true; } catch { return false; } })()
+    : false;
+  if (!_existingProfile || _isSkipped) {
+    const coachProfile = {
+      name: 'Felix Wagner',
+      sports: ['Leichtathletik', 'Sprint'],
+      structured: {
+        philosophy:
+          'Athletengerechte Periodisierung basierend auf wissenschaftlichen Erkenntnissen – ' +
+          'jeder Trainingsplan wird individuell auf den Athleten zugeschnitten und berücksichtigt ' +
+          'Belastungs-Erholungs-Balance, aktuelle Leistungsdaten und langfristige Entwicklungsziele.',
+        methods:
+          'Sprinttraining (Beschleunigung & Maximalgeschwindigkeit), Kraft- und Schnellkrafttraining, ' +
+          'Plyometrie sowie gezieltes Techniktraining. Die Methoden werden je nach Mesozyklus-Phase ' +
+          'in Frequenz und Intensität angepasst.',
+        targetGroup:
+          'Sprinter auf 100m–400m, Altersklasse 16–30 Jahre, vom ambitionierten Amateur bis zum Semi-Profi.',
+        experience:
+          '8 Jahre Coaching-Erfahrung im Leichtathletik-Bereich, davon 5 Jahre als Vereinstrainer ' +
+          'mit nachweisbaren Leistungsverbesserungen bei über 20 Athleten.',
+      },
+      summary:
+        'Felix Wagner ist ein erfahrener Leichtathletik-Coach mit Schwerpunkt Sprint, der evidenzbasierte ' +
+        'Periodisierungsmethoden mit einer hohen Individualität in der Trainingsplanung verbindet. ' +
+        'Seine Athleten profitieren von einem strukturierten, wissenschaftlich fundierten Ansatz, ' +
+        'der Kraft, Schnelligkeit und Technik ganzheitlich entwickelt.',
+      completedAt: new Date().toISOString(),
+    };
+    localStorage.setItem('coachProfile', JSON.stringify(coachProfile));
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

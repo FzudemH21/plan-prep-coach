@@ -1,53 +1,55 @@
-# Feature-Liste Plan Prep Coach
+# Feature List – Plan Prep Coach
 
-## Kontext
-Ich bin Athletin, Trainerin und Sportwissenschaftlerin.
-Ich entwickle Plan Prep Coach - eine Web-App die den Trainingplanungsprozess streamlinet.
+## Context
+I am an athlete, coach, and sports scientist.
+I'm developing Plan Prep Coach — a web app that streamlines the training planning process.
 **Tech Stack:** React, TypeScript, Vite, Tailwind, shadcn-ui, Supabase
 **GitHub:** https://github.com/FzudemH21/plan-prep-coach
-Ich arbeite mit Claude Code im Terminal für Code-Änderungen.
-Du bist mein Sparringspartner für Planung, Diskussion und Prompts für Claude Code.
+I work with Claude Code in the terminal for code changes.
+Claude Chat (browser) is my sparring partner for planning, discussion, and prompt formulation.
 
 ---
 
-## Feature-Liste
+## Feature List
 
-| Priorität | Feature | Status |
+| Priority | Feature | Status |
 |---|---|---|
-| 🔴 Jetzt | Code Audit Sofort-Punkte (1-4) | ✅ Erledigt |
-| 🔴 Jetzt | Athleticism DB v1 entfernen | ✅ Erledigt |
-| 🔴 Jetzt | Session-Card: Übungsanzahl entfernen | ✅ Erledigt |
-| 🔴 Jetzt | Notizfeld Wizard + Sync | ✅ Erledigt |
-| 🔴 Jetzt | Session-Card Overflow fixen | ✅ Erledigt |
-| 🔴 Jetzt | Notizfeld Athletenprofil | ✅ Erledigt |
-| 🔴 Jetzt | Bulk Import Übungen (CSV/Excel) | ✅ Erledigt |
-| 🔴 Jetzt | Bulk Import Fixes (3-Schritt-Flow, Description optional, konsistente Speicherung) | ✅ Erledigt |
-| 🔴 Jetzt | Dynamisches Übungsdetail-Modal (Spalten aus Datenbank, keine hardcodierten Felder, direkt editierbar) | ✅ Erledigt |
-| 🟡 Bald | Coach-Profil & Onboarding (KI-Gespräch zum Kennenlernen der Coaching-Philosophie, KI stellt Folgefragen, Ergebnis wird als Coach-Profil gespeichert und reviewbar) | ⬜ Offen |
-| 🟡 Bald | Plan-Uploads für Coach-Profil (Excel, PDF, Word und andere Dateien hochladbar, Coach gibt Kontext dazu, KI extrahiert Muster und reichert Coach-Profil an) | ⬜ Offen |
-| 🟡 Bald | KI-Autopilot im Wizard (Vorschläge & Vorausfüllen von Intensitäten, Methoden, Übungen basierend auf Coach-Profil) | ⬜ Offen |
-| 🟡 Bald | Accumulated Context (automatischer Abgleich KI-Vorschlag vs. finaler Plan, KI fragt dosiert nach bei signifikanten Abweichungen – max. 1-2 pro Plan, skipbar, Antworten fließen als Begründungen in Kontext ein) | ⬜ Offen |
-| 🟡 Bald | Spracheingabe für Coach (Athletenbeschreibung per Sprache im Athletenprofil und Wizard-Start, Web Speech API + Anthropic API) | ⬜ Offen |
-| 🟡 Bald | Masterplaner-Ansicht Athletenkalender (Tag 1, Tag 2... pro Wochentag) | ✅ Erledigt |
-| 🟡 Bald | Tests & Events im Athletenkalender + Sync mit Wizard | ⬜ Offen |
-| 🟡 Bald | Dokumente hochladen + Freigabe für Athleten | ⬜ Offen |
-| 🟡 Bald | Programming-Templates für Trainingsmethoden | ⬜ Offen |
-| 🟡 Bald | Spalten verschieben in Datenbanken (Drag & Drop) | ✅ Erledigt |
-| 🟠 Später | Goal Management + Testbenachrichtigungen | ⬜ Offen |
-| 🟠 Später | Datumsunabhängiger Plan (Template-Modus) | ⬜ Offen |
-| 🔵 Zukunft | Athleten-App (mobil, separat) | ⬜ Offen |
-| 🔵 Zukunft | Athlete Management System (eigenständiger Bereich: Athletenprofile, Fortschrittstracking, Kommunikation, Wearable-Daten) | ⬜ Offen |
-| 🔵 Zukunft | KI-Wissensbasis + Coach-Philosophie kombiniert (KI hat eigene sportwissenschaftliche Wissensbasis, Coach-Profil ergänzt diese, bei Abweichungen vom wissenschaftlichen Konsens markiert die KI das – Lerneffekt für unerfahrene Coaches) | ⬜ Offen |
-| 🔵 Zukunft | Wearable & App Integrationen (Oura, Whoop, Apple Fitness, VBT) | ⬜ Offen |
-| 🔵 Zukunft | SaaS & Monetarisierung (Login, Pakete, Stripe) | ⬜ Offen |
-| 🔵 Zukunft | Buchungssystem (Athleten buchen beim Coach) + Coach-Kalender | ⬜ Offen |
-| 🔵 Zukunft | Zahlungssystem Coach↔Athlet (Marketplace-Modell) | ⬜ Offen |
+| 🔴 Now | Code Audit Quick Fixes (1-4) | ✅ Done |
+| 🔴 Now | Remove Athleticism DB v1 | ✅ Done |
+| 🔴 Now | Session Card: remove exercise count | ✅ Done |
+| 🔴 Now | Notes field Wizard + Sync | ✅ Done |
+| 🔴 Now | Session Card overflow fix | ✅ Done |
+| 🔴 Now | Notes field Athlete Profile | ✅ Done |
+| 🔴 Now | Bulk Import Exercises (CSV/Excel) | ✅ Done |
+| 🔴 Now | Bulk Import fixes (3-step flow, description optional, consistent storage) | ✅ Done |
+| 🔴 Now | Dynamic Exercise Detail Modal (columns from database, no hardcoded fields, directly editable) | ✅ Done |
+| 🟡 Soon | Coach Profile & Onboarding (AI conversation to learn coaching philosophy, AI asks follow-up questions, result saved as coach profile and reviewable) | 🔄 In Progress – basic structure implemented (onboarding flow, coach profile page, skip option, voice input). Missing: Anthropic API fully wired up for AI conversation. |
+| 🟡 Soon | Plan uploads for Coach Profile (Excel, PDF, Word and other files uploadable, coach provides context, AI extracts patterns and enriches coach profile) | ⬜ Open |
+| 🟡 Soon | AI Autopilot in Wizard (suggestions & pre-filling of intensities, methods, exercises based on coach profile) | ⬜ Open |
+| 🟡 Soon | Accumulated Context (automatic comparison of AI suggestion vs. final plan, AI asks targeted follow-up questions on significant deviations — max. 1-2 per plan, skippable, answers fed back as rationale context) | ⬜ Open |
+| 🟡 Soon | Voice input for coach (athlete description via voice in athlete profile and wizard start, Web Speech API + Anthropic API) | ✅ Done |
+| 🟡 Soon | Masterplanner view – Athlete Calendar (Day 1, Day 2... per weekday) | ✅ Done |
+| 🟡 Soon | Tests & Events in Athlete Calendar + sync with Wizard | ✅ Done |
+| 🟡 Soon | Document upload + sharing with athletes | 🔄 In Progress – basic structure implemented (local storage, folders, drag & drop, upload in coach profile, onboarding and wizard resources panel). Missing: (1) cloud storage via Supabase, (2) AI analysis of documents (API missing), (3) sharing with athletes, (4) Obsidian integration noted as optional future option |
+| 🟡 Soon | Programming Templates for training methods | ✅ Done – templates per method in Training Toolbox, Load Template dialog in Wizard Step 4 with preview, editable before loading, save as new template, units displayed, works across mesocycles |
+| 🟡 Soon | Column reordering in databases (drag & drop) | ✅ Done |
+| 🟠 Later | Goal Management + test notifications | ⬜ Open |
+| 🟠 Later | Date-independent plan (template mode) | ⬜ Open |
+| 🔵 Future | Athlete App (mobile, separate) | ⬜ Open |
+| 🔵 Future | Athlete Management System (standalone area: athlete profiles, progress tracking, communication, wearable data. Incl. AI analysis: correlations between completed training and athlete progress — coach can ask how effective a program was, which methods had the greatest effect, etc. Requires compliance tracking, test results, and Supabase.) | ⬜ Open |
+| 🔵 Future | AI knowledge base + coach philosophy combined (AI has its own sports science knowledge base, coach profile supplements it, AI flags deviations from scientific consensus — learning effect for less experienced coaches) | ⬜ Open |
+| 🔵 Future | Wearable & app integrations (Oura, Whoop, Apple Fitness, VBT) | ⬜ Open |
+| 🔵 Future | SaaS & monetization (login, packages, Stripe) | ⬜ Open |
+| 🔵 Future | Booking system (athletes book with coach) + coach calendar | ⬜ Open |
+| 🔵 Future | Payment system Coach↔Athlete (marketplace model) | ⬜ Open |
+| 🔵 Future | RAG (Retrieval Augmented Generation) – sports science knowledge base via Supabase Vector DB: coach uploads literature/papers, AI retrieves relevant passages on queries and responds based on real academic sources. Requires Supabase Auth + Cloud Storage (both already set up). | ⬜ Open |
 
 ---
 
 ## Workflow
-- Claude Code im Terminal für alle Code-Änderungen
-- Dieser Chat als Sparringspartner für Planung & Prompts
-- Nach jedem Milestone: `git add . && git commit -m "..."` 
-- Kontext bei 70%+ → `/clear` in Claude Code
-- Neue Chat-Session → CLAUDE.md + FEATURES.md sind im Projekt hinterlegt
+- Claude Code (desktop app, Code tab) for all code changes
+- Claude Chat (browser) as sparring partner for planning & prompts
+- After each milestone: `git add . && git commit -m "..."`
+- Context at 70%+ → `/clear` in Claude Code
+- New chat session → CLAUDE.md + FEATURES.md are stored in the project root
+- External collaborator works in feature branches, opens PRs, Felix reviews and merges

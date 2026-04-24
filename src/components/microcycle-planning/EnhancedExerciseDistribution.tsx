@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 
-import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import { DragDropContext, Droppable, Draggable, DropResult, DragStart } from '@hello-pangea/dnd';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { TrainingDay } from '@/types/daily-intensity';
-import { CellData } from '@/types/microcycle-planning';
+import { CellData, ExerciseSelection } from '@/types/microcycle-planning';
 import { IntensityLevel } from '@/types/training';
 import { ExerciseLibraryPanel } from './ExerciseLibraryPanel';
+import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
 import { SessionColumnView } from './SessionColumnView';
 import { DayHeader } from './DayHeader';
 import { useToast } from '@/hooks/use-toast';
@@ -13,6 +14,12 @@ import { format, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Copy, Loader2, Plus, Trash2 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -89,6 +96,10 @@ interface EnhancedExerciseDistributionProps {
   onMoveSessionUp?: (dayDate: string, sessionIndex: number) => void;
   onMoveSessionDown?: (dayDate: string, sessionIndex: number) => void;
   onUpdateTrainingDay?: (dayDate: string, updates: Partial<TrainingDay>) => void;
+  /** From Step 1: key = "${dayDate}_${sessionIndex}" → assigned methodIds */
+  dayMethodAssignments?: Record<string, string[]>;
+  /** Bidirectional sync: called when an exercise is added inline and needs to be written back */
+  onExerciseSelectionDataChange?: (data: Record<string, CellData>) => void;
 }
 
 export function EnhancedExerciseDistribution({
@@ -120,8 +131,13 @@ export function EnhancedExerciseDistribution({
   onMoveSessionUp,
   onMoveSessionDown,
   onUpdateTrainingDay,
+  dayMethodAssignments,
+  onExerciseSelectionDataChange,
 }: EnhancedExerciseDistributionProps) {
   const { toast } = useToast();
+  const [draggingMethodId, setDraggingMethodId] = useState<string | null>(null);
+  const [inlinePicker, setInlinePicker] = useState<{ dayDate: string; sessionIndex: number; sectionId?: string; methodId?: string } | null>(null);
+  const [methodSelectorPicker, setMethodSelectorPicker] = useState<{ dayDate: string; sessionIndex: number; sectionId?: string; methods: string[] } | null>(null);
   const [selectedMicrocycleId, setSelectedMicrocycleId] = useState<string | null>(null);
   const [copyingMicrocycleId, setCopyingMicrocycleId] = useState<string | null>(null);
   const [copyingMesocycle, setCopyingMesocycle] = useState(false);
@@ -476,7 +492,103 @@ export function EnhancedExerciseDistribution({
     return insertIndex;
   };
 
+  const handleDragStart = (start: DragStart) => {
+    if (start.source.droppableId.startsWith('library-')) {
+      const methodId = start.source.droppableId.replace('library-', '').split('::')[0];
+      setDraggingMethodId(methodId);
+    }
+  };
+
+  // ── Inline exercise add: write to distribution + bidirectional sync ──────────
+  const handleInlineAddExercises = (exercises: ExerciseSelection[]) => {
+    if (!inlinePicker) return;
+    const { dayDate, sessionIndex, sectionId: pickerSectionId } = inlinePicker;
+
+    // Determine section to add to
+    let updatedSections = [...sessionSections];
+    let targetSectionId: string;
+
+    if (pickerSectionId) {
+      // Use the section explicitly chosen from a section "+" button
+      targetSectionId = pickerSectionId;
+    } else {
+      // Fallback: auto-create a section if none exists (legacy behaviour)
+      const existingSections = sessionSections.filter(
+        s => s.dayDate === dayDate && s.sessionIndex === sessionIndex
+      ).sort((a, b) => a.order - b.order);
+
+      if (existingSections.length === 0) {
+        const newSection: SessionSection = {
+          id: `section-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          dayDate,
+          sessionIndex,
+          name: 'Section 1',
+          order: 0,
+        };
+        updatedSections = [...sessionSections, newSection];
+        targetSectionId = newSection.id;
+        onSectionsChange(updatedSections);
+      } else {
+        targetSectionId = existingSections[0].id;
+      }
+    }
+
+    // Get current count of exercises in target section for ordering
+    const baseOrder = exerciseDistribution.filter(ex => ex.sectionId === targetSectionId).length;
+
+    // Use the method explicitly chosen by the coach (Case A: auto-set; Case B: selected via dialog)
+    const primaryMethodId = inlinePicker.methodId ?? '';
+
+    const newDistEntries: ExerciseDistribution[] = exercises.map((ex, i) => ({
+      id: `ex-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}`,
+      exerciseId: ex.exerciseId,
+      exerciseName: ex.exerciseName,
+      methodId: primaryMethodId,
+      categoryName: '',
+      subCategory: ex.subCategory,
+      dayDate,
+      sessionIndex,
+      order: baseOrder + i,
+      sectionId: targetSectionId,
+    }));
+
+    onDistributionChange([...exerciseDistribution, ...newDistEntries]);
+
+    // Bidirectional sync: write back to exerciseSelectionData if callback provided
+    if (onExerciseSelectionDataChange && primaryMethodId) {
+      const updatedSelectionData = { ...exerciseSelectionData };
+      exercises.forEach(ex => {
+        // Find existing cell for this method+mesocycle
+        const existingEntry = Object.entries(updatedSelectionData).find(
+          ([, cell]) => cell.methodId === primaryMethodId && cell.mesocycleId === mesocycle.id
+        );
+        if (existingEntry) {
+          const [cellKey, cellData] = existingEntry;
+          if (!cellData.exercises.find(e => e.exerciseId === ex.exerciseId)) {
+            updatedSelectionData[cellKey] = {
+              ...cellData,
+              exercises: [...cellData.exercises, ex],
+            };
+          }
+        } else {
+          // Create new cell
+          const newKey = `${primaryMethodId}::::${mesocycle.id}`;
+          updatedSelectionData[newKey] = {
+            methodId: primaryMethodId,
+            mesocycleId: mesocycle.id,
+            exercises: [ex],
+          };
+        }
+      });
+      onExerciseSelectionDataChange(updatedSelectionData);
+    }
+
+    toast({ title: 'Exercise added', description: `${exercises.length} exercise${exercises.length > 1 ? 's' : ''} added to session` });
+    setInlinePicker(null);
+  };
+
   const handleDragEnd = (result: DropResult) => {
+    setDraggingMethodId(null);
     const { source, destination, draggableId, type } = result;
 
     if (!destination) return;
@@ -702,6 +814,119 @@ export function EnhancedExerciseDistribution({
       
       onDistributionChange([...otherExercises, ...sectionExercises]);
       toast({ title: 'Exercise added to section', description: `${exercise.exerciseName} added to ${section.name}` });
+      return;
+    }
+
+    // Handle moving FROM section TO "create new section" drop zone
+    if (type === 'EXERCISE' && source.droppableId.startsWith('section-') && destination.droppableId.startsWith('new-section-')) {
+      const sourceSectionId = source.droppableId.replace('section-', '');
+      const destParts = destination.droppableId.replace('new-section-', '').split('::');
+      const destDayDate = destParts[0];
+      const destSessionIndex = parseInt(destParts[1], 10);
+
+      const sourceSection = sessionSections.find(s => s.id === sourceSectionId);
+      if (!sourceSection) return;
+
+      const sourceExercises = exerciseDistribution
+        .filter(ex => ex.sectionId === sourceSectionId)
+        .sort((a, b) => a.order - b.order);
+
+      const supersetExercises = getSupersetExercises(
+        draggableId,
+        sourceExercises,
+        sourceSection.dayDate,
+        sourceSection.sessionIndex,
+        sourceSectionId
+      );
+
+      const remainingSourceExercises = sourceExercises.filter(
+        ex => !supersetExercises.find(se => se.id === ex.id)
+      );
+
+      const existingSectionsInDest = sessionSections.filter(
+        s => s.dayDate === destDayDate && s.sessionIndex === destSessionIndex
+      );
+      const newSectionNumber = existingSectionsInDest.length + 1;
+
+      const newSection: SessionSection = {
+        id: `section-${Date.now()}-${Math.random()}`,
+        dayDate: destDayDate,
+        sessionIndex: destSessionIndex,
+        name: `Section ${newSectionNumber}`,
+        order: existingSectionsInDest.length,
+      };
+
+      supersetExercises.forEach((ex, idx) => {
+        ex.sectionId = newSection.id;
+        ex.dayDate = destDayDate;
+        ex.sessionIndex = destSessionIndex;
+        ex.order = idx;
+      });
+
+      remainingSourceExercises.forEach((ex, idx) => { ex.order = idx; });
+
+      const otherExercises = exerciseDistribution.filter(ex => ex.sectionId !== sourceSectionId);
+
+      onSectionsChange([...sessionSections, newSection]);
+      onDistributionChange([...otherExercises, ...remainingSourceExercises, ...supersetExercises]);
+      const exerciseText = supersetExercises.length > 1 ? `${supersetExercises.length} exercises` : 'Exercise';
+      toast({ title: 'New section created', description: `${exerciseText} moved to ${newSection.name}` });
+      return;
+    }
+
+    // Handle moving FROM unsectioned session area TO "create new section" drop zone
+    if (type === 'EXERCISE' && source.droppableId.startsWith('session-') && destination.droppableId.startsWith('new-section-')) {
+      const [sourceDayDate, sourceSessionIndex] = source.droppableId.replace('session-', '').split('::');
+      const destParts = destination.droppableId.replace('new-section-', '').split('::');
+      const destDayDate = destParts[0];
+      const destSessionIndex = parseInt(destParts[1], 10);
+
+      const sourceExercises = exerciseDistribution
+        .filter(ex => ex.dayDate === sourceDayDate && ex.sessionIndex === parseInt(sourceSessionIndex) && !ex.sectionId)
+        .sort((a, b) => a.order - b.order);
+
+      const supersetExercises = getSupersetExercises(
+        draggableId,
+        sourceExercises,
+        sourceDayDate,
+        parseInt(sourceSessionIndex),
+        undefined
+      );
+
+      const remainingSourceExercises = sourceExercises.filter(
+        ex => !supersetExercises.find(se => se.id === ex.id)
+      );
+
+      const existingSectionsInDest = sessionSections.filter(
+        s => s.dayDate === destDayDate && s.sessionIndex === destSessionIndex
+      );
+      const newSectionNumber = existingSectionsInDest.length + 1;
+
+      const newSection: SessionSection = {
+        id: `section-${Date.now()}-${Math.random()}`,
+        dayDate: destDayDate,
+        sessionIndex: destSessionIndex,
+        name: `Section ${newSectionNumber}`,
+        order: existingSectionsInDest.length,
+      };
+
+      supersetExercises.forEach((ex, idx) => {
+        ex.sectionId = newSection.id;
+        ex.dayDate = destDayDate;
+        ex.sessionIndex = destSessionIndex;
+        ex.order = idx;
+      });
+
+      remainingSourceExercises.forEach((ex, idx) => { ex.order = idx; });
+
+      const otherExercises = exerciseDistribution.filter(
+        ex => !(ex.dayDate === sourceDayDate && ex.sessionIndex === parseInt(sourceSessionIndex) && !ex.sectionId)
+      );
+
+      onSectionsChange([...sessionSections, newSection]);
+      onDistributionChange([...otherExercises, ...remainingSourceExercises, ...supersetExercises]);
+      const exerciseText = supersetExercises.length > 1 ? `${supersetExercises.length} exercises` : 'Exercise';
+      toast({ title: 'New section created', description: `${exerciseText} moved to ${newSection.name}` });
       return;
     }
 
@@ -2010,7 +2235,7 @@ export function EnhancedExerciseDistribution({
         </AlertDialogContent>
       </AlertDialog>
 
-      <DragDropContext onDragEnd={handleDragEnd}>
+      <DragDropContext onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
       <div className="flex h-full w-full">
         <div className="w-[15%] shrink-0 border-r">
           <ExerciseLibraryPanel
@@ -2215,11 +2440,34 @@ export function EnhancedExerciseDistribution({
                                 const sessionCommentsKey = mesocycle.id ? `sessionComments_${mesocycle.id}_${day.date}_${sessionIndex}` : '';
                                 const sessionComments = sessionCommentsKey ? (sessionCommentsMap[sessionCommentsKey] || '') : '';
 
+                                const sessionKey = `${day.date}_${sessionIndex}`;
+                                const sessionMethods = dayMethodAssignments?.[sessionKey] ?? [];
+                                const methodMatchState: 'match' | 'no-match' | 'neutral' =
+                                  draggingMethodId
+                                    ? (sessionMethods.length > 0
+                                        ? (sessionMethods.includes(draggingMethodId) ? 'match' : 'no-match')
+                                        : 'neutral')
+                                    : 'neutral';
+
                                 return (
                                   <SessionColumnView
                                     key={`${day.date}-${sessionIndex}`}
                                     day={day}
                                     sessionIndex={sessionIndex}
+                                    methodMatchState={methodMatchState}
+                                    assignedMethods={sessionMethods}
+                                    onAddExerciseInline={(sectionId) => {
+                                      if (sessionMethods.length === 1) {
+                                        // Case A: exactly one method — assign automatically
+                                        setInlinePicker({ dayDate: day.date, sessionIndex, sectionId, methodId: sessionMethods[0] });
+                                      } else if (sessionMethods.length > 1) {
+                                        // Case B: multiple methods — let coach choose
+                                        setMethodSelectorPicker({ dayDate: day.date, sessionIndex, sectionId, methods: sessionMethods });
+                                      } else {
+                                        // No methods assigned — open picker without method context
+                                        setInlinePicker({ dayDate: day.date, sessionIndex, sectionId });
+                                      }
+                                    }}
                                     exercises={sessionExercises}
                                     sections={daySections}
                                     supersets={daySupersets}
@@ -2286,6 +2534,47 @@ export function EnhancedExerciseDistribution({
         </div>
       </div>
     </DragDropContext>
+
+    {/* Method selector dialog (Case B: multiple methods on session) */}
+    <Dialog
+      open={!!methodSelectorPicker}
+      onOpenChange={(open) => { if (!open) setMethodSelectorPicker(null); }}
+    >
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Add exercise to which method?</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-2 pt-1">
+          {methodSelectorPicker?.methods.map(methodId => (
+            <Button
+              key={methodId}
+              variant="outline"
+              className="justify-start text-left h-auto py-2.5 px-3 whitespace-normal"
+              onClick={() => {
+                const { dayDate, sessionIndex, sectionId } = methodSelectorPicker!;
+                setMethodSelectorPicker(null);
+                setInlinePicker({ dayDate, sessionIndex, sectionId, methodId });
+              }}
+            >
+              <span className="text-sm leading-snug">{methodId}</span>
+            </Button>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    {/* Inline exercise picker dialog */}
+    {inlinePicker && (
+      <ExerciseLibraryPopup
+        isOpen={true}
+        onClose={() => setInlinePicker(null)}
+        onSelectExercises={handleInlineAddExercises}
+        selectedExerciseIds={exerciseDistribution
+          .filter(ex => ex.dayDate === inlinePicker.dayDate && ex.sessionIndex === inlinePicker.sessionIndex)
+          .map(ex => ex.exerciseId)}
+        onExerciseCreated={(ex) => handleInlineAddExercises([ex])}
+      />
+    )}
     </>
   );
 }

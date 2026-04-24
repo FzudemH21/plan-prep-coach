@@ -8,19 +8,20 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { 
-  Home, 
-  Target, 
-  Calendar, 
-  Users, 
-  FileText, 
+import {
+  Home,
+  Target,
+  Calendar,
+  Users,
+  FileText,
   BarChart3,
   ChevronDown,
   ChevronRight,
   Dumbbell,
   Zap,
   Wrench,
-  Library
+  Library,
+  UserCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCustomLibraries } from "@/contexts/CustomLibrariesContext";
@@ -281,6 +282,19 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
 
           {/* Templates & Libraries Group */}
           {renderNavGroup(templatesGroup, "templates")}
+
+          {/* Coach-Profil - standalone */}
+          <Button
+            variant="ghost"
+            className={cn(
+              "w-full justify-start h-10",
+              isActive("/coach-profile") && "bg-accent text-accent-foreground font-medium"
+            )}
+            onClick={() => handleNavigate("/coach-profile")}
+          >
+            <UserCircle className="h-4 w-4 mr-2" />
+            Coach-Profil
+          </Button>
 
           {/* Analytics - standalone */}
           <Button

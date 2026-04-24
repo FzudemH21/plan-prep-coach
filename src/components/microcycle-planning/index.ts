@@ -18,3 +18,5 @@ export { CombinedTestEventDialog } from './CombinedTestEventDialog';
 export { EnhancedExerciseDistribution } from './EnhancedExerciseDistribution';
 export { SessionColumnView } from './SessionColumnView';
 export { DayHeader } from './DayHeader';
+export { MethodSessionArchitecture } from './MethodSessionArchitecture';
+export type { MethodSessionArchitectureProps } from './MethodSessionArchitecture';

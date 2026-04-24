@@ -1,199 +1,214 @@
 # CLAUDE.md – Plan Prep Coach
 
-## Projektübersicht
-**Plan Prep Coach** ist eine Web-App für Trainer, Athleten und Sportwissenschaftler, die den Prozess der Trainingsplanung von Grund auf streamlinet. Die App ersetzt komplexe Excel-Workflows und manuelle Dateneingabe in externe Tools (z.B. Everfit, TrainHeroic) durch einen geführten, intelligenten Wizard.
+## Project Overview
+**Plan Prep Coach** is a web app for coaches, athletes, and sports scientists that streamlines the entire training planning process from the ground up. It replaces complex Excel workflows and manual data entry into external tools (e.g. Everfit, TrainHeroic) with a guided, intelligent wizard.
 
 **Tech Stack:** React, TypeScript, Vite, Tailwind CSS, shadcn-ui, Supabase
+**GitHub:** https://github.com/FzudemH21/plan-prep-coach
+**Dev Server:** `npm run dev` → localhost:8080 (PowerShell, path: `C:\Users\Hanik\plan-prep-coach`)
 
 ---
 
-## Kernphilosophie
-- Trainingsplanung ist eine Kette von abhängigen Entscheidungen – der Wizard führt den Trainer Schritt für Schritt durch diese Kette
-- Daten werden **einmal eingegeben** und fließen automatisch durch alle Ebenen durch (kein doppeltes Eintippen)
-- Der Trainer soll sich auf **Denken statt Klicken** konzentrieren können
-- Jeder Schritt des Wizards hat einen **KI-Chat** zur Diskussion und Beratung
+## Prompt Discipline (Critical!)
+**Every Claude Code prompt must begin with:**
+> Before making any changes, read both `CLAUDE.md` and `FEATURES.md` in the project root.
+
+No prompt without this line. CLAUDE.md and FEATURES.md are the single source of truth.
 
 ---
 
-## Trainingsplan-Hierarchie
+## Core Philosophy
+- Training planning is a chain of dependent decisions — the wizard guides the coach step by step through this chain
+- Data is **entered once** and flows automatically through all levels (no double entry)
+- The coach should focus on **thinking, not clicking**
+- Every wizard step has an **AI chat** for discussion and advice
+
+---
+
+## Infrastructure
+
+### Anthropic API
+- SDK installed: `@anthropic-ai/sdk`
+- Client wrapper: `src/lib/anthropic.ts`
+- Key stored in `.env` as `VITE_ANTHROPIC_API_KEY` (never commit)
+- `dangerouslyAllowBrowser: true` is set — acceptable for local coach tool, must be replaced with a backend proxy for SaaS
+
+### Supabase
+- SDK installed: `@supabase/supabase-js`
+- Client wrapper: `src/lib/supabase.ts`
+- Keys in `.env` as `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
+- Cloud Storage: `src/lib/storage.ts` with `uploadFile`, `downloadFile`, `deleteFile`, `getPublicUrl`
+- Storage bucket: `documents` (public: off) — for coach documents, training plans, literature
+- RLS (Row Level Security) is enabled
+
+---
+
+## Training Plan Hierarchy
 ```
-Makrozyklus
-  └── Mesozyklus(en)
-        └── Mikrozyklus(en)  (meist 1 Woche, Dauer konfigurierbar)
-              └── Trainingstag(e)
-                    └── Session(s) / Einheit(en)
-                          └── Sections (Warm-up, Hauptteil, Cooldown)
-                                └── Übungen (mit Sets, Reps, Intensität etc.)
+Macrocycle
+  └── Mesocycle(s)
+        └── Microcycle(s)  (usually 1 week, configurable duration)
+              └── Training Day(s)
+                    └── Session(s)
+                          └── Sections (Warm-up, Main, Cooldown)
+                                └── Exercises (with Sets, Reps, Intensity etc.)
 ```
 
 ---
 
-## Datenbanken (vom Coach konfigurierbar)
-1. **Athleten-Datenbank** – Profile mit:
-   - Demografische Daten (Name, Alter, Geschlecht, etc.)
-   - Parameterwerte (z.B. aktuelle 100m-Zeit, Kraftwerte etc.)
-   - Zugewiesene Trainingspläne
-   - Persönlicher Trainingskalender (nur Sessions & Tagesintensitäten sichtbar)
-2. **Parameter-Datenbank** – Ziele (z.B. 100m-Sprintzeit), Sub-Parameter, Abhängigkeiten zwischen Parametern (positiv/negativ), Begründungen + Research-Zitationen
-3. **Trainingsmethoden-Datenbank** – Methoden mit Ober-/Unterkategorien, verknüpft mit Parametern
-4. **Übungsdatenbank** – Übungen mit Video, Beschreibung, Kategorie (z.B. "Lower Body Resistance Strength"), Parametern
+## Databases (Coach-configurable)
+1. **Athlete Database** – Profiles with demographic data, parameter values, assigned plans, personal calendar
+2. **Parameter Database** – Goals, sub-parameters, dependencies between parameters (positive/negative), rationales + research citations
+3. **Training Methods Database** – Methods with parent/child categories, linked to parameters
+4. **Exercise Database** – Exercises with video, description, category (e.g. "Lower Body Resistance Strength"), parameters. Bulk import via CSV/Excel (3-step flow). Dynamic detail modal (columns from database, no hardcoded fields, directly editable). Drag & drop column reordering.
 
 ---
 
-## Wizard – Vollständiger Ablauf
+## Implemented Features (Current State)
 
-### Phase 1: Plan-Setup
-**Schritt 1:** Athlet wählen (aus Datenbank) → Werte automatisch geladen
-- Planname eingeben
-- Zeitraum festlegen (Kalender: Start- & Enddatum)
-- Ziel-Parameter wählen (z.B. "100m-Sprintzeit verbessern")
+### Coach Profile
+- Onboarding flow with AI conversation (basic structure), skip option, voice input
+- Documents: local storage, folder structure, drag & drop, upload
+- Resources panel (persistent, available in onboarding and wizard)
+- AI conversation will be fully activated once Anthropic API integration is complete
 
-**Schritt 2:** Parameter & Subziele
-- Aktuelle Athletenwerte für gewählte Parameter
-- Sub-Parameter / Subziele anzeigen (z.B. Kraft, Explosivität, Antritt)
-- Abhängigkeiten zwischen Parametern werden in der Parameterdatenbank definiert (nicht hier)
+### Athlete Calendar & Masterplanner
+- Athlete calendar with copy/paste, clear day/week, session name sync
+- Tests & events in calendar, synced with wizard via unified `calendarEvents` storage
+- Masterplanner view with week-horizon selector
+- Consistent color/icon scheme for tests and events across all views (Athlete Calendar, Macrocycle, Mesocycle, Microcycle Planning)
 
-**Schritt 3:** Trainingsmethoden wählen
-- Vorgeschlagene Methoden pro Ziel (aus Datenbank verlinkt)
-- Methoden abwählen oder manuell ergänzen (landen in Methoden-Datenbank)
+### Microcycle Planning
+- Method Distribution: drag & drop, methods filtered to current mesocycle's characterization selections, multiple methods per session allowed, full-name card display
+- Exercise Distribution: hybrid drag & drop + inline "+", bidirectional sync
+- Microcycle-specific frequency indicator with overage warnings
+- Copy behavior skips unavailable methods with warnings
 
----
+### Programming Templates
+- Templates per method in Training Toolbox
+- Load Template dialog in Wizard Step 4 with preview, editable before loading
+- Save as new template, units displayed, works across mesocycles
 
-### Phase 2: Mesozyklus-Planung
+### Plan Assignment
+- Multi-step Assign Program dialog with mesocycle/microcycle filtering
+- Plan-state tests/events only flow into `calendarEvents` upon plan assignment to an athlete
 
-**Schritt 1:** Mesozyklen konfigurieren
-- Anzahl Mesozyklen + Dauer (z.B. 3 Mesozyklen à 4 Wochen)
-- Intensitäten pro Mikrozyklus festlegen:
-  `Off → Easy → Moderate → Hard → Extremely Hard`
+### Exercise Database
+- Bulk import (multi-step flow), dynamic exercise detail modal
+- Drag & drop column reordering
 
-**Schritt 2:** Mikrozyklus-Intensitäten
-- Tagesintensitäten innerhalb jedes Mikrozyklus festlegen (gleiche Skala)
-
-**Schritt 3:** Methoden pro Mesozyklus
-- Für jeden Mesozyklus definieren welche Methoden aktiv sind
-- Beispiel: Letzter Mesozyklus nur Sprinttraining, kein Krafttraining
-
-**Schritt 4: Periodisierungstabelle** ⭐ (Kernstück)
-- Spalten = Mesozyklen mit ihren Mikrozyklen
-- Zeilen = Trainingsmethoden (Ober- & Unterkategorien)
-- Pro Methode & Mikrozyklus: Frequenz, Sätze, Wiederholungen, Intensität, weitere Parameter
-- Diese Werte fließen automatisch durch alle Ebenen durch – bis in den finalen Trainingskalender
-
-**Schritt 5:** Übungsauswahl
-- Pro Mesozyklus & Methode: Übungen aus Datenbank wählen
-- Übungen haben Videos, Beschreibungen, Kategorien
+### Seed Data
+- Seed data system via `src/utils/seedData.ts`
 
 ---
 
-### Phase 3: Mikrozyklus-Planung (Trainingskalender)
+## Wizard – Full Flow
 
-**Schritt 1:** Übungen den Tagen zuweisen
-- Kalenderansicht mit Intensitäts-Labels (aus Mesozyklus-Planung)
-- Labels änderbar (Änderung ist konsistent & rückwirkend)
+### Phase 1: Plan Setup
+**Step 1:** Select athlete → values auto-loaded, plan name, date range, target parameters
+**Step 2:** Parameters & sub-goals
+**Step 3:** Select training methods
 
-**Schritt 2:** Session-Architektur aufbauen
-- Sections anlegen: Warm-up, Hauptteil, Cooldown
-- Kommentare zu Sections und Übungen
-- Supersätze erstellen (Übungen verbinden)
-- Drag & Drop für Reihenfolge
-- Sessions kopieren
+### Phase 2: Mesocycle Planning
+**Step 1:** Configure mesocycles (count, duration, intensities per microcycle: `Off → Easy → Moderate → Hard → Extremely Hard`)
+**Step 2:** Microcycle intensities (daily intensities within each microcycle)
+**Step 3:** Methods per mesocycle (define which methods are active per mesocycle)
+**Step 4:** Periodization Table ⭐ (core component) — frequency, sets, reps, intensity per method & microcycle; values flow automatically through all levels down to the final training calendar
+**Step 5:** Exercise selection per mesocycle & method
 
-**Automatischer Datenfluss:**
-- Belastungsparameter aus Periodisierungstabelle erscheinen automatisch bei den Übungen
-- Sätze als Zeilen, Parameter als Spalten
-- Angezeigte Parameter konfigurierbar (in Parameterdatenbank)
+### Phase 3: Microcycle Planning (Training Calendar)
+**Step 1:** Assign exercises to days (calendar view with intensity labels, labels changeable consistently)
+**Step 2:** Build session architecture (sections, supersets, drag & drop, copy sessions)
 
----
+**Automatic data flow:**
+- Load parameters from periodization table appear automatically on exercises
+- Sets as rows, parameters as columns
+- Displayed parameters configurable (in parameter database)
 
-### Finaler Output & Planzuweisung
-- **Trainingskalender** mit allen Sessions & Parametern vollständig befüllt
-- **Zuweisung an Athleten-Profil:**
-  - Ein fertiger Trainingsplan kann jedem Athleten zugewiesen werden
-  - Die Zuweisung ist **datumsunabhängig** – ein Plan der ursprünglich am 1. Mai erstellt wurde, kann z.B. am 24. April 2027 einem Athleten zugewiesen werden. Das Startdatum wird bei der Zuweisung neu gesetzt, alle Sessions verschieben sich entsprechend
-  - Im Athleten-Kalender erscheinen dann nur die relevanten Infos: Sessions & Tagesintensitäten
-- **PDF-Export** mit:
-  - Vollständigem Trainingsplan
-  - Begründungen warum welche Methode gewählt wurde
-  - Research-Zitationen aus der Parameterdatenbank
-  - KI-unterstützte Formulierung des "Why" – die einzelnen Begründungen aus der Parameterdatenbank werden von der KI zu einem zusammenhängenden, gut lesbaren Text zusammengefügt
-  - Für den Athleten verständlich aufbereitet
-- Zukünftig: Sessions erscheinen in der Athleten-App (mobil)
+### Final Output & Plan Assignment
+- **Training calendar** fully populated with all sessions & parameters
+- **Assignment to athlete profile:**
+  - A finished plan can be assigned to any athlete
+  - Assignment is **date-independent** — a plan created on May 1st can be assigned starting April 24th 2027; start date is reset at assignment, all sessions shift accordingly
+  - In the athlete calendar only relevant info is visible: sessions & daily intensities
+- **PDF export** with full training plan, method rationales, research citations, AI-formulated "Why" text
+- Future: sessions appear in athlete app (mobile)
 
 ---
 
-## Zwei-App-Architektur
+## Two-App Architecture
 
-### Coach-App (Desktop-first)
-- Vollständiger Zugang zum Programming Wizard
-- Athleten-Datenbank, Parameter-Datenbank, Methoden-Datenbank, Übungsdatenbank
-- Trainingspläne erstellen, verwalten und Athleten zuweisen
-- KI-Chat überall verfügbar
+### Coach App (Desktop-first)
+- Full access to programming wizard
+- Athlete, parameter, methods, and exercise databases
+- Create, manage, and assign training plans to athletes
+- AI chat available everywhere
 
-### Athleten-App (Mobile-first)
-- Schlanke Ansicht – nur das was für den Athleten relevant ist
-- Persönlicher Kalender mit zugewiesenen Sessions
-- Tagesintensitäten sichtbar
-- Sessions öffnen und Details einsehen (Übungen, Sets, Reps, Intensität etc.)
-- Kein Zugang zur Planungsebene
-- **Jeder Schritt des Wizards** hat einen integrierten KI-Chat
-- Der Coach kann jederzeit mit der KI diskutieren: über Parameter, Intensitäten, Methoden, Periodisierung etc.
-- KI-Support auch beim PDF-Export für die "Why"-Formulierung
-- Generell: KI ist immer verfügbar als Sparringspartner in der gesamten App
+### Athlete App (Mobile-first, future)
+- Lean view — only what's relevant for the athlete
+- Personal calendar with assigned sessions
+- Daily intensities visible
+- Open sessions and view details (exercises, sets, reps, intensity etc.)
+- No access to planning level
 
 ---
 
-## Entwicklungsregeln
+## Collaboration
 
-### Datenfluss (kritisch!)
-- Parameter-Werte fließen von oben nach unten durch: Periodisierungstabelle → Übungen → Kalender
-- Änderungen an höherer Ebene müssen konsistent nach unten propagieren
-- Niemals Daten auf mehreren Ebenen doppelt speichern
+### Workflow
+- **Planning & prompts:** Claude Chat (browser)
+- **Implementation:** Claude Code (desktop app, Code tab)
+- **Version control:** GitHub, branch/PR workflow
+- External collaborator has GitHub Collaborator access
+- No direct pushes to `main` — always via Pull Request
+- Felix reviews and merges all PRs
+
+### For the External Collaborator
+- Work in own feature branches (e.g. `feature/rag-supabase`)
+- Open Pull Requests for review before merging
+- Has access to Supabase project (Settings → Team)
+- Current task: RAG via Supabase Vector DB (Supabase Auth + Cloud Storage already set up)
+
+---
+
+## Development Rules
+
+### Data Flow (Critical!)
+- Parameter values flow top-down: Periodization Table → Exercises → Calendar
+- Changes at a higher level must propagate consistently downward
+- Never store data redundantly across multiple levels
+- Plan-state tests/events only flow into `calendarEvents` upon plan assignment
 
 ### State Management
-- Wizard-State muss über alle Schritte erhalten bleiben
-- Jeder Schritt baut auf dem vorherigen auf
-- Beim Zurückgehen dürfen keine Daten verloren gehen
-- **Bidirektionale Synchronisation:** Änderungen in einem späteren Schritt müssen sich automatisch in allen vorherigen und nachfolgenden Schritten widerspiegeln – der gesamte Wizard-State ist immer konsistent
-- Keine isolierten lokalen States pro Schritt – immer einen zentralen, geteilten State verwenden
+- Wizard state must be preserved across all steps
+- Bidirectional sync — entire wizard state is always consistent
+- No isolated local state per step — always use central shared state
+- Going back must never lose data
 
-### UI/UX Prinzipien
-- Jeder Wizard-Schritt hat einen KI-Chat zur Beratung
-- Drag & Drop wo möglich (Session-Aufbau)
-- Intensitäts-Labels konsistent durch die gesamte App
-- Mobile-first für Athleten-Ansicht, Desktop-first für Coach-Ansicht
+### Storage Changes
+- Always include a migration fallback for existing localStorage data
+- Never assume data is in the latest format
 
-### Code-Qualität
-- TypeScript strict mode – keine `any` Types
-- Komponenten klein und wiederverwendbar halten
-- Komplexe Logik in eigene Hooks auslagern
-- Vor größeren Änderungen immer den bestehenden Code analysieren
+### UI/UX Principles
+- All UI text must be in English (labels, buttons, placeholders, hints, tab names, error messages)
+- Only CLAUDE.md and FEATURES.md remain in German — but as of this update, both are in English
+- Drag & drop wherever possible
+- Intensity labels consistent throughout the entire app
+- Desktop-first for coach view, mobile-first for athlete view (future)
 
----
-
-## Bekannte Komplexitäten
-- Periodisierungstabelle ist die komplexeste Komponente (viele verschachtelte Daten)
-- Abhängigkeiten zwischen Parametern müssen korrekt dargestellt werden
-- Automatischer Datenfluss von Meso → Mikro → Session ist kritisch
-- PDF-Export muss strukturiert und athletengerecht sein
+### Code Quality
+- TypeScript strict mode — no `any` types
+- Keep components small and reusable
+- Extract complex logic into custom hooks
+- Always analyze existing code before making changes
+- Scope-limited prompts: explicitly state which files may be touched
+- After implementation: provide a summary flagging any deviations from the prompt
 
 ---
 
-## Sessions & Kalender-Prinzip
-
-### Sessions sind Sessions
-- Es gibt keinen Unterschied zwischen "Programm-Sessions" und manuell hinzugefügten Sessions
-- Wenn ein Trainingsplan zugewiesen wird, werden die Sessions fragmentiert und als normale Kalender-Sessions übernommen
-- Ab dem Moment der Zuweisung haben alle Sessions dieselben Eigenschaften und dasselbe Verhalten, unabhängig von ihrer Herkunft
-- Bestehende Sessions werden beim Zuweisen eines Programms NIEMALS überschrieben – neue Sessions werden immer hinzugefügt
-
-### Storage-Änderungen
-- Bei jeder Änderung der Storage-Struktur immer einen Migrations-Fallback einbauen damit bestehende Daten (alte Athleten, alte Pläne) korrekt funktionieren
-- Niemals annehmen dass localStorage-Daten im neuesten Format vorliegen
-
----
-
-## Wichtige Hinweise für Claude Code
-- Immer erst den bestehenden Code verstehen bevor Änderungen gemacht werden
-- Bei komplexen Features: erst planen, dann implementieren
-- Den Datenfluss durch alle Ebenen im Blick behalten
-- Keine Breaking Changes an der Datenbankstruktur ohne explizite Bestätigung
+## Known Complexities
+- Periodization table is the most complex component (deeply nested data)
+- Dependencies between parameters must be correctly represented
+- Automatic data flow from Meso → Micro → Session is critical
+- PDF export must be structured and athlete-friendly
+- `dangerouslyAllowBrowser: true` must be replaced with a backend proxy for SaaS
