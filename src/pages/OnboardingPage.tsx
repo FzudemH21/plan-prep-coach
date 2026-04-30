@@ -497,13 +497,14 @@ export default function OnboardingPage() {
   /** Builds a partial-but-persisted profile with whatever data the coach has entered so far. */
   const buildSkippedProfile = (name: string, skipSports: string[]): CoachProfile => {
     if (name) {
+      // Coach entered real data — treat as a partial profile, not skipped.
+      // The coach profile page will show their name/sports with empty AI fields.
       return {
         name,
         sports: skipSports,
         structured: { philosophy: "", methods: "", targetGroup: "", experience: "" },
         summary: "",
         completedAt: new Date().toISOString(),
-        skipped: true,
       };
     }
     // No name entered at all — bare skip marker
