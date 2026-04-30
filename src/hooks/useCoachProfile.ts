@@ -141,9 +141,23 @@ export function useCoachProfile() {
             console.error("[useCoachProfile] migration error:", migrateErr);
           }
         } else {
-          // Truly no profile anywhere
-          setProfileState(null);
-          writeCache(null);
+          // ── No legacy data — check if cache has a profile that was saved while
+          // user was null (e.g. onboarding skip before auth state resolved).
+          // Sync it to Supabase now rather than clearing it.
+          const cached = readCache();
+          if (cached) {
+            console.log("[useCoachProfile] syncing cache→Supabase (saved before auth resolved)");
+            try {
+              await upsertRow(user.id, cached);
+            } catch (syncErr) {
+              console.error("[useCoachProfile] cache→Supabase sync error:", syncErr);
+            }
+            // State + cache are already correct — nothing to update
+          } else {
+            // Truly no profile anywhere
+            setProfileState(null);
+            writeCache(null);
+          }
         }
       }
     })();
@@ -154,7 +168,11 @@ export function useCoachProfile() {
     async (newProfile: CoachProfile): Promise<void> => {
       setProfileState(newProfile);
       writeCache(newProfile);
-      if (!user) return;
+      if (!user) {
+        console.warn("[useCoachProfile] saveProfile: user is null — saved to cache only, will sync after auth resolves");
+        return;
+      }
+      console.log("[useCoachProfile] saveProfile: upserting to Supabase for user", user.id, "profile:", newProfile);
       try {
         await upsertRow(user.id, newProfile);
       } catch (err) {

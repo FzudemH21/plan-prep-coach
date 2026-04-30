@@ -515,7 +515,9 @@ export default function OnboardingPage() {
    * in Stage1Form's own state and aren't yet in OnboardingPage state.
    */
   const handleStage1Skip = (name: string, skipSports: string[]) => {
-    saveProfile(buildSkippedProfile(name, skipSports));
+    const profile = buildSkippedProfile(name, skipSports);
+    console.log("[handleStage1Skip] name:", name, "sports:", skipSports, "→ saveProfile:", profile);
+    saveProfile(profile);
     navigate("/");
   };
 
@@ -524,7 +526,9 @@ export default function OnboardingPage() {
    * state (the coach completed Stage 1 before arriving here).
    */
   const handleStage2Skip = () => {
-    saveProfile(buildSkippedProfile(coachName, sports));
+    const profile = buildSkippedProfile(coachName, sports);
+    console.log("[handleStage2Skip] coachName:", coachName, "sports:", sports, "→ saveProfile:", profile);
+    saveProfile(profile);
     navigate("/");
   };
 
