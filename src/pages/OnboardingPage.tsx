@@ -103,7 +103,8 @@ function SkipWarning({ onSkip }: { onSkip: () => void }) {
 
 interface Stage1Props {
   onNext: (name: string, sports: string[]) => void;
-  onSkip: () => void;
+  /** Receives whatever the coach has typed so far — may be empty strings / empty array */
+  onSkip: (name: string, sports: string[]) => void;
 }
 
 function Stage1Form({ onNext, onSkip }: Stage1Props) {
@@ -171,7 +172,7 @@ function Stage1Form({ onNext, onSkip }: Stage1Props) {
         <ChevronRight className="h-4 w-4 ml-2" />
       </Button>
 
-      <SkipWarning onSkip={onSkip} />
+      <SkipWarning onSkip={() => onSkip(name.trim(), sports)} />
     </div>
   );
 }
@@ -213,18 +214,24 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip }: Stage2Props) {
     if (hasOpened.current) return;
     hasOpened.current = true;
 
+    const fallback: Message = {
+      role: "assistant",
+      content: `Hallo ${coachName}! Schön, dass du hier bist. Erzähl mir – wie bist du zum Coaching gekommen und was treibt dich an?`,
+    };
+
+    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY as string | undefined;
+    if (!apiKey) {
+      setMessages([fallback]);
+      return;
+    }
+
     setIsLoading(true);
     sendMessage(
       [{ role: "user", content: `Begrüße ${coachName}, Coach im Bereich ${sports.join(", ")}. Stelle eine erste offene Frage.` }],
       OPENER_SYSTEM
     )
       .then((text) => setMessages([{ role: "assistant", content: text }]))
-      .catch(() =>
-        setMessages([{
-          role: "assistant",
-          content: `Hallo ${coachName}! Schön, dass du hier bist. Erzähl mir – wie bist du zum Coaching gekommen und was treibt dich an?`,
-        }])
-      )
+      .catch(() => setMessages([fallback]))
       .finally(() => setIsLoading(false));
   }, [coachName, sports]);
 
@@ -487,8 +494,37 @@ export default function OnboardingPage() {
     }
   }, [existingProfile, navigate]);
 
-  const handleSkip = () => {
-    saveProfile({ skipped: true } as unknown as CoachProfile);
+  /** Builds a partial-but-persisted profile with whatever data the coach has entered so far. */
+  const buildSkippedProfile = (name: string, skipSports: string[]): CoachProfile => {
+    if (name) {
+      return {
+        name,
+        sports: skipSports,
+        structured: { philosophy: "", methods: "", targetGroup: "", experience: "" },
+        summary: "",
+        completedAt: new Date().toISOString(),
+        skipped: true,
+      };
+    }
+    // No name entered at all — bare skip marker
+    return { skipped: true } as unknown as CoachProfile;
+  };
+
+  /**
+   * Stage 1 skip — the form passes its current local values because they live
+   * in Stage1Form's own state and aren't yet in OnboardingPage state.
+   */
+  const handleStage1Skip = (name: string, skipSports: string[]) => {
+    saveProfile(buildSkippedProfile(name, skipSports));
+    navigate("/");
+  };
+
+  /**
+   * Stage 2 skip — coachName and sports are already promoted to OnboardingPage
+   * state (the coach completed Stage 1 before arriving here).
+   */
+  const handleStage2Skip = () => {
+    saveProfile(buildSkippedProfile(coachName, sports));
     navigate("/");
   };
 
@@ -592,7 +628,7 @@ export default function OnboardingPage() {
                 Let's quickly set up your coach profile so the AI can get to know you better.
               </p>
             </div>
-            <Stage1Form onNext={handleStage1Next} onSkip={handleSkip} />
+            <Stage1Form onNext={handleStage1Next} onSkip={handleStage1Skip} />
           </div>
         ) : stage === 2 ? (
           <div className="w-full max-w-2xl flex flex-col" style={{ height: "calc(100vh - 120px)" }}>
@@ -618,7 +654,7 @@ export default function OnboardingPage() {
                 coachName={coachName}
                 sports={sports}
                 onComplete={handleChatComplete}
-                onSkip={handleSkip}
+                onSkip={handleStage2Skip}
               />
             </div>
           </div>
