@@ -15,6 +15,8 @@ import TrainingProgramsPage from "./pages/TrainingProgramsPage";
 import AthleticismDatabaseV2 from "./pages/AthleticismDatabaseV2";
 import ToolboxDatabase from "./pages/ToolboxDatabase";
 import LibraryPage from "./pages/LibraryPage";
+import ExerciseLibrariesPage from "./pages/ExerciseLibrariesPage";
+import ProgramTemplatesPage from "./pages/ProgramTemplatesPage";
 import AthleteDatabase from "./pages/AthleteDatabase";
 import NotFound from "./pages/NotFound";
 import OnboardingPage from "./pages/OnboardingPage";
@@ -72,6 +74,8 @@ const App = () => (
                         <Route path="/templates/athleticism-v2" element={<Navigate to="/templates/athleticism" replace />} />
                         <Route path="/templates/toolbox" element={<ToolboxDatabase />} />
                         <Route path="/templates/libraries/:libraryName" element={<LibraryPage />} />
+                        <Route path="/templates/exercise-libraries" element={<ExerciseLibrariesPage />} />
+                        <Route path="/templates/program-templates" element={<ProgramTemplatesPage />} />
                         <Route path="/coach-profile" element={<CoachProfilePage />} />
                         <Route path="/analytics" element={<div className="text-center py-12">Analytics coming soon...</div>} />
                         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

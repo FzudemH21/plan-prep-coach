@@ -25,7 +25,6 @@ import {
   LogOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCustomLibraries } from "@/contexts/CustomLibrariesContext";
 import { useAuth } from "@/hooks/useAuth";
 
 interface NavigationSidebarProps {
@@ -58,7 +57,6 @@ interface NavGroup {
 export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { libraries } = useCustomLibraries();
   const { signOut, user } = useAuth();
   
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
@@ -90,28 +88,14 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
     return itemsActive || subGroupsActive;
   };
 
-  // Build library items from user-created libraries
-  const exerciseLibraryItems: NavItem[] = libraries.map(lib => ({
-    title: lib.name,
-    path: `/templates/libraries/${lib.id}`,
-    icon: Library
-  }));
-
   const templatesGroup: NavGroup = {
     title: "Templates & Libraries",
     icon: FileText,
-    path: "/templates",
     items: [
-      { title: "Training Programs", path: "/templates/programs", icon: Calendar },
+      { title: "Training Program Library", path: "/templates/programs", icon: Calendar },
+      { title: "Program Templates", path: "/templates/program-templates", icon: Target },
+      { title: "Exercise Libraries", path: "/templates/exercise-libraries", icon: Library },
     ],
-    subGroups: [
-      {
-        title: "Exercise Libraries",
-        icon: Library,
-        key: "exerciseLibraries",
-        items: exerciseLibraryItems
-      }
-    ]
   };
 
   const renderNavItem = (item: NavItem, extraIndent: boolean = false) => (
