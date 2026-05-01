@@ -223,6 +223,17 @@ export default function ToolboxDatabase() {
       showInGridByDefault: true,
     });
 
+    addEntry({
+      category,
+      subCategory,
+      parameterName: "Sets",
+      parameterType: "quantitative",
+      options: ["#"],
+      isFrequencyParameter: false,
+      isSetParameter: true,
+      showInGridByDefault: true,
+    });
+
     resetAddDialog();
     setIsAddDialogOpen(false);
 
