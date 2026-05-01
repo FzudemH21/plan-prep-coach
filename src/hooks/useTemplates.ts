@@ -1,50 +1,45 @@
 /**
  * useTemplates
  * Manages programming templates (periodization blueprints per training method).
- * Storage key: "programTemplates" — versioned, with migration fallback.
+ * Backed by Supabase table: program_templates
+ * Legacy localStorage key: "programTemplates"
  */
 
-const STORAGE_KEY = 'programTemplates';
-const STORAGE_VERSION = '1.1';
+import { useState, useCallback } from 'react';
+import { useSupabaseStore } from './useSupabaseStore';
 
-// ─────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface TemplateColumn {
   id: string;
-  /** Display label, e.g. "Microcycle 1" */
   label: string;
-  /** When true the column renders sub-cells (A, B, …) per parameter */
   isSplit: boolean;
-  /** Number of split halves (2–5). Only relevant when isSplit is true */
   splitCount: number;
-  /** paramName → value  (A-half when split) */
   parameters: Record<string, string>;
-  /** paramName → value  (B-half) */
   parametersB: Record<string, string>;
-  /** paramName → value  (C-half) */
   parametersC: Record<string, string>;
-  /** paramName → value  (D-half) */
   parametersD: Record<string, string>;
-  /** paramName → value  (E-half) */
   parametersE: Record<string, string>;
 }
 
 export interface ProgramTemplate {
   id: string;
   name: string;
-  /** "category|||subCategory" key from the toolbox */
   methodId: string;
-  /** Human-readable method name shown in the UI */
   methodName: string;
   columns: TemplateColumn[];
   createdAt: string;
 }
 
-// ─────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────
+interface TemplatesStore {
+  version: string;
+  templates: ProgramTemplate[];
+}
+
+const STORE_VERSION = '1.1';
+const DEFAULT_STORE: TemplatesStore = { version: STORE_VERSION, templates: [] };
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function generateId() {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -76,74 +71,60 @@ function migrateTemplate(raw: unknown): ProgramTemplate {
   };
 }
 
-function load(): ProgramTemplate[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    // Support both legacy plain array and versioned { version, templates }
-    const list: unknown[] = Array.isArray(parsed)
-      ? parsed
-      : (parsed as { templates?: unknown[] })?.templates ?? [];
-    return list.map(migrateTemplate);
-  } catch {
-    return [];
-  }
+function migrateLegacy(raw: unknown): TemplatesStore {
+  // Support both legacy plain array and versioned { version, templates }
+  const list: unknown[] = Array.isArray(raw)
+    ? raw
+    : ((raw as { templates?: unknown[] })?.templates ?? []);
+  return { version: STORE_VERSION, templates: list.map(migrateTemplate) };
 }
 
-function persist(templates: ProgramTemplate[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: STORAGE_VERSION, templates }));
-}
-
-// ─────────────────────────────────────────────
-// Hook
-// ─────────────────────────────────────────────
-
-import { useState, useCallback } from 'react';
+// ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useTemplates() {
-  const [templates, setTemplates] = useState<ProgramTemplate[]>(load);
+  const [store, setStore, isLoading] = useSupabaseStore<TemplatesStore>({
+    tableName: 'program_templates',
+    legacyKey: 'programTemplates',
+    defaultValue: DEFAULT_STORE,
+    migrate: migrateLegacy,
+  });
+
+  const templates = store.templates;
 
   const addTemplate = useCallback(
-    (template: Omit<ProgramTemplate, 'id' | 'createdAt'>): ProgramTemplate => {
+    async (template: Omit<ProgramTemplate, 'id' | 'createdAt'>): Promise<ProgramTemplate> => {
       const t: ProgramTemplate = {
         ...template,
         id: generateId(),
         createdAt: new Date().toISOString(),
       };
-      setTemplates(prev => {
-        const next = [...prev, t];
-        persist(next);
-        return next;
-      });
+      await setStore({ version: STORE_VERSION, templates: [...templates, t] });
       return t;
     },
-    [],
+    [templates, setStore],
   );
 
   const updateTemplate = useCallback(
-    (id: string, updates: Partial<Omit<ProgramTemplate, 'id' | 'createdAt'>>) => {
-      setTemplates(prev => {
-        const next = prev.map(t => (t.id === id ? { ...t, ...updates } : t));
-        persist(next);
-        return next;
+    async (id: string, updates: Partial<Omit<ProgramTemplate, 'id' | 'createdAt'>>) => {
+      await setStore({
+        version: STORE_VERSION,
+        templates: templates.map(t => (t.id === id ? { ...t, ...updates } : t)),
       });
     },
-    [],
+    [templates, setStore],
   );
 
-  const deleteTemplate = useCallback((id: string) => {
-    setTemplates(prev => {
-      const next = prev.filter(t => t.id !== id);
-      persist(next);
-      return next;
-    });
-  }, []);
+  const deleteTemplate = useCallback(
+    async (id: string) => {
+      await setStore({ version: STORE_VERSION, templates: templates.filter(t => t.id !== id) });
+    },
+    [templates, setStore],
+  );
 
   const getTemplatesForMethod = useCallback(
     (methodId: string) => templates.filter(t => t.methodId === methodId),
     [templates],
   );
 
-  return { templates, addTemplate, updateTemplate, deleteTemplate, getTemplatesForMethod };
+  return { templates, isLoading, addTemplate, updateTemplate, deleteTemplate, getTemplatesForMethod };
 }

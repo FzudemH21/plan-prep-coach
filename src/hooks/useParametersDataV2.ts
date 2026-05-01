@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useCallback } from 'react';
+import { useSupabaseStore } from './useSupabaseStore';
 import { ParametersDatabaseV2, ParameterV2, ParameterInteraction, ParameterMethodV2, InteractionDirection, InteractionStrength } from '@/types/parametersV2';
 
-const STORAGE_KEY = 'parameters-database-v2';
-const OLD_STORAGE_KEY = 'goals-database-v2';
+const LEGACY_KEY = 'parameters-database-v2';
+const OLD_LEGACY_KEY = 'goals-database-v2';
 
 const defaultDatabase: ParametersDatabaseV2 = {
   parameters: [],
@@ -11,7 +12,8 @@ const defaultDatabase: ParametersDatabaseV2 = {
   lastUpdated: new Date().toISOString(),
 };
 
-// Migration function to convert old goal data to new parameter format
+// ─── Migration helpers (same logic as before, applied on legacy load) ─────────
+
 function migrateFromGoals(oldData: any): ParametersDatabaseV2 {
   return {
     parameters: (oldData.goals || []).map((g: any) => ({
@@ -38,134 +40,98 @@ function migrateFromGoals(oldData: any): ParametersDatabaseV2 {
   };
 }
 
-// Migration function to convert old bidirectional interactions to new directional format
-function migrateToDirectionalInteractions(data: ParametersDatabaseV2): ParametersDatabaseV2 {
-  const migratedInteractions = data.interactions.map((i: any) => {
-    // If already migrated (has sourceParameterId), return as is
-    if (i.sourceParameterId && i.targetParameterId && i.direction) {
-      return i;
-    }
-    
-    // Migrate from old format
-    return {
-      id: i.id,
-      sourceParameterId: i.parameterId || i.sourceParameterId,
-      targetParameterId: i.interactingParameterId || i.targetParameterId,
-      direction: i.direction || ('contributes_to' as InteractionDirection),
-      strength: i.strength || ('moderate' as InteractionStrength),
-    };
-  });
-
+function migrateToDirectional(data: ParametersDatabaseV2): ParametersDatabaseV2 {
   return {
     ...data,
-    interactions: migratedInteractions,
+    interactions: data.interactions.map((i: any) => {
+      if (i.sourceParameterId && i.targetParameterId && i.direction) return i;
+      return {
+        id: i.id,
+        sourceParameterId: i.parameterId || i.sourceParameterId,
+        targetParameterId: i.interactingParameterId || i.targetParameterId,
+        direction: i.direction || ('contributes_to' as InteractionDirection),
+        strength: i.strength || ('moderate' as InteractionStrength),
+      };
+    }),
   };
 }
 
-export function useParametersDataV2() {
-  const [data, setData] = useState<ParametersDatabaseV2>(defaultDatabase);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    // Try new key first
-    let stored = localStorage.getItem(STORAGE_KEY);
-    
-    // If not found, try migrating from old key
-    if (!stored) {
-      const oldStored = localStorage.getItem(OLD_STORAGE_KEY);
-      if (oldStored) {
-        try {
-          const oldParsed = JSON.parse(oldStored);
-          const migrated = migrateFromGoals(oldParsed);
-          // Save to new key
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
-          // Remove old key
-          localStorage.removeItem(OLD_STORAGE_KEY);
-          setData(migrated);
-          setIsLoading(false);
-          return;
-        } catch (error) {
-          console.error('Failed to migrate old goals data:', error);
-        }
-      }
-    }
-    
-    if (stored) {
+function migrateLegacy(raw: unknown): ParametersDatabaseV2 {
+  // Try the very old goals format first
+  const r = raw as any;
+  let db: ParametersDatabaseV2;
+  if (r && 'goals' in r) {
+    db = migrateFromGoals(r);
+  } else {
+    db = r as ParametersDatabaseV2;
+  }
+  // Also check for old key in localStorage (one-time migration)
+  if (!r && typeof window !== 'undefined') {
+    const oldRaw = localStorage.getItem(OLD_LEGACY_KEY);
+    if (oldRaw) {
       try {
-        let parsed = JSON.parse(stored);
-        // Migrate to directional interactions if needed
-        parsed = migrateToDirectionalInteractions(parsed);
-        // Save migrated data
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-        setData(parsed);
-      } catch (error) {
-        console.error('Failed to parse stored parameters data:', error);
-        setData(defaultDatabase);
-      }
+        db = migrateFromGoals(JSON.parse(oldRaw));
+        localStorage.removeItem(OLD_LEGACY_KEY);
+      } catch { db = defaultDatabase; }
     }
-    setIsLoading(false);
-  }, []);
+  }
+  return migrateToDirectional(db ?? defaultDatabase);
+}
 
-  const saveData = (newData: ParametersDatabaseV2) => {
-    const updatedData = {
-      ...newData,
-      lastUpdated: new Date().toISOString(),
-    };
-    setData(updatedData);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedData));
-  };
+export function useParametersDataV2() {
+  const [data, setData, isLoading] = useSupabaseStore<ParametersDatabaseV2>({
+    tableName: 'parameters_database',
+    legacyKey: LEGACY_KEY,
+    defaultValue: defaultDatabase,
+    migrate: migrateLegacy,
+  });
 
-  // Parameter CRUD
-  const addParameter = (parameter: Omit<ParameterV2, 'id' | 'createdAt'>) => {
+  const saveData = useCallback(async (newData: ParametersDatabaseV2) => {
+    await setData({ ...newData, lastUpdated: new Date().toISOString() });
+  }, [setData]);
+
+  // ── Parameter CRUD ────────────────────────────────────────────────────────
+
+  const addParameter = useCallback(async (parameter: Omit<ParameterV2, 'id' | 'createdAt'>) => {
     const newParameter: ParameterV2 = {
       ...parameter,
       id: Date.now().toString(),
       createdAt: new Date().toISOString(),
     };
-    saveData({
-      ...data,
-      parameters: [...data.parameters, newParameter],
-    });
+    await saveData({ ...data, parameters: [...data.parameters, newParameter] });
     return newParameter;
-  };
+  }, [data, saveData]);
 
-  const updateParameter = (id: string, updates: Partial<ParameterV2>) => {
-    const newParameters = data.parameters.map((p) =>
-      p.id === id ? { ...p, ...updates } : p
-    );
-    saveData({ ...data, parameters: newParameters });
-  };
-
-  const deleteParameter = (id: string) => {
-    // Also delete related interactions and methods
-    const newParameters = data.parameters.filter((p) => p.id !== id);
-    const newInteractions = data.interactions.filter(
-      (i) => i.sourceParameterId !== id && i.targetParameterId !== id
-    );
-    const newParameterMethods = data.parameterMethods.filter((m) => m.parameterId !== id);
-    saveData({
+  const updateParameter = useCallback(async (id: string, updates: Partial<ParameterV2>) => {
+    await saveData({
       ...data,
-      parameters: newParameters,
-      interactions: newInteractions,
-      parameterMethods: newParameterMethods,
+      parameters: data.parameters.map(p => p.id === id ? { ...p, ...updates } : p),
     });
-  };
+  }, [data, saveData]);
 
-  // Interaction CRUD - Updated for directional interactions
-  const addInteraction = (
+  const deleteParameter = useCallback(async (id: string) => {
+    await saveData({
+      ...data,
+      parameters: data.parameters.filter(p => p.id !== id),
+      interactions: data.interactions.filter(i => i.sourceParameterId !== id && i.targetParameterId !== id),
+      parameterMethods: data.parameterMethods.filter(m => m.parameterId !== id),
+    });
+  }, [data, saveData]);
+
+  // ── Interaction CRUD ──────────────────────────────────────────────────────
+
+  const addInteraction = useCallback(async (
     sourceParameterId: string,
     targetParameterId: string,
     direction: InteractionDirection = 'contributes_to',
-    strength: InteractionStrength = 'moderate'
+    strength: InteractionStrength = 'moderate',
   ) => {
-    // Prevent duplicates (same source->target with same direction)
     const exists = data.interactions.some(
-      (i) => i.sourceParameterId === sourceParameterId && 
-             i.targetParameterId === targetParameterId &&
-             i.direction === direction
+      i => i.sourceParameterId === sourceParameterId &&
+           i.targetParameterId === targetParameterId &&
+           i.direction === direction
     );
     if (exists) return;
-
     const newInteraction: ParameterInteraction = {
       id: Date.now().toString(),
       sourceParameterId,
@@ -173,105 +139,72 @@ export function useParametersDataV2() {
       direction,
       strength,
     };
-    saveData({
+    await saveData({ ...data, interactions: [...data.interactions, newInteraction] });
+  }, [data, saveData]);
+
+  const updateInteraction = useCallback(async (id: string, updates: Partial<ParameterInteraction>) => {
+    await saveData({
       ...data,
-      interactions: [...data.interactions, newInteraction],
+      interactions: data.interactions.map(i => i.id === id ? { ...i, ...updates } : i),
     });
-  };
+  }, [data, saveData]);
 
-  const updateInteraction = (id: string, updates: Partial<ParameterInteraction>) => {
-    const newInteractions = data.interactions.map((i) =>
-      i.id === id ? { ...i, ...updates } : i
-    );
-    saveData({ ...data, interactions: newInteractions });
-  };
+  const removeInteraction = useCallback(async (id: string) => {
+    await saveData({ ...data, interactions: data.interactions.filter(i => i.id !== id) });
+  }, [data, saveData]);
 
-  const removeInteraction = (id: string) => {
-    const newInteractions = data.interactions.filter((i) => i.id !== id);
-    saveData({ ...data, interactions: newInteractions });
-  };
+  const getContributesToParameters = useCallback((sourceParameterId: string) =>
+    data.interactions.filter(i => i.sourceParameterId === sourceParameterId && i.direction === 'contributes_to'),
+  [data.interactions]);
 
-  // Get parameters that THIS parameter contributes to (this parameter helps improve these)
-  const getContributesToParameters = (sourceParameterId: string) => {
-    return data.interactions.filter(
-      (i) => i.sourceParameterId === sourceParameterId && i.direction === 'contributes_to'
-    );
-  };
+  const getImprovedByParameters = useCallback((targetParameterId: string) =>
+    data.interactions.filter(i => i.targetParameterId === targetParameterId && i.direction === 'contributes_to'),
+  [data.interactions]);
 
-  // Get parameters that help improve THIS parameter (these contribute to this)
-  const getImprovedByParameters = (targetParameterId: string) => {
-    return data.interactions.filter(
-      (i) => i.targetParameterId === targetParameterId && i.direction === 'contributes_to'
-    );
-  };
+  const getInteractionsForParameter = useCallback((parameterId: string) =>
+    data.interactions.filter(i => i.sourceParameterId === parameterId || i.targetParameterId === parameterId),
+  [data.interactions]);
 
-  // Legacy method for backwards compatibility
-  const getInteractionsForParameter = (parameterId: string) => {
-    return data.interactions.filter(
-      (i) => i.sourceParameterId === parameterId || i.targetParameterId === parameterId
-    );
-  };
+  // ── Parameter Method CRUD ─────────────────────────────────────────────────
 
-  // Parameter Method CRUD
-  const addParameterMethod = (
-    parameterId: string,
-    methodId: string,
-    rationale?: string
-  ) => {
-    // Prevent duplicates
-    const exists = data.parameterMethods.some(
-      (m) => m.parameterId === parameterId && m.methodId === methodId
-    );
+  const addParameterMethod = useCallback(async (parameterId: string, methodId: string, rationale?: string) => {
+    const exists = data.parameterMethods.some(m => m.parameterId === parameterId && m.methodId === methodId);
     if (exists) return;
+    const newMethod: ParameterMethodV2 = { id: Date.now().toString(), parameterId, methodId, rationale };
+    await saveData({ ...data, parameterMethods: [...data.parameterMethods, newMethod] });
+  }, [data, saveData]);
 
-    const newMethod: ParameterMethodV2 = {
-      id: Date.now().toString(),
-      parameterId,
-      methodId,
-      rationale,
-    };
-    saveData({
+  const updateParameterMethod = useCallback(async (id: string, updates: Partial<ParameterMethodV2>) => {
+    await saveData({
       ...data,
-      parameterMethods: [...data.parameterMethods, newMethod],
+      parameterMethods: data.parameterMethods.map(m => m.id === id ? { ...m, ...updates } : m),
     });
-  };
+  }, [data, saveData]);
 
-  const updateParameterMethod = (id: string, updates: Partial<ParameterMethodV2>) => {
-    const newMethods = data.parameterMethods.map((m) =>
-      m.id === id ? { ...m, ...updates } : m
-    );
-    saveData({ ...data, parameterMethods: newMethods });
-  };
+  const removeParameterMethod = useCallback(async (id: string) => {
+    await saveData({ ...data, parameterMethods: data.parameterMethods.filter(m => m.id !== id) });
+  }, [data, saveData]);
 
-  const removeParameterMethod = (id: string) => {
-    const newMethods = data.parameterMethods.filter((m) => m.id !== id);
-    saveData({ ...data, parameterMethods: newMethods });
-  };
-
-  const getMethodsForParameter = (parameterId: string) => {
-    return data.parameterMethods.filter((m) => m.parameterId === parameterId);
-  };
+  const getMethodsForParameter = useCallback((parameterId: string) =>
+    data.parameterMethods.filter(m => m.parameterId === parameterId),
+  [data.parameterMethods]);
 
   return {
     data,
     isLoading,
-    // Parameter operations
     addParameter,
     updateParameter,
     deleteParameter,
-    // Interaction operations
     addInteraction,
     updateInteraction,
     removeInteraction,
     getInteractionsForParameter,
     getContributesToParameters,
     getImprovedByParameters,
-    // Method operations
     addParameterMethod,
     updateParameterMethod,
     removeParameterMethod,
     getMethodsForParameter,
-    // Raw save for bulk operations
     saveData,
   };
 }
