@@ -83,7 +83,7 @@ function migrateLegacy(raw: unknown): TemplatesStore {
 
 export function useTemplates() {
   const [store, setStore, isLoading] = useSupabaseStore<TemplatesStore>({
-    tableName: 'program_templates',
+    tableName: 'programming_templates',
     legacyKey: 'programTemplates',
     defaultValue: DEFAULT_STORE,
     migrate: migrateLegacy,
