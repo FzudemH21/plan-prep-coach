@@ -5,11 +5,13 @@ import { Input } from "@/components/ui/input";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogPortal, DialogOverlay } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, Search, Download, Upload, Trash2, Edit, Copy, ChevronUp, ChevronDown, AlertCircle, LayoutTemplate } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, Plus, Search, Download, Upload, Trash2, Edit, Copy, ChevronUp, ChevronDown, AlertCircle, LayoutTemplate, Calculator } from "lucide-react";
+import { validateFormula, extractParameterNames } from "@/utils/formulaEvaluator";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToolboxData } from "@/hooks/useToolboxData";
@@ -59,15 +61,31 @@ export default function ToolboxDatabase() {
   const [isParameterDialogOpen, setIsParameterDialogOpen] = useState(false);
   const [expandedTemplatesKey, setExpandedTemplatesKey] = useState<string | null>(null);
   const [selectedSubCategory, setSelectedSubCategory] = useState<{ category: string; subCategory: string } | null>(null);
-  const [newEntry, setNewEntry] = useState({
-    category: "",
-    subCategory: "",
+  const [newEntry, setNewEntry] = useState({ category: "", subCategory: "" });
+  const [newMethodParameters, setNewMethodParameters] = useState<ToolboxEntry[]>([]);
+  const [showAddParamSubDialog, setShowAddParamSubDialog] = useState(false);
+  const [addingParam, setAddingParam] = useState({
     parameterName: "",
     parameterType: "qualitative" as "qualitative" | "quantitative",
-    options: [] as string[]
+    options: [] as string[],
+    isFrequencyParameter: false,
+    isSetParameter: false,
+    showInGridByDefault: true,
+    isCalculated: false,
+    formula: "",
+    sourceParameterIds: [] as string[],
   });
-  const [newOption, setNewOption] = useState("");
+  const [addingParamOption, setAddingParamOption] = useState("");
   const [dialogStep, setDialogStep] = useState<1 | 2>(1);
+
+  const resetAddDialog = () => {
+    setDialogStep(1);
+    setNewEntry({ category: "", subCategory: "" });
+    setNewMethodParameters([]);
+    setShowAddParamSubDialog(false);
+    setAddingParam({ parameterName: "", parameterType: "qualitative", options: [], isFrequencyParameter: false, isSetParameter: false, showInGridByDefault: true, isCalculated: false, formula: "", sourceParameterIds: [] });
+    setAddingParamOption("");
+  };
 
   // Handle column sorting
   const handleColumnSort = (column: SortColumn) => {
@@ -211,34 +229,62 @@ export default function ToolboxDatabase() {
     return setMap;
   }, [subCategoryData]);
 
-  // Handle add entry (creates a new sub-category)
-  const handleAddEntry = () => {
-    if (!newEntry.category.trim() || !newEntry.parameterName.trim()) {
-      toast({
-        title: "Validation Error",
-        description: "Category and Parameter Name are required fields.",
-        variant: "destructive"
-      });
-      return;
-    }
+  // Computed: quantitative non-calculated params already added to the new method (for formula builder)
+  const addingParamSourceParams = newMethodParameters.filter(
+    p => p.parameterType === 'quantitative' && !p.isCalculated
+  );
 
-    addEntry({
+  const existingNewFrequencyParam = newMethodParameters.find(p => p.isFrequencyParameter);
+  const existingNewSetParam = newMethodParameters.find(p => p.isSetParameter);
+
+  const addingParamFormulaValidation = useMemo(() => {
+    if (!addingParam.isCalculated || !addingParam.formula) return { valid: true };
+    return validateFormula(addingParam.formula, addingParamSourceParams.map(p => p.parameterName));
+  }, [addingParam.isCalculated, addingParam.formula, addingParamSourceParams]);
+
+  const handleConfirmAddParam = () => {
+    if (!addingParam.parameterName.trim()) return;
+    const param: ToolboxEntry = {
+      id: Date.now().toString(),
       category: newEntry.category.trim(),
       subCategory: newEntry.subCategory.trim(),
-      parameterName: newEntry.parameterName.trim(),
-      parameterType: newEntry.parameterType,
-      options: [...newEntry.options]
+      parameterName: addingParam.parameterName.trim(),
+      parameterType: addingParam.parameterType,
+      options: addingParam.isCalculated ? [] : [...addingParam.options],
+      isFrequencyParameter: addingParam.isCalculated ? false : addingParam.isFrequencyParameter,
+      isSetParameter: addingParam.isCalculated ? false : addingParam.isSetParameter,
+      showInGridByDefault: addingParam.showInGridByDefault,
+      isCalculated: addingParam.isCalculated,
+      formula: addingParam.isCalculated ? addingParam.formula : undefined,
+      sourceParameterIds: addingParam.isCalculated ? addingParam.sourceParameterIds : undefined,
+    };
+    setNewMethodParameters(prev => [...prev, param]);
+    setAddingParam({ parameterName: "", parameterType: "qualitative", options: [], isFrequencyParameter: false, isSetParameter: false, showInGridByDefault: true, isCalculated: false, formula: "", sourceParameterIds: [] });
+    setAddingParamOption("");
+    setShowAddParamSubDialog(false);
+  };
+
+  // Handle add entry (creates a new training method with all its parameters)
+  const handleAddEntry = () => {
+    if (!newEntry.category.trim() || !newEntry.subCategory.trim() || newMethodParameters.length === 0) return;
+
+    newMethodParameters.forEach(param => {
+      addEntry({
+        category: newEntry.category.trim(),
+        subCategory: newEntry.subCategory.trim(),
+        parameterName: param.parameterName,
+        parameterType: param.parameterType,
+        options: param.options,
+        isFrequencyParameter: param.isFrequencyParameter,
+        isSetParameter: param.isSetParameter,
+        showInGridByDefault: param.showInGridByDefault,
+        isCalculated: param.isCalculated,
+        formula: param.formula,
+        sourceParameterIds: param.sourceParameterIds,
+      });
     });
 
-    setDialogStep(1);
-    setNewEntry({
-      category: "",
-      subCategory: "",
-      parameterName: "",
-      parameterType: "qualitative",
-      options: []
-    });
-    setNewOption("");
+    resetAddDialog();
     setIsAddDialogOpen(false);
 
     toast({
@@ -461,11 +507,7 @@ export default function ToolboxDatabase() {
         <div className="flex items-center gap-2">          
           <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
             setIsAddDialogOpen(open);
-            if (!open) {
-              setDialogStep(1);
-              setNewEntry({ category: "", subCategory: "", parameterName: "", parameterType: "qualitative", options: [] });
-              setNewOption("");
-            }
+            if (!open) resetAddDialog();
           }}>
             <DialogTrigger asChild>
               <Button>
@@ -518,105 +560,43 @@ export default function ToolboxDatabase() {
 
               {dialogStep === 2 && (
                 <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="parameterName">First Parameter Name *</Label>
-                    <Input
-                      id="parameterName"
-                      value={newEntry.parameterName}
-                      onChange={(e) => setNewEntry(prev => ({ ...prev, parameterName: e.target.value }))}
-                      placeholder="e.g., Frequency, Intensity, Organization"
-                    />
+                  <p className="text-sm text-muted-foreground">{newEntry.category} → {newEntry.subCategory}</p>
+
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium text-sm">Parameters ({newMethodParameters.length})</span>
+                    <Button size="sm" onClick={() => setShowAddParamSubDialog(true)}>
+                      <Plus className="h-3 w-3 mr-1" />
+                      Add Parameter
+                    </Button>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label>Parameter Type</Label>
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        id="parameterType"
-                        checked={newEntry.parameterType === 'quantitative'}
-                        onCheckedChange={(checked) =>
-                          setNewEntry(prev => ({
-                            ...prev,
-                            parameterType: checked ? 'quantitative' : 'qualitative'
-                          }))
-                        }
-                      />
-                      <Label htmlFor="parameterType" className="text-sm">
-                        {newEntry.parameterType === 'quantitative' ? 'Quantitative (with units)' : 'Qualitative (descriptive)'}
-                      </Label>
+                  {newMethodParameters.length === 0 ? (
+                    <div className="text-center py-6 text-sm text-muted-foreground border rounded-lg">
+                      No parameters yet. Add at least one to create the method.
                     </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>
-                      {newEntry.parameterType === 'quantitative' ? 'Units' : 'Options'}
-                    </Label>
-                    <div className="flex space-x-2">
-                      <Input
-                        value={newOption}
-                        onChange={(e) => setNewOption(e.target.value)}
-                        placeholder={
-                          newEntry.parameterType === 'quantitative'
-                            ? "e.g., m, km, s, %, kg"
-                            : "e.g., Regular Sets, Super Sets"
-                        }
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter' && newOption.trim()) {
-                            setNewEntry(prev => ({
-                              ...prev,
-                              options: [...prev.options, newOption.trim()]
-                            }));
-                            setNewOption("");
-                          }
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        onClick={() => {
-                          if (newOption.trim()) {
-                            setNewEntry(prev => ({
-                              ...prev,
-                              options: [...prev.options, newOption.trim()]
-                            }));
-                            setNewOption("");
-                          }
-                        }}
-                      >
-                        Add
-                      </Button>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {newMethodParameters.map((p, i) => (
+                        <div key={i} className="flex items-center justify-between p-2 border rounded">
+                          <span className="text-sm">{p.parameterName}</span>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-xs">{p.parameterType}</Badge>
+                            {p.isFrequencyParameter && <Badge variant="secondary" className="text-xs">Frequency</Badge>}
+                            {p.isSetParameter && <Badge variant="secondary" className="text-xs">Sets</Badge>}
+                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setNewMethodParameters(prev => prev.filter((_, idx) => idx !== i))}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    {newEntry.options.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {newEntry.options.map((option, index) => (
-                          <span
-                            key={index}
-                            className="inline-flex items-center bg-secondary text-secondary-foreground px-2 py-1 text-xs rounded cursor-pointer"
-                            onClick={() => {
-                              setNewEntry(prev => ({
-                                ...prev,
-                                options: prev.options.filter((_, i) => i !== index)
-                              }));
-                            }}
-                          >
-                            {option} ×
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  )}
 
                   <div className="flex justify-between">
-                    <Button variant="outline" onClick={() => setDialogStep(1)}>
-                      Back
-                    </Button>
+                    <Button variant="outline" onClick={() => setDialogStep(1)}>Back</Button>
                     <div className="flex space-x-2">
-                      <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={handleAddEntry}
-                        disabled={!newEntry.parameterName.trim()}
-                      >
+                      <Button variant="outline" onClick={() => { setIsAddDialogOpen(false); resetAddDialog(); }}>Cancel</Button>
+                      <Button onClick={handleAddEntry} disabled={newMethodParameters.length === 0}>
                         Create Training Method
                       </Button>
                     </div>
@@ -624,6 +604,205 @@ export default function ToolboxDatabase() {
                 </div>
               )}
             </DialogContent>
+          </Dialog>
+
+          {/* Add Parameter sub-dialog (portal so it sits above the main dialog) */}
+          <Dialog open={showAddParamSubDialog} onOpenChange={(open) => {
+            setShowAddParamSubDialog(open);
+            if (!open) {
+              setAddingParam({ parameterName: "", parameterType: "qualitative", options: [], isFrequencyParameter: false, isSetParameter: false, showInGridByDefault: true, isCalculated: false, formula: "", sourceParameterIds: [] });
+              setAddingParamOption("");
+            }
+          }}>
+            <DialogPortal>
+              <DialogOverlay className="z-[150]" />
+              <DialogContent className="z-[160] max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Add Parameter</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label>Parameter Name *</Label>
+                    <Input
+                      value={addingParam.parameterName}
+                      onChange={(e) => setAddingParam(prev => ({ ...prev, parameterName: e.target.value }))}
+                      placeholder="e.g., Frequency, Sets, Intensity"
+                    />
+                  </div>
+
+                  <div>
+                    <Label>Parameter Type</Label>
+                    <Select
+                      value={addingParam.parameterType}
+                      onValueChange={(value) => setAddingParam(prev => ({
+                        ...prev,
+                        parameterType: value as "qualitative" | "quantitative",
+                        isFrequencyParameter: value === "quantitative" ? prev.isFrequencyParameter : false,
+                        isSetParameter: value === "quantitative" ? prev.isSetParameter : false,
+                      }))}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="qualitative">Qualitative</SelectItem>
+                        <SelectItem value="quantitative">Quantitative</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {!addingParam.isCalculated && (
+                    addingParam.parameterType === "quantitative" ? (
+                      <div className="space-y-2">
+                        <Label>Units</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            value={addingParamOption}
+                            onChange={(e) => setAddingParamOption(e.target.value)}
+                            placeholder="e.g., kg, %, RPE"
+                            onKeyPress={(e) => {
+                              if (e.key === "Enter" && addingParamOption.trim()) {
+                                setAddingParam(prev => ({ ...prev, options: [...prev.options, addingParamOption.trim()] }));
+                                setAddingParamOption("");
+                              }
+                            }}
+                          />
+                          <Button type="button" onClick={() => {
+                            if (addingParamOption.trim()) {
+                              setAddingParam(prev => ({ ...prev, options: [...prev.options, addingParamOption.trim()] }));
+                              setAddingParamOption("");
+                            }
+                          }}>Add</Button>
+                        </div>
+                        {addingParam.options.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {addingParam.options.map((o, i) => (
+                              <Badge key={i} variant="secondary" className="cursor-pointer" onClick={() => setAddingParam(prev => ({ ...prev, options: prev.options.filter((_, idx) => idx !== i) }))}>
+                                {o} ×
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Label>Options</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            value={addingParamOption}
+                            onChange={(e) => setAddingParamOption(e.target.value)}
+                            placeholder="e.g., Regular Sets, Super Sets"
+                            onKeyPress={(e) => {
+                              if (e.key === "Enter" && addingParamOption.trim()) {
+                                setAddingParam(prev => ({ ...prev, options: [...prev.options, addingParamOption.trim()] }));
+                                setAddingParamOption("");
+                              }
+                            }}
+                          />
+                          <Button type="button" onClick={() => {
+                            if (addingParamOption.trim()) {
+                              setAddingParam(prev => ({ ...prev, options: [...prev.options, addingParamOption.trim()] }));
+                              setAddingParamOption("");
+                            }
+                          }}>Add</Button>
+                        </div>
+                        {addingParam.options.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {addingParam.options.map((o, i) => (
+                              <Badge key={i} variant="secondary" className="cursor-pointer" onClick={() => setAddingParam(prev => ({ ...prev, options: prev.options.filter((_, idx) => idx !== i) }))}>
+                                {o} ×
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  )}
+
+                  {addingParam.parameterType === "quantitative" && (
+                    <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="apIsCalculated"
+                          checked={addingParam.isCalculated}
+                          disabled={addingParam.isFrequencyParameter || addingParam.isSetParameter}
+                          onChange={(e) => setAddingParam(prev => ({ ...prev, isCalculated: e.target.checked, isFrequencyParameter: e.target.checked ? false : prev.isFrequencyParameter, isSetParameter: e.target.checked ? false : prev.isSetParameter }))}
+                          className="h-4 w-4 disabled:opacity-50"
+                        />
+                        <Label htmlFor="apIsCalculated" className="text-sm flex items-center gap-1">
+                          <Calculator className="h-3 w-3" /> Calculated parameter
+                        </Label>
+                      </div>
+                      {addingParam.isCalculated && (
+                        <div className="space-y-3 pt-1">
+                          {addingParamSourceParams.length > 0 && (
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Click to insert into formula</Label>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {addingParamSourceParams.map(p => (
+                                  <Badge key={p.id} variant="outline" className="cursor-pointer text-xs" onClick={() => setAddingParam(prev => ({ ...prev, formula: prev.formula ? `${prev.formula} ${p.parameterName}` : p.parameterName, sourceParameterIds: [...new Set([...prev.sourceParameterIds, p.id])] }))}>
+                                    {p.parameterName}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          <div>
+                            <Label>Formula</Label>
+                            <Input
+                              value={addingParam.formula}
+                              onChange={(e) => {
+                                const formula = e.target.value;
+                                const names = addingParamSourceParams.map(p => p.parameterName);
+                                const ids = addingParamSourceParams.filter(p => extractParameterNames(formula, names).includes(p.parameterName)).map(p => p.id);
+                                setAddingParam(prev => ({ ...prev, formula, sourceParameterIds: ids }));
+                              }}
+                              placeholder="e.g., Sets * Reps"
+                              className="font-mono"
+                            />
+                            {!addingParamFormulaValidation.valid && addingParam.formula && (
+                              <div className="flex items-center gap-1 mt-1 text-destructive text-xs">
+                                <AlertCircle className="h-3 w-3" />{addingParamFormulaValidation.error}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <input type="checkbox" id="apIsFreq" checked={addingParam.isFrequencyParameter}
+                        disabled={addingParam.parameterType !== "quantitative" || addingParam.isSetParameter || addingParam.isCalculated || !!existingNewFrequencyParam}
+                        onChange={(e) => setAddingParam(prev => ({ ...prev, isFrequencyParameter: e.target.checked, showInGridByDefault: e.target.checked ? false : prev.showInGridByDefault }))}
+                        className="h-4 w-4 disabled:opacity-50" />
+                      <Label htmlFor="apIsFreq" className="text-sm">Training Frequency Parameter</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <input type="checkbox" id="apIsSet" checked={addingParam.isSetParameter}
+                        disabled={addingParam.parameterType !== "quantitative" || addingParam.isFrequencyParameter || addingParam.isCalculated || !!existingNewSetParam}
+                        onChange={(e) => setAddingParam(prev => ({ ...prev, isSetParameter: e.target.checked }))}
+                        className="h-4 w-4 disabled:opacity-50" />
+                      <Label htmlFor="apIsSet" className="text-sm">Set Parameter</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <input type="checkbox" id="apShowInGrid" checked={addingParam.showInGridByDefault}
+                        disabled={addingParam.isFrequencyParameter || addingParam.isSetParameter}
+                        onChange={(e) => setAddingParam(prev => ({ ...prev, showInGridByDefault: e.target.checked }))}
+                        className="h-4 w-4 disabled:opacity-50" />
+                      <Label htmlFor="apShowInGrid" className="text-sm">Show in parameter grid by default</Label>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end space-x-2">
+                    <Button variant="outline" onClick={() => setShowAddParamSubDialog(false)}>Cancel</Button>
+                    <Button onClick={handleConfirmAddParam} disabled={!addingParam.parameterName.trim()}>
+                      Add Parameter
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </DialogPortal>
           </Dialog>
         </div>
       </div>
