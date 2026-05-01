@@ -67,6 +67,7 @@ export default function ToolboxDatabase() {
     options: [] as string[]
   });
   const [newOption, setNewOption] = useState("");
+  const [dialogStep, setDialogStep] = useState<1 | 2>(1);
 
   // Handle column sorting
   const handleColumnSort = (column: SortColumn) => {
@@ -229,6 +230,7 @@ export default function ToolboxDatabase() {
       options: [...newEntry.options]
     });
 
+    setDialogStep(1);
     setNewEntry({
       category: "",
       subCategory: "",
@@ -238,10 +240,10 @@ export default function ToolboxDatabase() {
     });
     setNewOption("");
     setIsAddDialogOpen(false);
-    
+
     toast({
-      title: "Sub-Category Created",
-      description: "New sub-category with parameter has been added successfully."
+      title: "Training Method Created",
+      description: "New training method with parameter has been added successfully."
     });
   };
 
@@ -457,7 +459,14 @@ export default function ToolboxDatabase() {
         </div>
         
         <div className="flex items-center gap-2">          
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+            setIsAddDialogOpen(open);
+            if (!open) {
+              setDialogStep(1);
+              setNewEntry({ category: "", subCategory: "", parameterName: "", parameterType: "qualitative", options: [] });
+              setNewOption("");
+            }
+          }}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
@@ -466,50 +475,69 @@ export default function ToolboxDatabase() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Add New Training Method</DialogTitle>
+                <DialogTitle>
+                  {dialogStep === 1 ? "Add New Training Method – Step 1 of 2" : "Add New Training Method – Step 2 of 2"}
+                </DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="category">Category *</Label>
-                  <SearchableDropdown
-                    value={newEntry.category}
-                    onValueChange={(value) => setNewEntry(prev => ({ ...prev, category: value as string }))}
-                    options={existingCategories}
-                    placeholder="Select existing or type new category"
-                    allowCustomInput={true}
-                    className="w-full"
-                  />
+
+              {dialogStep === 1 && (
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="category">Category *</Label>
+                    <SearchableDropdown
+                      value={newEntry.category}
+                      onValueChange={(value) => setNewEntry(prev => ({ ...prev, category: value as string }))}
+                      options={existingCategories}
+                      placeholder="Select existing or type new category"
+                      allowCustomInput={true}
+                      className="w-full"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="subCategory">Method Name *</Label>
+                    <Input
+                      id="subCategory"
+                      value={newEntry.subCategory}
+                      onChange={(e) => setNewEntry(prev => ({ ...prev, subCategory: e.target.value }))}
+                      placeholder="e.g., Acceleration, Strength Endurance"
+                    />
+                  </div>
+                  <div className="flex justify-end space-x-2">
+                    <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={() => setDialogStep(2)}
+                      disabled={!newEntry.category.trim() || !newEntry.subCategory.trim()}
+                    >
+                      Next
+                    </Button>
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="subCategory">Sub-Category *</Label>
-                  <Input
-                    id="subCategory"
-                    value={newEntry.subCategory}
-                    onChange={(e) => setNewEntry(prev => ({ ...prev, subCategory: e.target.value }))}
-                    placeholder="e.g., Acceleration, Strength"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="parameterName">First Parameter Name *</Label>
-                  <Input
-                    id="parameterName"
-                    value={newEntry.parameterName}
-                    onChange={(e) => setNewEntry(prev => ({ ...prev, parameterName: e.target.value }))}
-                    placeholder="e.g., Frequency, Intensity, Organization"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Parameter Type</Label>
-                  <div className="flex items-center space-x-4">
+              )}
+
+              {dialogStep === 2 && (
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="parameterName">First Parameter Name *</Label>
+                    <Input
+                      id="parameterName"
+                      value={newEntry.parameterName}
+                      onChange={(e) => setNewEntry(prev => ({ ...prev, parameterName: e.target.value }))}
+                      placeholder="e.g., Frequency, Intensity, Organization"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Parameter Type</Label>
                     <div className="flex items-center space-x-2">
                       <Switch
                         id="parameterType"
                         checked={newEntry.parameterType === 'quantitative'}
-                        onCheckedChange={(checked) => 
-                          setNewEntry(prev => ({ 
-                            ...prev, 
-                            parameterType: checked ? 'quantitative' : 'qualitative' 
+                        onCheckedChange={(checked) =>
+                          setNewEntry(prev => ({
+                            ...prev,
+                            parameterType: checked ? 'quantitative' : 'qualitative'
                           }))
                         }
                       />
@@ -518,77 +546,83 @@ export default function ToolboxDatabase() {
                       </Label>
                     </div>
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label>
-                    {newEntry.parameterType === 'quantitative' ? 'Units' : 'Options'}
-                  </Label>
-                  <div className="flex space-x-2">
-                    <Input
-                      value={newOption}
-                      onChange={(e) => setNewOption(e.target.value)}
-                      placeholder={
-                        newEntry.parameterType === 'quantitative' 
-                          ? "e.g., m, km, s, %, kg" 
-                          : "e.g., Regular Sets, Super Sets"
-                      }
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter' && newOption.trim()) {
-                          setNewEntry(prev => ({ 
-                            ...prev, 
-                            options: [...prev.options, newOption.trim()] 
-                          }));
-                          setNewOption("");
+                  <div className="space-y-2">
+                    <Label>
+                      {newEntry.parameterType === 'quantitative' ? 'Units' : 'Options'}
+                    </Label>
+                    <div className="flex space-x-2">
+                      <Input
+                        value={newOption}
+                        onChange={(e) => setNewOption(e.target.value)}
+                        placeholder={
+                          newEntry.parameterType === 'quantitative'
+                            ? "e.g., m, km, s, %, kg"
+                            : "e.g., Regular Sets, Super Sets"
                         }
-                      }}
-                    />
-                    <Button 
-                      type="button" 
-                      onClick={() => {
-                        if (newOption.trim()) {
-                          setNewEntry(prev => ({ 
-                            ...prev, 
-                            options: [...prev.options, newOption.trim()] 
-                          }));
-                          setNewOption("");
-                        }
-                      }}
-                    >
-                      Add
-                    </Button>
-                  </div>
-                  {newEntry.options.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {newEntry.options.map((option, index) => (
-                        <span
-                          key={index}
-                          className="inline-flex items-center bg-secondary text-secondary-foreground px-2 py-1 text-xs rounded cursor-pointer"
-                          onClick={() => {
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter' && newOption.trim()) {
                             setNewEntry(prev => ({
                               ...prev,
-                              options: prev.options.filter((_, i) => i !== index)
+                              options: [...prev.options, newOption.trim()]
                             }));
-                          }}
-                        >
-                          {option} ×
-                        </span>
-                      ))}
+                            setNewOption("");
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          if (newOption.trim()) {
+                            setNewEntry(prev => ({
+                              ...prev,
+                              options: [...prev.options, newOption.trim()]
+                            }));
+                            setNewOption("");
+                          }
+                        }}
+                      >
+                        Add
+                      </Button>
                     </div>
-                  )}
+                    {newEntry.options.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {newEntry.options.map((option, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center bg-secondary text-secondary-foreground px-2 py-1 text-xs rounded cursor-pointer"
+                            onClick={() => {
+                              setNewEntry(prev => ({
+                                ...prev,
+                                options: prev.options.filter((_, i) => i !== index)
+                              }));
+                            }}
+                          >
+                            {option} ×
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-between">
+                    <Button variant="outline" onClick={() => setDialogStep(1)}>
+                      Back
+                    </Button>
+                    <div className="flex space-x-2">
+                      <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleAddEntry}
+                        disabled={!newEntry.parameterName.trim()}
+                      >
+                        Create Training Method
+                      </Button>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-end space-x-2">
-                  <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button 
-                    onClick={handleAddEntry}
-                    disabled={!newEntry.category.trim() || !newEntry.subCategory.trim() || !newEntry.parameterName.trim()}
-                  >
-                    Create Training Method
-                  </Button>
-                </div>
-              </div>
+              )}
             </DialogContent>
           </Dialog>
         </div>
