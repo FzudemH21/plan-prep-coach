@@ -23,14 +23,15 @@ Claude Chat (browser) is my sparring partner for planning, discussion, and promp
 | 🔴 Now | Bulk Import Exercises (CSV/Excel) | ✅ Done |
 | 🔴 Now | Bulk Import fixes (3-step flow, description optional, consistent storage) | ✅ Done |
 | 🔴 Now | Dynamic Exercise Detail Modal (columns from database, no hardcoded fields, directly editable) | ✅ Done |
-| 🟡 Soon | Coach Profile & Onboarding (AI conversation to learn coaching philosophy, AI asks follow-up questions, result saved as coach profile and reviewable) | 🔄 In Progress – basic structure implemented (onboarding flow, coach profile page, skip option, voice input). Missing: Anthropic API fully wired up for AI conversation. |
+| 🟡 Soon | Coach Profile & Onboarding (AI conversation to learn coaching philosophy, AI asks follow-up questions, result saved as coach profile and reviewable) | 🔄 In Progress – onboarding flow, skip with data save, coach profile page (editable), voice input all working. Supabase-backed (useCoachProfile migrated). Missing: Anthropic API key valid for AI conversation. |
+| 🟡 Soon | Supabase migration – remaining localStorage data | 🔄 In Progress – Auth ✅, Coach Profile ✅, Documents ✅. Still on localStorage: training programs, wizard state (macro/meso/microcycle), parameters DB, toolbox/methods DB, templates, athlete data, calendar events, custom libraries. |
 | 🟡 Soon | Plan uploads for Coach Profile (Excel, PDF, Word and other files uploadable, coach provides context, AI extracts patterns and enriches coach profile) | ⬜ Open |
 | 🟡 Soon | AI Autopilot in Wizard (suggestions & pre-filling of intensities, methods, exercises based on coach profile) | ⬜ Open |
 | 🟡 Soon | Accumulated Context (automatic comparison of AI suggestion vs. final plan, AI asks targeted follow-up questions on significant deviations — max. 1-2 per plan, skippable, answers fed back as rationale context) | ⬜ Open |
 | 🟡 Soon | Voice input for coach (athlete description via voice in athlete profile and wizard start, Web Speech API + Anthropic API) | ✅ Done |
 | 🟡 Soon | Masterplanner view – Athlete Calendar (Day 1, Day 2... per weekday) | ✅ Done |
 | 🟡 Soon | Tests & Events in Athlete Calendar + sync with Wizard | ✅ Done |
-| 🟡 Soon | Document upload + sharing with athletes | 🔄 In Progress – basic structure implemented (local storage, folders, drag & drop, upload in coach profile, onboarding and wizard resources panel). Missing: (1) cloud storage via Supabase, (2) AI analysis of documents (API missing), (3) sharing with athletes, (4) Obsidian integration noted as optional future option |
+| 🟡 Soon | Document upload + sharing with athletes | 🔄 In Progress – upload, folders, drag & drop working; Supabase Storage backend ✅. Missing: (1) AI analysis of documents (API key needed), (2) sharing with athletes, (3) Obsidian integration (optional future) |
 | 🟡 Soon | Programming Templates for training methods | ✅ Done – templates per method in Training Toolbox, Load Template dialog in Wizard Step 4 with preview, editable before loading, save as new template, units displayed, works across mesocycles |
 | 🟡 Soon | Column reordering in databases (drag & drop) | ✅ Done |
 | 🟠 Later | Goal Management + test notifications | ⬜ Open |
