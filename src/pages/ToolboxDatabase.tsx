@@ -219,9 +219,9 @@ export default function ToolboxDatabase() {
         parameterName: "Frequency",
         parameterType: "quantitative",
         options: [],
-        isFrequencyParameter: false,
+        isFrequencyParameter: true,
         isSetParameter: false,
-        showInGridByDefault: true,
+        showInGridByDefault: false,
       },
       {
         category,
