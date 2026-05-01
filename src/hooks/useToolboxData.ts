@@ -168,6 +168,11 @@ export function useToolboxData() {
     await saveData({ ...data, entries: [...data.entries, newEntry] });
   }, [data, saveData]);
 
+  const addEntries = useCallback(async (entries: Omit<ToolboxEntry, 'id'>[]) => {
+    const newEntries = entries.map((e, i) => ({ ...e, id: (Date.now() + i).toString() }));
+    await saveData({ ...data, entries: [...data.entries, ...newEntries] });
+  }, [data, saveData]);
+
   const updateEntry = useCallback(async (id: string, entry: Partial<ToolboxEntry>) => {
     await saveData({
       ...data,
@@ -265,6 +270,7 @@ export function useToolboxData() {
     data,
     isLoading,
     addEntry,
+    addEntries,
     updateEntry,
     deleteEntry,
     copyEntry,

@@ -35,7 +35,7 @@ interface SubCategoryData {
 export default function ToolboxDatabase() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { data, isLoading, addEntry, deleteEntry, copyEntry, reorderParameters, importData, exportData } = useToolboxData();
+  const { data, isLoading, addEntries, deleteEntry, copyEntry, reorderParameters, importData, exportData } = useToolboxData();
   
   const [searchTerm, setSearchTerm] = useState("");
   const [columnSorts, setColumnSorts] = useState<Record<SortColumn, ColumnSort | null>>({
@@ -212,27 +212,28 @@ export default function ToolboxDatabase() {
     const category = newEntry.category.trim();
     const subCategory = newEntry.subCategory.trim();
 
-    addEntry({
-      category,
-      subCategory,
-      parameterName: "Frequency",
-      parameterType: "quantitative",
-      options: [],
-      isFrequencyParameter: false,
-      isSetParameter: false,
-      showInGridByDefault: true,
-    });
-
-    addEntry({
-      category,
-      subCategory,
-      parameterName: "Sets",
-      parameterType: "quantitative",
-      options: ["#"],
-      isFrequencyParameter: false,
-      isSetParameter: true,
-      showInGridByDefault: true,
-    });
+    void addEntries([
+      {
+        category,
+        subCategory,
+        parameterName: "Frequency",
+        parameterType: "quantitative",
+        options: [],
+        isFrequencyParameter: false,
+        isSetParameter: false,
+        showInGridByDefault: true,
+      },
+      {
+        category,
+        subCategory,
+        parameterName: "Sets",
+        parameterType: "quantitative",
+        options: ["#"],
+        isFrequencyParameter: false,
+        isSetParameter: true,
+        showInGridByDefault: true,
+      },
+    ]);
 
     resetAddDialog();
     setIsAddDialogOpen(false);
