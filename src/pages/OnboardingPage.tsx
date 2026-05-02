@@ -27,6 +27,7 @@ import {
 import { sendMessage, type Message } from "@/utils/anthropicApi";
 import { useCoachProfile, type CoachProfile } from "@/hooks/useCoachProfile";
 import { useCoachDocuments } from "@/hooks/useCoachDocuments";
+import { TrainingPlanEnricher } from "@/components/coach/TrainingPlanEnricher";
 import { useSpeechInput } from "@/hooks/useSpeechInput";
 import { cn } from "@/lib/utils";
 
@@ -78,18 +79,6 @@ const MERGE_SUMMARY_SYSTEM = `Du bist ein Coach-Berater.
 Kombiniere die zwei folgenden Coach-Zusammenfassungen zu einem einzigen, kohärenten Fließtext (3-6 Sätze).
 Vermeide Wiederholungen. Integriere neue Informationen natürlich in den bestehenden Text.
 Antworte nur mit dem kombinierten Text, ohne Einleitung oder Erklärung. Antworte auf Deutsch.`;
-
-const PLAN_EXTRACTION_SYSTEM = `Du bist ein Coach-Berater der eine Beschreibung eines Trainingsplans analysiert.
-Extrahiere daraus strukturierte Informationen über den Coaching-Ansatz und gib sie als valides JSON zurück.
-Das JSON muss exakt diese Struktur haben:
-{
-  "philosophy": "Erkennbare Coaching-Philosophie aus dem Plan (1-2 Sätze) – leer lassen wenn nicht erkennbar",
-  "methods": "Verwendete Trainingsmethoden und Periodisierungsansatz (1-2 Sätze) – leer lassen wenn nicht erkennbar",
-  "targetGroup": "Zielgruppe/Athleten des Plans (1 Satz) – leer lassen wenn nicht erkennbar",
-  "experience": "Rückschlüsse auf den Erfahrungshintergrund des Coaches (1 Satz) – leer lassen wenn nicht erkennbar",
-  "summary": "Zusammenfassung was dieser Plan über den Coaching-Stil verrät (2-3 Sätze)"
-}
-Antworte NUR mit dem JSON, ohne Markdown-Code-Fences oder zusätzlichen Text.`;
 
 async function mergeSummaries(existing: string, incoming: string): Promise<string> {
   if (!existing) return incoming;
@@ -424,126 +413,60 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip }: Stage2Props) {
 interface Stage3Props {
   onFinish: () => void;
   onSkip: () => void;
-  coachName: string;
-  sports: string[];
-  existingProfile: CoachProfile | null;
-  saveProfile: (profile: CoachProfile) => Promise<void>;
 }
 
-function DropZone({
-  onFiles,
-  multiple = true,
-  disabled = false,
-}: {
-  onFiles: (files: FileList) => void;
-  multiple?: boolean;
-  disabled?: boolean;
-}) {
+function ResourceDropZone() {
+  const { addDocument } = useCoachDocuments();
   const [isDragging, setIsDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploaded, setUploaded] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  return (
-    <div
-      onDrop={(e) => { e.preventDefault(); setIsDragging(false); if (e.dataTransfer.files.length) onFiles(e.dataTransfer.files); }}
-      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-      onDragLeave={() => setIsDragging(false)}
-      onClick={() => !disabled && inputRef.current?.click()}
-      className={cn(
-        "border-2 border-dashed rounded-xl p-8 flex flex-col items-center gap-2 transition-colors",
-        disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
-        isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/40"
-      )}
-    >
-      <Upload className={cn("h-6 w-6", isDragging ? "text-primary" : "text-muted-foreground")} />
-      <p className="text-sm font-medium">Drop files here</p>
-      <p className="text-xs text-muted-foreground">or click to select</p>
-      <input ref={inputRef} type="file" multiple={multiple} className="hidden" onChange={(e) => e.target.files && onFiles(e.target.files)} />
-    </div>
-  );
-}
-
-function Stage3Upload({ onFinish, onSkip, existingProfile, saveProfile }: Stage3Props) {
-  const { addDocument } = useCoachDocuments();
-
-  // ── Resources tab ──
-  const [uploadedResources, setUploadedResources] = useState<string[]>([]);
-  const [uploadingResources, setUploadingResources] = useState(false);
-
-  const handleResourceFiles = async (files: FileList) => {
-    setUploadingResources(true);
+  const handleFiles = async (files: FileList) => {
+    setUploading(true);
     const names: string[] = [];
     for (const file of Array.from(files)) {
       await addDocument(file, null);
       names.push(file.name);
     }
-    setUploadedResources((prev) => [...prev, ...names]);
-    setUploadingResources(false);
+    setUploaded((prev) => [...prev, ...names]);
+    setUploading(false);
   };
 
-  // ── Training Plans tab ──
-  const [pendingPlan, setPendingPlan] = useState<{ file: File; description: string } | null>(null);
-  const [analyzedPlans, setAnalyzedPlans] = useState<string[]>([]);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  return (
+    <div className="space-y-3">
+      <div
+        onDrop={(e) => { e.preventDefault(); setIsDragging(false); if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); }}
+        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+        onDragLeave={() => setIsDragging(false)}
+        onClick={() => !uploading && inputRef.current?.click()}
+        className={cn(
+          "border-2 border-dashed rounded-xl p-8 flex flex-col items-center gap-2 transition-colors",
+          uploading ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
+          isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/40"
+        )}
+      >
+        <Upload className={cn("h-6 w-6", isDragging ? "text-primary" : "text-muted-foreground")} />
+        <p className="text-sm font-medium">Drop files here</p>
+        <p className="text-xs text-muted-foreground">or click to select — all file types</p>
+        <input ref={inputRef} type="file" multiple className="hidden" onChange={(e) => e.target.files && handleFiles(e.target.files)} />
+      </div>
+      {uploading && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Uploading…
+        </div>
+      )}
+      {uploaded.map((name, i) => (
+        <div key={i} className="flex items-center gap-2 text-sm text-foreground/80">
+          <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-green-500" />
+          <span className="truncate">{name}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
-  const handlePlanFile = (files: FileList) => {
-    setPendingPlan({ file: files[0], description: "" });
-    setAnalyzeError(null);
-  };
-
-  const handleAnalyze = async () => {
-    if (!pendingPlan || !pendingPlan.description.trim()) return;
-    setIsAnalyzing(true);
-    setAnalyzeError(null);
-    try {
-      // Upload file to documents
-      await addDocument(pendingPlan.file, null);
-
-      // AI extraction from filename + description
-      const content = `Dateiname: ${pendingPlan.file.name}\nBeschreibung des Coaches: ${pendingPlan.description}`;
-      const raw = await sendMessage(
-        [{ role: "user", content: `Hier sind Infos zu einem Trainingsplan:\n\n${content}\n\nBitte extrahiere strukturierte Informationen als JSON.` }],
-        PLAN_EXTRACTION_SYSTEM,
-        "claude-sonnet-4-5"
-      );
-
-      let parsed: { philosophy: string; methods: string; targetGroup: string; experience: string; summary: string };
-      try {
-        parsed = JSON.parse(raw.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim()) as typeof parsed;
-      } catch {
-        throw new Error("Could not parse AI response. Please try again.");
-      }
-
-      // Merge into existing profile
-      const base = existingProfile;
-      const mergedStructured = {
-        philosophy:  parsed.philosophy?.trim()   || base?.structured?.philosophy   || "",
-        methods:     parsed.methods?.trim()       || base?.structured?.methods       || "",
-        targetGroup: parsed.targetGroup?.trim()   || base?.structured?.targetGroup   || "",
-        experience:  parsed.experience?.trim()    || base?.structured?.experience    || "",
-      };
-      const mergedSummary = await mergeSummaries(base?.summary ?? "", parsed.summary ?? "");
-
-      const updated: CoachProfile = {
-        name:        base?.name        ?? "",
-        sports:      base?.sports      ?? [],
-        structured:  mergedStructured,
-        summary:     mergedSummary,
-        completedAt: new Date().toISOString(),
-      };
-      await saveProfile(updated);
-
-      setAnalyzedPlans((prev) => [...prev, pendingPlan.file.name]);
-      setPendingPlan(null);
-    } catch (err) {
-      setAnalyzeError(err instanceof Error ? err.message : "An error occurred.");
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  const busy = uploadingResources || isAnalyzing;
-
+function Stage3Upload({ onFinish, onSkip }: Stage3Props) {
   return (
     <div className="w-full max-w-lg mx-auto space-y-6">
       <Tabs defaultValue="resources">
@@ -558,93 +481,19 @@ function Stage3Upload({ onFinish, onSkip, existingProfile, saveProfile }: Stage3
           </TabsTrigger>
         </TabsList>
 
-        {/* ── Resources ── */}
         <TabsContent value="resources" className="space-y-4 pt-2">
           <p className="text-xs text-muted-foreground">
             Studies, literature, methodology documents — stored as reference material.
           </p>
-          <DropZone onFiles={handleResourceFiles} disabled={uploadingResources} />
-          {uploadingResources && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Uploading…
-            </div>
-          )}
-          {uploadedResources.length > 0 && (
-            <div className="space-y-1.5">
-              {uploadedResources.map((name, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm text-foreground/80">
-                  <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-green-500" />
-                  <span className="truncate">{name}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          <ResourceDropZone />
         </TabsContent>
 
-        {/* ── Training Plans ── */}
-        <TabsContent value="plans" className="space-y-4 pt-2">
-          <p className="text-xs text-muted-foreground">
-            Upload an existing training plan. The AI will extract your coaching patterns and enrich your profile.
-          </p>
-
-          {!pendingPlan ? (
-            <>
-              <DropZone onFiles={handlePlanFile} multiple={false} disabled={isAnalyzing} />
-              {analyzedPlans.length > 0 && (
-                <div className="space-y-1.5">
-                  {analyzedPlans.map((name, i) => (
-                    <div key={i} className="flex items-center gap-2 text-sm text-foreground/80">
-                      <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-green-500" />
-                      <span className="truncate">{name}</span>
-                      <span className="text-xs text-muted-foreground ml-auto">Profile enriched ✓</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="space-y-3 border rounded-xl p-4 bg-muted/30">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <FileText className="h-4 w-4 text-primary" />
-                <span className="truncate">{pendingPlan.file.name}</span>
-                <button
-                  className="ml-auto text-muted-foreground hover:text-destructive"
-                  onClick={() => setPendingPlan(null)}
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Describe this plan</Label>
-                <Textarea
-                  placeholder="e.g. 12-week sprint preparation for advanced athletes, heavy emphasis on speed-strength in mesocycle 2…"
-                  value={pendingPlan.description}
-                  onChange={(e) => setPendingPlan((p) => p ? { ...p, description: e.target.value } : p)}
-                  rows={3}
-                  disabled={isAnalyzing}
-                  className="text-sm resize-none"
-                />
-              </div>
-              {analyzeError && (
-                <p className="text-xs text-destructive">{analyzeError}</p>
-              )}
-              <Button
-                className="w-full"
-                onClick={handleAnalyze}
-                disabled={!pendingPlan.description.trim() || isAnalyzing}
-              >
-                {isAnalyzing ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Analyzing…</>
-                ) : (
-                  "Analyze & enrich profile"
-                )}
-              </Button>
-            </div>
-          )}
+        <TabsContent value="plans" className="pt-2">
+          <TrainingPlanEnricher />
         </TabsContent>
       </Tabs>
 
-      <Button className="w-full" onClick={onFinish} disabled={busy}>
+      <Button className="w-full" onClick={onFinish}>
         Finish
         <ChevronRight className="h-4 w-4 ml-2" />
       </Button>
@@ -873,10 +722,6 @@ export default function OnboardingPage() {
             <Stage3Upload
               onFinish={() => navigate("/")}
               onSkip={() => navigate("/")}
-              coachName={coachName}
-              sports={sports}
-              existingProfile={existingProfile}
-              saveProfile={saveProfile}
             />
           </div>
         )}

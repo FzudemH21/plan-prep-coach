@@ -22,6 +22,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useCoachProfile } from "@/hooks/useCoachProfile";
 import { DocumentsSection } from "@/components/coach/DocumentsSection";
+import { TrainingPlanEnricher } from "@/components/coach/TrainingPlanEnricher";
 import {
   Save,
   MessageSquarePlus,
@@ -38,6 +39,8 @@ import {
   Moon,
   Image,
   Mail,
+  BookOpen,
+  ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -556,7 +559,24 @@ export default function CoachProfilePage() {
         </TabsContent>
 
         <TabsContent value="documents">
-          <DocumentsSection />
+          <Tabs defaultValue="docs">
+            <TabsList className="mb-4">
+              <TabsTrigger value="docs" className="gap-1.5">
+                <BookOpen className="h-3.5 w-3.5" />
+                Documents
+              </TabsTrigger>
+              <TabsTrigger value="plans" className="gap-1.5">
+                <ClipboardList className="h-3.5 w-3.5" />
+                Training Plans
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="docs">
+              <DocumentsSection />
+            </TabsContent>
+            <TabsContent value="plans">
+              <TrainingPlanEnricher />
+            </TabsContent>
+          </Tabs>
         </TabsContent>
 
         <TabsContent value="settings">
