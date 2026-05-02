@@ -29,6 +29,8 @@ import { cn } from "@/lib/utils";
 // System prompts
 // ─────────────────────────────────────────────
 
+const READY_TOKEN = "[[READY]]";
+
 function buildConversationSystemPrompt(name: string, sports: string[]): string {
   return `Du bist ein erfahrener Sportwissenschaftler und Coach-Berater.
 Du führst ein erstes Kennenlerngespräch mit ${name}, einem Coach im Bereich ${sports.join(", ")}.
@@ -36,7 +38,21 @@ Du führst ein erstes Kennenlerngespräch mit ${name}, einem Coach im Bereich ${
 Dein Ziel: Verstehe die Coaching-Philosophie, bevorzugte Trainingsmethoden, Zielgruppe und Erfahrung des Coaches.
 Führe ein natürliches, offenes Gespräch – stelle eine Frage nach der anderen.
 Sei neugierig, freundlich und auf Augenhöhe. Kein formales Verhör.
-Antworte auf Deutsch. Halte deine Antworten kurz (2-4 Sätze), dann eine konkrete Folgefrage.`;
+Antworte auf Deutsch. Halte deine Antworten kurz (2-4 Sätze), dann eine konkrete Folgefrage.
+
+Verfolge intern welche dieser vier Themen du bereits ausreichend verstanden hast:
+1. Coaching-Philosophie (Werte, Ansatz, Überzeugungen)
+2. Bevorzugte Trainingsmethoden (konkrete Methoden, Periodisierung, Belastungssteuerung)
+3. Zielgruppe / Athleten (Leistungsniveau, Alter, Sportart, Erfahrung)
+4. Erfahrungshintergrund des Coaches (Werdegang, Ausbildung, Jahre als Coach)
+
+Sobald du alle vier Themen hinreichend verstanden hast (typischerweise nach 4-6 Antworten des Coaches):
+- Schreibe eine abschließende Antwort, die kurz zusammenfasst was du über den Coach verstanden hast.
+- Erkläre freundlich, dass du jetzt genug Infos hast um ein Profil zu erstellen.
+- Lade ihn ein, das Profil zu erstellen oder gerne noch weiterzureden.
+- Füge am Ende deiner Antwort auf einer neuen Zeile exakt diesen Token ein: ${READY_TOKEN}
+- Der Token ${READY_TOKEN} wird dem Coach nicht angezeigt – er ist nur ein internes Signal.
+- Sende ${READY_TOKEN} nur einmal. Falls der Coach danach noch weiterschreibt, antworte normal ohne Token.`;
 }
 
 const OPENER_SYSTEM = `Du bist ein Coach-Berater. Generiere einen kurzen, freundlichen Gesprächseinstieg (2-3 Sätze) der den Coach willkommen heißt und eine erste offene Frage stellt. Antworte auf Deutsch.`;
@@ -193,6 +209,7 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip }: Stage2Props) {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [profileReady, setProfileReady] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const hasOpened = useRef(false);
   // Always-current ref so the send handler reads the latest input after a voice delay
@@ -257,7 +274,10 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip }: Stage2Props) {
     setIsLoading(true);
 
     try {
-      const reply = await sendMessage(newMessages, buildConversationSystemPrompt(coachName, sports), "claude-haiku-4-5");
+      const raw = await sendMessage(newMessages, buildConversationSystemPrompt(coachName, sports), "claude-haiku-4-5");
+      const hasReady = raw.includes(READY_TOKEN);
+      const reply = raw.replace(READY_TOKEN, "").trim();
+      if (hasReady) setProfileReady(true);
       setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
     } catch (err) {
       console.error("[Stage2Chat] sendMessage error:", err);
@@ -274,7 +294,8 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip }: Stage2Props) {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendUserMessage(); }
   };
 
-  const hasEnoughContext = messages.filter((m) => m.role === "user").length >= 2;
+  // Show button when AI signals it has enough info, or as fallback after 8 user messages
+  const hasEnoughContext = profileReady || messages.filter((m) => m.role === "user").length >= 8;
 
   return (
     <div className="flex flex-col h-full">
