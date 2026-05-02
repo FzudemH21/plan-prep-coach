@@ -32,6 +32,7 @@ export function useSpeechInput(onResult: (text: string) => void, lang = "de-DE")
 
     recognition.onresult = (e: SpeechRecognitionEvent) => {
       const transcript = Array.from(e.results)
+        .slice(e.resultIndex)
         .filter((r) => r.isFinal)
         .map((r) => r[0].transcript)
         .join("");
