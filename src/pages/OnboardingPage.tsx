@@ -195,6 +195,9 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip }: Stage2Props) {
   const [isCreating, setIsCreating] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const hasOpened = useRef(false);
+  // Always-current ref so the send handler reads the latest input after a voice delay
+  const inputRef = useRef(input);
+  useEffect(() => { inputRef.current = input; }, [input]);
 
   // Voice input – appends transcript to the text field
   const handleVoiceResult = useCallback(
@@ -237,10 +240,16 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip }: Stage2Props) {
   }, [coachName, sports]);
 
   const sendUserMessage = async () => {
-    const text = input.trim();
-    if (!text || isLoading) return;
+    if (isLoading) return;
 
-    if (isListening) stopListening();
+    if (isListening) {
+      stopListening();
+      // Wait briefly for the last speech chunk to be finalized before reading input
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    const text = inputRef.current.trim();
+    if (!text) return;
 
     const newMessages: Message[] = [...messages, { role: "user" as const, content: text }];
     setMessages(newMessages);
@@ -493,6 +502,8 @@ export default function OnboardingPage() {
   const [coachName, setCoachName] = useState("");
   const [sports, setSports] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // Prevents the refresh-init branch from re-running after saveProfile updates existingProfile
+  const refreshInitialized = useRef(false);
 
   // Guard: if a full (non-skipped) profile already exists, skip onboarding entirely
   // Exception: ?mode=refresh allows re-entering the AI conversation from the profile page
@@ -500,8 +511,9 @@ export default function OnboardingPage() {
     if (!isRefresh && existingProfile && !existingProfile.skipped) {
       navigate("/coach-profile", { replace: true });
     }
-    // In refresh mode: pre-fill from existing profile and jump straight to Stage 2
-    if (isRefresh && existingProfile && !existingProfile.skipped) {
+    // In refresh mode: pre-fill from existing profile and jump straight to Stage 2 — only once
+    if (isRefresh && existingProfile && !existingProfile.skipped && !refreshInitialized.current) {
+      refreshInitialized.current = true;
       setCoachName(existingProfile.name ?? "");
       setSports(existingProfile.sports ?? []);
       setStage(2);
