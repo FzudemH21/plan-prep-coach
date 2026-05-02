@@ -61,7 +61,15 @@ export function useSpeechInput(onResult: (text: string) => void, lang = "de-DE")
         next.onend = recognition.onend;
         next.onerror = recognition.onerror;
         ref.current = next;
-        next.start();
+        // Small delay so the browser fully closes the old session before starting the new one
+        setTimeout(() => {
+          if (!intentionalStop.current) {
+            try { next.start(); } catch { /* ignore race-condition start errors */ }
+          } else {
+            ref.current = null;
+            setIsListening(false);
+          }
+        }, 150);
         return;
       }
       ref.current = null;
@@ -69,8 +77,9 @@ export function useSpeechInput(onResult: (text: string) => void, lang = "de-DE")
     };
 
     recognition.onerror = (e: SpeechRecognitionErrorEvent) => {
-      // no-speech is normal during pauses — let onend handle the restart
-      if ((e as { error?: string }).error === "no-speech") return;
+      const error = (e as { error?: string }).error ?? "";
+      // no-speech and network are normal browser interruptions during pauses — let onend restart
+      if (error === "no-speech" || error === "network") return;
       intentionalStop.current = true;
       ref.current = null;
       setIsListening(false);
