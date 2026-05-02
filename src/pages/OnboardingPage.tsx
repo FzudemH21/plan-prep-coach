@@ -201,7 +201,7 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip }: Stage2Props) {
     (text: string) => setInput((prev) => (prev ? `${prev} ${text}` : text)),
     []
   );
-  const { isListening, toggle: toggleMic, isSupported: micSupported } =
+  const { isListening, toggle: toggleMic, isSupported: micSupported, stopListening } =
     useSpeechInput(handleVoiceResult);
 
   // Auto-scroll to bottom whenever messages change
@@ -239,6 +239,8 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip }: Stage2Props) {
   const sendUserMessage = async () => {
     const text = input.trim();
     if (!text || isLoading) return;
+
+    if (isListening) stopListening();
 
     const newMessages: Message[] = [...messages, { role: "user" as const, content: text }];
     setMessages(newMessages);
@@ -560,7 +562,8 @@ export default function OnboardingPage() {
 
       const raw = await sendMessage(
         [{ role: "user", content: `Hier ist das Gespräch mit dem Coach:\n\n${transcript}\n\nBitte extrahiere die strukturierten Informationen als JSON.` }],
-        EXTRACTION_SYSTEM
+        EXTRACTION_SYSTEM,
+        "claude-sonnet-4-5"
       );
 
       let parsed: {
