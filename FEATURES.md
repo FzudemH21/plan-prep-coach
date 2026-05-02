@@ -23,7 +23,7 @@ Claude Chat (browser) is my sparring partner for planning, discussion, and promp
 | 🔴 Now | Bulk Import Exercises (CSV/Excel) | ✅ Done |
 | 🔴 Now | Bulk Import fixes (3-step flow, description optional, consistent storage) | ✅ Done |
 | 🔴 Now | Dynamic Exercise Detail Modal (columns from database, no hardcoded fields, directly editable) | ✅ Done |
-| 🟡 Soon | Coach Profile & Onboarding (AI conversation to learn coaching philosophy, AI asks follow-up questions, result saved as coach profile and reviewable) | 🔄 In Progress – onboarding flow, skip with data save, coach profile page (editable), voice input all working. Supabase-backed (useCoachProfile migrated). Anthropic API key ✅. Missing: AI conversation activation. |
+| 🟡 Soon | Coach Profile & Onboarding (AI conversation to learn coaching philosophy, AI asks follow-up questions, result saved as coach profile and reviewable) | ✅ Done – onboarding flow, AI conversation, profile extraction, voice input, skip option, Supabase-backed. Anthropic API key ✅. |
 | 🟡 Soon | Supabase migration – remaining localStorage data | ✅ Done – Auth ✅, Coach Profile ✅, Documents ✅, Training Programs ✅, Parameters DB ✅, Toolbox/Methods DB ✅, Templates ✅, Athlete Database ✅, Calendar Events ✅, Custom Libraries ✅. Wizard session state (macrocycleData etc.) intentionally stays in localStorage as ephemeral working state. |
 | 🟡 Soon | Plan uploads for Coach Profile (Excel, PDF, Word and other files uploadable, coach provides context, AI extracts patterns and enriches coach profile) | ⬜ Open |
 | 🟡 Soon | AI Autopilot in Wizard (suggestions & pre-filling of intensities, methods, exercises based on coach profile) | ⬜ Open |
