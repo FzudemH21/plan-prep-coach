@@ -193,7 +193,7 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip }: Stage2Props) {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
   const hasOpened = useRef(false);
 
   // Voice input – appends transcript to the text field
@@ -204,9 +204,9 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip }: Stage2Props) {
   const { isListening, toggle: toggleMic, isSupported: micSupported } =
     useSpeechInput(handleVoiceResult);
 
-  // Auto-scroll
+  // Auto-scroll to bottom whenever messages change
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   // AI opens the conversation automatically
@@ -268,7 +268,7 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip }: Stage2Props) {
   return (
     <div className="flex flex-col h-full">
       {/* Message list */}
-      <ScrollArea className="flex-1 pr-4" ref={scrollRef}>
+      <ScrollArea className="flex-1 pr-4">
         <div className="space-y-4 pb-4">
           {messages.map((msg, i) => (
             <div
@@ -309,6 +309,7 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip }: Stage2Props) {
               </div>
             </div>
           )}
+          <div ref={bottomRef} />
         </div>
       </ScrollArea>
 
