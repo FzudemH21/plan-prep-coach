@@ -228,7 +228,8 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip }: Stage2Props) {
     setIsLoading(true);
     sendMessage(
       [{ role: "user", content: `Begrüße ${coachName}, Coach im Bereich ${sports.join(", ")}. Stelle eine erste offene Frage.` }],
-      OPENER_SYSTEM
+      OPENER_SYSTEM,
+      "claude-haiku-4-5"
     )
       .then((text) => setMessages([{ role: "assistant", content: text }]))
       .catch(() => setMessages([fallback]))
@@ -245,9 +246,10 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip }: Stage2Props) {
     setIsLoading(true);
 
     try {
-      const reply = await sendMessage(newMessages, buildConversationSystemPrompt(coachName, sports));
+      const reply = await sendMessage(newMessages, buildConversationSystemPrompt(coachName, sports), "claude-haiku-4-5");
       setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
-    } catch {
+    } catch (err) {
+      console.error("[Stage2Chat] sendMessage error:", err);
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: "Sorry, an error occurred. Please try again." },
