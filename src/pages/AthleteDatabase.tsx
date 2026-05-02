@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAthletes } from '@/hooks/useAthletes';
+import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { AthleteGroupSidebar } from '@/components/athletes/AthleteGroupSidebar';
 import { AthleteProfileView } from '@/components/athletes/AthleteProfileView';
 import { Button } from '@/components/ui/button';
@@ -7,6 +8,7 @@ import { Plus, Users } from 'lucide-react';
 
 export default function AthleteDatabase() {
   const athleteData = useAthletes();
+  const { deleteEventsForAthlete } = useCalendarEvents();
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
   const [isNewAthlete, setIsNewAthlete] = useState(false);
   const [selectedGroupForNew, setSelectedGroupForNew] = useState<string | null>(null);
@@ -85,6 +87,7 @@ export default function AthleteDatabase() {
           onCreateAthlete={() => handleCreateAthlete()}
           onDeleteAthlete={(athleteId) => {
             athleteData.deleteAthlete(athleteId);
+            deleteEventsForAthlete(athleteId);
             if (selectedAthleteId === athleteId) {
               setSelectedAthleteId(null);
               setIsNewAthlete(false);
@@ -111,6 +114,7 @@ export default function AthleteDatabase() {
             onUpdateAthlete={(updates) => athleteData.updateAthlete(selectedAthlete.id, updates)}
             onDeleteAthlete={() => {
               athleteData.deleteAthlete(selectedAthlete.id);
+              deleteEventsForAthlete(selectedAthlete.id);
               setSelectedAthleteId(null);
               setIsNewAthlete(false);
             }}

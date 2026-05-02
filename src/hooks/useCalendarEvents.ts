@@ -69,5 +69,14 @@ export function useCalendarEvents() {
     [store, setStore],
   );
 
-  return { getEventsForDate, getEventsForAthlete, addEvent, deleteEvent, updateEvent };
+  const deleteEventsForAthlete = useCallback(
+    async (athleteId: string): Promise<void> => {
+      const updated = { ...store };
+      delete updated[athleteId];
+      await setStore(updated);
+    },
+    [store, setStore],
+  );
+
+  return { getEventsForDate, getEventsForAthlete, addEvent, deleteEvent, updateEvent, deleteEventsForAthlete };
 }
