@@ -27,14 +27,15 @@ export function useSpeechInput(onResult: (text: string) => void, lang = "de-DE")
 
     const recognition = new SR();
     recognition.lang = lang;
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.interimResults = true;
 
     recognition.onresult = (e: SpeechRecognitionEvent) => {
       const transcript = Array.from(e.results)
+        .filter((r) => r.isFinal)
         .map((r) => r[0].transcript)
         .join("");
-      onResult(transcript);
+      if (transcript) onResult(transcript);
     };
 
     recognition.onend = () => {
