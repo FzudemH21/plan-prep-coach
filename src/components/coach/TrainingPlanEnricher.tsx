@@ -80,9 +80,42 @@ function DropZone({ onFile, disabled }: { onFile: (file: File) => void; disabled
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+const TRAINING_PLANS_FOLDER = "Training Plans";
+const DOCS_INDEX_KEY = "coachDocuments";
+
+/**
+ * Finds the "Training Plans" root folder in the current state.
+ * If not found, calls addFolder (which writes to localStorage synchronously)
+ * and reads the new ID back from localStorage immediately.
+ */
+function resolveTrainingPlansFolder(
+  folders: { id: string; name: string; parentId: string | null }[],
+  addFolder: (name: string, parentId: null) => void
+): string | null {
+  const existing = folders.find(
+    (f) => f.name === TRAINING_PLANS_FOLDER && f.parentId === null
+  );
+  if (existing) return existing.id;
+
+  addFolder(TRAINING_PLANS_FOLDER, null);
+
+  // addFolder calls persistIndex synchronously → read fresh data from localStorage
+  try {
+    const stored = JSON.parse(localStorage.getItem(DOCS_INDEX_KEY) ?? "{}") as {
+      folders?: { id: string; name: string; parentId: string | null }[];
+    };
+    const created = (stored.folders ?? []).find(
+      (f) => f.name === TRAINING_PLANS_FOLDER && f.parentId === null
+    );
+    return created?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function TrainingPlanEnricher() {
   const { profile, saveProfile } = useCoachProfile();
-  const { addDocument } = useCoachDocuments();
+  const { addDocument, addFolder, folders } = useCoachDocuments();
 
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [description, setDescription] = useState("");
@@ -96,8 +129,9 @@ export function TrainingPlanEnricher() {
     setError(null);
 
     try {
-      // Store the file in coach documents
-      await addDocument(pendingFile, null);
+      // Find or create "Training Plans" folder, then upload there
+      const folderId = resolveTrainingPlansFolder(folders, addFolder);
+      await addDocument(pendingFile, folderId);
 
       // AI extraction from filename + description
       const content = `Dateiname: ${pendingFile.name}\nBeschreibung des Coaches: ${description}`;
