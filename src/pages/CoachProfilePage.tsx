@@ -244,7 +244,7 @@ function ProfileTab() {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => navigate("/onboarding")}>
+                <AlertDialogAction onClick={() => navigate("/onboarding?mode=refresh")}>
                   Start conversation
                 </AlertDialogAction>
               </AlertDialogFooter>

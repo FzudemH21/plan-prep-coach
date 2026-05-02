@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -481,6 +481,8 @@ function Stage3Upload({ onFinish, onSkip }: Stage3Props) {
 
 export default function OnboardingPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isRefresh = searchParams.get("mode") === "refresh";
   const { profile: existingProfile, saveProfile } = useCoachProfile();
   const [stage, setStage] = useState<1 | 2 | 3>(1);
   const [coachName, setCoachName] = useState("");
@@ -488,11 +490,12 @@ export default function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Guard: if a full (non-skipped) profile already exists, skip onboarding entirely
+  // Exception: ?mode=refresh allows re-entering the AI conversation from the profile page
   useEffect(() => {
-    if (existingProfile && !existingProfile.skipped) {
+    if (!isRefresh && existingProfile && !existingProfile.skipped) {
       navigate("/coach-profile", { replace: true });
     }
-  }, [existingProfile, navigate]);
+  }, [isRefresh, existingProfile, navigate]);
 
   /** Builds a partial-but-persisted profile with whatever data the coach has entered so far. */
   const buildSkippedProfile = (name: string, skipSports: string[]): CoachProfile => {
