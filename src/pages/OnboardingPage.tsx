@@ -495,6 +495,12 @@ export default function OnboardingPage() {
     if (!isRefresh && existingProfile && !existingProfile.skipped) {
       navigate("/coach-profile", { replace: true });
     }
+    // In refresh mode: pre-fill from existing profile and jump straight to Stage 2
+    if (isRefresh && existingProfile && !existingProfile.skipped) {
+      setCoachName(existingProfile.name ?? "");
+      setSports(existingProfile.sports ?? []);
+      setStage(2);
+    }
   }, [isRefresh, existingProfile, navigate]);
 
   /** Builds a partial-but-persisted profile with whatever data the coach has entered so far. */
