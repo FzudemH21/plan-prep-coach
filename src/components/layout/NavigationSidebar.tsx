@@ -93,7 +93,6 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
     icon: FileText,
     items: [
       { title: "Training Program Library", path: "/templates/programs", icon: Calendar },
-      { title: "Program Templates", path: "/templates/program-templates", icon: Target },
       { title: "Exercise Libraries", path: "/templates/exercise-libraries", icon: Library },
     ],
   };
