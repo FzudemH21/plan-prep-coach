@@ -108,8 +108,8 @@ export default function TrainingProgramsPage() {
     navigate('/macrocycle');
   };
 
-  const handleCopyProgram = (program: TrainingProgram) => {
-    const copied = copyProgram(program.id);
+  const handleCopyProgram = async (program: TrainingProgram) => {
+    const copied = await copyProgram(program.id);
     if (copied) {
       toast({
         title: "Program copied",

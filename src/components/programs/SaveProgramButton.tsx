@@ -31,8 +31,8 @@ export function SaveProgramButton({
     try {
       // saveCurrentSession() automatically uses plan name from macrocycleData
       // and handles new vs update based on activeProgramId
-      const saved = saveCurrentSession();
-      
+      const saved = await saveCurrentSession();
+
       toast({
         title: "Program saved",
         description: `"${saved.name}" has been saved successfully.`,
