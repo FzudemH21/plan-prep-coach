@@ -208,9 +208,10 @@ interface Stage2Props {
   sports: string[];
   onComplete: (messages: Message[]) => void;
   onSkip: () => void;
+  hideSkipWarning?: boolean;
 }
 
-function Stage2Chat({ coachName, sports, onComplete, onSkip }: Stage2Props) {
+function Stage2Chat({ coachName, sports, onComplete, onSkip, hideSkipWarning = false }: Stage2Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -400,7 +401,7 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip }: Stage2Props) {
           </Button>
         )}
 
-        <SkipWarning onSkip={onSkip} />
+        {!hideSkipWarning && <SkipWarning onSkip={onSkip} />}
       </div>
     </div>
   );
@@ -707,6 +708,7 @@ export default function OnboardingPage() {
                 sports={sports}
                 onComplete={handleChatComplete}
                 onSkip={handleStage2Skip}
+                hideSkipWarning={isRefresh}
               />
             </div>
           </div>
