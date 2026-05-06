@@ -4991,6 +4991,13 @@ export default function MesocyclePage() {
   // ── AI Assistant context ───────────────────────────────────────────────────
   const mesoStepLabel = stepTitles[currentStep - 1] ?? `Step ${currentStep}`;
 
+  // All method names selected in the macrocycle step
+  const allMacroMethods = useMemo<string[]>(() => {
+    const from = macrocycleData?.selectedMethods ?? [];
+    const manual = (macrocycleData?.manuallyAddedMethods ?? []).map((m: { methodId: string }) => m.methodId);
+    return Array.from(new Set([...from, ...manual]));
+  }, [macrocycleData]);
+
   const mesoWizardContext = useMemo(() => {
     const athleteStr = athleteName ? `Athlete: ${athleteName}` : "No athlete selected";
     const planStr = macrocycleData?.planName ? `Plan: ${macrocycleData.planName}` : "";
@@ -4999,9 +5006,10 @@ export default function MesocyclePage() {
       : macrocycleData?.smartGoal?.specific
       ? `Primary goal: ${macrocycleData.smartGoal.specific}`
       : "";
+    const durationStr = totalWeeks > 0 ? `Plan duration: ${totalWeeks} weeks` : "";
     const mesoCount = mesocycles.length;
     const mesoStr = mesoCount > 0
-      ? `Mesocycles: ${mesoCount} (${mesocycles.map((m) => m.name).join(", ")})`
+      ? `Mesocycles: ${mesoCount} (${mesocycles.map((m) => `${m.name} — ${m.duration ?? m.weeks} weeks`).join(", ")})`
       : "No mesocycles configured yet";
     const allocatedMethods = Object.keys(methodAllocations).filter(
       (m) => methodAllocations[m]?.length > 0
@@ -5009,17 +5017,76 @@ export default function MesocyclePage() {
     const methodsStr = allocatedMethods.length
       ? `Allocated methods:\n${allocatedMethods.map((m) => `- ${m}`).join("\n")}`
       : "";
+
+    let actionHints = "";
+    if (currentStep === 1) {
+      actionHints = `Available AI action: set_mesocycle_config\nPlan duration: ${totalWeeks} weeks — suggest a sensible count and individual duration in weeks.`;
+    } else if (currentStep === 3 && allMacroMethods.length > 0) {
+      const unallocated = allMacroMethods.filter((m) => !(methodAllocations[m]?.length > 0));
+      actionHints = unallocated.length
+        ? `Available AI action: add_methods (allocates listed methods to all mesocycles)\nUnallocated methods (use exact names):\n${unallocated.map((m) => `- ${m}`).join("\n")}`
+        : "All methods are already allocated to mesocycles.";
+    }
+
     return [
       `Current step: ${mesoStepLabel}`,
       athleteStr,
       planStr,
       goalStr,
+      durationStr,
       mesoStr,
       methodsStr,
+      actionHints,
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, mesocycles, methodAllocations, mesoStepLabel]);
+  }, [currentStep, athleteName, macrocycleData, mesocycles, methodAllocations, mesoStepLabel, totalWeeks, allMacroMethods]);
+
+  // ── AI Apply handler ───────────────────────────────────────────────────────
+  const handleMesoAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
+    switch (action.type) {
+      case "set_mesocycle_config": {
+        const count = Math.max(1, Math.min(12, action.count));
+        const weeksEach = Math.max(1, action.weeksDuration);
+        const newMesocycles: ExtendedMesocycle[] = Array.from({ length: count }, (_, i) => {
+          const microcycles: Microcycle[] = Array.from({ length: weeksEach }, (_, j) => ({
+            id: `micro-${i + 1}-${j + 1}`,
+            name: `Microcycle ${j + 1}`,
+            duration: 7,
+            intensity: "moderate" as Intensity,
+          }));
+          return {
+            id: `meso-${i + 1}`,
+            name: `Mesocycle ${i + 1}`,
+            weeks: weeksEach,
+            sessionsPerWeek: 3,
+            sessionLength: 60,
+            startDate: planStartDate,
+            endDate: planStartDate,
+            duration: weeksEach,
+            intensity: "moderate" as IntensityLevel,
+            trainingMethods: [],
+            trainingQualities: [],
+            microcycles,
+          };
+        });
+        const recalculated = recalculateAllMesocycleDates(newMesocycles, planStartDate);
+        setMesocycles(recalculated);
+        break;
+      }
+      case "add_methods":
+        // Allocate each suggested method to all mesocycles
+        action.methods.forEach((methodName) => {
+          setMethodAllocations((prev) => ({
+            ...prev,
+            [methodName]: mesocycles.map((m) => m.id),
+          }));
+        });
+        break;
+      default:
+        break;
+    }
+  }, [mesocycles, planStartDate, recalculateAllMesocycleDates]);
 
   return (
     <div className="w-full max-w-none space-y-6 min-w-0">
@@ -5159,7 +5226,11 @@ export default function MesocyclePage() {
         />
 
       {/* AI Assistant */}
-      <WizardAIAssistant stepLabel={mesoStepLabel} wizardContext={mesoWizardContext} />
+      <WizardAIAssistant
+        stepLabel={mesoStepLabel}
+        wizardContext={mesoWizardContext}
+        onApplySuggestion={handleMesoAIApply}
+      />
     </div>
   );
 };

@@ -3241,6 +3241,9 @@ export default function MicrocyclePlanningPage() {
   const microWizardContext = useMemo(() => {
     const athleteStr = athleteName ? `Athlete: ${athleteName}` : "No athlete selected";
     const planStr = macrocycleData?.planName ? `Plan: ${macrocycleData.planName}` : "";
+    const goalStr = macrocycleData?.smartGoals?.[0]?.description
+      ? `Primary goal: ${macrocycleData.smartGoals[0].description}`
+      : "";
     const mesoCount = mesocycles.length;
     const mesoStr = mesoCount > 0
       ? `Mesocycles: ${mesoCount} (${mesocycles.map((m: { name: string }) => m.name).join(", ")})`
@@ -3253,17 +3256,35 @@ export default function MicrocyclePlanningPage() {
     const dayStr = assignedDays > 0
       ? `Training days with methods assigned: ${assignedDays}`
       : "No method-day assignments yet";
+
+    // Available methods from mesocycle allocation
+    const availableMethods = Object.keys(methodAllocations).filter(
+      (m) => methodAllocations[m]?.length > 0
+    );
+    const methodsStr = availableMethods.length
+      ? `Training methods in this plan:\n${availableMethods.map((m) => `- ${m}`).join("\n")}`
+      : "";
+
+    const stepHint = currentStep === 1
+      ? "Goal: distribute methods across training days of the week — ask the AI for advice on optimal placement."
+      : currentStep === 2
+      ? "Goal: assign exercises from the database to each method slot."
+      : "Goal: review the final training calendar with all sessions.";
+
     return [
       `Current step: ${microStepLabel}`,
       athleteStr,
       planStr,
+      goalStr,
       mesoStr,
       currentMesoStr,
+      methodsStr,
       dayStr,
+      stepHint,
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, dayMethodAssignments, microStepLabel]);
+  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, dayMethodAssignments, methodAllocations, microStepLabel]);
 
   return (
     <div className="mx-auto py-6 space-y-6 px-4 w-full max-w-[98vw]">
