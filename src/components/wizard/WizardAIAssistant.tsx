@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, X, Send, Mic, MicOff, Loader2, ChevronRight } from "lucide-react";
+import { Bot, X, Send, Mic, MicOff, Loader2, ChevronRight, CheckCircle2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { sendMessage, type Message } from "@/utils/anthropicApi";
 import { useCoachProfile } from "@/hooks/useCoachProfile";
@@ -10,16 +10,47 @@ import { useSpeechInput } from "@/hooks/useSpeechInput";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+/** Structured actions the AI can suggest for direct application into the wizard. */
+export type ApplySuggestion =
+  | { type: "set_plan_name"; name: string }
+  | { type: "add_goal"; description: string }
+  | { type: "add_methods"; methods: string[] }
+  | { type: "set_mesocycle_config"; count: number; weeksDuration: number }
+  | { type: "set_method_intensities"; methodName: string; frequency: number; sets: number; reps: string; intensity: string };
+
 export interface WizardAIAssistantProps {
   /** Human-readable label for the current wizard step, e.g. "Goal & Method Selection" */
   stepLabel: string;
   /** A plain-text snapshot of the current wizard state built by the parent page */
   wizardContext: string;
+  /**
+   * When provided, the AI is told it can emit [[APPLY: {...}]] blocks and the
+   * panel will render Apply buttons that call this handler.
+   */
+  onApplySuggestion?: (action: ApplySuggestion) => void;
 }
 
 // ─── Prompts ─────────────────────────────────────────────────────────────────
 
-function buildSystemPrompt(coachContext: string, wizardContext: string): string {
+const APPLY_FORMAT_INSTRUCTIONS = `
+## Applying Suggestions Directly
+When you have a concrete suggestion the coach can apply with one click, append ONE structured apply block at the very end of your message using this exact format:
+[[APPLY: {"type": "...", ...fields}]]
+
+Available types and their fields:
+- set_plan_name: {"type":"set_plan_name","name":"<plan name>"}
+- add_goal: {"type":"add_goal","description":"<full goal description including numbers and timeframe>"}
+- add_methods: {"type":"add_methods","methods":["<exact method name>","<exact method name>"]}
+- set_mesocycle_config: {"type":"set_mesocycle_config","count":<number>,"weeksDuration":<weeks per mesocycle>}
+- set_method_intensities: {"type":"set_method_intensities","methodName":"<name>","frequency":<sessions/week>,"sets":<number>,"reps":"<e.g. 3-5>","intensity":"<e.g. 85-90% 1RM>"}
+
+Rules:
+- Only ONE [[APPLY: ...]] block per message, at the very end.
+- Only include it when you are confident the suggestion is appropriate and actionable.
+- Use exact method names as listed in the wizard context.
+- Do not add commentary after the [[APPLY: ...]] block.`;
+
+function buildSystemPrompt(coachContext: string, wizardContext: string, canApply: boolean): string {
   return `You are an expert sports science advisor embedded in a training planning wizard.
 You assist the coach in making smart, evidence-based planning decisions.
 
@@ -34,7 +65,7 @@ ${wizardContext}
 - Keep responses concise (2-4 sentences). If helpful, ask one focused follow-up question.
 - Draw on the coach's philosophy and preferred methods when making suggestions.
 - Always refer to the athlete named in "Current Wizard State" — never reference athletes mentioned in the Coach Style section.
-- Reply in English.`;
+- Reply in English.${canApply ? APPLY_FORMAT_INSTRUCTIONS : ""}`;
 }
 
 const PROACTIVE_SYSTEM = `You are an expert sports science advisor embedded in a training planning wizard.
@@ -46,9 +77,64 @@ Generate a brief, helpful proactive message (2-3 sentences) that:
 
 CRITICAL: The "Wizard Context" tells you exactly which athlete this plan is for. The "Coach Style" section describes the coach's background and may mention past athletes — do not confuse these with the current athlete. If no athlete is selected yet in the wizard, do not mention any athlete by name.
 
-Be specific and practical, not generic. Reply in English.`;
+Be specific and practical, not generic. Do NOT include [[APPLY: ...]] blocks in the opening message. Reply in English.`;
 
-// ─── Markdown renderer (same lightweight approach as onboarding chat) ──────
+// ─── Suggestion card ─────────────────────────────────────────────────────────
+
+function getSuggestionPreview(action: ApplySuggestion): string {
+  switch (action.type) {
+    case "set_plan_name":
+      return `Set plan name: "${action.name}"`;
+    case "add_goal":
+      return `Add goal: ${action.description}`;
+    case "add_methods":
+      return action.methods.length === 1
+        ? `Add method: ${action.methods[0]}`
+        : `Add ${action.methods.length} methods: ${action.methods.join(", ")}`;
+    case "set_mesocycle_config":
+      return `Configure ${action.count} mesocycle${action.count !== 1 ? "s" : ""}, ${action.weeksDuration} week${action.weeksDuration !== 1 ? "s" : ""} each`;
+    case "set_method_intensities":
+      return `${action.methodName}: ${action.frequency}×/week, ${action.sets} sets × ${action.reps} reps @ ${action.intensity}`;
+  }
+}
+
+function SuggestionCard({
+  action,
+  onApply,
+}: {
+  action: ApplySuggestion;
+  onApply: (a: ApplySuggestion) => void;
+}) {
+  const [applied, setApplied] = useState(false);
+
+  return (
+    <div className="mt-2.5 rounded-xl border border-primary/25 bg-primary/5 px-3 py-2.5 space-y-2">
+      <div className="flex items-center gap-1.5 text-xs text-primary font-medium">
+        <Sparkles className="h-3 w-3 flex-shrink-0" />
+        Suggested action
+      </div>
+      <p className="text-xs text-foreground leading-snug">{getSuggestionPreview(action)}</p>
+      <Button
+        size="sm"
+        variant={applied ? "outline" : "default"}
+        className="h-7 text-xs w-full"
+        disabled={applied}
+        onClick={() => {
+          onApply(action);
+          setApplied(true);
+        }}
+      >
+        {applied ? (
+          <><CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-green-500" />Applied</>
+        ) : (
+          "Apply to wizard"
+        )}
+      </Button>
+    </div>
+  );
+}
+
+// ─── Markdown renderer + apply-block parser ───────────────────────────────────
 
 function ChatMarkdown({ text }: { text: string }) {
   const paragraphs = text.split(/\n{2,}/);
@@ -66,9 +152,44 @@ function ChatMarkdown({ text }: { text: string }) {
   );
 }
 
+const APPLY_REGEX = /\[\[APPLY:\s*(\{[\s\S]*?\})\]\]/;
+
+function AssistantMessage({
+  text,
+  onApply,
+}: {
+  text: string;
+  onApply?: (a: ApplySuggestion) => void;
+}) {
+  const match = text.match(APPLY_REGEX);
+  const cleanText = text.replace(APPLY_REGEX, "").trim();
+
+  let suggestion: ApplySuggestion | null = null;
+  if (match && onApply) {
+    try {
+      suggestion = JSON.parse(match[1]) as ApplySuggestion;
+    } catch {
+      // malformed JSON from AI — ignore the block
+    }
+  }
+
+  return (
+    <span>
+      <ChatMarkdown text={cleanText} />
+      {suggestion && onApply && (
+        <SuggestionCard action={suggestion} onApply={onApply} />
+      )}
+    </span>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function WizardAIAssistant({ stepLabel, wizardContext }: WizardAIAssistantProps) {
+export function WizardAIAssistant({
+  stepLabel,
+  wizardContext,
+  onApplySuggestion,
+}: WizardAIAssistantProps) {
   const { profile } = useCoachProfile();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -150,7 +271,7 @@ export function WizardAIAssistant({ stepLabel, wizardContext }: WizardAIAssistan
     try {
       const reply = await sendMessage(
         newMessages,
-        buildSystemPrompt(coachContext, wizardContext),
+        buildSystemPrompt(coachContext, wizardContext, !!onApplySuggestion),
         "claude-haiku-4-5"
       );
       setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
@@ -213,6 +334,12 @@ export function WizardAIAssistant({ stepLabel, wizardContext }: WizardAIAssistan
                 <p className="text-sm font-semibold leading-none">AI Assistant</p>
                 <p className="text-xs text-muted-foreground mt-0.5 truncate">{stepLabel}</p>
               </div>
+              {onApplySuggestion && (
+                <div className="flex items-center gap-1 text-xs text-primary bg-primary/10 rounded-full px-2 py-0.5 mr-1">
+                  <Sparkles className="h-2.5 w-2.5" />
+                  Can fill wizard
+                </div>
+              )}
               <button
                 onClick={() => setIsOpen(false)}
                 className="text-muted-foreground hover:text-foreground transition-colors"
@@ -248,7 +375,7 @@ export function WizardAIAssistant({ stepLabel, wizardContext }: WizardAIAssistan
                         : "bg-primary text-primary-foreground rounded-tr-sm"
                     )}>
                       {msg.role === "assistant"
-                        ? <ChatMarkdown text={msg.content} />
+                        ? <AssistantMessage text={msg.content} onApply={onApplySuggestion} />
                         : msg.content
                       }
                     </div>

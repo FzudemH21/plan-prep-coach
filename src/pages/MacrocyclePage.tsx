@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { WizardAIAssistant } from "@/components/wizard/WizardAIAssistant";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -2754,6 +2754,13 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   ];
   const macroStepLabel = macroStepLabels[currentStep - 1] ?? `Step ${currentStep}`;
 
+  // All available method IDs from goal-linked + toolbox
+  const allAvailableMethodIds = useMemo(() => {
+    const ids = new Set<string>();
+    Object.values(methodsByQuality).forEach((q) => q.list.forEach((m) => ids.add(m)));
+    return Array.from(ids);
+  }, [methodsByQuality]);
+
   const wizardContext = useMemo(() => {
     const athleteStr = selectedAthlete
       ? `Athlete: ${getAthleteDisplayName(selectedAthlete)}`
@@ -2765,10 +2772,28 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     const goalsStr = smartGoals.length
       ? `Goals:\n${smartGoals.map((g) => `- ${g.description || g.specific || ""}`).filter(Boolean).join("\n")}`
       : "";
-    const methodsStr =
-      selectedMethods.size > 0 || manuallyAddedMethods.length > 0
-        ? `Selected methods:\n${[...Array.from(selectedMethods), ...manuallyAddedMethods.map((m) => m.methodId)].map((m) => `- ${m}`).join("\n")}`
-        : "";
+    const selectedMethodList = [
+      ...Array.from(selectedMethods),
+      ...manuallyAddedMethods.map((m) => m.methodId),
+    ];
+    const methodsStr = selectedMethodList.length
+      ? `Selected methods:\n${selectedMethodList.map((m) => `- ${m}`).join("\n")}`
+      : "";
+
+    // Step-specific AI action hints
+    let actionHints = "";
+    if (currentStep === 1) {
+      actionHints = "Available AI action: set_plan_name";
+    } else if (currentStep === 2) {
+      actionHints = "Available AI action: add_goal (include specific numbers and timeframe in the description)";
+    } else if (currentStep === 3) {
+      const unselected = allAvailableMethodIds.filter((m) => !selectedMethods.has(m));
+      const methodListStr = unselected.length
+        ? `Available methods to suggest from (use exact names):\n${unselected.map((m) => `- ${m}`).join("\n")}`
+        : "All available methods are already selected.";
+      actionHints = `Available AI action: add_methods\n${methodListStr}`;
+    }
+
     return [
       `Current step: ${macroStepLabel}`,
       athleteStr,
@@ -2776,10 +2801,48 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       durationStr,
       goalsStr,
       methodsStr,
+      actionHints,
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, selectedAthlete, planName, planDuration, smartGoals, selectedMethods, manuallyAddedMethods, macroStepLabel]);
+  }, [currentStep, selectedAthlete, planName, planDuration, smartGoals, selectedMethods, manuallyAddedMethods, macroStepLabel, allAvailableMethodIds]);
+
+  // ── AI Apply handler ───────────────────────────────────────────────────────
+  const handleAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
+    switch (action.type) {
+      case "set_plan_name":
+        setPlanName(action.name);
+        break;
+      case "add_goal":
+        setSmartGoals((prev) => [
+          ...prev,
+          {
+            id: generateId(),
+            description: action.description,
+            baselineValue: 0,
+            desiredValue: 0,
+            unit: "",
+            percentChange: 0,
+          },
+        ]);
+        break;
+      case "add_methods": {
+        const linkedIds = new Set(allAvailableMethodIds);
+        action.methods.forEach((methodId) => {
+          if (linkedIds.has(methodId)) {
+            // Goal-linked method — just select it
+            setSelectedMethods((prev) => new Set([...prev, methodId]));
+          } else {
+            // Not in goal list — add as manually added method
+            handleAddManualMethod({ methodId, rationale: "" });
+          }
+        });
+        break;
+      }
+      default:
+        break;
+    }
+  }, [allAvailableMethodIds, handleAddManualMethod]);
 
   return (
     <>
@@ -2921,7 +2984,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     </div>
 
       {/* AI Assistant */}
-      <WizardAIAssistant stepLabel={macroStepLabel} wizardContext={wizardContext} />
+      <WizardAIAssistant
+        stepLabel={macroStepLabel}
+        wizardContext={wizardContext}
+        onApplySuggestion={handleAIApply}
+      />
     </>
   );
 }
