@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { WizardAIAssistant } from "@/components/wizard/WizardAIAssistant";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -2748,6 +2749,41 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   // Methods without rationale for warning dialog
   const methodsWithoutRationale = getMethodsWithoutRationale();
 
+  // ── AI Assistant context ───────────────────────────────────────────────────
+  const macroStepLabels = [
+    "Plan Setup — Athlete & Date Range",
+    "Goal & Parameter Selection",
+    "Training Method Selection",
+  ];
+  const macroStepLabel = macroStepLabels[currentStep - 1] ?? `Step ${currentStep}`;
+
+  const wizardContext = useMemo(() => {
+    const athleteStr = selectedAthlete
+      ? `Athlete: ${getAthleteDisplayName(selectedAthlete)}`
+      : "No athlete selected yet";
+    const planStr = planName ? `Plan name: ${planName}` : "";
+    const durationStr = planDuration
+      ? `Duration: ${planDuration.totalDays} days (${Math.round(planDuration.totalDays / 7)} weeks)`
+      : "";
+    const goalsStr = smartGoals.length
+      ? `Goals:\n${smartGoals.map((g) => `- ${g.description || g.specific || ""}`).filter(Boolean).join("\n")}`
+      : "";
+    const methodsStr =
+      selectedMethods.size > 0 || manuallyAddedMethods.length > 0
+        ? `Selected methods:\n${[...Array.from(selectedMethods), ...manuallyAddedMethods.map((m) => m.methodId)].map((m) => `- ${m}`).join("\n")}`
+        : "";
+    return [
+      `Current step: ${macroStepLabel}`,
+      athleteStr,
+      planStr,
+      durationStr,
+      goalsStr,
+      methodsStr,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }, [currentStep, selectedAthlete, planName, planDuration, smartGoals, selectedMethods, manuallyAddedMethods, macroStepLabel]);
+
   return (
     <>
       {/* Warning Dialog for Missing Rationales */}
@@ -2889,6 +2925,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         </Button>
       </div>
     </div>
+
+      {/* AI Assistant */}
+      <WizardAIAssistant stepLabel={macroStepLabel} wizardContext={wizardContext} />
     </>
   );
 }

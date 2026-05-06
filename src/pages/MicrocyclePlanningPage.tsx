@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { WizardAIAssistant } from '@/components/wizard/WizardAIAssistant';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -3229,6 +3230,41 @@ export default function MicrocyclePlanningPage() {
     );
   };
 
+  // ── AI Assistant context ───────────────────────────────────────────────────
+  const microStepLabels = [
+    "Method Distribution to Training Days",
+    "Exercise Distribution",
+    "Training Calendar",
+  ];
+  const microStepLabel = microStepLabels[currentStep - 1] ?? `Step ${currentStep}`;
+
+  const microWizardContext = useMemo(() => {
+    const athleteStr = athleteName ? `Athlete: ${athleteName}` : "No athlete selected";
+    const planStr = macrocycleData?.planName ? `Plan: ${macrocycleData.planName}` : "";
+    const mesoCount = mesocycles.length;
+    const mesoStr = mesoCount > 0
+      ? `Mesocycles: ${mesoCount} (${mesocycles.map((m: { name: string }) => m.name).join(", ")})`
+      : "No mesocycles";
+    const currentMeso = mesocycles[currentMesocycleIndex];
+    const currentMesoStr = currentMeso ? `Current mesocycle: ${currentMeso.name}` : "";
+    const assignedDays = Object.keys(dayMethodAssignments).filter(
+      (d) => dayMethodAssignments[d]?.length > 0
+    ).length;
+    const dayStr = assignedDays > 0
+      ? `Training days with methods assigned: ${assignedDays}`
+      : "No method-day assignments yet";
+    return [
+      `Current step: ${microStepLabel}`,
+      athleteStr,
+      planStr,
+      mesoStr,
+      currentMesoStr,
+      dayStr,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, dayMethodAssignments, microStepLabel]);
+
   return (
     <div className="mx-auto py-6 space-y-6 px-4 w-full max-w-[98vw]">
       <div className="flex items-center justify-between mb-4">
@@ -3385,6 +3421,9 @@ export default function MicrocyclePlanningPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* AI Assistant */}
+      <WizardAIAssistant stepLabel={microStepLabel} wizardContext={microWizardContext} />
     </div>
   );
 }
