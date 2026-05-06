@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import ReactMarkdown from "react-markdown";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,6 +91,27 @@ async function mergeSummaries(existing: string, incoming: string): Promise<strin
   } catch {
     return `${existing}\n\n${incoming}`;
   }
+}
+
+// ─────────────────────────────────────────────
+// Lightweight Markdown renderer (bold + line breaks only)
+// ─────────────────────────────────────────────
+
+function ChatMarkdown({ text }: { text: string }) {
+  // Split on double newlines for paragraphs, then render bold within each
+  const paragraphs = text.split(/\n{2,}/);
+  return (
+    <span>
+      {paragraphs.map((para, pi) => (
+        <span key={pi}>
+          {pi > 0 && <br />}
+          {para.split(/\*\*(.+?)\*\*/g).map((chunk, ci) =>
+            ci % 2 === 1 ? <strong key={ci}>{chunk}</strong> : chunk
+          )}
+        </span>
+      ))}
+    </span>
+  );
 }
 
 // ─────────────────────────────────────────────
@@ -330,13 +350,10 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip, hideSkipWarning = f
                   ? "bg-muted text-foreground rounded-tl-sm"
                   : "bg-primary text-primary-foreground rounded-tr-sm"
               )}>
-                {msg.role === "assistant" ? (
-                  <ReactMarkdown className="prose prose-sm dark:prose-invert max-w-none [&>p]:mb-1 [&>p:last-child]:mb-0">
-                    {msg.content}
-                  </ReactMarkdown>
-                ) : (
-                  msg.content
-                )}
+                {msg.role === "assistant"
+                  ? <ChatMarkdown text={msg.content} />
+                  : msg.content
+                }
               </div>
             </div>
           ))}
