@@ -39,54 +39,54 @@ import { cn } from "@/lib/utils";
 const READY_TOKEN = "[[READY]]";
 
 function buildConversationSystemPrompt(name: string, sports: string[]): string {
-  return `Du bist ein erfahrener Sportwissenschaftler und Coach-Berater.
-Du führst ein erstes Kennenlerngespräch mit ${name}, einem Coach im Bereich ${sports.join(", ")}.
+  return `You are an experienced sports scientist and coach advisor.
+You are having an introductory conversation with ${name}, a coach in the field of ${sports.join(", ")}.
 
-Dein Ziel: Verstehe die Coaching-Philosophie, bevorzugte Trainingsmethoden, Zielgruppe und Erfahrung des Coaches.
-Führe ein natürliches, offenes Gespräch – stelle eine Frage nach der anderen.
-Sei neugierig, freundlich und auf Augenhöhe. Kein formales Verhör.
-Antworte auf Deutsch. Halte deine Antworten kurz (2-4 Sätze), dann eine konkrete Folgefrage.
+Your goal: Understand the coach's philosophy, preferred training methods, target athletes, and background.
+Have a natural, open conversation — ask one question at a time.
+Be curious, friendly, and collegial. No formal interrogation.
+Reply in English. Keep your answers short (2-4 sentences), then ask one concrete follow-up question.
 
-Verfolge intern welche dieser vier Themen du bereits ausreichend verstanden hast:
-1. Coaching-Philosophie (Werte, Ansatz, Überzeugungen)
-2. Bevorzugte Trainingsmethoden (konkrete Methoden, Periodisierung, Belastungssteuerung)
-3. Zielgruppe / Athleten (Leistungsniveau, Alter, Sportart, Erfahrung)
-4. Erfahrungshintergrund des Coaches (Werdegang, Ausbildung, Jahre als Coach)
+Internally track which of these four topics you have sufficiently understood:
+1. Coaching philosophy (values, approach, beliefs)
+2. Preferred training methods (specific methods, periodization, load management)
+3. Target group / athletes (performance level, age, sport, experience)
+4. Coach's background (career path, education, years of coaching)
 
-Sobald du alle vier Themen hinreichend verstanden hast (typischerweise nach 4-6 Antworten des Coaches):
-- Schreibe eine abschließende Antwort, die kurz zusammenfasst was du über den Coach verstanden hast.
-- Erkläre freundlich, dass du jetzt genug Infos hast um ein Profil zu erstellen.
-- Lade ihn ein, das Profil zu erstellen oder gerne noch weiterzureden.
-- Füge am Ende deiner Antwort auf einer neuen Zeile exakt diesen Token ein: ${READY_TOKEN}
-- Der Token ${READY_TOKEN} wird dem Coach nicht angezeigt – er ist nur ein internes Signal.
-- Sende ${READY_TOKEN} nur einmal. Falls der Coach danach noch weiterschreibt, antworte normal ohne Token.`;
+Once you have sufficiently understood all four topics (typically after 4-6 coach responses):
+- Write a closing response that briefly summarizes what you have learned about the coach.
+- Kindly explain that you now have enough information to create a profile.
+- Invite them to create the profile or continue talking if they wish.
+- Append exactly this token on a new line at the end of your response: ${READY_TOKEN}
+- The token ${READY_TOKEN} is not shown to the coach — it is an internal signal only.
+- Send ${READY_TOKEN} only once. If the coach continues writing afterwards, reply normally without the token.`;
 }
 
-const OPENER_SYSTEM = `Du bist ein Coach-Berater. Generiere einen kurzen, freundlichen Gesprächseinstieg (2-3 Sätze) der den Coach willkommen heißt und eine erste offene Frage stellt. Antworte auf Deutsch.`;
+const OPENER_SYSTEM = `You are a coach advisor. Generate a short, friendly conversation opener (2-3 sentences) that welcomes the coach and asks one open first question. Reply in English.`;
 
-const EXTRACTION_SYSTEM = `Du bist ein Coach-Berater der ein Gesprächstranskript analysiert.
-Extrahiere aus dem Gespräch strukturierte Informationen über den Coach und gib sie als valides JSON zurück.
-Das JSON muss exakt diese Struktur haben:
+const EXTRACTION_SYSTEM = `You are a coach advisor analyzing a conversation transcript.
+Extract structured information about the coach and return it as valid JSON.
+The JSON must have exactly this structure:
 {
-  "philosophy": "Kurze Beschreibung der Coaching-Philosophie (1-2 Sätze) – leer lassen wenn nicht erwähnt",
-  "methods": "Bevorzugte Trainingsmethoden und Ansätze (1-2 Sätze) – leer lassen wenn nicht erwähnt",
-  "targetGroup": "Beschreibung der Zielgruppe/Athleten (1 Satz) – leer lassen wenn nicht erwähnt",
-  "experience": "Erfahrungshintergrund des Coaches (1 Satz) – leer lassen wenn nicht erwähnt",
-  "summary": "Zusammenfassender Fließtext über den Coach (3-5 Sätze, für das Coach-Profil)"
+  "philosophy": "Brief description of coaching philosophy (1-2 sentences) — leave empty if not mentioned",
+  "methods": "Preferred training methods and approaches (1-2 sentences) — leave empty if not mentioned",
+  "targetGroup": "Description of target group/athletes (1 sentence) — leave empty if not mentioned",
+  "experience": "Coach's background and experience (1 sentence) — leave empty if not mentioned",
+  "summary": "Summary prose about the coach (3-5 sentences, for the coach profile)"
 }
-Antworte NUR mit dem JSON, ohne Markdown-Code-Fences oder zusätzlichen Text.`;
+Reply ONLY with the JSON, without Markdown code fences or additional text.`;
 
-const MERGE_SUMMARY_SYSTEM = `Du bist ein Coach-Berater.
-Kombiniere die zwei folgenden Coach-Zusammenfassungen zu einem einzigen, kohärenten Fließtext (3-6 Sätze).
-Vermeide Wiederholungen. Integriere neue Informationen natürlich in den bestehenden Text.
-Antworte nur mit dem kombinierten Text, ohne Einleitung oder Erklärung. Antworte auf Deutsch.`;
+const MERGE_SUMMARY_SYSTEM = `You are a coach advisor.
+Combine the two following coach summaries into a single, coherent prose text (3-6 sentences).
+Avoid repetition. Integrate new information naturally into the existing text.
+Reply only with the combined text, without introduction or explanation. Reply in English.`;
 
 async function mergeSummaries(existing: string, incoming: string): Promise<string> {
   if (!existing) return incoming;
   if (!incoming) return existing;
   try {
     return await sendMessage(
-      [{ role: "user", content: `Bestehende Zusammenfassung:\n${existing}\n\nNeue Informationen:\n${incoming}` }],
+      [{ role: "user", content: `Existing summary:\n${existing}\n\nNew information:\n${incoming}` }],
       MERGE_SUMMARY_SYSTEM
     );
   } catch {
@@ -244,7 +244,7 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip, hideSkipWarning = f
 
     const fallback: Message = {
       role: "assistant",
-      content: `Hallo ${coachName}! Schön, dass du hier bist. Erzähl mir – wie bist du zum Coaching gekommen und was treibt dich an?`,
+      content: `Hi ${coachName}! Great to have you here. Tell me — how did you get into coaching and what drives you?`,
     };
 
     const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY as string | undefined;
@@ -255,7 +255,7 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip, hideSkipWarning = f
 
     setIsLoading(true);
     sendMessage(
-      [{ role: "user", content: `Begrüße ${coachName}, Coach im Bereich ${sports.join(", ")}. Stelle eine erste offene Frage.` }],
+      [{ role: "user", content: `Welcome ${coachName}, a coach in the field of ${sports.join(", ")}. Ask one open first question.` }],
       OPENER_SYSTEM,
       "claude-haiku-4-5"
     )
@@ -597,11 +597,11 @@ export default function OnboardingPage() {
     setError(null);
     try {
       const transcript = messages
-        .map((m) => `${m.role === "user" ? coachName : "KI"}: ${m.content}`)
+        .map((m) => `${m.role === "user" ? coachName : "AI"}: ${m.content}`)
         .join("\n\n");
 
       const raw = await sendMessage(
-        [{ role: "user", content: `Hier ist das Gespräch mit dem Coach:\n\n${transcript}\n\nBitte extrahiere die strukturierten Informationen als JSON.` }],
+        [{ role: "user", content: `Here is the conversation with the coach:\n\n${transcript}\n\nPlease extract the structured information as JSON.` }],
         EXTRACTION_SYSTEM,
         "claude-sonnet-4-5"
       );

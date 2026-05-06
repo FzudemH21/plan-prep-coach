@@ -10,29 +10,29 @@ import { useCoachDocuments } from "@/hooks/useCoachDocuments";
 
 // ─── Prompts ──────────────────────────────────────────────────────────────────
 
-const PLAN_EXTRACTION_SYSTEM = `Du bist ein Coach-Berater der eine Beschreibung eines Trainingsplans analysiert.
-Extrahiere daraus strukturierte Informationen über den Coaching-Ansatz und gib sie als valides JSON zurück.
-Das JSON muss exakt diese Struktur haben:
+const PLAN_EXTRACTION_SYSTEM = `You are a coach advisor analyzing a description of a training plan.
+Extract structured information about the coaching approach and return it as valid JSON.
+The JSON must have exactly this structure:
 {
-  "philosophy": "Erkennbare Coaching-Philosophie aus dem Plan (1-2 Sätze) – leer lassen wenn nicht erkennbar",
-  "methods": "Verwendete Trainingsmethoden und Periodisierungsansatz (1-2 Sätze) – leer lassen wenn nicht erkennbar",
-  "targetGroup": "Zielgruppe/Athleten des Plans (1 Satz) – leer lassen wenn nicht erkennbar",
-  "experience": "Rückschlüsse auf den Erfahrungshintergrund des Coaches (1 Satz) – leer lassen wenn nicht erkennbar",
-  "summary": "Zusammenfassung was dieser Plan über den Coaching-Stil verrät (2-3 Sätze)"
+  "philosophy": "Recognizable coaching philosophy from the plan (1-2 sentences) — leave empty if not recognizable",
+  "methods": "Training methods and periodization approach used (1-2 sentences) — leave empty if not recognizable",
+  "targetGroup": "Target group/athletes of the plan (1 sentence) — leave empty if not recognizable",
+  "experience": "Conclusions about the coach's background from the plan (1 sentence) — leave empty if not recognizable",
+  "summary": "Summary of what this plan reveals about the coaching style (2-3 sentences)"
 }
-Antworte NUR mit dem JSON, ohne Markdown-Code-Fences oder zusätzlichen Text.`;
+Reply ONLY with the JSON, without Markdown code fences or additional text.`;
 
-const MERGE_SUMMARY_SYSTEM = `Du bist ein Coach-Berater.
-Kombiniere die zwei folgenden Coach-Zusammenfassungen zu einem einzigen, kohärenten Fließtext (3-6 Sätze).
-Vermeide Wiederholungen. Integriere neue Informationen natürlich in den bestehenden Text.
-Antworte nur mit dem kombinierten Text, ohne Einleitung oder Erklärung. Antworte auf Deutsch.`;
+const MERGE_SUMMARY_SYSTEM = `You are a coach advisor.
+Combine the two following coach summaries into a single, coherent prose text (3-6 sentences).
+Avoid repetition. Integrate new information naturally into the existing text.
+Reply only with the combined text, without introduction or explanation. Reply in English.`;
 
 async function mergeSummaries(existing: string, incoming: string): Promise<string> {
   if (!existing) return incoming;
   if (!incoming) return existing;
   try {
     return await sendMessage(
-      [{ role: "user", content: `Bestehende Zusammenfassung:\n${existing}\n\nNeue Informationen:\n${incoming}` }],
+      [{ role: "user", content: `Existing summary:\n${existing}\n\nNew information:\n${incoming}` }],
       MERGE_SUMMARY_SYSTEM
     );
   } catch {
@@ -136,7 +136,7 @@ export function TrainingPlanEnricher() {
       // AI extraction from filename + description
       const content = `Dateiname: ${pendingFile.name}\nBeschreibung des Coaches: ${description}`;
       const raw = await sendMessage(
-        [{ role: "user", content: `Hier sind Infos zu einem Trainingsplan:\n\n${content}\n\nBitte extrahiere strukturierte Informationen als JSON.` }],
+        [{ role: "user", content: `Here is information about a training plan:\n\n${content}\n\nPlease extract structured information as JSON.` }],
         PLAN_EXTRACTION_SYSTEM,
         "claude-sonnet-4-5"
       );
