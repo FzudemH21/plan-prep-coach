@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -329,7 +330,13 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip, hideSkipWarning = f
                   ? "bg-muted text-foreground rounded-tl-sm"
                   : "bg-primary text-primary-foreground rounded-tr-sm"
               )}>
-                {msg.content}
+                {msg.role === "assistant" ? (
+                  <ReactMarkdown className="prose prose-sm dark:prose-invert max-w-none [&>p]:mb-1 [&>p:last-child]:mb-0">
+                    {msg.content}
+                  </ReactMarkdown>
+                ) : (
+                  msg.content
+                )}
               </div>
             </div>
           ))}
