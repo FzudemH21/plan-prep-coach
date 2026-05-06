@@ -5021,11 +5021,21 @@ export default function MesocyclePage() {
     let actionHints = "";
     if (currentStep === 1) {
       actionHints = `Available AI action: set_mesocycle_config\nPlan duration: ${totalWeeks} weeks — suggest a sensible count and individual duration in weeks.`;
-    } else if (currentStep === 3 && allMacroMethods.length > 0) {
-      const unallocated = allMacroMethods.filter((m) => !(methodAllocations[m]?.length > 0));
-      actionHints = unallocated.length
-        ? `Available AI action: add_methods (allocates listed methods to all mesocycles)\nUnallocated methods (use exact names):\n${unallocated.map((m) => `- ${m}`).join("\n")}`
-        : "All methods are already allocated to mesocycles.";
+    } else if (currentStep === 3 && allMacroMethods.length > 0 && mesocycles.length > 0) {
+      const mesoNames = mesocycles.map((m) => m.name).join(", ");
+      const currentAllocations = allMacroMethods
+        .map((m) => {
+          const ids = methodAllocations[m] ?? [];
+          const names = mesocycles.filter((mc) => ids.includes(mc.id)).map((mc) => mc.name);
+          return names.length ? `- ${m} → ${names.join(", ")}` : `- ${m} → (not allocated)`;
+        })
+        .join("\n");
+      actionHints = [
+        `Available AI action: allocate_methods`,
+        `Mesocycles (use exact names): ${mesoNames}`,
+        `All methods to distribute (use exact names):\n${currentAllocations}`,
+        `Based on periodization principles and the plan goal, suggest which methods should be active in which mesocycles. Not all methods need to appear in every mesocycle — use phase logic (e.g. general prep → specific prep → competition prep).`,
+      ].join("\n");
     }
 
     return [
@@ -5074,15 +5084,19 @@ export default function MesocyclePage() {
         setMesocycles(recalculated);
         break;
       }
-      case "add_methods":
-        // Allocate each suggested method to all mesocycles
-        action.methods.forEach((methodName) => {
-          setMethodAllocations((prev) => ({
-            ...prev,
-            [methodName]: mesocycles.map((m) => m.id),
-          }));
+      case "allocate_methods": {
+        // Map mesocycle names → IDs, then apply per-method allocations
+        const nameToId = new Map(mesocycles.map((m) => [m.name, m.id]));
+        const newAllocations: Record<string, string[]> = {};
+        action.allocations.forEach(({ methodName, mesocycleNames }) => {
+          const ids = mesocycleNames
+            .map((n) => nameToId.get(n))
+            .filter((id): id is string => !!id);
+          if (ids.length > 0) newAllocations[methodName] = ids;
         });
+        setMethodAllocations((prev) => ({ ...prev, ...newAllocations }));
         break;
+      }
       default:
         break;
     }

@@ -14,8 +14,11 @@ import { useSpeechInput } from "@/hooks/useSpeechInput";
 export type ApplySuggestion =
   | { type: "set_plan_name"; name: string }
   | { type: "add_goal"; description: string }
+  /** MacrocyclePage Step 3 — add new methods to the training plan */
   | { type: "add_methods"; methods: string[] }
   | { type: "set_mesocycle_config"; count: number; weeksDuration: number }
+  /** MesocyclePage Step 3 — distribute existing methods across specific mesocycles */
+  | { type: "allocate_methods"; allocations: Array<{ methodName: string; mesocycleNames: string[] }> }
   | { type: "set_method_intensities"; methodName: string; frequency: number; sets: number; reps: string; intensity: string };
 
 export interface WizardAIAssistantProps {
@@ -42,6 +45,7 @@ Available types and their fields:
 - add_goal: {"type":"add_goal","description":"<full goal description including numbers and timeframe>"}
 - add_methods: {"type":"add_methods","methods":["<exact method name>","<exact method name>"]}
 - set_mesocycle_config: {"type":"set_mesocycle_config","count":<number>,"weeksDuration":<weeks per mesocycle>}
+- allocate_methods: {"type":"allocate_methods","allocations":[{"methodName":"<exact method name>","mesocycleNames":["Mesocycle 1","Mesocycle 2"]},{"methodName":"<exact method name>","mesocycleNames":["Mesocycle 1","Mesocycle 2","Mesocycle 3"]}]}
 - set_method_intensities: {"type":"set_method_intensities","methodName":"<name>","frequency":<sessions/week>,"sets":<number>,"reps":"<e.g. 3-5>","intensity":"<e.g. 85-90% 1RM>"}
 
 Rules:
@@ -93,6 +97,10 @@ function getSuggestionPreview(action: ApplySuggestion): string {
         : `Add ${action.methods.length} methods: ${action.methods.join(", ")}`;
     case "set_mesocycle_config":
       return `Configure ${action.count} mesocycle${action.count !== 1 ? "s" : ""}, ${action.weeksDuration} week${action.weeksDuration !== 1 ? "s" : ""} each`;
+    case "allocate_methods":
+      return action.allocations
+        .map((a) => `${a.methodName} → ${a.mesocycleNames.join(", ")}`)
+        .join("\n");
     case "set_method_intensities":
       return `${action.methodName}: ${action.frequency}×/week, ${action.sets} sets × ${action.reps} reps @ ${action.intensity}`;
   }
