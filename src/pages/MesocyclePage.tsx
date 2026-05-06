@@ -43,7 +43,7 @@ import { CrossMesocycleCopyDialog } from "@/components/ui/cross-mesocycle-copy-d
 import { CrossMesocycleMicrocycleCopyDialog } from "@/components/ui/cross-mesocycle-microcycle-copy-dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy, AlertCircle, Trophy, LayoutTemplate } from "lucide-react";
+import { Target, Calendar as CalendarIcon, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy, AlertCircle, Trophy, LayoutTemplate } from "lucide-react";
 import { ResourcesButton } from "@/components/programs/ResourcesButton";
 import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
@@ -5041,10 +5041,6 @@ export default function MesocyclePage() {
             </Button>
             <SaveProgramButton />
             <ResourcesButton />
-            <Button variant="outline" size="sm">
-              <Bot className="h-4 w-4 mr-2" />
-              Ask AI for Help
-            </Button>
             <PlanningNavigationMenu currentPage="mesocycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
           </div>
         </div>

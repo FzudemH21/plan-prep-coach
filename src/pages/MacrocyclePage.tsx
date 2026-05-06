@@ -16,7 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { SmartGoal, SubGoal, TrainableQuality, Event, PlanDuration } from "@/types/training";
-import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2, FileText, Check, ChevronsUpDown, ChevronDown, Pencil, Link, Link2, CheckSquare } from "lucide-react";
+import { User, Target, Calendar as CalendarIcon, Plus, X, Trash2, FileText, Check, ChevronsUpDown, ChevronDown, Pencil, Link, Link2, CheckSquare } from "lucide-react";
 import { ResourcesButton } from "@/components/programs/ResourcesButton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -2706,10 +2706,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
             </Button>
             <SaveProgramButton />
             <ResourcesButton />
-            <Button variant="outline" size="sm">
-              <Bot className="h-4 w-4 mr-2" />
-              Ask AI for Help
-            </Button>
+
             <PlanningNavigationMenu currentPage="macrocycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
           </div>
         </div>
@@ -2867,10 +2864,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
             </Button>
             <SaveProgramButton />
             <ResourcesButton />
-            <Button variant="outline" size="sm">
-              <Bot className="h-4 w-4 mr-2" />
-              Ask AI for Help
-            </Button>
+
             <PlanningNavigationMenu currentPage="macrocycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
           </div>
         </div>

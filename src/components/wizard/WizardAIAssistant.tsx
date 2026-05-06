@@ -23,25 +23,29 @@ function buildSystemPrompt(coachContext: string, wizardContext: string): string 
   return `You are an expert sports science advisor embedded in a training planning wizard.
 You assist the coach in making smart, evidence-based planning decisions.
 
-## Coach Profile
+## Coach Style (background only — do NOT use to identify the current athlete)
 ${coachContext}
 
-## Current Wizard State
+## Current Wizard State (authoritative — this is who the plan is for)
 ${wizardContext}
 
 ## Your role
 - Give concrete, actionable suggestions relevant to the current planning step.
 - Keep responses concise (2-4 sentences). If helpful, ask one focused follow-up question.
 - Draw on the coach's philosophy and preferred methods when making suggestions.
-- Reference the athlete's profile when relevant.
+- Always refer to the athlete named in "Current Wizard State" — never reference athletes mentioned in the Coach Style section.
 - Reply in English.`;
 }
 
 const PROACTIVE_SYSTEM = `You are an expert sports science advisor embedded in a training planning wizard.
 Generate a brief, helpful proactive message (2-3 sentences) that:
-- Acknowledges what the coach is currently working on
-- Offers one concrete, specific suggestion or asks one focused question
-- Is personalized to the coach profile and athlete context provided
+- Acknowledges what the coach is currently working on in the wizard
+- Offers one concrete, specific suggestion or asks one focused question relevant to this planning step
+- References the athlete named in the Wizard Context (if one is selected) — NEVER reference any athletes mentioned in the Coach Style section
+- Uses the Coach Style section only to understand coaching philosophy and methods, not to infer which athlete is being planned for
+
+CRITICAL: The "Wizard Context" tells you exactly which athlete this plan is for. The "Coach Style" section describes the coach's background and may mention past athletes — do not confuse these with the current athlete. If no athlete is selected yet in the wizard, do not mention any athlete by name.
+
 Be specific and practical, not generic. Reply in English.`;
 
 // ─── Markdown renderer (same lightweight approach as onboarding chat) ──────
@@ -107,7 +111,7 @@ export function WizardAIAssistant({ stepLabel, wizardContext }: WizardAIAssistan
     hasOpened.current = true;
     setIsLoading(true);
     try {
-      const contextForOpener = `Coach profile:\n${coachContext}\n\nCurrent wizard step: ${stepLabel}\n\nWizard context:\n${wizardContext}`;
+      const contextForOpener = `## Coach Style (background only — do NOT use to identify the current athlete)\n${coachContext}\n\n## Wizard Context (authoritative — this is who the plan is for)\n${wizardContext}`;
       const text = await sendMessage(
         [{ role: "user", content: contextForOpener }],
         PROACTIVE_SYSTEM,
