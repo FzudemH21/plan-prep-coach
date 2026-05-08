@@ -34,6 +34,10 @@ Claude Chat (browser) is my sparring partner for planning, discussion, and promp
 | 🟡 Soon | Document upload + sharing with athletes | 🔄 In Progress – upload, folders, drag & drop working; Supabase Storage backend ✅. Missing: (1) AI analysis of documents (API key needed), (2) sharing with athletes, (3) Obsidian integration (optional future) |
 | 🟡 Soon | Programming Templates for training methods | ✅ Done – templates per method in Training Toolbox, Load Template dialog in Wizard Step 4 with preview, editable before loading, save as new template, units displayed, works across mesocycles |
 | 🟡 Soon | Column reordering in databases (drag & drop) | ✅ Done |
+| 🟡 Soon | Outcome Annotation for completed plans (Plan Review dialog on athlete calendar: overall rating 1–5, goal achievement, load tolerance, coach notes — stored per assignment, feeds into AI memory) | ✅ Done – PlanReviewDialog on completed assignments, data stored in AthleteCalendarAssignment. Placeholders for: Adherence (auto-fill from athlete app), Planned vs. Real (athlete app), AI coaching dialog. |
+| 🟠 Later | Adherence tracking (auto-filled from athlete app workout logs — session completion rate, missed days) | ⬜ Open – placeholder UI exists in Plan Review dialog |
+| 🟠 Later | Planned vs. Real comparison (volume, intensity, load: planned vs. actually performed — requires athlete app session data) | ⬜ Open – placeholder UI exists in Plan Review dialog |
+| 🟠 Later | AI Coaching Dialog in Plan Review (AI reflects on outcome data, identifies patterns, suggests next-cycle adjustments — powered by plan_memory + outcome annotation) | ⬜ Open – placeholder UI exists in Plan Review dialog |
 | 🟠 Later | Goal Management + test notifications | ⬜ Open |
 | 🟠 Later | Date-independent plan (template mode) | ⬜ Open |
 | 🟠 Later | Inline Document Viewer (preview PDFs and other supported file types directly inside the app instead of opening a new browser tab) | ⬜ Open |
