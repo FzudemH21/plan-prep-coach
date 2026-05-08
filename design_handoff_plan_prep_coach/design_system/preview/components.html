@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Components — Plan Prep Coach</title>
+<link rel="stylesheet" href="../colors_and_type.css" />
+<style>
+  body { margin: 0; padding: 56px 64px; background: var(--bg); color: var(--fg); font-family: var(--font-sans); }
+  h1 { font-size: 56px; font-weight: 800; letter-spacing: -0.04em; margin: 0 0 12px; }
+  h2 { font-size: 12px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--fg-3); margin: 48px 0 16px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .btn { font-family: var(--font-sans); font-weight: 700; font-size: 14px; padding: 10px 18px; border-radius: var(--radius); border: 1px solid transparent; cursor: pointer; letter-spacing: -0.01em; }
+  .btn.primary { background: var(--ink); color: var(--ink-fg); }
+  .btn.accent  { background: var(--accent); color: var(--accent-fg); }
+  .btn.ghost   { background: transparent; color: var(--fg-1); border-color: var(--border-strong); }
+  .btn.link    { background: transparent; color: var(--accent); padding: 10px 4px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: var(--radius-pill); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+  .chip.solid { background: var(--ink); color: var(--ink-fg); }
+  .chip.outline { background: transparent; color: var(--fg-1); border: 1px solid var(--border-strong); }
+  .chip.intensity { color: #fff; }
+  .card { padding: 20px 22px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg); max-width: 320px; }
+  .card .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--fg-3); }
+  .card h3 { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin: 6px 0 10px; }
+  .card p { font-size: 13px; color: var(--fg-2); line-height: 1.55; margin: 0; }
+  input.fld { font-family: var(--font-sans); font-size: 14px; padding: 10px 14px; border-radius: var(--radius); border: 1px solid var(--border-strong); width: 280px; outline: none; }
+  input.fld:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .intensity-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; max-width: 600px; }
+  .iblock { padding: 8px 6px; text-align: center; border-radius: 4px; font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #fff; }
+</style>
+</head>
+<body>
+  <h1>Components</h1>
+
+  <h2>Buttons</h2>
+  <div class="row">
+    <button class="btn primary">Build Plan</button>
+    <button class="btn accent">Export PDF</button>
+    <button class="btn ghost">Cancel</button>
+    <button class="btn link">Learn more →</button>
+  </div>
+
+  <h2>Chips · Tags</h2>
+  <div class="row">
+    <span class="chip solid">Maximal Strength</span>
+    <span class="chip outline">Acceleration</span>
+    <span class="chip intensity" style="background:var(--intensity-hard)">Hard</span>
+    <span class="chip intensity" style="background:var(--intensity-extremely-hard)">Peak</span>
+    <span class="chip intensity" style="background:var(--intensity-easy);color:#0c0a09">Easy</span>
+  </div>
+
+  <h2>Card</h2>
+  <div class="row">
+    <div class="card">
+      <div class="eyebrow">02 / Mesocycle 02</div>
+      <h3>Transmutation</h3>
+      <p>Convert capacity to specific output. Heavy compound strength meets resisted sprints — the overlap that builds horizontal force at the start.</p>
+    </div>
+  </div>
+
+  <h2>Input</h2>
+  <div class="row">
+    <input class="fld" placeholder="Athlete name" />
+    <input class="fld" placeholder="Email" />
+  </div>
+
+  <h2>Intensity row (a recurring product pattern)</h2>
+  <div class="intensity-row">
+    <div class="iblock" style="background:var(--intensity-moderate);color:#0c0a09">Mon</div>
+    <div class="iblock" style="background:var(--intensity-hard)">Tue</div>
+    <div class="iblock" style="background:var(--intensity-easy);color:#0c0a09">Wed</div>
+    <div class="iblock" style="background:var(--intensity-moderate-hard)">Thu</div>
+    <div class="iblock" style="background:var(--intensity-extremely-hard)">Fri</div>
+    <div class="iblock" style="background:var(--intensity-easy-moderate)">Sat</div>
+    <div class="iblock" style="background:var(--intensity-off);color:var(--fg-2)">Sun</div>
+  </div>
+</body>
+</html>

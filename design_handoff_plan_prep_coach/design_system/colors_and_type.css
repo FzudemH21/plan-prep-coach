@@ -1,0 +1,152 @@
+/* =============================================================
+   Plan Prep Coach — Design System Tokens
+   Source of truth for color, typography, spacing, radii.
+   Mirrors and extends src/index.css from the codebase.
+   ============================================================= */
+
+/* ---------- WEBFONTS ---------- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&display=swap');
+
+:root {
+  /* ---------- TYPOGRAPHY FAMILIES ----------
+     Athletic clean direction:
+     - Geist for UI/body (modern, neutral, designed for product UI)
+     - Fraunces (variable, expressive serif) for editorial PDF headlines
+     - Geist Mono for numerics, codes, athlete IDs
+     Inter is kept as a fallback and what shadcn ships with.
+  */
+  --font-sans:    'Geist', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Fraunces', 'Geist', Georgia, serif;     /* editorial */
+  --font-mono:    'Geist Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+  /* ---------- TYPE SCALE (px-anchored, for both screen + print) ---------- */
+  --text-xs:   11px;
+  --text-sm:   13px;
+  --text-base: 15px;
+  --text-md:   17px;
+  --text-lg:   20px;
+  --text-xl:   26px;
+  --text-2xl:  34px;
+  --text-3xl:  44px;
+  --text-4xl:  60px;
+  --text-5xl:  80px;
+
+  --leading-tight:  1.05;
+  --leading-snug:   1.2;
+  --leading-normal: 1.45;
+  --leading-relaxed: 1.6;
+
+  --tracking-tight:  -0.02em;
+  --tracking-normal:  0;
+  --tracking-wide:    0.04em;
+  --tracking-wider:   0.12em;   /* eyebrow caps */
+
+  /* ---------- BASE COLORS (HSL-style hex, mirroring the app) ---------- */
+  --bg:           #ffffff;
+  --bg-elev:      #fafaf9;       /* offwhite, paper */
+  --bg-muted:     #f4f4f3;       /* card surfaces */
+  --bg-inverse:   #0c0a09;       /* near-black header */
+
+  --fg:           #0c0a09;       /* primary text */
+  --fg-1:         #18181b;
+  --fg-2:         #44403c;       /* secondary text */
+  --fg-3:         #78716c;       /* tertiary, captions */
+  --fg-4:         #a8a29e;       /* placeholder */
+  --fg-on-dark:   #fafaf9;
+
+  --border:       #e7e5e4;
+  --border-strong:#d6d3d1;
+  --border-muted: #f1efed;
+
+  /* ---------- BRAND ACCENT ----------
+     "Athletic clean": a confident energetic accent — deep ember/orange.
+     Distinct from the intensity colors (which are heat-mapped),
+     used for brand callouts, links, focused states.
+  */
+  --accent:        #e2522b;       /* signal orange */
+  --accent-hover:  #c8431f;
+  --accent-soft:   #fdebe2;
+  --accent-fg:     #ffffff;
+
+  --ink:           #0c0a09;       /* deep neutral, used as "primary" surface */
+  --ink-soft:      #1c1917;
+  --ink-fg:        #fafaf9;
+
+  /* ---------- INTENSITY SCALE (matches src/index.css HSL → hex) ---------- */
+  --intensity-off:             #f2f2f2;   /* hsl(0 0% 95%)         */
+  --intensity-deload:          #2e7a2e;   /* hsl(120 40% 30%)      */
+  --intensity-easy:            #33cc33;   /* hsl(120 60% 50%)      */
+  --intensity-easy-moderate:   #3d8df0;   /* hsl(210 80% 60%)      */
+  --intensity-moderate:        #f7c512;   /* hsl(45 95% 55%)       */
+  --intensity-moderate-hard:   #f78d12;   /* hsl(25 95% 55%)       */
+  --intensity-hard:            #e22424;   /* hsl(0 80% 55%)        */
+  --intensity-extremely-hard:  #8f1f1f;   /* hsl(0 60% 35%)        */
+  --intensity-fg:              #ffffff;
+
+  /* Soft tints (24% alpha equivalent) for backgrounds that still carry text */
+  --intensity-off-soft:           #fafaf9;
+  --intensity-deload-soft:        #d8e8d8;
+  --intensity-easy-soft:          #d6f5d6;
+  --intensity-easy-moderate-soft: #d8e7fb;
+  --intensity-moderate-soft:      #fdefc4;
+  --intensity-moderate-hard-soft: #fde0c4;
+  --intensity-hard-soft:          #fad4d4;
+  --intensity-extremely-hard-soft:#e8c8c8;
+
+  /* ---------- MESOCYCLE ACCENT WHEEL (8 colors, mirroring tailwind tokens) ---------- */
+  --meso-1: #2e6fcf;   /* blue */
+  --meso-2: #1f9b6e;   /* green */
+  --meso-3: #8a3fcf;   /* purple */
+  --meso-4: #e07a1f;   /* orange */
+  --meso-5: #cf2e2e;   /* red */
+  --meso-6: #b3c526;   /* yellow-green */
+  --meso-7: #1f9bcf;   /* cyan */
+  --meso-8: #cf2e9b;   /* pink */
+
+  /* ---------- SEMANTIC ---------- */
+  --success: #1f9b6e;
+  --warning: #f7c512;
+  --danger:  #e22424;
+  --info:    #3d8df0;
+
+  /* ---------- RADII ---------- */
+  --radius-sm: 4px;
+  --radius:    8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* ---------- SHADOWS ---------- */
+  --shadow-xs: 0 1px 0 rgba(15, 12, 9, 0.04);
+  --shadow-sm: 0 1px 2px rgba(15, 12, 9, 0.06), 0 1px 3px rgba(15, 12, 9, 0.04);
+  --shadow:    0 4px 12px rgba(15, 12, 9, 0.06), 0 2px 4px rgba(15, 12, 9, 0.04);
+  --shadow-lg: 0 18px 40px rgba(15, 12, 9, 0.10), 0 4px 12px rgba(15, 12, 9, 0.06);
+  --shadow-print: 0 0 0 1px rgba(15,12,9,0.06), 0 18px 50px rgba(15,12,9,0.18);
+
+  /* ---------- SPACING (8pt-ish) ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 56px;
+  --space-10: 80px;
+}
+
+/* ---------- SEMANTIC TYPE ROLES ---------- */
+.t-display     { font-family: var(--font-display); font-weight: 600; font-size: var(--text-5xl); line-height: var(--leading-tight); letter-spacing: var(--tracking-tight); }
+.t-h1          { font-family: var(--font-display); font-weight: 600; font-size: var(--text-4xl); line-height: var(--leading-tight); letter-spacing: var(--tracking-tight); }
+.t-h2          { font-family: var(--font-sans);    font-weight: 700; font-size: var(--text-2xl); line-height: var(--leading-snug);  letter-spacing: var(--tracking-tight); }
+.t-h3          { font-family: var(--font-sans);    font-weight: 700; font-size: var(--text-xl);  line-height: var(--leading-snug); }
+.t-h4          { font-family: var(--font-sans);    font-weight: 600; font-size: var(--text-lg);  line-height: var(--leading-snug); }
+.t-eyebrow     { font-family: var(--font-sans);    font-weight: 600; font-size: var(--text-xs);  line-height: 1; letter-spacing: var(--tracking-wider); text-transform: uppercase; color: var(--fg-3); }
+.t-body        { font-family: var(--font-sans);    font-weight: 400; font-size: var(--text-base);line-height: var(--leading-normal); color: var(--fg-1); }
+.t-body-sm     { font-family: var(--font-sans);    font-weight: 400; font-size: var(--text-sm); line-height: var(--leading-normal); color: var(--fg-2); }
+.t-caption     { font-family: var(--font-sans);    font-weight: 500; font-size: var(--text-xs); line-height: 1.3; color: var(--fg-3); }
+.t-quote       { font-family: var(--font-display); font-weight: 400; font-style: italic; font-size: var(--text-lg); line-height: var(--leading-snug); color: var(--fg-1); }
+.t-mono        { font-family: var(--font-mono); font-feature-settings: 'tnum' 1; }
+.t-num         { font-family: var(--font-sans); font-feature-settings: 'tnum' 1, 'lnum' 1; font-variant-numeric: tabular-nums; }

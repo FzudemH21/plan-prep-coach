@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Colors — Plan Prep Coach</title>
+<link rel="stylesheet" href="../colors_and_type.css" />
+<style>
+  body { margin: 0; padding: 56px 64px; background: var(--bg); color: var(--fg); font-family: var(--font-sans); }
+  h1 { font-size: 56px; font-weight: 800; letter-spacing: -0.04em; margin: 0 0 12px; }
+  h2 { font-size: 12px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--fg-3); margin: 56px 0 16px; }
+  .lead { font-size: 17px; color: var(--fg-2); margin: 0 0 24px; max-width: 640px; line-height: 1.55; }
+  .scale { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+  .swatch { padding: 16px 14px; border-radius: 10px; min-height: 110px; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid var(--border); }
+  .swatch b { font-size: 13px; font-weight: 700; }
+  .swatch code { font-family: var(--font-mono); font-size: 10px; opacity: 0.85; }
+  .neutrals { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .accent-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .meso-row { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+</style>
+</head>
+<body>
+  <h1>Color</h1>
+  <p class="lead">The intensity scale is meaning, not decoration. The accent is coach-configurable. Neutrals are a 6-step warm grey ladder.</p>
+
+  <h2>Intensity scale (8 steps · sacred)</h2>
+  <div class="scale">
+    <div class="swatch" style="background:var(--intensity-off);color:var(--fg-1)"><b>Off</b><code>--intensity-off</code></div>
+    <div class="swatch" style="background:var(--intensity-deload);color:#fff"><b>Deload</b><code>--intensity-deload</code></div>
+    <div class="swatch" style="background:var(--intensity-easy);color:#0c0a09"><b>Easy</b><code>--intensity-easy</code></div>
+    <div class="swatch" style="background:var(--intensity-easy-moderate);color:#fff"><b>Easy-Mod</b><code>--intensity-easy-moderate</code></div>
+    <div class="swatch" style="background:var(--intensity-moderate);color:#0c0a09"><b>Moderate</b><code>--intensity-moderate</code></div>
+    <div class="swatch" style="background:var(--intensity-moderate-hard);color:#fff"><b>Mod-Hard</b><code>--intensity-moderate-hard</code></div>
+    <div class="swatch" style="background:var(--intensity-hard);color:#fff"><b>Hard</b><code>--intensity-hard</code></div>
+    <div class="swatch" style="background:var(--intensity-extremely-hard);color:#fff"><b>Extreme</b><code>--intensity-extremely-hard</code></div>
+  </div>
+
+  <h2>Brand accent (coach-configurable via samplePlan.coach.accent)</h2>
+  <div class="accent-row">
+    <div class="swatch" style="background:var(--accent);color:#fff"><b>Accent</b><code>--accent · #e2522b</code></div>
+    <div class="swatch" style="background:var(--accent-hover);color:#fff"><b>Accent Hover</b><code>--accent-hover</code></div>
+    <div class="swatch" style="background:var(--accent-soft);color:var(--accent)"><b>Accent Soft</b><code>--accent-soft</code></div>
+    <div class="swatch" style="background:var(--ink);color:var(--ink-fg)"><b>Ink</b><code>--ink · #0c0a09</code></div>
+  </div>
+
+  <h2>Mesocycle wheel (decorative; never substituted for intensity)</h2>
+  <div class="meso-row">
+    <div class="swatch" style="background:var(--meso-1);color:#fff"><b>1</b><code>--meso-1</code></div>
+    <div class="swatch" style="background:var(--meso-2);color:#fff"><b>2</b><code>--meso-2</code></div>
+    <div class="swatch" style="background:var(--meso-3);color:#fff"><b>3</b><code>--meso-3</code></div>
+    <div class="swatch" style="background:var(--meso-4);color:#fff"><b>4</b><code>--meso-4</code></div>
+    <div class="swatch" style="background:var(--meso-5);color:#fff"><b>5</b><code>--meso-5</code></div>
+    <div class="swatch" style="background:var(--meso-6);color:#0c0a09"><b>6</b><code>--meso-6</code></div>
+    <div class="swatch" style="background:var(--meso-7);color:#fff"><b>7</b><code>--meso-7</code></div>
+    <div class="swatch" style="background:var(--meso-8);color:#fff"><b>8</b><code>--meso-8</code></div>
+  </div>
+
+  <h2>Neutrals (text + surface)</h2>
+  <div class="neutrals">
+    <div class="swatch" style="background:var(--bg);color:var(--fg)"><b>BG</b><code>--bg</code></div>
+    <div class="swatch" style="background:var(--bg-elev);color:var(--fg)"><b>BG Elev</b><code>--bg-elev</code></div>
+    <div class="swatch" style="background:var(--bg-muted);color:var(--fg)"><b>BG Muted</b><code>--bg-muted</code></div>
+    <div class="swatch" style="background:var(--fg-3);color:#fff"><b>FG 3</b><code>--fg-3</code></div>
+    <div class="swatch" style="background:var(--fg-1);color:#fff"><b>FG 1</b><code>--fg-1</code></div>
+    <div class="swatch" style="background:var(--ink);color:#fff"><b>Ink</b><code>--ink</code></div>
+  </div>
+</body>
+</html>
