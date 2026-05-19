@@ -446,22 +446,25 @@ export default function MicrocyclePlanningPage() {
   useEffect(() => {
     if (!macrocycleData || trainingDays.length === 0) return;
 
+    // Helper: normalize any date string (ISO or yyyy-MM-dd) to yyyy-MM-dd
+    const toDateKey = (d: string) => d.split('T')[0];
+
     const testMap = new Map<string, string[]>();
     (macrocycleData.subGoals || []).forEach((sg: any) => {
       const name = sg.testMethod || sg.name || sg.testName || sg.method || sg.description || 'Test';
       (sg.testDates || []).forEach((dateStr: string) => {
-        const existing = testMap.get(dateStr) || [];
-        testMap.set(dateStr, [...existing, name]);
+        const key = toDateKey(dateStr);
+        const existing = testMap.get(key) || [];
+        if (!existing.includes(name)) testMap.set(key, [...existing, name]);
       });
     });
     // Include athlete's existing tests from calendar assignments
-    // Normalize ISO strings (yyyy-MM-ddT...) to yyyy-MM-dd to match trainingDay.date format
     (macrocycleData.athleteExistingTests || []).forEach((t: any) => {
       const name = t.testMethod || 'Test';
       (t.testDates || []).forEach((dateStr: string) => {
-        const normalized = dateStr.split('T')[0];
-        const existing = testMap.get(normalized) || [];
-        if (!existing.includes(name)) testMap.set(normalized, [...existing, name]);
+        const key = toDateKey(dateStr);
+        const existing = testMap.get(key) || [];
+        if (!existing.includes(name)) testMap.set(key, [...existing, name]);
       });
     });
 
@@ -469,18 +472,18 @@ export default function MicrocyclePlanningPage() {
     (macrocycleData.events || []).forEach((e: any) => {
       const name = e.name || e.eventName || e.title || e.description || 'Event';
       (e.eventDates || []).forEach((dateStr: string) => {
-        const existing = eventMap.get(dateStr) || [];
-        eventMap.set(dateStr, [...existing, name]);
+        const key = toDateKey(dateStr);
+        const existing = eventMap.get(key) || [];
+        if (!existing.includes(name)) eventMap.set(key, [...existing, name]);
       });
     });
     // Include athlete's existing events from calendar assignments
-    // Normalize ISO strings (yyyy-MM-ddT...) to yyyy-MM-dd to match trainingDay.date format
     (macrocycleData.athleteExistingEvents || []).forEach((e: any) => {
       const name = e.name || 'Event';
       (e.eventDates || []).forEach((dateStr: string) => {
-        const normalized = dateStr.split('T')[0];
-        const existing = eventMap.get(normalized) || [];
-        if (!existing.includes(name)) eventMap.set(normalized, [...existing, name]);
+        const key = toDateKey(dateStr);
+        const existing = eventMap.get(key) || [];
+        if (!existing.includes(name)) eventMap.set(key, [...existing, name]);
       });
     });
 
