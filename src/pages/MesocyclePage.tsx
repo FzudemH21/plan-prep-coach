@@ -1,5 +1,4 @@
 import { MicrocyclePlanningTable } from '@/components/microcycle-planning';
-import { WizardAIAssistant } from '@/components/wizard/WizardAIAssistant';
 import { cn } from '@/lib/utils';
 import { evaluateFormula } from '@/utils/formulaEvaluator';
 import React, { useState, useEffect, useMemo, useCallback, useTransition } from 'react';
@@ -43,7 +42,7 @@ import { CrossMesocycleCopyDialog } from "@/components/ui/cross-mesocycle-copy-d
 import { CrossMesocycleMicrocycleCopyDialog } from "@/components/ui/cross-mesocycle-microcycle-copy-dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Target, Calendar as CalendarIcon, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy, AlertCircle, Trophy, LayoutTemplate } from "lucide-react";
+import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy, AlertCircle, Trophy, LayoutTemplate } from "lucide-react";
 import { ResourcesButton } from "@/components/programs/ResourcesButton";
 import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
@@ -56,6 +55,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { useTemplates, type ProgramTemplate, type TemplateColumn } from '@/hooks/useTemplates';
 import { LoadTemplateDialog, type MethodParam } from '@/components/mesocycle/LoadTemplateDialog';
+import { useWizardData } from '@/contexts/WizardDataContext';
 
 // Helper function for string normalization - robust canonicalization
 const normalizeForComparison = (str: unknown): string => {
@@ -76,7 +76,6 @@ export default function MesocyclePage() {
   });
   const [isPending, startTransition] = useTransition();
   const [mesocycles, setMesocycles] = useState<ExtendedMesocycle[]>([]);
-  const [macrocycleData, setMacrocycleData] = useState<any>(null);
   const [planStartDate, setPlanStartDate] = useState<Date>(new Date());
   const [planEndDate, setPlanEndDate] = useState<Date>(new Date());
   const [totalWeeks, setTotalWeeks] = useState<number>(0);
@@ -99,9 +98,8 @@ export default function MesocyclePage() {
   const [isClearAllExercisesDialogOpen, setIsClearAllExercisesDialogOpen] = useState(false);
   const [loadTemplateDialog, setLoadTemplateDialog] = useState<{ open: boolean; methodName: string; lookupName: string }>({ open: false, methodName: '', lookupName: '' });
   
-  // Daily intensity planning state
-  const [dailyIntensityData, setDailyIntensityData] = useState<DailyIntensity[]>([]);
-  const [trainingDays, setTrainingDays] = useState<TrainingDay[]>([]);
+  // Daily intensity planning state — lifted to shared WizardDataContext
+  const { macrocycleData, setMacrocycleData, trainingDays, setTrainingDays, dailyIntensityData, setDailyIntensityData } = useWizardData();
   const [isIntensityDataLoaded, setIsIntensityDataLoaded] = useState(false);
   
   // Cross-mesocycle copy dialog state
@@ -207,7 +205,8 @@ export default function MesocyclePage() {
       >
         {currentStep <= 1 ? "Back to Macrocycle" : "Previous"}
       </Button>
-      <Button 
+      <Button
+        disabled={currentStep === 1 && daysMismatch}
         onClick={() => {
           if (currentStep >= totalSteps) {
             // CRITICAL: Synchronously save parameterValues before navigating
@@ -240,32 +239,30 @@ export default function MesocyclePage() {
     }
   }, []);
 
-  // Load macrocycle data on mount
+  // Load macrocycle data on mount — macrocycleData comes from shared WizardDataContext
   useEffect(() => {
-    const savedMacrocycleData = localStorage.getItem('macrocycleData');
     const savedMesocycleData = localStorage.getItem('mesocycleData');
-    
-    if (savedMacrocycleData) {
-      const data = JSON.parse(savedMacrocycleData);
-      setMacrocycleData(data);
-      
+
+    const data = macrocycleData;
+
+    if (data) {
       // Calculate total weeks from date range - prioritize planDuration over legacy smartGoal
       const rawStartDate = data.planDuration?.startDate || data.smartGoal?.startDate;
       const rawEndDate = data.planDuration?.endDate || data.smartGoal?.endDate;
       const rawTotalWeeks = data.planDuration?.totalWeeks || data.smartGoal?.totalWeeks;
-      
+
       const startDate = rawStartDate ? new Date(rawStartDate) : new Date();
       const endDate = rawEndDate ? new Date(rawEndDate) : addWeeks(startDate, 12);
-      const weeks = rawTotalWeeks || 
-        (rawStartDate && rawEndDate 
-          ? Math.ceil((Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))) / 7) 
+      const weeks = rawTotalWeeks ||
+        (rawStartDate && rawEndDate
+          ? Math.ceil((Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))) / 7)
           : 12);
       setTotalWeeks(weeks);
-      
+
       // Set plan dates
       setPlanStartDate(startDate);
       setPlanEndDate(endDate);
-      
+
       // Check if we have saved mesocycle data with allocatedSubGoals
       if (savedMesocycleData) {
         try {
@@ -415,34 +412,10 @@ export default function MesocyclePage() {
     }
   }, [methodAllocations]);
 
-  // Load training days from localStorage on mount
+  // trainingDays and dailyIntensityData are now loaded from shared WizardDataContext on mount.
+  // Mark intensity data as loaded once context is available (context initializes from localStorage).
   useEffect(() => {
-    const savedTrainingDays = localStorage.getItem('trainingDays');
-    if (savedTrainingDays) {
-      try {
-        const parsed = JSON.parse(savedTrainingDays);
-        setTrainingDays(parsed);
-      } catch (e) {
-        console.error('Failed to load training days:', e);
-      }
-    }
-  }, []);
-
-  // Load daily intensity data from localStorage on mount
-  useEffect(() => {
-    const savedDailyIntensity = localStorage.getItem('dailyIntensityData');
-    if (savedDailyIntensity) {
-      try {
-        const parsed = JSON.parse(savedDailyIntensity);
-        setDailyIntensityData(parsed);
-        setIsIntensityDataLoaded(true);
-      } catch (e) {
-        console.error('Failed to load daily intensity data:', e);
-        setIsIntensityDataLoaded(true);
-      }
-    } else {
-      setIsIntensityDataLoaded(true);
-    }
+    setIsIntensityDataLoaded(true);
   }, []);
 
   // Save mesocycle data to localStorage for microcycle planning
@@ -459,19 +432,7 @@ export default function MesocyclePage() {
     }
   }, [parameterValues]);
 
-  // Save training days to localStorage
-  useEffect(() => {
-    if (trainingDays.length > 0) {
-      localStorage.setItem('trainingDays', JSON.stringify(trainingDays));
-    }
-  }, [trainingDays]);
-
-  // Save daily intensity data to localStorage
-  useEffect(() => {
-    if (dailyIntensityData.length > 0) {
-      localStorage.setItem('dailyIntensityData', JSON.stringify(dailyIntensityData));
-    }
-  }, [dailyIntensityData]);
+  // trainingDays and dailyIntensityData persistence is handled by WizardDataContext setters.
 
   // Save current step to localStorage
   useEffect(() => {
@@ -641,9 +602,7 @@ export default function MesocyclePage() {
         }))}
         notes={macrocycleData?.planNotes}
         onNotesChange={(notes) => {
-          const updated = { ...macrocycleData, planNotes: notes };
-          setMacrocycleData(updated);
-          localStorage.setItem('macrocycleData', JSON.stringify(updated));
+          setMacrocycleData({ ...macrocycleData, planNotes: notes });
         }}
       />
     );
@@ -761,11 +720,13 @@ export default function MesocyclePage() {
   };
 
   // Calculate total mesocycle days from microcycles
-  const totalMesocycleDays = mesocycles.reduce((sum, meso) => 
+  const totalMesocycleDays = mesocycles.reduce((sum, meso) =>
     sum + meso.microcycles.reduce((mesoSum, micro) => mesoSum + micro.duration, 0), 0
   );
-  const expectedTotalDays = totalWeeks * 7;
-  const daysMismatch = totalMesocycleDays !== expectedTotalDays;
+  const expectedTotalDays = planStartDate && planEndDate && planEndDate > planStartDate
+    ? differenceInDays(planEndDate, planStartDate) + 1
+    : totalWeeks * 7;
+  const daysMismatch = expectedTotalDays > 0 && totalMesocycleDays !== expectedTotalDays;
 
   // Helper functions for microcycle management
   const toggleMesocycleExpansion = (mesocycleId: string) => {
@@ -850,16 +811,55 @@ export default function MesocyclePage() {
         </div>
       </CardHeader>
       <CardContent className="space-y-6 max-w-full">
-        {/* Duration Validation Warning */}
+        {/* Duration Validation Error */}
         {daysMismatch && (
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
-            <div className="flex items-center space-x-2 text-destructive">
-              <Info className="h-4 w-4" />
-              <span className="font-medium">Duration Mismatch Warning</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 text-destructive">
+                <Info className="h-4 w-4" />
+                <span className="font-medium">Duration Mismatch — Cannot proceed</span>
+              </div>
+              <button
+                className="text-xs font-medium bg-destructive text-destructive-foreground px-3 py-1 rounded hover:bg-destructive/90 transition-colors"
+                onClick={() => {
+                  if (mesocycles.length === 0) return;
+                  let remaining = expectedTotalDays - totalMesocycleDays;
+                  if (remaining === 0) return;
+                  const updated = mesocycles.map(m => ({
+                    ...m,
+                    microcycles: m.microcycles.map(mc => ({ ...mc }))
+                  }));
+                  if (remaining > 0) {
+                    // Add all extra days to last microcycle
+                    const lastMeso = updated[updated.length - 1];
+                    if (lastMeso.microcycles.length > 0) {
+                      lastMeso.microcycles[lastMeso.microcycles.length - 1].duration += remaining;
+                    }
+                  } else {
+                    // Cascade removal backwards through microcycles
+                    for (let mi = updated.length - 1; mi >= 0 && remaining < 0; mi--) {
+                      const meso = updated[mi];
+                      for (let mci = meso.microcycles.length - 1; mci >= 0 && remaining < 0; mci--) {
+                        const canRemove = meso.microcycles[mci].duration - 1;
+                        if (canRemove > 0) {
+                          const toRemove = Math.min(canRemove, -remaining);
+                          meso.microcycles[mci].duration -= toRemove;
+                          remaining += toRemove;
+                        }
+                      }
+                    }
+                  }
+                  setMesocycles(recalculateAllMesocycleDates(updated, planStartDate));
+                }}
+              >
+                Auto-fix
+              </button>
             </div>
             <p className="text-sm text-destructive/80 mt-1">
-              Total microcycle days ({totalMesocycleDays}) don't match your macrocycle plan ({expectedTotalDays} days / {totalWeeks} weeks). 
-              Please adjust microcycle durations to match your training plan.
+              Your microcycles total <strong>{totalMesocycleDays} days</strong> but the plan is <strong>{expectedTotalDays} days</strong>.{' '}
+              {totalMesocycleDays < expectedTotalDays
+                ? `Add ${expectedTotalDays - totalMesocycleDays} day(s) to your microcycles.`
+                : `Remove ${totalMesocycleDays - expectedTotalDays} day(s) from your microcycles.`}
             </p>
           </div>
         )}
@@ -2698,9 +2698,8 @@ export default function MesocyclePage() {
         });
       }
       
-      // Update state and localStorage
+      // Update context state (context setter writes to localStorage)
       setMacrocycleData(updatedMacrocycleData);
-      localStorage.setItem('macrocycleData', JSON.stringify(updatedMacrocycleData));
       
       toast({
         title: "Method removed",
@@ -4982,125 +4981,11 @@ export default function MesocyclePage() {
 
   const stepTitles = [
     "Mesocycle Setup",
-    "Daily Training Intensity Planning",
+    "Daily Training Intensity Planning", 
     "Mesocycle Characterization",
     "Method Periodization",
     "Exercise Selection"
   ];
-
-  // ── AI Assistant context ───────────────────────────────────────────────────
-  const mesoStepLabel = stepTitles[currentStep - 1] ?? `Step ${currentStep}`;
-
-  // All method names selected in the macrocycle step
-  const allMacroMethods = useMemo<string[]>(() => {
-    const from = macrocycleData?.selectedMethods ?? [];
-    const manual = (macrocycleData?.manuallyAddedMethods ?? []).map((m: { methodId: string }) => m.methodId);
-    return Array.from(new Set([...from, ...manual]));
-  }, [macrocycleData]);
-
-  const mesoWizardContext = useMemo(() => {
-    const athleteStr = athleteName ? `Athlete: ${athleteName}` : "No athlete selected";
-    const planStr = macrocycleData?.planName ? `Plan: ${macrocycleData.planName}` : "";
-    const goalStr = macrocycleData?.smartGoals?.[0]?.description
-      ? `Primary goal: ${macrocycleData.smartGoals[0].description}`
-      : macrocycleData?.smartGoal?.specific
-      ? `Primary goal: ${macrocycleData.smartGoal.specific}`
-      : "";
-    const durationStr = totalWeeks > 0 ? `Plan duration: ${totalWeeks} weeks` : "";
-    const mesoCount = mesocycles.length;
-    const mesoStr = mesoCount > 0
-      ? `Mesocycles: ${mesoCount} (${mesocycles.map((m) => `${m.name} — ${m.duration ?? m.weeks} weeks`).join(", ")})`
-      : "No mesocycles configured yet";
-    const allocatedMethods = Object.keys(methodAllocations).filter(
-      (m) => methodAllocations[m]?.length > 0
-    );
-    const methodsStr = allocatedMethods.length
-      ? `Allocated methods:\n${allocatedMethods.map((m) => `- ${m}`).join("\n")}`
-      : "";
-
-    let actionHints = "";
-    if (currentStep === 1) {
-      actionHints = `Available AI action: set_mesocycle_config\nPlan duration: ${totalWeeks} weeks — suggest a sensible count and individual duration in weeks.`;
-    } else if (currentStep === 3 && allMacroMethods.length > 0 && mesocycles.length > 0) {
-      const mesoNames = mesocycles.map((m) => m.name).join(", ");
-      const currentAllocations = allMacroMethods
-        .map((m) => {
-          const ids = methodAllocations[m] ?? [];
-          const names = mesocycles.filter((mc) => ids.includes(mc.id)).map((mc) => mc.name);
-          return names.length ? `- ${m} → ${names.join(", ")}` : `- ${m} → (not allocated)`;
-        })
-        .join("\n");
-      actionHints = [
-        `Available AI action: allocate_methods`,
-        `Mesocycles (use exact names): ${mesoNames}`,
-        `All methods to distribute (use exact names):\n${currentAllocations}`,
-        `Based on periodization principles and the plan goal, suggest which methods should be active in which mesocycles. Not all methods need to appear in every mesocycle — use phase logic (e.g. general prep → specific prep → competition prep).`,
-      ].join("\n");
-    }
-
-    return [
-      `Current step: ${mesoStepLabel}`,
-      athleteStr,
-      planStr,
-      goalStr,
-      durationStr,
-      mesoStr,
-      methodsStr,
-      actionHints,
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, mesocycles, methodAllocations, mesoStepLabel, totalWeeks, allMacroMethods]);
-
-  // ── AI Apply handler ───────────────────────────────────────────────────────
-  const handleMesoAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
-    switch (action.type) {
-      case "set_mesocycle_config": {
-        const count = Math.max(1, Math.min(12, action.count));
-        const weeksEach = Math.max(1, action.weeksDuration);
-        const newMesocycles: ExtendedMesocycle[] = Array.from({ length: count }, (_, i) => {
-          const microcycles: Microcycle[] = Array.from({ length: weeksEach }, (_, j) => ({
-            id: `micro-${i + 1}-${j + 1}`,
-            name: `Microcycle ${j + 1}`,
-            duration: 7,
-            intensity: "moderate" as Intensity,
-          }));
-          return {
-            id: `meso-${i + 1}`,
-            name: `Mesocycle ${i + 1}`,
-            weeks: weeksEach,
-            sessionsPerWeek: 3,
-            sessionLength: 60,
-            startDate: planStartDate,
-            endDate: planStartDate,
-            duration: weeksEach,
-            intensity: "moderate" as IntensityLevel,
-            trainingMethods: [],
-            trainingQualities: [],
-            microcycles,
-          };
-        });
-        const recalculated = recalculateAllMesocycleDates(newMesocycles, planStartDate);
-        setMesocycles(recalculated);
-        break;
-      }
-      case "allocate_methods": {
-        // Map mesocycle names → IDs, then apply per-method allocations
-        const nameToId = new Map(mesocycles.map((m) => [m.name, m.id]));
-        const newAllocations: Record<string, string[]> = {};
-        action.allocations.forEach(({ methodName, mesocycleNames }) => {
-          const ids = mesocycleNames
-            .map((n) => nameToId.get(n))
-            .filter((id): id is string => !!id);
-          if (ids.length > 0) newAllocations[methodName] = ids;
-        });
-        setMethodAllocations((prev) => ({ ...prev, ...newAllocations }));
-        break;
-      }
-      default:
-        break;
-    }
-  }, [mesocycles, planStartDate, recalculateAllMesocycleDates]);
 
   return (
     <div className="w-full max-w-none space-y-6 min-w-0">
@@ -5122,6 +5007,10 @@ export default function MesocyclePage() {
             </Button>
             <SaveProgramButton />
             <ResourcesButton />
+            <Button variant="outline" size="sm">
+              <Bot className="h-4 w-4 mr-2" />
+              Ask AI for Help
+            </Button>
             <PlanningNavigationMenu currentPage="mesocycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
           </div>
         </div>
@@ -5239,12 +5128,6 @@ export default function MesocyclePage() {
           }}
         />
 
-      {/* AI Assistant */}
-      <WizardAIAssistant
-        stepLabel={mesoStepLabel}
-        wizardContext={mesoWizardContext}
-        onApplySuggestion={handleMesoAIApply}
-      />
     </div>
   );
 };

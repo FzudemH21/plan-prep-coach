@@ -46,12 +46,14 @@ import { getAthleteDisplayName } from "@/types/athlete";
 import { useAthletes } from "@/hooks/useAthletes";
 import { useToast } from "@/hooks/use-toast";
 import { format, formatDistanceToNow } from "date-fns";
+import { useWizardData } from "@/contexts/WizardDataContext";
 
 export default function TrainingProgramsPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { programs, isLoading, copyProgram, deleteProgram, loadProgramIntoSession, clearSession } = useTrainingPrograms();
   const { athletes } = useAthletes();
+  const { loadWizardSession } = useWizardData();
   
   const [searchQuery, setSearchQuery] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -105,11 +107,12 @@ export default function TrainingProgramsPage() {
 
   const handleEditProgram = (program: TrainingProgram) => {
     loadProgramIntoSession(program.id);
+    loadWizardSession();
     navigate('/macrocycle');
   };
 
-  const handleCopyProgram = async (program: TrainingProgram) => {
-    const copied = await copyProgram(program.id);
+  const handleCopyProgram = (program: TrainingProgram) => {
+    const copied = copyProgram(program.id);
     if (copied) {
       toast({
         title: "Program copied",

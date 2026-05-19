@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, LayoutGrid, Columns } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, startOfWeek, endOfWeek, addWeeks, subWeeks, isSameMonth, parseISO, isSameDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, startOfWeek, endOfWeek, addWeeks, subWeeks, isSameMonth, parseISO, isSameDay, addDays, differenceInDays } from 'date-fns';
 import { useCalendarGrid, groupDaysIntoWeeks } from '@/hooks/useCalendarGrid';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MasterPlannerGrid } from './MasterPlannerGrid';
@@ -335,7 +335,9 @@ export function TrainingCalendarView({
       return {
         date,
         dateString,
-        isCurrentMonth: isSameMonth(date, currentDate),
+        // Days that belong to the training plan (have a trainingDay) are always
+        // rendered at full opacity, regardless of which calendar month is shown.
+        isCurrentMonth: isSameMonth(date, currentDate) || !!trainingDays.find(td => td.date === dateString),
         trainingDay,
         sessions,
         totalExercises: exercises.length,
@@ -1059,11 +1061,39 @@ export function TrainingCalendarView({
                 </div>
 
                 {/* Calendar Weeks */}
-                {weeks.map((week, weekIdx) => (
+                {weeks.map((week, weekIdx) => {
+                  // Compute microcycle label via date-math against mesocycle start.
+                  // Walk through microcycles accumulating days; the first week-day that
+                  // falls inside the mesocycle range determines which microcycle label to show.
+                  const mesoStart = currentMesocycle.startDate instanceof Date
+                    ? currentMesocycle.startDate
+                    : new Date(currentMesocycle.startDate);
+                  const mesoEnd = currentMesocycle.endDate instanceof Date
+                    ? currentMesocycle.endDate
+                    : new Date(currentMesocycle.endDate);
+
+                  let microcycleLabel: string | undefined;
+                  outer: for (const day of week) {
+                    const d = day.date;
+                    if (d < mesoStart || d > mesoEnd) continue;
+                    let accumulated = 0;
+                    for (const mc of currentMesocycle.microcycles) {
+                      const mcStart = addDays(mesoStart, accumulated);
+                      const mcEnd = addDays(mesoStart, accumulated + mc.duration - 1);
+                      if (d >= mcStart && d <= mcEnd) {
+                        microcycleLabel = mc.name;
+                        break outer;
+                      }
+                      accumulated += mc.duration;
+                    }
+                  }
+
+                  return (
                   <WeekRow
                     key={weekIdx}
                     week={week}
                     weekIdx={weekIdx}
+                    microcycleLabel={microcycleLabel}
                     copiedWeek={copiedWeek}
                     copiedSession={copiedSession}
                     copiedDay={copiedDay}
@@ -1105,7 +1135,8 @@ export function TrainingCalendarView({
                     selectedAthleteId={selectedAthleteId}
                     athletePerformanceParameters={athletePerformanceParameters}
                   />
-                ))}
+                  );
+                })}
               </div>
             </DragDropContext>
           )}

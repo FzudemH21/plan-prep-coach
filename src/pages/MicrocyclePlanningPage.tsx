@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { WizardAIAssistant } from '@/components/wizard/WizardAIAssistant';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,6 +28,7 @@ import { TrainingCalendarView, EnhancedExerciseDistribution, MethodSessionArchit
 import { DropResult } from '@hello-pangea/dnd';
 import { SaveProgramButton } from '@/components/programs/SaveProgramButton';
 import { useTrainingPrograms } from '@/hooks/useTrainingPrograms';
+import { useWizardData } from '@/contexts/WizardDataContext';
 
 // Using ExerciseDistribution, SessionSection, and SupersetMapping from types file
 
@@ -54,11 +54,10 @@ interface AllocationWarning {
 export default function MicrocyclePlanningPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { macrocycleData, setMacrocycleData, trainingDays, setTrainingDays } = useWizardData();
   const [currentStep, setCurrentStep] = useState(1);
   const [currentMesocycleIndex, setCurrentMesocycleIndex] = useState(0);
   const [mesocycles, setMesocycles] = useState<ExtendedMesocycle[]>([]);
-  const [trainingDays, setTrainingDays] = useState<TrainingDay[]>([]);
-  const [macrocycleData, setMacrocycleData] = useState<any>(null);
   const [exerciseSelectionData, setExerciseSelectionData] = useState<Record<string, CellData>>({});
   const [exerciseDistribution, setExerciseDistribution] = useState<ExerciseDistribution[]>([]);
   const [parameterValues, setParameterValues] = useState<Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>>({});
@@ -148,15 +147,10 @@ export default function MicrocyclePlanningPage() {
 
   // Load data from localStorage
   useEffect(() => {
-    const savedMacrocycleData = localStorage.getItem('macrocycleData');
     const savedMesocycleData = localStorage.getItem('mesocycleData');
     const savedParameters = localStorage.getItem('parameterValues');
     const savedTrainingDays = localStorage.getItem('trainingDays');
     const savedMicrocycleStep = localStorage.getItem('microcycleStep');
-
-    if (savedMacrocycleData) {
-      setMacrocycleData(JSON.parse(savedMacrocycleData));
-    }
 
     if (savedMesocycleData) {
       const data = JSON.parse(savedMesocycleData);
@@ -171,31 +165,6 @@ export default function MicrocyclePlanningPage() {
 
     if (savedParameters) {
       setParameterValues(JSON.parse(savedParameters));
-    }
-
-    if (savedTrainingDays) {
-      const loadedDays = JSON.parse(savedTrainingDays);
-      
-      // Migrate old data format to new format (testName -> testNames, eventName -> eventNames)
-      const migratedDays = loadedDays.map((td: any) => {
-        const migrated = { ...td };
-        
-        // Migrate testName to testNames
-        if ('testName' in td && td.testName) {
-          migrated.testNames = [td.testName];
-          delete migrated.testName;
-        }
-        
-        // Migrate eventName to eventNames
-        if ('eventName' in td && td.eventName) {
-          migrated.eventNames = [td.eventName];
-          delete migrated.eventName;
-        }
-        
-        return migrated;
-      });
-      
-      setTrainingDays(migratedDays);
     }
 
     // v1→v2 migration: a new Step 1 was inserted, so old step indices shift by +1.
@@ -447,22 +416,25 @@ export default function MicrocyclePlanningPage() {
   useEffect(() => {
     if (!macrocycleData || trainingDays.length === 0) return;
 
+    // Helper: normalize any date string (ISO or yyyy-MM-dd) to yyyy-MM-dd
+    const toDateKey = (d: string) => d.split('T')[0];
+
     const testMap = new Map<string, string[]>();
     (macrocycleData.subGoals || []).forEach((sg: any) => {
       const name = sg.testMethod || sg.name || sg.testName || sg.method || sg.description || 'Test';
       (sg.testDates || []).forEach((dateStr: string) => {
-        const existing = testMap.get(dateStr) || [];
-        testMap.set(dateStr, [...existing, name]);
+        const key = toDateKey(dateStr);
+        const existing = testMap.get(key) || [];
+        if (!existing.includes(name)) testMap.set(key, [...existing, name]);
       });
     });
     // Include athlete's existing tests from calendar assignments
-    // Normalize ISO strings (yyyy-MM-ddT...) to yyyy-MM-dd to match trainingDay.date format
     (macrocycleData.athleteExistingTests || []).forEach((t: any) => {
       const name = t.testMethod || 'Test';
       (t.testDates || []).forEach((dateStr: string) => {
-        const normalized = dateStr.split('T')[0];
-        const existing = testMap.get(normalized) || [];
-        if (!existing.includes(name)) testMap.set(normalized, [...existing, name]);
+        const key = toDateKey(dateStr);
+        const existing = testMap.get(key) || [];
+        if (!existing.includes(name)) testMap.set(key, [...existing, name]);
       });
     });
 
@@ -470,18 +442,18 @@ export default function MicrocyclePlanningPage() {
     (macrocycleData.events || []).forEach((e: any) => {
       const name = e.name || e.eventName || e.title || e.description || 'Event';
       (e.eventDates || []).forEach((dateStr: string) => {
-        const existing = eventMap.get(dateStr) || [];
-        eventMap.set(dateStr, [...existing, name]);
+        const key = toDateKey(dateStr);
+        const existing = eventMap.get(key) || [];
+        if (!existing.includes(name)) eventMap.set(key, [...existing, name]);
       });
     });
     // Include athlete's existing events from calendar assignments
-    // Normalize ISO strings (yyyy-MM-ddT...) to yyyy-MM-dd to match trainingDay.date format
     (macrocycleData.athleteExistingEvents || []).forEach((e: any) => {
       const name = e.name || 'Event';
       (e.eventDates || []).forEach((dateStr: string) => {
-        const normalized = dateStr.split('T')[0];
-        const existing = eventMap.get(normalized) || [];
-        if (!existing.includes(name)) eventMap.set(normalized, [...existing, name]);
+        const key = toDateKey(dateStr);
+        const existing = eventMap.get(key) || [];
+        if (!existing.includes(name)) eventMap.set(key, [...existing, name]);
       });
     });
 
@@ -527,7 +499,6 @@ export default function MicrocyclePlanningPage() {
 
     if (changed) {
       setTrainingDays(updated);
-      localStorage.setItem('trainingDays', JSON.stringify(updated));
     }
   }, [macrocycleData, trainingDays]);
 
@@ -2335,11 +2306,10 @@ export default function MicrocyclePlanningPage() {
           return td;
         });
         
-        localStorage.setItem('trainingDays', JSON.stringify(updated));
         return updated;
       });
     }
-    
+
     // 7. Update trainingDays session info
     setTrainingDays(prev =>
       prev.map(day => {
@@ -2425,8 +2395,6 @@ export default function MicrocyclePlanningPage() {
         }
         return td;
       });
-      
-      localStorage.setItem('trainingDays', JSON.stringify(updated));
       return updated;
     });
     
@@ -2534,11 +2502,10 @@ export default function MicrocyclePlanningPage() {
         
         updated = [...prev, newDay];
       }
-      
-      localStorage.setItem('trainingDays', JSON.stringify(updated));
+
       return updated;
     });
-    
+
     // Sync to macrocycleData
     if (macrocycleData) {
       const updatedMacrocycle = { ...macrocycleData };
@@ -2590,9 +2557,8 @@ export default function MicrocyclePlanningPage() {
       }
       
       setMacrocycleData(updatedMacrocycle);
-      localStorage.setItem('macrocycleData', JSON.stringify(updatedMacrocycle));
     }
-    
+
     toast({
       title: `${type === 'test' ? 'Test' : 'Event'} added`,
       description: `${testEventName} scheduled for ${format(parseISO(dayDate), 'PPP')}`,
@@ -2623,7 +2589,6 @@ export default function MicrocyclePlanningPage() {
         }
         return td;
       });
-      localStorage.setItem('trainingDays', JSON.stringify(updated));
       return updated;
     });
     
@@ -2638,7 +2603,7 @@ export default function MicrocyclePlanningPage() {
           if (testName === name) {
             return {
               ...sg,
-              testDates: (sg.testDates || []).filter((date: string) => date !== dayDate)
+              testDates: (sg.testDates || []).filter((date: string) => date.split('T')[0] !== dayDate)
             };
           }
           return sg;
@@ -2650,7 +2615,7 @@ export default function MicrocyclePlanningPage() {
           if (eventName === name) {
             return {
               ...e,
-              eventDates: (e.eventDates || []).filter((date: string) => date !== dayDate)
+              eventDates: (e.eventDates || []).filter((date: string) => date.split('T')[0] !== dayDate)
             };
           }
           return e;
@@ -2658,9 +2623,8 @@ export default function MicrocyclePlanningPage() {
       }
       
       setMacrocycleData(updatedMacrocycle);
-      localStorage.setItem('macrocycleData', JSON.stringify(updatedMacrocycle));
     }
-    
+
     toast({
       title: `${type === 'test' ? 'Test' : 'Event'} deleted`,
       description: `${name} removed from ${format(parseISO(dayDate), 'PPP')}`,
@@ -2669,17 +2633,15 @@ export default function MicrocyclePlanningPage() {
 
   // Handle update test comment
   const handleUpdateTestComment = (testId: string, comments: string) => {
-    const savedData = localStorage.getItem('macrocycleData');
-    if (savedData) {
+    if (macrocycleData) {
       try {
-        const data = JSON.parse(savedData);
+        const data = { ...macrocycleData };
         const updatedSubGoals = (data.subGoals || []).map((sg: any) =>
           sg.id === testId ? { ...sg, comments } : sg
         );
         data.subGoals = updatedSubGoals;
-        localStorage.setItem('macrocycleData', JSON.stringify(data));
-        
-        // Update local state
+
+        // Update context state (context setter writes to localStorage)
         setMacrocycleData(data);
         
         // Trigger re-fetch of data
@@ -2703,15 +2665,13 @@ export default function MicrocyclePlanningPage() {
 
   // Handle update test values (baseline, goal, comments)
   const handleUpdateTestValues = (testId: string, updates: { preTestValue?: number; goalValue?: number; comments?: string }) => {
-    const savedData = localStorage.getItem('macrocycleData');
-    if (savedData) {
+    if (macrocycleData) {
       try {
-        const data = JSON.parse(savedData);
+        const data = { ...macrocycleData };
         const updatedSubGoals = (data.subGoals || []).map((sg: any) =>
           sg.id === testId ? { ...sg, ...updates } : sg
         );
         data.subGoals = updatedSubGoals;
-        localStorage.setItem('macrocycleData', JSON.stringify(data));
         setMacrocycleData(data);
         const event = new Event('macrocycle-data-updated');
         window.dispatchEvent(event);
@@ -2723,17 +2683,15 @@ export default function MicrocyclePlanningPage() {
 
   // Handle update event comment
   const handleUpdateEventComment = (eventId: string, comments: string) => {
-    const savedData = localStorage.getItem('macrocycleData');
-    if (savedData) {
+    if (macrocycleData) {
       try {
-        const data = JSON.parse(savedData);
+        const data = { ...macrocycleData };
         const updatedEvents = (data.events || []).map((ev: any) =>
           ev.id === eventId ? { ...ev, comments } : ev
         );
         data.events = updatedEvents;
-        localStorage.setItem('macrocycleData', JSON.stringify(data));
-        
-        // Update local state
+
+        // Update context state (context setter writes to localStorage)
         setMacrocycleData(data);
         
         // Trigger re-fetch of data
@@ -3148,9 +3106,7 @@ export default function MicrocyclePlanningPage() {
         }))}
         notes={macrocycleData?.planNotes}
         onNotesChange={(notes) => {
-          const updated = { ...macrocycleData, planNotes: notes };
-          setMacrocycleData(updated);
-          localStorage.setItem('macrocycleData', JSON.stringify(updated));
+          setMacrocycleData({ ...macrocycleData, planNotes: notes });
         }}
       />
     );
@@ -3229,62 +3185,6 @@ export default function MicrocyclePlanningPage() {
       </div>
     );
   };
-
-  // ── AI Assistant context ───────────────────────────────────────────────────
-  const microStepLabels = [
-    "Method Distribution to Training Days",
-    "Exercise Distribution",
-    "Training Calendar",
-  ];
-  const microStepLabel = microStepLabels[currentStep - 1] ?? `Step ${currentStep}`;
-
-  const microWizardContext = useMemo(() => {
-    const athleteStr = athleteName ? `Athlete: ${athleteName}` : "No athlete selected";
-    const planStr = macrocycleData?.planName ? `Plan: ${macrocycleData.planName}` : "";
-    const goalStr = macrocycleData?.smartGoals?.[0]?.description
-      ? `Primary goal: ${macrocycleData.smartGoals[0].description}`
-      : "";
-    const mesoCount = mesocycles.length;
-    const mesoStr = mesoCount > 0
-      ? `Mesocycles: ${mesoCount} (${mesocycles.map((m: { name: string }) => m.name).join(", ")})`
-      : "No mesocycles";
-    const currentMeso = mesocycles[currentMesocycleIndex];
-    const currentMesoStr = currentMeso ? `Current mesocycle: ${currentMeso.name}` : "";
-    const assignedDays = Object.keys(dayMethodAssignments).filter(
-      (d) => dayMethodAssignments[d]?.length > 0
-    ).length;
-    const dayStr = assignedDays > 0
-      ? `Training days with methods assigned: ${assignedDays}`
-      : "No method-day assignments yet";
-
-    // Available methods from mesocycle allocation
-    const availableMethods = Object.keys(methodAllocations).filter(
-      (m) => methodAllocations[m]?.length > 0
-    );
-    const methodsStr = availableMethods.length
-      ? `Training methods in this plan:\n${availableMethods.map((m) => `- ${m}`).join("\n")}`
-      : "";
-
-    const stepHint = currentStep === 1
-      ? "Goal: distribute methods across training days of the week — ask the AI for advice on optimal placement."
-      : currentStep === 2
-      ? "Goal: assign exercises from the database to each method slot."
-      : "Goal: review the final training calendar with all sessions.";
-
-    return [
-      `Current step: ${microStepLabel}`,
-      athleteStr,
-      planStr,
-      goalStr,
-      mesoStr,
-      currentMesoStr,
-      methodsStr,
-      dayStr,
-      stepHint,
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, dayMethodAssignments, methodAllocations, microStepLabel]);
 
   return (
     <div className="mx-auto py-6 space-y-6 px-4 w-full max-w-[98vw]">
@@ -3386,6 +3286,7 @@ export default function MicrocyclePlanningPage() {
               daySplitStates={daySplitStates}
               selectedAthleteId={selectedAthleteId}
               athletePerformanceParameters={selectedAthletePerformanceParameters}
+              onDeleteTestEvent={handleDeleteTestEvent}
             />
         </>
       )}
@@ -3442,9 +3343,6 @@ export default function MicrocyclePlanningPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* AI Assistant */}
-      <WizardAIAssistant stepLabel={microStepLabel} wizardContext={microWizardContext} />
     </div>
   );
 }

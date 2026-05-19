@@ -1,5 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { WizardAIAssistant } from "@/components/wizard/WizardAIAssistant";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { SmartGoal, SubGoal, TrainableQuality, Event, PlanDuration } from "@/types/training";
-import { User, Target, Calendar as CalendarIcon, Plus, X, Trash2, FileText, Check, ChevronsUpDown, ChevronDown, Pencil, Link, Link2, CheckSquare } from "lucide-react";
+import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2, FileText, Check, ChevronsUpDown, ChevronDown, Pencil, Link, Link2, CheckSquare } from "lucide-react";
 import { ResourcesButton } from "@/components/programs/ResourcesButton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -39,6 +38,7 @@ import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 import { TEST_COLOR, EVENT_COLOR, testEventGradient } from "@/lib/eventColors";
+import { useWizardData } from "@/contexts/WizardDataContext";
 
 // Type for manually added methods with rationale
 interface ManuallyAddedMethod {
@@ -53,6 +53,7 @@ export default function MacrocyclePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { saveCurrentSession, getProgram } = useTrainingPrograms();
+  const { setMacrocycleData: setContextMacrocycleData } = useWizardData();
   const { getEventsForDate } = useCalendarEvents();
   const { data: parametersDataV2, addParameter: addAthleticismParameter, addInteraction: addParameterInteraction } = useParametersDataV2();
   const { data: toolboxData } = useToolboxData();
@@ -417,6 +418,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       lastUpdated: new Date().toISOString()
     };
     localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
+    setContextMacrocycleData(macrocycleData);
   }, [planName, planNotes, selectedAthleteId, planDuration, smartGoals, smartGoal, subGoals, events, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest, selectedEvent, selectedMethods, manuallyAddedMethods, athleteExistingTestsAndEvents]);
 
   // Save step whenever it changes (step persistence)
@@ -2679,6 +2681,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         completedAt: new Date().toISOString()
       };
       localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
+      setContextMacrocycleData(macrocycleData);
       setShowMissingRationaleWarning(false);
       navigate('/mesocycle');
     } else {
@@ -2706,7 +2709,10 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
             </Button>
             <SaveProgramButton />
             <ResourcesButton />
-
+            <Button variant="outline" size="sm">
+              <Bot className="h-4 w-4 mr-2" />
+              Ask AI for Help
+            </Button>
             <PlanningNavigationMenu currentPage="macrocycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
           </div>
         </div>
@@ -2745,104 +2751,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
 
   // Methods without rationale for warning dialog
   const methodsWithoutRationale = getMethodsWithoutRationale();
-
-  // ── AI Assistant context ───────────────────────────────────────────────────
-  const macroStepLabels = [
-    "Plan Setup — Athlete & Date Range",
-    "Goal & Parameter Selection",
-    "Training Method Selection",
-  ];
-  const macroStepLabel = macroStepLabels[currentStep - 1] ?? `Step ${currentStep}`;
-
-  // All available method IDs from goal-linked + toolbox
-  const allAvailableMethodIds = useMemo(() => {
-    const ids = new Set<string>();
-    Object.values(methodsByQuality).forEach((q) => q.list.forEach((m) => ids.add(m)));
-    return Array.from(ids);
-  }, [methodsByQuality]);
-
-  const wizardContext = useMemo(() => {
-    const athleteStr = selectedAthlete
-      ? `Athlete: ${getAthleteDisplayName(selectedAthlete)}`
-      : "No athlete selected yet";
-    const planStr = planName ? `Plan name: ${planName}` : "";
-    const durationStr = planDuration
-      ? `Duration: ${planDuration.totalDays} days (${Math.round(planDuration.totalDays / 7)} weeks)`
-      : "";
-    const goalsStr = smartGoals.length
-      ? `Goals:\n${smartGoals.map((g) => `- ${g.description || g.specific || ""}`).filter(Boolean).join("\n")}`
-      : "";
-    const selectedMethodList = [
-      ...Array.from(selectedMethods),
-      ...manuallyAddedMethods.map((m) => m.methodId),
-    ];
-    const methodsStr = selectedMethodList.length
-      ? `Selected methods:\n${selectedMethodList.map((m) => `- ${m}`).join("\n")}`
-      : "";
-
-    // Step-specific AI action hints
-    let actionHints = "";
-    if (currentStep === 1) {
-      actionHints = "Available AI action: set_plan_name";
-    } else if (currentStep === 2) {
-      actionHints = "Available AI action: add_goal (include specific numbers and timeframe in the description)";
-    } else if (currentStep === 3) {
-      const unselected = allAvailableMethodIds.filter((m) => !selectedMethods.has(m));
-      const methodListStr = unselected.length
-        ? `Available methods to suggest from (use exact names):\n${unselected.map((m) => `- ${m}`).join("\n")}`
-        : "All available methods are already selected.";
-      actionHints = `Available AI action: add_methods\n${methodListStr}`;
-    }
-
-    return [
-      `Current step: ${macroStepLabel}`,
-      athleteStr,
-      planStr,
-      durationStr,
-      goalsStr,
-      methodsStr,
-      actionHints,
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-  }, [currentStep, selectedAthlete, planName, planDuration, smartGoals, selectedMethods, manuallyAddedMethods, macroStepLabel, allAvailableMethodIds]);
-
-  // ── AI Apply handler ───────────────────────────────────────────────────────
-  const handleAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
-    switch (action.type) {
-      case "set_plan_name":
-        setPlanName(action.name);
-        break;
-      case "add_goal":
-        setSmartGoals((prev) => [
-          ...prev,
-          {
-            id: generateId(),
-            description: action.description,
-            baselineValue: 0,
-            desiredValue: 0,
-            unit: "",
-            percentChange: 0,
-          },
-        ]);
-        break;
-      case "add_methods": {
-        const linkedIds = new Set(allAvailableMethodIds);
-        action.methods.forEach((methodId) => {
-          if (linkedIds.has(methodId)) {
-            // Goal-linked method — just select it
-            setSelectedMethods((prev) => new Set([...prev, methodId]));
-          } else {
-            // Not in goal list — add as manually added method
-            handleAddManualMethod({ methodId, rationale: "" });
-          }
-        });
-        break;
-      }
-      default:
-        break;
-    }
-  }, [allAvailableMethodIds, handleAddManualMethod]);
 
   return (
     <>
@@ -2899,6 +2807,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                 completedAt: new Date().toISOString()
               };
               localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
+              setContextMacrocycleData(macrocycleData);
               setShowMissingRationaleWarning(false);
               navigate('/mesocycle');
             }}>
@@ -2927,7 +2836,10 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
             </Button>
             <SaveProgramButton />
             <ResourcesButton />
-
+            <Button variant="outline" size="sm">
+              <Bot className="h-4 w-4 mr-2" />
+              Ask AI for Help
+            </Button>
             <PlanningNavigationMenu currentPage="macrocycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
           </div>
         </div>
@@ -2982,13 +2894,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         </Button>
       </div>
     </div>
-
-      {/* AI Assistant */}
-      <WizardAIAssistant
-        stepLabel={macroStepLabel}
-        wizardContext={wizardContext}
-        onApplySuggestion={handleAIApply}
-      />
     </>
   );
 }
