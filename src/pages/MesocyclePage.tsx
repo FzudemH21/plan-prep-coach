@@ -206,7 +206,8 @@ export default function MesocyclePage() {
       >
         {currentStep <= 1 ? "Back to Macrocycle" : "Previous"}
       </Button>
-      <Button 
+      <Button
+        disabled={currentStep === 1 && daysMismatch}
         onClick={() => {
           if (currentStep >= totalSteps) {
             // CRITICAL: Synchronously save parameterValues before navigating
@@ -760,11 +761,13 @@ export default function MesocyclePage() {
   };
 
   // Calculate total mesocycle days from microcycles
-  const totalMesocycleDays = mesocycles.reduce((sum, meso) => 
+  const totalMesocycleDays = mesocycles.reduce((sum, meso) =>
     sum + meso.microcycles.reduce((mesoSum, micro) => mesoSum + micro.duration, 0), 0
   );
-  const expectedTotalDays = totalWeeks * 7;
-  const daysMismatch = totalMesocycleDays !== expectedTotalDays;
+  const expectedTotalDays = planStartDate && planEndDate && planEndDate > planStartDate
+    ? differenceInDays(planEndDate, planStartDate) + 1
+    : totalWeeks * 7;
+  const daysMismatch = expectedTotalDays > 0 && totalMesocycleDays !== expectedTotalDays;
 
   // Helper functions for microcycle management
   const toggleMesocycleExpansion = (mesocycleId: string) => {
@@ -849,16 +852,55 @@ export default function MesocyclePage() {
         </div>
       </CardHeader>
       <CardContent className="space-y-6 max-w-full">
-        {/* Duration Validation Warning */}
+        {/* Duration Validation Error */}
         {daysMismatch && (
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
-            <div className="flex items-center space-x-2 text-destructive">
-              <Info className="h-4 w-4" />
-              <span className="font-medium">Duration Mismatch Warning</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 text-destructive">
+                <Info className="h-4 w-4" />
+                <span className="font-medium">Duration Mismatch — Cannot proceed</span>
+              </div>
+              <button
+                className="text-xs font-medium bg-destructive text-destructive-foreground px-3 py-1 rounded hover:bg-destructive/90 transition-colors"
+                onClick={() => {
+                  if (mesocycles.length === 0) return;
+                  let remaining = expectedTotalDays - totalMesocycleDays;
+                  if (remaining === 0) return;
+                  const updated = mesocycles.map(m => ({
+                    ...m,
+                    microcycles: m.microcycles.map(mc => ({ ...mc }))
+                  }));
+                  if (remaining > 0) {
+                    // Add all extra days to last microcycle
+                    const lastMeso = updated[updated.length - 1];
+                    if (lastMeso.microcycles.length > 0) {
+                      lastMeso.microcycles[lastMeso.microcycles.length - 1].duration += remaining;
+                    }
+                  } else {
+                    // Cascade removal backwards through microcycles
+                    for (let mi = updated.length - 1; mi >= 0 && remaining < 0; mi--) {
+                      const meso = updated[mi];
+                      for (let mci = meso.microcycles.length - 1; mci >= 0 && remaining < 0; mci--) {
+                        const canRemove = meso.microcycles[mci].duration - 1;
+                        if (canRemove > 0) {
+                          const toRemove = Math.min(canRemove, -remaining);
+                          meso.microcycles[mci].duration -= toRemove;
+                          remaining += toRemove;
+                        }
+                      }
+                    }
+                  }
+                  setMesocycles(recalculateAllMesocycleDates(updated, planStartDate));
+                }}
+              >
+                Auto-fix
+              </button>
             </div>
             <p className="text-sm text-destructive/80 mt-1">
-              Total microcycle days ({totalMesocycleDays}) don't match your macrocycle plan ({expectedTotalDays} days / {totalWeeks} weeks). 
-              Please adjust microcycle durations to match your training plan.
+              Your microcycles total <strong>{totalMesocycleDays} days</strong> but the plan is <strong>{expectedTotalDays} days</strong>.{' '}
+              {totalMesocycleDays < expectedTotalDays
+                ? `Add ${expectedTotalDays - totalMesocycleDays} day(s) to your microcycles.`
+                : `Remove ${totalMesocycleDays - expectedTotalDays} day(s) from your microcycles.`}
             </p>
           </div>
         )}
