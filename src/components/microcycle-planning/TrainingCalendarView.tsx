@@ -335,7 +335,9 @@ export function TrainingCalendarView({
       return {
         date,
         dateString,
-        isCurrentMonth: isSameMonth(date, currentDate),
+        // Days that belong to the training plan (have a trainingDay) are always
+        // rendered at full opacity, regardless of which calendar month is shown.
+        isCurrentMonth: isSameMonth(date, currentDate) || !!trainingDays.find(td => td.date === dateString),
         trainingDay,
         sessions,
         totalExercises: exercises.length,
@@ -1059,11 +1061,19 @@ export function TrainingCalendarView({
                 </div>
 
                 {/* Calendar Weeks */}
-                {weeks.map((week, weekIdx) => (
+                {weeks.map((week, weekIdx) => {
+                  // Compute microcycle label from the first training day in the week
+                  const firstTrainingDay = week.find(d => d.trainingDay?.microcycleId)?.trainingDay;
+                  const microcycleLabel = firstTrainingDay?.microcycleId
+                    ? currentMesocycle.microcycles.find(m => m.id === firstTrainingDay.microcycleId)?.name
+                    : undefined;
+
+                  return (
                   <WeekRow
                     key={weekIdx}
                     week={week}
                     weekIdx={weekIdx}
+                    microcycleLabel={microcycleLabel}
                     copiedWeek={copiedWeek}
                     copiedSession={copiedSession}
                     copiedDay={copiedDay}
@@ -1105,7 +1115,8 @@ export function TrainingCalendarView({
                     selectedAthleteId={selectedAthleteId}
                     athletePerformanceParameters={athletePerformanceParameters}
                   />
-                ))}
+                  );
+                })}
               </div>
             </DragDropContext>
           )}

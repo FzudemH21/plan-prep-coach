@@ -20,7 +20,7 @@ import {
   HoverCardContent,
 } from '@/components/ui/hover-card';
 import { CalendarEventDialog } from '@/components/shared/CalendarEventDialog';
-import { useCalendarEvents } from '@/hooks/useCalendarEvents';
+import { useCalendarEvents, CalendarEvent } from '@/hooks/useCalendarEvents';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { AthletePerformanceParameter } from '@/types/athlete';
 
@@ -135,8 +135,34 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
   // per-program key derived from the day's mesocycleId so tests persist
   const eventsAthleteKey = selectedAthleteId || `program-${day.trainingDay?.mesocycleId || 'default'}`;
   const calendarEvents = getEventsForDate(eventsAthleteKey, day.dateString);
-  const calendarTests = calendarEvents.filter(e => e.type === 'test');
-  const calendarEventItems = calendarEvents.filter(e => e.type === 'event');
+  const hookTests = calendarEvents.filter(e => e.type === 'test');
+  const hookEventItems = calendarEvents.filter(e => e.type === 'event');
+
+  // Merge plan-level testNames / eventNames from trainingDay into the hook-sourced arrays.
+  // These are read-only markers set during macrocycle planning — we create synthetic CalendarEvent
+  // objects for any title not already present so they show up in badges and tooltips.
+  const hookTestTitles = new Set(hookTests.map(e => e.title));
+  const planLevelTests: CalendarEvent[] = (day.trainingDay?.testNames ?? [])
+    .filter((name: string) => !hookTestTitles.has(name))
+    .map((name: string): CalendarEvent => ({
+      id: `plan-test-${day.dateString}-${name}`,
+      date: day.dateString,
+      type: 'test',
+      title: name,
+    }));
+
+  const hookEventTitles = new Set(hookEventItems.map(e => e.title));
+  const planLevelEvents: CalendarEvent[] = (day.trainingDay?.eventNames ?? [])
+    .filter((name: string) => !hookEventTitles.has(name))
+    .map((name: string): CalendarEvent => ({
+      id: `plan-event-${day.dateString}-${name}`,
+      date: day.dateString,
+      type: 'event',
+      title: name,
+    }));
+
+  const calendarTests = [...hookTests, ...planLevelTests];
+  const calendarEventItems = [...hookEventItems, ...planLevelEvents];
 
   const hasTraining = day.sessions.length > 0;
   const isTestDay = calendarTests.length > 0;
