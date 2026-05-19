@@ -684,6 +684,14 @@ export default function MesocyclePage() {
         if (d >= start && d <= end) addTest(name, d);
       });
     });
+    // Source 3: plan-state primary SMART goal tests
+    macrocycleData?.smartGoals?.forEach((sg: any) => {
+      const name = sg.description || 'Test';
+      sg.testDates?.forEach((td: string) => {
+        const d = new Date(td);
+        if (d >= start && d <= end) addTest(name, d);
+      });
+    });
     return Array.from(testMap.entries()).map(([name, dates]) => ({
       name,
       dates: dates.sort((a, b) => a.getTime() - b.getTime()),
@@ -1064,7 +1072,11 @@ export default function MesocyclePage() {
                   }
                 }}
                 onCopyMesocycle={copyMesocycleIntensity}
-                subGoals={[...(macrocycleData?.subGoals || []), ...(macrocycleData?.athleteExistingTests || []).map((t: any) => ({ testDates: t.testDates, testMethod: t.testMethod }))]}
+                subGoals={[
+                  ...(macrocycleData?.subGoals || []),
+                  ...(macrocycleData?.smartGoals || []).map((sg: any) => ({ testDates: sg.testDates || [], testMethod: sg.description || '', description: sg.description || '' })),
+                  ...(macrocycleData?.athleteExistingTests || []).map((t: any) => ({ testDates: t.testDates, testMethod: t.testMethod })),
+                ]}
                 events={[...(macrocycleData?.events || []), ...(macrocycleData?.athleteExistingEvents || []).map((e: any) => ({ eventDates: e.eventDates, name: e.name }))]}
                 planStartDate={planStartDate}
               />
