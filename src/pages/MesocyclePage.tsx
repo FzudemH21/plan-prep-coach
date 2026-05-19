@@ -4036,15 +4036,21 @@ export default function MesocyclePage() {
     // Create maps to store dates with their names
     const testDateMap = new Map<string, string>();
     
-    macrocycleData.subGoals?.forEach((sg: any, idx: number) => {
-      // Try multiple possible property names for test name
+    macrocycleData.subGoals?.forEach((sg: any) => {
       const testName = sg.testMethod || sg.name || sg.testName || sg.method || sg.description || "Test";
-
       if (sg.testDates) {
         sg.testDates?.forEach((dateStr: string) => {
           testDateMap.set(dateStr, testName);
         });
       }
+    });
+
+    // Also include primary SMART goal tests
+    macrocycleData.smartGoals?.forEach((sg: any) => {
+      const testName = sg.description || "Test";
+      sg.testDates?.forEach((dateStr: string) => {
+        if (!testDateMap.has(dateStr)) testDateMap.set(dateStr, testName);
+      });
     });
 
     // Also include athlete's existing tests
@@ -4334,42 +4340,32 @@ export default function MesocyclePage() {
     }
   };
 
-  // Helper functions for tooltips
+  // Helper functions for tooltips — all date comparisons use slice(0,10) to avoid
+  // timezone drift from new Date() round-trips on yyyy-MM-dd strings.
   const getTestsForDate = (date: string): string[] => {
-    const wizardTests = (macrocycleData?.subGoals || [])
-      .filter((subGoal: any) =>
-        subGoal.testDates?.some((testDate: string) =>
-          new Date(testDate).toISOString().split('T')[0] === date
-        )
-      )
-      .map((subGoal: any) => subGoal.testMethod || subGoal.description || 'Test');
+    const wizardSubGoalTests = (macrocycleData?.subGoals || [])
+      .filter((sg: any) => sg.testDates?.some((td: string) => td.slice(0, 10) === date))
+      .map((sg: any) => sg.testMethod || sg.description || 'Test');
+
+    const wizardSmartGoalTests = (macrocycleData?.smartGoals || [])
+      .filter((sg: any) => sg.testDates?.some((td: string) => td.slice(0, 10) === date))
+      .map((sg: any) => sg.description || 'Test');
 
     const athleteTests = (macrocycleData?.athleteExistingTests || [])
-      .filter((t: any) =>
-        t.testDates?.some((td: string) =>
-          new Date(td).toISOString().split('T')[0] === date
-        )
-      )
+      .filter((t: any) => t.testDates?.some((td: string) => td.slice(0, 10) === date))
       .map((t: any) => t.testMethod || 'Test');
 
-    return [...wizardTests, ...athleteTests.filter((t: string) => !wizardTests.includes(t))];
+    const all = [...wizardSubGoalTests, ...wizardSmartGoalTests];
+    return [...all, ...athleteTests.filter((t: string) => !all.includes(t))];
   };
 
   const getEventsForDate = (date: string): string[] => {
     const wizardEvents = (macrocycleData?.events || [])
-      .filter((event: any) =>
-        event.eventDates?.some((eventDate: string) =>
-          new Date(eventDate).toISOString().split('T')[0] === date
-        )
-      )
+      .filter((event: any) => event.eventDates?.some((ed: string) => ed.slice(0, 10) === date))
       .map((event: any) => event.name || 'Event');
 
     const athleteEvents = (macrocycleData?.athleteExistingEvents || [])
-      .filter((e: any) =>
-        e.eventDates?.some((ed: string) =>
-          new Date(ed).toISOString().split('T')[0] === date
-        )
-      )
+      .filter((e: any) => e.eventDates?.some((ed: string) => ed.slice(0, 10) === date))
       .map((e: any) => e.name || 'Event');
 
     return [...wizardEvents, ...athleteEvents.filter((e: string) => !wizardEvents.includes(e))];
