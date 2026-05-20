@@ -43,6 +43,8 @@ export type ApplySuggestion =
   | { type: "assign_methods_to_days"; microcycleIndex?: number; weekPattern: Array<{ method: string; days: string[] }> }
   /** MesocyclePage Step 5 — assign exercises from the library to method × mesocycle cells */
   | { type: "assign_exercises"; replace?: boolean; assignments: Array<{ methodName: string; mesocycleName: string; categoryName?: string; exercises: Array<{ exerciseId: string; exerciseName: string; libraryId: string }> }> }
+  /** MicrocyclePlanningPage Step 2 — distribute exercises to specific training days / sessions */
+  | { type: "distribute_exercises"; replace?: boolean; entries: Array<{ exerciseId: string; exerciseName: string; methodId: string; categoryName?: string; dayDate: string; sessionIndex?: number }> }
   /** Parameter Database — add a new parameter */
   | { type: "add_parameter"; name: string; category?: string; unit?: string; applicableSports?: string[] }
   /** Parameter Database — add multiple parameters at once */
@@ -126,6 +128,9 @@ Available types and their fields:
   microcycleIndex is 1-based — include to target a specific microcycle only (e.g. 1 = first week), omit to apply the pattern to ALL microcycles in the current mesocycle. Do NOT assign methods to days marked as "off" — those are rest days with no sessions.
 - assign_exercises: {"type":"assign_exercises","replace":true,"assignments":[{"methodName":"<exact method name>","mesocycleName":"Mesocycle 1","categoryName":"<exercise category — include ONLY if method has categories, omit otherwise>","exercises":[{"exerciseId":"<exact id>","exerciseName":"<name>","libraryId":"<exact library id>"}]}]}
   Only use exercise IDs and library IDs as listed in the wizard context. Use exact values — do not invent IDs. Set "replace": true to replace the existing exercise selection for a cell; omit or set false to append to existing exercises. If the method context lists "Categories:", produce one assignment entry per category, each with the matching "categoryName" field and category-appropriate exercises.
+- distribute_exercises: {"type":"distribute_exercises","replace":false,"entries":[{"exerciseId":"<exact id from context>","exerciseName":"<name>","methodId":"<exact methodId from context>","categoryName":"<category — include ONLY if the method has categories, omit otherwise>","dayDate":"YYYY-MM-DD","sessionIndex":0}]}
+  IMPORTANT: Use this action in Phase 3 Step 2 whenever the coach asks to assign or distribute exercises to training days. You CAN assign exercises directly to specific calendar dates — this is exactly what this action is for. Do NOT tell the coach this is impossible or that they need to use the hierarchy manually.
+  Use ONLY exerciseIds and methodIds listed under "Available exercises" in the wizard context. dayDate must be YYYY-MM-DD and must exactly match a date from the training schedule in context. sessionIndex is 0-based (0 = first session of the day). Set "replace":true to clear the existing exercise distribution for the entire current mesocycle before adding. Do NOT invent dates — use only dates from the training schedule provided in context.
 - add_parameter: {"type":"add_parameter","name":"<parameter name>","category":"<one of: strength|speed|power|endurance|mobility|technique|body_composition|other>","unit":"<unit e.g. kg, s, cm — omit if not applicable>","applicableSports":["<sport>","<sport>"]}
   applicableSports is optional — include when the parameter is sport-specific (e.g. ["Soccer","Rugby"]). Omit for universal parameters.
 - add_parameters_bulk: {"type":"add_parameters_bulk","parameters":[{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>","applicableSports":["<sport>"]},{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>"}]}
@@ -229,7 +234,7 @@ Use hyphens (not underscores). "Deload" = active recovery week at very low load.
 
 **Phase 3 — Microcycle Planning** (MicrocyclePlanningPage):
   Step 1: Assign methods to days of the week (drag & drop)
-  Step 2: Build session architecture (sections, supersets, exercise order)
+  Step 2: Exercise Distribution — assign exercises from the Step 5 library to specific training days and sessions. The wizard provides exact calendar dates for every training day; you CAN and SHOULD assign exercises directly to those dates using the distribute_exercises action.
 
 ### Data Flow
 Parameter values set in the Periodization Table (Phase 2 Step 4) flow automatically down to exercises and the training calendar. Changing a value at a higher level propagates consistently downward. Tests and events scheduled in Phase 1 appear in the mesocycle calendar and athlete calendar upon plan assignment.
@@ -310,6 +315,11 @@ function getSuggestionPreview(action: ApplySuggestion): string {
     case "assign_exercises": {
       const total = action.assignments.reduce((n, a) => n + a.exercises.length, 0);
       return `Assign ${total} exercise${total !== 1 ? "s" : ""} across ${action.assignments.length} method-mesocycle cell${action.assignments.length !== 1 ? "s" : ""}`;
+    }
+    case "distribute_exercises": {
+      const total = action.entries.length;
+      const days = [...new Set(action.entries.map(e => e.dayDate))].length;
+      return `Distribute ${total} exercise slot${total !== 1 ? "s" : ""} across ${days} day${days !== 1 ? "s" : ""}${action.replace ? " (replace existing)" : ""}`;
     }
     case "add_parameter":
       return `Add parameter: ${action.name}${action.category ? ` (${action.category})` : ""}${action.unit ? ` [${action.unit}]` : ""}`;
