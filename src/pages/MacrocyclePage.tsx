@@ -38,6 +38,7 @@ import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 import { TEST_COLOR, EVENT_COLOR, testEventGradient } from "@/lib/eventColors";
+import { useWizardData } from "@/contexts/WizardDataContext";
 
 // Type for manually added methods with rationale
 interface ManuallyAddedMethod {
@@ -52,6 +53,7 @@ export default function MacrocyclePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { saveCurrentSession, getProgram } = useTrainingPrograms();
+  const { setMacrocycleData: setContextMacrocycleData } = useWizardData();
   const { getEventsForDate } = useCalendarEvents();
   const { data: parametersDataV2, addParameter: addAthleticismParameter, addInteraction: addParameterInteraction } = useParametersDataV2();
   const { data: toolboxData } = useToolboxData();
@@ -416,6 +418,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       lastUpdated: new Date().toISOString()
     };
     localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
+    setContextMacrocycleData(macrocycleData);
   }, [planName, planNotes, selectedAthleteId, planDuration, smartGoals, smartGoal, subGoals, events, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest, selectedEvent, selectedMethods, manuallyAddedMethods, athleteExistingTestsAndEvents]);
 
   // Save step whenever it changes (step persistence)
@@ -2678,6 +2681,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         completedAt: new Date().toISOString()
       };
       localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
+      setContextMacrocycleData(macrocycleData);
       setShowMissingRationaleWarning(false);
       navigate('/mesocycle');
     } else {
@@ -2803,6 +2807,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                 completedAt: new Date().toISOString()
               };
               localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
+              setContextMacrocycleData(macrocycleData);
               setShowMissingRationaleWarning(false);
               navigate('/mesocycle');
             }}>

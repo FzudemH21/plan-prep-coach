@@ -18,6 +18,7 @@ import {
   Mic,
   MicOff,
   AlertTriangle,
+  ArrowLeft,
   Upload,
   FileText,
   CheckCircle2,
@@ -229,10 +230,11 @@ interface Stage2Props {
   sports: string[];
   onComplete: (messages: Message[]) => void;
   onSkip: () => void;
+  onBack?: () => void;
   hideSkipWarning?: boolean;
 }
 
-function Stage2Chat({ coachName, sports, onComplete, onSkip, hideSkipWarning = false }: Stage2Props) {
+function Stage2Chat({ coachName, sports, onComplete, onSkip, onBack, hideSkipWarning = false }: Stage2Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -327,6 +329,21 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip, hideSkipWarning = f
 
   return (
     <div className="flex flex-col h-full">
+      {/* Back button */}
+      {onBack && (
+        <div className="mb-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onBack}
+            className="text-muted-foreground hover:text-foreground -ml-1"
+          >
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            Back
+          </Button>
+        </div>
+      )}
+
       {/* Message list */}
       <ScrollArea className="flex-1 pr-4">
         <div className="space-y-4 pb-4">
@@ -732,6 +749,7 @@ export default function OnboardingPage() {
                 sports={sports}
                 onComplete={handleChatComplete}
                 onSkip={handleStage2Skip}
+                onBack={isRefresh ? () => navigate("/coach-profile") : () => setStage(1)}
                 hideSkipWarning={isRefresh}
               />
             </div>

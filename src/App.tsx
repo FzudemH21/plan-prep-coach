@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { DisplayModeProvider } from "@/contexts/DisplayModeContext";
 import { CustomLibrariesProvider } from "@/contexts/CustomLibrariesContext";
+import { WizardDataProvider } from "@/contexts/WizardDataContext";
 import HomePage from "./pages/HomePage";
 import MacrocyclePage from "./pages/MacrocyclePage";
 import MesocyclePage from "./pages/MesocyclePage";
@@ -49,6 +50,7 @@ const App = () => (
     <TooltipProvider>
       <DisplayModeProvider>
         <CustomLibrariesProvider>
+          <WizardDataProvider>
           <Toaster />
           <Sonner />
           <BrowserRouter>
@@ -87,6 +89,7 @@ const App = () => (
               />
             </Routes>
           </BrowserRouter>
+          </WizardDataProvider>
         </CustomLibrariesProvider>
       </DisplayModeProvider>
     </TooltipProvider>

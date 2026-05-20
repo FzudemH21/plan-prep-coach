@@ -15,12 +15,14 @@ import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useAthletes } from "@/hooks/useAthletes";
 import { getAthleteDisplayName } from "@/types/athlete";
 import { formatDistanceToNow } from "date-fns";
+import { useWizardData } from "@/contexts/WizardDataContext";
 
 export default function HomePage() {
   const navigate = useNavigate();
   const { getRecentPrograms, loadProgramIntoSession } = useTrainingPrograms();
   const { athletes } = useAthletes();
-  
+  const { loadWizardSession } = useWizardData();
+
   const recentPrograms = getRecentPrograms(6);
 
   const getAthleteName = (athleteId: string | null): string => {
@@ -40,6 +42,7 @@ export default function HomePage() {
 
   const handleProgramClick = (programId: string) => {
     loadProgramIntoSession(programId);
+    loadWizardSession();
     navigate('/macrocycle');
   };
 

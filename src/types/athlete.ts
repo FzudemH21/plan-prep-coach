@@ -17,6 +17,13 @@ export interface AthleteGroup {
   createdAt: string;
 }
 
+export interface AthleteNote {
+  id: string;
+  text: string;
+  /** ISO date string */
+  timestamp: string;
+}
+
 export interface Athlete {
   id: string;
   firstName: string;
@@ -25,13 +32,16 @@ export interface Athlete {
   birthday: string | null;
   sex: Sex | null;
   sport: string | null;
+  team: string | null;
   occupation: string | null;
   dailyActivityLevel: DailyActivityLevel | null;
   groupIds: string[];
   isArchived: boolean;
   createdAt: string;
   updatedAt: string;
+  /** @deprecated use notesHistory instead — kept for migration */
   notes?: string;
+  notesHistory?: AthleteNote[];
 }
 
 // Helper to get display name
@@ -158,10 +168,16 @@ export interface AthleteCalendarAssignment {
   // Metadata
   createdAt: string;
   notes?: string;
-  
+
   // Reviewed tests & events (from Step 4)
   reviewedSubGoals?: ReviewedSubGoal[];
   reviewedEvents?: ReviewedEvent[];
+
+  // Outcome annotation (filled in after the plan concludes)
+  outcomeRating?: number | null;                          // 1–5 overall rating
+  outcomeGoalAchievement?: 'not_achieved' | 'partial' | 'achieved' | 'exceeded' | null;
+  outcomeLoadTolerance?: 'too_easy' | 'about_right' | 'too_hard' | null;
+  outcomeNotes?: string | null;
 }
 
 export interface ReviewedSubGoal {

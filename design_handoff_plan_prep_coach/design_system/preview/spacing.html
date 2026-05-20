@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Spacing — Plan Prep Coach</title>
+<link rel="stylesheet" href="../colors_and_type.css" />
+<style>
+  body { margin: 0; padding: 56px 64px; background: var(--bg); color: var(--fg); font-family: var(--font-sans); }
+  h1 { font-size: 56px; font-weight: 800; letter-spacing: -0.04em; margin: 0 0 12px; }
+  h2 { font-size: 12px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--fg-3); margin: 56px 0 16px; }
+  .row { display: grid; grid-template-columns: 120px 1fr; gap: 24px; padding: 12px 0; align-items: center; border-bottom: 1px solid var(--border); }
+  .row code { font-family: var(--font-mono); font-size: 11px; color: var(--fg-2); }
+  .bar { background: var(--accent); height: 16px; border-radius: 4px; }
+  .radii { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; }
+  .r { background: var(--ink); color: var(--ink-fg); padding: 32px 16px; text-align: center; font-family: var(--font-mono); font-size: 11px; }
+  .shadows { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+  .s { background: var(--bg-elev); padding: 32px 16px; text-align: center; font-family: var(--font-mono); font-size: 11px; border-radius: 10px; border: 1px solid var(--border); }
+</style>
+</head>
+<body>
+  <h1>Spacing, Radii, Shadows</h1>
+  <h2>Spacing scale (8pt-anchored)</h2>
+  <div class="row"><code>--space-1 · 4</code><div class="bar" style="width:4px"></div></div>
+  <div class="row"><code>--space-2 · 8</code><div class="bar" style="width:8px"></div></div>
+  <div class="row"><code>--space-3 · 12</code><div class="bar" style="width:12px"></div></div>
+  <div class="row"><code>--space-4 · 16</code><div class="bar" style="width:16px"></div></div>
+  <div class="row"><code>--space-5 · 20</code><div class="bar" style="width:20px"></div></div>
+  <div class="row"><code>--space-6 · 24</code><div class="bar" style="width:24px"></div></div>
+  <div class="row"><code>--space-7 · 32</code><div class="bar" style="width:32px"></div></div>
+  <div class="row"><code>--space-8 · 40</code><div class="bar" style="width:40px"></div></div>
+  <div class="row"><code>--space-9 · 56</code><div class="bar" style="width:56px"></div></div>
+  <div class="row"><code>--space-10 · 80</code><div class="bar" style="width:80px"></div></div>
+
+  <h2>Radii</h2>
+  <div class="radii">
+    <div class="r" style="border-radius:var(--radius-sm)">SM · 4</div>
+    <div class="r" style="border-radius:var(--radius)">DEF · 8</div>
+    <div class="r" style="border-radius:var(--radius-md)">MD · 10</div>
+    <div class="r" style="border-radius:var(--radius-lg)">LG · 14</div>
+    <div class="r" style="border-radius:var(--radius-xl)">XL · 20</div>
+    <div class="r" style="border-radius:var(--radius-pill)">PILL</div>
+  </div>
+
+  <h2>Shadows</h2>
+  <div class="shadows">
+    <div class="s" style="box-shadow:var(--shadow-xs)">XS</div>
+    <div class="s" style="box-shadow:var(--shadow-sm)">SM</div>
+    <div class="s" style="box-shadow:var(--shadow)">DEF</div>
+    <div class="s" style="box-shadow:var(--shadow-lg)">LG</div>
+  </div>
+</body>
+</html>

@@ -5,10 +5,11 @@ import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Trash2, Calendar, LayoutGrid, Columns } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trash2, Calendar, LayoutGrid, Columns, ClipboardList } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Athlete, AthleteCalendarAssignment } from '@/types/athlete';
 import { AssignProgramDialog } from './AssignProgramDialog';
+import { PlanReviewDialog } from './PlanReviewDialog';
 import { useTrainingPrograms, TrainingProgram } from '@/hooks/useTrainingPrograms';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useToolboxData } from '@/hooks/useToolboxData';
@@ -78,6 +79,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [deleteAssignment, setDeleteAssignment] = useState<AthleteCalendarAssignment | null>(null);
+  const [reviewAssignment, setReviewAssignment] = useState<AthleteCalendarAssignment | null>(null);
   const [sessionSheetOpen, setSessionSheetOpen] = useState(false);
   const [selectedSessionInfo, setSelectedSessionInfo] = useState<{
     dayDate: string;
@@ -1047,6 +1049,30 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 </ToggleGroupItem>
               </ToggleGroup>
 
+              {/* Review Plan — visible when selected assignment has ended */}
+              {(() => {
+                const sel = editing.selectedAssignment;
+                if (!sel) return null;
+                const ended = new Date(sel.endDate) < new Date();
+                if (!ended) return null;
+                const hasReview =
+                  sel.outcomeRating != null ||
+                  sel.outcomeGoalAchievement != null ||
+                  sel.outcomeLoadTolerance != null ||
+                  (sel.outcomeNotes ?? '').trim().length > 0;
+                return (
+                  <Button
+                    variant={hasReview ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-8 gap-1.5"
+                    onClick={() => setReviewAssignment(sel)}
+                  >
+                    <ClipboardList className="h-4 w-4" />
+                    {hasReview ? 'Edit Review' : 'Review Plan'}
+                  </Button>
+                );
+              })()}
+
               {/* Master Planner specific controls */}
               {isMasterMode && (
                 <>
@@ -1253,6 +1279,19 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         </CardContent>
       </Card>
 
+
+      {/* Plan Review Dialog */}
+      {reviewAssignment && (
+        <PlanReviewDialog
+          open={!!reviewAssignment}
+          onOpenChange={(open) => { if (!open) setReviewAssignment(null); }}
+          assignment={reviewAssignment}
+          onSave={(updates) => {
+            athleteData.updateCalendarAssignment(reviewAssignment.id, updates);
+            setReviewAssignment(null);
+          }}
+        />
+      )}
 
       {/* Assign Program Dialog */}
       <AssignProgramDialog

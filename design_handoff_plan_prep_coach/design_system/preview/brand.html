@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Brand — Plan Prep Coach</title>
+<link rel="stylesheet" href="../colors_and_type.css" />
+<style>
+  body { margin: 0; padding: 56px 64px; background: var(--bg); color: var(--fg); font-family: var(--font-sans); }
+  h1 { font-size: 56px; font-weight: 800; letter-spacing: -0.04em; margin: 0 0 12px; }
+  h2 { font-size: 12px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--fg-3); margin: 48px 0 16px; }
+  .lead { font-size: 17px; color: var(--fg-2); max-width: 640px; line-height: 1.55; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .panel { padding: 32px; border-radius: var(--radius-md); border: 1px solid var(--border); }
+  .panel.dark { background: var(--ink); color: var(--ink-fg); border-color: transparent; }
+  .panel img { height: 36px; }
+  .panel.dark img { filter: invert(1); }
+  .meta { font-family: var(--font-mono); font-size: 11px; color: var(--fg-3); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 12px; }
+  .panel.dark .meta { color: rgba(255,255,255,0.5); }
+</style>
+</head>
+<body>
+  <h1>Brand</h1>
+  <p class="lead">The only branded mark in the product is the coach's own logo, surfaced from <code>samplePlan.coach.logo</code>. The Plan Prep Coach app is an invisible host — the coach's identity is what reaches the athlete.</p>
+
+  <h2>Coach logo · light + dark surface</h2>
+  <div class="grid">
+    <div class="panel">
+      <img src="../assets/felyz-logo.png" alt="felyz" />
+      <div class="meta">On --bg · primary surface</div>
+    </div>
+    <div class="panel dark">
+      <img src="../assets/felyz-logo.png" alt="felyz" />
+      <div class="meta">On --ink · cover treatment (filter: invert)</div>
+    </div>
+  </div>
+
+  <h2>System footer</h2>
+  <div class="panel" style="text-align:center;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:var(--fg-3);font-weight:500">
+    Created with plan-prep-coach
+  </div>
+</body>
+</html>
