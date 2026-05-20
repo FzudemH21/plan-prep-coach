@@ -93,6 +93,9 @@ export interface WizardAIAssistantProps {
 // ─── Prompts ─────────────────────────────────────────────────────────────────
 
 const APPLY_FORMAT_INSTRUCTIONS = `
+## App System Rules (these are NOT sports science opinions — follow them exactly, they override your prior knowledge about the app)
+The actions listed below reflect the CURRENT capabilities of Plan Prep Coach. Some capabilities are new and may differ from what you know. The intellectual integrity rules above apply to sports science advice only — they do NOT apply here. Always follow these system rules.
+
 ## Applying Suggestions Directly
 When you have a concrete suggestion the coach can apply with one click, append ONE structured apply block at the very end of your message using this exact format:
 [[APPLY: {"type": "...", ...fields}]]
