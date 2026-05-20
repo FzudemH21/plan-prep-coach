@@ -684,6 +684,53 @@ export default function MicrocyclePlanningPage() {
     return grouped;
   }, [allocatedExercises]);
 
+  // Derive method → exercise-categories map from toolbox database definitions.
+  // Keyed by BASE method name (no :: suffix), split-state-independent.
+  // Uses toolboxData (same source as MesocyclePage's getMethodExerciseCategories) so categories
+  // are always available regardless of whether exercises have been selected in step 6.
+  const methodExerciseCategories = useMemo((): Record<string, string[]> => {
+    const result: Record<string, string[]> = {};
+    const entries = toolboxData?.entries ?? [];
+    entries.forEach(entry => {
+      if (!entry.exerciseCategories || entry.exerciseCategories.length === 0) return;
+      const methodKey = entry.subCategory
+        ? `${entry.category} - ${entry.subCategory}`
+        : entry.category;
+      result[methodKey] = [...new Set([...(result[methodKey] ?? []), ...entry.exerciseCategories])];
+    });
+    return result;
+  }, [toolboxData]);
+
+  // Resolved method allocations: normalise split keys AND supplement from parameterValues.
+  // This guarantees the left panel shows base method names (e.g. "Strength") even when the
+  // periodization table is in split mode (where parameterValues stores "Strength::Squat" etc.).
+  const resolvedMethodAllocations = useMemo((): Record<string, string[]> => {
+    const result: Record<string, string[]> = {};
+
+    // 1. Normalise existing methodAllocations (strip any accidental ::category suffix)
+    Object.entries(methodAllocations).forEach(([key, mesoIds]) => {
+      const base = key.split('::')[0];
+      result[base] = [...new Set([...(result[base] ?? []), ...mesoIds])];
+    });
+
+    // 2. Supplement from parameterValues – handles the case where methodAllocations is stale
+    //    or empty but parameterValues already has method keys for specific mesocycles.
+    mesocycles.forEach(meso => {
+      const mesoData = parameterValues[meso.id];
+      if (!mesoData) return;
+      Object.values(mesoData).forEach(microData => {
+        if (!microData || typeof microData !== 'object') return;
+        Object.keys(microData).forEach(methodKey => {
+          const base = methodKey.split('::')[0];
+          if (!result[base]) result[base] = [];
+          if (!result[base].includes(meso.id)) result[base].push(meso.id);
+        });
+      });
+    });
+
+    return result;
+  }, [methodAllocations, parameterValues, mesocycles]);
+
   // Calculate frequency for each method/microcycle
   const getMethodFrequency = (methodId: string, microcycleId: string, categoryName?: string): number => {
     if (!currentMesocycle) return 1;
@@ -3218,7 +3265,8 @@ export default function MicrocyclePlanningPage() {
             mesocycle={currentMesocycle}
             allMesocycles={mesocycles}
             trainingDays={trainingDays}
-            methodAllocations={methodAllocations}
+            methodAllocations={resolvedMethodAllocations}
+            methodExerciseCategories={methodExerciseCategories}
             dayMethodAssignments={dayMethodAssignments}
             onDayMethodAssignmentsChange={setDayMethodAssignments}
             sessionSections={sessionSections}
