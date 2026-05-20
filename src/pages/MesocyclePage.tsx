@@ -5029,6 +5029,201 @@ export default function MesocyclePage() {
       .join("\n\n");
   }, [currentStep, athleteName, macrocycleData, mesocycles, methodAllocations, mesoStepLabel]);
 
+  // ── AI Apply handler ──────────────────────────────────────────────────────
+  const handleMesoAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
+    switch (action.type) {
+      case "set_mesocycle_config": {
+        const count = Math.max(1, Math.min(12, action.count));
+        const weeksEach = Math.max(1, action.weeksDuration);
+        const newMesocycles: ExtendedMesocycle[] = Array.from({ length: count }, (_, i) => ({
+          id: `meso-${i + 1}`,
+          name: `Mesocycle ${i + 1}`,
+          weeks: weeksEach,
+          sessionsPerWeek: 3,
+          sessionLength: 60,
+          startDate: planStartDate,
+          endDate: planStartDate,
+          duration: weeksEach,
+          intensity: "moderate" as IntensityLevel,
+          trainingMethods: [],
+          trainingQualities: [],
+          microcycles: Array.from({ length: weeksEach }, (_, j) => ({
+            id: `micro-${i + 1}-${j + 1}`,
+            name: `Microcycle ${j + 1}`,
+            duration: 7,
+            intensity: "moderate" as IntensityLevel,
+          })),
+        }));
+        setMesocycles(recalculateAllMesocycleDates(newMesocycles, planStartDate));
+        break;
+      }
+      case "configure_mesocycles": {
+        const newMesocycles: ExtendedMesocycle[] = action.mesocycles.map((m, i) => ({
+          id: `meso-${i + 1}`,
+          name: m.name ?? `Mesocycle ${i + 1}`,
+          weeks: m.microcycles.reduce((s, mc) => s + Math.ceil(mc.duration / 7), 0),
+          sessionsPerWeek: 3,
+          sessionLength: 60,
+          startDate: planStartDate,
+          endDate: planStartDate,
+          duration: m.microcycles.reduce((s, mc) => s + mc.duration, 0),
+          intensity: (m.microcycles.at(-1)?.intensity ?? "moderate") as IntensityLevel,
+          trainingMethods: [],
+          trainingQualities: [],
+          microcycles: m.microcycles.map((mc, j) => ({
+            id: `micro-${i + 1}-${j + 1}`,
+            name: mc.name ?? `Microcycle ${j + 1}`,
+            duration: mc.duration,
+            intensity: (mc.intensity ?? "moderate") as IntensityLevel,
+          })),
+        }));
+        setMesocycles(recalculateAllMesocycleDates(newMesocycles, planStartDate));
+        break;
+      }
+      case "set_microcycle_intensities": {
+        setMesocycles(prev => {
+          const updated = prev.map(meso => {
+            const plan = action.plan.find(p => p.mesocycleName === meso.name);
+            if (!plan) return meso;
+            const updatedMicros = meso.microcycles?.map((mc, i) => ({
+              ...mc,
+              intensity: (plan.intensities?.[i] ?? mc.intensity) as IntensityLevel,
+            })) ?? [];
+            return {
+              ...meso,
+              intensity: (plan.mesoIntensity ?? meso.intensity) as IntensityLevel,
+              microcycles: updatedMicros,
+            };
+          });
+          return recalculateAllMesocycleDates(updated, planStartDate);
+        });
+        break;
+      }
+      case "set_daily_intensities": {
+        setDailyIntensityData(prev => {
+          const updated = [...prev];
+          action.plan.forEach(({ mesocycleName, microcycleIndex, days }) => {
+            const meso = mesocycles.find(m => m.name === mesocycleName);
+            if (!meso) return;
+            const micro = meso.microcycles?.[microcycleIndex - 1];
+            if (!micro) return;
+            const microDays = updated.filter(d => d.microcycleId === micro.id);
+            days.forEach((intensity, i) => {
+              const day = microDays[i];
+              if (!day) return;
+              const idx = updated.findIndex(d => d.date === day.date);
+              if (idx !== -1) updated[idx] = { ...updated[idx], intensity: intensity as IntensityLevel };
+            });
+          });
+          return updated;
+        });
+        setTrainingDays(prev => {
+          const updated = [...prev];
+          action.plan.forEach(({ mesocycleName, microcycleIndex, days }) => {
+            const meso = mesocycles.find(m => m.name === mesocycleName);
+            if (!meso) return;
+            const micro = meso.microcycles?.[microcycleIndex - 1];
+            if (!micro) return;
+            const microDays = updated.filter(d => d.microcycleId === micro.id);
+            days.forEach((intensity, i) => {
+              const day = microDays[i];
+              if (!day) return;
+              const idx = updated.findIndex(d => d.date === day.date);
+              if (idx !== -1) updated[idx] = { ...updated[idx], intensity: intensity as IntensityLevel };
+            });
+          });
+          return updated;
+        });
+        break;
+      }
+      case "allocate_methods": {
+        setMethodAllocations(prev => {
+          const next = { ...prev };
+          action.allocations.forEach(({ methodName, mesocycleNames }) => {
+            const mesoIds = mesocycleNames
+              .map(n => mesocycles.find(m => m.name === n)?.id)
+              .filter((id): id is string => !!id);
+            next[methodName] = mesoIds;
+          });
+          return next;
+        });
+        break;
+      }
+      case "add_methods": {
+        action.methods.forEach(({ name }) => {
+          setMethodAllocations(prev => ({
+            ...prev,
+            [name]: prev[name] ?? mesocycles.map(m => m.id),
+          }));
+        });
+        break;
+      }
+      case "remove_methods": {
+        setMethodAllocations(prev => {
+          const next = { ...prev };
+          action.methodNames.forEach(n => { delete next[n]; });
+          return next;
+        });
+        setManuallyAddedMethods(prev => prev.filter(m => !action.methodNames.includes(m)));
+        break;
+      }
+      case "set_periodization": {
+        setParameterValues(prev => {
+          const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
+          action.entries.forEach(entry => {
+            const meso = mesocycles.find(m => m.name === entry.mesocycleName);
+            if (!meso) return;
+            const mcIndices = entry.microcycleIndex != null
+              ? [entry.microcycleIndex - 1]
+              : meso.microcycles?.map((_, i) => i) ?? [0];
+            mcIndices.forEach(mcIdx => {
+              if (!next[meso.id]) next[meso.id] = {};
+              if (!next[meso.id][mcIdx]) next[meso.id][mcIdx] = {};
+              if (!next[meso.id][mcIdx][entry.methodName]) next[meso.id][mcIdx][entry.methodName] = {};
+              if (!next[meso.id][mcIdx][entry.methodName][0]) next[meso.id][mcIdx][entry.methodName][0] = {};
+              const cell = next[meso.id][mcIdx][entry.methodName][0];
+              if (entry.frequency != null) cell['Frequency'] = entry.frequency;
+              if (entry.sets != null) cell['Sets'] = entry.sets;
+              if (entry.reps != null) cell['Reps'] = entry.reps;
+              if (entry.intensity != null) cell['Intensity'] = entry.intensity;
+              if (entry.extraParams) Object.assign(cell, entry.extraParams);
+            });
+          });
+          return next;
+        });
+        break;
+      }
+      case "assign_exercises": {
+        const stored = localStorage.getItem('exerciseSelectionData');
+        const cellMap: Record<string, { methodId: string; categoryName?: string; mesocycleId: string; exercises: Array<{ id: string; exerciseId: string; exerciseName: string; library: string }> }> = stored ? JSON.parse(stored) : {};
+        action.assignments.forEach(({ methodName, mesocycleName, categoryName, exercises }) => {
+          const meso = mesocycles.find(m => m.name === mesocycleName);
+          if (!meso) return;
+          const cellKey = `${methodName}::${categoryName ?? ''}::${meso.id}`;
+          const existing = cellMap[cellKey] ?? { methodId: methodName, categoryName, mesocycleId: meso.id, exercises: [] };
+          const newExercises = exercises.map(ex => ({
+            id: ex.exerciseId,
+            exerciseId: ex.exerciseId,
+            exerciseName: ex.exerciseName,
+            library: ex.libraryId,
+          }));
+          cellMap[cellKey] = {
+            ...existing,
+            exercises: action.replace ? newExercises : [
+              ...existing.exercises.filter(e => !newExercises.some(n => n.exerciseId === e.exerciseId)),
+              ...newExercises,
+            ],
+          };
+        });
+        localStorage.setItem('exerciseSelectionData', JSON.stringify(cellMap));
+        setMpTableKey(k => k + 1);
+        break;
+      }
+      default:
+        break;
+    }
+  }, [mesocycles, planStartDate, recalculateAllMesocycleDates, setDailyIntensityData, setTrainingDays]);
+
   return (
     <div className="w-full max-w-none space-y-6 min-w-0">
       {/* Progress Header */}
@@ -5171,7 +5366,7 @@ export default function MesocyclePage() {
         />
 
       {/* AI Assistant */}
-      <WizardAIAssistant stepLabel={mesoStepLabel} wizardContext={mesoWizardContext} />
+      <WizardAIAssistant stepLabel={mesoStepLabel} wizardContext={mesoWizardContext} onApplySuggestion={handleMesoAIApply} />
     </div>
   );
 };
