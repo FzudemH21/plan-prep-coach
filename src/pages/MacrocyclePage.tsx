@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,7 @@ import { AddParameterDialogV2 } from "@/components/goals/AddParameterDialogV2";
 import { useToolboxData } from "@/hooks/useToolboxData";
 import { AlertTriangle, ArrowLeft } from "lucide-react";
 import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
+import { WizardAIAssistant } from "@/components/wizard/WizardAIAssistant";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 import { TEST_COLOR, EVENT_COLOR, testEventGradient } from "@/lib/eventColors";
@@ -2752,6 +2753,79 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   // Methods without rationale for warning dialog
   const methodsWithoutRationale = getMethodsWithoutRationale();
 
+  const macroStepLabel = stepTitles[currentStep - 1] ?? `Step ${currentStep}`;
+
+  const wizardContext = useMemo(() => {
+    const athleteStr = selectedAthlete
+      ? `Athlete: ${getAthleteDisplayName(selectedAthlete)}`
+      : "No athlete selected yet";
+    const planStr = planName ? `Plan name: ${planName}` : "";
+    const durationStr = planDuration
+      ? `Duration: ${planDuration.totalDays} days (${Math.round(planDuration.totalDays / 7)} weeks)`
+      : "";
+    const goalsStr = smartGoals.length
+      ? `Goals:\n${smartGoals.map((g) => `- ${g.description || g.specific || ""}`).filter(Boolean).join("\n")}`
+      : "";
+    const selectedMethodList = [
+      ...Array.from(selectedMethods),
+      ...manuallyAddedMethods.map((m) => m.methodId),
+    ];
+    const methodsStr = selectedMethodList.length
+      ? `Selected methods:\n${selectedMethodList.map((m) => `- ${m}`).join("\n")}`
+      : "";
+    let actionHints = "";
+    if (currentStep === 1) {
+      actionHints = "Available AI action: set_plan_name";
+    } else if (currentStep === 2) {
+      actionHints = "Available AI action: add_goal (include specific numbers and timeframe in the description)";
+    } else if (currentStep === 3) {
+      const allAvailableIds = Object.values(methodsByQuality).flatMap((q) => q.list);
+      const unselected = allAvailableIds.filter((m) => !selectedMethods.has(m));
+      const methodListStr = unselected.length
+        ? `Available methods to suggest from (use exact names):\n${unselected.map((m) => `- ${m}`).join("\n")}`
+        : "All available methods are already selected.";
+      actionHints = `Available AI action: add_methods\n${methodListStr}`;
+    }
+    return [
+      `Current step: ${macroStepLabel}`,
+      athleteStr,
+      planStr,
+      durationStr,
+      goalsStr,
+      methodsStr,
+      actionHints,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }, [currentStep, selectedAthlete, planName, planDuration, smartGoals, selectedMethods, manuallyAddedMethods, macroStepLabel, methodsByQuality]);
+
+  const handleAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
+    switch (action.type) {
+      case "set_plan_name":
+        setPlanName(action.name);
+        break;
+      case "add_goal":
+        setSmartGoals((prev) => [
+          ...prev,
+          { id: crypto.randomUUID(), description: action.description, baselineValue: 0, desiredValue: 0, unit: "", percentChange: 0 },
+        ]);
+        break;
+      case "add_methods": {
+        const allAvailableIds = new Set(Object.values(methodsByQuality).flatMap((q) => q.list));
+        action.methods.forEach((methodId) => {
+          if (allAvailableIds.has(methodId)) {
+            setSelectedMethods((prev) => new Set([...prev, methodId]));
+          } else {
+            handleAddManualMethod({ methodId, rationale: "" });
+          }
+        });
+        break;
+      }
+      default:
+        break;
+    }
+  }, [methodsByQuality, handleAddManualMethod]);
+
   return (
     <>
       {/* Warning Dialog for Missing Rationales */}
@@ -2894,6 +2968,13 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         </Button>
       </div>
     </div>
+
+      {/* AI Assistant */}
+      <WizardAIAssistant
+        stepLabel={macroStepLabel}
+        wizardContext={wizardContext}
+        onApplySuggestion={handleAIApply}
+      />
     </>
   );
 }

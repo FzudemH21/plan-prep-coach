@@ -1,4 +1,5 @@
 import { MicrocyclePlanningTable } from '@/components/microcycle-planning';
+import { WizardAIAssistant } from '@/components/wizard/WizardAIAssistant';
 import { cn } from '@/lib/utils';
 import { evaluateFormula } from '@/utils/formulaEvaluator';
 import React, { useState, useEffect, useMemo, useCallback, useTransition } from 'react';
@@ -4990,11 +4991,43 @@ export default function MesocyclePage() {
 
   const stepTitles = [
     "Mesocycle Setup",
-    "Daily Training Intensity Planning", 
+    "Daily Training Intensity Planning",
     "Mesocycle Characterization",
     "Method Periodization",
     "Exercise Selection"
   ];
+
+  const mesoStepLabel = stepTitles[currentStep - 1] ?? `Step ${currentStep}`;
+
+  const mesoWizardContext = useMemo(() => {
+    const athleteStr = athleteName ? `Athlete: ${athleteName}` : "No athlete selected";
+    const planStr = macrocycleData?.planName ? `Plan: ${macrocycleData.planName}` : "";
+    const goalStr = macrocycleData?.smartGoals?.[0]?.description
+      ? `Primary goal: ${macrocycleData.smartGoals[0].description}`
+      : macrocycleData?.smartGoal?.specific
+      ? `Primary goal: ${macrocycleData.smartGoal.specific}`
+      : "";
+    const mesoCount = mesocycles.length;
+    const mesoStr = mesoCount > 0
+      ? `Mesocycles: ${mesoCount} (${mesocycles.map((m) => m.name).join(", ")})`
+      : "No mesocycles configured yet";
+    const allocatedMethods = Object.keys(methodAllocations).filter(
+      (m) => methodAllocations[m]?.length > 0
+    );
+    const methodsStr = allocatedMethods.length
+      ? `Allocated methods:\n${allocatedMethods.map((m) => `- ${m}`).join("\n")}`
+      : "";
+    return [
+      `Current step: ${mesoStepLabel}`,
+      athleteStr,
+      planStr,
+      goalStr,
+      mesoStr,
+      methodsStr,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }, [currentStep, athleteName, macrocycleData, mesocycles, methodAllocations, mesoStepLabel]);
 
   return (
     <div className="w-full max-w-none space-y-6 min-w-0">
@@ -5137,6 +5170,8 @@ export default function MesocyclePage() {
           }}
         />
 
+      {/* AI Assistant */}
+      <WizardAIAssistant stepLabel={mesoStepLabel} wizardContext={mesoWizardContext} />
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,7 @@ import { DropResult } from '@hello-pangea/dnd';
 import { SaveProgramButton } from '@/components/programs/SaveProgramButton';
 import { useTrainingPrograms } from '@/hooks/useTrainingPrograms';
 import { useWizardData } from '@/contexts/WizardDataContext';
+import { WizardAIAssistant } from '@/components/wizard/WizardAIAssistant';
 
 // Using ExerciseDistribution, SessionSection, and SupersetMapping from types file
 
@@ -3319,6 +3320,101 @@ export default function MicrocyclePlanningPage() {
     );
   };
 
+  // ── AI Assistant ────────────────────────────────────────────────────────────
+  const microStepLabels = [
+    "Method Distribution to Training Days",
+    "Exercise Distribution",
+    "Training Calendar",
+  ];
+  const microStepLabel = microStepLabels[currentStep - 1] ?? `Step ${currentStep}`;
+
+  const microWizardContext = useMemo(() => {
+    const athleteStr = athleteName ? `Athlete: ${athleteName}` : "No athlete selected";
+    const planStr = macrocycleData?.planName ? `Plan: ${macrocycleData.planName}` : "";
+    const goalStr = macrocycleData?.smartGoals?.[0]?.description
+      ? `Primary goal: ${macrocycleData.smartGoals[0].description}`
+      : "";
+    const mesoCount = mesocycles.length;
+    const mesoStr = mesoCount > 0
+      ? `Mesocycles: ${mesoCount} (${mesocycles.map((m: { name: string }) => m.name).join(", ")})`
+      : "No mesocycles";
+    const currentMeso = mesocycles[currentMesocycleIndex];
+    const currentMesoStr = currentMeso ? `Current mesocycle: ${currentMeso.name}` : "";
+    const assignedDays = Object.keys(dayMethodAssignments).filter(
+      (d) => dayMethodAssignments[d]?.length > 0
+    ).length;
+    const dayStr = assignedDays > 0
+      ? `Training days with methods assigned: ${assignedDays}`
+      : "No method-day assignments yet";
+    const availableMethods = Object.keys(resolvedMethodAllocations).filter(
+      (m) => resolvedMethodAllocations[m]?.length > 0
+    );
+    const methodsStr = availableMethods.length
+      ? `Training methods in this plan:\n${availableMethods.map((m) => `- ${m}`).join("\n")}`
+      : "";
+    const offDays = trainingDays
+      .filter(d => d.intensity === 'off')
+      .map(d => format(parseISO(d.date), 'EEEE'))
+      .filter((v, i, a) => a.indexOf(v) === i);
+    const offDaysStr = offDays.length ? `Rest days (off): ${offDays.join(", ")}` : "";
+    const stepHint = currentStep === 1
+      ? `Goal: assign methods to training days. Do NOT assign methods to rest/off days (${offDays.join(", ") || "none"}).`
+      : currentStep === 2
+      ? "Goal: assign exercises from the database to each method slot."
+      : "Goal: review the final training calendar with all sessions.";
+    return [
+      `Current step: ${microStepLabel}`,
+      athleteStr,
+      planStr,
+      goalStr,
+      mesoStr,
+      currentMesoStr,
+      methodsStr,
+      dayStr,
+      offDaysStr,
+      stepHint,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel]);
+
+  const handleMicroAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
+    if (action.type !== "assign_methods_to_days") return;
+    const dayNameMap: Record<string, number> = {
+      Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
+      Thursday: 4, Friday: 5, Saturday: 6,
+    };
+    const currentMeso = mesocycles[currentMesocycleIndex];
+    if (!currentMeso) return;
+
+    const targetDays = trainingDays.filter(d => {
+      if (d.intensity === 'off') return false;
+      if (action.microcycleIndex != null) {
+        const micro = currentMeso.microcycles?.[action.microcycleIndex - 1];
+        if (!micro || d.microcycleId !== micro.id) return false;
+      } else {
+        if (!currentMeso.microcycles?.some((m: { id: string }) => m.id === d.microcycleId)) return false;
+      }
+      return true;
+    });
+
+    const newAssignments = { ...dayMethodAssignments };
+    action.weekPattern.forEach(({ method, days }) => {
+      const dayNums = days.map(d => dayNameMap[d]).filter(n => n != null);
+      targetDays.forEach(day => {
+        const date = new Date(day.date + 'T00:00:00');
+        if (!dayNums.includes(date.getDay())) return;
+        const key = `${day.date}_0`;
+        const current = newAssignments[key] ?? [];
+        if (!current.includes(method)) {
+          newAssignments[key] = [...current, method];
+        }
+      });
+    });
+    setDayMethodAssignments(newAssignments);
+    localStorage.setItem('dayMethodAssignments', JSON.stringify(newAssignments));
+  }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments]);
+
   return (
     <div className="mx-auto py-6 space-y-6 px-4 w-full max-w-[98vw]">
       <div className="flex items-center justify-between mb-4">
@@ -3484,6 +3580,13 @@ export default function MicrocyclePlanningPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* AI Assistant */}
+      <WizardAIAssistant
+        stepLabel={microStepLabel}
+        wizardContext={microWizardContext}
+        onApplySuggestion={handleMicroAIApply}
+      />
     </div>
   );
 }
