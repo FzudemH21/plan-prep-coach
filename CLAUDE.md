@@ -239,7 +239,7 @@ Always use hyphens (not underscores). Applied at: microcycle level, daily level,
 - After finishing any work: commit and push all changes so nothing is left only locally
 - Never leave large amounts of uncommitted work sitting in the main directory — commit in logical chunks regularly
 - Claude Code works in a worktree (`.claude/worktrees/<branch>/`). Changes are ONLY visible in the browser if the dev server runs from that worktree directory. The user's dev server runs from `C:\Users\Hanik\plan-prep-coach` (main project dir) → changes are only visible AFTER the PR is merged to `main` and the user hard-reloads
-- **Always merge the PR and tell the user to open http://localhost:8080 and hard-reload (`Ctrl+Shift+R`) before declaring a task complete.** If they can't verify at that URL, the task is not done
+- **Always merge the PR yourself using `gh pr merge <number> --merge` immediately after creating it — never leave it for the user to merge.** Then tell the user to open http://localhost:8080 and hard-reload (`Ctrl+Shift+R`). If they can't verify at that URL, the task is not done
 - **Before every large sync commit (stash → pull → stash pop), always check the diff for accidental removals** — especially imports and component renders that were intentionally added in earlier commits. A sync commit must never silently delete features
 
 ### UI/UX Principles
