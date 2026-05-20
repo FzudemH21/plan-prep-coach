@@ -2785,9 +2785,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       : "";
     let actionHints = "";
     if (currentStep === 1) {
-      actionHints = "Available AI actions: set_plan_name, set_plan_duration, add_goal, remove_goal, schedule_tests, create_event";
+      actionHints = "Available AI actions: set_plan_name, set_plan_duration, add_goal, remove_goal, schedule_tests, create_event, remove_event";
     } else if (currentStep === 2) {
-      actionHints = "Available AI actions: add_goal (include specific numbers and timeframe), remove_goal, schedule_tests, create_event";
+      actionHints = "Available AI actions: add_goal (include specific numbers and timeframe), remove_goal, schedule_tests, create_event, remove_event";
     } else if (currentStep === 3) {
       const allAvailableIds = Object.values(methodsByQuality).flatMap((q) => q.list);
       const unselected = allAvailableIds.filter((m) => !selectedMethods.has(m));
@@ -2836,6 +2836,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       case "remove_goal":
         setSmartGoals((prev) =>
           prev.filter((g) => (g.description || g.specific || "").toLowerCase() !== action.goalName.toLowerCase())
+        );
+        break;
+      case "remove_event":
+        setEvents((prev) =>
+          prev.filter((e) => e.name.toLowerCase() !== action.eventName.toLowerCase())
         );
         break;
       case "schedule_tests": {

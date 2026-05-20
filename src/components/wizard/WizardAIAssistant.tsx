@@ -23,6 +23,8 @@ export type ApplySuggestion =
   | { type: "set_plan_duration"; startDate?: string; endDate?: string; weeks?: number }
   /** MacrocyclePage Steps 1 & 2 — create a new event (without scheduling dates yet) */
   | { type: "create_event"; name: string; description?: string }
+  /** MacrocyclePage Steps 1 & 2 — delete an existing event entirely */
+  | { type: "remove_event"; eventName: string }
   /** MacrocyclePage Step 3 — add new methods to the training plan, each with an optional rationale */
   | { type: "add_methods"; methods: Array<{ name: string; rationale?: string }> }
   | { type: "set_mesocycle_config"; count: number; weeksDuration: number }
@@ -113,6 +115,8 @@ Available types and their fields:
   action is "add" (default) or "remove". Use ISO date strings (YYYY-MM-DD). For goals/sub-goals use the exact name from the Goals list in context. For events: FIRST check the Events list in context — if an event with a similar name exists, use its EXACT name (e.g. coach says "strength test" → use "Strength Test - 1RM Back Squat" if that exists). Only use create_event for brand-new events that have no match. If you are unsure which existing event the coach means, ask for clarification instead of creating a duplicate.
 - create_event: {"type":"create_event","name":"<event name>","description":"<optional description>"}
   Creates a new event entry without scheduling any dates. Use ONLY when the event does not already exist in the Events list in context.
+- remove_event: {"type":"remove_event","eventName":"<exact event name from the Events list in context>"}
+  Deletes an event entirely (removes it and all its scheduled dates). Use the EXACT name from the Events list.
 - add_methods: {"type":"add_methods","methods":[{"name":"<exact method name>","rationale":"<why this method supports the goal>"},{"name":"<exact method name>","rationale":"<rationale>"}]}
   Always include a rationale for methods that are NOT already goal-linked (i.e. methods you are suggesting beyond what the system derived from the parameter database).
 - set_mesocycle_config: {"type":"set_mesocycle_config","count":<number>,"weeksDuration":<weeks per mesocycle>}
