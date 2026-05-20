@@ -334,7 +334,8 @@ export function EnhancedExerciseDistribution({
     };
 
     // DEBUG — remove after diagnosis
-    console.log('[ExerciseDist] mesocycle.id:', mesocycle.id, 'exerciseSelectionData keys:', Object.keys(exerciseSelectionData), 'mesocycleIds in cells:', Object.values(exerciseSelectionData).map(c => c.mesocycleId));
+    console.log('[ExerciseDist] mesocycle.id:', mesocycle.id);
+    console.log('[ExerciseDist] cells:', Object.entries(exerciseSelectionData).map(([k, v]) => ({ key: k, mesoId: v.mesocycleId, exercises: v.exercises.length })));
 
     // 1. Add exercises from exerciseSelectionData (Step 0)
     Object.entries(exerciseSelectionData).forEach(([key, cellData]) => {
