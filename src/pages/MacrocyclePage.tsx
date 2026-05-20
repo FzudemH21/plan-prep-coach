@@ -37,6 +37,7 @@ import { AlertTriangle, ArrowLeft } from "lucide-react";
 import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
 import { WizardAIAssistant } from "@/components/wizard/WizardAIAssistant";
 import { useRAGRetrieval } from "@/hooks/useRAGRetrieval";
+import { useGlobalAIContext } from "@/hooks/useGlobalAIContext";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 import { TEST_COLOR, EVENT_COLOR, testEventGradient } from "@/lib/eventColors";
@@ -62,6 +63,7 @@ export default function MacrocyclePage() {
   const { athletes, groups, getAthletePerformanceParameters, addPerformanceParameter, getAthleteBiometrics, biometricDefinitions, getAthleteCalendarAssignments } = useAthletes();
   const { retrieve: ragRetrieve } = useRAGRetrieval();
   const [ragContext, setRagContext] = useState('');
+  const globalAIContext = useGlobalAIContext();
   const [athleteDropdownOpen, setAthleteDropdownOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [planName, setPlanName] = useState<string>("");
@@ -3040,6 +3042,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         wizardContext={wizardContext}
         onApplySuggestion={handleAIApply}
         ragContext={ragContext}
+        globalContext={globalAIContext}
       />
     </>
   );
