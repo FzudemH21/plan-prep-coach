@@ -118,7 +118,7 @@ Available types and their fields:
 - remove_event: {"type":"remove_event","eventName":"<exact event name from the Events list in context>"}
   Deletes an event entirely (removes it and all its scheduled dates). Use the EXACT name from the Events list.
 - add_methods: {"type":"add_methods","methods":[{"name":"<exact method name>","rationale":"<why this method supports the goal>"},{"name":"<exact method name>","rationale":"<rationale>"}]}
-  Always include a rationale for methods that are NOT already goal-linked (i.e. methods you are suggesting beyond what the system derived from the parameter database).
+  ONLY suggest or add methods whose exact name appears in the "Training Toolbox" list in context. Never invent method names from general knowledge. Always include a rationale for methods that are not goal-linked.
 - set_mesocycle_config: {"type":"set_mesocycle_config","count":<number>,"weeksDuration":<weeks per mesocycle>}
   Use for quick uniform setup (all mesocycles same length, all microcycles 7 days). For variable durations use configure_mesocycles instead.
 - configure_mesocycles: {"type":"configure_mesocycles","mesocycles":[{"name":"Mesocycle 1","microcycles":[{"duration":7,"intensity":"easy"},{"duration":7,"intensity":"moderate"},{"duration":7,"intensity":"hard"},{"duration":7,"intensity":"deload"}]},{"name":"Mesocycle 2","microcycles":[{"duration":7,"intensity":"moderate"},{"duration":7,"intensity":"hard"},{"duration":5,"intensity":"extremely-hard"},{"duration":2,"intensity":"deload"}]}]}
