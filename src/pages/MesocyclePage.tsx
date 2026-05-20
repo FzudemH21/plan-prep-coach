@@ -57,6 +57,7 @@ import { Separator } from "@/components/ui/separator";
 import { useTemplates, type ProgramTemplate, type TemplateColumn } from '@/hooks/useTemplates';
 import { LoadTemplateDialog, type MethodParam } from '@/components/mesocycle/LoadTemplateDialog';
 import { useWizardData } from '@/contexts/WizardDataContext';
+import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 
 // Helper function for string normalization - robust canonicalization
 const normalizeForComparison = (str: unknown): string => {
@@ -169,6 +170,7 @@ export default function MesocyclePage() {
   
   const { data: toolboxData } = useToolboxData();
   const { data: parametersDataV2 } = useParametersDataV2();
+  const { libraries: exerciseLibraries } = useCustomLibraries();
   const { dragState, startDrag, endDrag, addToSelection, clearSelection, fillCells } = useDragFill();
   const { toast } = useToast();
   const { athletes } = useAthletes();
@@ -5017,6 +5019,43 @@ export default function MesocyclePage() {
     const methodsStr = allocatedMethods.length
       ? `Allocated methods:\n${allocatedMethods.map((m) => `- ${m}`).join("\n")}`
       : "";
+
+    // Step 5: add exercise library context so AI can use assign_exercises
+    let exerciseLibraryStr = "";
+    if (currentStep === 5 && exerciseLibraries.length > 0) {
+      const libraryLines: string[] = ["Available exercises in the database (use exact IDs for assign_exercises):"];
+      exerciseLibraries.forEach(lib => {
+        if (!lib.exercises || lib.exercises.length === 0) return;
+        const nameCol = lib.columns.find(c => c.name.toLowerCase().includes('name'));
+        const catCol = lib.columns.find(c => c.name.toLowerCase().includes('categor'));
+        libraryLines.push(`\nLibrary: "${lib.name}" (libraryId: "${lib.id}")`);
+        lib.exercises.forEach(ex => {
+          const name = nameCol ? (ex.data[nameCol.id] ?? ex.id) : ex.id;
+          const cat = catCol ? (ex.data[catCol.id] ?? '') : '';
+          libraryLines.push(`  - exerciseId: "${ex.id}" | name: "${name}"${cat ? ` | category: "${cat}"` : ''}`);
+        });
+      });
+      exerciseLibraryStr = libraryLines.join("\n");
+
+      // Also show currently selected exercises per cell
+      const stored = localStorage.getItem('exerciseSelectionData');
+      if (stored) {
+        try {
+          const cellMap = JSON.parse(stored) as Record<string, { methodId: string; categoryName?: string; mesocycleId: string; exercises: Array<{ exerciseName: string }> }>;
+          const selectionLines: string[] = ["\nCurrently selected exercises per cell:"];
+          Object.entries(cellMap).forEach(([key, cell]) => {
+            if (cell.exercises?.length > 0) {
+              const meso = mesocycles.find(m => m.id === cell.mesocycleId);
+              const mesoName = meso?.name ?? cell.mesocycleId;
+              const label = cell.categoryName ? `${cell.methodId}::${cell.categoryName}` : cell.methodId;
+              selectionLines.push(`  ${mesoName} | ${label}: ${cell.exercises.map(e => e.exerciseName).join(", ")}`);
+            }
+          });
+          if (selectionLines.length > 1) exerciseLibraryStr += "\n" + selectionLines.join("\n");
+        } catch { /* ignore */ }
+      }
+    }
+
     return [
       `Current step: ${mesoStepLabel}`,
       athleteStr,
@@ -5024,10 +5063,11 @@ export default function MesocyclePage() {
       goalStr,
       mesoStr,
       methodsStr,
+      exerciseLibraryStr,
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, mesocycles, methodAllocations, mesoStepLabel]);
+  }, [currentStep, athleteName, macrocycleData, mesocycles, methodAllocations, mesoStepLabel, exerciseLibraries]);
 
   // ── AI Apply handler ──────────────────────────────────────────────────────
   const handleMesoAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
