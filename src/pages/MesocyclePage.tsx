@@ -2207,7 +2207,8 @@ export default function MesocyclePage() {
     // Clear localStorage items
     localStorage.removeItem('microcyclePlanningState');
     localStorage.removeItem('exerciseSelectionData');
-    
+    // Sync React state so AI context immediately reflects the cleared state
+    setExerciseCellData({});
     // Force remount of MicrocyclePlanningTable to reset all state
     setMpTableKey(k => k + 1);
     setIsClearAllExercisesDialogOpen(false);
@@ -5060,17 +5061,20 @@ export default function MesocyclePage() {
         exerciseLibraryStr = libraryLines.join("\n");
       }
 
-      // Currently selected exercises — use React state (exerciseCellData) so it's always live
-      const selectionLines: string[] = ["\nCurrently selected exercises per cell:"];
+      // Currently selected exercises — always explicit so AI never falls back to conversation history
+      const selectionLines: string[] = ["\nCurrently selected exercises per cell (this is the authoritative current state — ignore anything from earlier in the conversation):"];
+      let hasAnyExercises = false;
       Object.entries(exerciseCellData).forEach(([, cell]) => {
         if (cell.exercises?.length > 0) {
+          hasAnyExercises = true;
           const meso = mesocycles.find(m => m.id === cell.mesocycleId);
           const mesoName = meso?.name ?? cell.mesocycleId;
           const label = cell.categoryName ? `${cell.methodId}::${cell.categoryName}` : cell.methodId;
           selectionLines.push(`  ${mesoName} | ${label}: ${cell.exercises.map(e => e.exerciseName).join(", ")}`);
         }
       });
-      if (selectionLines.length > 1) exerciseLibraryStr += "\n" + selectionLines.join("\n");
+      if (!hasAnyExercises) selectionLines.push("  (no exercises currently selected in any cell)");
+      exerciseLibraryStr += "\n" + selectionLines.join("\n");
     }
 
     return [
