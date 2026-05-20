@@ -172,12 +172,21 @@ export default function MesocyclePage() {
   const { data: parametersDataV2 } = useParametersDataV2();
   const { libraries: exerciseLibraries } = useCustomLibraries();
   const mpTableRef = React.useRef<MicrocyclePlanningTableHandle>(null);
-  const [exerciseCellData, setExerciseCellData] = useState<Record<string, import('@/types/microcycle-planning').CellData>>(() => {
-    try {
-      const stored = localStorage.getItem('microcyclePlanningState');
-      return stored ? (JSON.parse(stored) as import('@/types/microcycle-planning').MicrocyclePlanningState).cellData ?? {} : {};
-    } catch { return {}; }
-  });
+  const [exerciseCellData, setExerciseCellData] = useState<Record<string, import('@/types/microcycle-planning').CellData>>({});
+  // Re-sync from localStorage whenever step 5 is entered or the table remounts (mpTableKey change).
+  // This is the ground truth — don't rely solely on callback-driven updates.
+  useEffect(() => {
+    if (currentStep === 5) {
+      try {
+        const stored = localStorage.getItem('microcyclePlanningState');
+        setExerciseCellData(stored
+          ? (JSON.parse(stored) as import('@/types/microcycle-planning').MicrocyclePlanningState).cellData ?? {}
+          : {}
+        );
+      } catch { setExerciseCellData({}); }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, mpTableKey]);
   const { dragState, startDrag, endDrag, addToSelection, clearSelection, fillCells } = useDragFill();
   const { toast } = useToast();
   const { athletes } = useAthletes();
