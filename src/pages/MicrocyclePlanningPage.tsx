@@ -3360,7 +3360,7 @@ export default function MicrocyclePlanningPage() {
     const stepHint = currentStep === 1
       ? `Goal: assign methods to training days. Do NOT assign methods to rest/off days (${offDays.join(", ") || "none"}).`
       : currentStep === 2
-      ? "Goal: assign exercises from the exercise library to each training day session."
+      ? "Goal: assign exercises from the exercise library to specific training day sessions. Use the distribute_exercises action to assign exercises directly to dates — you have the full schedule with exact dates above. Do NOT say this is impossible."
       : "Goal: review the final training calendar with all sessions.";
 
     // Step 2: build available exercises + day schedule for AI context
