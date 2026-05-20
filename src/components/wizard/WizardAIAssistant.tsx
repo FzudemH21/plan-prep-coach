@@ -34,7 +34,7 @@ export type ApplySuggestion =
   | { type: "allocate_methods"; allocations: Array<{ methodName: string; mesocycleNames: string[] }> }
   /** MesocyclePage Step 3 — add new training methods to the plan */
   | { type: "add_methods"; methods: Array<{ name: string; rationale?: string }> }
-  /** MesocyclePage Step 3 — remove methods from the plan entirely */
+  /** MacrocyclePage Step 3 & MesocyclePage Step 3 — remove methods from the plan entirely */
   | { type: "remove_methods"; methodNames: string[] }
   | { type: "set_method_intensities"; methodName: string; frequency: number; sets: number; reps: string; intensity: string }
   /** MesocyclePage Steps 1 & 2 — set mesocycle-level intensity and/or per-microcycle loading wave */
