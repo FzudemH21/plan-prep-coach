@@ -32,6 +32,7 @@ import { useWizardData } from '@/contexts/WizardDataContext';
 import { WizardAIAssistant } from '@/components/wizard/WizardAIAssistant';
 import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
 import { useGlobalAIContext } from '@/hooks/useGlobalAIContext';
+import { useCoachMemory } from '@/hooks/useCoachMemory';
 
 // Using ExerciseDistribution, SessionSection, and SupersetMapping from types file
 
@@ -74,6 +75,7 @@ export default function MicrocyclePlanningPage() {
   const { retrieve: ragRetrieve } = useRAGRetrieval();
   const [ragContext, setRagContext] = useState('');
   const globalAIContext = useGlobalAIContext();
+  const { coachMemoryContext } = useCoachMemory({ currentMethods: macrocycleData?.selectedMethods ?? [] });
 
   // Resolve athlete name from selectedAthleteId
   const selectedAthleteId = macrocycleData?.selectedAthleteId;
@@ -3769,6 +3771,7 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
         onApplySuggestion={handleMicroAIApply}
         ragContext={ragContext}
         globalContext={globalAIContext}
+        coachMemoryContext={coachMemoryContext}
       />
     </div>
   );

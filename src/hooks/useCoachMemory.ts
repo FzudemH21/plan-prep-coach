@@ -26,7 +26,7 @@ interface UseCoachMemoryOptions {
 
 export function useCoachMemory({
   currentMethods = [],
-  limit = 5,
+  limit = 20,
 }: UseCoachMemoryOptions = {}) {
   const { user } = useAuth();
   const [plans, setPlans] = useState<PlanMemorySummary[]>([]);

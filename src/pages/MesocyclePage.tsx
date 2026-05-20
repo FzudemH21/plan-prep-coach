@@ -60,6 +60,7 @@ import { useWizardData } from '@/contexts/WizardDataContext';
 import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
 import { useGlobalAIContext } from '@/hooks/useGlobalAIContext';
+import { useCoachMemory } from '@/hooks/useCoachMemory';
 
 // Helper function for string normalization - robust canonicalization
 const normalizeForComparison = (str: unknown): string => {
@@ -176,6 +177,7 @@ export default function MesocyclePage() {
   const { retrieve: ragRetrieve } = useRAGRetrieval();
   const [ragContext, setRagContext] = useState('');
   const globalAIContext = useGlobalAIContext();
+  const { coachMemoryContext } = useCoachMemory({ currentMethods: macrocycleData?.selectedMethods ?? [] });
   const mpTableRef = React.useRef<MicrocyclePlanningTableHandle>(null);
   const [exerciseCellData, setExerciseCellData] = useState<Record<string, import('@/types/microcycle-planning').CellData>>({});
   // Re-sync from exerciseSelectionData (the dedicated step-5 key) whenever the user
@@ -5485,7 +5487,7 @@ export default function MesocyclePage() {
         />
 
       {/* AI Assistant */}
-      <WizardAIAssistant stepLabel={mesoStepLabel} wizardContext={mesoWizardContext} onApplySuggestion={handleMesoAIApply} ragContext={ragContext} globalContext={globalAIContext} />
+      <WizardAIAssistant stepLabel={mesoStepLabel} wizardContext={mesoWizardContext} onApplySuggestion={handleMesoAIApply} ragContext={ragContext} globalContext={globalAIContext} coachMemoryContext={coachMemoryContext} />
     </div>
   );
 };
