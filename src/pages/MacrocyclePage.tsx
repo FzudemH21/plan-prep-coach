@@ -2805,10 +2805,15 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         setPlanName(action.name);
         break;
       case "set_plan_duration": {
-        const start = planDuration?.startDate ?? new Date();
-        const end = new Date(start);
-        end.setDate(end.getDate() + action.weeks * 7);
-        setPlanDuration({ startDate: start, endDate: end, totalDays: action.weeks * 7, totalWeeks: action.weeks });
+        const start = action.startDate
+          ? new Date(action.startDate + 'T12:00:00')
+          : (planDuration?.startDate ?? new Date());
+        const end = action.endDate
+          ? new Date(action.endDate + 'T12:00:00')
+          : (() => { const d = new Date(start); d.setDate(d.getDate() + (action.weeks ?? 0) * 7); return d; })();
+        const totalDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        const totalWeeks = Math.round(totalDays / 7);
+        setPlanDuration({ startDate: start, endDate: end, totalDays, totalWeeks });
         break;
       }
       case "add_goal":
