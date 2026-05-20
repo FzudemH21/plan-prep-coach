@@ -173,6 +173,7 @@ export function MethodSessionArchitecture({
   const [copyingMicrocycleId, setCopyingMicrocycleId] = useState<string | null>(null);
   const [clearingMicrocycleId, setClearingMicrocycleId] = useState<string | null>(null);
   const [clearingMesocycleId, setClearingMesocycleId] = useState<string | null>(null);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   // ── selected microcycle: controlled by parent when prop provided, else local ──
   const [selectedMicrocycleIndexLocal, setSelectedMicrocycleIndexLocal] = useState(0);
   const selectedMicrocycleIndex = selectedMicrocycleIndexProp ?? selectedMicrocycleIndexLocal;
