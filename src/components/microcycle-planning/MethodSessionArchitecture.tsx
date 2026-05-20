@@ -50,6 +50,8 @@ export interface MethodSessionArchitectureProps {
   trainingDays: TrainingDay[];
   /** Record<methodName, mesocycleId[]> — written by MesocyclePage, read-only here */
   methodAllocations: Record<string, string[]>;
+  /** Record<baseMethodName, exerciseCategory[]> — derived from exercisesByMethod, split-state-independent */
+  methodExerciseCategories?: Record<string, string[]>;
   /** Record<dayDate, methodId[]> */
   dayMethodAssignments: Record<string, string[]>;
   onDayMethodAssignmentsChange: (assignments: Record<string, string[]>) => void;
@@ -143,6 +145,7 @@ export function MethodSessionArchitecture({
   allMesocycles,
   trainingDays,
   methodAllocations,
+  methodExerciseCategories,
   dayMethodAssignments,
   onDayMethodAssignmentsChange,
   sessionSections,
@@ -167,7 +170,6 @@ export function MethodSessionArchitecture({
   const [renamingSession, setRenamingSession] = useState<{
     dayDate: string; sessionIndex: number; value: string;
   } | null>(null);
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [sessionIntensityPopovers, setSessionIntensityPopovers] = useState<Set<string>>(new Set());
   const [sessionCommentsMap, setSessionCommentsMap] = useState<Record<string, string>>({});
   const [sessionIntensityMap, setSessionIntensityMap] = useState<Record<string, IntensityLevel>>({});
@@ -214,13 +216,16 @@ export function MethodSessionArchitecture({
   }, [mesocycleDays, mesocycle]);
 
   // ── derived: only methods explicitly allocated to this mesocycle ─────────────
+  // Strip any "::category" split suffix so the panel is always split-state-independent.
   const allMethods = useMemo(() => {
-    return Object.keys(methodAllocations).filter(m =>
-      methodAllocations[m]?.includes(mesocycle.id)
-    );
+    const seen = new Set<string>();
+    return Object.keys(methodAllocations)
+      .filter(m => methodAllocations[m]?.includes(mesocycle.id))
+      .map(m => m.split('::')[0])
+      .filter(m => !seen.has(m) && seen.add(m) !== undefined);
   }, [methodAllocations, mesocycle.id]);
 
-  // ── derived: methods grouped by category (all are available for this meso) ───
+  // ── derived: methods grouped by parent category label ───────────────────────
   const methodsByCategory = useMemo(() => {
     const grouped: Record<string, string[]> = {};
     allMethods.forEach(m => {
@@ -255,7 +260,6 @@ export function MethodSessionArchitecture({
     const counts: Record<string, number> = {};
     if (!selectedEntry) return counts;
     const [selectedMicroId, { days }] = selectedEntry;
-    // Explicitly guard by microcycleId so cross-microcycle assignments never bleed in
     days.filter(d => d.microcycleId === selectedMicroId).forEach(day => {
       const seen = new Set<string>();
       for (let si = 0; si < 4; si++) {
@@ -271,7 +275,6 @@ export function MethodSessionArchitecture({
     const targets: Record<string, number> = {};
     if (!getMethodFrequencyTarget || !selectedEntry) return targets;
     const [microId] = selectedEntry;
-    // flatAvailable includes both plain methods and method::category keys
     flatAvailable.forEach(key => {
       const freq = getMethodFrequencyTarget(key, microId);
       if (freq > 0) targets[key] = freq;
@@ -280,8 +283,6 @@ export function MethodSessionArchitecture({
   }, [getMethodFrequencyTarget, selectedEntry, flatAvailable]);
 
   // ── init: expand all categories whenever methodsByCategory changes ──────────
-  // Must depend on methodsByCategory (not empty []) so new categories are expanded
-  // even when data loads after mount.
   useEffect(() => {
     setExpandedCategories(prev => {
       const next = new Set(prev);
@@ -625,9 +626,7 @@ export function MethodSessionArchitecture({
                   )}
 
                   {Object.entries(methodsByCategory).map(([category, methods]) => {
-                    const isExpanded = expandedCategories.has(category);
                     if (methods.length === 0) return null;
-
                     return (
                       <div key={category}>
                         {/* Category header */}
@@ -641,19 +640,18 @@ export function MethodSessionArchitecture({
                           }
                           className="w-full flex items-center gap-1 px-1 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground rounded"
                         >
-                          {isExpanded
+                          {expandedCategories.has(category)
                             ? <ChevronDown className="h-3 w-3 shrink-0" />
                             : <ChevronRight className="h-3 w-3 shrink-0" />}
                           <span className="truncate text-left flex-1">{category}</span>
                         </button>
 
-                        {isExpanded && (
+                        {expandedCategories.has(category) && (
                           <div className="ml-2 space-y-0.5 mb-1">
                             {methods.map(methodId => {
                               const exCats = methodExerciseCategories?.[methodId];
                               const hasCategories = exCats && exCats.length > 0;
 
-                              // ── helper: renders a single draggable card ──────
                               const renderCard = (draggableKey: string) => {
                                 const idx = flatAvailable.indexOf(draggableKey);
                                 const label = hasExCat(draggableKey)
@@ -718,7 +716,6 @@ export function MethodSessionArchitecture({
                               };
 
                               if (hasCategories) {
-                                // Non-draggable method label + draggable category sub-cards
                                 return (
                                   <div key={methodId}>
                                     <div className="px-2 py-1 text-xs font-medium text-muted-foreground/70 select-none">

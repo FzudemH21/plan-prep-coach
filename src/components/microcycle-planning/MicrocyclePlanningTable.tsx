@@ -52,6 +52,10 @@ export const MicrocyclePlanningTable = forwardRef<MicrocyclePlanningTableHandle,
     microcycleGroups: {}
   });
 
+  // Prevents the save effect from wiping localStorage with the initial empty state on mount
+  // before the load effect's setPlanningState triggers a re-render.
+  const isMountSave = React.useRef(true);
+
   // Load saved state from localStorage
   useEffect(() => {
     const savedState = localStorage.getItem('microcyclePlanningState');
@@ -63,7 +67,6 @@ export const MicrocyclePlanningTable = forwardRef<MicrocyclePlanningTableHandle,
   // Save state to localStorage and notify parent whenever it changes.
   // Skip the very first execution (initial empty state before load completes).
   // Use a ref for the callback to avoid spurious saves when the parent re-renders.
-  const isMountSave = React.useRef(true);
   const onExerciseSelectionChangeRef = React.useRef(onExerciseSelectionChange);
   onExerciseSelectionChangeRef.current = onExerciseSelectionChange;
   useEffect(() => {
