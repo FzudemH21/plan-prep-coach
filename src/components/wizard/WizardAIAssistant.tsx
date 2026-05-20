@@ -43,6 +43,8 @@ export type ApplySuggestion =
   | { type: "assign_methods_to_days"; microcycleIndex?: number; weekPattern: Array<{ method: string; days: string[] }> }
   /** MesocyclePage Step 5 — assign exercises from the library to method × mesocycle cells */
   | { type: "assign_exercises"; replace?: boolean; assignments: Array<{ methodName: string; mesocycleName: string; categoryName?: string; exercises: Array<{ exerciseId: string; exerciseName: string; libraryId: string }> }> }
+  /** MicrocyclePlanningPage Step 2 — distribute exercises to specific training days / sessions */
+  | { type: "distribute_exercises"; replace?: boolean; entries: Array<{ exerciseId: string; exerciseName: string; methodId: string; categoryName?: string; dayDate: string; sessionIndex?: number }> }
   /** Parameter Database — add a new parameter */
   | { type: "add_parameter"; name: string; category?: string; unit?: string; applicableSports?: string[] }
   /** Parameter Database — add multiple parameters at once */
@@ -126,6 +128,8 @@ Available types and their fields:
   microcycleIndex is 1-based — include to target a specific microcycle only (e.g. 1 = first week), omit to apply the pattern to ALL microcycles in the current mesocycle. Do NOT assign methods to days marked as "off" — those are rest days with no sessions.
 - assign_exercises: {"type":"assign_exercises","replace":true,"assignments":[{"methodName":"<exact method name>","mesocycleName":"Mesocycle 1","categoryName":"<exercise category — include ONLY if method has categories, omit otherwise>","exercises":[{"exerciseId":"<exact id>","exerciseName":"<name>","libraryId":"<exact library id>"}]}]}
   Only use exercise IDs and library IDs as listed in the wizard context. Use exact values — do not invent IDs. Set "replace": true to replace the existing exercise selection for a cell; omit or set false to append to existing exercises. If the method context lists "Categories:", produce one assignment entry per category, each with the matching "categoryName" field and category-appropriate exercises.
+- distribute_exercises: {"type":"distribute_exercises","replace":false,"entries":[{"exerciseId":"<exact id from context>","exerciseName":"<name>","methodId":"<exact methodId from context>","categoryName":"<category — include ONLY if the method has categories, omit otherwise>","dayDate":"YYYY-MM-DD","sessionIndex":0}]}
+  Assigns exercises to specific training day sessions for the current mesocycle. Use ONLY exerciseIds and methodIds listed under "Available exercises" in the wizard context. dayDate must be YYYY-MM-DD and must exactly match a date from the training schedule. sessionIndex is 0-based (0 = first session of the day). Set "replace":true to clear the existing exercise distribution for the entire current mesocycle before adding. Do NOT invent dates — use only dates from the training schedule provided in context.
 - add_parameter: {"type":"add_parameter","name":"<parameter name>","category":"<one of: strength|speed|power|endurance|mobility|technique|body_composition|other>","unit":"<unit e.g. kg, s, cm — omit if not applicable>","applicableSports":["<sport>","<sport>"]}
   applicableSports is optional — include when the parameter is sport-specific (e.g. ["Soccer","Rugby"]). Omit for universal parameters.
 - add_parameters_bulk: {"type":"add_parameters_bulk","parameters":[{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>","applicableSports":["<sport>"]},{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>"}]}

@@ -3360,8 +3360,65 @@ export default function MicrocyclePlanningPage() {
     const stepHint = currentStep === 1
       ? `Goal: assign methods to training days. Do NOT assign methods to rest/off days (${offDays.join(", ") || "none"}).`
       : currentStep === 2
-      ? "Goal: assign exercises from the database to each method slot."
+      ? "Goal: assign exercises from the exercise library to each training day session."
       : "Goal: review the final training calendar with all sessions.";
+
+    // Step 2: build available exercises + day schedule for AI context
+    let exercisesStr = '';
+    let scheduleStr = '';
+    if (currentStep === 2 && currentMeso) {
+      // Available exercises per method/category from Step 5 selections
+      const exByMethod: Record<string, Record<string, Array<{ exerciseId: string; exerciseName: string }>>> = {};
+      Object.values(exerciseSelectionData).forEach(cell => {
+        if (cell.mesocycleId !== currentMeso.id) return;
+        const method = cell.methodId;
+        const cat = cell.categoryName || '';
+        if (!exByMethod[method]) exByMethod[method] = {};
+        if (!exByMethod[method][cat]) exByMethod[method][cat] = [];
+        cell.exercises.forEach(ex => {
+          if (!exByMethod[method][cat].find((e: { exerciseId: string }) => e.exerciseId === ex.exerciseId)) {
+            exByMethod[method][cat].push({ exerciseId: ex.exerciseId, exerciseName: ex.exerciseName });
+          }
+        });
+      });
+      if (Object.keys(exByMethod).length > 0) {
+        const lines = [`Available exercises for ${currentMeso.name}:`];
+        Object.entries(exByMethod).forEach(([method, cats]) => {
+          lines.push(`  Method: "${method}"`);
+          Object.entries(cats).forEach(([cat, exs]) => {
+            const catLabel = cat ? `Category: "${cat}"` : '(no category)';
+            const exList = exs.map(e => `${e.exerciseName} (id: ${e.exerciseId})`).join(', ');
+            lines.push(`    ${catLabel}: ${exList}`);
+          });
+        });
+        exercisesStr = lines.join('\n');
+      }
+
+      // Training day schedule with dates and assigned methods
+      const mesoDays = trainingDays.filter(d =>
+        currentMeso.microcycles?.some((m: { id: string }) => m.id === d.microcycleId)
+      );
+      if (mesoDays.length > 0) {
+        const scheduleLines = [`Training schedule for ${currentMeso.name} (use these exact dates in distribute_exercises):`];
+        mesoDays.forEach(day => {
+          const label = format(new Date(day.date + 'T12:00:00'), 'EEE dd MMM');
+          if (day.intensity === 'off') {
+            scheduleLines.push(`  ${day.date} (${label}): REST`);
+          } else {
+            const sessionCount = day.sessions ?? 1;
+            const sessionParts: string[] = [];
+            for (let s = 0; s < sessionCount; s++) {
+              const key = `${day.date}_${s}`;
+              const methods = dayMethodAssignments[key] ?? [];
+              sessionParts.push(`session ${s}: [${methods.join(', ') || 'none'}]`);
+            }
+            scheduleLines.push(`  ${day.date} (${label}): ${sessionParts.join(' | ')}`);
+          }
+        });
+        scheduleStr = scheduleLines.join('\n');
+      }
+    }
+
     return [
       `Current step: ${microStepLabel}`,
       athleteStr,
@@ -3372,48 +3429,96 @@ export default function MicrocyclePlanningPage() {
       methodsStr,
       dayStr,
       offDaysStr,
+      exercisesStr,
+      scheduleStr,
       stepHint,
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel]);
+  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel, exerciseSelectionData]);
 
   const handleMicroAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
-    if (action.type !== "assign_methods_to_days") return;
-    const dayNameMap: Record<string, number> = {
-      Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
-      Thursday: 4, Friday: 5, Saturday: 6,
-    };
-    const currentMeso = mesocycles[currentMesocycleIndex];
-    if (!currentMeso) return;
+    if (action.type === "assign_methods_to_days") {
+      const dayNameMap: Record<string, number> = {
+        Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
+        Thursday: 4, Friday: 5, Saturday: 6,
+      };
+      const currentMeso = mesocycles[currentMesocycleIndex];
+      if (!currentMeso) return;
 
-    const targetDays = trainingDays.filter(d => {
-      if (d.intensity === 'off') return false;
-      if (action.microcycleIndex != null) {
-        const micro = currentMeso.microcycles?.[action.microcycleIndex - 1];
-        if (!micro || d.microcycleId !== micro.id) return false;
-      } else {
-        if (!currentMeso.microcycles?.some((m: { id: string }) => m.id === d.microcycleId)) return false;
-      }
-      return true;
-    });
-
-    const newAssignments = { ...dayMethodAssignments };
-    action.weekPattern.forEach(({ method, days }) => {
-      const dayNums = days.map(d => dayNameMap[d]).filter(n => n != null);
-      targetDays.forEach(day => {
-        const date = new Date(day.date + 'T00:00:00');
-        if (!dayNums.includes(date.getDay())) return;
-        const key = `${day.date}_0`;
-        const current = newAssignments[key] ?? [];
-        if (!current.includes(method)) {
-          newAssignments[key] = [...current, method];
+      const targetDays = trainingDays.filter(d => {
+        if (d.intensity === 'off') return false;
+        if (action.microcycleIndex != null) {
+          const micro = currentMeso.microcycles?.[action.microcycleIndex - 1];
+          if (!micro || d.microcycleId !== micro.id) return false;
+        } else {
+          if (!currentMeso.microcycles?.some((m: { id: string }) => m.id === d.microcycleId)) return false;
         }
+        return true;
       });
-    });
-    setDayMethodAssignments(newAssignments);
-    localStorage.setItem('dayMethodAssignments', JSON.stringify(newAssignments));
-  }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments]);
+
+      const newAssignments = { ...dayMethodAssignments };
+      action.weekPattern.forEach(({ method, days }) => {
+        const dayNums = days.map(d => dayNameMap[d]).filter(n => n != null);
+        targetDays.forEach(day => {
+          const date = new Date(day.date + 'T00:00:00');
+          if (!dayNums.includes(date.getDay())) return;
+          const key = `${day.date}_0`;
+          const current = newAssignments[key] ?? [];
+          if (!current.includes(method)) {
+            newAssignments[key] = [...current, method];
+          }
+        });
+      });
+      setDayMethodAssignments(newAssignments);
+      localStorage.setItem('dayMethodAssignments', JSON.stringify(newAssignments));
+    } else if (action.type === "distribute_exercises") {
+      const currentMeso = mesocycles[currentMesocycleIndex];
+      if (!currentMeso) return;
+
+      // Build set of valid dates for the current mesocycle
+      const mesoDateSet = new Set(
+        trainingDays
+          .filter(d => currentMeso.microcycles?.some((m: { id: string }) => m.id === d.microcycleId))
+          .map(d => d.date)
+      );
+
+      // Optionally clear existing distribution for this mesocycle first
+      const base = action.replace
+        ? exerciseDistribution.filter(e => !mesoDateSet.has(e.dayDate))
+        : [...exerciseDistribution];
+
+      // Track next order per day/session slot
+      const orderCounters: Record<string, number> = {};
+      base.forEach(e => {
+        const k = `${e.dayDate}_${e.sessionIndex}`;
+        orderCounters[k] = Math.max(orderCounters[k] ?? 0, e.order + 1);
+      });
+
+      const newEntries: ExerciseDistribution[] = action.entries
+        .filter(e => mesoDateSet.has(e.dayDate))
+        .map(e => {
+          const sessionIndex = e.sessionIndex ?? 0;
+          const k = `${e.dayDate}_${sessionIndex}`;
+          const order = orderCounters[k] ?? 0;
+          orderCounters[k] = order + 1;
+          return {
+            id: `dist-ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            exerciseId: e.exerciseId,
+            exerciseName: e.exerciseName,
+            methodId: e.methodId,
+            categoryName: e.categoryName ?? '',
+            dayDate: e.dayDate,
+            sessionIndex,
+            order,
+          };
+        });
+
+      const updated = [...base, ...newEntries];
+      setExerciseDistribution(updated);
+      localStorage.setItem('exerciseDistribution', JSON.stringify(updated));
+    }
+  }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments, exerciseDistribution]);
 
   return (
     <div className="mx-auto py-6 space-y-6 px-4 w-full max-w-[98vw]">
