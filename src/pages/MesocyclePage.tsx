@@ -1,4 +1,4 @@
-import { MicrocyclePlanningTable } from '@/components/microcycle-planning';
+import { MicrocyclePlanningTable, type MicrocyclePlanningTableHandle } from '@/components/microcycle-planning';
 import { WizardAIAssistant } from '@/components/wizard/WizardAIAssistant';
 import { cn } from '@/lib/utils';
 import { evaluateFormula } from '@/utils/formulaEvaluator';
@@ -171,6 +171,7 @@ export default function MesocyclePage() {
   const { data: toolboxData } = useToolboxData();
   const { data: parametersDataV2 } = useParametersDataV2();
   const { libraries: exerciseLibraries } = useCustomLibraries();
+  const mpTableRef = React.useRef<MicrocyclePlanningTableHandle>(null);
   const { dragState, startDrag, endDrag, addToSelection, clearSelection, fillCells } = useDragFill();
   const { toast } = useToast();
   const { athletes } = useAthletes();
@@ -3993,6 +3994,7 @@ export default function MesocyclePage() {
         </CardHeader>
         <CardContent className="overflow-x-auto max-w-full">
           <MicrocyclePlanningTable
+            ref={mpTableRef}
             key={mpTableKey}
             mesocycles={mesocycles}
             selectedMethods={getAllocatedMethods()}
@@ -5234,29 +5236,51 @@ export default function MesocyclePage() {
         break;
       }
       case "assign_exercises": {
-        const stored = localStorage.getItem('exerciseSelectionData');
-        const cellMap: Record<string, { methodId: string; categoryName?: string; mesocycleId: string; exercises: Array<{ id: string; exerciseId: string; exerciseName: string; library: string }> }> = stored ? JSON.parse(stored) : {};
+        // Build the newCellData in MicrocyclePlanningTable's CellData format
+        // (keyed by `methodId::categoryName::mesocycleId`) and merge via the
+        // imperative handle — writing to exerciseSelectionData would hit the
+        // wrong localStorage key since the table uses microcyclePlanningState.
+        const newCellData: Record<string, import('@/types/microcycle-planning').CellData> = {};
         action.assignments.forEach(({ methodName, mesocycleName, categoryName, exercises }) => {
           const meso = mesocycles.find(m => m.name === mesocycleName);
           if (!meso) return;
           const cellKey = `${methodName}::${categoryName ?? ''}::${meso.id}`;
-          const existing = cellMap[cellKey] ?? { methodId: methodName, categoryName, mesocycleId: meso.id, exercises: [] };
           const newExercises = exercises.map(ex => ({
             id: ex.exerciseId,
             exerciseId: ex.exerciseId,
             exerciseName: ex.exerciseName,
             library: ex.libraryId,
           }));
-          cellMap[cellKey] = {
-            ...existing,
-            exercises: action.replace ? newExercises : [
-              ...existing.exercises.filter(e => !newExercises.some(n => n.exerciseId === e.exerciseId)),
-              ...newExercises,
-            ],
+          newCellData[cellKey] = {
+            methodId: methodName,
+            categoryName: categoryName,
+            mesocycleId: meso.id,
+            exercises: newExercises,
           };
         });
-        localStorage.setItem('exerciseSelectionData', JSON.stringify(cellMap));
-        setMpTableKey(k => k + 1);
+        if (action.replace) {
+          // For replace mode, write the cell data directly via ref (overwrites existing for each cell)
+          mpTableRef.current?.mergeCellData(newCellData);
+        } else {
+          // For append mode, read existing cell data first then merge
+          const stored = localStorage.getItem('microcyclePlanningState');
+          const existing: Record<string, import('@/types/microcycle-planning').CellData> = stored
+            ? (JSON.parse(stored) as import('@/types/microcycle-planning').MicrocyclePlanningState).cellData
+            : {};
+          const merged: Record<string, import('@/types/microcycle-planning').CellData> = {};
+          Object.entries(newCellData).forEach(([key, cell]) => {
+            const prev = existing[key];
+            const prevExercises = prev?.exercises ?? [];
+            merged[key] = {
+              ...cell,
+              exercises: [
+                ...prevExercises.filter(e => !cell.exercises.some(n => n.exerciseId === e.exerciseId)),
+                ...cell.exercises,
+              ],
+            };
+          });
+          mpTableRef.current?.mergeCellData(merged);
+        }
         break;
       }
       default:
