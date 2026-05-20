@@ -3394,13 +3394,18 @@ export default function MicrocyclePlanningPage() {
         exercisesStr = lines.join('\n');
       }
 
-      // Training day schedule with dates and assigned methods
-      const mesoDays = trainingDays.filter(d =>
-        currentMeso.microcycles?.some((m: { id: string }) => m.id === d.microcycleId)
-      );
-      if (mesoDays.length > 0) {
-        const scheduleLines = [`Training schedule for ${currentMeso.name} (use these exact dates in distribute_exercises):`];
-        mesoDays.forEach(day => {
+      // Training day schedule — ONLY the currently selected microcycle (not all meso days)
+      const currentMicro = currentMeso.microcycles?.[currentMicrocycleIndex] as { id: string; name?: string } | undefined;
+      const microDays = currentMicro
+        ? trainingDays.filter(d => d.microcycleId === currentMicro.id)
+        : [];
+      if (microDays.length > 0) {
+        const firstDate = microDays[0].date;
+        const lastDate = microDays[microDays.length - 1].date;
+        const scheduleLines = [
+          `Training schedule — ${currentMicro?.name ?? 'current microcycle'} (${firstDate} to ${lastDate}). Use these exact YYYY-MM-DD dates in distribute_exercises:`
+        ];
+        microDays.forEach(day => {
           const label = format(new Date(day.date + 'T12:00:00'), 'EEE dd MMM');
           if (day.intensity === 'off') {
             scheduleLines.push(`  ${day.date} (${label}): REST`);
@@ -3410,7 +3415,7 @@ export default function MicrocyclePlanningPage() {
             for (let s = 0; s < sessionCount; s++) {
               const key = `${day.date}_${s}`;
               const methods = dayMethodAssignments[key] ?? [];
-              sessionParts.push(`session ${s}: [${methods.join(', ') || 'none'}]`);
+              sessionParts.push(`session ${s}: [${methods.join(', ') || 'no method assigned'}]`);
             }
             scheduleLines.push(`  ${day.date} (${label}): ${sessionParts.join(' | ')}`);
           }
@@ -3422,8 +3427,9 @@ export default function MicrocyclePlanningPage() {
     // Step 2: prepend a hard override so the AI doesn't fall back to "hierarchy" explanation
     const step2Override = currentStep === 2
       ? `⚠️ CAPABILITY OVERRIDE — READ THIS FIRST:
-You are in Exercise Distribution (Phase 3 Step 2). In this step you CAN assign exercises directly to specific calendar dates using the distribute_exercises action.
-When the coach says "assign X to [date]" or "put X on [day]" — use [[APPLY: {"type":"distribute_exercises",...}]] immediately. Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact dates from the training schedule below.`
+You are in Exercise Distribution (Phase 3 Step 2). You HAVE the ability to assign exercises to specific calendar dates using the distribute_exercises action. This is a direct date placement feature — it works even if a day shows "no method assigned".
+When the coach says "assign X to [date]" or "put X on [date]" — immediately produce [[APPLY: {"type":"distribute_exercises","replace":false,"entries":[{"exerciseId":"<id from Available exercises below>","exerciseName":"<name>","methodId":"<method from Available exercises below>","dayDate":"YYYY-MM-DD","sessionIndex":0}]}]].
+Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-MM-DD dates from the training schedule below.`
       : '';
 
     return [
@@ -3443,7 +3449,7 @@ When the coach says "assign X to [date]" or "put X on [day]" — use [[APPLY: {"
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel, exerciseSelectionData]);
+  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, currentMicrocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel, exerciseSelectionData]);
 
   const handleMicroAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
     if (action.type === "assign_methods_to_days") {
