@@ -7,6 +7,8 @@
 **GitHub:** https://github.com/FzudemH21/plan-prep-coach
 **Dev Server:** `npm run dev` → localhost:8080 (PowerShell, path: `C:\Users\Hanik\plan-prep-coach`)
 
+> **Critical — Worktree awareness:** Claude Code works in a git worktree under `.claude/worktrees/<branch>/`. Changes are ONLY visible in the browser if the dev server runs from that worktree directory, NOT from the main project root. Always confirm with the user which directory their dev server is running from before declaring a fix complete. If they're on the main dev server, changes won't appear until the branch is merged to `main`.
+
 ---
 
 ## Prompt Discipline (Critical!)
