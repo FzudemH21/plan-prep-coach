@@ -2792,9 +2792,13 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       const allAvailableIds = Object.values(methodsByQuality).flatMap((q) => q.list);
       const unselected = allAvailableIds.filter((m) => !selectedMethods.has(m));
       const methodListStr = unselected.length
-        ? `Available methods to suggest from (use exact names):\n${unselected.map((m) => `- ${m}`).join("\n")}`
+        ? `Methods available to add (use exact names):\n${unselected.map((m) => `- ${m}`).join("\n")}`
         : "All available methods are already selected.";
-      actionHints = `Available AI action: add_methods\n${methodListStr}`;
+      const selectedList = [...Array.from(selectedMethods), ...manuallyAddedMethods.filter(m => !selectedMethods.has(m.methodId)).map(m => m.methodId)];
+      const selectedListStr = selectedList.length
+        ? `Currently selected methods (use exact names for remove_methods):\n${selectedList.map((m) => `- ${m}`).join("\n")}`
+        : "";
+      actionHints = `Available AI actions: add_methods, remove_methods\n${methodListStr}${selectedListStr ? `\n${selectedListStr}` : ""}`;
     }
     return [
       `Current step: ${macroStepLabel}`,
@@ -2901,10 +2905,21 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         });
         break;
       }
+      case "remove_methods": {
+        action.methodNames.forEach((name) => {
+          const isManual = manuallyAddedMethods.some((m) => m.methodId === name);
+          if (isManual) {
+            handleRemoveManualMethod(name);
+          } else {
+            toggleMethodSelection(name, false);
+          }
+        });
+        break;
+      }
       default:
         break;
     }
-  }, [methodsByQuality, handleAddManualMethod, planDuration]);
+  }, [methodsByQuality, handleAddManualMethod, handleRemoveManualMethod, toggleMethodSelection, manuallyAddedMethods, planDuration]);
 
   return (
     <>
