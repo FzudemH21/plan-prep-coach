@@ -2792,11 +2792,17 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       const goalLinkedIds = Object.values(methodsByQuality).flatMap((q) => q.list);
       const goalLinkedStr = goalLinkedIds.length
         ? `Goal-linked methods proposed by the system (✓ = currently selected, ✗ = deselected):\n${goalLinkedIds.map((m) => `${selectedMethods.has(m) ? "✓" : "✗"} ${m}`).join("\n")}`
-        : "No goal-linked methods found.";
+        : "No goal-linked methods found (parameter-method links may not be configured in the database).";
       const manualStr = manuallyAddedMethods.length
         ? `Manually added methods:\n${manuallyAddedMethods.map((m) => `✓ ${m.methodId}${m.rationale ? ` — ${m.rationale}` : ""}`).join("\n")}`
         : "";
-      actionHints = `Available AI actions: add_methods, remove_methods\n${goalLinkedStr}${manualStr ? `\n${manualStr}` : ""}`;
+      const allToolboxMethods = [...new Set(
+        (toolboxData?.entries ?? []).map(e => `${e.category} - ${e.subCategory}`)
+      )].sort();
+      const toolboxStr = allToolboxMethods.length
+        ? `Training Toolbox — ALL methods available to add (ONLY suggest from this list, use exact names):\n${allToolboxMethods.map(m => `- ${m}`).join("\n")}`
+        : "Training Toolbox: empty.";
+      actionHints = `Available AI actions: add_methods, remove_methods\n${goalLinkedStr}${manualStr ? `\n${manualStr}` : ""}\n${toolboxStr}`;
     }
     return [
       `Current step: ${macroStepLabel}`,
@@ -2810,7 +2816,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, selectedAthlete, planName, planDuration, smartGoals, events, selectedMethods, manuallyAddedMethods, macroStepLabel, methodsByQuality]);
+  }, [currentStep, selectedAthlete, planName, planDuration, smartGoals, events, selectedMethods, manuallyAddedMethods, macroStepLabel, methodsByQuality, toolboxData]);
 
   const handleAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
     switch (action.type) {
