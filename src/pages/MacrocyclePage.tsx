@@ -2904,9 +2904,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         setEvents(prev => [...prev, { id: generateId(), name: action.name, description: action.description, eventDates: [] }]);
         break;
       case "add_methods": {
-        const allAvailableIds = new Set(Object.values(methodsByQuality).flatMap((q) => q.list));
+        const goalLinkedIds = new Set(getAllMethodsWithAssociations().map(m => m.methodId));
         action.methods.forEach(({ name, rationale }) => {
-          if (allAvailableIds.has(name)) {
+          if (goalLinkedIds.has(name)) {
             setSelectedMethods((prev) => new Set([...prev, name]));
           } else {
             handleAddManualMethod({ methodId: name, rationale: rationale ?? "" });
