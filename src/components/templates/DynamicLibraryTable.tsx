@@ -8,8 +8,10 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Edit2, MoreHorizontal, Filter, RotateCcw, FileText, Upload, GripVertical } from 'lucide-react';
+import { Plus, Trash2, Edit2, MoreHorizontal, Filter, RotateCcw, FileText, Upload, GripVertical, Recycle } from 'lucide-react';
 import { useCustomLibraries, CustomLibrary, CustomExercise, LibraryColumn, BulkImportPayload } from '@/hooks/useCustomLibraries';
+import type { Circuit } from '@/contexts/CustomLibrariesContext';
+import { CircuitBuilderDialog } from './CircuitBuilderDialog';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { CustomLibraryColumnFilter } from './CustomLibraryColumnFilter';
@@ -69,6 +71,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
     deleteColumnFromLibrary,
     reorderColumnsInLibrary,
     bulkImportToLibrary,
+    deleteCircuitFromLibrary,
   } = useCustomLibraries();
   const { toast } = useToast();
 
@@ -113,6 +116,8 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const [draggedColId, setDraggedColId] = useState<string | null>(null);
   const [dragOverColId, setDragOverColId] = useState<string | null>(null);
+  const [circuitBuilderOpen, setCircuitBuilderOpen] = useState(false);
+  const [editingCircuit, setEditingCircuit] = useState<Circuit | undefined>(undefined);
 
   const handleBulkImport = (
     rows: Array<Record<string, string>>,
@@ -634,6 +639,74 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
         </div>
       </div>
 
+      {/* ── Circuits section ─────────────────────────────────────────────── */}
+      <div className="space-y-3 pt-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Recycle className="h-4 w-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold">Circuits</h3>
+            <span className="text-xs text-muted-foreground">({(library.circuits ?? []).length})</span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => { setEditingCircuit(undefined); setCircuitBuilderOpen(true); }}
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            New Circuit
+          </Button>
+        </div>
+
+        {(library.circuits ?? []).length === 0 ? (
+          <div className="border-2 border-dashed rounded-lg p-6 text-center text-sm text-muted-foreground">
+            No circuits yet. Circuits group exercises into a looped sequence — great for warm-ups.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {(library.circuits ?? []).map((circuit) => (
+              <div
+                key={circuit.id}
+                className="flex items-center gap-3 px-3 py-2.5 border rounded-lg bg-card hover:bg-accent/30 transition-colors"
+              >
+                <Recycle className="h-4 w-4 text-primary shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{circuit.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {circuit.exercises.length} exercise{circuit.exercises.length !== 1 ? 's' : ''} · {circuit.restBetweenRounds}s between rounds · {circuit.restBetweenExercises}s between exercises
+                  </p>
+                  {circuit.comments && (
+                    <p className="text-xs text-muted-foreground/70 italic truncate mt-0.5">{circuit.comments}</p>
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 shrink-0"
+                  title="Edit circuit"
+                  onClick={() => { setEditingCircuit(circuit); setCircuitBuilderOpen(true); }}
+                >
+                  <Edit2 className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 text-destructive hover:text-destructive shrink-0"
+                  title="Delete circuit"
+                  onClick={() => {
+                    if (confirm(`Delete circuit "${circuit.name}"?`)) {
+                      deleteCircuitFromLibrary(library.id, circuit.id);
+                      toast({ title: 'Circuit deleted' });
+                    }
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Dialogs */}
       <Dialog open={newColumnDialog.isOpen} onOpenChange={(open) => setNewColumnDialog({ ...newColumnDialog, isOpen: open })}>
         <DialogContent>
@@ -766,6 +839,14 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
         onClose={() => setIsBulkImportOpen(false)}
         library={safeLibrary}
         onImport={handleBulkImport}
+      />
+
+      {/* Circuit Builder Dialog */}
+      <CircuitBuilderDialog
+        isOpen={circuitBuilderOpen}
+        onClose={() => { setCircuitBuilderOpen(false); setEditingCircuit(undefined); }}
+        libraryId={library.id}
+        circuit={editingCircuit}
       />
     </>
   );

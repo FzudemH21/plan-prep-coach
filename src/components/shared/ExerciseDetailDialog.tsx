@@ -525,29 +525,40 @@ export function ExerciseDetailDialog({
                 </p>
               )}
 
-              {/* Backward compat: show legacy videoUrl if exercise has it but library has no video column */}
-              {!hasVideoColInLib && (videoUrl || localVideoUrl) && (
+              {/* Video — always shown when library has no dedicated video column */}
+              {!hasVideoColInLib && (
                 <>
                   <Separator />
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold flex items-center gap-2">
                       <Video className="h-4 w-4" />
-                      Video
+                      Video URL
                     </h3>
                     {renderVideoSection()}
                   </div>
                 </>
               )}
 
-              {/* Backward compat: show legacy description if exercise has it and library has no textarea columns */}
-              {!isEditable && (description || localDescription) && !displayColumns.some(col => col.type === 'textarea') && (
+              {/* Description — always shown when library has no dedicated description column */}
+              {!displayColumns.some(isDescriptionColumn) && (
                 <>
                   <Separator />
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold">Description</h3>
-                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                      {localDescription || description}
-                    </p>
+                    {isEditable ? (
+                      <Textarea
+                        value={localDescription}
+                        onChange={(e) => setLocalDescription(e.target.value)}
+                        placeholder="Enter exercise description..."
+                        className="min-h-[100px] resize-none"
+                      />
+                    ) : (localDescription || description) ? (
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                        {localDescription || description}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">No description</p>
+                    )}
                   </div>
                 </>
               )}

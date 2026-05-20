@@ -11,16 +11,8 @@ import { format } from 'date-fns';
 import { Dumbbell, Trophy, Calendar as CalendarIcon } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-
-interface ExerciseDistribution {
-  exerciseId: string;
-  exerciseName: string;
-  methodId: string;
-  categoryName: string;
-  subCategory?: string;
-  dayDate: string;
-  sessionIndex: number;
-}
+import { ExerciseDistribution } from '@/types/microcycle-planning';
+import { displayMethodLabel } from './methodLabelUtils';
 
 interface TrainingDay {
   date: string;
@@ -120,7 +112,7 @@ export function DayExercisesDialog({ day, isOpen, onClose }: DayExercisesDialogP
                     <div key={method} className="space-y-3">
                       {/* Method Header */}
                       <div className="bg-muted/50 px-3 py-2 rounded-md">
-                        <h4 className="font-medium text-sm">{method}</h4>
+                        <h4 className="font-medium text-sm">{displayMethodLabel(method)}</h4>
                       </div>
 
                       {/* Categories and Exercises */}

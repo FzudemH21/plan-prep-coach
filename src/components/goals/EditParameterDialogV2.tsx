@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, KeyboardEvent } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -53,6 +53,89 @@ interface EditParameterDialogV2Props {
   onRemoveMethod: (id: string) => void;
 }
 
+// --- SportTagInput ---
+function SportTagInput({
+  value,
+  onChange,
+  suggestions = [],
+}: {
+  value: string[];
+  onChange: (v: string[]) => void;
+  suggestions?: string[];
+}) {
+  const [inputVal, setInputVal] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  const addSport = (sport: string) => {
+    const trimmed = sport.trim();
+    if (trimmed && !value.includes(trimmed)) {
+      onChange([...value, trimmed]);
+    }
+    setInputVal('');
+    setShowDropdown(false);
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addSport(inputVal);
+    } else if (e.key === 'Backspace' && !inputVal && value.length > 0) {
+      onChange(value.slice(0, -1));
+    } else if (e.key === 'Escape') {
+      setShowDropdown(false);
+    }
+  };
+
+  const filteredSuggestions = suggestions.filter(
+    (s) => !value.includes(s) && s.toLowerCase().includes(inputVal.toLowerCase())
+  );
+
+  return (
+    <div className="relative">
+      <div
+        className="flex flex-wrap gap-1 border rounded-md px-2 py-1.5 min-h-9 cursor-text focus-within:ring-1 focus-within:ring-ring"
+        onClick={(e) => (e.currentTarget.querySelector('input') as HTMLInputElement)?.focus()}
+      >
+        {value.map((sport) => (
+          <Badge key={sport} variant="secondary" className="text-xs gap-1 pr-1">
+            {sport}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onChange(value.filter((s) => s !== sport)); }}
+              className="hover:text-destructive"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </Badge>
+        ))}
+        <input
+          className="flex-1 min-w-[100px] text-sm bg-transparent outline-none placeholder:text-muted-foreground"
+          value={inputVal}
+          onChange={(e) => { setInputVal(e.target.value); setShowDropdown(true); }}
+          onKeyDown={handleKeyDown}
+          onFocus={() => setShowDropdown(true)}
+          onBlur={() => setTimeout(() => { if (inputVal.trim()) addSport(inputVal); setShowDropdown(false); }, 150)}
+          placeholder={value.length === 0 ? 'e.g., Soccer, Basketball...' : ''}
+        />
+      </div>
+      {showDropdown && filteredSuggestions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-36 overflow-y-auto">
+          {filteredSuggestions.map((sport) => (
+            <button
+              key={sport}
+              type="button"
+              className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent"
+              onMouseDown={(e) => { e.preventDefault(); addSport(sport); }}
+            >
+              {sport}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const COMMON_UNITS = [
   'kg', 'lbs', 's', 'min', 'm', 'cm', 'km', 'mph', 'm/s', '%', 'reps', 'sets',
   'kg/bw', '%1RM', 'W', 'W/kg', 'bpm', 'kcal', 'RPE', 'RiR'
@@ -77,6 +160,7 @@ export function EditParameterDialogV2({
   const [name, setName] = useState(parameter.name);
   const [unit, setUnit] = useState(parameter.unit || '');
   const [category, setCategory] = useState(parameter.category || '');
+  const [applicableSports, setApplicableSports] = useState<string[]>(parameter.applicableSports ?? []);
   
   // Popover states
   const [contributesToSearchOpen, setContributesToSearchOpen] = useState(false);
@@ -114,6 +198,7 @@ export function EditParameterDialogV2({
     setName(parameter.name);
     setUnit(parameter.unit || '');
     setCategory(parameter.category || '');
+    setApplicableSports(parameter.applicableSports ?? []);
   }, [parameter]);
 
   // Get available parameters for "Contributes To" (exclude self and already linked as target)
@@ -182,6 +267,7 @@ export function EditParameterDialogV2({
       name: name.trim(),
       unit: unit || undefined,
       category: category || undefined,
+      applicableSports: applicableSports.length > 0 ? applicableSports : undefined,
     });
   };
 
@@ -280,7 +366,8 @@ export function EditParameterDialogV2({
                                 className="w-full text-left px-2 py-1.5 text-sm hover:bg-accent rounded"
                                 onClick={() => {
                                   setUnitSearchOpen(false);
-                                  setTimeout(handleSave, 0);
+                                  // Pass unit directly — avoids stale closure
+                                  onUpdateParameter({ name: name.trim(), unit: unit || undefined, category: category || undefined });
                                 }}
                               >
                                 Use "{unit}" as custom unit
@@ -293,7 +380,8 @@ export function EditParameterDialogV2({
                                   onSelect={() => {
                                     setUnit(u);
                                     setUnitSearchOpen(false);
-                                    setTimeout(handleSave, 0);
+                                    // Pass new unit directly — avoids stale closure
+                                    onUpdateParameter({ name: name.trim(), unit: u || undefined, category: category || undefined });
                                   }}
                                 >
                                   {u}
@@ -340,7 +428,7 @@ export function EditParameterDialogV2({
                                 className="w-full text-left px-2 py-1.5 text-sm hover:bg-accent rounded"
                                 onClick={() => {
                                   setCategorySearchOpen(false);
-                                  setTimeout(handleSave, 0);
+                                  onUpdateParameter({ name: name.trim(), unit: unit || undefined, category: category || undefined });
                                 }}
                               >
                                 Use "{category}" as custom category
@@ -353,7 +441,7 @@ export function EditParameterDialogV2({
                                   onSelect={() => {
                                     setCategory(cat.value);
                                     setCategorySearchOpen(false);
-                                    setTimeout(handleSave, 0);
+                                    onUpdateParameter({ name: name.trim(), unit: unit || undefined, category: cat.value || undefined });
                                   }}
                                 >
                                   {cat.label}
@@ -365,6 +453,27 @@ export function EditParameterDialogV2({
                       </PopoverContent>
                     </Popover>
                   </div>
+                </div>
+
+                {/* Applicable Sports */}
+                <div className="space-y-2">
+                  <Label>Applicable Sports</Label>
+                  <SportTagInput
+                    value={applicableSports}
+                    suggestions={Array.from(new Set(allParameters.flatMap((p) => p.applicableSports ?? [])))}
+                    onChange={(v) => {
+                      setApplicableSports(v);
+                      onUpdateParameter({
+                        name: name.trim(),
+                        unit: unit || undefined,
+                        category: category || undefined,
+                        applicableSports: v.length > 0 ? v : undefined,
+                      });
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Which sports is this parameter relevant for? Press Enter or comma to add.
+                  </p>
                 </div>
               </div>
             </div>

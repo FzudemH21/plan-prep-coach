@@ -16,6 +16,15 @@ export interface CoachProfileStructured {
   experience: string;
 }
 
+export interface CoachBranding {
+  /** Base64 data-URL of the coach/org logo (PNG, JPG, or SVG) */
+  logoBase64?: string;
+  /** Hex accent color used in PDF exports, e.g. "#2563eb" */
+  primaryColor?: string;
+  /** Business / organisation name shown in PDF footer */
+  businessName?: string;
+}
+
 export interface CoachProfile {
   name: string;
   sports: string[];
@@ -24,6 +33,8 @@ export interface CoachProfile {
   completedAt: string;
   /** Set to true when the user explicitly skipped onboarding */
   skipped?: boolean;
+  /** PDF report branding (logo, accent color, business name) */
+  branding?: CoachBranding;
 }
 
 // ─── Cache helpers (sync, no network) ─────────────────────────────────────────

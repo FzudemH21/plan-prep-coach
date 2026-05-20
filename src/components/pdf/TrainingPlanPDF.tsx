@@ -1,4 +1,4 @@
-/**
+﻿/**
  * TrainingPlanPDF.tsx
  *
  * Redesigned to match design_handoff_plan_prep_coach/ visual language:
@@ -8,7 +8,8 @@
  *   - One page per mesocycle (intensity progression chart + rep week bar chart)
  *   - Methods / "The Why" closing page
  *
- * Font: Helvetica (react-pdf built-in — Geist requires font registration files).
+ * Fonts: Geist (body/UI), Geist Mono (numbers), Fraunces (display headlines).
+ *   Served from public/fonts/ as plain URLs — no Vite ?url imports needed.
  * Colors: exact hex values from design_system/colors_and_type.css.
  * Accent: coach-configurable via branding.primaryColor (default #e2522b).
  */
@@ -16,12 +17,59 @@
 import React from "react";
 import {
   Document,
+  Font,
   Page,
   Text,
   View,
   StyleSheet,
   Image,
+  Svg,
+  Path,
+  Circle,
 } from "@react-pdf/renderer";
+
+// ─── Font registration ────────────────────────────────────────────────────────
+// Fonts are served from public/fonts/ — no module imports needed, just string URLs.
+// This avoids Vite 8 / rolldown package.json exports restrictions.
+
+Font.register({
+  family: "Geist",
+  fonts: [
+    { src: "/fonts/Geist-Regular.ttf",   fontWeight: 400 },
+    { src: "/fonts/Geist-Regular.ttf",   fontWeight: 400, fontStyle: "italic" }, // Geist has no italic — use regular as fallback
+    { src: "/fonts/Geist-Medium.ttf",    fontWeight: 500 },
+    { src: "/fonts/Geist-Medium.ttf",    fontWeight: 500, fontStyle: "italic" },
+    { src: "/fonts/Geist-SemiBold.ttf",  fontWeight: 600 },
+    { src: "/fonts/Geist-SemiBold.ttf",  fontWeight: 600, fontStyle: "italic" },
+    { src: "/fonts/Geist-Bold.ttf",      fontWeight: 700 },
+    { src: "/fonts/Geist-Bold.ttf",      fontWeight: 700, fontStyle: "italic" },
+  ],
+});
+
+Font.register({
+  family: "Geist Mono",
+  fonts: [
+    { src: "/fonts/GeistMono-Regular.ttf", fontWeight: 400 },
+    { src: "/fonts/GeistMono-Regular.ttf", fontWeight: 400, fontStyle: "italic" },
+    { src: "/fonts/GeistMono-Bold.ttf",    fontWeight: 700 },
+    { src: "/fonts/GeistMono-Bold.ttf",    fontWeight: 700, fontStyle: "italic" },
+  ],
+});
+
+// Fraunces: woff format (react-pdf/fontkit supports woff, NOT woff2 or variable TTF).
+// Static per-weight woff files from fonts.bunny.net — clean subsetting in pdfkit.
+Font.register({
+  family: "Fraunces",
+  fonts: [
+    { src: "/fonts/Fraunces-Regular.woff",  fontWeight: 400 },
+    { src: "/fonts/Fraunces-Italic.woff",   fontWeight: 400, fontStyle: "italic" },
+    { src: "/fonts/Fraunces-SemiBold.woff", fontWeight: 600 },
+    { src: "/fonts/Fraunces-Bold.woff",     fontWeight: 700 },
+  ],
+});
+
+// Disable hyphenation — prevents words breaking mid-character at line ends
+Font.registerHyphenationCallback((word) => [word]);
 import { TrainingProgram } from "@/hooks/useTrainingPrograms";
 import { PlanNarrative, MesocycleNarrative } from "@/lib/generatePlanNarrative";
 import type { DetailLevel } from "./ExportPDFButton";
@@ -127,12 +175,12 @@ function truncate(s: string, n: number): string {
 const S = StyleSheet.create({
   // Pages
   coverPage: {
-    fontFamily: "Helvetica",
+    fontFamily: "Geist",
     backgroundColor: "#0c0a09",
     overflow: "hidden",
   },
   page: {
-    fontFamily: "Helvetica",
+    fontFamily: "Geist",
     fontSize: 10,
     color: D.ink,
     backgroundColor: D.bg,
@@ -152,16 +200,16 @@ const S = StyleSheet.create({
     borderBottomColor: "#0c0a09",
   },
   eyebrow: {
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Geist", fontWeight: 700,
     fontSize: 10,
     letterSpacing: 2.4,
     textTransform: "uppercase",
     marginBottom: 6,
   },
   sectionTitle: {
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Geist", fontWeight: 700,
     fontSize: 30,
-    letterSpacing: -0.8,
+    letterSpacing: -1.2,
     lineHeight: 1.0,
     color: "#0c0a09",
   },
@@ -177,14 +225,14 @@ const S = StyleSheet.create({
     alignItems: "center",
   },
   footerStudio: {
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Geist", fontWeight: 700,
     fontSize: 9,
     color: "#0c0a09",
     letterSpacing: 1.6,
     textTransform: "uppercase",
   },
   footerPage: {
-    fontFamily: "Helvetica",
+    fontFamily: "Geist",
     fontSize: 10,
     color: "#78716c",
   },
@@ -198,7 +246,7 @@ const S = StyleSheet.create({
     color: "#a8a29e",
     letterSpacing: 1.8,
     textTransform: "uppercase",
-    fontFamily: "Helvetica",
+    fontFamily: "Geist",
   },
 
   // Body text
@@ -358,14 +406,14 @@ function extractMesoData(
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function BFooter({
-  studioName,
+  studioLabel,
 }: {
-  studioName: string;
+  studioLabel: string;
 }) {
   return (
     <>
       <View style={S.footer} fixed>
-        <Text style={S.footerStudio}>{studioName}</Text>
+        <Text style={S.footerStudio}>{studioLabel}</Text>
         <Text
           style={S.footerPage}
           render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
@@ -398,7 +446,7 @@ function PageHdr({
         <Text style={S.sectionTitle}>{title}</Text>
       </View>
       {right ? (
-        <Text style={{ fontFamily: "Helvetica", fontSize: 10, color: D.fg3 }}>
+        <Text style={{ fontFamily: "Geist", fontSize: 10, color: D.fg3 }}>
           {right}
         </Text>
       ) : null}
@@ -418,13 +466,13 @@ function ArcRow({ meso, ordinal }: { meso: MesoPdfData; ordinal: number }) {
       <View style={{ flex: 1, paddingVertical: 12, paddingHorizontal: 14 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 5 }}>
           <Text style={{
-            fontFamily: "Helvetica", fontSize: 9, color: D.fg3,
+            fontFamily: "Geist", fontSize: 9, color: D.fg3,
             letterSpacing: 1.8, textTransform: "uppercase",
           }}>
             M{String(ordinal).padStart(2, "0")}
           </Text>
           <Text style={{
-            fontFamily: "Helvetica-Bold", fontSize: 15, letterSpacing: -0.4,
+            fontFamily: "Geist", fontWeight: 700, fontSize: 15, letterSpacing: -0.4,
             lineHeight: 1.05, color: D.ink, flex: 1,
           }}>
             {meso.name.toUpperCase()}
@@ -435,14 +483,14 @@ function ArcRow({ meso, ordinal }: { meso: MesoPdfData; ordinal: number }) {
             paddingVertical: 3, paddingHorizontal: 8,
           }}>
             <Text style={{
-              fontFamily: "Helvetica-Bold", fontSize: 7.5,
+              fontFamily: "Geist", fontWeight: 700, fontSize: 7.5,
               letterSpacing: 1.4, textTransform: "uppercase", color: col.fg,
             }}>
               {iLabel(meso.intensity)}
             </Text>
           </View>
         </View>
-        <Text style={{ fontFamily: "Helvetica", fontSize: 9, color: D.fg3, letterSpacing: 0.4 }}>
+        <Text style={{ fontFamily: "Geist", fontSize: 9, color: D.fg3, letterSpacing: 0.4 }}>
           {meso.microcycles.length} MC{meso.weeks > 0 ? ` · ${meso.weeks}w` : ""}
         </Text>
       </View>
@@ -453,7 +501,7 @@ function ArcRow({ meso, ordinal }: { meso: MesoPdfData; ordinal: number }) {
         flexDirection: "column", justifyContent: "center", alignItems: "flex-end", gap: 4,
       }}>
         <Text style={{
-          fontSize: 7, fontFamily: "Helvetica-Bold", color: D.fg3,
+          fontSize: 7, fontFamily: "Geist", fontWeight: 700, color: D.fg3,
           letterSpacing: 1.4, textTransform: "uppercase", marginBottom: 4,
         }}>
           Microcycles
@@ -486,59 +534,75 @@ function IntensityProgressionChart({
   microcycles: MesoPdfData["microcycles"];
 }) {
   if (microcycles.length === 0) return null;
-  const CHART_H = 150;
+  const BAR_AREA_H = 150; // fixed pixel budget for bars — prevents overflow into heading above
+  const LABEL_BELOW_H = 18; // reserved height for week-name below each bar
+  const nBars = microcycles.length;
+  // Scale label font smaller as bars get narrower (more microcycles)
+  const labelFontSz = Math.max(4.5, 6.5 - Math.max(0, nBars - 3) * 0.5);
 
   return (
     <View style={{ marginBottom: 22 }}>
       <Text style={{
-        fontFamily: "Helvetica-Bold", fontSize: 8.5, letterSpacing: 1.8,
+        fontFamily: "Geist", fontWeight: 700, fontSize: 8.5, letterSpacing: 1.8,
         textTransform: "uppercase", color: D.ink, marginBottom: 10,
       }}>
         Microcycle Intensity Progression
       </Text>
-      <View style={{ flexDirection: "row", gap: 5, height: CHART_H, alignItems: "flex-end" }}>
+      {/* Each column = fixed bar area + reserved week-label row — no overflow into heading */}
+      <View style={{ flexDirection: "row", gap: 5 }}>
         {microcycles.map((mc, i) => {
           const col = iColor(mc.intensity);
           const ratio = iHeight(mc.intensity);
-          const barH = Math.max(4, ratio * CHART_H);
+          const barH = Math.max(4, ratio * BAR_AREA_H);
           const labelInside = ratio > 0.35;
-          const shortLabel = iLabel(mc.intensity).replace("Extremely Hard", "X-Hard");
+          const fullLabel = iLabel(mc.intensity);
 
           return (
-            <View
-              key={i}
-              style={{ flex: 1, alignItems: "center", justifyContent: "flex-end" }}
-            >
-              {/* Label above bar when bar is too short */}
-              {!labelInside && (
-                <Text style={{
-                  fontSize: 5.5, fontFamily: "Helvetica-Bold", letterSpacing: 0.4,
-                  textTransform: "uppercase", color: D.fg2, textAlign: "center", marginBottom: 2,
-                }}>
-                  {shortLabel}
-                </Text>
-              )}
-              {/* Bar */}
+            <View key={i} style={{ flex: 1, alignItems: "center" }}>
+              {/* Fixed-height bar area — overflow hidden clips content so tall bars
+                  never bleed into the chart heading above */}
               <View style={{
-                width: "100%", height: barH,
-                backgroundColor: col.bg, borderRadius: 3, alignItems: "center",
+                height: BAR_AREA_H, width: "100%",
+                justifyContent: "flex-end", alignItems: "center",
+                overflow: "hidden",
               }}>
-                {labelInside && (
+                {/* Label above bar (short bars only) */}
+                {!labelInside && (
                   <Text style={{
-                    fontSize: 5.5, fontFamily: "Helvetica-Bold", letterSpacing: 0.4,
-                    textTransform: "uppercase", color: col.fg, textAlign: "center", marginTop: 4,
+                    fontSize: labelFontSz, fontFamily: "Geist", fontWeight: 700,
+                    letterSpacing: 0.3, textTransform: "uppercase",
+                    color: D.fg2, textAlign: "center", marginBottom: 2,
                   }}>
-                    {shortLabel}
+                    {fullLabel}
                   </Text>
                 )}
+                {/* Bar */}
+                <View style={{
+                  width: "100%", height: barH,
+                  backgroundColor: col.bg, borderRadius: 3, alignItems: "center",
+                  overflow: "hidden",
+                }}>
+                  {labelInside && (
+                    <Text style={{
+                      fontSize: labelFontSz, fontFamily: "Geist", fontWeight: 700,
+                      letterSpacing: 0.3, textTransform: "uppercase",
+                      color: col.fg, textAlign: "center", marginTop: 4,
+                    }}>
+                      {fullLabel}
+                    </Text>
+                  )}
+                </View>
               </View>
-              {/* Microcycle name below bar */}
-              <Text style={{
-                fontSize: 6.5, fontFamily: "Helvetica-Bold", color: D.fg3,
-                textAlign: "center", marginTop: 4, letterSpacing: 0.2,
-              }}>
-                {truncate(mc.name.replace(/Microcycle\s*/i, "MC "), 10)}
-              </Text>
+
+              {/* Week label in its own reserved row — never competes with bars */}
+              <View style={{ height: LABEL_BELOW_H, justifyContent: "flex-start", alignItems: "center" }}>
+                <Text style={{
+                  fontSize: 6.5, fontFamily: "Geist", fontWeight: 700, color: D.fg3,
+                  textAlign: "center", marginTop: 4, letterSpacing: 0.2,
+                }}>
+                  {truncate(mc.name.replace(/^Week\s+/i, "Microcycle "), 15)}
+                </Text>
+              </View>
             </View>
           );
         })}
@@ -546,7 +610,6 @@ function IntensityProgressionChart({
     </View>
   );
 }
-
 /** Bar chart: one column per day of the representative microcycle */
 function RepWeekChart({ trainingDays }: { trainingDays: MesoPdfData["trainingDays"] }) {
   if (trainingDays.length === 0) return null;
@@ -564,12 +627,12 @@ function RepWeekChart({ trainingDays }: { trainingDays: MesoPdfData["trainingDay
         alignItems: "baseline", marginBottom: 10,
       }}>
         <Text style={{
-          fontFamily: "Helvetica-Bold", fontSize: 8.5, letterSpacing: 1.8,
+          fontFamily: "Geist", fontWeight: 700, fontSize: 8.5, letterSpacing: 1.8,
           textTransform: "uppercase", color: D.ink,
         }}>
           Representative Microcycle
         </Text>
-        <Text style={{ fontFamily: "Helvetica", fontSize: 7.5, color: D.fg3, letterSpacing: 0.4 }}>
+        <Text style={{ fontFamily: "Geist", fontSize: 7.5, color: D.fg3, letterSpacing: 0.4 }}>
           INTENSITY · FOCUS · MAIN WORK
         </Text>
       </View>
@@ -587,7 +650,7 @@ function RepWeekChart({ trainingDays }: { trainingDays: MesoPdfData["trainingDay
           const barH = Math.max(3, ratio * CHART_H);
           const labelInside = ratio > 0.38;
           const sessionName = (day.sessionNames ?? [])[0] ?? "";
-          const shortLabel = iLabel(day.intensity).replace("Extremely Hard", "X-Hard");
+          const fullLabel = iLabel(day.intensity);
 
           return (
             <View
@@ -601,19 +664,19 @@ function RepWeekChart({ trainingDays }: { trainingDays: MesoPdfData["trainingDay
               <View style={{ height: CHART_H, width: "100%", justifyContent: "flex-end", alignItems: "center", marginBottom: 5 }}>
                 {!labelInside && !isOff && (
                   <Text style={{
-                    fontSize: 5, fontFamily: "Helvetica-Bold", letterSpacing: 0.3,
+                    fontSize: 5, fontFamily: "Geist", fontWeight: 700, letterSpacing: 0.3,
                     textTransform: "uppercase", color: D.fg2, textAlign: "center", marginBottom: 2,
                   }}>
-                    {shortLabel}
+                    {fullLabel}
                   </Text>
                 )}
                 <View style={{ width: "100%", height: barH, backgroundColor: col.bg, borderRadius: 2, alignItems: "center" }}>
                   {labelInside && (
                     <Text style={{
-                      fontSize: 5, fontFamily: "Helvetica-Bold", letterSpacing: 0.3,
+                      fontSize: 5, fontFamily: "Geist", fontWeight: 700, letterSpacing: 0.3,
                       textTransform: "uppercase", color: col.fg, textAlign: "center", marginTop: 3,
                     }}>
-                      {shortLabel}
+                      {fullLabel}
                     </Text>
                   )}
                 </View>
@@ -621,7 +684,7 @@ function RepWeekChart({ trainingDays }: { trainingDays: MesoPdfData["trainingDay
 
               {/* Day name */}
               <Text style={{
-                fontFamily: "Helvetica-Bold", fontSize: 7, color: D.fg3,
+                fontFamily: "Geist", fontWeight: 700, fontSize: 7, color: D.fg3,
                 letterSpacing: 1.1, marginBottom: 4, textAlign: "center",
               }}>
                 {day.dayName.slice(0, 3).toUpperCase()}
@@ -630,10 +693,10 @@ function RepWeekChart({ trainingDays }: { trainingDays: MesoPdfData["trainingDay
               {/* Session focus */}
               {sessionName ? (
                 <Text style={{
-                  fontFamily: "Helvetica-Bold", fontSize: 6.5, color: D.ink,
+                  fontFamily: "Geist", fontWeight: 700, fontSize: 6.5, color: D.ink,
                   lineHeight: 1.25, textAlign: "center", marginBottom: 3,
                 }}>
-                  {truncate(sessionName, 16)}
+                  {sessionName}
                 </Text>
               ) : null}
 
@@ -646,7 +709,7 @@ function RepWeekChart({ trainingDays }: { trainingDays: MesoPdfData["trainingDay
                     textAlign: "center", fontStyle: "italic",
                   }}
                 >
-                  {truncate(m, 18)}
+                  {m}
                 </Text>
               ))}
             </View>
@@ -668,6 +731,10 @@ interface TrainingPlanPDFProps {
   selectedMesoIds?: string[];
   /** How deep the PDF renders */
   detailLevel?: DetailLevel;
+  /** Athlete name/sport/team — looked up in ExportPDFButton from the Athlete record */
+  athleteDisplayName?: string | null;
+  athleteSport?: string | null;
+  athleteTeam?: string | null;
 }
 
 export function TrainingPlanPDF({
@@ -677,6 +744,9 @@ export function TrainingPlanPDF({
   branding,
   selectedMesoIds,
   detailLevel = "overview",
+  athleteDisplayName,
+  athleteSport,
+  athleteTeam,
 }: TrainingPlanPDFProps) {
   // ── Brand ───────────────────────────────────────────────────────────────────
   const accent       = branding?.primaryColor ?? DEFAULT_ACCENT;
@@ -687,12 +757,38 @@ export function TrainingPlanPDF({
 
   // ── Plan data ────────────────────────────────────────────────────────────────
   const macro = program.macrocycleData;
-  const goals = (
-    macro?.smartGoals
-      ?.map((g: { description?: string }) => g.description)
-      .filter(Boolean) ??
-    (program.primaryGoal ? [program.primaryGoal] : [])
-  ) as string[];
+
+  interface SmartGoalRaw {
+    id?: string;
+    description?: string;
+    baselineValue?: number | null;
+    desiredValue?: number | null;
+    unit?: string | null;
+    percentChange?: number | null;
+  }
+
+  interface SubGoalRaw {
+    id?: string;
+    parentGoalId?: string;
+    description?: string;
+    preTestValue?: number | null;
+    goalValue?: number | null;
+    unit?: string | null;
+    percentChange?: number | null;
+    testMethod?: string | null;
+    isDerived?: boolean;
+  }
+
+  const smartGoals: SmartGoalRaw[] = macro?.smartGoals?.length
+    ? (macro.smartGoals as SmartGoalRaw[])
+    : program.primaryGoal
+    ? [{ description: program.primaryGoal }]
+    : [];
+
+  const subGoals: SubGoalRaw[] = (macro?.subGoals ?? []) as SubGoalRaw[];
+
+  // Total goal count for badge (main + sub)
+  const goals = smartGoals.map((g) => g.description ?? "").filter(Boolean);
 
   const methods = [
     ...(macro?.selectedMethods ?? []),
@@ -702,7 +798,7 @@ export function TrainingPlanPDF({
   ].filter(Boolean) as string[];
 
   const mesoPdfData  = extractMesoData(program, selectedMesoIds);
-  const athleteName  = program.athleteName ?? "Athlete";
+  const athleteName  = athleteDisplayName || program.athleteName || "Athlete";
   const planName     = program.name ?? "Training Plan";
   const totalWeeks   = program.duration?.weeks ?? 0;
   const startDate    = program.duration?.startDate ? fmtDate(program.duration.startDate) : "";
@@ -753,7 +849,7 @@ export function TrainingPlanPDF({
         {totalMicrocycles > 0 && (
           <Text style={{
             position: "absolute", top: -40, right: -24,
-            fontFamily: "Helvetica-Bold",
+            fontFamily: "Geist", fontWeight: 700,
             fontSize: 280, letterSpacing: -18,
             color: accent, opacity: 0.13,
           }}>
@@ -773,13 +869,13 @@ export function TrainingPlanPDF({
             />
           ) : (
             <Text style={{
-              fontFamily: "Helvetica-Bold", fontSize: 12, color: D.inkFg,
+              fontFamily: "Geist", fontWeight: 700, fontSize: 12, color: D.inkFg,
               letterSpacing: 2, textTransform: "uppercase",
             }}>
               {businessName ?? ""}
             </Text>
           )}
-          <Text style={{ fontFamily: "Helvetica", fontSize: 9, color: D.fg4, letterSpacing: 0.4 }}>
+          <Text style={{ fontFamily: "Geist", fontSize: 9, color: D.fg4, letterSpacing: 0.4 }}>
             {new Date().toISOString().split("T")[0]}
           </Text>
         </View>
@@ -787,31 +883,31 @@ export function TrainingPlanPDF({
         {/* Plan title */}
         <View style={{ position: "absolute", left: 48, right: 48, top: 155 }}>
           <Text style={{
-            fontFamily: "Helvetica-Bold", fontSize: 10, letterSpacing: 3.2,
+            fontFamily: "Geist", fontWeight: 700, fontSize: 10, letterSpacing: 3.2,
             textTransform: "uppercase", color: accent, marginBottom: 18,
           }}>
             Macrocycle{totalMicrocycles > 0 ? ` · ${totalMicrocycles} Microcycles` : ""}
           </Text>
           <Text style={{
-            fontFamily: "Helvetica-Bold",
+            fontFamily: "Geist", fontWeight: 700,
             fontSize: coverFontSize,
-            lineHeight: 0.92,
-            letterSpacing: -2,
-            color: D.inkFg,
+            lineHeight: 0.88,
+            letterSpacing: -1.5,
             textTransform: "uppercase",
+            color: D.inkFg,
           }}>
-            {coverPrimary.toUpperCase()}
+            {coverPrimary}
           </Text>
           {coverSecondary ? (
             <Text style={{
-              fontFamily: "Helvetica-Bold",
+              fontFamily: "Geist", fontWeight: 700,
               fontSize: coverFontSize,
-              lineHeight: 0.92,
-              letterSpacing: -2,
-              color: accent,
+              lineHeight: 0.88,
+              letterSpacing: -1.5,
               textTransform: "uppercase",
+              color: accent,
             }}>
-              {coverSecondary.toUpperCase()}
+              {coverSecondary}
             </Text>
           ) : null}
         </View>
@@ -834,7 +930,7 @@ export function TrainingPlanPDF({
             marginRight: 16,
           }}>
             <Text style={{
-              fontFamily: "Helvetica-Bold", fontSize: 17,
+              fontFamily: "Geist", fontWeight: 700, fontSize: 17,
               color: "#ffffff", letterSpacing: -0.5,
             }}>
               {initials}
@@ -844,21 +940,21 @@ export function TrainingPlanPDF({
           {/* Athlete info */}
           <View style={{ flex: 1 }}>
             <Text style={{
-              fontSize: 8, fontFamily: "Helvetica-Bold",
+              fontSize: 8, fontFamily: "Geist", fontWeight: 700,
               letterSpacing: 2, textTransform: "uppercase",
               color: D.fg4, marginBottom: 4,
             }}>
               Programmed for
             </Text>
             <Text style={{
-              fontFamily: "Helvetica-Bold", fontSize: 19,
+              fontFamily: "Geist", fontWeight: 700, fontSize: 19,
               letterSpacing: -0.5, lineHeight: 1, color: "#ffffff",
             }}>
               {athleteName}
             </Text>
-            {(macro?.athleteSport || macro?.athleteTeam) && (
+            {(athleteSport || athleteTeam) && (
               <Text style={{ fontSize: 10, color: D.fg4, marginTop: 4 }}>
-                {[macro?.athleteSport, macro?.athleteTeam].filter(Boolean).join(" · ")}
+                {[athleteSport, athleteTeam].filter(Boolean).join(" · ")}
               </Text>
             )}
           </View>
@@ -867,14 +963,14 @@ export function TrainingPlanPDF({
           {(coachName || businessName) && (
             <View style={{ alignItems: "flex-end" }}>
               <Text style={{
-                fontSize: 8, fontFamily: "Helvetica-Bold",
+                fontSize: 8, fontFamily: "Geist", fontWeight: 700,
                 letterSpacing: 2, textTransform: "uppercase",
                 color: D.fg4, marginBottom: 4,
               }}>
                 Coach
               </Text>
               {coachName && (
-                <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 13, color: "#ffffff" }}>
+                <Text style={{ fontFamily: "Geist", fontWeight: 700, fontSize: 13, color: "#ffffff" }}>
                   {coachName}
                 </Text>
               )}
@@ -894,20 +990,20 @@ export function TrainingPlanPDF({
           paddingTop: 14, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.15)",
         }}>
           <Text style={{
-            fontFamily: "Helvetica", fontSize: 9, color: D.fg4,
+            fontFamily: "Geist", fontSize: 9, color: D.fg4,
             letterSpacing: 0.6, textTransform: "uppercase",
           }}>
             {startDate}
           </Text>
           <Text style={{
-            fontFamily: "Helvetica-Bold", fontSize: 9, letterSpacing: 3.2,
+            fontFamily: "Geist", fontWeight: 700, fontSize: 9, letterSpacing: 3.2,
             textTransform: "uppercase", color: accent,
           }}>
             {totalMicrocycles > 0 ? `→ ${totalMicrocycles} Microcycles` : "→"}
             {totalWeeks > 0 ? ` · ${totalWeeks}W` : ""} →
           </Text>
           <Text style={{
-            fontFamily: "Helvetica", fontSize: 9, color: D.fg4,
+            fontFamily: "Geist", fontSize: 9, color: D.fg4,
             letterSpacing: 0.6, textTransform: "uppercase",
           }}>
             {endDate}
@@ -918,7 +1014,7 @@ export function TrainingPlanPDF({
         <Text style={{
           position: "absolute", bottom: 14, left: 0, right: 0,
           textAlign: "center", fontSize: 8, letterSpacing: 1.8,
-          textTransform: "uppercase", fontFamily: "Helvetica",
+          textTransform: "uppercase", fontFamily: "Geist",
           color: "rgba(255,255,255,0.25)",
         }}>
           Created with plan-prep-coach
@@ -934,39 +1030,251 @@ export function TrainingPlanPDF({
             eyebrow={`${nextOrdinal()} / The Mission`}
             title="GOALS"
             accent={accent}
-            right={`${goals.length} goal${goals.length !== 1 ? "s" : ""}`}
+            right={`${goals.length + subGoals.length} goal${goals.length + subGoals.length !== 1 ? "s" : ""}`}
           />
 
           {narrative.intro ? (
             <Text style={S.body}>{narrative.intro}</Text>
           ) : null}
 
-          <View style={{ gap: 8 }}>
-            {goals.map((goal, i) => (
-              <View
-                key={i}
-                style={{
-                  flexDirection: "row", alignItems: "flex-start",
-                  backgroundColor: D.ink, borderRadius: 10,
-                  padding: 14, gap: 12,
-                }}
-              >
-                <Text style={{
-                  fontFamily: "Helvetica-Bold", fontSize: 20,
-                  color: accent, letterSpacing: -0.5,
-                  lineHeight: 1, width: 30,
-                }}>
-                  {String(i + 1).padStart(2, "0")}
-                </Text>
-                <Text style={{
-                  fontFamily: "Helvetica-Bold", fontSize: 12,
-                  color: "#ffffff", lineHeight: 1.35, flex: 1,
-                }}>
-                  {goal}
-                </Text>
+          {/* ── Goals hierarchy: two-row grid (main goals / sub-goals) + bezier connectors ── */}
+          {(() => {
+            const CONTENT_W = 499; // A4 595 − 2×48 padding
+            const CONNECTOR_H = 160;
+            const MAIN_GAP = 10;
+            const SUB_GAP = 8;
+            const DOT_R = 3;
+
+            const fmt = (v: number | null | undefined) =>
+              v == null ? "" : Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/\.?0+$/, "");
+
+            // scale: applied to fonts + padding based on card width
+            // Calculated after nMain/nSub are known — placeholder fn, overridden below
+            const makeValueStrip = (scale: number) =>
+              ({ baseline, target, unit, pct }: {
+                baseline?: number | null; target?: number | null;
+                unit?: string | null; pct?: string;
+              }) => {
+                const labelSz  = Math.max(5,   6.5 * scale);
+                const valueSz  = Math.max(7.5, 11  * scale);
+                const arrowSz  = Math.max(8,   11  * scale);
+                const padV     = Math.round(Math.max(4, 8 * scale));
+                return (
+                  <View style={{
+                    flexDirection: "row",
+                    // align to bottom so arrow sits level with the value text, not the label
+                    alignItems: "flex-end",
+                    borderTopWidth: 1, borderTopColor: "#444444",
+                    paddingTop: padV, marginTop: padV,
+                  }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{
+                        fontFamily: "Geist", fontWeight: 700, fontSize: labelSz,
+                        letterSpacing: 1.2, textTransform: "uppercase",
+                        color: D.fg3, marginBottom: 1,
+                      }}>Baseline</Text>
+                      <Text style={{ fontFamily: "Geist Mono", fontWeight: 400, fontSize: valueSz, color: D.fg3 }}>
+                        {fmt(baseline)}{unit ? ` ${unit}` : ""}
+                      </Text>
+                    </View>
+                    <Text style={{
+                      fontFamily: "Geist", fontSize: arrowSz, color: accent,
+                      marginHorizontal: Math.round(4 * scale), marginBottom: 0,
+                    }}>{"→"}</Text>
+                    <View style={{ alignItems: "flex-end" }}>
+                      <Text style={{
+                        fontFamily: "Geist", fontWeight: 700, fontSize: labelSz,
+                        letterSpacing: 1.2, textTransform: "uppercase",
+                        color: D.fg3, marginBottom: 1,
+                      }}>Target</Text>
+                      <Text style={{ fontFamily: "Geist Mono", fontWeight: 700, fontSize: valueSz, color: "#ffffff" }}>
+                        {fmt(target)}{unit ? ` ${unit}` : ""}{pct ?? ""}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              };
+
+            // Only export sub-goals that have actual goal values set (baseline or target).
+            // Sub-goals without values are derived parameters shown in the wizard but not
+            // meaningful in the athlete-facing PDF (they have no measurable target).
+            const subsWithValues = subGoals.filter(
+              sg => sg.preTestValue != null || sg.goalValue != null
+            );
+
+            // Build ordered sub-goal list: parented first (sorted by parent order), orphans after
+            const parentIds = new Set(smartGoals.map(g => g.id).filter(Boolean));
+            const parentedSubs = subsWithValues.filter(sg => sg.parentGoalId && parentIds.has(sg.parentGoalId));
+            const orphanSubs   = subsWithValues.filter(sg => !sg.parentGoalId || !parentIds.has(sg.parentGoalId));
+            const allSubs = [...parentedSubs, ...orphanSubs];
+
+            // Connections: map each sub-goal → main goal index
+            const nMain = smartGoals.length;
+            const nSub  = allSubs.length;
+            const mainGap = MAIN_GAP;
+            const subGap  = SUB_GAP;
+            const mainCardW = nMain > 0 ? (CONTENT_W - Math.max(0, nMain - 1) * mainGap) / nMain : CONTENT_W;
+            const subCardW  = nSub  > 0 ? (CONTENT_W - Math.max(0, nSub  - 1) * subGap)  / nSub  : CONTENT_W;
+            const mainCX = (i: number) => i * (mainCardW + mainGap) + mainCardW / 2;
+            const subCX  = (j: number) => j * (subCardW  + subGap)  + subCardW  / 2;
+
+            // Adaptive scale: shrink fonts/padding as cards get narrower
+            // 240pt = comfortable 2-col main width; 170pt = comfortable 3-col sub width
+            const mainScale = Math.min(1.0, Math.max(0.60, mainCardW / 240));
+            const subScale  = Math.min(1.0, Math.max(0.60, subCardW  / 170));
+            const MainValueStrip = makeValueStrip(mainScale);
+            const SubValueStrip  = makeValueStrip(subScale);
+
+            // ── Main→Sub connections (parentGoalId → SmartGoal) ──────────────
+            const connections: Array<{ mainIdx: number; subIdx: number }> = [];
+            allSubs.forEach((sub, subIdx) => {
+              if (!sub.parentGoalId) return;
+              const mainIdx = smartGoals.findIndex(g => g.id === sub.parentGoalId);
+              if (mainIdx >= 0) connections.push({ mainIdx, subIdx });
+            });
+
+            // ── Sub→Sub connections (parentGoalId → another SubGoal) ─────────
+            // These are drawn as a shallow arch BELOW the sub-goal row so they
+            // are visually distinct from the main→sub connectors above.
+            const SUB_ARCH_H = 32; // depth of the arch below the sub-goal cards
+            const subConnections: Array<{ parentSubIdx: number; childSubIdx: number }> = [];
+            allSubs.forEach((sub, childSubIdx) => {
+              if (!sub.parentGoalId) return;
+              // Skip if already handled as a main→sub connection
+              if (smartGoals.findIndex(g => g.id === sub.parentGoalId) >= 0) return;
+              const parentSubIdx = allSubs.findIndex(s => s.id === sub.parentGoalId);
+              // Guard against self-reference and missing parents
+              if (parentSubIdx >= 0 && parentSubIdx !== childSubIdx) {
+                subConnections.push({ parentSubIdx, childSubIdx });
+              }
+            });
+
+            const mid = CONNECTOR_H / 2;
+
+            return (
+              <View>
+                {/* ── Row 1: main goal cards ── */}
+                <View style={{ flexDirection: "row", gap: mainGap }}>
+                  {smartGoals.map((sg, i) => {
+                    const hasValues = sg.baselineValue != null || sg.desiredValue != null;
+                    const pct = sg.percentChange != null
+                      ? ` (${sg.percentChange > 0 ? "+" : ""}${sg.percentChange.toFixed(1)}%)`
+                      : "";
+                    const pad = Math.round(Math.max(8, 12 * mainScale));
+                    return (
+                      <View key={sg.id ?? i} style={{ flex: 1, backgroundColor: "#1e1e1e", borderRadius: 10, padding: pad }}>
+                        <Text style={{
+                          fontFamily: "Geist", fontWeight: 700,
+                          fontSize: Math.max(5.5, 7.5 * mainScale),
+                          letterSpacing: 1.8, textTransform: "uppercase",
+                          color: accent, marginBottom: Math.round(4 * mainScale),
+                        }}>Main Goal</Text>
+                        <Text style={{
+                          fontFamily: "Geist", fontWeight: 700,
+                          fontSize: Math.max(8, 13 * mainScale),
+                          color: "#ffffff", lineHeight: 1.25,
+                        }}>
+                          {sg.description ?? ""}
+                        </Text>
+                        {hasValues && (
+                          <MainValueStrip
+                            baseline={sg.baselineValue} target={sg.desiredValue}
+                            unit={sg.unit} pct={pct}
+                          />
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+
+                {/* ── Main→Sub bezier connector SVG ── */}
+                {connections.length > 0 && (
+                  <Svg width={CONTENT_W} height={CONNECTOR_H}>
+                    {connections.map(({ mainIdx, subIdx }, ci) => (
+                      <Path
+                        key={`curve-${ci}`}
+                        d={`M ${mainCX(mainIdx)} 0 C ${mainCX(mainIdx)} ${mid} ${subCX(subIdx)} ${mid} ${subCX(subIdx)} ${CONNECTOR_H}`}
+                        stroke={accentLight}
+                        strokeWidth="1.2"
+                        fill="none"
+                      />
+                    ))}
+                    {connections.map(({ mainIdx }, ci) => (
+                      <Circle key={`dt-${ci}`} cx={mainCX(mainIdx)} cy={DOT_R + 1} r={DOT_R} fill={accentLight} />
+                    ))}
+                    {connections.map(({ subIdx }, ci) => (
+                      <Circle key={`db-${ci}`} cx={subCX(subIdx)} cy={CONNECTOR_H - DOT_R - 1} r={DOT_R} fill={accentLight} />
+                    ))}
+                  </Svg>
+                )}
+                {connections.length === 0 && allSubs.length > 0 && (
+                  <View style={{ height: 14 }} />
+                )}
+
+                {/* ── Row 2: sub-goal cards ── */}
+                {allSubs.length > 0 && (
+                  <View style={{ flexDirection: "row", gap: subGap }}>
+                    {allSubs.map((sub, j) => {
+                      const subHas = sub.preTestValue != null || sub.goalValue != null;
+                      const subPct = sub.percentChange != null
+                        ? ` (${sub.percentChange > 0 ? "+" : ""}${sub.percentChange.toFixed(1)}%)`
+                        : "";
+                      const pad = Math.round(Math.max(6, 10 * subScale));
+                      return (
+                        <View key={sub.id ?? j} style={{ flex: 1, backgroundColor: "#4a4a4a", borderRadius: 8, padding: pad }}>
+                          <Text style={{
+                            fontFamily: "Geist", fontWeight: 700,
+                            fontSize: Math.max(5, 6.5 * subScale),
+                            letterSpacing: 1.4, textTransform: "uppercase",
+                            color: accentLight, marginBottom: Math.round(3 * subScale),
+                          }}>Sub-Goal</Text>
+                          <Text style={{
+                            fontFamily: "Geist", fontWeight: 700,
+                            fontSize: Math.max(7, 11 * subScale),
+                            color: "#ffffff", lineHeight: 1.25,
+                          }}>
+                            {sub.description ?? ""}
+                          </Text>
+                          {subHas && (
+                            <SubValueStrip
+                              baseline={sub.preTestValue} target={sub.goalValue}
+                              unit={sub.unit} pct={subPct}
+                            />
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {/* ── Sub→Sub arch SVG (below sub-goal cards) ──
+                    Drawn as a downward arch so it is visually separate from the
+                    main→sub connectors above. Both connections on the same sub-goal
+                    are shown simultaneously — nothing is removed. */}
+                {subConnections.length > 0 && (
+                  <Svg width={CONTENT_W} height={SUB_ARCH_H}>
+                    {subConnections.map(({ parentSubIdx, childSubIdx }, ci) => (
+                      <Path
+                        key={`subcurve-${ci}`}
+                        d={`M ${subCX(parentSubIdx)} 0 C ${subCX(parentSubIdx)} ${SUB_ARCH_H} ${subCX(childSubIdx)} ${SUB_ARCH_H} ${subCX(childSubIdx)} 0`}
+                        stroke={accentLight}
+                        strokeWidth="1.0"
+                        strokeDasharray="3,2"
+                        fill="none"
+                      />
+                    ))}
+                    {/* Endpoint dots — one at each sub-goal involved */}
+                    {subConnections.map(({ parentSubIdx }, ci) => (
+                      <Circle key={`sdt-${ci}`} cx={subCX(parentSubIdx)} cy={DOT_R} r={DOT_R} fill={accentLight} />
+                    ))}
+                    {subConnections.map(({ childSubIdx }, ci) => (
+                      <Circle key={`sdb-${ci}`} cx={subCX(childSubIdx)} cy={DOT_R} r={DOT_R} fill={accentLight} />
+                    ))}
+                  </Svg>
+                )}
               </View>
-            ))}
-          </View>
+            );
+          })()}
 
           <BFooter studioLabel={studioLabel} />
         </Page>
@@ -1008,31 +1316,41 @@ export function TrainingPlanPDF({
 
         return (
           <Page key={meso.id} size="A4" style={S.page}>
-            {/* Header: eyebrow + title + intensity badge + meta */}
-            <View style={S.pageHeader}>
-              <View>
-                <Text style={[S.eyebrow, { color: accent }]}>
-                  {nextOrdinal()} / Mesocycle {String(i + 1).padStart(2, "0")}
-                </Text>
-                <Text style={S.sectionTitle}>{meso.name.toUpperCase()}</Text>
-              </View>
-              <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
-                <View style={{
-                  backgroundColor: col.bg, borderRadius: 4,
-                  paddingVertical: 5, paddingHorizontal: 10,
-                }}>
-                  <Text style={{
-                    fontFamily: "Helvetica-Bold", fontSize: 8.5,
-                    letterSpacing: 1.6, textTransform: "uppercase", color: col.fg,
-                  }}>
-                    {iLabel(meso.intensity)}
-                  </Text>
+            {/* Header: eyebrow + title + intensity badge + meta.
+                Left side gets flex:1 so the title wraps/shrinks instead of
+                overflowing into the intensity badge on the right. */}
+            {(() => {
+              const n = meso.name.length;
+              const mesoTitleSz = n > 28 ? 20 : n > 22 ? 24 : n > 16 ? 26 : 30;
+              return (
+                <View style={S.pageHeader}>
+                  <View style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
+                    <Text style={[S.eyebrow, { color: accent }]}>
+                      {nextOrdinal()} / Mesocycle {String(i + 1).padStart(2, "0")}
+                    </Text>
+                    <Text style={[S.sectionTitle, { fontSize: mesoTitleSz }]}>
+                      {meso.name.toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: "row", gap: 10, alignItems: "center", flexShrink: 0 }}>
+                    <View style={{
+                      backgroundColor: col.bg, borderRadius: 4,
+                      paddingVertical: 5, paddingHorizontal: 10,
+                    }}>
+                      <Text style={{
+                        fontFamily: "Geist", fontWeight: 700, fontSize: 8.5,
+                        letterSpacing: 1.6, textTransform: "uppercase", color: col.fg,
+                      }}>
+                        {iLabel(meso.intensity)}
+                      </Text>
+                    </View>
+                    <Text style={{ fontFamily: "Geist", fontSize: 10, color: D.fg3 }}>
+                      {meso.microcycles.length} MC{meso.weeks > 0 ? ` · ${meso.weeks}w` : ""}
+                    </Text>
+                  </View>
                 </View>
-                <Text style={{ fontFamily: "Helvetica", fontSize: 10, color: D.fg3 }}>
-                  {meso.microcycles.length} MC{meso.weeks > 0 ? ` · ${meso.weeks}w` : ""}
-                </Text>
-              </View>
-            </View>
+              );
+            })()}
 
             {/* Description block with intensity-colored left bar */}
             {mesoNarr ? (
@@ -1065,7 +1383,7 @@ export function TrainingPlanPDF({
                         paddingVertical: 3, paddingHorizontal: 8,
                       }}
                     >
-                      <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 7.5, color: c.fg }}>
+                      <Text style={{ fontFamily: "Geist", fontWeight: 700, fontSize: 7.5, color: c.fg }}>
                         W{mi + 1}: {iLabel(mc.intensity)}
                       </Text>
                     </View>
@@ -1089,7 +1407,7 @@ export function TrainingPlanPDF({
                           paddingVertical: 3, paddingHorizontal: 7,
                           flexShrink: 0, marginTop: 1,
                         }}>
-                          <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 7.5, color: c.fg }}>
+                          <Text style={{ fontFamily: "Geist", fontWeight: 700, fontSize: 7.5, color: c.fg }}>
                             W{mi + 1}
                           </Text>
                         </View>
@@ -1109,36 +1427,6 @@ export function TrainingPlanPDF({
               </View>
             )}
 
-            {/* Methods used in this mesocycle */}
-            {meso.methodsWithExercises.length > 0 && (
-              <View style={{ marginTop: 4 }}>
-                <Text style={{
-                  fontFamily: "Helvetica-Bold", fontSize: 8.5,
-                  letterSpacing: 1.8, textTransform: "uppercase",
-                  color: D.ink, marginBottom: 8,
-                }}>
-                  Methods
-                </Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                  {meso.methodsWithExercises.map((m, mi) => (
-                    <View
-                      key={mi}
-                      style={{
-                        backgroundColor: D.ink, borderRadius: 999,
-                        paddingVertical: 4, paddingHorizontal: 10,
-                      }}
-                    >
-                      <Text style={{
-                        fontFamily: "Helvetica-Bold", fontSize: 8,
-                        color: "#ffffff", letterSpacing: 0.3,
-                      }}>
-                        {m.methodName}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
 
             <BFooter studioLabel={studioLabel} />
           </Page>
@@ -1170,7 +1458,7 @@ export function TrainingPlanPDF({
           {methods.length > 0 && (
             <View>
               <Text style={{
-                fontFamily: "Helvetica-Bold", fontSize: 8.5,
+                fontFamily: "Geist", fontWeight: 700, fontSize: 8.5,
                 letterSpacing: 1.8, textTransform: "uppercase",
                 color: D.ink, marginBottom: 10,
               }}>
@@ -1184,14 +1472,14 @@ export function TrainingPlanPDF({
                   >
                     <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
                       <Text style={{
-                        fontFamily: "Helvetica-Bold", fontSize: 18,
+                        fontFamily: "Geist", fontWeight: 700, fontSize: 18,
                         color: accent, letterSpacing: -0.5,
                         lineHeight: 1, width: 26,
                       }}>
                         {String(i + 1).padStart(2, "0")}
                       </Text>
                       <Text style={{
-                        fontFamily: "Helvetica-Bold", fontSize: 11.5,
+                        fontFamily: "Geist", fontWeight: 700, fontSize: 11.5,
                         color: D.ink, lineHeight: 1.2, flex: 1,
                         textTransform: "uppercase",
                       }}>

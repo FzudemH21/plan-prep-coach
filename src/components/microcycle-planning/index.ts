@@ -1,4 +1,5 @@
 export { MicrocyclePlanningTable } from './MicrocyclePlanningTable';
+export type { MicrocyclePlanningTableHandle } from './MicrocyclePlanningTable';
 export { ExerciseSelectionCell } from './ExerciseSelectionCell';
 export { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
 export { ExerciseChangePopup } from './ExerciseChangePopup';

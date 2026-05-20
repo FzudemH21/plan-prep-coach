@@ -17,6 +17,7 @@ interface TrainingPlanOverviewProps {
   totalDays?: number;
   totalMesocycles?: number;
   primaryGoal?: string;
+  primaryGoals?: string[];
   subGoals?: Array<{ id: string; description: string }>;
   defaultCollapsed?: boolean;
   notes?: string;
@@ -32,11 +33,25 @@ export function TrainingPlanOverview({
   totalDays,
   totalMesocycles,
   primaryGoal,
+  primaryGoals,
   subGoals = [],
   defaultCollapsed = false,
   notes,
   onNotesChange,
 }: TrainingPlanOverviewProps) {
+  // Merge legacy single-goal prop with the goals array, deduplicate
+  const allPrimaryGoals = React.useMemo(() => {
+    const base = primaryGoals && primaryGoals.length > 0
+      ? primaryGoals
+      : primaryGoal ? [primaryGoal] : [];
+    const seen = new Set<string>();
+    return base.filter(g => {
+      const t = g?.trim();
+      if (!t || seen.has(t)) return false;
+      seen.add(t);
+      return true;
+    });
+  }, [primaryGoal, primaryGoals]);
   const [isOpen, setIsOpen] = useState(!defaultCollapsed);
   const [showAllSubGoals, setShowAllSubGoals] = useState(false);
 
@@ -133,13 +148,23 @@ export function TrainingPlanOverview({
               )}
             </div>
 
-            {/* Row 2: Primary Goal */}
-            {primaryGoal && primaryGoal.trim() !== '' && (
+            {/* Row 2: Primary Goals */}
+            {allPrimaryGoals.length > 0 && (
               <div>
                 <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Target className="h-3 w-3" /> Goal
+                  <Target className="h-3 w-3" /> {allPrimaryGoals.length === 1 ? 'Goal' : 'Goals'}
                 </Label>
-                <p className="text-sm font-medium">{primaryGoal}</p>
+                {allPrimaryGoals.length === 1 ? (
+                  <p className="text-sm font-medium">{allPrimaryGoals[0]}</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {allPrimaryGoals.map((goal, i) => (
+                      <Badge key={i} variant="secondary" className="text-xs">
+                        {goal}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

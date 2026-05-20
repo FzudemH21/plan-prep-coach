@@ -1,4 +1,5 @@
 import { MicrocyclePlanningTable } from '@/components/microcycle-planning';
+import { WizardAIAssistant } from '@/components/wizard/WizardAIAssistant';
 import { cn } from '@/lib/utils';
 import { evaluateFormula } from '@/utils/formulaEvaluator';
 import React, { useState, useEffect, useMemo, useCallback, useTransition } from 'react';
@@ -47,7 +48,7 @@ import { ResourcesButton } from "@/components/programs/ResourcesButton";
 import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
-import { format, addWeeks, differenceInWeeks, addDays, differenceInDays } from "date-fns";
+import { format, addWeeks, differenceInWeeks, addDays, differenceInDays, parseISO } from "date-fns";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 import { IntensityLevel } from "@/types/training";
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
@@ -673,14 +674,14 @@ export default function MesocyclePage() {
     athleteCalendarEvents
       .filter(e => e.type === 'test')
       .forEach(e => {
-        const d = new Date(e.date);
+        const d = parseISO(e.date);
         if (d >= start && d <= end) addTest(e.title, d);
       });
     // Source 2: plan-state (wizard-assigned sub-goal tests)
     macrocycleData?.subGoals?.forEach((sg: any) => {
       const name = sg.testMethod || sg.description || 'Test';
       sg.testDates?.forEach((td: string) => {
-        const d = new Date(td);
+        const d = parseISO(td);
         if (d >= start && d <= end) addTest(name, d);
       });
     });
@@ -688,7 +689,7 @@ export default function MesocyclePage() {
     macrocycleData?.smartGoals?.forEach((sg: any) => {
       const name = sg.description || 'Test';
       sg.testDates?.forEach((td: string) => {
-        const d = new Date(td);
+        const d = parseISO(td);
         if (d >= start && d <= end) addTest(name, d);
       });
     });
@@ -710,14 +711,14 @@ export default function MesocyclePage() {
     athleteCalendarEvents
       .filter(e => e.type === 'event')
       .forEach(e => {
-        const d = new Date(e.date);
+        const d = parseISO(e.date);
         if (d >= start && d <= end) addEvent(e.title, d);
       });
     // Source 2: plan-state (wizard-assigned events)
     macrocycleData?.events?.forEach((e: any) => {
       const name = e.name || 'Event';
       e.eventDates?.forEach((ed: string) => {
-        const d = new Date(ed);
+        const d = parseISO(ed);
         if (d >= start && d <= end) addEvent(name, d);
       });
     });
@@ -1449,7 +1450,7 @@ export default function MesocyclePage() {
     };
     // Source 1: calendarEvents (athlete-bound)
     athleteCalendarEvents.forEach(e => {
-      const d = new Date(e.date);
+      const d = parseISO(e.date);
       if (d >= mesoStart && d <= mesoEnd) {
         if (e.type === 'test') addTest(e.title, d);
         else addEvent(e.title, d);
@@ -1459,7 +1460,7 @@ export default function MesocyclePage() {
     macrocycleData?.smartGoals?.forEach((sg: any) => {
       const name = sg.description || 'Test';
       sg.testDates?.forEach((td: string) => {
-        const d = new Date(td);
+        const d = parseISO(td);
         if (d >= mesoStart && d <= mesoEnd) addTest(name, d);
       });
     });
@@ -1467,7 +1468,7 @@ export default function MesocyclePage() {
     macrocycleData?.subGoals?.forEach((sg: any) => {
       const name = sg.testMethod || sg.description || 'Test';
       sg.testDates?.forEach((td: string) => {
-        const d = new Date(td);
+        const d = parseISO(td);
         if (d >= mesoStart && d <= mesoEnd) addTest(name, d);
       });
     });
@@ -1475,7 +1476,7 @@ export default function MesocyclePage() {
     macrocycleData?.events?.forEach((e: any) => {
       const name = e.name || 'Event';
       e.eventDates?.forEach((ed: string) => {
-        const d = new Date(ed);
+        const d = parseISO(ed);
         if (d >= mesoStart && d <= mesoEnd) addEvent(name, d);
       });
     });
@@ -3989,7 +3990,7 @@ export default function MesocyclePage() {
           </div>
         </CardHeader>
         <CardContent className="overflow-x-auto max-w-full">
-          <MicrocyclePlanningTable 
+          <MicrocyclePlanningTable
             key={mpTableKey}
             mesocycles={mesocycles}
             selectedMethods={getAllocatedMethods()}
@@ -3999,6 +4000,7 @@ export default function MesocyclePage() {
               localStorage.setItem('exerciseSelectionData', JSON.stringify(cellData));
             }}
             getParametersForCell={getParametersForCell}
+            methodAllocations={methodAllocations}
           />
         </CardContent>
       </Card>
@@ -4989,11 +4991,43 @@ export default function MesocyclePage() {
 
   const stepTitles = [
     "Mesocycle Setup",
-    "Daily Training Intensity Planning", 
+    "Daily Training Intensity Planning",
     "Mesocycle Characterization",
     "Method Periodization",
     "Exercise Selection"
   ];
+
+  const mesoStepLabel = stepTitles[currentStep - 1] ?? `Step ${currentStep}`;
+
+  const mesoWizardContext = useMemo(() => {
+    const athleteStr = athleteName ? `Athlete: ${athleteName}` : "No athlete selected";
+    const planStr = macrocycleData?.planName ? `Plan: ${macrocycleData.planName}` : "";
+    const goalStr = macrocycleData?.smartGoals?.[0]?.description
+      ? `Primary goal: ${macrocycleData.smartGoals[0].description}`
+      : macrocycleData?.smartGoal?.specific
+      ? `Primary goal: ${macrocycleData.smartGoal.specific}`
+      : "";
+    const mesoCount = mesocycles.length;
+    const mesoStr = mesoCount > 0
+      ? `Mesocycles: ${mesoCount} (${mesocycles.map((m) => m.name).join(", ")})`
+      : "No mesocycles configured yet";
+    const allocatedMethods = Object.keys(methodAllocations).filter(
+      (m) => methodAllocations[m]?.length > 0
+    );
+    const methodsStr = allocatedMethods.length
+      ? `Allocated methods:\n${allocatedMethods.map((m) => `- ${m}`).join("\n")}`
+      : "";
+    return [
+      `Current step: ${mesoStepLabel}`,
+      athleteStr,
+      planStr,
+      goalStr,
+      mesoStr,
+      methodsStr,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }, [currentStep, athleteName, macrocycleData, mesocycles, methodAllocations, mesoStepLabel]);
 
   return (
     <div className="w-full max-w-none space-y-6 min-w-0">
@@ -5136,6 +5170,8 @@ export default function MesocyclePage() {
           }}
         />
 
+      {/* AI Assistant */}
+      <WizardAIAssistant stepLabel={mesoStepLabel} wizardContext={mesoWizardContext} />
     </div>
   );
 };

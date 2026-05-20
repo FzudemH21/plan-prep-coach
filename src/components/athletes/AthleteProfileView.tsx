@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,10 +43,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Save, Trash2, TrendingUp, X, Calendar, User } from 'lucide-react';
+import { Plus, Save, Trash2, TrendingUp, X, Calendar, User, Mic, MicOff, Clock, Files } from 'lucide-react';
+import { useSpeechInput } from '@/hooks/useSpeechInput';
 import {
   Athlete,
   AthleteGroup,
+  AthleteNote,
   AthleteParameter,
   DailyActivityLevel,
   ParameterDefinition,
@@ -57,7 +60,51 @@ import {
 import { ParameterSection } from './ParameterSection';
 import { ParameterValueHistory } from './ParameterValueHistory';
 import { AthleteCalendarView } from './AthleteCalendarView';
+import { AthleteDocumentsTab } from './AthleteDocumentsTab';
 import { useAthletes } from '@/hooks/useAthletes';
+
+// ── Sport tag input ───────────────────────────────────────────────────────────
+
+function SportTagInput({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const [inputVal, setInputVal] = useState('');
+
+  const addSport = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed || value.includes(trimmed)) { setInputVal(''); return; }
+    onChange([...value, trimmed]);
+    setInputVal('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addSport(inputVal); }
+    if (e.key === 'Backspace' && !inputVal && value.length > 0) {
+      onChange(value.slice(0, -1));
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap gap-1 border rounded-md px-2 py-1.5 min-h-9 bg-background focus-within:ring-1 focus-within:ring-ring">
+      {value.map((sport) => (
+        <Badge key={sport} variant="secondary" className="text-xs gap-1 pr-1">
+          {sport}
+          <button type="button" onClick={() => onChange(value.filter((s) => s !== sport))} className="hover:text-destructive">
+            <X className="h-3 w-3" />
+          </button>
+        </Badge>
+      ))}
+      <input
+        value={inputVal}
+        onChange={(e) => setInputVal(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={() => addSport(inputVal)}
+        placeholder={value.length === 0 ? 'Type sport and press Enter…' : ''}
+        className="flex-1 min-w-20 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
+      />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface AthleteProfileViewProps {
   athlete: Athlete;
@@ -83,6 +130,38 @@ export function AthleteProfileView({
   const [isEditing, setIsEditing] = useState(isNewAthlete);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editedAthlete, setEditedAthlete] = useState<Partial<Athlete>>({});
+
+  // Notes state
+  const [newNoteText, setNewNoteText] = useState('');
+
+  // Voice input for notes
+  const handleVoiceNoteResult = useCallback(
+    (text: string) => setNewNoteText((prev) => (prev ? `${prev} ${text}` : text)),
+    []
+  );
+  const { isListening: isListeningNote, toggle: toggleNoteMic, isSupported: noteMicSupported } =
+    useSpeechInput(handleVoiceNoteResult);
+
+  // Derive all notes (newest-first), migrating legacy `notes` string if needed
+  const allNotes = useMemo<AthleteNote[]>(() => {
+    const history = athlete.notesHistory ?? [];
+    if (history.length === 0 && athlete.notes) {
+      return [{ id: '__migrated__', text: athlete.notes, timestamp: athlete.createdAt }];
+    }
+    return history;
+  }, [athlete.notesHistory, athlete.notes, athlete.createdAt]);
+
+  const handleAddNote = () => {
+    const text = newNoteText.trim();
+    if (!text) return;
+    const newEntry: AthleteNote = {
+      id: `note-${Date.now()}`,
+      text,
+      timestamp: new Date().toISOString(),
+    };
+    onUpdateAthlete({ notesHistory: [newEntry, ...(athlete.notesHistory ?? [])] });
+    setNewNoteText('');
+  };
 
   // Height/Weight state
   const [showHeightHistory, setShowHeightHistory] = useState(false);
@@ -269,6 +348,10 @@ export function AthleteProfileView({
             <Calendar className="h-4 w-4" />
             Calendar
           </TabsTrigger>
+          <TabsTrigger value="documents" className="gap-2">
+            <Files className="h-4 w-4" />
+            Documents
+          </TabsTrigger>
         </TabsList>
         
         <TabsContent value="profile" className="flex-1 mt-0">
@@ -432,16 +515,46 @@ export function AthleteProfileView({
             )}
 
             <div className="space-y-2">
-              <Label>Sport</Label>
+              <Label>Sport(s)</Label>
               {isEditing ? (
-                <Input
-                  value={displayValue('sport') || ''}
-                  onChange={(e) => updateField('sport', e.target.value || null)}
-                  placeholder="e.g., Athletics, Swimming"
+                <SportTagInput
+                  value={
+                    (editedAthlete.sports !== undefined
+                      ? editedAthlete.sports
+                      : athlete.sports) ??
+                    (athlete.sport ? [athlete.sport] : [])
+                  }
+                  onChange={(sports) => {
+                    updateField('sports', sports);
+                    // keep legacy field in sync
+                    updateField('sport', sports[0] ?? null);
+                  }}
                 />
               ) : (
                 <p className="text-sm">
-                  {athlete.sport || (
+                  {(athlete.sports?.length
+                    ? athlete.sports
+                    : athlete.sport
+                      ? [athlete.sport]
+                      : []
+                  ).join(', ') || (
+                    <span className="text-muted-foreground">Not set</span>
+                  )}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Team</Label>
+              {isEditing ? (
+                <Input
+                  value={displayValue('team') || ''}
+                  onChange={(e) => updateField('team', e.target.value || null)}
+                  placeholder="e.g., National Junior Squad"
+                />
+              ) : (
+                <p className="text-sm">
+                  {athlete.team || (
                     <span className="text-muted-foreground">Not set</span>
                   )}
                 </p>
@@ -498,19 +611,66 @@ export function AthleteProfileView({
             </div>
 
             {/* Notes */}
-            <div className="space-y-2 pt-4 border-t">
+            <div className="space-y-3 pt-4 border-t">
               <Label>Notes</Label>
-              {isEditing ? (
+
+              {/* Add new note — always visible */}
+              <div className="space-y-2">
                 <Textarea
-                  value={displayValue('notes') || ''}
-                  onChange={(e) => updateField('notes', e.target.value || undefined)}
-                  placeholder="Notizen zum Athleten..."
-                  className="min-h-[100px] resize-y"
+                  value={newNoteText}
+                  onChange={(e) => setNewNoteText(e.target.value)}
+                  placeholder={isListeningNote ? 'Recording…' : 'Add a note…'}
+                  className="min-h-[80px] resize-y"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); handleAddNote(); }
+                  }}
                 />
+                <div className="flex items-center gap-2 justify-end">
+                  {noteMicSupported && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={isListeningNote ? 'destructive' : 'outline'}
+                      onClick={toggleNoteMic}
+                      className={cn('h-8', isListeningNote && 'animate-pulse')}
+                      title={isListeningNote ? 'Stop recording' : 'Voice input'}
+                    >
+                      {isListeningNote
+                        ? <><MicOff className="h-3.5 w-3.5 mr-1.5" />Recording…</>
+                        : <><Mic className="h-3.5 w-3.5 mr-1.5" />Voice</>
+                      }
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    onClick={handleAddNote}
+                    disabled={!newNoteText.trim()}
+                    className="h-8"
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1.5" />
+                    Save note
+                  </Button>
+                </div>
+              </div>
+
+              {/* Notes history */}
+              {allNotes.length > 0 ? (
+                <div className="space-y-2">
+                  {allNotes.map((note) => (
+                    <div key={note.id} className="rounded-lg border bg-muted/30 px-3 py-2.5 text-sm">
+                      <p className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+                        <Clock className="h-3 w-3 flex-shrink-0" />
+                        {format(new Date(note.timestamp), 'MMM d, yyyy · HH:mm')}
+                        {note.id === '__migrated__' && (
+                          <span className="ml-1 italic">(imported)</span>
+                        )}
+                      </p>
+                      <p className="whitespace-pre-wrap leading-snug">{note.text}</p>
+                    </div>
+                  ))}
+                </div>
               ) : (
-                <p className="text-sm whitespace-pre-wrap">
-                  {athlete.notes || <span className="text-muted-foreground">No notes</span>}
-                </p>
+                <p className="text-sm text-muted-foreground">No notes yet.</p>
               )}
             </div>
 
@@ -690,6 +850,12 @@ export function AthleteProfileView({
         
         <TabsContent value="calendar" className="flex-1 mt-0 px-1">
           <AthleteCalendarView athlete={athlete} />
+        </TabsContent>
+
+        <TabsContent value="documents" className="flex-1 mt-0">
+          <ScrollArea className="h-full">
+            <AthleteDocumentsTab athleteId={athlete.id} />
+          </ScrollArea>
         </TabsContent>
       </Tabs>
     </div>

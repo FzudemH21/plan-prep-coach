@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,7 @@ import { DropResult } from '@hello-pangea/dnd';
 import { SaveProgramButton } from '@/components/programs/SaveProgramButton';
 import { useTrainingPrograms } from '@/hooks/useTrainingPrograms';
 import { useWizardData } from '@/contexts/WizardDataContext';
+import { WizardAIAssistant } from '@/components/wizard/WizardAIAssistant';
 
 // Using ExerciseDistribution, SessionSection, and SupersetMapping from types file
 
@@ -57,6 +58,7 @@ export default function MicrocyclePlanningPage() {
   const { macrocycleData, setMacrocycleData, trainingDays, setTrainingDays } = useWizardData();
   const [currentStep, setCurrentStep] = useState(1);
   const [currentMesocycleIndex, setCurrentMesocycleIndex] = useState(0);
+  const [currentMicrocycleIndex, setCurrentMicrocycleIndex] = useState(0);
   const [mesocycles, setMesocycles] = useState<ExtendedMesocycle[]>([]);
   const [exerciseSelectionData, setExerciseSelectionData] = useState<Record<string, CellData>>({});
   const [exerciseDistribution, setExerciseDistribution] = useState<ExerciseDistribution[]>([]);
@@ -163,8 +165,10 @@ export default function MicrocyclePlanningPage() {
       setMesocycles(mesocyclesWithDates);
     }
 
+    const parsedParams: Record<string, Record<number, Record<string, any>>> =
+      savedParameters ? JSON.parse(savedParameters) : {};
     if (savedParameters) {
-      setParameterValues(JSON.parse(savedParameters));
+      setParameterValues(parsedParams);
     }
 
     // v1→v2 migration: a new Step 1 was inserted, so old step indices shift by +1.
@@ -190,10 +194,28 @@ export default function MicrocyclePlanningPage() {
       try { setDayMethodAssignments(JSON.parse(savedDayMethodAssignments)); } catch { /* ignore */ }
     }
 
-    // Load method allocations (written by MesocyclePage, read-only here)
+    // Load method allocations (written by MesocyclePage, read-only here).
+    // Validate against parameterValues: a method is only truly allocated to a mesocycle
+    // if it has at least one entry in the periodization table for that mesocycle.
+    // This removes stale entries that accumulated from old sessions or plan loads.
     const savedMethodAllocations = localStorage.getItem('methodAllocations');
     if (savedMethodAllocations) {
-      try { setMethodAllocations(JSON.parse(savedMethodAllocations)); } catch { /* ignore */ }
+      try {
+        const rawAllocations: Record<string, string[]> = JSON.parse(savedMethodAllocations);
+        const validatedAllocations: Record<string, string[]> = {};
+        Object.entries(rawAllocations).forEach(([methodId, mesoIds]) => {
+          const validIds = mesoIds.filter(mesoId => {
+            const mesoData = parsedParams[mesoId];
+            if (!mesoData) return false;
+            // Keep if this method appears in at least one microcycle slot of the meso
+            return Object.values(mesoData).some(
+              (microData: any) => microData && methodId in microData
+            );
+          });
+          if (validIds.length > 0) validatedAllocations[methodId] = validIds;
+        });
+        setMethodAllocations(validatedAllocations);
+      } catch { /* ignore */ }
     }
 
     const savedDailyIntensity = localStorage.getItem('dailyIntensityData');
@@ -416,10 +438,30 @@ export default function MicrocyclePlanningPage() {
   useEffect(() => {
     if (!macrocycleData || trainingDays.length === 0) return;
 
-    // Helper: normalize any date string (ISO or yyyy-MM-dd) to yyyy-MM-dd
-    const toDateKey = (d: string) => d.split('T')[0];
+    // Helper: normalize any date string (ISO or yyyy-MM-dd) to local yyyy-MM-dd.
+    // Using local Date components avoids the UTC-midnight off-by-one that
+    // d.split('T')[0] causes in UTC+ timezones.
+    const toDateKey = (d: string): string => {
+      if (!d) return d;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+      const dt = new Date(d);
+      const yyyy = dt.getFullYear();
+      const mm = String(dt.getMonth() + 1).padStart(2, '0');
+      const dd = String(dt.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    };
 
     const testMap = new Map<string, string[]>();
+    // Primary SMART goal tests
+    (macrocycleData.smartGoals || []).forEach((sg: any) => {
+      const name = sg.description || 'Test';
+      (sg.testDates || []).forEach((dateStr: string) => {
+        const key = toDateKey(dateStr);
+        const existing = testMap.get(key) || [];
+        if (!existing.includes(name)) testMap.set(key, [...existing, name]);
+      });
+    });
+    // Sub-goal tests
     (macrocycleData.subGoals || []).forEach((sg: any) => {
       const name = sg.testMethod || sg.name || sg.testName || sg.method || sg.description || 'Test';
       (sg.testDates || []).forEach((dateStr: string) => {
@@ -3080,51 +3122,69 @@ export default function MicrocyclePlanningPage() {
     });
   };
 
+  const stepLabels: Record<number, string> = {
+    1: 'Step 1 of 3 — Method Distribution',
+    2: 'Step 2 of 3 — Exercise Distribution',
+    3: 'Step 3 of 3 — Training Calendar',
+  };
+
+  const goToStep = (step: number) => {
+    const clamped = Math.min(totalSteps, Math.max(1, step));
+    setCurrentStep(clamped);
+    localStorage.setItem('microcycleStep', String(clamped));
+    localStorage.setItem('microcyclePlanningVersion', '2');
+  };
+
   const NavigationButtons = () => {
     const isLastStep = currentStep >= totalSteps;
-    
+
     return (
-      <div className="flex flex-col md:flex-row md:justify-between items-stretch md:items-center gap-3 w-full">
-        <Button 
-          onClick={() => {
-            if (currentStep <= 1) {
-              localStorage.setItem('mesocycleStep', '5');
-              navigate('/mesocycle');
-            } else {
-              setCurrentStep(Math.max(1, currentStep - 1));
-            }
-          }}
-          variant="outline"
-          className="w-full md:w-auto"
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          {currentStep <= 1 ? "Back to Mesocycle Planning" : "Previous"}
-        </Button>
-        
-        {isLastStep ? (
-          <Button 
+      <div className="space-y-2">
+        <p className="text-sm text-muted-foreground text-center font-medium">
+          {stepLabels[currentStep]}
+        </p>
+        <div className="flex flex-col md:flex-row md:justify-between items-stretch md:items-center gap-3 w-full">
+          <Button
             onClick={() => {
-              saveCurrentSession();
-              toast({
-                title: "Program saved",
-                description: "Your training program has been saved.",
-              });
-              navigate("/templates/programs");
+              if (currentStep <= 1) {
+                localStorage.setItem('mesocycleStep', '5');
+                navigate('/mesocycle');
+              } else {
+                goToStep(currentStep - 1);
+              }
             }}
+            variant="outline"
             className="w-full md:w-auto"
           >
-            <Check className="mr-2 h-4 w-4" />
-            Save & Finish
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            {currentStep <= 1 ? "Back to Mesocycle Planning" : "Previous"}
           </Button>
-        ) : (
-          <Button 
-            onClick={() => setCurrentStep(Math.min(totalSteps, currentStep + 1))}
-            className="w-full md:w-auto"
-          >
-            Next
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
-        )}
+
+          {isLastStep ? (
+            <Button
+              onClick={() => {
+                saveCurrentSession();
+                toast({
+                  title: "Program saved",
+                  description: "Your training program has been saved.",
+                });
+                navigate("/templates/programs");
+              }}
+              className="w-full md:w-auto"
+            >
+              <Check className="mr-2 h-4 w-4" />
+              Save & Finish
+            </Button>
+          ) : (
+            <Button
+              onClick={() => goToStep(currentStep + 1)}
+              className="w-full md:w-auto"
+            >
+              Next
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
     );
   };
@@ -3168,7 +3228,7 @@ export default function MicrocyclePlanningPage() {
               key={meso.id}
               variant={index === currentMesocycleIndex ? "default" : "outline"}
               size="sm"
-              onClick={() => setCurrentMesocycleIndex(index)}
+              onClick={() => { setCurrentMesocycleIndex(index); setCurrentMicrocycleIndex(0); }}
               className="min-w-[100px] shrink-0"
             >
               {meso.name}
@@ -3178,6 +3238,30 @@ export default function MicrocyclePlanningPage() {
       </div>
     </div>
   );
+
+  const renderMicrocycleNavigation = () => {
+    const microcycles = currentMesocycle?.microcycles ?? [];
+    if (microcycles.length <= 1) return null;
+    return (
+      <div className="flex items-center justify-center mb-4">
+        <div className="overflow-x-auto scrollbar-thin max-w-full">
+          <div className="flex items-center justify-center gap-2 px-2">
+            {microcycles.map((micro, index) => (
+              <Button
+                key={micro.id}
+                variant={index === currentMicrocycleIndex ? "default" : "outline"}
+                size="sm"
+                onClick={() => setCurrentMicrocycleIndex(index)}
+                className="min-w-[90px] shrink-0"
+              >
+                {micro.name}
+              </Button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderExerciseDistribution = () => {
     if (!currentMesocycle) {
@@ -3228,10 +3312,108 @@ export default function MicrocyclePlanningPage() {
             const parsed = existing ? JSON.parse(existing) : {};
             localStorage.setItem('microcyclePlanningState', JSON.stringify({ ...parsed, cellData: data }));
           }}
+          selectedMicrocycleIndex={currentMicrocycleIndex}
+          onSelectedMicrocycleIndexChange={setCurrentMicrocycleIndex}
+          methodAllocations={methodAllocations}
         />
       </div>
     );
   };
+
+  // ── AI Assistant ────────────────────────────────────────────────────────────
+  const microStepLabels = [
+    "Method Distribution to Training Days",
+    "Exercise Distribution",
+    "Training Calendar",
+  ];
+  const microStepLabel = microStepLabels[currentStep - 1] ?? `Step ${currentStep}`;
+
+  const microWizardContext = useMemo(() => {
+    const athleteStr = athleteName ? `Athlete: ${athleteName}` : "No athlete selected";
+    const planStr = macrocycleData?.planName ? `Plan: ${macrocycleData.planName}` : "";
+    const goalStr = macrocycleData?.smartGoals?.[0]?.description
+      ? `Primary goal: ${macrocycleData.smartGoals[0].description}`
+      : "";
+    const mesoCount = mesocycles.length;
+    const mesoStr = mesoCount > 0
+      ? `Mesocycles: ${mesoCount} (${mesocycles.map((m: { name: string }) => m.name).join(", ")})`
+      : "No mesocycles";
+    const currentMeso = mesocycles[currentMesocycleIndex];
+    const currentMesoStr = currentMeso ? `Current mesocycle: ${currentMeso.name}` : "";
+    const assignedDays = Object.keys(dayMethodAssignments).filter(
+      (d) => dayMethodAssignments[d]?.length > 0
+    ).length;
+    const dayStr = assignedDays > 0
+      ? `Training days with methods assigned: ${assignedDays}`
+      : "No method-day assignments yet";
+    const availableMethods = Object.keys(resolvedMethodAllocations).filter(
+      (m) => resolvedMethodAllocations[m]?.length > 0
+    );
+    const methodsStr = availableMethods.length
+      ? `Training methods in this plan:\n${availableMethods.map((m) => `- ${m}`).join("\n")}`
+      : "";
+    const offDays = trainingDays
+      .filter(d => d.intensity === 'off')
+      .map(d => format(parseISO(d.date), 'EEEE'))
+      .filter((v, i, a) => a.indexOf(v) === i);
+    const offDaysStr = offDays.length ? `Rest days (off): ${offDays.join(", ")}` : "";
+    const stepHint = currentStep === 1
+      ? `Goal: assign methods to training days. Do NOT assign methods to rest/off days (${offDays.join(", ") || "none"}).`
+      : currentStep === 2
+      ? "Goal: assign exercises from the database to each method slot."
+      : "Goal: review the final training calendar with all sessions.";
+    return [
+      `Current step: ${microStepLabel}`,
+      athleteStr,
+      planStr,
+      goalStr,
+      mesoStr,
+      currentMesoStr,
+      methodsStr,
+      dayStr,
+      offDaysStr,
+      stepHint,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel]);
+
+  const handleMicroAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
+    if (action.type !== "assign_methods_to_days") return;
+    const dayNameMap: Record<string, number> = {
+      Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
+      Thursday: 4, Friday: 5, Saturday: 6,
+    };
+    const currentMeso = mesocycles[currentMesocycleIndex];
+    if (!currentMeso) return;
+
+    const targetDays = trainingDays.filter(d => {
+      if (d.intensity === 'off') return false;
+      if (action.microcycleIndex != null) {
+        const micro = currentMeso.microcycles?.[action.microcycleIndex - 1];
+        if (!micro || d.microcycleId !== micro.id) return false;
+      } else {
+        if (!currentMeso.microcycles?.some((m: { id: string }) => m.id === d.microcycleId)) return false;
+      }
+      return true;
+    });
+
+    const newAssignments = { ...dayMethodAssignments };
+    action.weekPattern.forEach(({ method, days }) => {
+      const dayNums = days.map(d => dayNameMap[d]).filter(n => n != null);
+      targetDays.forEach(day => {
+        const date = new Date(day.date + 'T00:00:00');
+        if (!dayNums.includes(date.getDay())) return;
+        const key = `${day.date}_0`;
+        const current = newAssignments[key] ?? [];
+        if (!current.includes(method)) {
+          newAssignments[key] = [...current, method];
+        }
+      });
+    });
+    setDayMethodAssignments(newAssignments);
+    localStorage.setItem('dayMethodAssignments', JSON.stringify(newAssignments));
+  }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments]);
 
   return (
     <div className="mx-auto py-6 space-y-6 px-4 w-full max-w-[98vw]">
@@ -3259,6 +3441,9 @@ export default function MicrocyclePlanningPage() {
 
       {renderTrainingPlanOverview()}
       
+      {currentStep === 1 && mesocycles.length > 1 && renderMesocycleNavigation()}
+      {currentStep === 1 && renderMicrocycleNavigation()}
+
       {currentStep === 1 && (
         currentMesocycle ? (
           <MethodSessionArchitecture
@@ -3280,6 +3465,9 @@ export default function MicrocyclePlanningPage() {
             onRenameSession={handleRenameSession}
             intensityLevels={intensityLevels}
             getIntensityColor={getIntensityColor}
+            getMethodFrequencyTarget={getMethodFrequency}
+            selectedMicrocycleIndex={currentMicrocycleIndex}
+            onSelectedMicrocycleIndexChange={setCurrentMicrocycleIndex}
           />
         ) : (
           <div className="p-8 text-center text-muted-foreground">No mesocycle data available</div>
@@ -3287,6 +3475,7 @@ export default function MicrocyclePlanningPage() {
       )}
 
       {currentStep === 2 && renderMesocycleNavigation()}
+      {currentStep === 2 && renderMicrocycleNavigation()}
 
       {currentStep === 2 && renderExerciseDistribution()}
 
@@ -3391,6 +3580,13 @@ export default function MicrocyclePlanningPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* AI Assistant */}
+      <WizardAIAssistant
+        stepLabel={microStepLabel}
+        wizardContext={microWizardContext}
+        onApplySuggestion={handleMicroAIApply}
+      />
     </div>
   );
 }

@@ -7,19 +7,54 @@ import { cn } from "@/lib/utils";
 import { sendMessage, type Message } from "@/utils/anthropicApi";
 import { useCoachProfile } from "@/hooks/useCoachProfile";
 import { useSpeechInput } from "@/hooks/useSpeechInput";
+import { useToolboxData } from "@/hooks/useToolboxData";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 /** Structured actions the AI can suggest for direct application into the wizard. */
 export type ApplySuggestion =
   | { type: "set_plan_name"; name: string }
-  | { type: "add_goal"; description: string }
-  /** MacrocyclePage Step 3 — add new methods to the training plan */
-  | { type: "add_methods"; methods: string[] }
+  | { type: "add_goal"; parameterName: string }
+  /** MacrocyclePage Steps 1 & 2 — schedule or remove test dates for main goals / sub-goals, or dates for events */
+  | { type: "schedule_tests"; schedule: Array<{ goalDescription: string; isMainGoal: boolean; isEvent?: boolean; action?: "add" | "remove"; dates: string[] }> }
+  /** MacrocyclePage Step 1 — change plan duration by setting a new number of weeks (keeps start date) */
+  | { type: "set_plan_duration"; weeks: number }
+  /** MacrocyclePage Steps 1 & 2 — create a new event (without scheduling dates yet) */
+  | { type: "create_event"; name: string; description?: string }
+  /** MacrocyclePage Step 3 — add new methods to the training plan, each with an optional rationale */
+  | { type: "add_methods"; methods: Array<{ name: string; rationale?: string }> }
   | { type: "set_mesocycle_config"; count: number; weeksDuration: number }
+  /** MesocyclePage Step 1 — configure the full mesocycle/microcycle structure with per-microcycle durations and intensities */
+  | { type: "configure_mesocycles"; mesocycles: Array<{ name?: string; microcycles: Array<{ duration: number; intensity?: string; name?: string }> }> }
   /** MesocyclePage Step 3 — distribute existing methods across specific mesocycles */
   | { type: "allocate_methods"; allocations: Array<{ methodName: string; mesocycleNames: string[] }> }
-  | { type: "set_method_intensities"; methodName: string; frequency: number; sets: number; reps: string; intensity: string };
+  /** MesocyclePage Step 3 — add new training methods to the plan */
+  | { type: "add_methods"; methods: Array<{ name: string; rationale?: string }> }
+  /** MesocyclePage Step 3 — remove methods from the plan entirely */
+  | { type: "remove_methods"; methodNames: string[] }
+  | { type: "set_method_intensities"; methodName: string; frequency: number; sets: number; reps: string; intensity: string }
+  /** MesocyclePage Steps 1 & 2 — set mesocycle-level intensity and/or per-microcycle loading wave */
+  | { type: "set_microcycle_intensities"; plan: Array<{ mesocycleName: string; mesoIntensity?: string; intensities: string[] }> }
+  /** MesocyclePage Step 2 — set per-day intensities within each microcycle */
+  | { type: "set_daily_intensities"; plan: Array<{ mesocycleName: string; microcycleIndex: number; days: string[] }> }
+  /** MesocyclePage Step 4 — fill periodization table (frequency/sets/reps/intensity per method × mesocycle × microcycle) */
+  | { type: "set_periodization"; entries: Array<{ methodName: string; mesocycleName: string; microcycleIndex?: number; frequency?: number; sets?: number; reps?: string; intensity?: string; extraParams?: Record<string, string | number> }> }
+  /** MicrocyclePlanningPage Step 1 — assign methods to days of the week */
+  | { type: "assign_methods_to_days"; microcycleIndex?: number; weekPattern: Array<{ method: string; days: string[] }> }
+  /** MesocyclePage Step 5 — assign exercises from the library to method × mesocycle cells */
+  | { type: "assign_exercises"; replace?: boolean; assignments: Array<{ methodName: string; mesocycleName: string; categoryName?: string; exercises: Array<{ exerciseId: string; exerciseName: string; libraryId: string }> }> }
+  /** Parameter Database — add a new parameter */
+  | { type: "add_parameter"; name: string; category?: string; unit?: string; applicableSports?: string[] }
+  /** Parameter Database — add multiple parameters at once */
+  | { type: "add_parameters_bulk"; parameters: Array<{ name: string; category?: string; unit?: string; applicableSports?: string[] }> }
+  /** Parameter Database — add an interaction between two existing parameters (by name) */
+  | { type: "add_interaction"; sourceParameterName: string; targetParameterName: string; direction: "contributes_to" | "improved_by"; strength?: "strong" | "moderate" | "weak" }
+  /** Parameter Database — add multiple interactions at once */
+  | { type: "add_interactions_bulk"; interactions: Array<{ sourceParameterName: string; targetParameterName: string; direction: "contributes_to" | "improved_by"; strength?: "strong" | "moderate" | "weak" }> }
+  /** Parameter Database — link a training method to a parameter */
+  | { type: "add_parameter_method"; parameterName: string; methodId: string; rationale?: string }
+  /** Parameter Database — link multiple training methods to parameters at once */
+  | { type: "add_parameter_methods_bulk"; links: Array<{ parameterName: string; methodId: string; rationale?: string }> };
 
 export interface WizardAIAssistantProps {
   /** Human-readable label for the current wizard step, e.g. "Goal & Method Selection" */
@@ -27,10 +62,30 @@ export interface WizardAIAssistantProps {
   /** A plain-text snapshot of the current wizard state built by the parent page */
   wizardContext: string;
   /**
+   * Pre-formatted block of past plans from plan_memory, built by useCoachMemory.
+   * Injected between coach profile and current wizard state so the AI can
+   * reference the coach's own history when making suggestions.
+   */
+  coachMemoryContext?: string;
+  /**
+   * RAG-retrieved chunks from the vector DB, pre-formatted as a string block.
+   * Injected after coach memory and before wizard state so the AI can cite
+   * real documents when making suggestions.
+   * Format: "Source: <doc title>\n<chunk text>\n\n..." (one chunk per block)
+   */
+  ragContext?: string;
+  /**
    * When provided, the AI is told it can emit [[APPLY: {...}]] blocks and the
    * panel will render Apply buttons that call this handler.
    */
   onApplySuggestion?: (action: ApplySuggestion) => void;
+  /**
+   * Optional override for the AI's role description, injected into both the
+   * main system prompt and the proactive opener. Use this to give the assistant
+   * a different focus in non-wizard contexts (e.g. Parameter Database).
+   * When omitted, the default wizard advisor role is used.
+   */
+  assistantRole?: string;
 }
 
 // ─── Prompts ─────────────────────────────────────────────────────────────────
@@ -42,11 +97,48 @@ When you have a concrete suggestion the coach can apply with one click, append O
 
 Available types and their fields:
 - set_plan_name: {"type":"set_plan_name","name":"<plan name>"}
-- add_goal: {"type":"add_goal","description":"<full goal description including numbers and timeframe>"}
-- add_methods: {"type":"add_methods","methods":["<exact method name>","<exact method name>"]}
+- set_plan_duration: {"type":"set_plan_duration","weeks":<total number of weeks>}
+- add_goal: {"type":"add_goal","parameterName":"<exact parameter name from the database list>"}
+- schedule_tests: {"type":"schedule_tests","schedule":[{"goalDescription":"<exact name>","isMainGoal":<true|false>,"isEvent":<true for events, omit/false for goals>,"action":"add","dates":["YYYY-MM-DD"]}]}
+  action is "add" (default) or "remove". Use ISO date strings (YYYY-MM-DD). For goals/sub-goals match goalDescription to the name in context. For events, goalDescription is the event name — created automatically if it doesn't exist yet.
+- create_event: {"type":"create_event","name":"<event name>","description":"<optional description>"}
+  Creates a new event entry without scheduling any dates. Use this when the coach wants to add an event to the list first and schedule it later.
+- add_methods: {"type":"add_methods","methods":[{"name":"<exact method name>","rationale":"<why this method supports the goal>"},{"name":"<exact method name>","rationale":"<rationale>"}]}
+  Always include a rationale for methods that are NOT already goal-linked (i.e. methods you are suggesting beyond what the system derived from the parameter database).
 - set_mesocycle_config: {"type":"set_mesocycle_config","count":<number>,"weeksDuration":<weeks per mesocycle>}
+  Use for quick uniform setup (all mesocycles same length, all microcycles 7 days). For variable durations use configure_mesocycles instead.
+- configure_mesocycles: {"type":"configure_mesocycles","mesocycles":[{"name":"Mesocycle 1","microcycles":[{"duration":7,"intensity":"easy"},{"duration":7,"intensity":"moderate"},{"duration":7,"intensity":"hard"},{"duration":7,"intensity":"deload"}]},{"name":"Mesocycle 2","microcycles":[{"duration":7,"intensity":"moderate"},{"duration":7,"intensity":"hard"},{"duration":5,"intensity":"extremely-hard"},{"duration":2,"intensity":"deload"}]}]}
+  Full structure replacement — use when microcycles have different durations or when adding/removing mesocycles or microcycles. Duration is in days. Intensity is optional (defaults to "moderate"). Valid intensities: "off","deload","easy","easy-moderate","moderate","moderate-hard","hard","extremely-hard".
 - allocate_methods: {"type":"allocate_methods","allocations":[{"methodName":"<exact method name>","mesocycleNames":["Mesocycle 1","Mesocycle 2"]},{"methodName":"<exact method name>","mesocycleNames":["Mesocycle 1","Mesocycle 2","Mesocycle 3"]}]}
+- remove_methods: {"type":"remove_methods","methodNames":["<exact method name>","<exact method name>"]}
+  Removes methods from the plan entirely. Use exact method names as listed in the wizard context.
 - set_method_intensities: {"type":"set_method_intensities","methodName":"<name>","frequency":<sessions/week>,"sets":<number>,"reps":"<e.g. 3-5>","intensity":"<e.g. 85-90% 1RM>"}
+- set_microcycle_intensities: {"type":"set_microcycle_intensities","plan":[{"mesocycleName":"Mesocycle 1","mesoIntensity":"hard","intensities":["easy","moderate","hard","deload"]},{"mesocycleName":"Mesocycle 2","mesoIntensity":"extremely-hard","intensities":["moderate","hard","extremely-hard","deload"]}]}
+  Valid intensity values: "off", "deload", "easy", "easy-moderate", "moderate", "moderate-hard", "hard", "extremely-hard". Use hyphens, not underscores.
+  mesoIntensity sets the overall intensity of the mesocycle (its peak/characterization). intensities sets each individual microcycle in order. Both are optional — include only what you want to change.
+- set_daily_intensities: {"type":"set_daily_intensities","plan":[{"mesocycleName":"Mesocycle 1","microcycleIndex":1,"days":["easy","moderate","hard","off","moderate","hard","off"]},{"mesocycleName":"Mesocycle 1","microcycleIndex":2,"days":["moderate","hard","extremely-hard","off","hard","extremely-hard","off"]}]}
+  Sets the intensity for each individual training day within a microcycle. microcycleIndex is 1-based (1 = first microcycle of that mesocycle). days array length must match the microcycle duration in days — provide one value per day in calendar order. Valid values: "off","deload","easy","easy-moderate","moderate","moderate-hard","hard","extremely-hard".
+- set_periodization: {"type":"set_periodization","entries":[{"methodName":"<exact name>","mesocycleName":"Mesocycle 1","microcycleIndex":1,"frequency":3,"sets":4,"reps":"3-5","intensity":"80-85% 1RM","extraParams":{"Organization":"Whole","Contrast":"No"}}]}
+  microcycleIndex is 1-based (1 = first microcycle). Omit microcycleIndex to apply to ALL microcycles of that mesocycle. Only include the fields you want to set.
+  ALL additional parameters listed in the context under each method (both qualitative/dropdown AND quantitative, e.g. rest durations) MUST be included in extraParams. Use the exact parameter name as the key. For qualitative/dropdown parameters, pick one of the listed options as the value. For quantitative parameters, provide a number (e.g. 90 for seconds). Do not skip any parameter listed in the context.
+- assign_methods_to_days: {"type":"assign_methods_to_days","microcycleIndex":1,"weekPattern":[{"method":"<exact method name>","days":["Monday","Wednesday","Friday"]},{"method":"<exact method name>","days":["Tuesday","Thursday"]}]}
+  Valid day names: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday.
+  microcycleIndex is 1-based — include to target a specific microcycle only (e.g. 1 = first week), omit to apply the pattern to ALL microcycles in the current mesocycle. Do NOT assign methods to days marked as "off" — those are rest days with no sessions.
+- assign_exercises: {"type":"assign_exercises","replace":true,"assignments":[{"methodName":"<exact method name>","mesocycleName":"Mesocycle 1","categoryName":"<exercise category — include ONLY if method has categories, omit otherwise>","exercises":[{"exerciseId":"<exact id>","exerciseName":"<name>","libraryId":"<exact library id>"}]}]}
+  Only use exercise IDs and library IDs as listed in the wizard context. Use exact values — do not invent IDs. Set "replace": true to replace the existing exercise selection for a cell; omit or set false to append to existing exercises. If the method context lists "Categories:", produce one assignment entry per category, each with the matching "categoryName" field and category-appropriate exercises.
+- add_parameter: {"type":"add_parameter","name":"<parameter name>","category":"<one of: strength|speed|power|endurance|mobility|technique|body_composition|other>","unit":"<unit e.g. kg, s, cm — omit if not applicable>","applicableSports":["<sport>","<sport>"]}
+  applicableSports is optional — include when the parameter is sport-specific (e.g. ["Soccer","Rugby"]). Omit for universal parameters.
+- add_parameters_bulk: {"type":"add_parameters_bulk","parameters":[{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>","applicableSports":["<sport>"]},{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>"}]}
+  Use this when adding multiple parameters at once (e.g. filling a whole database section). Preferred over add_parameter when adding 2 or more parameters.
+  applicableSports per entry is optional — omit for universal parameters, include for sport-specific ones.
+- add_interaction: {"type":"add_interaction","sourceParameterName":"<exact name of existing parameter>","targetParameterName":"<exact name of existing parameter>","direction":"contributes_to","strength":"<strong|moderate|weak>"}
+  direction "contributes_to" means sourceParameter positively influences targetParameter. Use exact parameter names as listed in the wizard context.
+- add_interactions_bulk: {"type":"add_interactions_bulk","interactions":[{"sourceParameterName":"<exact name>","targetParameterName":"<exact name>","direction":"contributes_to","strength":"<strong|moderate|weak>"},{"sourceParameterName":"<exact name>","targetParameterName":"<exact name>","direction":"contributes_to","strength":"<strong|moderate|weak>"}]}
+  Use this when adding multiple interactions at once. Preferred over add_interaction when adding 2 or more interactions.
+- add_parameter_method: {"type":"add_parameter_method","parameterName":"<exact name of existing parameter>","methodId":"<exact method ID from wizard context>","rationale":"<optional: why this method improves this parameter>"}
+  Only use method IDs as listed in the wizard context. Do not invent method IDs.
+- add_parameter_methods_bulk: {"type":"add_parameter_methods_bulk","links":[{"parameterName":"<exact parameter name>","methodId":"<exact method ID from wizard context>","rationale":"<optional>"},{"parameterName":"<exact parameter name>","methodId":"<exact method ID from wizard context>"}]}
+  Use this when linking multiple training methods to parameters at once. Preferred over add_parameter_method when adding 2 or more links.
 
 Rules:
 - Only ONE [[APPLY: ...]] block per message, at the very end.
@@ -54,34 +146,120 @@ Rules:
 - Use exact method names as listed in the wizard context.
 - Do not add commentary after the [[APPLY: ...]] block.`;
 
-function buildSystemPrompt(coachContext: string, wizardContext: string, canApply: boolean): string {
-  return `You are an expert sports science advisor embedded in a training planning wizard.
-You assist the coach in making smart, evidence-based planning decisions.
-
-## Coach Style (background only — do NOT use to identify the current athlete)
-${coachContext}
-
-## Current Wizard State (authoritative — this is who the plan is for)
-${wizardContext}
-
-## Your role
+const DEFAULT_ROLE = `## Your role
+- Be objective and direct. If the current plan has weaknesses, gaps, or contradicts evidence — say so clearly and constructively.
+- Do not default to agreement or validation. A good sports scientist pushes back when warranted.
 - Give concrete, actionable suggestions relevant to the current planning step.
 - Keep responses concise (2-4 sentences). If helpful, ask one focused follow-up question.
-- Draw on the coach's philosophy and preferred methods when making suggestions.
+- Understand the coach's philosophy and methods — but do not let it override scientific evidence. If their approach conflicts with consensus, flag it respectfully and explain why.
+- When citing research from the References section, mention the source document name.
 - Always refer to the athlete named in "Current Wizard State" — never reference athletes mentioned in the Coach Style section.
-- Reply in English.${canApply ? APPLY_FORMAT_INSTRUCTIONS : ""}`;
+- Reply in English.`;
+
+const INTELLECTUAL_INTEGRITY = `## Intellectual integrity (critical)
+- Only change your position when the coach provides a genuinely compelling argument, new evidence, or corrects a factual error. Update your view in those cases — that is good science.
+- Do NOT back down simply because the coach disagrees, repeats their point more firmly, or expresses frustration. Capitulating under social pressure is not open-mindedness — it is sycophancy and it makes you useless.
+- If you were wrong on a specific point, concede that specific point clearly and explain why — but do not abandon your broader position unless that too is undermined.
+- If the coach pushes back without new reasoning, hold your position and explain your reasoning again more clearly. It is fine to say: "I understand we see this differently — here is why I still think X."
+- The coach hired you for an honest expert opinion, not for agreement.
+- Do NOT hide behind "it depends" or "every athlete is different" as a substitute for a real answer. Those phrases are only acceptable when you follow them immediately with a concrete position based on the specific context you have. Vagueness is not neutrality — it is a failure to do your job.
+- Do NOT present false balance. If scientific consensus strongly favors one view and a fringe position opposes it, say so clearly — weight evidence by quality and volume, not by treating all views as equally valid.`;
+
+function buildSystemPrompt(
+  coachContext: string,
+  wizardContext: string,
+  canApply: boolean,
+  coachMemoryContext?: string,
+  ragContext?: string,
+  assistantRole?: string,
+  toolboxContext?: string,
+): string {
+  const memoryBlock = coachMemoryContext
+    ? `\n\n## Coach's Past Plans (most recent first — defer to newer patterns when in doubt)\n${coachMemoryContext}`
+    : "";
+  const ragBlock = ragContext
+    ? `\n\n## Relevant Research & References (retrieved from the coach's uploaded documents)\n${ragContext}\n\n## Research Integration Instructions\n- Cite the source document name when referencing uploaded research.\n- Cross-reference the uploaded content against your own sports science knowledge (textbooks, peer-reviewed literature, established guidelines e.g. NSCA, ACSM).\n- If an uploaded source aligns with scientific consensus, note that briefly.\n- If an uploaded source contradicts or challenges consensus, explicitly flag it: explain both positions and let the coach decide — do not silently blend conflicting views.\n- If sources within the uploaded documents contradict each other, surface that tension clearly.\n- Never fabricate citations. Only cite documents that appear in the References section above.`
+    : "";
+  const toolboxBlock = toolboxContext ? `\n\n## ${toolboxContext}` : "";
+  const roleBlock = assistantRole
+    ? `## Your role\n${assistantRole}`
+    : DEFAULT_ROLE;
+  // When assistantRole is provided (e.g. Parameter Database), label the context
+  // block differently so the AI doesn't treat it as an athlete-specific plan state.
+  const contextLabel = assistantRole ? "Database State" : "Current Context";
+  return `You are an expert sports scientist and training advisor working inside Plan Prep Coach — a training planning app for coaches and sports scientists that replaces complex Excel workflows with a guided, intelligent wizard.
+
+## About Plan Prep Coach
+
+### Philosophy
+- Training planning is a chain of dependent decisions — the wizard guides the coach step by step
+- Data is entered once and flows automatically through all levels (no double entry)
+- The coach focuses on thinking and decision-making, not manual data entry
+
+### Plan Hierarchy
+Macrocycle → Mesocycle(s) → Microcycle(s) → Training Day(s) → Session(s) → Sections (Warm-up / Main / Cooldown) → Exercises
+
+- **Macrocycle**: The complete training plan from start to competition/goal date (e.g. 16 weeks). Contains all mesocycles.
+- **Mesocycle**: A training block within the macrocycle (e.g. 4-week general prep, 4-week specific prep, 3-week competition prep, 1-week taper). Each mesocycle has its own method allocation and training focus.
+- **Microcycle**: A training unit within a mesocycle — typically 7 days but any duration is supported. Microcycles within the same mesocycle CAN have different durations (e.g. 7+7+7+5 days). Each microcycle has one intensity level.
+- **Training Day / Session**: Specific days and sessions within a microcycle. A day can have multiple sessions. Sessions contain sections (warm-up, main, cooldown) with exercises.
+
+### Intensity Scale (8 levels, low → high)
+off → deload → easy → easy-moderate → moderate → moderate-hard → hard → extremely-hard
+Use hyphens (not underscores). "Deload" = active recovery week at very low load.
+
+### Databases (coach-configurable)
+- **Athlete Database**: Athlete profiles with demographics, performance parameter values, assigned plans, personal calendar
+- **Parameter Database**: Performance parameters (e.g. Squat 1RM, Sprint 30m) with categories, units, inter-parameter dependencies (positive/negative), and research citations. Parameters link to training methods.
+- **Training Methods Database** (Toolbox): Training methods organized by category → subcategory (e.g. "Lower Body Resistance Training - Strength"). Methods can be split by exercise category (e.g. Squat, Hinge) — shown as "Method::Category" internally. Each method has configurable parameters (frequency, sets, reps, intensity, rest durations, etc.).
+- **Exercise Database**: Exercises with video, description, category, and linked parameters. Importable via CSV/Excel.
+
+### Wizard Flow
+**Phase 1 — Plan Setup** (MacrocyclePage):
+  Step 1: Select athlete, set plan name and date range, choose target parameters (SMART goals)
+  Step 2: Add sub-goals and define test/event schedule
+  Step 3: Select training methods from the toolbox (goal-linked methods are auto-suggested; additional methods can be added manually with a rationale)
+
+**Phase 2 — Mesocycle Planning** (MesocyclePage):
+  Step 1: Configure mesocycle/microcycle structure (count, durations, intensities)
+  Step 2: Set daily intensity planning within each microcycle (loading wave)
+  Step 3: Allocate methods to specific mesocycles (not all methods need to be active in every mesocycle)
+  Step 4: Periodization table — set frequency, sets, reps, intensity per method × microcycle (values flow automatically to exercises and calendar)
+  Step 5: Assign exercises from the library to each method × mesocycle slot
+
+**Phase 3 — Microcycle Planning** (MicrocyclePlanningPage):
+  Step 1: Assign methods to days of the week (drag & drop)
+  Step 2: Build session architecture (sections, supersets, exercise order)
+
+### Data Flow
+Parameter values set in the Periodization Table (Phase 2 Step 4) flow automatically down to exercises and the training calendar. Changing a value at a higher level propagates consistently downward. Tests and events scheduled in Phase 1 appear in the mesocycle calendar and athlete calendar upon plan assignment.
+
+## Coach Background
+${coachContext}${memoryBlock}${ragBlock}${toolboxBlock}
+
+## ${contextLabel}
+${wizardContext}
+
+${roleBlock}
+
+${INTELLECTUAL_INTEGRITY}${canApply ? APPLY_FORMAT_INSTRUCTIONS : ""}`;
 }
 
-const PROACTIVE_SYSTEM = `You are an expert sports science advisor embedded in a training planning wizard.
-Generate a brief, helpful proactive message (2-3 sentences) that:
-- Acknowledges what the coach is currently working on in the wizard
-- Offers one concrete, specific suggestion or asks one focused question relevant to this planning step
-- References the athlete named in the Wizard Context (if one is selected) — NEVER reference any athletes mentioned in the Coach Style section
-- Uses the Coach Style section only to understand coaching philosophy and methods, not to infer which athlete is being planned for
+function buildProactiveSystem(assistantRole?: string): string {
+  const roleHint = assistantRole
+    ? `Your role in this context: ${assistantRole}`
+    : `Your role is to give the coach an honest, objective, evidence-based perspective — not to validate their decisions, but to help them make better ones.`;
 
-CRITICAL: The "Wizard Context" tells you exactly which athlete this plan is for. The "Coach Style" section describes the coach's background and may mention past athletes — do not confuse these with the current athlete. If no athlete is selected yet in the wizard, do not mention any athlete by name.
+  const proactiveInstructions = assistantRole
+    ? `Generate a brief, helpful opening message (1-2 sentences) that offers to help with the current task. Do not critique or make assumptions about existing content — wait to be asked.`
+    : `Write a short 1-2 sentence opening. Greet the coach briefly, then mention that you've noticed a few things and offer to share them if they'd like — but do NOT state the observations yet. Example tone: "Hi! How can I help you? I've spotted a few things — let me know if you'd like me to go through them." Adapt naturally to the current step and context.`;
 
-Be specific and practical, not generic. Do NOT include [[APPLY: ...]] blocks in the opening message. Reply in English.`;
+  return `You are an expert sports scientist and training advisor. ${roleHint}
+
+${proactiveInstructions}
+
+Be specific and direct. Do not open with flattery, generic encouragement, or filler phrases. Do not hide behind "it depends" — if you have a view, state it. Do NOT include [[APPLY: ...]] blocks in the opening message. Reply in English.`;
+}
 
 // ─── Suggestion card ─────────────────────────────────────────────────────────
 
@@ -90,19 +268,61 @@ function getSuggestionPreview(action: ApplySuggestion): string {
     case "set_plan_name":
       return `Set plan name: "${action.name}"`;
     case "add_goal":
-      return `Add goal: ${action.description}`;
+      return `Add goal: ${action.parameterName}`;
+    case "schedule_tests":
+      return `Schedule tests for ${action.schedule.length} goal${action.schedule.length !== 1 ? "s" : ""}`;
+    case "create_event":
+      return `Create event: ${action.name}`;
     case "add_methods":
       return action.methods.length === 1
-        ? `Add method: ${action.methods[0]}`
-        : `Add ${action.methods.length} methods: ${action.methods.join(", ")}`;
+        ? `Add method: ${action.methods[0].name}`
+        : `Add ${action.methods.length} methods: ${action.methods.map((m) => m.name).join(", ")}`;
     case "set_mesocycle_config":
       return `Configure ${action.count} mesocycle${action.count !== 1 ? "s" : ""}, ${action.weeksDuration} week${action.weeksDuration !== 1 ? "s" : ""} each`;
+    case "configure_mesocycles": {
+      const totalMicros = action.mesocycles.reduce((s, m) => s + m.microcycles.length, 0);
+      const totalDays = action.mesocycles.reduce((s, m) => s + m.microcycles.reduce((ss, mc) => ss + mc.duration, 0), 0);
+      return `Configure ${action.mesocycles.length} mesocycle${action.mesocycles.length !== 1 ? "s" : ""}, ${totalMicros} microcycles, ${totalDays} days total`;
+    }
     case "allocate_methods":
       return action.allocations
         .map((a) => `${a.methodName} → ${a.mesocycleNames.join(", ")}`)
         .join("\n");
+    case "remove_methods":
+      return action.methodNames.length === 1
+        ? `Remove method: ${action.methodNames[0]}`
+        : `Remove ${action.methodNames.length} methods: ${action.methodNames.join(", ")}`;
     case "set_method_intensities":
       return `${action.methodName}: ${action.frequency}×/week, ${action.sets} sets × ${action.reps} reps @ ${action.intensity}`;
+    case "set_microcycle_intensities":
+      return `Set microcycle intensities for ${action.plan.length} mesocycle${action.plan.length !== 1 ? "s" : ""}`;
+    case "set_daily_intensities": {
+      const totalMicros = action.plan.length;
+      const totalDays = action.plan.reduce((s, p) => s + p.days.length, 0);
+      return `Set daily intensities: ${totalMicros} microcycle${totalMicros !== 1 ? "s" : ""}, ${totalDays} days`;
+    }
+    case "set_periodization": {
+      const methods = [...new Set(action.entries.map((e) => e.methodName))];
+      return `Set periodization for: ${methods.join(", ")}`;
+    }
+    case "assign_methods_to_days":
+      return action.weekPattern.map((p) => `${p.method} → ${p.days.join(", ")}`).join("\n");
+    case "assign_exercises": {
+      const total = action.assignments.reduce((n, a) => n + a.exercises.length, 0);
+      return `Assign ${total} exercise${total !== 1 ? "s" : ""} across ${action.assignments.length} method-mesocycle cell${action.assignments.length !== 1 ? "s" : ""}`;
+    }
+    case "add_parameter":
+      return `Add parameter: ${action.name}${action.category ? ` (${action.category})` : ""}${action.unit ? ` [${action.unit}]` : ""}`;
+    case "add_parameters_bulk":
+      return `Add ${action.parameters.length} parameter${action.parameters.length !== 1 ? "s" : ""}: ${action.parameters.map((p) => p.name).join(", ")}`;
+    case "add_interaction":
+      return `${action.sourceParameterName} → ${action.targetParameterName} (${action.strength ?? "moderate"})`;
+    case "add_interactions_bulk":
+      return `Add ${action.interactions.length} interaction${action.interactions.length !== 1 ? "s" : ""}: ${action.interactions.map((i) => `${i.sourceParameterName} → ${i.targetParameterName}`).join(", ")}`;
+    case "add_parameter_method":
+      return `Link method to ${action.parameterName}${action.rationale ? `: ${action.rationale.slice(0, 60)}…` : ""}`;
+    case "add_parameter_methods_bulk":
+      return `Link ${action.links.length} method${action.links.length !== 1 ? "s" : ""} to parameters: ${action.links.map((l) => `${l.methodId} → ${l.parameterName}`).join(", ")}`;
   }
 }
 
@@ -196,9 +416,13 @@ function AssistantMessage({
 export function WizardAIAssistant({
   stepLabel,
   wizardContext,
+  coachMemoryContext,
+  ragContext,
   onApplySuggestion,
+  assistantRole,
 }: WizardAIAssistantProps) {
   const { profile } = useCoachProfile();
+  const { data: toolboxData } = useToolboxData();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -221,6 +445,16 @@ export function WizardAIAssistant({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Build full toolbox method list (available on every page/step)
+  const toolboxContext = (() => {
+    const names = Array.from(
+      new Set((toolboxData?.entries ?? []).filter((e) => e.subCategory).map((e) => e.subCategory))
+    ).sort();
+    return names.length
+      ? `Training Toolbox (all available methods):\n${names.map((n) => `- ${n}`).join("\n")}`
+      : "";
+  })();
+
   // Build coach context string from profile
   const coachContext = profile
     ? [
@@ -234,28 +468,27 @@ export function WizardAIAssistant({
       ].filter(Boolean).join("\n")
     : "No coach profile available.";
 
-  // Generate proactive opener the first time the panel opens
+  // Generate proactive opener the first time the panel opens.
+  // When assistantRole is provided (e.g. Parameter Database), skip the AI call
+  // and use a static greeting — sending wizardContext would cause the AI to
+  // volunteer unsolicited analysis of existing content.
   const generateOpener = useCallback(async () => {
     if (hasOpened.current) return;
     hasOpened.current = true;
-    setIsLoading(true);
-    try {
-      const contextForOpener = `## Coach Style (background only — do NOT use to identify the current athlete)\n${coachContext}\n\n## Wizard Context (authoritative — this is who the plan is for)\n${wizardContext}`;
-      const text = await sendMessage(
-        [{ role: "user", content: contextForOpener }],
-        PROACTIVE_SYSTEM,
-        "claude-haiku-4-5"
-      );
-      setMessages([{ role: "assistant", content: text }]);
-    } catch {
+
+    if (assistantRole) {
       setMessages([{
         role: "assistant",
-        content: `I'm here to help with **${stepLabel}**. What would you like to work on?`,
+        content: `Hi! How can I help you?`,
       }]);
-    } finally {
-      setIsLoading(false);
+      return;
     }
-  }, [coachContext, stepLabel, wizardContext]);
+
+    setMessages([{
+      role: "assistant",
+      content: `Hi! How can I help you? I've spotted a few things — let me know if you'd like me to go through them.`,
+    }]);
+  }, [coachContext, stepLabel, wizardContext, assistantRole, coachMemoryContext]);
 
   const handleOpen = () => {
     setIsOpen(true);
@@ -279,11 +512,13 @@ export function WizardAIAssistant({
     try {
       const reply = await sendMessage(
         newMessages,
-        buildSystemPrompt(coachContext, wizardContext, !!onApplySuggestion),
-        "claude-haiku-4-5"
+        buildSystemPrompt(coachContext, wizardContext, !!onApplySuggestion, coachMemoryContext, ragContext, assistantRole, toolboxContext),
+        "claude-sonnet-4-5",
+        8192
       );
       setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
-    } catch {
+    } catch (err) {
+      console.error("[WizardAIAssistant] sendMessage failed:", err);
       setMessages((prev) => [...prev, {
         role: "assistant",
         content: "Sorry, an error occurred. Please try again.",
@@ -304,7 +539,7 @@ export function WizardAIAssistant({
         <button
           onClick={handleOpen}
           className={cn(
-            "fixed bottom-6 right-6 z-50",
+            "fixed bottom-6 right-6 z-[200]",
             "w-14 h-14 rounded-full shadow-lg",
             "bg-primary text-primary-foreground",
             "flex items-center justify-center",
@@ -322,13 +557,13 @@ export function WizardAIAssistant({
         <>
           {/* Backdrop (mobile) */}
           <div
-            className="fixed inset-0 z-40 bg-black/20 md:hidden"
+            className="fixed inset-0 z-[199] bg-black/20 md:hidden"
             onClick={() => setIsOpen(false)}
           />
 
           {/* Panel */}
           <div className={cn(
-            "fixed right-0 top-0 bottom-0 z-50",
+            "fixed right-0 top-0 bottom-0 z-[200]",
             "w-full md:w-[400px]",
             "bg-card border-l shadow-2xl",
             "flex flex-col"

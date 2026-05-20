@@ -8,6 +8,7 @@ export interface ParameterV2 {
   name: string;                    // "1RM Front Squat", "100m Sprint Time"
   unit?: string;                   // "kg", "s", "cm", etc.
   category?: string;               // Category for organization (can be custom)
+  applicableSports?: string[];     // Sports this parameter is relevant for (free-text tags)
   createdAt: string;
 }
 

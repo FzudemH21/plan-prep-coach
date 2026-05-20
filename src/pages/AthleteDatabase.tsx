@@ -25,6 +25,7 @@ export default function AthleteDatabase() {
       birthday: null,
       sex: null,
       sport: null,
+      team: null,
       occupation: null,
       dailyActivityLevel: null,
       groupIds: groupId ? [groupId] : [],

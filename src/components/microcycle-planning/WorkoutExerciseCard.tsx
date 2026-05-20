@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
-import { GripVertical, MoreVertical, Link2, Copy, Trash2, Plus, StickyNote, Calculator, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
+import { GripVertical, MoreVertical, Link2, Copy, Trash2, Plus, StickyNote, Calculator, ChevronDown, ChevronRight, RefreshCw, Recycle } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { WorkoutExercise } from '@/types/workout';
@@ -54,6 +54,8 @@ interface WorkoutExerciseCardProps {
   }) => void;
   // Open full library popup for change
   onOpenChangeLibrary?: () => void;
+  // Open detail dialog for a circuit sub-exercise
+  onOpenCircuitExerciseDetail?: (exerciseId: string, libraryId: string, exerciseName: string) => void;
 }
 
 export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
@@ -83,7 +85,108 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
   onOpenDetail,
   onChangeExercise,
   onOpenChangeLibrary,
+  onOpenCircuitExerciseDetail,
 }: WorkoutExerciseCardProps) {
+
+  // ── Circuit rendering ───────────────────────────────────────────────────────
+  if (exercise.isCircuit) {
+    const subExercises = (exercise.circuitExercises ?? []).slice().sort((a, b) => a.order - b.order);
+    return (
+      <Card className="p-4 bg-primary/5 border-primary/30">
+        <div className="flex items-start gap-3">
+          {/* Drag Handle */}
+          <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing mt-1 hover:text-primary transition-colors">
+            <GripVertical className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
+          </div>
+
+          {/* Collapse Toggle */}
+          {onToggleCollapse && (
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 mt-0.5" onClick={onToggleCollapse}>
+              {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </Button>
+          )}
+
+          <div className="flex-1 space-y-2">
+            {/* Header */}
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-2">
+                <Recycle className="h-4 w-4 text-primary shrink-0" />
+                <button
+                  className={`font-medium text-sm text-left ${onOpenDetail ? 'hover:text-primary hover:underline cursor-pointer' : 'cursor-default'}`}
+                  onClick={onOpenDetail}
+                  disabled={!onOpenDetail}
+                >
+                  {exercise.exerciseName}
+                </button>
+              </div>
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="z-[60] bg-popover">
+                  <DropdownMenuItem onClick={onDuplicate}>
+                    <Copy className="h-4 w-4 mr-2" />Duplicate
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={onDelete} className="text-destructive">
+                    <Trash2 className="h-4 w-4 mr-2" />Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            {/* Rest info */}
+            {!isCollapsed && (
+              <p className="text-xs text-muted-foreground">
+                Rest between rounds:{' '}
+                <span className="font-medium">
+                  {exercise.circuitRestBetweenRounds ? `${exercise.circuitRestBetweenRounds}s` : '—'}
+                </span>
+                &nbsp;·&nbsp;
+                Rest between exercises:{' '}
+                <span className="font-medium">
+                  {exercise.circuitRestBetweenExercises ? `${exercise.circuitRestBetweenExercises}s` : '—'}
+                </span>
+              </p>
+            )}
+
+            {/* Comments */}
+            {!isCollapsed && exercise.circuitComments && (
+              <p className="text-xs text-muted-foreground/80 italic">{exercise.circuitComments}</p>
+            )}
+
+            {/* Sub-exercise list */}
+            {!isCollapsed && subExercises.length > 0 && (
+              <div className="space-y-1 mt-1">
+                {subExercises.map((sub, idx) => (
+                  <div key={sub.id} className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-background/70 border text-xs">
+                    <span className="w-4 text-center font-semibold text-muted-foreground shrink-0">{idx + 1}</span>
+                    <button
+                      className={`flex-1 text-left font-medium min-w-0 truncate ${onOpenCircuitExerciseDetail ? 'text-primary hover:underline cursor-pointer' : ''}`}
+                      onClick={() => onOpenCircuitExerciseDetail?.(sub.exerciseId, sub.libraryId, sub.exerciseName)}
+                      disabled={!onOpenCircuitExerciseDetail}
+                    >
+                      {sub.exerciseName}
+                    </button>
+                    <span className="text-muted-foreground shrink-0">{sub.sets}×{sub.reps}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {subExercises.length === 0 && !isCollapsed && (
+              <p className="text-xs text-muted-foreground italic">No exercises in this circuit.</p>
+            )}
+          </div>
+        </div>
+      </Card>
+    );
+  }
   // Get parameters: FIRST derive from exercise.parameters (from method periodization), THEN fallback to static dictionary
   const methodParams = (() => {
     // PRIMARY: Derive parameters from exercise.parameters (populated from method periodization grid)

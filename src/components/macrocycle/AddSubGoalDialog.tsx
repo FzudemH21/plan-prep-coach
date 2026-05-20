@@ -52,6 +52,7 @@ interface AddSubGoalDialogProps {
   smartGoals: SmartGoal[];
   defaultParentGoalId?: string;
   defaultCategory?: ItemCategory;
+  defaultParameterId?: string | null;
   onCreateNewParameter?: (parentGoalId: string | undefined) => void;
 }
 
@@ -71,14 +72,15 @@ export function AddSubGoalDialog({
   smartGoals,
   defaultParentGoalId,
   defaultCategory,
+  defaultParameterId,
   onCreateNewParameter,
 }: AddSubGoalDialogProps) {
   // Category state
   const [category, setCategory] = useState<ItemCategory>(defaultCategory || "subgoal");
-  
+
   // Common state
   const [comboboxOpen, setComboboxOpen] = useState(false);
-  const [selectedParameterId, setSelectedParameterId] = useState<string | null>(null);
+  const [selectedParameterId, setSelectedParameterId] = useState<string | null>(defaultParameterId ?? null);
   const [description, setDescription] = useState("");
   const [comments, setComments] = useState("");
   
@@ -102,6 +104,25 @@ export function AddSubGoalDialog({
   useEffect(() => {
     setParentGoalId(defaultParentGoalId);
   }, [defaultParentGoalId]);
+
+  // Pre-select parameter when defaultParameterId changes (AI-triggered open)
+  useEffect(() => {
+    if (!defaultParameterId) return;
+    const param = athleticismParameters.find((p) => p.id === defaultParameterId);
+    if (!param) return;
+    setSelectedParameterId(param.id);
+    setDescription(param.name);
+    setUnit(param.unit ?? "");
+    const athleteParam = athletePerformanceParams?.find((pp) => pp.athleticismParameterId === param.id);
+    if (athleteParam?.values?.length) {
+      const latest = athleteParam.values[athleteParam.values.length - 1];
+      const num = parseFloat(latest.value);
+      if (!isNaN(num)) setPreTestValue(num);
+    } else {
+      setPreTestValue("");
+    }
+    setGoalValue("");
+  }, [defaultParameterId, athleticismParameters, athletePerformanceParams]);
 
   // Pre-fill form when editing sub-goal
   useEffect(() => {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { IntensityLevel } from '@/types/training';
 import { TrainingDay } from '@/types/daily-intensity';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
 import { Badge } from '@/components/ui/badge';
 import { Trophy, Calendar } from 'lucide-react';
@@ -161,7 +161,7 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
         backgroundClip: 'padding-box, border-box',
       } : undefined}
     >
-      <div className="font-medium">{format(new Date(day.date), 'MMM d')}</div>
+      <div className="font-medium">{format(parseISO(day.date), 'MMM d')}</div>
       <div className="text-xs">{day.dayName}</div>
 
       {/* Test/Event Icons with Hover Cards */}

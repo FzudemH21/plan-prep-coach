@@ -605,7 +605,6 @@ export default function OnboardingPage() {
    */
   const handleStage1Skip = (name: string, skipSports: string[]) => {
     const profile = buildSkippedProfile(name, skipSports);
-    console.log("[handleStage1Skip] name:", name, "sports:", skipSports, "→ saveProfile:", profile);
     saveProfile(profile);
     navigate("/");
   };
@@ -616,7 +615,6 @@ export default function OnboardingPage() {
    */
   const handleStage2Skip = () => {
     const profile = buildSkippedProfile(coachName, sports);
-    console.log("[handleStage2Skip] coachName:", coachName, "sports:", sports, "→ saveProfile:", profile);
     saveProfile(profile);
     navigate("/");
   };

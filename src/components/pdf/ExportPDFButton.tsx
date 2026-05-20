@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { TrainingProgram } from "@/hooks/useTrainingPrograms";
 import { useCoachProfile } from "@/hooks/useCoachProfile";
+import { useAthletes } from "@/hooks/useAthletes";
 import type { PlanNarrative, NarrativeOptions } from "@/lib/generatePlanNarrative";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -98,6 +99,7 @@ export function ExportPDFButton({
   onOpenChange,
 }: ExportPDFButtonProps) {
   const { profile } = useCoachProfile();
+  const { athletes } = useAthletes();
   const isControlled = controlledOpen !== undefined;
   const [internalOpen, setInternalOpen] = useState(false);
   const open = isControlled ? controlledOpen! : internalOpen;
@@ -130,6 +132,15 @@ export function ExportPDFButton({
 
   const coachName = profile?.name ?? undefined;
   const branding = profile?.branding ?? undefined;
+
+  // Look up the athlete to get full name, sport & team (not reliably stored on TrainingProgram)
+  const athlete = useMemo(
+    () => athletes.find((a) => a.id === program.athleteId) ?? null,
+    [athletes, program.athleteId],
+  );
+  const athleteDisplayName = athlete
+    ? [athlete.firstName, athlete.middleName, athlete.lastName].filter(Boolean).join(" ")
+    : undefined;
 
   // ── Dialog open / reset ─────────────────────────────────────────────────────
   const handleOpen = () => {
@@ -198,6 +209,9 @@ export function ExportPDFButton({
           branding={branding}
           selectedMesoIds={selectedIds}
           detailLevel={detailLevel}
+          athleteDisplayName={athleteDisplayName}
+          athleteSport={athlete?.sport}
+          athleteTeam={athlete?.team}
         />
       );
       const blob = await pdf(doc).toBlob();

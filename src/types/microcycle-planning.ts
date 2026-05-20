@@ -4,6 +4,14 @@ export interface ExerciseSelection {
   exerciseName: string;
   library: string; // Allow any library ID including custom ones
   subCategory?: string; // Sub-category like "Frog Tier", "Gazelle Tier", etc.
+  // Circuit fields — present when this selection is a circuit block
+  isCircuit?: boolean;
+  circuitId?: string;
+  circuitLibraryId?: string;
+  circuitExercises?: import('@/contexts/CustomLibrariesContext').CircuitExercise[];
+  circuitRestBetweenRounds?: string;
+  circuitRestBetweenExercises?: string;
+  circuitComments?: string;
 }
 
 export interface CellData {
@@ -95,6 +103,14 @@ export interface ExerciseDistribution {
   autoCalculateTargetHR?: boolean; // Auto-calculate target HR from %maxHR
   // Source of parameter values: 'toolbox' = use blank grid, 'periodization' = use program method periodization
   parameterSource?: 'toolbox' | 'periodization';
+  // Circuit block fields — present when this entry represents a circuit
+  isCircuit?: boolean;
+  circuitId?: string;
+  circuitLibraryId?: string;
+  circuitExercises?: import('@/contexts/CustomLibrariesContext').CircuitExercise[];
+  circuitRestBetweenRounds?: string;
+  circuitRestBetweenExercises?: string;
+  circuitComments?: string;
 }
 
 export interface SessionSection {

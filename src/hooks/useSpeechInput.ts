@@ -16,6 +16,7 @@ function getSRCtor(): SpeechRecognitionCtor | null {
  * - continuous: keeps listening until manually stopped
  * - auto-restarts on unexpected browser timeouts
  * - ignores onresult events fired after an intentional stop
+ * - uses a ref for onResult so the latest callback is always called (no stale closures)
  * @param onResult  called with each new final transcript chunk
  * @param lang      BCP-47 language tag, defaults to "de-DE"
  */
@@ -25,70 +26,69 @@ export function useSpeechInput(onResult: (text: string) => void, lang = "de-DE")
   const intentionalStop = useRef(false);
   const isSupported = getSRCtor() !== null;
 
+  // Always point to the latest onResult — prevents stale closures on re-renders
+  const onResultRef = useRef(onResult);
+  onResultRef.current = onResult;
+
   const startListening = useCallback(() => {
     const SR = getSRCtor();
     if (!SR || ref.current) return;
 
     intentionalStop.current = false;
 
-    const recognition = new SR();
-    recognition.lang = lang;
-    recognition.continuous = true;
-    recognition.interimResults = true;
+    const makeRecognition = (): SpeechRecognition => {
+      const recognition = new SR();
+      recognition.lang = lang;
+      recognition.continuous = true;
+      recognition.interimResults = true;
 
-    recognition.onresult = (e: SpeechRecognitionEvent) => {
-      // Ignore any results that fire after we intentionally stopped
-      if (intentionalStop.current) return;
-      const transcript = Array.from(e.results)
-        .slice(e.resultIndex)
-        .filter((r) => r.isFinal)
-        .map((r) => r[0].transcript)
-        .join("");
-      if (transcript) onResult(transcript);
-    };
+      recognition.onresult = (e: SpeechRecognitionEvent) => {
+        if (intentionalStop.current) return;
+        const transcript = Array.from(e.results)
+          .slice(e.resultIndex)
+          .filter((r) => r.isFinal)
+          .map((r) => r[0].transcript)
+          .join("");
+        // Always call the latest onResult via ref — never a stale closure
+        if (transcript) onResultRef.current(transcript);
+      };
 
-    recognition.onend = () => {
-      if (!intentionalStop.current) {
-        // Browser timed out due to silence — restart automatically
+      recognition.onend = () => {
+        if (!intentionalStop.current) {
+          // Browser timed out due to silence — restart automatically
+          ref.current = null;
+          const next = makeRecognition();
+          ref.current = next;
+          setTimeout(() => {
+            if (!intentionalStop.current) {
+              try { next.start(); } catch { /* ignore race-condition start errors */ }
+            } else {
+              ref.current = null;
+              setIsListening(false);
+            }
+          }, 150);
+          return;
+        }
         ref.current = null;
-        const SR2 = getSRCtor();
-        if (!SR2) return;
-        const next = new SR2();
-        next.lang = lang;
-        next.continuous = true;
-        next.interimResults = true;
-        next.onresult = recognition.onresult;
-        next.onend = recognition.onend;
-        next.onerror = recognition.onerror;
-        ref.current = next;
-        // Small delay so the browser fully closes the old session before starting the new one
-        setTimeout(() => {
-          if (!intentionalStop.current) {
-            try { next.start(); } catch { /* ignore race-condition start errors */ }
-          } else {
-            ref.current = null;
-            setIsListening(false);
-          }
-        }, 150);
-        return;
-      }
-      ref.current = null;
-      setIsListening(false);
+        setIsListening(false);
+      };
+
+      recognition.onerror = (e: SpeechRecognitionErrorEvent) => {
+        const error = (e as { error?: string }).error ?? "";
+        if (error === "no-speech" || error === "network") return;
+        intentionalStop.current = true;
+        ref.current = null;
+        setIsListening(false);
+      };
+
+      return recognition;
     };
 
-    recognition.onerror = (e: SpeechRecognitionErrorEvent) => {
-      const error = (e as { error?: string }).error ?? "";
-      // no-speech and network are normal browser interruptions during pauses — let onend restart
-      if (error === "no-speech" || error === "network") return;
-      intentionalStop.current = true;
-      ref.current = null;
-      setIsListening(false);
-    };
-
+    const recognition = makeRecognition();
     ref.current = recognition;
     recognition.start();
     setIsListening(true);
-  }, [lang, onResult]);
+  }, [lang]);
 
   const stopListening = useCallback(() => {
     intentionalStop.current = true;

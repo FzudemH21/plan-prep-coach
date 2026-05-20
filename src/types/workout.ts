@@ -21,6 +21,15 @@ export interface WorkoutExercise {
   autoCalculateTargetHR?: boolean; // Auto-calculate target HR from %maxHR when assigned to athlete
   // Source of parameter values: 'toolbox' = use blank grid (ad-hoc), 'periodization' = use program method periodization
   parameterSource?: 'toolbox' | 'periodization';
+  // Circuit fields — populated when this item is a circuit block
+  isCircuit?: boolean;
+  circuitId?: string;
+  circuitLibraryId?: string;
+  /** Snapshot of circuit exercises at the time of adding to session */
+  circuitExercises?: import('@/contexts/CustomLibrariesContext').CircuitExercise[];
+  circuitRestBetweenRounds?: string;
+  circuitRestBetweenExercises?: string;
+  circuitComments?: string;
 }
 
 export interface WorkoutSession {

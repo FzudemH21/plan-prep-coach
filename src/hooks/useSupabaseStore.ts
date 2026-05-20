@@ -47,23 +47,10 @@ async function upsertRow<T>(
   data: T,
 ): Promise<void> {
   const now = new Date().toISOString();
-  const { data: existing } = await supabase
+  const { error } = await supabase
     .from(tableName)
-    .select('id')
-    .eq('user_id', userId)
-    .maybeSingle();
-  if (existing) {
-    const { error } = await supabase
-      .from(tableName)
-      .update({ data, updated_at: now })
-      .eq('user_id', userId);
-    if (error) throw error;
-  } else {
-    const { error } = await supabase
-      .from(tableName)
-      .insert({ user_id: userId, data, updated_at: now });
-    if (error) throw error;
-  }
+    .upsert({ user_id: userId, data, updated_at: now }, { onConflict: 'user_id' });
+  if (error) throw error;
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────

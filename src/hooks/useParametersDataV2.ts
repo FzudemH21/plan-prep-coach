@@ -102,6 +102,18 @@ export function useParametersDataV2() {
     return newParameter;
   }, [data, saveData]);
 
+  /** Add many parameters in a single save — avoids stale-closure overwrites from sequential calls. */
+  const addParametersBulk = useCallback(async (parameters: Array<Omit<ParameterV2, 'id' | 'createdAt'>>) => {
+    const now = new Date().toISOString();
+    const newParams: ParameterV2[] = parameters.map((p, i) => ({
+      ...p,
+      id: `${Date.now()}_${i}`,
+      createdAt: now,
+    }));
+    await saveData({ ...data, parameters: [...data.parameters, ...newParams] });
+    return newParams;
+  }, [data, saveData]);
+
   const updateParameter = useCallback(async (id: string, updates: Partial<ParameterV2>) => {
     await saveData({
       ...data,
@@ -142,6 +154,26 @@ export function useParametersDataV2() {
     await saveData({ ...data, interactions: [...data.interactions, newInteraction] });
   }, [data, saveData]);
 
+  /** Add many interactions in a single save — avoids stale-closure overwrites. */
+  const addInteractionsBulk = useCallback(async (
+    entries: Array<{ sourceParameterId: string; targetParameterId: string; direction: InteractionDirection; strength: InteractionStrength }>,
+  ) => {
+    const existing = new Set(
+      data.interactions.map((i) => `${i.sourceParameterId}|${i.targetParameterId}|${i.direction}`),
+    );
+    const newInteractions: ParameterInteraction[] = entries
+      .filter((e) => !existing.has(`${e.sourceParameterId}|${e.targetParameterId}|${e.direction}`))
+      .map((e, i) => ({
+        id: `${Date.now()}_${i}`,
+        sourceParameterId: e.sourceParameterId,
+        targetParameterId: e.targetParameterId,
+        direction: e.direction,
+        strength: e.strength,
+      }));
+    if (newInteractions.length === 0) return;
+    await saveData({ ...data, interactions: [...data.interactions, ...newInteractions] });
+  }, [data, saveData]);
+
   const updateInteraction = useCallback(async (id: string, updates: Partial<ParameterInteraction>) => {
     await saveData({
       ...data,
@@ -174,6 +206,25 @@ export function useParametersDataV2() {
     await saveData({ ...data, parameterMethods: [...data.parameterMethods, newMethod] });
   }, [data, saveData]);
 
+  /** Add multiple parameter-method links in a single save — avoids stale-closure overwrites. */
+  const addParameterMethodsBulk = useCallback(async (
+    entries: Array<{ parameterId: string; methodId: string; rationale?: string }>,
+  ) => {
+    const existing = new Set(
+      data.parameterMethods.map((m) => `${m.parameterId}|${m.methodId}`),
+    );
+    const newMethods: ParameterMethodV2[] = entries
+      .filter((e) => !existing.has(`${e.parameterId}|${e.methodId}`))
+      .map((e, i) => ({
+        id: `${Date.now()}_${i}`,
+        parameterId: e.parameterId,
+        methodId: e.methodId,
+        rationale: e.rationale,
+      }));
+    if (newMethods.length === 0) return;
+    await saveData({ ...data, parameterMethods: [...data.parameterMethods, ...newMethods] });
+  }, [data, saveData]);
+
   const updateParameterMethod = useCallback(async (id: string, updates: Partial<ParameterMethodV2>) => {
     await saveData({
       ...data,
@@ -193,15 +244,18 @@ export function useParametersDataV2() {
     data,
     isLoading,
     addParameter,
+    addParametersBulk,
     updateParameter,
     deleteParameter,
     addInteraction,
+    addInteractionsBulk,
     updateInteraction,
     removeInteraction,
     getInteractionsForParameter,
     getContributesToParameters,
     getImprovedByParameters,
     addParameterMethod,
+    addParameterMethodsBulk,
     updateParameterMethod,
     removeParameterMethod,
     getMethodsForParameter,

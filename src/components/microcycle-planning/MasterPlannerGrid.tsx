@@ -5,25 +5,10 @@ import { IntensityLevel, SubGoal, Event } from '@/types/training';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { ToolboxDatabase } from '@/types/toolbox';
-import { SessionSection, SupersetMapping } from '@/types/microcycle-planning';
+import { ExerciseDistribution, SessionSection, SupersetMapping } from '@/types/microcycle-planning';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { AthletePerformanceParameter } from '@/types/athlete';
-
-interface ExerciseDistribution {
-  exerciseId: string;
-  exerciseName: string;
-  methodId: string;
-  categoryName: string;
-  subCategory?: string;
-  dayDate: string;
-  sessionIndex: number;
-  sectionId?: string;
-  notes?: string;
-  eachSide?: boolean;
-  autoCalculateWeight?: boolean;
-  autoCalculateTargetHR?: boolean;
-}
 
 interface TrainingDay {
   date: string;

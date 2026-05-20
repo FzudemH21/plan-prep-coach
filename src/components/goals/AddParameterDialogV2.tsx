@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, KeyboardEvent } from 'react';
 import { cn } from '@/lib/utils';
 import {
   Dialog,
@@ -59,11 +59,95 @@ interface AddParameterDialogV2Props {
     name: string;
     unit?: string;
     category?: string;
+    applicableSports?: string[];
     interactions: PendingInteraction[];
     methods: PendingMethod[];
   }) => void;
   /** Custom z-index class for nested dialog scenarios */
   containerClassName?: string;
+}
+
+// --- SportTagInput (reusable within this file) ---
+function SportTagInput({
+  value,
+  onChange,
+  suggestions = [],
+}: {
+  value: string[];
+  onChange: (v: string[]) => void;
+  suggestions?: string[];
+}) {
+  const [inputVal, setInputVal] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  const addSport = (sport: string) => {
+    const trimmed = sport.trim();
+    if (trimmed && !value.includes(trimmed)) {
+      onChange([...value, trimmed]);
+    }
+    setInputVal('');
+    setShowDropdown(false);
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addSport(inputVal);
+    } else if (e.key === 'Backspace' && !inputVal && value.length > 0) {
+      onChange(value.slice(0, -1));
+    } else if (e.key === 'Escape') {
+      setShowDropdown(false);
+    }
+  };
+
+  const filteredSuggestions = suggestions.filter(
+    (s) => !value.includes(s) && s.toLowerCase().includes(inputVal.toLowerCase())
+  );
+
+  return (
+    <div className="relative">
+      <div
+        className="flex flex-wrap gap-1 border rounded-md px-2 py-1.5 min-h-9 cursor-text focus-within:ring-1 focus-within:ring-ring"
+        onClick={(e) => (e.currentTarget.querySelector('input') as HTMLInputElement)?.focus()}
+      >
+        {value.map((sport) => (
+          <Badge key={sport} variant="secondary" className="text-xs gap-1 pr-1">
+            {sport}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onChange(value.filter((s) => s !== sport)); }}
+              className="hover:text-destructive"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </Badge>
+        ))}
+        <input
+          className="flex-1 min-w-[100px] text-sm bg-transparent outline-none placeholder:text-muted-foreground"
+          value={inputVal}
+          onChange={(e) => { setInputVal(e.target.value); setShowDropdown(true); }}
+          onKeyDown={handleKeyDown}
+          onFocus={() => setShowDropdown(true)}
+          onBlur={() => setTimeout(() => { if (inputVal.trim()) addSport(inputVal); setShowDropdown(false); }, 150)}
+          placeholder={value.length === 0 ? 'e.g., Soccer, Basketball...' : ''}
+        />
+      </div>
+      {showDropdown && filteredSuggestions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-36 overflow-y-auto">
+          {filteredSuggestions.map((sport) => (
+            <button
+              key={sport}
+              type="button"
+              className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent"
+              onMouseDown={(e) => { e.preventDefault(); addSport(sport); }}
+            >
+              {sport}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function AddParameterDialogV2({
@@ -77,6 +161,7 @@ export function AddParameterDialogV2({
   const [name, setName] = useState('');
   const [unit, setUnit] = useState('');
   const [category, setCategory] = useState('');
+  const [applicableSports, setApplicableSports] = useState<string[]>([]);
   
   // Separate pending interactions for each section
   const [pendingContributesTo, setPendingContributesTo] = useState<PendingInteraction[]>([]);
@@ -203,6 +288,7 @@ export function AddParameterDialogV2({
       name: name.trim(),
       unit: unit || undefined,
       category: category || undefined,
+      applicableSports: applicableSports.length > 0 ? applicableSports : undefined,
       interactions: allInteractions,
       methods: pendingMethods,
     });
@@ -215,6 +301,7 @@ export function AddParameterDialogV2({
     setName('');
     setUnit('');
     setCategory('');
+    setApplicableSports([]);
     setPendingContributesTo([]);
     setPendingImprovedBy([]);
     setPendingMethods([]);
@@ -373,6 +460,19 @@ export function AddParameterDialogV2({
                   </PopoverContent>
                 </Popover>
               </div>
+            </div>
+
+            {/* Applicable Sports */}
+            <div className="space-y-2">
+              <Label>Applicable Sports</Label>
+              <SportTagInput
+                value={applicableSports}
+                onChange={setApplicableSports}
+                suggestions={Array.from(new Set(allParameters.flatMap((p) => p.applicableSports ?? [])))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Which sports is this parameter relevant for? Press Enter or comma to add.
+              </p>
             </div>
 
             <Separator />

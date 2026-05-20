@@ -22,36 +22,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, X, ChevronUp, ChevronDown, ChevronRight, MessageSquare, Copy, ArrowUp, ArrowDown, StickyNote } from 'lucide-react';
+import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, X, ChevronUp, ChevronDown, ChevronRight, MessageSquare, Copy, ArrowUp, ArrowDown, StickyNote, Recycle } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { TrainingDay } from '@/types/daily-intensity';
 import { IntensityLevel } from '@/types/training';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-
-interface ExerciseDistribution {
-  id: string;
-  exerciseId: string;
-  exerciseName: string;
-  methodId: string;
-  categoryName: string;
-  subCategory?: string;
-  dayDate: string;
-  sessionIndex: number;
-  order: number;
-  sectionId?: string;
-  supersetId?: string;
-  notes?: string;
-}
-
-interface SessionSection {
-  id: string;
-  dayDate: string;
-  sessionIndex: number;
-  name: string;
-  order: number;
-  comments?: string;
-}
+import { ExerciseDistribution, SessionSection } from '@/types/microcycle-planning';
+import { displayMethodLabel } from './methodLabelUtils';
 
 interface SessionColumnViewProps {
   day: TrainingDay;
@@ -89,6 +67,10 @@ interface SessionColumnViewProps {
   assignedMethods?: string[];
   /** Triggered by the inline "+ Add exercise" button; optional sectionId targets a specific section */
   onAddExerciseInline?: (sectionId?: string) => void;
+  /** Triggered by the inline "⟳ Add circuit" button */
+  onAddCircuitInline?: (sectionId?: string) => void;
+  /** Called when the user clicks "Edit" on a circuit card — passes the circuit's distribution entry id */
+  onEditCircuit?: (exerciseDistributionId: string) => void;
 }
 
 export function SessionColumnView({
@@ -124,6 +106,8 @@ export function SessionColumnView({
   methodMatchState = 'neutral',
   assignedMethods,
   onAddExerciseInline,
+  onAddCircuitInline,
+  onEditCircuit,
 }: SessionColumnViewProps) {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionName, setEditingSectionName] = useState('');
@@ -241,6 +225,62 @@ export function SessionColumnView({
   };
 
   const renderExerciseCard = (exercise: ExerciseDistribution, index: number, allExercises: ExerciseDistribution[], sectionId?: string) => {
+    // ── Circuit block ─────────────────────────────────────────────────────────
+    if (exercise.isCircuit) {
+      return (
+        <Draggable key={exercise.id} draggableId={exercise.id} index={index}>
+          {(provided, snapshot) => (
+            <div>
+              <div ref={provided.innerRef} {...provided.draggableProps} className="group relative">
+                <div className={cn(
+                  "text-xs bg-primary/5 border border-primary/25 rounded-md p-2.5 shadow-sm",
+                  snapshot.isDragging && "opacity-50 shadow-lg"
+                )}>
+                  <div className="flex items-start gap-2">
+                    <div {...provided.dragHandleProps} className="pt-0.5">
+                      <GripVertical className="h-3 w-3 text-muted-foreground cursor-grab active:cursor-grabbing" />
+                    </div>
+                    <Recycle className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <button
+                        className="font-semibold truncate text-primary text-left w-full hover:underline cursor-pointer"
+                        onClick={() => onEditCircuit?.(exercise.id)}
+                        title="Click to edit circuit"
+                      >
+                        {exercise.exerciseName}
+                      </button>
+                      <div className="text-muted-foreground text-[10px]">
+                        {exercise.circuitExercises?.length ?? 0} exercises
+                        {exercise.circuitRestBetweenRounds ? ` · ${exercise.circuitRestBetweenRounds}s / ${exercise.circuitRestBetweenExercises}s` : ''}
+                      </div>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <MoreVertical className="h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {onEditCircuit && (
+                          <DropdownMenuItem onClick={() => onEditCircuit(exercise.id)}>
+                            <Pencil className="mr-2 h-3 w-3" />Edit Circuit
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem onClick={() => onDeleteExercise(exercise.id)} className="text-destructive">
+                          <Trash2 className="mr-2 h-3 w-3" />Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </Draggable>
+      );
+    }
+
+    // ── Normal exercise card ──────────────────────────────────────────────────
     const supersetId = getSuperset(exercise.id, sectionId);
     const nextExercise = allExercises[index + 1];
     const nextSupersetId = nextExercise ? getSuperset(nextExercise.id, sectionId) : undefined;
@@ -271,7 +311,7 @@ export function SessionColumnView({
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">{exercise.exerciseName}</div>
                     <div className="text-muted-foreground truncate text-[10px]">
-                      {exercise.methodId}
+                      {displayMethodLabel(exercise.methodId)}
                     </div>
                     {supersetId && (
                       <Badge variant="default" className="text-[10px] mt-1 px-1.5 font-semibold">
@@ -549,7 +589,7 @@ export function SessionColumnView({
                     className="inline-flex items-center rounded-md bg-muted/60 border border-border/50 px-2 py-0.5 text-[10px] text-muted-foreground font-medium"
                     title={m}
                   >
-                    {m}
+                    {displayMethodLabel(m)}
                   </span>
                 ))}
               </div>
@@ -706,6 +746,18 @@ export function SessionColumnView({
                                   title="Add exercise to this section"
                                 >
                                   <Plus className="h-3 w-3" />
+                                </Button>
+                              )}
+                              {/* Add circuit to this section */}
+                              {onAddCircuitInline && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 hover:bg-accent text-primary hover:text-primary"
+                                  onClick={() => onAddCircuitInline(section.id)}
+                                  title="Add circuit to this section"
+                                >
+                                  <Recycle className="h-3 w-3" />
                                 </Button>
                               )}
                               {/* Copy Section Button */}

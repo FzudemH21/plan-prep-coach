@@ -23,11 +23,13 @@ import { AdHocMethodSelectionDialog } from './AdHocMethodSelectionDialog';
 import { CombinedTestEventDialog } from './CombinedTestEventDialog';
 import { ParameterVisibilityPopover, ParameterVisibilityOverrides } from './ParameterVisibilityPopover';
 import { ExerciseDetailDialog } from '@/components/shared/ExerciseDetailDialog';
+import { CircuitBuilderDialog } from '@/components/templates/CircuitBuilderDialog';
 import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
+import type { Circuit } from '@/contexts/CustomLibrariesContext';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { getParametersForMethod } from '@/data/methodParameters';
-import { ExerciseSelection } from '@/types/microcycle-planning';
+import { ExerciseDistribution, ExerciseSelection } from '@/types/microcycle-planning';
 import { ToolboxDatabase } from '@/types/toolbox';
 import { cn } from '@/lib/utils';
 import { toggleSuperset, getSupersetLabelFromMapping, cleanupSupersetsOnExerciseDelete } from '@/utils/supersetUtils';
@@ -35,24 +37,6 @@ import { getMethodSessionIndex, getModuloSessionIndex } from '@/utils/sessionInd
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { AthletePerformanceParameter } from '@/types/athlete';
-
-interface ExerciseDistribution {
-  id?: string;
-  exerciseId: string;
-  exerciseName: string;
-  methodId: string;
-  categoryName: string;
-  subCategory?: string;
-  dayDate: string;
-  sessionIndex: number;
-  order?: number;
-  sectionId?: string;
-  supersetId?: string;
-  notes?: string;
-  eachSide?: boolean;
-  // Source of parameter values: 'toolbox' = use blank grid, 'periodization' = use program method periodization
-  parameterSource?: 'toolbox' | 'periodization';
-}
 
 interface SessionSectionProp {
   id: string;
@@ -204,6 +188,12 @@ export function WorkoutSessionSheet({
   // Exercise detail dialog state
   const [detailExercise, setDetailExercise] = useState<WorkoutExercise | null>(null);
 
+  // Circuit card detail dialog state (clicking circuit name)
+  const [circuitDetailExercise, setCircuitDetailExercise] = useState<WorkoutExercise | null>(null);
+
+  // Circuit sub-exercise detail dialog state (clicking sub-exercise name)
+  const [circuitSubDetail, setCircuitSubDetail] = useState<{ exerciseId: string; libraryId: string; exerciseName: string } | null>(null);
+
   // Change exercise library popup state
   const [changeExerciseTarget, setChangeExerciseTarget] = useState<string | null>(null);
 
@@ -238,6 +228,26 @@ export function WorkoutSessionSheet({
             const sectionExercises = exercisesList
               .filter((ex: any) => ex.sectionId === section.id)
               .map((ex, idx) => {
+                // ===== CIRCUIT BLOCKS: Pass circuit fields through directly =====
+                if (ex.isCircuit) {
+                  return {
+                    id: ex.id || ex.exerciseId,
+                    exerciseId: ex.exerciseId,
+                    exerciseName: ex.exerciseName,
+                    methodId: ex.methodId,
+                    categoryName: ex.categoryName || '',
+                    order: ex.order ?? idx,
+                    parameters: {},
+                    isCircuit: true,
+                    circuitId: ex.circuitId,
+                    circuitLibraryId: ex.circuitLibraryId,
+                    circuitExercises: ex.circuitExercises,
+                    circuitRestBetweenRounds: ex.circuitRestBetweenRounds,
+                    circuitRestBetweenExercises: ex.circuitRestBetweenExercises,
+                    circuitComments: ex.circuitComments,
+                  } as WorkoutExercise;
+                }
+
                 // ===== TOOLBOX-SOURCED EXERCISES: Generate blank parameters =====
                 // If this exercise was added via ad-hoc dialog (parameterSource === 'toolbox'),
                 // skip periodization lookup entirely and build blank parameters from toolbox
@@ -482,7 +492,28 @@ export function WorkoutSessionSheet({
       if (!sectionsMap.has(sectionName)) {
         sectionsMap.set(sectionName, []);
       }
-      
+
+      // ===== CIRCUIT BLOCKS: Pass circuit fields through directly =====
+      if (ex.isCircuit) {
+        sectionsMap.get(sectionName)!.push({
+          id: ex.id || ex.exerciseId,
+          exerciseId: ex.exerciseId,
+          exerciseName: ex.exerciseName,
+          methodId: ex.methodId,
+          categoryName: ex.categoryName || '',
+          order: ex.order ?? index,
+          parameters: {},
+          isCircuit: true,
+          circuitId: ex.circuitId,
+          circuitLibraryId: ex.circuitLibraryId,
+          circuitExercises: ex.circuitExercises,
+          circuitRestBetweenRounds: ex.circuitRestBetweenRounds,
+          circuitRestBetweenExercises: ex.circuitRestBetweenExercises,
+          circuitComments: ex.circuitComments,
+        } as WorkoutExercise);
+        return;
+      }
+
       // ===== TOOLBOX-SOURCED EXERCISES: Generate blank parameters =====
       // If this exercise was added via ad-hoc dialog (parameterSource === 'toolbox'),
       // skip periodization lookup entirely and build blank parameters from toolbox
@@ -1368,14 +1399,52 @@ export function WorkoutSessionSheet({
       setChangeExerciseTarget(null);
       return;
     }
-    
+
     // Normal add exercise mode
     if (!currentSectionId) return;
-    
-    // Store exercises and open method selection dialog
-    setSelectedExercisesForMethod(exercises);
-    setIsLibraryOpen(false);
-    setIsMethodSelectionOpen(true);
+
+    // ── Circuit selections: add directly (no method dialog needed) ────────────
+    const circuitSelections = exercises.filter(ex => ex.isCircuit);
+    const normalSelections = exercises.filter(ex => !ex.isCircuit);
+
+    if (circuitSelections.length > 0) {
+      const section = workoutSections.find(s => s.id === currentSectionId);
+      if (section) {
+        const circuitWorkoutExercises: WorkoutExercise[] = circuitSelections.map((sel, idx) => ({
+          id: `${sel.exerciseId}-circuit-${Date.now()}-${idx}`,
+          exerciseId: sel.exerciseId,
+          exerciseName: sel.exerciseName,
+          methodId: 'circuit',
+          categoryName: 'Circuit',
+          order: section.exercises.length + idx,
+          parameters: {},
+          isCircuit: true,
+          circuitId: sel.circuitId,
+          circuitLibraryId: sel.circuitLibraryId,
+          circuitExercises: sel.circuitExercises,
+          circuitRestBetweenRounds: sel.circuitRestBetweenRounds,
+          circuitRestBetweenExercises: sel.circuitRestBetweenExercises,
+          circuitComments: sel.circuitComments,
+        }));
+        setWorkoutSections(sections =>
+          sections.map(s =>
+            s.id === currentSectionId
+              ? { ...s, exercises: [...s.exercises, ...circuitWorkoutExercises] }
+              : s
+          )
+        );
+        toast({ title: `Circuit${circuitSelections.length > 1 ? 's' : ''} added` });
+      }
+    }
+
+    // Normal exercises proceed to method selection dialog
+    if (normalSelections.length > 0) {
+      setSelectedExercisesForMethod(normalSelections);
+      setIsLibraryOpen(false);
+      setIsMethodSelectionOpen(true);
+    } else {
+      setIsLibraryOpen(false);
+    }
   };
 
   const handleMethodSelected = (methodId: string, categoryName?: string) => {
@@ -1869,7 +1938,61 @@ export function WorkoutSessionSheet({
 
   // Exercise detail dialog handlers
   const handleOpenExerciseDetail = (exercise: WorkoutExercise) => {
-    setDetailExercise(exercise);
+    if (exercise.isCircuit) {
+      setCircuitDetailExercise(exercise);
+    } else {
+      setDetailExercise(exercise);
+    }
+  };
+
+  const handleOpenCircuitExerciseDetail = (exerciseId: string, libraryId: string, exerciseName: string) => {
+    setCircuitSubDetail({ exerciseId, libraryId, exerciseName });
+  };
+
+  /** Called when the user saves edits in the CircuitBuilderDialog (edit mode for session circuits) */
+  const handleCircuitEdited = (updatedCircuit: Circuit, savedToLibraryId?: string) => {
+    if (!circuitDetailExercise) return;
+    const targetId = circuitDetailExercise.id;
+
+    // Update workoutSections for immediate UI refresh
+    setWorkoutSections(sections =>
+      sections.map(section => ({
+        ...section,
+        exercises: section.exercises.map(ex =>
+          ex.id === targetId
+            ? {
+                ...ex,
+                exerciseName: updatedCircuit.name,
+                circuitRestBetweenRounds: updatedCircuit.restBetweenRounds,
+                circuitRestBetweenExercises: updatedCircuit.restBetweenExercises,
+                circuitComments: updatedCircuit.comments,
+                circuitExercises: updatedCircuit.exercises,
+                ...(savedToLibraryId ? { circuitLibraryId: savedToLibraryId, circuitId: updatedCircuit.id } : {}),
+              }
+            : ex
+        ),
+      }))
+    );
+
+    // Sync back to exercise distribution (Step 1 / parent state)
+    if (onDistributionChange && allExerciseDistribution) {
+      const updatedDistribution = allExerciseDistribution.map(ex =>
+        ex.id === targetId
+          ? {
+              ...ex,
+              exerciseName: updatedCircuit.name,
+              circuitRestBetweenRounds: updatedCircuit.restBetweenRounds,
+              circuitRestBetweenExercises: updatedCircuit.restBetweenExercises,
+              circuitComments: updatedCircuit.comments,
+              circuitExercises: updatedCircuit.exercises,
+              ...(savedToLibraryId ? { circuitLibraryId: savedToLibraryId, circuitId: updatedCircuit.id } : {}),
+            }
+          : ex
+      );
+      onDistributionChange(updatedDistribution);
+    }
+
+    setCircuitDetailExercise(null);
   };
 
   const handleSaveExerciseToLibrary = (updatedData: {
@@ -2166,6 +2289,7 @@ export function WorkoutSessionSheet({
     onAutoCalculateWeightChange: handleAutoCalculateWeightChange,
     onAutoCalculateTargetHRChange: handleAutoCalculateTargetHRChange,
     onOpenExerciseDetail: handleOpenExerciseDetail,
+    onOpenCircuitExerciseDetail: handleOpenCircuitExerciseDetail,
     onChangeExercise: handleChangeExercise,
     onOpenChangeLibrary: handleOpenChangeLibrary,
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2187,6 +2311,7 @@ export function WorkoutSessionSheet({
     handleAutoCalculateWeightChange,
     handleAutoCalculateTargetHRChange,
     handleOpenExerciseDetail,
+    handleOpenCircuitExerciseDetail,
     handleChangeExercise,
     handleOpenChangeLibrary,
   ]);
@@ -2246,7 +2371,7 @@ export function WorkoutSessionSheet({
                 </div>
               )}
               <DialogDescription className="mt-1">
-                {dayDate ? format(new Date(dayDate), 'EEEE, MMMM d, yyyy') : 'New Session'}
+                {dayDate ? format(parseISO(dayDate), 'EEEE, MMMM d, yyyy') : 'New Session'}
               </DialogDescription>
               
               {/* Editable Day Intensity */}
@@ -2767,6 +2892,38 @@ export function WorkoutSessionSheet({
           exerciseName={detailExercise.exerciseName}
           mode="edit"
           onSave={handleSaveExerciseToLibrary}
+        />
+      )}
+
+      {/* Circuit sub-exercise detail dialog (same mode as regular exercises) */}
+      {circuitSubDetail && (
+        <ExerciseDetailDialog
+          isOpen={true}
+          onClose={() => setCircuitSubDetail(null)}
+          exerciseId={circuitSubDetail.exerciseId}
+          exerciseName={circuitSubDetail.exerciseName}
+          libraryId={circuitSubDetail.libraryId}
+          mode="edit"
+        />
+      )}
+
+      {/* Circuit edit dialog — opens CircuitBuilderDialog pre-filled with current session circuit data */}
+      {circuitDetailExercise && (
+        <CircuitBuilderDialog
+          isOpen={true}
+          darkOverlay
+          onClose={() => setCircuitDetailExercise(null)}
+          circuit={{
+            id: circuitDetailExercise.circuitId ?? circuitDetailExercise.exerciseId,
+            name: circuitDetailExercise.exerciseName,
+            exercises: circuitDetailExercise.circuitExercises ?? [],
+            restBetweenRounds: circuitDetailExercise.circuitRestBetweenRounds ?? '60',
+            restBetweenExercises: circuitDetailExercise.circuitRestBetweenExercises ?? '15',
+            comments: circuitDetailExercise.circuitComments,
+            createdAt: new Date().toISOString(),
+            lastUpdated: new Date().toISOString(),
+          } satisfies Circuit}
+          onCircuitCreated={handleCircuitEdited}
         />
       )}
     </Dialog>

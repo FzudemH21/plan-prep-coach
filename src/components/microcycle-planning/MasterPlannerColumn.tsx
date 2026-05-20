@@ -14,7 +14,7 @@ import { CombinedTestEventDialog } from './CombinedTestEventDialog';
 import { IntensityLevel } from '@/types/training';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { ToolboxDatabase } from '@/types/toolbox';
-import { SessionSection, SupersetMapping } from '@/types/microcycle-planning';
+import { ExerciseDistribution, SessionSection, SupersetMapping } from '@/types/microcycle-planning';
 import { getSupersetLabelFromMapping } from '@/utils/supersetUtils';
 import { getMethodSessionIndex, getModuloSessionIndex } from '@/utils/sessionIndexUtils';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
@@ -57,23 +57,6 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-
-interface ExerciseDistribution {
-  id?: string; // Unique distribution ID used for superset mapping
-  exerciseId: string;
-  exerciseName: string;
-  methodId: string;
-  categoryName: string;
-  subCategory?: string;
-  dayDate: string;
-  sessionIndex: number;
-  sectionId?: string;
-  order?: number;
-  notes?: string;
-  eachSide?: boolean;
-  autoCalculateWeight?: boolean;
-  autoCalculateTargetHR?: boolean;
-}
 
 interface TrainingDay {
   date: string;
