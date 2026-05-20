@@ -381,6 +381,7 @@ export function EnhancedExerciseDistribution({
       });
     }
 
+    console.log('[ExerciseDist] grouped result:', JSON.stringify(Object.entries(grouped).map(([m, cats]) => ({ method: m, cats: Object.keys(cats) }))));
     return grouped;
   }, [exerciseSelectionData, exerciseDistribution, mesocycle.id, methodAllocations]);
 
