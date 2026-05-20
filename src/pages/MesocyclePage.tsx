@@ -5027,7 +5027,10 @@ export default function MesocyclePage() {
       : "";
     const mesoCount = mesocycles.length;
     const mesoStr = mesoCount > 0
-      ? `Mesocycles: ${mesoCount} (${mesocycles.map((m) => m.name).join(", ")})`
+      ? `Mesocycles (${mesoCount}):\n${mesocycles.map((m) => {
+          const micros = m.microcycles?.map(mc => `  - ${mc.name} (${mc.duration}d, ${mc.intensity})`).join("\n") ?? "";
+          return `- ${m.name} (${m.weeks}w)${micros ? "\n" + micros : ""}`;
+        }).join("\n")}`
       : "No mesocycles configured yet";
     const allocatedMethods = Object.keys(methodAllocations).filter(
       (m) => methodAllocations[m]?.length > 0
@@ -5146,6 +5149,20 @@ export default function MesocyclePage() {
           })),
         }));
         setMesocycles(recalculateAllMesocycleDates(newMesocycles, planStartDate));
+        break;
+      }
+      case "rename_cycles": {
+        setMesocycles(prev => prev.map(meso => {
+          const mesoRename = action.renames.find(r => r.currentName === meso.name);
+          const updatedMeso = mesoRename ? { ...meso, name: mesoRename.newName } : meso;
+          return {
+            ...updatedMeso,
+            microcycles: (meso.microcycles ?? []).map(mc => {
+              const mcRename = action.renames.find(r => r.currentName === mc.name);
+              return mcRename ? { ...mc, name: mcRename.newName } : mc;
+            }),
+          };
+        }));
         break;
       }
       case "set_microcycle_intensities": {
