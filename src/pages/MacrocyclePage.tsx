@@ -2804,19 +2804,73 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       case "set_plan_name":
         setPlanName(action.name);
         break;
+      case "set_plan_duration": {
+        const start = planDuration?.startDate ?? new Date();
+        const end = new Date(start);
+        end.setDate(end.getDate() + action.weeks * 7);
+        setPlanDuration({ startDate: start, endDate: end, totalDays: action.weeks * 7, totalWeeks: action.weeks });
+        break;
+      }
       case "add_goal":
         setSmartGoals((prev) => [
           ...prev,
-          { id: crypto.randomUUID(), description: action.description, baselineValue: 0, desiredValue: 0, unit: "", percentChange: 0 },
+          { id: generateId(), description: action.parameterName, baselineValue: 0, desiredValue: 0, unit: "", percentChange: 0, testDates: [] },
         ]);
+        break;
+      case "schedule_tests": {
+        action.schedule.forEach(({ goalDescription, isEvent, action: act = "add", dates }) => {
+          if (isEvent) {
+            setEvents(prev => {
+              const existing = prev.find(e => e.name.toLowerCase() === goalDescription.toLowerCase());
+              if (existing) {
+                return prev.map(e => e.id === existing.id ? {
+                  ...e,
+                  eventDates: act === "remove"
+                    ? e.eventDates.filter(d => !dates.includes(d))
+                    : [...new Set([...e.eventDates, ...dates])],
+                } : e);
+              }
+              return act === "add" ? [...prev, { id: generateId(), name: goalDescription, eventDates: dates }] : prev;
+            });
+          } else {
+            setSmartGoals(prev => prev.map(g => {
+              if (g.description.toLowerCase().includes(goalDescription.toLowerCase())) {
+                const current = g.testDates ?? [];
+                return {
+                  ...g,
+                  testDates: act === "remove"
+                    ? current.filter(d => !dates.includes(d))
+                    : [...new Set([...current, ...dates])],
+                };
+              }
+              return g;
+            }));
+            setSubGoals(prev => prev.map(sg => {
+              if (sg.description.toLowerCase().includes(goalDescription.toLowerCase())) {
+                const current = sg.testDates ?? [];
+                return {
+                  ...sg,
+                  testDates: act === "remove"
+                    ? current.filter(d => !dates.includes(d))
+                    : [...new Set([...current, ...dates])],
+                };
+              }
+              return sg;
+            }));
+          }
+        });
+        break;
+      }
+      case "create_event":
+        setEvents(prev => [...prev, { id: generateId(), name: action.name, description: action.description, eventDates: [] }]);
         break;
       case "add_methods": {
         const allAvailableIds = new Set(Object.values(methodsByQuality).flatMap((q) => q.list));
-        action.methods.forEach((methodId) => {
-          if (allAvailableIds.has(methodId)) {
-            setSelectedMethods((prev) => new Set([...prev, methodId]));
+        action.methods.forEach(({ name, rationale }) => {
+          if (allAvailableIds.has(name)) {
+            setSelectedMethods((prev) => new Set([...prev, name]));
           } else {
-            handleAddManualMethod({ methodId, rationale: "" });
+            handleAddManualMethod({ methodId: name, rationale: rationale ?? "" });
           }
         });
         break;
@@ -2824,7 +2878,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       default:
         break;
     }
-  }, [methodsByQuality, handleAddManualMethod]);
+  }, [methodsByQuality, handleAddManualMethod, planDuration]);
 
   return (
     <>
