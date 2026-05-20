@@ -36,6 +36,7 @@ import { useToolboxData } from "@/hooks/useToolboxData";
 import { AlertTriangle, ArrowLeft } from "lucide-react";
 import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
 import { WizardAIAssistant } from "@/components/wizard/WizardAIAssistant";
+import { useRAGRetrieval } from "@/hooks/useRAGRetrieval";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 import { TEST_COLOR, EVENT_COLOR, testEventGradient } from "@/lib/eventColors";
@@ -59,6 +60,8 @@ export default function MacrocyclePage() {
   const { data: parametersDataV2, addParameter: addAthleticismParameter, addInteraction: addParameterInteraction } = useParametersDataV2();
   const { data: toolboxData } = useToolboxData();
   const { athletes, groups, getAthletePerformanceParameters, addPerformanceParameter, getAthleteBiometrics, biometricDefinitions, getAthleteCalendarAssignments } = useAthletes();
+  const { retrieve: ragRetrieve } = useRAGRetrieval();
+  const [ragContext, setRagContext] = useState('');
   const [athleteDropdownOpen, setAthleteDropdownOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [planName, setPlanName] = useState<string>("");
@@ -426,6 +429,14 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   useEffect(() => {
     localStorage.setItem('macrocycleStep', currentStep.toString());
   }, [currentStep]);
+
+  // RAG retrieval — refresh when goals or methods change
+  useEffect(() => {
+    const goalNames = smartGoals.map(g => g.description || g.specific || '').filter(Boolean).join(', ');
+    const methodNames = Array.from(selectedMethods).join(', ');
+    const query = [goalNames, methodNames].filter(Boolean).join('; ') || 'training plan goal setting periodization';
+    ragRetrieve(query).then(setRagContext);
+  }, [ragRetrieve, smartGoals, selectedMethods]);
 
   // Auto-select methods linked to primary goals (only on initial load or when goals change significantly)
   useEffect(() => {
@@ -3078,6 +3089,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         stepLabel={macroStepLabel}
         wizardContext={wizardContext}
         onApplySuggestion={handleAIApply}
+        ragContext={ragContext}
       />
     </>
   );

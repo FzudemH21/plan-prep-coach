@@ -58,6 +58,7 @@ import { useTemplates, type ProgramTemplate, type TemplateColumn } from '@/hooks
 import { LoadTemplateDialog, type MethodParam } from '@/components/mesocycle/LoadTemplateDialog';
 import { useWizardData } from '@/contexts/WizardDataContext';
 import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
+import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
 
 // Helper function for string normalization - robust canonicalization
 const normalizeForComparison = (str: unknown): string => {
@@ -171,6 +172,8 @@ export default function MesocyclePage() {
   const { data: toolboxData } = useToolboxData();
   const { data: parametersDataV2 } = useParametersDataV2();
   const { libraries: exerciseLibraries } = useCustomLibraries();
+  const { retrieve: ragRetrieve } = useRAGRetrieval();
+  const [ragContext, setRagContext] = useState('');
   const mpTableRef = React.useRef<MicrocyclePlanningTableHandle>(null);
   const [exerciseCellData, setExerciseCellData] = useState<Record<string, import('@/types/microcycle-planning').CellData>>({});
   // Re-sync from exerciseSelectionData (the dedicated step-5 key) whenever the user
@@ -664,6 +667,14 @@ export default function MesocyclePage() {
     
     return microcycleDates;
   }, [mesocycles, planStartDate]);
+
+  // RAG retrieval — refresh when mesocycle structure or allocated methods change
+  useEffect(() => {
+    const methodNames = (macrocycleData?.selectedMethods ?? []).join(', ');
+    const mesoNames = mesocycles.map(m => m.name).join(', ');
+    const query = [methodNames, mesoNames].filter(Boolean).join('; ') || 'mesocycle periodization training methods';
+    ragRetrieve(query).then(setRagContext);
+  }, [ragRetrieve, macrocycleData?.selectedMethods, mesocycles]);
 
   // Interface for test/event details with dates
   interface TestDetail {
@@ -5477,7 +5488,7 @@ export default function MesocyclePage() {
         />
 
       {/* AI Assistant */}
-      <WizardAIAssistant stepLabel={mesoStepLabel} wizardContext={mesoWizardContext} onApplySuggestion={handleMesoAIApply} />
+      <WizardAIAssistant stepLabel={mesoStepLabel} wizardContext={mesoWizardContext} onApplySuggestion={handleMesoAIApply} ragContext={ragContext} />
     </div>
   );
 };

@@ -30,6 +30,7 @@ import { SaveProgramButton } from '@/components/programs/SaveProgramButton';
 import { useTrainingPrograms } from '@/hooks/useTrainingPrograms';
 import { useWizardData } from '@/contexts/WizardDataContext';
 import { WizardAIAssistant } from '@/components/wizard/WizardAIAssistant';
+import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
 
 // Using ExerciseDistribution, SessionSection, and SupersetMapping from types file
 
@@ -69,7 +70,9 @@ export default function MicrocyclePlanningPage() {
   const { data: toolboxData } = useToolboxData();
   const { athletes, athletePerformanceParameters } = useAthletes();
   const { saveCurrentSession } = useTrainingPrograms();
-  
+  const { retrieve: ragRetrieve } = useRAGRetrieval();
+  const [ragContext, setRagContext] = useState('');
+
   // Resolve athlete name from selectedAthleteId
   const selectedAthleteId = macrocycleData?.selectedAthleteId;
   const selectedAthlete = athletes.find(a => a.id === selectedAthleteId);
@@ -80,6 +83,13 @@ export default function MicrocyclePlanningPage() {
     if (!selectedAthleteId) return [];
     return athletePerformanceParameters.filter(pp => pp.athleteId === selectedAthleteId);
   }, [athletePerformanceParameters, selectedAthleteId]);
+  // RAG retrieval — refresh when selected methods or mesocycles change
+  useEffect(() => {
+    const methodNames = (macrocycleData?.selectedMethods ?? []).join(', ');
+    const query = methodNames || 'session architecture exercise selection microcycle';
+    ragRetrieve(query).then(setRagContext);
+  }, [ragRetrieve, macrocycleData?.selectedMethods]);
+
   const [clearMesocycleDialogOpen, setClearMesocycleDialogOpen] = useState(false);
   const [clearMicrocycleDialog, setClearMicrocycleDialog] = useState<{
     isOpen: boolean;
@@ -3755,6 +3765,7 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
         stepLabel={microStepLabel}
         wizardContext={microWizardContext}
         onApplySuggestion={handleMicroAIApply}
+        ragContext={ragContext}
       />
     </div>
   );
