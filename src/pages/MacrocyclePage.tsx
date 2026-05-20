@@ -2761,11 +2761,21 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       : "No athlete selected yet";
     const planStr = planName ? `Plan name: ${planName}` : "";
     const durationStr = planDuration
-      ? `Duration: ${planDuration.totalDays} days (${Math.round(planDuration.totalDays / 7)} weeks)`
+      ? `Plan dates: ${format(planDuration.startDate, 'yyyy-MM-dd')} → ${format(planDuration.endDate, 'yyyy-MM-dd')} (${planDuration.totalDays} days / ${Math.round(planDuration.totalDays / 7)} weeks)`
       : "";
     const goalsStr = smartGoals.length
-      ? `Goals:\n${smartGoals.map((g) => `- ${g.description || g.specific || ""}`).filter(Boolean).join("\n")}`
+      ? `Goals (use EXACT names for schedule_tests):\n${smartGoals.map((g) => {
+          const name = g.description || g.specific || "";
+          const dates = g.testDates?.length ? ` [tests: ${g.testDates.join(", ")}]` : "";
+          return `- ${name}${dates}`;
+        }).filter(Boolean).join("\n")}`
       : "";
+    const eventsStr = events.length
+      ? `Events (use EXACT names for schedule_tests — do NOT create a new event if one already exists here):\n${events.map((e) => {
+          const dates = e.eventDates?.length ? ` [scheduled: ${e.eventDates.join(", ")}]` : " [no dates yet]";
+          return `- "${e.name}"${dates}`;
+        }).join("\n")}`
+      : "Events: none yet";
     const selectedMethodList = [
       ...Array.from(selectedMethods),
       ...manuallyAddedMethods.map((m) => m.methodId),
@@ -2775,9 +2785,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       : "";
     let actionHints = "";
     if (currentStep === 1) {
-      actionHints = "Available AI action: set_plan_name";
+      actionHints = "Available AI actions: set_plan_name, set_plan_duration, add_goal, schedule_tests, create_event";
     } else if (currentStep === 2) {
-      actionHints = "Available AI action: add_goal (include specific numbers and timeframe in the description)";
+      actionHints = "Available AI actions: add_goal (include specific numbers and timeframe), schedule_tests, create_event";
     } else if (currentStep === 3) {
       const allAvailableIds = Object.values(methodsByQuality).flatMap((q) => q.list);
       const unselected = allAvailableIds.filter((m) => !selectedMethods.has(m));
@@ -2792,12 +2802,13 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       planStr,
       durationStr,
       goalsStr,
+      eventsStr,
       methodsStr,
       actionHints,
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, selectedAthlete, planName, planDuration, smartGoals, selectedMethods, manuallyAddedMethods, macroStepLabel, methodsByQuality]);
+  }, [currentStep, selectedAthlete, planName, planDuration, smartGoals, events, selectedMethods, manuallyAddedMethods, macroStepLabel, methodsByQuality]);
 
   const handleAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
     switch (action.type) {
