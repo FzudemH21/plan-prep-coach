@@ -3419,7 +3419,15 @@ export default function MicrocyclePlanningPage() {
       }
     }
 
+    // Step 2: prepend a hard override so the AI doesn't fall back to "hierarchy" explanation
+    const step2Override = currentStep === 2
+      ? `⚠️ CAPABILITY OVERRIDE — READ THIS FIRST:
+You are in Exercise Distribution (Phase 3 Step 2). In this step you CAN assign exercises directly to specific calendar dates using the distribute_exercises action.
+When the coach says "assign X to [date]" or "put X on [day]" — use [[APPLY: {"type":"distribute_exercises",...}]] immediately. Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact dates from the training schedule below.`
+      : '';
+
     return [
+      step2Override,
       `Current step: ${microStepLabel}`,
       athleteStr,
       planStr,
