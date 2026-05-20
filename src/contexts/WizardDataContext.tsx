@@ -1,7 +1,22 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 
-// Normalize a date string to yyyy-MM-dd regardless of whether it's ISO or already short
-const normDate = (d: string): string => (d ? d.split('T')[0] : d);
+// Normalize a date string to yyyy-MM-dd in LOCAL time.
+// - Already "yyyy-MM-dd" → returned as-is (no time component to shift).
+// - ISO string with time component → parsed to LOCAL date via the Date constructor
+//   and re-formatted in local time, so UTC-offset midnight strings (e.g.
+//   "2025-07-17T22:00:00.000Z" = local midnight July 18 in UTC+2) map to the
+//   correct local calendar date.
+const normDate = (d: string): string => {
+  if (!d) return d;
+  // Already a plain date string — safe to return without re-parsing.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  // ISO string with time: convert to local date.
+  const local = new Date(d);
+  const yyyy = local.getFullYear();
+  const mm = String(local.getMonth() + 1).padStart(2, '0');
+  const dd = String(local.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
 
 // Deeply normalize all date arrays in macrocycleData to yyyy-MM-dd
 function normalizeMacrocycleData(data: any): any {

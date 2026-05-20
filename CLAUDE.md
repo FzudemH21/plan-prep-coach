@@ -34,6 +34,7 @@ No prompt without this line. CLAUDE.md and FEATURES.md are the single source of 
 - Client wrapper: `src/lib/anthropic.ts`
 - Key stored in `.env` as `VITE_ANTHROPIC_API_KEY` (never commit)
 - `dangerouslyAllowBrowser: true` is set — acceptable for local coach tool, must be replaced with a backend proxy for SaaS
+- Model in use: `claude-sonnet-4-5` with `max_tokens: 8192`
 
 ### Supabase
 - SDK installed: `@supabase/supabase-js`
@@ -49,7 +50,7 @@ No prompt without this line. CLAUDE.md and FEATURES.md are the single source of 
 ```
 Macrocycle
   └── Mesocycle(s)
-        └── Microcycle(s)  (usually 1 week, configurable duration)
+        └── Microcycle(s)  (any duration in days, variable within a mesocycle)
               └── Training Day(s)
                     └── Session(s)
                           └── Sections (Warm-up, Main, Cooldown)
@@ -58,10 +59,28 @@ Macrocycle
 
 ---
 
+## Intensity Scale
+8 levels used consistently throughout the entire app (low → high):
+
+| Value | Display |
+|-------|---------|
+| `off` | Off |
+| `deload` | Deload |
+| `easy` | Easy |
+| `easy-moderate` | Easy-Moderate |
+| `moderate` | Moderate |
+| `moderate-hard` | Moderate-Hard |
+| `hard` | Hard |
+| `extremely-hard` | Extremely Hard |
+
+Always use hyphens (not underscores). Applied at: microcycle level, daily level, and session level.
+
+---
+
 ## Databases (Coach-configurable)
-1. **Athlete Database** – Profiles with demographic data, parameter values, assigned plans, personal calendar
-2. **Parameter Database** – Goals, sub-parameters, dependencies between parameters (positive/negative), rationales + research citations
-3. **Training Methods Database** – Methods with parent/child categories, linked to parameters
+1. **Athlete Database** – Profiles with demographic data, performance parameter values (tracked over time), assigned plans, personal calendar
+2. **Parameter Database** – Performance parameters (e.g. Squat 1RM, Sprint 30m, VO2max) with categories, units, inter-parameter dependencies (positive/negative correlations), and research citations. Parameters are linked to training methods.
+3. **Training Methods Database (Toolbox)** – Methods organized as `Category → SubCategory` (e.g. "Lower Body Resistance Training → Strength"). Each method has configurable parameters: Frequency, Sets, Reps, Intensity, rest durations, and qualitative fields (e.g. Organization, Contrast). Methods can be **split by exercise category** — internally stored as `"Method::Category"` (e.g. `"Lower Body Resistance Training - Strength::Squat"`).
 4. **Exercise Database** – Exercises with video, description, category (e.g. "Lower Body Resistance Strength"), parameters. Bulk import via CSV/Excel (3-step flow). Dynamic detail modal (columns from database, no hardcoded fields, directly editable). Drag & drop column reordering.
 
 ---
@@ -69,16 +88,22 @@ Macrocycle
 ## Implemented Features (Current State)
 
 ### Coach Profile
-- Onboarding flow with AI conversation (basic structure), skip option, voice input
+- Onboarding flow with AI conversation, skip option, voice input
 - Documents: local storage, folder structure, drag & drop, upload
 - Resources panel (persistent, available in onboarding and wizard)
-- AI conversation will be fully activated once Anthropic API integration is complete
+
+### AI Assistant
+- Available on every page and wizard step (`WizardAIAssistant` component)
+- Powered by `claude-sonnet-4-5`
+- Receives full wizard context (current step, athlete, plan state, toolbox, parameter database)
+- Can apply structured actions directly into the wizard via `[[APPLY: {...}]]` blocks
+- Available actions per phase — see Wizard Flow section below
 
 ### Athlete Calendar & Masterplanner
 - Athlete calendar with copy/paste, clear day/week, session name sync
 - Tests & events in calendar, synced with wizard via unified `calendarEvents` storage
 - Masterplanner view with week-horizon selector
-- Consistent color/icon scheme for tests and events across all views (Athlete Calendar, Macrocycle, Mesocycle, Microcycle Planning)
+- Consistent color/icon scheme for tests and events across all views
 
 ### Microcycle Planning
 - Method Distribution: drag & drop, methods filtered to current mesocycle's characterization selections, multiple methods per session allowed, full-name card display
@@ -106,24 +131,41 @@ Macrocycle
 
 ## Wizard – Full Flow
 
-### Phase 1: Plan Setup
-**Step 1:** Select athlete → values auto-loaded, plan name, date range, target parameters
-**Step 2:** Parameters & sub-goals
-**Step 3:** Select training methods
+### Phase 1: Plan Setup (MacrocyclePage)
+**Step 1:** Select athlete → values auto-loaded, plan name, date range, SMART goals (linked to parameters)
+- AI actions: `set_plan_name`, `set_plan_duration`, `add_goal`, `schedule_tests`, `create_event`
 
-### Phase 2: Mesocycle Planning
-**Step 1:** Configure mesocycles (count, duration, intensities per microcycle: `Off → Easy → Moderate → Hard → Extremely Hard`)
-**Step 2:** Microcycle intensities (daily intensities within each microcycle)
-**Step 3:** Methods per mesocycle (define which methods are active per mesocycle)
-**Step 4:** Periodization Table ⭐ (core component) — frequency, sets, reps, intensity per method & microcycle; values flow automatically through all levels down to the final training calendar
+**Step 2:** Sub-goals, test dates, events
+- AI actions: `add_goal` (adds sub-goal), `schedule_tests`, `create_event`
+
+**Step 3:** Select training methods (goal-linked methods are auto-suggested; additional methods can be added with a rationale)
+- AI actions: `add_methods` (each with optional rationale)
+
+### Phase 2: Mesocycle Planning (MesocyclePage)
+**Step 1:** Configure mesocycle/microcycle structure
+- Microcycles within a mesocycle **can have different durations** (e.g. 7+7+7+5 days)
+- AI actions: `set_mesocycle_config` (uniform), `configure_mesocycles` (full control: variable durations, add/remove mesocycles or microcycles)
+
+**Step 2:** Daily intensity planning (loading wave per microcycle)
+- AI actions: `set_microcycle_intensities`
+
+**Step 3:** Allocate methods to specific mesocycles (not all methods need to be active in every mesocycle)
+- AI actions: `allocate_methods`
+
+**Step 4:** Periodization Table ⭐ (core component) — frequency, sets, reps, intensity + all method-specific parameters per method & microcycle; values flow automatically through all levels down to the final training calendar
+- AI actions: `set_periodization` (with `extraParams` for qualitative/additional parameters)
+
 **Step 5:** Exercise selection per mesocycle & method
+- AI actions: `assign_exercises`
 
-### Phase 3: Microcycle Planning (Training Calendar)
-**Step 1:** Assign exercises to days (calendar view with intensity labels, labels changeable consistently)
+### Phase 3: Microcycle Planning (MicrocyclePlanningPage)
+**Step 1:** Assign methods to training days (drag & drop calendar view)
+- AI actions: `assign_methods_to_days`
+
 **Step 2:** Build session architecture (sections, supersets, drag & drop, copy sessions)
 
 **Automatic data flow:**
-- Load parameters from periodization table appear automatically on exercises
+- Parameter values from Periodization Table appear automatically on exercises
 - Sets as rows, parameters as columns
 - Displayed parameters configurable (in parameter database)
 
@@ -191,11 +233,17 @@ Macrocycle
 - Always include a migration fallback for existing localStorage data
 - Never assume data is in the latest format
 
+### Git / Local Sync (Critical!)
+- Local files in `C:\Users\Hanik\plan-prep-coach` and `main` branch on GitHub must always stay in sync
+- Before starting any new work: `git pull` to ensure local is up to date
+- After finishing any work: commit and push all changes so nothing is left only locally
+- Never leave large amounts of uncommitted work sitting in the main directory — commit in logical chunks regularly
+- Claude Code works in a worktree (`.claude/worktrees/<branch>/`). Always merge the PR and pull into the main directory before telling the user to test, otherwise they won't see the changes
+
 ### UI/UX Principles
 - All UI text must be in English (labels, buttons, placeholders, hints, tab names, error messages)
-- Only CLAUDE.md and FEATURES.md remain in German — but as of this update, both are in English
 - Drag & drop wherever possible
-- Intensity labels consistent throughout the entire app
+- Intensity labels consistent throughout the entire app (always use the 8-level scale above)
 - Desktop-first for coach view, mobile-first for athlete view (future)
 
 ### Code Quality
@@ -209,8 +257,10 @@ Macrocycle
 ---
 
 ## Known Complexities
-- Periodization table is the most complex component (deeply nested data)
+- Periodization table is the most complex component (deeply nested data: `parameterValues[mesoId][mcIdx][methodKey][sessionIdx][paramName]`)
+- Split methods use `"Method::Category"` key format internally; base method name must be stripped for toolbox/parameter lookups
 - Dependencies between parameters must be correctly represented
 - Automatic data flow from Meso → Micro → Session is critical
+- Date handling: always store dates as `yyyy-MM-dd` strings; parse with `T12:00:00` (noon local) for display to avoid UTC midnight → previous day offset in non-UTC timezones
 - PDF export must be structured and athlete-friendly
 - `dangerouslyAllowBrowser: true` must be replaced with a backend proxy for SaaS

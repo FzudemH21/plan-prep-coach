@@ -12,7 +12,7 @@
  * no UI component needs to change.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { uploadFile, deleteFile, getSignedUrl } from "@/lib/storage";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -23,6 +23,13 @@ const INDEX_KEY = "coachDocuments";
 /** Legacy per-file base64 key prefix – used only during migration cleanup */
 const LEGACY_DATA_PREFIX = "coachDocData_";
 const VERSION = "2.0.0";
+
+/**
+ * Custom event dispatched whenever any hook instance commits a change.
+ * This allows multiple instances on the same page (e.g. DocumentsSection +
+ * TrainingPlanEnricher) to stay in sync without a full context refactor.
+ */
+const SYNC_EVENT = "coachDocuments:updated";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -122,10 +129,22 @@ function persistIndex(index: StorageIndex): void {
 export function useCoachDocuments() {
   const [index, setIndex] = useState<StorageIndex>(loadIndex);
 
-  /** Commit updated index to React state + localStorage */
+  /** Commit updated index to React state + localStorage, then notify siblings. */
   const commit = useCallback((next: StorageIndex) => {
     persistIndex(next);
     setIndex(next);
+    window.dispatchEvent(new CustomEvent(SYNC_EVENT));
+  }, []);
+
+  /**
+   * Re-read from localStorage whenever another hook instance on the same page
+   * commits a change (e.g. TrainingPlanEnricher adding a doc while
+   * DocumentsSection is mounted).
+   */
+  useEffect(() => {
+    const handler = () => setIndex(loadIndex());
+    window.addEventListener(SYNC_EVENT, handler);
+    return () => window.removeEventListener(SYNC_EVENT, handler);
   }, []);
 
   // ── Folders ─────────────────────────────────────────────────────────────────
@@ -227,7 +246,7 @@ export function useCoachDocuments() {
    * Throws if the remote upload fails so the caller can show an error.
    */
   const addDocument = useCallback(
-    async (file: File, folderId: string | null = null) => {
+    async (file: File, folderId: string | null = null): Promise<CoachDocument> => {
       const id = genId();
       const ext = file.name.includes(".")
         ? file.name.split(".").pop()
@@ -249,6 +268,7 @@ export function useCoachDocuments() {
       };
 
       commit({ ...index, documents: [...index.documents, doc] });
+      return doc;
     },
     [index, commit]
   );

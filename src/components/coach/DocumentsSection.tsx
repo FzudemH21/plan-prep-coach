@@ -1,4 +1,6 @@
 import { useState, useRef, useCallback } from "react";
+import { InlineDocumentViewer } from "./InlineDocumentViewer";
+import { DocumentAnalysisDialog } from "./DocumentAnalysisDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,9 +48,12 @@ import {
   File,
   Files,
   GripVertical,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { useAuth } from "@/hooks/useAuth";
+import { ingestDocument } from "@/utils/ragPipeline";
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -190,13 +195,14 @@ function FolderCard({
 interface DocRowProps {
   doc: CoachDocument;
   onOpen: () => void;
+  onAnalyze: () => void;
   onMove: () => void;
   onDelete: () => void;
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: () => void;
 }
 
-function DocRow({ doc, onOpen, onMove, onDelete, onDragStart, onDragEnd }: DocRowProps) {
+function DocRow({ doc, onOpen, onAnalyze, onMove, onDelete, onDragStart, onDragEnd }: DocRowProps) {
   const dragFromHandle = useRef(false);
 
   return (
@@ -235,11 +241,15 @@ function DocRow({ doc, onOpen, onMove, onDelete, onDragStart, onDragEnd }: DocRo
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={onMove}>
+            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onAnalyze(); }}>
+              <Sparkles className="h-4 w-4 mr-2 text-primary" /> Analyze with AI
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMove(); }}>
               <FolderInput className="h-4 w-4 mr-2" /> Move
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-destructive focus:text-destructive">
               <Trash2 className="h-4 w-4 mr-2" /> Delete
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -319,6 +329,7 @@ function MoveDialog({ doc, allFolders, onMove, onClose }: MoveDialogProps) {
 
 export function DocumentsSection() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const {
     folders,
     getFolders,
@@ -334,18 +345,29 @@ export function DocumentsSection() {
     getDocumentUrl,
   } = useCoachDocuments();
 
+  // ── Inline viewer state ─────────────────────
+  const [viewer, setViewer] = useState<{ doc: CoachDocument; url: string } | null>(null);
+
+  // ── AI analysis state ───────────────────────
+  const [analyzeTarget, setAnalyzeTarget] = useState<CoachDocument | null>(null);
+
   const handleDocOpen = useCallback(async (doc: CoachDocument) => {
-    const url = await getDocumentUrl(doc.id);
-    if (!url) return;
     const viewable = doc.type.startsWith("image/") || doc.type === "application/pdf";
-    if (viewable) {
-      window.open(url, "_blank");
-    } else {
+    if (!viewable) {
+      // Non-viewable types → download directly
+      const url = await getDocumentUrl(doc.id);
+      if (!url) return;
       const a = document.createElement("a");
       a.href = url;
       a.download = doc.name;
       a.click();
+      return;
     }
+    // Open viewer immediately (URL loads async inside the dialog)
+    setViewer({ doc, url: "" });
+    const url = await getDocumentUrl(doc.id);
+    if (!url) { setViewer(null); return; }
+    setViewer({ doc, url });
   }, [getDocumentUrl]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -412,6 +434,7 @@ export function DocumentsSection() {
   const [moveTarget, setMoveTarget] = useState<CoachDocument | null>(null);
 
   const [uploading, setUploading] = useState(false);
+  const [indexingCount, setIndexingCount] = useState(0);
 
   // ── Handlers ────────────────────────────────
 
@@ -450,8 +473,51 @@ export function DocumentsSection() {
       if (!files.length) return;
       setUploading(true);
       try {
-        await Promise.all(files.map((f) => addDocument(f, currentFolderId)));
+        const docs = await Promise.all(files.map((f) => addDocument(f, currentFolderId)));
         toast({ title: `${files.length} document${files.length > 1 ? "s" : ""} uploaded` });
+
+        // Trigger RAG ingestion in the background for supported file types
+        if (user) {
+          const ingestable = docs.filter(
+            (d) => d.storagePath && (
+              d.type === 'application/pdf' ||
+              d.type.startsWith('text/') ||
+              d.name.endsWith('.md')
+            )
+          );
+          if (ingestable.length > 0) {
+            setIndexingCount((n) => n + ingestable.length);
+            Promise.all(
+              ingestable.map((doc) =>
+                ingestDocument({
+                  storagePath: doc.storagePath,
+                  documentName: doc.name,
+                  mimeType: doc.type,
+                  userId: user.id,
+                  onProgress: (pct) => console.log(`[RAG] ${doc.name}: ${pct}%`),
+                }).finally(() => setIndexingCount((n) => Math.max(0, n - 1)))
+              )
+            ).then((results) => {
+              const succeeded = results.filter((r) => r.success).length;
+              const failed = results.filter((r) => !r.success);
+              if (succeeded > 0) {
+                toast({
+                  title: `${succeeded} document${succeeded > 1 ? 's' : ''} indexed for AI`,
+                  description: 'The AI assistant can now reference these documents.',
+                });
+              }
+              if (failed.length > 0) {
+                const reasons = failed.map((r) => !r.success ? (r.message ?? r.reason) : '').filter(Boolean).join('; ');
+                console.error('[RAG] Ingestion failed:', reasons);
+                toast({
+                  title: 'Indexing failed',
+                  description: reasons || 'Could not index document for AI. Check the console for details.',
+                  variant: 'destructive',
+                });
+              }
+            });
+          }
+        }
       } catch {
         toast({ title: "Upload failed", variant: "destructive" });
       } finally {
@@ -459,7 +525,7 @@ export function DocumentsSection() {
         if (fileInputRef.current) fileInputRef.current.value = "";
       }
     },
-    [addDocument, currentFolderId, toast]
+    [addDocument, currentFolderId, toast, user]
   );
 
   const isEmpty = currentFolders.length === 0 && currentDocs.length === 0;
@@ -497,6 +563,12 @@ export function DocumentsSection() {
               <Upload className="h-4 w-4 mr-1.5" />
               {uploading ? "Uploading…" : "Upload"}
             </Button>
+            {indexingCount > 0 && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1 animate-pulse">
+                <Sparkles className="h-3 w-3 text-primary" />
+                Indexing for AI…
+              </span>
+            )}
             <input
               ref={fileInputRef}
               type="file"
@@ -556,6 +628,7 @@ export function DocumentsSection() {
                 key={doc.id}
                 doc={doc}
                 onOpen={() => handleDocOpen(doc)}
+                onAnalyze={() => setAnalyzeTarget(doc)}
                 onMove={() => setMoveTarget(doc)}
                 onDelete={() => setDeleteTarget({ type: "doc", item: doc })}
                 onDragStart={(e) => handleDocDragStart(e, doc.id)}
@@ -646,6 +719,23 @@ export function DocumentsSection() {
         }}
         onClose={() => setMoveTarget(null)}
       />
+
+      {/* ── Inline document viewer ── */}
+      <InlineDocumentViewer
+        open={viewer !== null}
+        doc={viewer?.doc ?? null}
+        url={viewer?.url ?? null}
+        onClose={() => setViewer(null)}
+      />
+
+      {/* ── AI analysis dialog ── */}
+      <DocumentAnalysisDialog
+        open={analyzeTarget !== null}
+        doc={analyzeTarget}
+        getDocumentUrl={getDocumentUrl}
+        onClose={() => setAnalyzeTarget(null)}
+      />
+
     </Card>
   );
 }

@@ -1,4 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { WizardAIAssistant } from '@/components/wizard/WizardAIAssistant';
+import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
+import { useCoachProfile } from '@/hooks/useCoachProfile';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -43,21 +46,175 @@ export default function AthleticismDatabaseV2() {
   const {
     data,
     isLoading,
+    addParameter,
+    addParametersBulk,
     updateParameter,
     deleteParameter,
     addInteraction,
+    addInteractionsBulk,
     updateInteraction,
     removeInteraction,
     getInteractionsForParameter,
     getContributesToParameters,
     getImprovedByParameters,
     addParameterMethod,
+    addParameterMethodsBulk,
     updateParameterMethod,
     removeParameterMethod,
     getMethodsForParameter,
     saveData,
   } = useParametersDataV2();
   const { data: toolboxData } = useToolboxData();
+
+  // ── AI Assistant ───────────────────────────────────────────────────────────
+  const { coachProfile } = useCoachProfile();
+  const { retrieve } = useRAGRetrieval();
+  const [ragContext, setRagContext] = useState('');
+
+  // Build context string from current parameter database state
+  const parameterContext = useMemo(() => {
+    // IMPORTANT: show name and metadata separately so the AI doesn't confuse
+    // "(category)" as part of the parameter name when generating apply actions.
+    const paramList = data?.parameters?.length
+      ? data.parameters.map((p) =>
+          `- name: "${p.name}"` +
+          (p.category ? ` | category: ${p.category}` : '') +
+          (p.unit ? ` | unit: ${p.unit}` : '') +
+          (p.applicableSports?.length ? ` | sports: ${p.applicableSports.join(', ')}` : '')
+        ).join('\n')
+      : 'No parameters defined yet.';
+
+    // Extract unique training methods from toolbox entries.
+    // methodId convention (matches EditParameterDialogV2):
+    //   subCategory present → "<category> - <subCategory>"
+    //   subCategory absent  → "<category>"
+    const uniqueMethods: { label: string; methodId: string }[] = [];
+    const seen = new Set<string>();
+    for (const entry of toolboxData?.entries ?? []) {
+      const methodId = entry.subCategory
+        ? `${entry.category} - ${entry.subCategory}`
+        : entry.category;
+      if (!seen.has(methodId)) {
+        seen.add(methodId);
+        uniqueMethods.push({ label: entry.subCategory || entry.category, methodId });
+      }
+    }
+    const methodList = uniqueMethods.length
+      ? uniqueMethods.map((m) => `- "${m.label}" → methodId: "${m.methodId}"`).join('\n')
+      : 'No training methods found in your toolbox. Add methods in the Training Methods Toolbox first.';
+
+    return [
+      `Parameters (${data?.parameters?.length ?? 0} total):\n${paramList}`,
+      `Interactions defined: ${data?.interactions?.length ?? 0}`,
+      `Method links defined: ${data?.parameterMethods?.length ?? 0}`,
+      `Available training methods — use the exact methodId string shown when applying:\n${methodList}`,
+    ].join('\n\n');
+  }, [data, toolboxData]);
+
+  useEffect(() => {
+    const paramNames = (data?.parameters ?? []).map((p) => p.name).join(', ');
+    const query = paramNames || 'sports performance parameters training methods';
+    retrieve(query).then(setRagContext);
+  }, [retrieve, data?.parameters]);
+
+  const coachContext = coachProfile?.extractedProfile ?? '';
+
+  // ── AI apply handler ───────────────────────────────────────────────────────
+
+  // Fuzzy parameter lookup — tries increasingly lenient matches so minor AI
+  // inconsistencies (trailing category suffix, different capitalisation) don't
+  // cause silent failures.
+  //   1. Exact match
+  //   2. Case-insensitive + trimmed
+  //   3. Strip trailing parenthetical suffix the AI may have appended
+  //      e.g. "100m sprint time (speed)" → try "100m sprint time"
+  const findParam = useCallback((name: string) => {
+    const params = data?.parameters ?? [];
+    const needle = name.trim();
+    const needleLower = needle.toLowerCase();
+
+    return (
+      params.find((p) => p.name === needle) ??
+      params.find((p) => p.name.trim().toLowerCase() === needleLower) ??
+      params.find((p) => {
+        // Strip one trailing (...) block from the AI-provided name and retry
+        const stripped = needle.replace(/\s*\([^)]*\)\s*$/, '').trim();
+        return stripped.length > 0 && p.name.trim().toLowerCase() === stripped.toLowerCase();
+      }) ??
+      params.find((p) => {
+        // Strip one trailing (...) block from the STORED name and compare
+        const stripped = p.name.replace(/\s*\([^)]*\)\s*$/, '').trim();
+        return stripped.length > 0 && stripped.toLowerCase() === needleLower;
+      })
+    );
+  }, [data?.parameters]);
+
+  const handleAIApply = useCallback(async (action: import('@/components/wizard/WizardAIAssistant').ApplySuggestion) => {
+    if (action.type === 'add_parameter') {
+      await addParameter({ name: action.name, category: action.category, unit: action.unit, applicableSports: action.applicableSports });
+      toast({ title: `Parameter "${action.name}" added` });
+
+    } else if (action.type === 'add_parameters_bulk') {
+      await addParametersBulk(action.parameters.map((p) => ({ name: p.name, category: p.category, unit: p.unit, applicableSports: p.applicableSports })));
+      toast({ title: `${action.parameters.length} parameter${action.parameters.length !== 1 ? 's' : ''} added` });
+
+    } else if (action.type === 'add_interaction') {
+      const source = findParam(action.sourceParameterName);
+      const target = findParam(action.targetParameterName);
+      if (!source || !target) {
+        toast({ title: 'Could not find parameter', description: 'Make sure both parameters exist first.', variant: 'destructive' });
+        return;
+      }
+      await addInteraction(source.id, target.id, action.direction, action.strength ?? 'moderate');
+      toast({ title: `Interaction added: ${action.sourceParameterName} → ${action.targetParameterName}` });
+
+    } else if (action.type === 'add_interactions_bulk') {
+      const failed: string[] = [];
+      const resolved: Array<{ sourceParameterId: string; targetParameterId: string; direction: 'contributes_to' | 'improved_by'; strength: 'strong' | 'moderate' | 'weak' }> = [];
+      for (const i of action.interactions) {
+        const source = findParam(i.sourceParameterName);
+        const target = findParam(i.targetParameterName);
+        if (!source || !target) { failed.push(`${i.sourceParameterName} → ${i.targetParameterName}`); continue; }
+        resolved.push({ sourceParameterId: source.id, targetParameterId: target.id, direction: i.direction, strength: i.strength ?? 'moderate' });
+      }
+      if (resolved.length > 0) await addInteractionsBulk(resolved);
+      if (resolved.length > 0) toast({ title: `${resolved.length} interaction${resolved.length !== 1 ? 's' : ''} added` });
+      if (failed.length > 0) {
+        toast({
+          title: `${failed.length} interaction${failed.length !== 1 ? 's' : ''} skipped — parameter not found`,
+          description: failed.slice(0, 3).join(' | ') + (failed.length > 3 ? ` + ${failed.length - 3} more` : ''),
+          variant: 'destructive',
+        });
+      }
+
+    } else if (action.type === 'add_parameter_method') {
+      const param = findParam(action.parameterName);
+      if (!param) {
+        toast({ title: 'Parameter not found', description: `"${action.parameterName}" does not exist yet.`, variant: 'destructive' });
+        return;
+      }
+      await addParameterMethod(param.id, action.methodId, action.rationale);
+      toast({ title: `Method linked to "${action.parameterName}"` });
+
+    } else if (action.type === 'add_parameter_methods_bulk') {
+      const failed: string[] = [];
+      const resolved: Array<{ parameterId: string; methodId: string; rationale?: string }> = [];
+      for (const link of action.links) {
+        const param = findParam(link.parameterName);
+        if (!param) { failed.push(link.parameterName); continue; }
+        resolved.push({ parameterId: param.id, methodId: link.methodId, rationale: link.rationale });
+      }
+      if (resolved.length > 0) await addParameterMethodsBulk(resolved);
+      if (resolved.length > 0) toast({ title: `${resolved.length} method link${resolved.length !== 1 ? 's' : ''} added` });
+      if (failed.length > 0) {
+        toast({
+          title: `${failed.length} link${failed.length !== 1 ? 's' : ''} skipped — parameter not found`,
+          description: failed.slice(0, 3).join(', ') + (failed.length > 3 ? ` + ${failed.length - 3} more` : ''),
+          variant: 'destructive',
+        });
+      }
+    }
+  }, [addParameter, addParametersBulk, addInteraction, addInteractionsBulk, addParameterMethod, addParameterMethodsBulk, findParam, toast]);
 
   // Sorting state
   const [sortColumn, setSortColumn] = useState<SortColumn>('parameter');
@@ -144,6 +301,7 @@ export default function AthleticismDatabaseV2() {
     name: string;
     unit?: string;
     category?: string;
+    applicableSports?: string[];
     interactions: { targetParameterId: string; direction: InteractionDirection; strength: InteractionStrength }[];
     methods: { methodId: string; rationale?: string }[];
   }) => {
@@ -153,6 +311,7 @@ export default function AthleticismDatabaseV2() {
       name: parameterData.name,
       unit: parameterData.unit,
       category: parameterData.category,
+      applicableSports: parameterData.applicableSports,
       createdAt: new Date().toISOString(),
     };
 
@@ -399,13 +558,14 @@ export default function AthleticismDatabaseV2() {
                     </div>
                   </TableHead>
                   
-                  <TableHead className="w-[30%] text-right">Actions</TableHead>
+                  <TableHead className="w-[22%]">Applicable Sports</TableHead>
+                  <TableHead className="w-[18%] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredParameters.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
                       {parameterSearch || selectedCategories.length > 0
                         ? 'No parameters match your filters.'
                         : 'No parameters yet. Click "Add Parameter" to create one.'}
@@ -435,6 +595,19 @@ export default function AthleticismDatabaseV2() {
                               </span>
                             )}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {parameter.applicableSports?.length ? (
+                            <div className="flex flex-wrap gap-1">
+                              {parameter.applicableSports.map((sport) => (
+                                <Badge key={sport} variant="outline" className="text-xs">
+                                  {sport}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
@@ -513,6 +686,16 @@ export default function AthleticismDatabaseV2() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* AI Assistant */}
+      <WizardAIAssistant
+        stepLabel="Parameter Database"
+        wizardContext={parameterContext}
+        coachMemoryContext={coachContext}
+        ragContext={ragContext}
+        onApplySuggestion={handleAIApply}
+        assistantRole="Answer sports science questions and help the coach define and structure their parameter database. This is a general template database — it is NOT tied to any specific athlete, training phase, or mesocycle. Parameters already in the database are examples or templates, not athlete-specific data. Do NOT ask about the coach's athlete, training phase, season context, or testing infrastructure unless the coach explicitly brings it up. When suggesting or filling parameters, use general scientific specifications (e.g. 'Ground contact time at maximum velocity, 30–60m phase') without assuming any particular athlete context. Suggest relevant parameters, categories, units, and evidence-based rationale. When asked, suggest interactions between parameters or links to training methods. Do not make unsolicited judgments about parameters the coach has already added."
+      />
     </div>
   );
 }

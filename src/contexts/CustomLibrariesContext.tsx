@@ -11,6 +11,36 @@ export interface LibraryColumn {
   role?: 'video' | 'description';
 }
 
+// ── Circuit types ──────────────────────────────────────────────────────────────
+
+export interface CircuitExercise {
+  /** Unique within this circuit */
+  id: string;
+  /** Reference to exercise in source library */
+  exerciseId: string;
+  exerciseName: string;
+  /** Source library ID */
+  libraryId: string;
+  sets: string;
+  reps: string;
+  order: number;
+}
+
+export interface Circuit {
+  id: string;
+  name: string;
+  exercises: CircuitExercise[];
+  /** Numeric seconds, stored as string (e.g. "60") */
+  restBetweenRounds: string;
+  /** Numeric seconds, stored as string (e.g. "15") */
+  restBetweenExercises: string;
+  comments?: string;
+  createdAt: string;
+  lastUpdated: string;
+}
+
+// ── Library & Exercise types ───────────────────────────────────────────────────
+
 export interface CustomLibrary {
   id: string;
   name: string;
@@ -18,6 +48,8 @@ export interface CustomLibrary {
   description: string;
   columns: LibraryColumn[];
   exercises: CustomExercise[];
+  /** Circuit blocks stored alongside exercises */
+  circuits?: Circuit[];
   createdAt: string;
   lastUpdated: string;
 }
@@ -56,7 +88,13 @@ interface CustomLibrariesContextType {
   updateColumnInLibrary: (libraryId: string, columnId: string, updates: Partial<LibraryColumn>) => void;
   deleteColumnFromLibrary: (libraryId: string, columnId: string) => void;
   reorderColumnsInLibrary: (libraryId: string, columnIds: string[]) => void;
+  // Circuit operations
+  addCircuitToLibrary: (libraryId: string, circuit: Omit<Circuit, 'id' | 'createdAt' | 'lastUpdated'>) => Circuit;
+  updateCircuitInLibrary: (libraryId: string, circuitId: string, updates: Partial<Omit<Circuit, 'id' | 'createdAt'>>) => void;
+  deleteCircuitFromLibrary: (libraryId: string, circuitId: string) => void;
   bulkImportToLibrary: (libraryId: string, payload: BulkImportPayload) => void;
+  /** Merge seed/demo libraries into the store. Upserts by id. */
+  mergeSeedLibraries: (libraries: CustomLibrary[]) => void;
 }
 
 const CustomLibrariesContext = createContext<CustomLibrariesContextType | undefined>(undefined);
@@ -111,6 +149,7 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
       id: uniqueSlug,
       columns: library.columns || [{ id: 'exercise', name: 'Exercise', type: 'text', required: true }],
       exercises: [],
+      circuits: [],
       createdAt: new Date().toISOString(),
       lastUpdated: new Date().toISOString(),
     };
@@ -273,6 +312,82 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
     });
   }, [data, save]);
 
+  // ── Circuit operations ────────────────────────────────────────────────────
+
+  const addCircuitToLibrary = useCallback((
+    libraryId: string,
+    circuit: Omit<Circuit, 'id' | 'createdAt' | 'lastUpdated'>,
+  ): Circuit => {
+    const now = new Date().toISOString();
+    const newCircuit: Circuit = {
+      ...circuit,
+      id: `circuit_${Date.now()}`,
+      createdAt: now,
+      lastUpdated: now,
+    };
+    save({
+      ...data,
+      libraries: data.libraries.map(lib =>
+        lib.id === libraryId
+          ? { ...lib, circuits: [...(lib.circuits ?? []), newCircuit], lastUpdated: now }
+          : lib
+      ),
+    });
+    return newCircuit;
+  }, [data, save]);
+
+  const updateCircuitInLibrary = useCallback((
+    libraryId: string,
+    circuitId: string,
+    updates: Partial<Omit<Circuit, 'id' | 'createdAt'>>,
+  ) => {
+    const now = new Date().toISOString();
+    save({
+      ...data,
+      libraries: data.libraries.map(lib =>
+        lib.id === libraryId
+          ? {
+              ...lib,
+              circuits: (lib.circuits ?? []).map(c =>
+                c.id === circuitId ? { ...c, ...updates, lastUpdated: now } : c
+              ),
+              lastUpdated: now,
+            }
+          : lib
+      ),
+    });
+  }, [data, save]);
+
+  const deleteCircuitFromLibrary = useCallback((libraryId: string, circuitId: string) => {
+    const now = new Date().toISOString();
+    save({
+      ...data,
+      libraries: data.libraries.map(lib =>
+        lib.id === libraryId
+          ? {
+              ...lib,
+              circuits: (lib.circuits ?? []).filter(c => c.id !== circuitId),
+              lastUpdated: now,
+            }
+          : lib
+      ),
+    });
+  }, [data, save]);
+
+  const mergeSeedLibraries = useCallback((seedLibraries: CustomLibrary[]) => {
+    const now = new Date().toISOString();
+    const merged = [...data.libraries];
+    for (const seed of seedLibraries) {
+      const idx = merged.findIndex(l => l.id === seed.id);
+      if (idx >= 0) {
+        merged[idx] = { ...seed, lastUpdated: now };
+      } else {
+        merged.push({ ...seed, createdAt: now, lastUpdated: now });
+      }
+    }
+    save({ ...data, libraries: merged });
+  }, [data, save]);
+
   const value: CustomLibrariesContextType = {
     data,
     isLoading,
@@ -288,6 +403,10 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
     deleteColumnFromLibrary,
     reorderColumnsInLibrary,
     bulkImportToLibrary,
+    mergeSeedLibraries,
+    addCircuitToLibrary,
+    updateCircuitInLibrary,
+    deleteCircuitFromLibrary,
   };
 
   return (

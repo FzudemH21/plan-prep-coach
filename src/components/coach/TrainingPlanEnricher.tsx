@@ -1,43 +1,31 @@
+/**
+ * TrainingPlanEnricher — "Past Plans as AI Context"
+ *
+ * Coaches upload existing training plans and fill in a short structured form.
+ * The data is saved to `plan_memory` so the AI can use it as situational context
+ * in the wizard — without touching the stable Coach Profile.
+ *
+ * Coach Profile = who you are as a coach (stable)
+ * Plan Memory   = how you've coached in specific situations (contextual)
+ */
+
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Upload, FileText, X, CheckCircle2 } from "lucide-react";
+import { Loader2, Upload, FileText, X, CheckCircle2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { sendMessage } from "@/utils/anthropicApi";
-import { useCoachProfile, type CoachProfile } from "@/hooks/useCoachProfile";
 import { useCoachDocuments } from "@/hooks/useCoachDocuments";
+import { useAuth } from "@/hooks/useAuth";
+import { saveUploadedPlanMemory } from "@/lib/planMemory";
 
-// ─── Prompts ──────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const PLAN_EXTRACTION_SYSTEM = `You are a coach advisor analyzing a description of a training plan.
-Extract structured information about the coaching approach and return it as valid JSON.
-The JSON must have exactly this structure:
-{
-  "philosophy": "Recognizable coaching philosophy from the plan (1-2 sentences) — leave empty if not recognizable",
-  "methods": "Training methods and periodization approach used (1-2 sentences) — leave empty if not recognizable",
-  "targetGroup": "Target group/athletes of the plan (1 sentence) — leave empty if not recognizable",
-  "experience": "Conclusions about the coach's background from the plan (1 sentence) — leave empty if not recognizable",
-  "summary": "Summary of what this plan reveals about the coaching style (2-3 sentences)"
-}
-Reply ONLY with the JSON, without Markdown code fences or additional text.`;
-
-const MERGE_SUMMARY_SYSTEM = `You are a coach advisor.
-Combine the two following coach summaries into a single, coherent prose text (3-6 sentences).
-Avoid repetition. Integrate new information naturally into the existing text.
-Reply only with the combined text, without introduction or explanation. Reply in English.`;
-
-async function mergeSummaries(existing: string, incoming: string): Promise<string> {
-  if (!existing) return incoming;
-  if (!incoming) return existing;
-  try {
-    return await sendMessage(
-      [{ role: "user", content: `Existing summary:\n${existing}\n\nNew information:\n${incoming}` }],
-      MERGE_SUMMARY_SYSTEM
-    );
-  } catch {
-    return `${existing}\n\n${incoming}`;
-  }
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 // ─── Drop zone ────────────────────────────────────────────────────────────────
@@ -58,14 +46,14 @@ function DropZone({ onFile, disabled }: { onFile: (file: File) => void; disabled
       onDragLeave={() => setIsDragging(false)}
       onClick={() => !disabled && inputRef.current?.click()}
       className={cn(
-        "border-2 border-dashed rounded-xl p-8 flex flex-col items-center gap-2 transition-colors",
+        "border-2 border-dashed rounded-xl p-6 flex flex-col items-center gap-2 transition-colors",
         disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
         isDragging
           ? "border-primary bg-primary/5"
           : "border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/40"
       )}
     >
-      <Upload className={cn("h-6 w-6", isDragging ? "text-primary" : "text-muted-foreground")} />
+      <Upload className={cn("h-5 w-5", isDragging ? "text-primary" : "text-muted-foreground")} />
       <p className="text-sm font-medium">Drop plan file here</p>
       <p className="text-xs text-muted-foreground">or click to select — all file types</p>
       <input
@@ -78,16 +66,11 @@ function DropZone({ onFile, disabled }: { onFile: (file: File) => void; disabled
   );
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const TRAINING_PLANS_FOLDER = "Training Plans";
 const DOCS_INDEX_KEY = "coachDocuments";
 
-/**
- * Finds the "Training Plans" root folder in the current state.
- * If not found, calls addFolder (which writes to localStorage synchronously)
- * and reads the new ID back from localStorage immediately.
- */
 function resolveTrainingPlansFolder(
   folders: { id: string; name: string; parentId: string | null }[],
   addFolder: (name: string, parentId: null) => void
@@ -99,146 +82,259 @@ function resolveTrainingPlansFolder(
 
   addFolder(TRAINING_PLANS_FOLDER, null);
 
-  // addFolder calls persistIndex synchronously → read fresh data from localStorage
   try {
     const stored = JSON.parse(localStorage.getItem(DOCS_INDEX_KEY) ?? "{}") as {
       folders?: { id: string; name: string; parentId: string | null }[];
     };
-    const created = (stored.folders ?? []).find(
+    return stored.folders?.find(
       (f) => f.name === TRAINING_PLANS_FOLDER && f.parentId === null
-    );
-    return created?.id ?? null;
+    )?.id ?? null;
   } catch {
     return null;
   }
 }
 
+// ─── Form state ───────────────────────────────────────────────────────────────
+
+interface PlanForm {
+  planName: string;
+  sportAndAthlete: string;
+  goalAndContext: string;
+  methodsAndStructure: string;
+  outcomeAndNotes: string;
+}
+
+const EMPTY_FORM: PlanForm = {
+  planName: "",
+  sportAndAthlete: "",
+  goalAndContext: "",
+  methodsAndStructure: "",
+  outcomeAndNotes: "",
+};
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export function TrainingPlanEnricher() {
-  const { profile, saveProfile } = useCoachProfile();
-  const { addDocument, addFolder, folders } = useCoachDocuments();
+  const { user } = useAuth();
+  const { addDocument, addFolder, folders, getDocuments, deleteDocument } = useCoachDocuments();
+
+  // Persistent list from the "Training Plans" folder
+  const trainingPlansFolder = folders.find(
+    (f) => f.name === TRAINING_PLANS_FOLDER && f.parentId === null
+  );
+  const uploadedPlans = trainingPlansFolder ? getDocuments(trainingPlansFolder.id) : [];
 
   const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [description, setDescription] = useState("");
-  const [analyzedPlans, setAnalyzedPlans] = useState<string[]>([]);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [form, setForm]               = useState<PlanForm>(EMPTY_FORM);
+  const [isSaving, setIsSaving]       = useState(false);
+  const [error, setError]             = useState<string | null>(null);
 
-  const handleAnalyze = async () => {
-    if (!pendingFile || !description.trim()) return;
-    setIsAnalyzing(true);
+  const setField = (key: keyof PlanForm) => (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
+
+  const handleFileSelected = (file: File) => {
+    setPendingFile(file);
+    setForm((prev) => ({ ...prev, planName: file.name.replace(/\.[^/.]+$/, "") }));
+    setError(null);
+  };
+
+  const handleSave = async () => {
+    if (!pendingFile) return;
+    if (!form.sportAndAthlete.trim() || !form.goalAndContext.trim()) {
+      setError("Please fill in at least the athlete/sport and goal fields.");
+      return;
+    }
+    setIsSaving(true);
     setError(null);
 
     try {
-      // Find or create "Training Plans" folder, then upload there
+      // 1. Upload file to "Training Plans" folder in document library
       const folderId = resolveTrainingPlansFolder(folders, addFolder);
       await addDocument(pendingFile, folderId);
 
-      // AI extraction from filename + description
-      const content = `Dateiname: ${pendingFile.name}\nBeschreibung des Coaches: ${description}`;
-      const raw = await sendMessage(
-        [{ role: "user", content: `Here is information about a training plan:\n\n${content}\n\nPlease extract structured information as JSON.` }],
-        PLAN_EXTRACTION_SYSTEM,
-        "claude-sonnet-4-5"
-      );
-
-      let parsed: {
-        philosophy: string; methods: string;
-        targetGroup: string; experience: string; summary: string;
+      // 2. Derive the doc ID of the just-uploaded file (newest in folder)
+      // We read fresh from localStorage since addDocument just committed there
+      const stored = JSON.parse(localStorage.getItem(DOCS_INDEX_KEY) ?? "{}") as {
+        documents?: Array<{ id: string; folderId: string | null; uploadedAt: string }>;
       };
-      try {
-        parsed = JSON.parse(raw.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim()) as typeof parsed;
-      } catch {
-        throw new Error("Could not parse AI response. Please try again.");
+      const allDocs = stored.documents ?? [];
+      const newestInFolder = allDocs
+        .filter((d) => d.folderId === folderId)
+        .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())[0];
+      const docId = newestInFolder?.id ?? `manual_${Date.now()}`;
+
+      // 3. Save context to plan_memory (not to coach profile!)
+      if (user?.id) {
+        await saveUploadedPlanMemory(
+          {
+            docId,
+            planName: form.planName.trim() || pendingFile.name,
+            sportAndAthlete:    form.sportAndAthlete.trim(),
+            goalAndContext:      form.goalAndContext.trim(),
+            methodsAndStructure: form.methodsAndStructure.trim(),
+            outcomeAndNotes:     form.outcomeAndNotes.trim(),
+          },
+          user.id
+        );
       }
 
-      // Merge into existing profile
-      const base = profile;
-      const merged: CoachProfile = {
-        name:    base?.name    ?? "",
-        sports:  base?.sports  ?? [],
-        structured: {
-          philosophy:  parsed.philosophy?.trim()   || base?.structured?.philosophy   || "",
-          methods:     parsed.methods?.trim()       || base?.structured?.methods       || "",
-          targetGroup: parsed.targetGroup?.trim()   || base?.structured?.targetGroup   || "",
-          experience:  parsed.experience?.trim()    || base?.structured?.experience    || "",
-        },
-        summary:     await mergeSummaries(base?.summary ?? "", parsed.summary ?? ""),
-        completedAt: new Date().toISOString(),
-      };
-      await saveProfile(merged);
-
-      setAnalyzedPlans((prev) => [...prev, pendingFile.name]);
       setPendingFile(null);
-      setDescription("");
+      setForm(EMPTY_FORM);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred.");
+      setError(err instanceof Error ? err.message : "An error occurred. Please try again.");
     } finally {
-      setIsAnalyzing(false);
+      setIsSaving(false);
     }
   };
 
+  const canSave = !!pendingFile && form.sportAndAthlete.trim() && form.goalAndContext.trim();
+
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Upload an existing training plan. The AI reads the filename and your description to extract
-        coaching patterns and enrich your profile.
-      </p>
+      {/* Header */}
+      <div className="space-y-1">
+        <p className="text-sm text-muted-foreground">
+          Upload past training plans to give the AI situational context — how you've coached
+          specific athletes in specific situations. This does <strong>not</strong> change your
+          coaching philosophy; it's background knowledge the AI uses when making suggestions.
+        </p>
+      </div>
 
-      {/* Analyzed plans list */}
-      {analyzedPlans.length > 0 && (
+      {/* Uploaded plans list */}
+      {uploadedPlans.length > 0 && (
         <div className="space-y-1.5">
-          {analyzedPlans.map((name, i) => (
-            <div key={i} className="flex items-center gap-2 text-sm text-foreground/80">
-              <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-green-500" />
-              <span className="truncate">{name}</span>
-              <span className="text-xs text-muted-foreground ml-auto">Profile enriched ✓</span>
+          {uploadedPlans.map((doc) => (
+            <div
+              key={doc.id}
+              className="flex items-center gap-2 text-sm border rounded-lg px-3 py-2 bg-muted/20"
+            >
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
+              <div className="flex-1 min-w-0">
+                <p className="truncate font-medium text-sm">{doc.name}</p>
+                <p className="text-xs text-muted-foreground">{formatBytes(doc.size)} · Saved as AI context ✓</p>
+              </div>
+              <button
+                className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                title="Remove"
+                onClick={() => deleteDocument(doc.id)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
             </div>
           ))}
         </div>
       )}
 
-      {/* Pending plan form or drop zone */}
+      {/* Form or drop zone */}
       {pendingFile ? (
-        <div className="space-y-3 border rounded-xl p-4 bg-muted/30">
+        <div className="space-y-4 border rounded-xl p-4 bg-muted/30">
+          {/* File header */}
           <div className="flex items-center gap-2 text-sm font-medium">
-            <FileText className="h-4 w-4 text-primary flex-shrink-0" />
-            <span className="truncate">{pendingFile.name}</span>
+            <FileText className="h-4 w-4 text-primary shrink-0" />
+            <span className="truncate flex-1">{pendingFile.name}</span>
             <button
-              className="ml-auto text-muted-foreground hover:text-destructive flex-shrink-0"
-              onClick={() => { setPendingFile(null); setDescription(""); setError(null); }}
+              className="text-muted-foreground hover:text-destructive shrink-0"
+              onClick={() => { setPendingFile(null); setForm(EMPTY_FORM); setError(null); }}
             >
               <X className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="space-y-1.5">
-            <Label className="text-xs">Describe this plan</Label>
-            <Textarea
-              placeholder="e.g. 12-week sprint preparation for advanced athletes, heavy speed-strength emphasis in mesocycle 2…"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              disabled={isAnalyzing}
-              className="text-sm resize-none"
-            />
+          {/* Guided fields */}
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Plan name</Label>
+              <Input
+                value={form.planName}
+                onChange={setField("planName")}
+                placeholder="e.g. Sprint Prep Block – Summer 2024"
+                className="text-sm h-8"
+                disabled={isSaving}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">
+                Who was this plan for? <span className="text-destructive">*</span>
+              </Label>
+              <p className="text-xs text-muted-foreground -mt-0.5">
+                Sport, discipline, level, age/gender context
+              </p>
+              <Textarea
+                value={form.sportAndAthlete}
+                onChange={setField("sportAndAthlete")}
+                placeholder="e.g. Track & field, 100m sprinter, elite level, 23y male"
+                rows={2}
+                disabled={isSaving}
+                className="text-sm resize-none"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">
+                Goal & situation? <span className="text-destructive">*</span>
+              </Label>
+              <p className="text-xs text-muted-foreground -mt-0.5">
+                Main goal, training phase, time of year, special circumstances
+              </p>
+              <Textarea
+                value={form.goalAndContext}
+                onChange={setField("goalAndContext")}
+                placeholder="e.g. National championship prep, 12-week peaking block, started after injury return"
+                rows={2}
+                disabled={isSaving}
+                className="text-sm resize-none"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Methods & structure</Label>
+              <p className="text-xs text-muted-foreground -mt-0.5">
+                Periodization approach, key methods, number of mesos, load logic
+              </p>
+              <Textarea
+                value={form.methodsAndStructure}
+                onChange={setField("methodsAndStructure")}
+                placeholder="e.g. Block periodization, 3 mesos: accumulation → intensification → realization, heavy speed-strength, 4-2-4-2 microcycle pattern"
+                rows={2}
+                disabled={isSaving}
+                className="text-sm resize-none"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Outcome & notes (optional)</Label>
+              <p className="text-xs text-muted-foreground -mt-0.5">
+                What worked, what you'd change, athlete response to load
+              </p>
+              <Textarea
+                value={form.outcomeAndNotes}
+                onChange={setField("outcomeAndNotes")}
+                placeholder="e.g. PB at nationals, athlete handled volume well — reduce taper block from 2 to 1.5 weeks next time"
+                rows={2}
+                disabled={isSaving}
+                className="text-sm resize-none"
+              />
+            </div>
           </div>
 
           {error && <p className="text-xs text-destructive">{error}</p>}
 
           <Button
             className="w-full"
-            onClick={handleAnalyze}
-            disabled={!description.trim() || isAnalyzing}
+            onClick={handleSave}
+            disabled={!canSave || isSaving}
           >
-            {isAnalyzing ? (
-              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Analyzing…</>
+            {isSaving ? (
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</>
             ) : (
-              "Analyze & enrich profile"
+              "Save as AI context"
             )}
           </Button>
         </div>
       ) : (
-        <DropZone onFile={setPendingFile} disabled={isAnalyzing} />
+        <DropZone onFile={handleFileSelected} disabled={isSaving} />
       )}
     </div>
   );

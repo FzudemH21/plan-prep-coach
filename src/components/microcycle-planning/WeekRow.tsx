@@ -68,6 +68,8 @@ interface WeekRowProps {
   // Athlete context for baseline value auto-fill
   selectedAthleteId?: string;
   athletePerformanceParameters?: AthletePerformanceParameter[];
+  // Microcycle label to display next to the week date (e.g. "Microcycle 1")
+  microcycleLabel?: string;
 }
 
 export function WeekRow({
@@ -101,6 +103,7 @@ export function WeekRow({
   onAddSession,
   selectedAthleteId,
   athletePerformanceParameters,
+  microcycleLabel,
 }: WeekRowProps) {
   const [isWeekHovering, setIsWeekHovering] = useState(false);
   const weekStartDate = week[0]?.dateString;
@@ -138,6 +141,9 @@ export function WeekRow({
         {/* Week label */}
         <div className="text-xs text-muted-foreground flex-1">
           Week of {format(week[0].date, 'MMM d')}
+          {microcycleLabel && (
+            <span className="text-muted-foreground"> · {microcycleLabel}</span>
+          )}
         </div>
 
         {/* Paste Week button - appears on hover when week is copied */}

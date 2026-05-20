@@ -3,6 +3,16 @@ export interface Message {
   content: string;
 }
 
+/** A file block that can be attached to a message for document/image analysis. */
+export interface FileAttachment {
+  /** "document" for PDFs, "image" for image types */
+  blockType: "document" | "image";
+  /** MIME type, e.g. "application/pdf" or "image/jpeg" */
+  mediaType: string;
+  /** Base64-encoded file content */
+  base64Data: string;
+}
+
 const API_URL = "https://api.anthropic.com/v1/messages";
 
 function getApiKey(): string {
@@ -14,7 +24,8 @@ function getApiKey(): string {
 export async function sendMessage(
   messages: Message[],
   systemPrompt: string,
-  model = "claude-opus-4-6"
+  model = "claude-haiku-4-5",
+  maxTokens = 4096,
 ): Promise<string> {
   const response = await fetch(API_URL, {
     method: "POST",
@@ -26,9 +37,70 @@ export async function sendMessage(
     },
     body: JSON.stringify({
       model,
-      max_tokens: 1024,
+      max_tokens: maxTokens,
       system: systemPrompt,
       messages,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Anthropic API error ${response.status}: ${error}`);
+  }
+
+  const data = await response.json() as {
+    content: Array<{ type: string; text: string }>;
+  };
+
+  const textBlock = data.content.find((b) => b.type === "text");
+  if (!textBlock) throw new Error("No text in API response");
+  return textBlock.text;
+}
+
+/**
+ * Send a single user message that may include a PDF or image attachment.
+ * The file block is prepended before the text block so Claude reads the
+ * document first, then the prompt.
+ */
+export async function sendMessageWithFile(
+  textContent: string,
+  attachment: FileAttachment | null,
+  systemPrompt: string,
+  model = "claude-sonnet-4-5"
+): Promise<string> {
+  type ContentBlock =
+    | { type: "text"; text: string }
+    | { type: "document"; source: { type: "base64"; media_type: string; data: string } }
+    | { type: "image"; source: { type: "base64"; media_type: string; data: string } };
+
+  const content: ContentBlock[] = [];
+
+  if (attachment) {
+    content.push({
+      type: attachment.blockType,
+      source: {
+        type: "base64",
+        media_type: attachment.mediaType,
+        data: attachment.base64Data,
+      },
+    } as ContentBlock);
+  }
+
+  content.push({ type: "text", text: textContent });
+
+  const response = await fetch(API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": getApiKey(),
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 2048,
+      system: systemPrompt,
+      messages: [{ role: "user", content }],
     }),
   });
 

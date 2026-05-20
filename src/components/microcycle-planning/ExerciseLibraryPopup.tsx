@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Search, Plus, ChevronUp, ChevronDown, X } from 'lucide-react';
+import { Search, Plus, ChevronUp, ChevronDown, X, Recycle } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { ExerciseSelection, ExerciseLibraryType } from '@/types/microcycle-planning';
 import { FilterState } from '@/types/exercises';
@@ -413,6 +413,49 @@ export function ExerciseLibraryPopup({
                     </TabsTrigger>
                   ))}
                 </TabsList>
+
+                {libraries.map(lib => {
+                  const libCircuits = lib.circuits ?? [];
+                  if (lib.id !== activeTab || libCircuits.length === 0) return null;
+                  return (
+                    <div key={`circuits-${lib.id}`} className="mt-3 shrink-0">
+                      <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 mb-1.5">
+                        <Recycle className="h-3.5 w-3.5" />
+                        Circuits in this library
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {libCircuits.map(circuit => (
+                          <button
+                            key={circuit.id}
+                            className="flex items-center gap-2 px-3 py-1.5 border rounded-lg bg-muted/40 hover:bg-primary/10 hover:border-primary/40 transition-colors text-sm"
+                            onClick={() => {
+                              onSelectExercises([{
+                                id: `circuit-${circuit.id}-${Date.now()}`,
+                                exerciseId: circuit.id,
+                                exerciseName: circuit.name,
+                                library: lib.id,
+                                isCircuit: true,
+                                circuitId: circuit.id,
+                                circuitLibraryId: lib.id,
+                                circuitExercises: [...circuit.exercises],
+                                circuitRestBetweenRounds: circuit.restBetweenRounds,
+                                circuitRestBetweenExercises: circuit.restBetweenExercises,
+                                circuitComments: circuit.comments,
+                              }]);
+                              handleClose();
+                            }}
+                          >
+                            <Recycle className="h-3.5 w-3.5 text-primary shrink-0" />
+                            <span className="font-medium">{circuit.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {circuit.exercises.length} ex.
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
 
                 <TabsContent value={activeTab} className="mt-4 flex-1 flex flex-col overflow-hidden">
                   {/* Table with sticky headers and horizontal scroll */}

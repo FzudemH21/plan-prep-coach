@@ -87,54 +87,60 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
     return dates;
   }, [mesocycles, planStartDate]);
 
-  // Get tests in date range with their names and individual dates
+  // Get tests in date range with their names and individual dates.
+  // Uses string comparison to avoid UTC-midnight vs local-midnight mismatch.
   const getTestsInRange = (start: Date, end: Date): TestDetail[] => {
-    const testMap = new Map<string, { goal?: string; dates: Date[] }>();
-    
+    const startStr = format(start, 'yyyy-MM-dd');
+    const endStr = format(end, 'yyyy-MM-dd');
+    const testMap = new Map<string, { goal?: string; dates: string[] }>();
+
     subGoals.forEach(sg => {
       const testName = sg.testMethod || sg.description || 'Test';
       sg.testDates?.forEach(td => {
-        const testDate = new Date(td);
-        if (testDate >= start && testDate <= end) {
+        const dateStr = td.slice(0, 10);
+        if (dateStr >= startStr && dateStr <= endStr) {
           const existing = testMap.get(testName);
           if (existing) {
-            existing.dates.push(testDate);
+            existing.dates.push(dateStr);
           } else {
-            testMap.set(testName, { goal: sg.goal, dates: [testDate] });
+            testMap.set(testName, { goal: sg.goal, dates: [dateStr] });
           }
         }
       });
     });
-    
-    return Array.from(testMap.entries()).map(([name, data]) => ({ 
-      name, 
+
+    return Array.from(testMap.entries()).map(([name, data]) => ({
+      name,
       goal: data.goal,
-      dates: data.dates.sort((a, b) => a.getTime() - b.getTime())
+      // Parse at noon local time so format() never rolls back to the previous day
+      dates: data.dates.sort().map(d => new Date(`${d}T12:00:00`)),
     }));
   };
 
-  // Get events in date range with their names and individual dates
+  // Get events in date range with their names and individual dates.
   const getEventsInRange = (start: Date, end: Date): EventDetail[] => {
-    const eventMap = new Map<string, Date[]>();
-    
+    const startStr = format(start, 'yyyy-MM-dd');
+    const endStr = format(end, 'yyyy-MM-dd');
+    const eventMap = new Map<string, string[]>();
+
     events.forEach(e => {
       const eventName = e.name || 'Event';
       e.eventDates?.forEach(ed => {
-        const eventDate = new Date(ed);
-        if (eventDate >= start && eventDate <= end) {
+        const dateStr = ed.slice(0, 10);
+        if (dateStr >= startStr && dateStr <= endStr) {
           const existing = eventMap.get(eventName);
           if (existing) {
-            existing.push(eventDate);
+            existing.push(dateStr);
           } else {
-            eventMap.set(eventName, [eventDate]);
+            eventMap.set(eventName, [dateStr]);
           }
         }
       });
     });
-    
-    return Array.from(eventMap.entries()).map(([name, dates]) => ({ 
-      name, 
-      dates: dates.sort((a, b) => a.getTime() - b.getTime())
+
+    return Array.from(eventMap.entries()).map(([name, dates]) => ({
+      name,
+      dates: dates.sort().map(d => new Date(`${d}T12:00:00`)),
     }));
   };
 

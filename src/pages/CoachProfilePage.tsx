@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,9 @@ import {
   Mail,
   BookOpen,
   ClipboardList,
+  Palette,
+  Upload,
+  RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -349,12 +352,169 @@ function ProfileTab() {
 }
 
 // ─────────────────────────────────────────────
+// Branding card (inside Settings tab)
+// ─────────────────────────────────────────────
+
+function BrandingCard() {
+  const { profile, saveProfile } = useCoachProfile();
+  const { toast } = useToast();
+
+  const [businessName, setBusinessName] = useState(profile?.branding?.businessName ?? "");
+  const [primaryColor, setPrimaryColor] = useState(profile?.branding?.primaryColor ?? "#2563eb");
+  const [logoBase64, setLogoBase64] = useState<string | undefined>(
+    profile?.branding?.logoBase64
+  );
+  const [dirty, setDirty] = useState(false);
+
+  // Sync with profile once it loads from Supabase
+  useEffect(() => {
+    if (!profile?.branding) return;
+    setBusinessName(profile.branding.businessName ?? "");
+    setPrimaryColor(profile.branding.primaryColor ?? "#2563eb");
+    setLogoBase64(profile.branding.logoBase64);
+  }, [profile]);
+
+  const handleLogoUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setLogoBase64(ev.target?.result as string);
+      setDirty(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async () => {
+    if (!profile) return;
+    await saveProfile({
+      ...profile,
+      branding: { logoBase64, primaryColor, businessName },
+    });
+    setDirty(false);
+    toast({ title: "Branding saved" });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Palette className="h-4 w-4" />
+          Report Branding
+        </CardTitle>
+        <CardDescription>
+          Your logo and colors appear on exported training plan PDFs.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {/* Business name */}
+        <div className="space-y-1.5">
+          <Label>Business / Organisation Name</Label>
+          <Input
+            placeholder="e.g. Elite Performance Coaching"
+            value={businessName}
+            onChange={(e) => { setBusinessName(e.target.value); setDirty(true); }}
+          />
+          <p className="text-xs text-muted-foreground">
+            Shown in the PDF footer and cover page.
+          </p>
+        </div>
+
+        {/* Accent color */}
+        <div className="space-y-1.5">
+          <Label>Accent Color</Label>
+          <div className="flex items-center gap-3">
+            <input
+              type="color"
+              value={primaryColor}
+              onChange={(e) => { setPrimaryColor(e.target.value); setDirty(true); }}
+              className="h-9 w-16 cursor-pointer rounded border border-input p-0.5"
+            />
+            <span className="text-sm font-mono text-muted-foreground">{primaryColor}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => { setPrimaryColor("#2563eb"); setDirty(true); }}
+            >
+              <RotateCcw className="h-3 w-3 mr-1" />
+              Reset
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Used as the header and highlight color in exported PDFs.
+          </p>
+        </div>
+
+        {/* Logo */}
+        <div className="space-y-1.5">
+          <Label>Logo</Label>
+          {logoBase64 ? (
+            <div className="flex items-center gap-3">
+              <img
+                src={logoBase64}
+                alt="Logo preview"
+                className="h-12 max-w-[140px] rounded border bg-muted object-contain p-1"
+              />
+              <div className="flex gap-2">
+                <Label htmlFor="logo-upload" className="cursor-pointer">
+                  <Button variant="outline" size="sm" asChild>
+                    <span>Replace</span>
+                  </Button>
+                </Label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => { setLogoBase64(undefined); setDirty(true); }}
+                >
+                  Remove
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Label htmlFor="logo-upload" className="cursor-pointer">
+              <div className="flex h-20 items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 transition-colors hover:border-primary/50">
+                <div className="text-center">
+                  <Upload className="mx-auto mb-1 h-5 w-5 text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">
+                    Click to upload PNG, JPG, or SVG
+                  </p>
+                </div>
+              </div>
+            </Label>
+          )}
+          <input
+            id="logo-upload"
+            type="file"
+            accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp"
+            className="sr-only"
+            onChange={handleLogoUpload}
+          />
+          <p className="text-xs text-muted-foreground">
+            Displayed in the top-right corner of the PDF cover page.
+          </p>
+        </div>
+
+        <Button size="sm" onClick={handleSave} disabled={!dirty || !profile}>
+          <Save className="h-4 w-4 mr-2" />
+          Save Branding
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────
 // Tab: Settings
 // ─────────────────────────────────────────────
 
 function SettingsTab() {
   return (
     <div className="space-y-6">
+      {/* Branding */}
+      <BrandingCard />
+
       {/* Personal data */}
       <Card>
         <CardHeader className="pb-3">

@@ -17,13 +17,21 @@ export interface Mesocycle {
   trainingQualities?: string[];
 }
 
+/** A training method as stored on a mesocycle — minimal shape used across the wizard. */
+export interface TrainingMethodRef {
+  id: string;
+  name: string;
+  category?: string;
+  parentCategory?: string;
+}
+
 // Extended interface for the mesocycle page that includes additional properties
 export interface ExtendedMesocycle extends Mesocycle {
   startDate: Date;
   endDate: Date;
   duration: number;
   intensity: Intensity;
-  trainingMethods: any[];
+  trainingMethods: TrainingMethodRef[];
   allocatedSubGoals?: string[];
 }
 

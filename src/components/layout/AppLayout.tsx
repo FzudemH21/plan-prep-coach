@@ -9,11 +9,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bot, FileText, Settings, Menu, FlaskConical, Trash2 } from "lucide-react";
+import { Bot, Settings, Menu, FlaskConical, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { loadSeedData, loadDemoPlan2026, loadExerciseLibrarySeedData } from "@/utils/seedData";
+import { loadSeedData, loadDemoPlan2026, loadStrengthPlan, loadExerciseLibrarySeedData } from "@/utils/seedData";
 import { clearAllAppCache } from "@/utils/clearCache";
 import { NavigationSidebar } from "./NavigationSidebar";
+import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
+import { useCustomLibraries } from "@/contexts/CustomLibrariesContext";
+import type { CustomLibrary } from "@/contexts/CustomLibrariesContext";
+import type { TrainingProgram } from "@/hooks/useTrainingPrograms";
 
 interface AppLayoutProps {
   children?: React.ReactNode;
@@ -24,12 +28,28 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [navOpen, setNavOpen] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { mergeSeedPrograms } = useTrainingPrograms();
+  const { mergeSeedLibraries } = useCustomLibraries();
 
-  const handleLoadSeedData = () => {
-    loadSeedData();
-    loadDemoPlan2026();
-    loadExerciseLibrarySeedData();
-    toast({ title: "Demo-Daten geladen", description: "Sprint Performance Demo + Demo Plan 2026 + Exercise Library wurden geladen." });
+  const handleLoadSeedData = async () => {
+    try {
+      const p1 = loadSeedData() as TrainingProgram;
+      const p2 = loadDemoPlan2026() as TrainingProgram;
+      const p3 = loadStrengthPlan() as TrainingProgram;
+      const libs = loadExerciseLibrarySeedData() as CustomLibrary[];
+
+      await mergeSeedPrograms([p1, p2, p3].filter(Boolean) as Array<{ id: string; [key: string]: unknown }>);
+      mergeSeedLibraries(libs);
+
+      toast({ title: "Demo-Daten geladen", description: "Sprint Performance Demo + Demo Plan 2026 + Strength Development 12-Week Plan + Exercise Library wurden geladen." });
+    } catch (err) {
+      console.error('[Demo-Daten laden] Fehler:', err);
+      toast({
+        title: "Fehler beim Laden",
+        description: err instanceof Error ? err.message : String(err),
+        variant: "destructive",
+      });
+    }
   };
 
   const handleClearData = () => {
@@ -70,10 +90,6 @@ export function AppLayout({ children }: AppLayoutProps) {
                 AI Agent
               </Button>
               
-              <Button variant="outline" size="sm">
-                <FileText className="h-4 w-4 mr-2" />
-                Export
-              </Button>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

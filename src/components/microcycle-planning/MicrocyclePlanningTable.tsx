@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,10 @@ import {
 import { cn } from '@/lib/utils';
 import { getParametersForMethod, MethodParameter } from '@/data/methodParameters';
 
+export interface MicrocyclePlanningTableHandle {
+  mergeCellData: (newCellData: Record<string, CellData>) => void;
+}
+
 interface MicrocyclePlanningTableProps {
   mesocycles: ExtendedMesocycle[];
   selectedMethods?: string[];
@@ -35,9 +39,11 @@ interface MicrocyclePlanningTableProps {
   }>>;
   onExerciseSelectionChange?: (cellData: Record<string, CellData>) => void;
   getParametersForCell?: (mesocycleId: string, microcycleId: string | undefined, methodId: string, categoryName: string | undefined) => string;
+  /** methodName → array of mesocycleIds the method is assigned to */
+  methodAllocations?: Record<string, string[]>;
 }
 
-export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], parameterValues = {}, methodParametersMap = {}, onExerciseSelectionChange, getParametersForCell }: MicrocyclePlanningTableProps) {
+export const MicrocyclePlanningTable = forwardRef<MicrocyclePlanningTableHandle, MicrocyclePlanningTableProps>(function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], parameterValues = {}, methodParametersMap = {}, onExerciseSelectionChange, getParametersForCell, methodAllocations = {} }: MicrocyclePlanningTableProps, ref) {
   const { data: toolboxData } = useToolboxData();
   const { toast } = useToast();
   const [planningState, setPlanningState] = useState<MicrocyclePlanningState>({
@@ -54,11 +60,30 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], para
     }
   }, []);
 
-  // Save state to localStorage and notify parent whenever it changes
+  // Save state to localStorage and notify parent whenever it changes.
+  // Skip the very first execution (initial empty state before load completes).
+  // Use a ref for the callback to avoid spurious saves when the parent re-renders.
+  const isMountSave = React.useRef(true);
+  const onExerciseSelectionChangeRef = React.useRef(onExerciseSelectionChange);
+  onExerciseSelectionChangeRef.current = onExerciseSelectionChange;
   useEffect(() => {
+    if (isMountSave.current) {
+      isMountSave.current = false;
+      return;
+    }
     localStorage.setItem('microcyclePlanningState', JSON.stringify(planningState));
-    onExerciseSelectionChange?.(planningState.cellData);
-  }, [planningState, onExerciseSelectionChange]);
+    onExerciseSelectionChangeRef.current?.(planningState.cellData);
+  }, [planningState]); // intentionally omit callback — use ref to avoid spurious saves
+
+  // Expose imperative handle so parent can merge AI-assigned cell data directly
+  useImperativeHandle(ref, () => ({
+    mergeCellData: (newCellData: Record<string, CellData>) => {
+      setPlanningState(prev => ({
+        ...prev,
+        cellData: { ...prev.cellData, ...newCellData },
+      }));
+    },
+  }));
 
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   
@@ -1685,6 +1710,7 @@ const updateCellData = (
                                      method.id,
                                      undefined
                                    )}
+                                   disabled={Object.keys(methodAllocations).length > 0 && !(methodAllocations[method.id] ?? []).includes(column.mesocycleId)}
                                  />
                               </TableCell>
                             );
@@ -1754,6 +1780,7 @@ const updateCellData = (
                                         method.id,
                                         categoryName
                                       )}
+                                      disabled={Object.keys(methodAllocations).length > 0 && !(methodAllocations[method.id] ?? []).includes(column.mesocycleId)}
                                     />
                                   </TableCell>
                                 );
@@ -1852,4 +1879,4 @@ const updateCellData = (
     </AlertDialog>
   </>
   );
-}
+});

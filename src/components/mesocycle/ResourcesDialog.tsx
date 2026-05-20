@@ -1,4 +1,6 @@
-import React, { useState, useRef, useCallback } from 'react';
+﻿import React, { useState, useRef, useCallback } from 'react';
+import { InlineDocumentViewer } from '@/components/coach/InlineDocumentViewer';
+import { DocumentAnalysisDialog } from '@/components/coach/DocumentAnalysisDialog';
 import {
   Dialog,
   DialogContent,
@@ -53,6 +55,7 @@ import {
   File,
   GripVertical,
   X,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -188,13 +191,14 @@ function FolderCard({
 interface DocRowProps {
   doc: CoachDocument;
   onOpen: () => void;
+  onAnalyze: () => void;
   onMove: () => void;
   onDelete: () => void;
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: () => void;
 }
 
-function DocRow({ doc, onOpen, onMove, onDelete, onDragStart, onDragEnd }: DocRowProps) {
+function DocRow({ doc, onOpen, onAnalyze, onMove, onDelete, onDragStart, onDragEnd }: DocRowProps) {
   const dragFromHandle = useRef(false);
 
   return (
@@ -233,6 +237,10 @@ function DocRow({ doc, onOpen, onMove, onDelete, onDragStart, onDragEnd }: DocRo
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onAnalyze(); }}>
+              <Sparkles className="h-4 w-4 mr-2 text-primary" /> Analyze with AI
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onMove}>
               <FolderInput className="h-4 w-4 mr-2" /> Move
             </DropdownMenuItem>
@@ -323,18 +331,28 @@ export const ResourcesDialog: React.FC<ResourcesDialogProps> = ({ open, onOpenCh
     getDocumentUrl,
   } = useCoachDocuments();
 
+  // ── Inline viewer state ─────────────────────
+  const [viewer, setViewer] = useState<{ doc: CoachDocument; url: string } | null>(null);
+
+  // ── AI analysis state ───────────────────────
+  const [analyzeTarget, setAnalyzeTarget] = useState<CoachDocument | null>(null);
+
   const handleDocOpen = useCallback(async (doc: CoachDocument) => {
-    const url = await getDocumentUrl(doc.id);
-    if (!url) return;
     const viewable = doc.type.startsWith('image/') || doc.type === 'application/pdf';
-    if (viewable) {
-      window.open(url, '_blank');
-    } else {
+    if (!viewable) {
+      const url = await getDocumentUrl(doc.id);
+      if (!url) return;
       const a = document.createElement('a');
       a.href = url;
       a.download = doc.name;
       a.click();
+      return;
     }
+    // Open viewer immediately; spinner shows while URL loads
+    setViewer({ doc, url: '' });
+    const url = await getDocumentUrl(doc.id);
+    if (!url) { setViewer(null); return; }
+    setViewer({ doc, url });
   }, [getDocumentUrl]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -547,6 +565,7 @@ export const ResourcesDialog: React.FC<ResourcesDialogProps> = ({ open, onOpenCh
                   key={doc.id}
                   doc={doc}
                   onOpen={() => handleDocOpen(doc)}
+                  onAnalyze={() => setAnalyzeTarget(doc)}
                   onMove={() => setMoveTarget(doc)}
                   onDelete={() => setDeleteTarget({ type: 'doc', item: doc })}
                   onDragStart={(e) => handleDocDragStart(e, doc.id)}
@@ -633,6 +652,22 @@ export const ResourcesDialog: React.FC<ResourcesDialogProps> = ({ open, onOpenCh
           }
         }}
         onClose={() => setMoveTarget(null)}
+      />
+
+      {/* ── Inline document viewer ── */}
+      <InlineDocumentViewer
+        open={viewer !== null}
+        doc={viewer?.doc ?? null}
+        url={viewer?.url ?? null}
+        onClose={() => setViewer(null)}
+      />
+
+      {/* ── AI analysis dialog ── */}
+      <DocumentAnalysisDialog
+        open={analyzeTarget !== null}
+        doc={analyzeTarget}
+        getDocumentUrl={getDocumentUrl}
+        onClose={() => setAnalyzeTarget(null)}
       />
     </>
   );

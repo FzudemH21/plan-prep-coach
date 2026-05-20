@@ -50,6 +50,7 @@ interface AddSmartGoalDialogProps {
   athletePerformanceParams: AthletePerformanceParameter[];
   athleticismParameters: ParameterV2[];
   onOpenCreateParameter?: () => void;
+  defaultParameterId?: string | null;
 }
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -63,9 +64,10 @@ export function AddSmartGoalDialog({
   athletePerformanceParams,
   athleticismParameters,
   onOpenCreateParameter,
+  defaultParameterId,
 }: AddSmartGoalDialogProps) {
   const [comboboxOpen, setComboboxOpen] = useState(false);
-  const [selectedParameterId, setSelectedParameterId] = useState<string | null>(null);
+  const [selectedParameterId, setSelectedParameterId] = useState<string | null>(defaultParameterId ?? null);
   const [description, setDescription] = useState("");
   const [baselineValue, setBaselineValue] = useState<number | "">("");
   const [desiredValue, setDesiredValue] = useState<number | "">("");
@@ -82,7 +84,7 @@ export function AddSmartGoalDialog({
     }
   }, [editGoal]);
 
-  // Reset form when dialog closes
+  // Reset form when dialog closes or pre-select parameter when it opens
   useEffect(() => {
     if (!open) {
       setSelectedParameterId(null);
@@ -90,8 +92,27 @@ export function AddSmartGoalDialog({
       setBaselineValue("");
       setDesiredValue("");
       setUnit("");
+    } else if (!editGoal && defaultParameterId) {
+      const param = athleticismParameters.find((p) => p.id === defaultParameterId);
+      if (param) {
+        setSelectedParameterId(param.id);
+        setDescription(param.name);
+        setUnit(param.unit ?? "");
+        // Auto-fill baseline from athlete profile if available
+        const athleteParam = athletePerformanceParams.find((pp) => pp.athleticismParameterId === param.id);
+        if (athleteParam?.values?.length) {
+          const latest = athleteParam.values.reduce((a, b) =>
+            new Date(a.recordedAt) > new Date(b.recordedAt) ? a : b
+          );
+          const num = parseFloat(latest.value);
+          if (!isNaN(num)) setBaselineValue(num);
+        } else {
+          setBaselineValue("");
+        }
+        setDesiredValue("");
+      }
     }
-  }, [open]);
+  }, [open, defaultParameterId, editGoal, athleticismParameters, athletePerformanceParams]);
 
   // Get athlete's performance parameters with their details
   const athleteParamsWithDetails = useMemo((): ParameterOptionItem[] => {

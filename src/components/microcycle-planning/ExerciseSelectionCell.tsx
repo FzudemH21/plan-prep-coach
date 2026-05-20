@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { X, Plus, Copy, Info } from 'lucide-react';
+import { X, Plus, Copy, Info, Ban } from 'lucide-react';
 import { CellData, ExerciseSelection, ExerciseLibraryType } from '@/types/microcycle-planning';
 import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -13,14 +13,17 @@ interface ExerciseSelectionCellProps {
   onCopy?: () => void;
   hasPreviousExercises?: boolean;
   parameterInfo?: string;
+  /** When true the method is not assigned to this mesocycle — cell is locked */
+  disabled?: boolean;
 }
 
-export function ExerciseSelectionCell({ 
-  cellData, 
-  onUpdate, 
+export function ExerciseSelectionCell({
+  cellData,
+  onUpdate,
   onCopy,
   hasPreviousExercises = false,
-  parameterInfo
+  parameterInfo,
+  disabled = false,
 }: ExerciseSelectionCellProps) {
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
 
@@ -37,6 +40,17 @@ export function ExerciseSelectionCell({
   const handleExerciseCreated = (exercise: ExerciseSelection) => {
     addExercise(exercise);
   };
+
+  if (disabled) {
+    return (
+      <div className="min-h-[60px] flex items-center justify-center bg-muted/20 rounded border border-dashed border-border/40">
+        <div className="flex flex-col items-center gap-1 text-muted-foreground/50">
+          <Ban className="h-4 w-4" />
+          <span className="text-[10px]">Not assigned</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3 min-h-[60px] flex flex-col relative">

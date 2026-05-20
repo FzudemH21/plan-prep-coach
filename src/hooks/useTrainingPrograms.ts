@@ -1,5 +1,7 @@
 import { useCallback } from 'react';
 import { useSupabaseStore } from './useSupabaseStore';
+import { useAuth } from './useAuth';
+import { savePlanMemory } from '@/lib/planMemory';
 import { PlanDuration, SmartGoal, SubGoal, Event, TrainableQuality, IntensityLevel } from '@/types/training';
 
 // Interface for manually added methods
@@ -52,6 +54,7 @@ export interface TrainingProgram {
   daySplitStates: Record<string, number> | null;
   sessionSections: Record<string, any[]> | null;
   supersets: Record<string, Record<string, string>> | null;
+  methodAllocations: Record<string, string[]> | null;
 }
 
 interface TrainingProgramsData {
@@ -65,6 +68,7 @@ const DEFAULT_DATA: TrainingProgramsData = { version: CURRENT_VERSION, programs:
 const generateId = () => `prog_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 export function useTrainingPrograms() {
+  const { user } = useAuth();
   const [data, setData, isLoading] = useSupabaseStore<TrainingProgramsData>({
     tableName: 'training_programs',
     legacyKey: 'trainingPrograms',
@@ -101,6 +105,8 @@ export function useTrainingPrograms() {
         const newPrograms = [...data.programs];
         newPrograms[existingIndex] = updated;
         await saveData({ ...data, programs: newPrograms });
+        // Persist summary to plan_memory in the background (non-blocking)
+        if (user) savePlanMemory(updated, user.id).catch(() => {});
         return updated;
       }
     }
@@ -124,11 +130,14 @@ export function useTrainingPrograms() {
       daySplitStates: program.daySplitStates || null,
       sessionSections: program.sessionSections || null,
       supersets: program.supersets || null,
+      methodAllocations: program.methodAllocations || null,
     };
 
     await saveData({ ...data, programs: [...data.programs, newProgram] });
+    // Persist summary to plan_memory in the background (non-blocking)
+    if (user) savePlanMemory(newProgram, user.id).catch(() => {});
     return newProgram;
-  }, [data, saveData]);
+  }, [data, saveData, user]);
 
   // Copy a program
   const copyProgram = useCallback(async (id: string): Promise<TrainingProgram | null> => {
@@ -167,7 +176,7 @@ export function useTrainingPrograms() {
     const keysToCheck = [
       'macrocycleData', 'mesocycleData', 'trainingDays', 'exerciseDistribution',
       'parameterValues', 'dailyIntensityData', 'daySplitStates', 'sessionSections',
-      'supersets', 'macrocycleStep', 'mesocycleStep', 'microcycleStep',
+      'supersets', 'methodAllocations', 'macrocycleStep', 'mesocycleStep', 'microcycleStep',
     ];
     keysToCheck.forEach(key => localStorage.removeItem(key));
 
@@ -180,6 +189,7 @@ export function useTrainingPrograms() {
     if (program.daySplitStates) localStorage.setItem('daySplitStates', JSON.stringify(program.daySplitStates));
     if (program.sessionSections) localStorage.setItem('sessionSections', JSON.stringify(program.sessionSections));
     if (program.supersets) localStorage.setItem('supersets', JSON.stringify(program.supersets));
+    if (program.methodAllocations) localStorage.setItem('methodAllocations', JSON.stringify(program.methodAllocations));
     localStorage.setItem('activeProgramId', id);
 
     return true;
@@ -228,6 +238,7 @@ export function useTrainingPrograms() {
       daySplitStates: get('daySplitStates'),
       sessionSections: get('sessionSections'),
       supersets: get('supersets'),
+      methodAllocations: get('methodAllocations'),
     };
   }, []);
 
@@ -252,7 +263,7 @@ export function useTrainingPrograms() {
     const staticKeys = [
       'macrocycleData', 'mesocycleData', 'trainingDays', 'exerciseDistribution',
       'parameterValues', 'dailyIntensityData', 'daySplitStates', 'sessionSections',
-      'supersets', 'macrocycleStep', 'mesocycleStep', 'microcycleStep', 'activeProgramId',
+      'supersets', 'methodAllocations', 'macrocycleStep', 'mesocycleStep', 'microcycleStep', 'activeProgramId',
     ];
     staticKeys.forEach(key => localStorage.removeItem(key));
 
@@ -274,6 +285,24 @@ export function useTrainingPrograms() {
     await saveProgram({ id, status });
     return true;
   }, [data.programs, saveProgram]);
+
+  // Merge seed/demo programs into the store in a single atomic Supabase write.
+  // Upserts by id: replaces existing entries, prepends new ones.
+  const mergeSeedPrograms = useCallback(async (
+    seedPrograms: Array<{ id: string; [key: string]: unknown }>,
+  ): Promise<void> => {
+    const now = new Date().toISOString();
+    const merged = [...data.programs];
+    for (const seed of seedPrograms) {
+      const idx = merged.findIndex(p => p.id === seed.id);
+      if (idx >= 0) {
+        merged[idx] = { ...merged[idx], ...(seed as unknown as TrainingProgram), lastModifiedAt: now };
+      } else {
+        merged.unshift({ ...(seed as unknown as TrainingProgram), createdAt: now, lastModifiedAt: now });
+      }
+    }
+    await saveData({ ...data, programs: merged });
+  }, [data, saveData]);
 
   // Get programs sorted by last modified
   const getRecentPrograms = useCallback((limit?: number) => {
@@ -297,5 +326,6 @@ export function useTrainingPrograms() {
     clearSession,
     updateProgramStatus,
     getRecentPrograms,
+    mergeSeedPrograms,
   };
 }

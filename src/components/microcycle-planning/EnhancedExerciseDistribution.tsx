@@ -1,19 +1,22 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 
 import { DragDropContext, Droppable, Draggable, DropResult, DragStart } from '@hello-pangea/dnd';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { TrainingDay } from '@/types/daily-intensity';
-import { CellData, ExerciseSelection } from '@/types/microcycle-planning';
+import { CellData, ExerciseDistribution, ExerciseSelection, SessionSection, SupersetMapping } from '@/types/microcycle-planning';
 import { IntensityLevel } from '@/types/training';
 import { ExerciseLibraryPanel } from './ExerciseLibraryPanel';
 import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
 import { SessionColumnView } from './SessionColumnView';
 import { DayHeader } from './DayHeader';
+import { displayMethodLabel } from './methodLabelUtils';
 import { useToast } from '@/hooks/use-toast';
 import { format, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Copy, Loader2, Plus, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, Loader2, Plus, Trash2, Recycle, Trophy, Calendar as CalendarIcon } from 'lucide-react';
+import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
+import type { Circuit } from '@/contexts/CustomLibrariesContext';
 import {
   Dialog,
   DialogContent,
@@ -32,40 +35,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { cleanupSupersetsOnExerciseDelete, toggleSuperset } from '@/utils/supersetUtils';
-
-interface ExerciseDistribution {
-  id: string;
-  exerciseId: string;
-  exerciseName: string;
-  methodId: string;
-  categoryName: string;
-  subCategory?: string;
-  dayDate: string;
-  sessionIndex: number;
-  order: number;
-  sectionId?: string;
-  supersetId?: string;
-  notes?: string;
-}
-
-interface SessionSection {
-  id: string;
-  dayDate: string;
-  sessionIndex: number;
-  name: string;
-  order: number;
-  comments?: string;
-}
-
-interface SupersetMapping {
-  [dayDate: string]: {
-    [sessionIndex: number]: {
-      [sectionId: string]: {  // section ID or "__unsectioned__" for session-level
-        [supersetId: string]: string[]; // array of exercise IDs
-      };
-    };
-  };
-}
+import { CircuitBuilderDialog } from '@/components/templates/CircuitBuilderDialog';
 
 interface EnhancedExerciseDistributionProps {
   mesocycle: ExtendedMesocycle;
@@ -100,6 +70,41 @@ interface EnhancedExerciseDistributionProps {
   dayMethodAssignments?: Record<string, string[]>;
   /** Bidirectional sync: called when an exercise is added inline and needs to be written back */
   onExerciseSelectionDataChange?: (data: Record<string, CellData>) => void;
+  /** Controlled selected microcycle index (lifted to page for pill navigation) */
+  selectedMicrocycleIndex?: number;
+  onSelectedMicrocycleIndexChange?: (index: number) => void;
+  /** methodName → mesocycleId[] — used to filter the left panel to assigned methods only */
+  methodAllocations?: Record<string, string[]>;
+}
+
+// ── Pure helpers (no component state — defined outside to avoid re-creation) ──
+
+function formatIntensityLabel(intensity: IntensityLevel): string {
+  const labels: Record<IntensityLevel, string> = {
+    'off': 'OFF',
+    'deload': 'DELOAD',
+    'easy': 'EASY',
+    'easy-moderate': 'EASY-MODERATE',
+    'moderate': 'MODERATE',
+    'moderate-hard': 'MODERATE-HARD',
+    'hard': 'HARD',
+    'extremely-hard': 'EXTREMELY HARD',
+  };
+  return labels[intensity] || intensity.toUpperCase();
+}
+
+function getSubtleIntensityBg(intensity: IntensityLevel): string {
+  const bgMappings: Record<IntensityLevel, string> = {
+    'off': 'bg-[hsl(var(--intensity-off)/0.15)]',
+    'deload': 'bg-[hsl(var(--intensity-deload)/0.15)]',
+    'easy': 'bg-[hsl(var(--intensity-easy)/0.15)]',
+    'easy-moderate': 'bg-[hsl(var(--intensity-easy-moderate)/0.15)]',
+    'moderate': 'bg-[hsl(var(--intensity-moderate)/0.15)]',
+    'moderate-hard': 'bg-[hsl(var(--intensity-moderate-hard)/0.15)]',
+    'hard': 'bg-[hsl(var(--intensity-hard)/0.15)]',
+    'extremely-hard': 'bg-[hsl(var(--intensity-extremely-hard)/0.20)]',
+  };
+  return bgMappings[intensity] || 'bg-primary/10';
 }
 
 export function EnhancedExerciseDistribution({
@@ -133,47 +138,32 @@ export function EnhancedExerciseDistribution({
   onUpdateTrainingDay,
   dayMethodAssignments,
   onExerciseSelectionDataChange,
+  selectedMicrocycleIndex: selectedMicrocycleIndexProp,
+  onSelectedMicrocycleIndexChange,
+  methodAllocations = {},
 }: EnhancedExerciseDistributionProps) {
   const { toast } = useToast();
+  const { libraries } = useCustomLibraries();
   const [draggingMethodId, setDraggingMethodId] = useState<string | null>(null);
   const [inlinePicker, setInlinePicker] = useState<{ dayDate: string; sessionIndex: number; sectionId?: string; methodId?: string } | null>(null);
+  const [circuitPicker, setCircuitPicker] = useState<{ dayDate: string; sessionIndex: number; sectionId?: string } | null>(null);
+  const [circuitBuilderOpen, setCircuitBuilderOpen] = useState(false);
+  // ID of the ExerciseDistribution entry being edited via the circuit builder
+  const [circuitEditId, setCircuitEditId] = useState<string | null>(null);
   const [methodSelectorPicker, setMethodSelectorPicker] = useState<{ dayDate: string; sessionIndex: number; sectionId?: string; methods: string[] } | null>(null);
-  const [selectedMicrocycleId, setSelectedMicrocycleId] = useState<string | null>(null);
+  // ── selected microcycle: controlled by parent when prop provided, else local ──
+  const [selectedMcIndexLocal, setSelectedMcIndexLocal] = useState(0);
+  const selectedMcIndex = selectedMicrocycleIndexProp ?? selectedMcIndexLocal;
+  const setSelectedMcIndex = useCallback((v: number | ((prev: number) => number)) => {
+    const next = typeof v === 'function' ? v(selectedMcIndex) : v;
+    setSelectedMcIndexLocal(next);
+    onSelectedMicrocycleIndexChange?.(next);
+  }, [selectedMcIndex, onSelectedMicrocycleIndexChange]);
   const [copyingMicrocycleId, setCopyingMicrocycleId] = useState<string | null>(null);
   const [copyingMesocycle, setCopyingMesocycle] = useState(false);
   const [sessionCommentsMap, setSessionCommentsMap] = useState<Record<string, string>>({});
   const [clearingMicrocycleId, setClearingMicrocycleId] = useState<string | null>(null);
   const [clearingMesocycleId, setClearingMesocycleId] = useState<string | null>(null);
-
-  // Helper function to format intensity labels
-  const formatIntensityLabel = (intensity: IntensityLevel): string => {
-    const labels: Record<IntensityLevel, string> = {
-      'off': 'OFF',
-      'deload': 'DELOAD',
-      'easy': 'EASY',
-      'easy-moderate': 'EASY-MODERATE',
-      'moderate': 'MODERATE',
-      'moderate-hard': 'MODERATE-HARD',
-      'hard': 'HARD',
-      'extremely-hard': 'EXTREMELY HARD'
-    };
-    return labels[intensity] || intensity.toUpperCase();
-  };
-
-  // Helper function for subtle transparent intensity backgrounds (matching Step 2 Mesocycle Planning)
-  const getSubtleIntensityBg = (intensity: IntensityLevel): string => {
-    const bgMappings: Record<IntensityLevel, string> = {
-      "off": "bg-[hsl(var(--intensity-off)/0.15)]",
-      "deload": "bg-[hsl(var(--intensity-deload)/0.15)]",
-      "easy": "bg-[hsl(var(--intensity-easy)/0.15)]",
-      "easy-moderate": "bg-[hsl(var(--intensity-easy-moderate)/0.15)]",
-      "moderate": "bg-[hsl(var(--intensity-moderate)/0.15)]",
-      "moderate-hard": "bg-[hsl(var(--intensity-moderate-hard)/0.15)]",
-      "hard": "bg-[hsl(var(--intensity-hard)/0.15)]",
-      "extremely-hard": "bg-[hsl(var(--intensity-extremely-hard)/0.20)]"
-    };
-    return bgMappings[intensity] || "bg-primary/10";
-  };
 
   // Helper to swap session comments in local state immediately
   const swapSessionComments = (dayDate: string, indexA: number, indexB: number) => {
@@ -301,6 +291,14 @@ export function EnhancedExerciseDistribution({
     return sortedGrouped;
   }, [currentMesocycleDays, mesocycle]);
 
+  // ── single-microcycle view ────────────────────────────────────────────────────
+  const microcycleEntries = useMemo(() => Array.from(daysByMicrocycle.entries()), [daysByMicrocycle]);
+  const clampedMcIdx = Math.min(selectedMcIndex, Math.max(0, microcycleEntries.length - 1));
+  const selectedMicrocycleEntry = microcycleEntries[clampedMcIdx] ?? null;
+  // Keep selectedMicrocycleId in sync for copy/clear handlers that use it
+  const selectedMicrocycleId = selectedMicrocycleEntry ? selectedMicrocycleEntry[0] : null;
+
+
   // Group exercises by method and category
   const exercisesByMethod = useMemo(() => {
     const grouped: Record<string, Record<string, Array<{
@@ -354,15 +352,15 @@ export function EnhancedExerciseDistribution({
       cellData.exercises.forEach(ex => validExerciseIds.add(ex.exerciseId));
     });
 
-    // 2. Also add exercises from exerciseDistribution (captures exercises added in Master Planner or Workout Session Card)
-    // BUT only if they are still selected in Step 5
+    // 2. Also add exercises from exerciseDistribution (captures exercises added inline in the calendar)
+    // BUT only if: (a) the exercise is in Step 5 selection, AND (b) the method already has a Step 5
+    // selection entry for this mesocycle — we never introduce a method solely from distribution.
     exerciseDistribution.forEach(ex => {
-      // Only include if this exercise is still selected in Step 5
       if (!validExerciseIds.has(ex.exerciseId)) return;
-      
       const methodId = ex.methodId;
+      // Only add to an already-known method (one that has a Step 5 selection entry)
+      if (!grouped[methodId]) return;
       const categoryName = isValidCategoryName(ex.categoryName) ? ex.categoryName : '';
-      
       addExercise(methodId, categoryName, {
         exerciseId: ex.exerciseId,
         exerciseName: ex.exerciseName,
@@ -370,8 +368,17 @@ export function EnhancedExerciseDistribution({
       });
     });
 
+    // 3. Filter out methods not allocated to this mesocycle (removes stale exerciseSelectionData)
+    if (Object.keys(methodAllocations).length > 0) {
+      Object.keys(grouped).forEach(methodId => {
+        if (!(methodAllocations[methodId] ?? []).includes(mesocycle.id)) {
+          delete grouped[methodId];
+        }
+      });
+    }
+
     return grouped;
-  }, [exerciseSelectionData, exerciseDistribution, mesocycle.id]);
+  }, [exerciseSelectionData, exerciseDistribution, mesocycle.id, methodAllocations]);
 
   // Helper to find superset in mapping
   const findSessionSuperset = (
@@ -492,12 +499,12 @@ export function EnhancedExerciseDistribution({
     return insertIndex;
   };
 
-  const handleDragStart = (start: DragStart) => {
+  const handleDragStart = useCallback((start: DragStart) => {
     if (start.source.droppableId.startsWith('library-')) {
       const methodId = start.source.droppableId.replace('library-', '').split('::')[0];
       setDraggingMethodId(methodId);
     }
-  };
+  }, []);
 
   // ── Inline exercise add: write to distribution + bidirectional sync ──────────
   const handleInlineAddExercises = (exercises: ExerciseSelection[]) => {
@@ -585,6 +592,64 @@ export function EnhancedExerciseDistribution({
 
     toast({ title: 'Exercise added', description: `${exercises.length} exercise${exercises.length > 1 ? 's' : ''} added to session` });
     setInlinePicker(null);
+  };
+
+  // ── Inline circuit add ───────────────────────────────────────────────────────
+  const handleCircuitPickerAdd = (circuit: Circuit, libraryId: string) => {
+    if (!circuitPicker) return;
+    const { dayDate, sessionIndex, sectionId: pickerSectionId } = circuitPicker;
+
+    // Determine / auto-create target section
+    let updatedSections = [...sessionSections];
+    let targetSectionId: string;
+
+    if (pickerSectionId) {
+      targetSectionId = pickerSectionId;
+    } else {
+      const existingSections = sessionSections
+        .filter(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex)
+        .sort((a, b) => a.order - b.order);
+
+      if (existingSections.length === 0) {
+        const newSection: SessionSection = {
+          id: `section-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          dayDate,
+          sessionIndex,
+          name: 'Section 1',
+          order: 0,
+        };
+        updatedSections = [...sessionSections, newSection];
+        targetSectionId = newSection.id;
+        onSectionsChange(updatedSections);
+      } else {
+        targetSectionId = existingSections[0].id;
+      }
+    }
+
+    const baseOrder = exerciseDistribution.filter(ex => ex.sectionId === targetSectionId).length;
+
+    const newEntry: ExerciseDistribution = {
+      id: `circuit-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      exerciseId: circuit.id,
+      exerciseName: circuit.name,
+      methodId: '',
+      categoryName: '',
+      dayDate,
+      sessionIndex,
+      order: baseOrder,
+      sectionId: targetSectionId,
+      isCircuit: true,
+      circuitId: circuit.id,
+      circuitLibraryId: libraryId,
+      circuitExercises: circuit.exercises,
+      circuitRestBetweenRounds: circuit.restBetweenRounds,
+      circuitRestBetweenExercises: circuit.restBetweenExercises,
+      circuitComments: circuit.comments,
+    };
+
+    onDistributionChange([...exerciseDistribution, newEntry]);
+    toast({ title: 'Circuit added', description: `"${circuit.name}" added to session` });
+    setCircuitPicker(null);
   };
 
   const handleDragEnd = (result: DropResult) => {
@@ -856,6 +921,9 @@ export function EnhancedExerciseDistribution({
         order: existingSectionsInDest.length,
       };
 
+      // Compute otherExercises BEFORE mutating, so sectionId is still the original value
+      const otherExercises = exerciseDistribution.filter(ex => ex.sectionId !== sourceSectionId);
+
       supersetExercises.forEach((ex, idx) => {
         ex.sectionId = newSection.id;
         ex.dayDate = destDayDate;
@@ -864,8 +932,6 @@ export function EnhancedExerciseDistribution({
       });
 
       remainingSourceExercises.forEach((ex, idx) => { ex.order = idx; });
-
-      const otherExercises = exerciseDistribution.filter(ex => ex.sectionId !== sourceSectionId);
 
       onSectionsChange([...sessionSections, newSection]);
       onDistributionChange([...otherExercises, ...remainingSourceExercises, ...supersetExercises]);
@@ -910,6 +976,11 @@ export function EnhancedExerciseDistribution({
         order: existingSectionsInDest.length,
       };
 
+      // Compute otherExercises BEFORE mutating, so sectionId is still undefined (original value)
+      const otherExercises = exerciseDistribution.filter(
+        ex => !(ex.dayDate === sourceDayDate && ex.sessionIndex === parseInt(sourceSessionIndex) && !ex.sectionId)
+      );
+
       supersetExercises.forEach((ex, idx) => {
         ex.sectionId = newSection.id;
         ex.dayDate = destDayDate;
@@ -918,10 +989,6 @@ export function EnhancedExerciseDistribution({
       });
 
       remainingSourceExercises.forEach((ex, idx) => { ex.order = idx; });
-
-      const otherExercises = exerciseDistribution.filter(
-        ex => !(ex.dayDate === sourceDayDate && ex.sessionIndex === parseInt(sourceSessionIndex) && !ex.sectionId)
-      );
 
       onSectionsChange([...sessionSections, newSection]);
       onDistributionChange([...otherExercises, ...remainingSourceExercises, ...supersetExercises]);
@@ -1442,7 +1509,7 @@ export function EnhancedExerciseDistribution({
     }
   };
 
-  const handleDeleteExercise = (exerciseDistId: string) => {
+  const handleDeleteExercise = useCallback((exerciseDistId: string) => {
     const exercise = exerciseDistribution.find(ex => ex.id === exerciseDistId);
     if (!exercise) return;
 
@@ -1467,9 +1534,9 @@ export function EnhancedExerciseDistribution({
     onSupersetsChange(cleanedSupersets);
     
     toast({ title: 'Exercise removed', description: `${exercise.exerciseName} removed from session` });
-  };
+  }, [exerciseDistribution, supersets, onDistributionChange, onSupersetsChange, toast]);
 
-  const handleAddSection = (dayDate: string, sessionIndex: number) => {
+  const handleAddSection = useCallback((dayDate: string, sessionIndex: number) => {
     const existingSections = sessionSections.filter(
       s => s.dayDate === dayDate && s.sessionIndex === sessionIndex
     );
@@ -1487,16 +1554,16 @@ export function EnhancedExerciseDistribution({
 
     onSectionsChange([...sessionSections, newSection]);
     toast({ title: 'Section added', description: newSection.name });
-  };
+  }, [sessionSections, onSectionsChange, toast]);
 
-  const handleRenameSection = (sectionId: string, newName: string) => {
-    const updated = sessionSections.map(s => 
+  const handleRenameSection = useCallback((sectionId: string, newName: string) => {
+    const updated = sessionSections.map(s =>
       s.id === sectionId ? { ...s, name: newName } : s
     );
     onSectionsChange(updated);
-  };
+  }, [sessionSections, onSectionsChange]);
 
-  const handleSessionCommentsChange = (dayDate: string, sessionIndex: number, comments: string) => {
+  const handleSessionCommentsChange = useCallback((dayDate: string, sessionIndex: number, comments: string) => {
     if (!mesocycle?.id) return;
     
     // Use workoutSessions_* format for sync with Step 2
@@ -1516,23 +1583,23 @@ export function EnhancedExerciseDistribution({
     
     // Debounce localStorage write
     debouncedSaveToLocalStorage(storageKey, JSON.stringify(data));
-  };
+  }, [mesocycle?.id, debouncedSaveToLocalStorage]);
 
-  const handleSectionCommentsChange = (sectionId: string, comments: string) => {
-    const updated = sessionSections.map(s => 
+  const handleSectionCommentsChange = useCallback((sectionId: string, comments: string) => {
+    const updated = sessionSections.map(s =>
       s.id === sectionId ? { ...s, comments } : s
     );
     onSectionsChange(updated);
-  };
+  }, [sessionSections, onSectionsChange]);
 
-  const handleExerciseNotesChange = (exerciseId: string, notes: string) => {
+  const handleExerciseNotesChange = useCallback((exerciseId: string, notes: string) => {
     const updated = exerciseDistribution.map(ex =>
       ex.id === exerciseId ? { ...ex, notes } : ex
     );
     onDistributionChange(updated);
-  };
+  }, [exerciseDistribution, onDistributionChange]);
 
-  const handleDeleteSection = (sectionId: string) => {
+  const handleDeleteSection = useCallback((sectionId: string) => {
     // Find section to get dayDate and sessionIndex for superset cleanup
     const section = sessionSections.find(s => s.id === sectionId);
     
@@ -1558,15 +1625,15 @@ export function EnhancedExerciseDistribution({
     }
 
     const exerciseCount = exercisesInSection.length;
-    toast({ 
-      title: 'Section deleted', 
-      description: exerciseCount > 0 
-        ? `Section and ${exerciseCount} exercise${exerciseCount !== 1 ? 's' : ''} removed` 
-        : 'Section removed' 
+    toast({
+      title: 'Section deleted',
+      description: exerciseCount > 0
+        ? `Section and ${exerciseCount} exercise${exerciseCount !== 1 ? 's' : ''} removed`
+        : 'Section removed'
     });
-  };
+  }, [sessionSections, exerciseDistribution, supersets, onSectionsChange, onDistributionChange, onSupersetsChange, toast]);
 
-  const handleSectionReorder = (sectionId: string, direction: 'up' | 'down') => {
+  const handleSectionReorder = useCallback((sectionId: string, direction: 'up' | 'down') => {
     const section = sessionSections.find(s => s.id === sectionId);
     if (!section) return;
     
@@ -1597,16 +1664,14 @@ export function EnhancedExerciseDistribution({
       s => !(s.dayDate === dayDate && s.sessionIndex === sessionIndex)
     );
     onSectionsChange([...otherSections, ...reorderedWithOrder]);
-    
-    toast({ title: "Section reordered" });
-  };
 
-  const handleToggleSuperset = (dayDate: string, sessionIndex: number, exerciseId1: string, exerciseId2: string, sectionId?: string) => {
-    // Use the shared utility for consistent superset logic across all views
+    toast({ title: "Section reordered" });
+  }, [sessionSections, onSectionsChange, toast]);
+
+  const handleToggleSuperset = useCallback((dayDate: string, sessionIndex: number, exerciseId1: string, exerciseId2: string, sectionId?: string) => {
     const result = toggleSuperset(supersets, dayDate, sessionIndex, exerciseId1, exerciseId2, sectionId);
     onSupersetsChange(result.newSupersets);
-    
-    // Show appropriate toast based on action
+
     if (result.action === 'created') {
       toast({ title: 'Superset created', description: result.message });
     } else if (result.action === 'unlinked') {
@@ -1616,7 +1681,7 @@ export function EnhancedExerciseDistribution({
     } else if (result.action === 'linked') {
       toast({ title: 'Exercise added to superset', description: result.message });
     }
-  };
+  }, [supersets, onSupersetsChange, toast]);
 
   const handleCopyFromPreviousMicrocycle = (targetMicrocycleId: string) => {
     setCopyingMicrocycleId(targetMicrocycleId);
@@ -1725,22 +1790,37 @@ export function EnhancedExerciseDistribution({
         });
       });
       
-      // Copy exercises with updated sectionIds
+      // Build the set of exercise IDs valid for the target microcycle from exerciseSelectionData.
+      // A cell applies to the target microcycle when:
+      //   - it belongs to the target mesocycle, AND
+      //   - either it has no microcycleId (mesocycle-level selection, applies to all microcycles)
+      //     or its microcycleId matches the target microcycle.
+      const targetValidExerciseIds = new Set<string>();
+      Object.values(exerciseSelectionData).forEach(cellData => {
+        if (cellData.mesocycleId !== targetMesocycle!.id) return;
+        if (cellData.microcycleId && cellData.microcycleId !== targetMicrocycleId) return;
+        cellData.exercises.forEach(ex => targetValidExerciseIds.add(ex.exerciseId));
+      });
+
+      // Copy exercises with updated sectionIds, filtered to target microcycle's selection
       const newExercises: ExerciseDistribution[] = [];
       const oldToNewExerciseIds: Record<string, string> = {};
-      
+
       sourceDays.forEach((sourceDay, dayIndex) => {
         if (dayIndex >= minDays) return;
-        
+
         const targetDate = dayMapping[dayIndex];
         const sourceDateExercises = exerciseDistribution.filter(
           ex => ex.dayDate === sourceDay.date
         );
-        
+
         sourceDateExercises.forEach(exercise => {
+          // Skip exercises not selected for the target microcycle
+          if (!targetValidExerciseIds.has(exercise.exerciseId)) return;
+
           const newId = `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
           oldToNewExerciseIds[exercise.id] = newId;
-          
+
           newExercises.push({
             ...exercise,
             id: newId,
@@ -1900,6 +1980,16 @@ export function EnhancedExerciseDistribution({
       }
       
       // All validations passed - proceed with copy
+
+      // Build the set of exercise IDs valid for the TARGET mesocycle from exerciseSelectionData.
+      // Cells with no microcycleId apply to the whole mesocycle; cells with a microcycleId
+      // apply only to that specific microcycle (handled per-microcycle below).
+      const targetMesoValidExerciseIds = new Set<string>();
+      Object.values(exerciseSelectionData).forEach(cellData => {
+        if (cellData.mesocycleId !== mesocycle.id) return;
+        cellData.exercises.forEach(ex => targetMesoValidExerciseIds.add(ex.exerciseId));
+      });
+
       const newExercises: ExerciseDistribution[] = [];
       const newSections: SessionSection[] = [];
       const oldToNewExerciseIds: Record<string, string> = {};
@@ -1959,19 +2049,31 @@ export function EnhancedExerciseDistribution({
           });
         });
         
-        // STEP 2: Copy exercises AFTER, remapping sectionId using the mapping
+        // STEP 2: Copy exercises AFTER, remapping sectionId using the mapping.
+        // Build per-microcycle valid IDs: mesocycle-level cells apply to all microcycles;
+        // microcycle-specific cells only apply to their own microcycle.
+        const targetMicroValidExerciseIds = new Set<string>();
+        Object.values(exerciseSelectionData).forEach(cellData => {
+          if (cellData.mesocycleId !== mesocycle.id) return;
+          if (cellData.microcycleId && cellData.microcycleId !== targetMicro.id) return;
+          cellData.exercises.forEach(ex => targetMicroValidExerciseIds.add(ex.exerciseId));
+        });
+
         sourceDays.forEach((sourceDay, dayIndex) => {
           if (dayIndex >= minDays) return;
-          
+
           const targetDate = dayMapping[sourceDay.date];
           const sourceDateExercises = exerciseDistribution.filter(
             ex => ex.dayDate === sourceDay.date
           );
-          
+
           sourceDateExercises.forEach(exercise => {
+            // Skip exercises not selected for the target mesocycle/microcycle
+            if (!targetMicroValidExerciseIds.has(exercise.exerciseId)) return;
+
             const newId = `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
             oldToNewExerciseIds[exercise.id] = newId;
-            
+
             newExercises.push({
               ...exercise,
               id: newId,
@@ -2314,94 +2416,62 @@ export function EnhancedExerciseDistribution({
                 </p>
               </div>
               
-              {/* Microcycle Headers Row */}
-              <div className="flex gap-4 mb-2">
-                {Array.from(daysByMicrocycle.entries()).map(([microId, { microcycle, days }], microIndex) => {
-                  // Width derives from invisible placeholders below to mirror day columns
-                  
-                  // Check if this is the very first microcycle across all mesocycles
-                  const isVeryFirstMicrocycle = (() => {
-                    const currentMesoIndex = allMesocycles.findIndex(m => m.id === mesocycle.id);
-                    return currentMesoIndex === 0 && microIndex === 0;
-                  })();
-                  
-                  return (
-                    <React.Fragment key={microId}>
-                      {microIndex > 0 && (
-                        <div className="w-1 bg-border shrink-0" />
+              {/* Microcycle Header — single-microcycle view with prev/next */}
+              {selectedMicrocycleEntry && (() => {
+                const [microId, { microcycle, days }] = selectedMicrocycleEntry;
+                const isFirst = clampedMcIdx === 0;
+                const isLast = clampedMcIdx === microcycleEntries.length - 1;
+                const isVeryFirstMicrocycle = allMesocycles.findIndex(m => m.id === mesocycle.id) === 0 && isFirst;
+                return (
+                  <div className={cn(
+                    'flex items-center justify-between gap-3 mb-3 px-3 py-2 rounded-md border border-border',
+                    getSubtleIntensityBg(microcycle.intensity)
+                  )}>
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0"
+                      disabled={isFirst} onClick={() => setSelectedMcIndex(i => Math.max(0, i - 1))}>
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+
+                    <div className="flex items-center gap-2 flex-1 justify-center">
+                      <span className="font-semibold text-sm">{microcycle.name}</span>
+                      <Badge variant="secondary" className={cn('font-semibold text-xs', getIntensityColor(microcycle.intensity))}>
+                        {formatIntensityLabel(microcycle.intensity)}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">{clampedMcIdx + 1} / {microcycleEntries.length}</span>
+                      {!isVeryFirstMicrocycle && (
+                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0 ml-1"
+                          disabled={copyingMicrocycleId === microId}
+                          title={isFirst
+                            ? (() => { const pm = allMesocycles[allMesocycles.findIndex(m => m.id === mesocycle.id) - 1]; return pm ? `Copy from ${pm.microcycles[pm.microcycles.length - 1].name} (${pm.name})` : ''; })()
+                            : `Copy from ${mesocycle.microcycles[clampedMcIdx - 1].name}`}
+                          onClick={() => handleCopyFromPreviousMicrocycle(microId)}>
+                          {copyingMicrocycleId === microId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Copy className="h-3 w-3" />}
+                        </Button>
                       )}
-                      <div 
-                        className={cn(
-                          "relative shrink-0 text-center font-semibold py-3 rounded-md border border-border",
-                          getSubtleIntensityBg(microcycle.intensity)
-                        )}
-                      >
-                        <div className="invisible pointer-events-none flex gap-4">
-                          {days.map((_, i) => (
-                            <div key={i} className="w-80" />
-                          ))}
-                        </div>
-                        <div className="absolute inset-0 flex items-center justify-center px-3">
-                          <div className="flex items-center gap-2">
-                            <span>{microcycle.name}</span>
-                            <Badge variant="secondary" className={cn("font-semibold", getIntensityColor(microcycle.intensity))}>
-                              {formatIntensityLabel(microcycle.intensity)}
-                            </Badge>
-                            <div className="flex items-center gap-1">
-                              {!isVeryFirstMicrocycle && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-6 w-6 p-0"
-                                  disabled={copyingMicrocycleId === microId}
-                                  title={(() => {
-                                    const currentMesoIndex = allMesocycles.findIndex(m => m.id === mesocycle.id);
-                                    if (microIndex > 0) {
-                                      return `Copy setup from ${mesocycle.microcycles[microIndex - 1].name}`;
-                                    } else if (currentMesoIndex > 0) {
-                                      const prevMeso = allMesocycles[currentMesoIndex - 1];
-                                      const prevMicro = prevMeso.microcycles[prevMeso.microcycles.length - 1];
-                                      return `Copy setup from ${prevMicro.name} (${prevMeso.name})`;
-                                    }
-                                    return 'Copy setup from previous microcycle';
-                                  })()}
-                                  onClick={() => handleCopyFromPreviousMicrocycle(microId)}
-                                >
-                                  {copyingMicrocycleId === microId ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : (
-                                    <Copy className="h-3 w-3" />
-                                  )}
-                                </Button>
-                              )}
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
-                                title={`Clear all content from ${microcycle.name}`}
-                                onClick={() => setClearingMicrocycleId(microId)}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </React.Fragment>
-                  );
-                })}
-              </div>
-              
-              {/* Day Columns */}
+                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
+                        title={`Clear all content from ${microcycle.name}`}
+                        onClick={() => setClearingMicrocycleId(microId)}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0"
+                      disabled={isLast} onClick={() => setSelectedMcIndex(i => Math.min(microcycleEntries.length - 1, i + 1))}>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                );
+              })()}
+
+              {/* Day Columns — only selected microcycle */}
               <div className="flex gap-4">
-                {Array.from(daysByMicrocycle.entries()).map(([microId, { days }], index) => (
-                  <React.Fragment key={microId}>
-                    {index > 0 && (
-                      <div className="w-1 bg-border shrink-0" />
-                    )}
+                {selectedMicrocycleEntry && (() => {
+                  const [, { days }] = selectedMicrocycleEntry;
+                  return (
                     <div className="flex gap-4">
                       {days.map((day) => {
-                        const sessionsCount = day.sessions ?? (day.intensity === 'off' ? 0 : 1);
+                        // Off days always have 0 sessions regardless of stored session count
+                        const sessionsCount = day.intensity === 'off' ? 0 : (day.sessions ?? 1);
                         
                         // Safety check
                         if (!day || !day.date) {
@@ -2409,8 +2479,16 @@ export function EnhancedExerciseDistribution({
                           return null;
                         }
                         
+                        const hasTest = (day.testNames?.length ?? 0) > 0;
+                        const hasEvent = (day.eventNames?.length ?? 0) > 0;
+                        const hasBoth = hasTest && hasEvent;
                         return (
-                          <div key={day.date} className="flex flex-col w-80">
+                          <div key={day.date} className={cn(
+                            'flex flex-col w-80 rounded-sm',
+                            hasBoth ? 'border-l-2 border-l-purple-400 pl-2' :
+                            hasTest  ? 'border-l-2 border-l-amber-400 pl-2' :
+                            hasEvent ? 'border-l-2 border-l-blue-400 pl-2' : ''
+                          )}>
                             {/* Day Header - Shows once per day */}
                 <DayHeader
                   date={day.date}
@@ -2422,7 +2500,30 @@ export function EnhancedExerciseDistribution({
                   testNames={day.testNames}
                   eventNames={day.eventNames}
                 />
-                            
+
+                            {/* Test / Event strip */}
+                            {(hasTest || hasEvent) && (
+                              <div className={cn(
+                                'flex flex-wrap gap-2 px-2 py-1 mb-1 rounded text-xs',
+                                hasBoth ? 'bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800' :
+                                hasTest  ? 'bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800' :
+                                'bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800'
+                              )}>
+                                {hasTest && (
+                                  <span className="flex items-center gap-1 text-amber-700 dark:text-amber-300 font-medium">
+                                    <Trophy className="h-3 w-3 shrink-0" />
+                                    {day.testNames!.join(' · ')}
+                                  </span>
+                                )}
+                                {hasEvent && (
+                                  <span className="flex items-center gap-1 text-blue-700 dark:text-blue-300 font-medium">
+                                    <CalendarIcon className="h-3 w-3 shrink-0" />
+                                    {day.eventNames!.join(' · ')}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
                             {/* Sessions - Multiple can exist under one day */}
                             <div className="flex flex-col gap-2">
                               {Array.from({ length: sessionsCount }).map((_, sessionIndex) => {
@@ -2467,6 +2568,12 @@ export function EnhancedExerciseDistribution({
                                         // No methods assigned — open picker without method context
                                         setInlinePicker({ dayDate: day.date, sessionIndex, sectionId });
                                       }
+                                    }}
+                                    onAddCircuitInline={(sectionId) => {
+                                      setCircuitPicker({ dayDate: day.date, sessionIndex, sectionId });
+                                    }}
+                                    onEditCircuit={(distributionId) => {
+                                      setCircuitEditId(distributionId);
                                     }}
                                     exercises={sessionExercises}
                                     sections={daySections}
@@ -2525,8 +2632,8 @@ export function EnhancedExerciseDistribution({
                         );
                       })}
                     </div>
-                  </React.Fragment>
-                ))}
+                  );
+                })()}
               </div>
               
             </div>
@@ -2556,7 +2663,7 @@ export function EnhancedExerciseDistribution({
                 setInlinePicker({ dayDate, sessionIndex, sectionId, methodId });
               }}
             >
-              <span className="text-sm leading-snug">{methodId}</span>
+              <span className="text-sm leading-snug">{displayMethodLabel(methodId)}</span>
             </Button>
           ))}
         </div>
@@ -2575,6 +2682,118 @@ export function EnhancedExerciseDistribution({
         onExerciseCreated={(ex) => handleInlineAddExercises([ex])}
       />
     )}
+
+    {/* Circuit picker dialog */}
+    <Dialog open={!!circuitPicker} onOpenChange={(open) => { if (!open) setCircuitPicker(null); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Recycle className="h-4 w-4 text-primary" />
+            Add Circuit
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+          {/* Create new circuit button — always visible */}
+          <Button
+            variant="outline"
+            className="w-full justify-start gap-2"
+            onClick={() => setCircuitBuilderOpen(true)}
+          >
+            <Plus className="h-4 w-4" />
+            Create New Circuit…
+          </Button>
+
+          {libraries.filter(lib => (lib.circuits?.length ?? 0) > 0).length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No saved circuits yet. Use "Create New Circuit" above to build one.
+            </p>
+          ) : (
+            libraries
+              .filter(lib => (lib.circuits?.length ?? 0) > 0)
+              .map(lib => (
+                <div key={lib.id}>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{lib.name}</p>
+                  <div className="space-y-1.5">
+                    {lib.circuits!.map(circuit => (
+                      <button
+                        key={circuit.id}
+                        onClick={() => handleCircuitPickerAdd(circuit, lib.id)}
+                        className="w-full text-left rounded-md border bg-card hover:bg-accent hover:border-primary/40 transition-colors px-3 py-2.5 group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Recycle className="h-3.5 w-3.5 text-primary shrink-0" />
+                          <span className="text-sm font-medium flex-1 truncate">{circuit.name}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5 ml-5">
+                          {circuit.exercises.length} exercises
+                          {circuit.restBetweenRounds ? ` · ${circuit.restBetweenRounds}s / ${circuit.restBetweenExercises}s` : ''}
+                          {circuit.comments && (
+                            <span className="ml-1 italic truncate">· {circuit.comments}</span>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    {/* Circuit builder — standalone mode, opened from the circuit picker (create new) */}
+    <CircuitBuilderDialog
+      isOpen={circuitBuilderOpen}
+      onClose={() => setCircuitBuilderOpen(false)}
+      onCircuitCreated={(newCircuit, savedToLibraryId) => {
+        setCircuitBuilderOpen(false);
+        handleCircuitPickerAdd(newCircuit, savedToLibraryId ?? '');
+      }}
+    />
+
+    {/* Circuit editor — opened by clicking a circuit card in Exercise Distribution */}
+    {(() => {
+      if (!circuitEditId) return null;
+      const entry = exerciseDistribution.find(ex => ex.id === circuitEditId);
+      if (!entry) return null;
+      const circuitForEdit: import('@/contexts/CustomLibrariesContext').Circuit = {
+        id: entry.circuitId ?? entry.exerciseId,
+        name: entry.exerciseName,
+        exercises: entry.circuitExercises ?? [],
+        restBetweenRounds: entry.circuitRestBetweenRounds ?? '60',
+        restBetweenExercises: entry.circuitRestBetweenExercises ?? '15',
+        comments: entry.circuitComments,
+        createdAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString(),
+      };
+      return (
+        <CircuitBuilderDialog
+          isOpen={true}
+          onClose={() => setCircuitEditId(null)}
+          circuit={circuitForEdit}
+          onCircuitCreated={(updatedCircuit, savedToLibraryId) => {
+            // Update the embedded circuit data in exerciseDistribution
+            const updated = exerciseDistribution.map(ex =>
+              ex.id === circuitEditId
+                ? {
+                    ...ex,
+                    exerciseName: updatedCircuit.name,
+                    circuitRestBetweenRounds: updatedCircuit.restBetweenRounds,
+                    circuitRestBetweenExercises: updatedCircuit.restBetweenExercises,
+                    circuitComments: updatedCircuit.comments,
+                    circuitExercises: updatedCircuit.exercises,
+                    ...(savedToLibraryId
+                      ? { circuitLibraryId: savedToLibraryId, circuitId: updatedCircuit.id }
+                      : {}),
+                  }
+                : ex
+            );
+            onDistributionChange(updated);
+            setCircuitEditId(null);
+          }}
+        />
+      );
+    })()}
     </>
   );
 }

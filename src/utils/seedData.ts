@@ -43,7 +43,7 @@ function secId(date: string, si: number, label: string): string {
   return `demo-sec-${date}-${si}-${label}`;
 }
 
-export function loadSeedData(): void {
+export function loadSeedData(): unknown {
   // Plan: 12 weeks starting 2026-03-23 (Monday)
   const planStart = new Date('2026-03-23T00:00:00.000Z');
   const planEnd = addDays(planStart, 83);
@@ -521,32 +521,40 @@ export function loadSeedData(): void {
     supersets,
   };
 
-  // ── Write to localStorage ───────────────────────────────────────────────────
-  localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
-  localStorage.setItem('mesocycleData', JSON.stringify({ mesocycles }));
-  localStorage.setItem('trainingDays', JSON.stringify(trainingDays));
-  localStorage.setItem('dailyIntensityData', JSON.stringify(dailyIntensityData));
-  localStorage.setItem('daySplitStates', JSON.stringify(daySplitStates));
-  localStorage.setItem('sessionSections', JSON.stringify(sessionSections));
-  localStorage.setItem('exerciseDistribution', JSON.stringify(exerciseDistribution));
-  localStorage.setItem('supersets', JSON.stringify(supersets));
-  localStorage.setItem('parameterValues', JSON.stringify(pv));
-  localStorage.setItem('methodAllocations', JSON.stringify(methodAllocations));
-  localStorage.setItem('activeProgramId', programId);
-  localStorage.setItem('macrocycleStep', '3');
-  localStorage.setItem('mesocycleStep', '1');
+  // ── Write to localStorage (best-effort – QuotaExceededError must not crash the function) ─
+  try {
+    localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
+    localStorage.setItem('mesocycleData', JSON.stringify({ mesocycles }));
+    localStorage.setItem('trainingDays', JSON.stringify(trainingDays));
+    localStorage.setItem('dailyIntensityData', JSON.stringify(dailyIntensityData));
+    localStorage.setItem('daySplitStates', JSON.stringify(daySplitStates));
+    localStorage.setItem('sessionSections', JSON.stringify(sessionSections));
+    localStorage.setItem('exerciseDistribution', JSON.stringify(exerciseDistribution));
+    localStorage.setItem('supersets', JSON.stringify(supersets));
+    localStorage.setItem('parameterValues', JSON.stringify(pv));
+    localStorage.setItem('methodAllocations', JSON.stringify(methodAllocations));
+    localStorage.setItem('activeProgramId', programId);
+    localStorage.setItem('macrocycleStep', '3');
+    localStorage.setItem('mesocycleStep', '1');
+  } catch (e) {
+    console.warn('[loadSeedData] localStorage write failed (quota?):', e);
+  }
 
   // Add / replace in trainingPrograms store
-  let store: { version: number; programs: unknown[] };
   try {
-    const raw = localStorage.getItem('trainingPrograms');
-    store = raw ? JSON.parse(raw) : { version: 1, programs: [] };
-  } catch {
-    store = { version: 1, programs: [] };
+    let store: { version: number; programs: unknown[] };
+    try {
+      const raw = localStorage.getItem('trainingPrograms');
+      store = raw ? JSON.parse(raw) : { version: 1, programs: [] };
+    } catch {
+      store = { version: 1, programs: [] };
+    }
+    store.programs = (store.programs as { id: string }[]).filter((p) => p.id !== programId);
+    store.programs.unshift(trainingProgram);
+    localStorage.setItem('trainingPrograms', JSON.stringify(store));
+  } catch (e) {
+    console.warn('[loadSeedData] trainingPrograms store write failed (quota?):', e);
   }
-  store.programs = (store.programs as { id: string }[]).filter((p) => p.id !== programId);
-  store.programs.unshift(trainingProgram);
-  localStorage.setItem('trainingPrograms', JSON.stringify(store));
 
   // ── Coach-Profil Seed-Daten ──────────────────────────────────────────────
   // Schreiben wenn: kein Profil vorhanden ODER nur ein Skipped-Profil gesetzt
@@ -582,6 +590,8 @@ export function loadSeedData(): void {
     };
     localStorage.setItem('coachProfile', JSON.stringify(coachProfile));
   }
+
+  return trainingProgram;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -613,7 +623,7 @@ function d2SecId(date: string, si: number, label: string): string {
   return `d2-sec-${date}-${si}-${label}`;
 }
 
-export function loadDemoPlan2026(): void {
+export function loadDemoPlan2026(): unknown {
   const now = new Date().toISOString();
 
   // Plan: 4 weeks starting 2026-04-06 (Monday)
@@ -1069,18 +1079,583 @@ export function loadDemoPlan2026(): void {
   };
 
   // ── 14. Write to trainingPrograms store (insert at top) ────────────────────
-  let store: { version: number; programs: { id: string }[] };
   try {
-    const raw = localStorage.getItem('trainingPrograms');
-    store = raw ? JSON.parse(raw) : { version: 1, programs: [] };
-  } catch {
-    store = { version: 1, programs: [] };
+    let store: { version: number; programs: { id: string }[] };
+    try {
+      const raw = localStorage.getItem('trainingPrograms');
+      store = raw ? JSON.parse(raw) : { version: 1, programs: [] };
+    } catch {
+      store = { version: 1, programs: [] };
+    }
+    store.programs = store.programs.filter((p) => p.id !== D2_PROGRAM_ID);
+    store.programs.unshift(trainingProgram);
+    localStorage.setItem('trainingPrograms', JSON.stringify(store));
+  } catch (e) {
+    console.warn('[loadDemoPlan2026] trainingPrograms store write failed (quota?):', e);
   }
-  store.programs = store.programs.filter((p) => p.id !== D2_PROGRAM_ID);
-  store.programs.unshift(trainingProgram);
-  localStorage.setItem('trainingPrograms', JSON.stringify(store));
 
   console.info('[Demo Plan 2026] Loaded – athleteId:', athleteId, '| calendarEvents added for athlete');
+  return trainingProgram;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Strength Development – 12-Week Plan
+//   • 3 Mesocycles × 4 Weeks • Mon/Tue/Thu training days
+//   • Full exercise detail for first week of each mesocycle
+//   • Progressive parameter values across all 12 weeks
+// ─────────────────────────────────────────────────────────────────────────────
+
+const STR_PROGRAM_ID = 'strength-plan-12w';
+
+const STR_MESO_IDS = ['str-meso-1', 'str-meso-2', 'str-meso-3'] as const;
+
+const STR_MICRO_IDS = [
+  ['str-micro-1-1', 'str-micro-1-2', 'str-micro-1-3', 'str-micro-1-4'],
+  ['str-micro-2-1', 'str-micro-2-2', 'str-micro-2-3', 'str-micro-2-4'],
+  ['str-micro-3-1', 'str-micro-3-2', 'str-micro-3-3', 'str-micro-3-4'],
+] as const;
+
+const SMETHODS = [
+  'Max Strength – Compound Lifts',
+  'Hypertrophy – Volume Training',
+  'Posterior Chain & Accessories',
+] as const;
+
+function strSecId(date: string, si: number, label: string): string {
+  return `str-sec-${date}-${si}-${label}`;
+}
+
+export function loadStrengthPlan(): unknown {
+  const now = new Date().toISOString();
+
+  // Plan: 12 weeks starting 2026-06-01 (Monday)
+  const planStart = new Date('2026-06-01T00:00:00.000Z');
+  const planEnd = addDays(planStart, 83); // ends 2026-08-23
+
+  const startDate = planStart.toISOString();
+  const endDate = planEnd.toISOString();
+
+  // ── Microcycle intensity map ─────────────────────────────────────────────
+  const strMicroIntensityMap: Record<string, string> = {
+    'str-micro-1-1': 'easy',
+    'str-micro-1-2': 'moderate',
+    'str-micro-1-3': 'hard',
+    'str-micro-1-4': 'deload',
+    'str-micro-2-1': 'moderate',
+    'str-micro-2-2': 'moderate-hard',
+    'str-micro-2-3': 'hard',
+    'str-micro-2-4': 'deload',
+    'str-micro-3-1': 'hard',
+    'str-micro-3-2': 'extremely-hard',
+    'str-micro-3-3': 'hard',
+    'str-micro-3-4': 'easy',
+  };
+
+  // ── macrocycleData ────────────────────────────────────────────────────────
+  const macrocycleData = {
+    planName: 'Strength Development – 12-Week Plan',
+    selectedAthleteId: null,
+    planDuration: {
+      startDate,
+      endDate,
+      totalDays: 84,
+      totalWeeks: 12,
+    },
+    smartGoals: [
+      {
+        id: 'str-sg-1',
+        description: 'Back Squat: 100 kg → 130 kg (+30%)',
+        baselineValue: 100,
+        desiredValue: 130,
+        unit: 'kg',
+        percentChange: 30,
+      },
+    ],
+    smartGoal: {
+      id: 'str-sg-1',
+      description: 'Back Squat: 100 kg → 130 kg (+30%)',
+      baselineValue: 100,
+      desiredValue: 130,
+      unit: 'kg',
+      percentChange: 30,
+    },
+    subGoals: [
+      {
+        id: 'str-sub-1',
+        parentGoalId: 'str-sg-1',
+        description: 'Build hypertrophy base',
+        testMethod: 'Lean Body Mass (DEXA)',
+        preTestValue: 72,
+        goalValue: 76,
+        unit: 'kg',
+        percentChange: 5.6,
+      },
+      {
+        id: 'str-sub-2',
+        parentGoalId: 'str-sg-1',
+        description: 'Improve relative strength',
+        testMethod: 'Back Squat 1RM',
+        preTestValue: 100,
+        goalValue: 130,
+        unit: 'kg',
+        percentChange: 30,
+      },
+    ],
+    events: [
+      {
+        id: 'str-ev-1',
+        name: 'Strength Test – 1RM Back Squat',
+        description: 'Final performance test',
+        eventDates: [fmtDate(addDays(planStart, 77))],
+        comments: 'Week 12 Monday',
+      },
+    ],
+    qualities: [
+      {
+        id: 'str-q-1',
+        name: 'Maximal Strength',
+        description: 'Maximum force production',
+        methods: [SMETHODS[0]],
+      },
+      {
+        id: 'str-q-2',
+        name: 'Muscle Hypertrophy',
+        description: 'Increase in muscle cross-section',
+        methods: [SMETHODS[1]],
+      },
+      {
+        id: 'str-q-3',
+        name: 'Posterior Chain Strength',
+        description: 'Hip hinge and unilateral strength',
+        methods: [SMETHODS[2]],
+      },
+    ],
+    qualitiesBySubGoal: {
+      'str-sub-1': {
+        label: 'Build hypertrophy base',
+        list: ['Muscle Hypertrophy', 'Posterior Chain Strength'],
+      },
+      'str-sub-2': {
+        label: 'Improve relative strength',
+        list: ['Maximal Strength', 'Posterior Chain Strength'],
+      },
+    },
+    methodsByQuality: {
+      'str-q-1': {
+        subGoalLabel: 'Improve relative strength',
+        qualityName: 'Maximal Strength',
+        list: [SMETHODS[0]],
+      },
+      'str-q-2': {
+        subGoalLabel: 'Build hypertrophy base',
+        qualityName: 'Muscle Hypertrophy',
+        list: [SMETHODS[1]],
+      },
+      'str-q-3': {
+        subGoalLabel: 'Build hypertrophy base',
+        qualityName: 'Posterior Chain Strength',
+        list: [SMETHODS[2]],
+      },
+    },
+    selectedTest: null,
+    selectedEvent: null,
+    selectedMethods: [...SMETHODS],
+    manuallyAddedMethods: [],
+    lastUpdated: now,
+  };
+
+  // ── mesocycleData ─────────────────────────────────────────────────────────
+  const mesocycles = [
+    {
+      id: 'str-meso-1',
+      name: 'Phase 1 – Foundation',
+      weeks: 4,
+      sessionsPerWeek: 3,
+      sessionLength: 75,
+      startDate,
+      endDate: addDays(planStart, 27).toISOString(),
+      duration: 4,
+      intensity: 'moderate',
+      trainingMethods: [...SMETHODS],
+      microcycles: [
+        { id: 'str-micro-1-1', name: 'Week 1', duration: 7, intensity: 'easy' },
+        { id: 'str-micro-1-2', name: 'Week 2', duration: 7, intensity: 'moderate' },
+        { id: 'str-micro-1-3', name: 'Week 3', duration: 7, intensity: 'hard' },
+        { id: 'str-micro-1-4', name: 'Week 4 (Deload)', duration: 7, intensity: 'deload' },
+      ],
+    },
+    {
+      id: 'str-meso-2',
+      name: 'Phase 2 – Strength Build',
+      weeks: 4,
+      sessionsPerWeek: 3,
+      sessionLength: 75,
+      startDate: addDays(planStart, 28).toISOString(),
+      endDate: addDays(planStart, 55).toISOString(),
+      duration: 4,
+      intensity: 'hard',
+      trainingMethods: [...SMETHODS],
+      microcycles: [
+        { id: 'str-micro-2-1', name: 'Week 5', duration: 7, intensity: 'moderate' },
+        { id: 'str-micro-2-2', name: 'Week 6', duration: 7, intensity: 'moderate-hard' },
+        { id: 'str-micro-2-3', name: 'Week 7', duration: 7, intensity: 'hard' },
+        { id: 'str-micro-2-4', name: 'Week 8 (Deload)', duration: 7, intensity: 'deload' },
+      ],
+    },
+    {
+      id: 'str-meso-3',
+      name: 'Phase 3 – Peak Strength',
+      weeks: 4,
+      sessionsPerWeek: 3,
+      sessionLength: 70,
+      startDate: addDays(planStart, 56).toISOString(),
+      endDate: addDays(planStart, 83).toISOString(),
+      duration: 4,
+      intensity: 'extremely-hard',
+      trainingMethods: [SMETHODS[0], SMETHODS[2]], // No volume training in peak phase
+      microcycles: [
+        { id: 'str-micro-3-1', name: 'Week 9', duration: 7, intensity: 'hard' },
+        { id: 'str-micro-3-2', name: 'Week 10', duration: 7, intensity: 'extremely-hard' },
+        { id: 'str-micro-3-3', name: 'Week 11', duration: 7, intensity: 'hard' },
+        { id: 'str-micro-3-4', name: 'Week 12', duration: 7, intensity: 'easy' },
+      ],
+    },
+  ];
+
+  // ── trainingDays + dailyIntensityData ─────────────────────────────────────
+  // Training days: Monday (dow=1), Tuesday (dow=2), Thursday (dow=4)
+  const trainingDays: unknown[] = [];
+  const dailyIntensityData: unknown[] = [];
+
+  for (let week = 0; week < 12; week++) {
+    const mesoIdx = Math.floor(week / 4);
+    const microIdx = week % 4;
+    const mesoId = STR_MESO_IDS[mesoIdx];
+    const microId = STR_MICRO_IDS[mesoIdx][microIdx];
+    const microIntensity = strMicroIntensityMap[microId];
+
+    for (let d = 0; d < 7; d++) {
+      const date = addDays(planStart, week * 7 + d);
+      const dateStr = fmtDate(date);
+      const dow = date.getDay(); // 0=Sun
+      const dayName = DAY_NAMES[dow];
+
+      // Training: Mon(1), Tue(2), Thu(4)
+      const isTraining = dow === 1 || dow === 2 || dow === 4;
+      const intensity = isTraining ? microIntensity : 'off';
+
+      let sessionName: string | undefined;
+      if (dow === 1) sessionName = 'Lower Body – Squat';
+      else if (dow === 2) sessionName = 'Upper Body – Press & Pull';
+      else if (dow === 4) sessionName = 'Posterior Chain';
+
+      trainingDays.push({
+        date: dateStr,
+        dayOfWeek: dow,
+        dayName,
+        mesocycleId: mesoId,
+        microcycleId: microId,
+        isTestDay: false,
+        isEventDay: false,
+        isTrainingDay: isTraining,
+        intensity,
+        sessions: isTraining ? 1 : undefined,
+        sessionNames: isTraining && sessionName ? [sessionName] : undefined,
+      });
+
+      dailyIntensityData.push({
+        date: dateStr,
+        mesocycleId: mesoId,
+        microcycleId: microId,
+        dayOfWeek: dow,
+        intensity,
+        isTestDay: false,
+        isEventDay: false,
+      });
+    }
+  }
+
+  // ── daySplitStates – only training days (Mon=0, Tue=1, Thu=3 offsets from Mon) ──
+  const daySplitStates: Record<string, number> = {};
+  for (let week = 0; week < 12; week++) {
+    // Mon offset=0, Tue offset=1, Thu offset=3
+    for (const d of [0, 1, 3]) {
+      const dateStr = fmtDate(addDays(planStart, week * 7 + d));
+      daySplitStates[dateStr] = 1;
+    }
+  }
+
+  // ── sessionSections – all training days, flat array ──────────────────────
+  const sessionSections: unknown[] = [];
+
+  for (let week = 0; week < 12; week++) {
+    for (const d of [0, 1, 3]) {
+      const dateStr = fmtDate(addDays(planStart, week * 7 + d));
+      sessionSections.push(
+        { id: strSecId(dateStr, 0, 'warmup'),   dayDate: dateStr, sessionIndex: 0, name: 'Warm-up',   order: 0 },
+        { id: strSecId(dateStr, 0, 'main'),     dayDate: dateStr, sessionIndex: 0, name: 'Main Work',  order: 1 },
+        { id: strSecId(dateStr, 0, 'cooldown'), dayDate: dateStr, sessionIndex: 0, name: 'Cool-down',  order: 2 },
+      );
+    }
+  }
+
+  // ── exerciseDistribution ──────────────────────────────────────────────────
+  const exerciseDistribution: unknown[] = [];
+  const supersets: Record<string, Record<string, Record<string, Record<string, string[]>>>> = {};
+
+  const ex = (
+    id: string,
+    exerciseName: string,
+    methodId: string,
+    categoryName: string,
+    dateStr: string,
+    si: number,
+    order: number,
+    sectionId: string,
+    extras: Record<string, unknown> = {},
+  ) => {
+    exerciseDistribution.push({
+      id,
+      exerciseId: `str-exlib-${id}`,
+      exerciseName,
+      methodId,
+      categoryName,
+      dayDate: dateStr,
+      sessionIndex: si,
+      order,
+      sectionId,
+      parameterSource: 'periodization' as const,
+      ...extras,
+    });
+  };
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Exercise distribution – all 12 weeks, generated by loop per mesocycle
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // Mesocycle 1 (weeks 1–4): Mon d=0, Tue d=1, Thu d=3
+  for (let weekIdx = 0; weekIdx < 4; weekIdx++) {
+    const mon = fmtDate(addDays(planStart, weekIdx * 7 + 0));
+    const tue = fmtDate(addDays(planStart, weekIdx * 7 + 1));
+    const thu = fmtDate(addDays(planStart, weekIdx * 7 + 3));
+    const w = `m1w${weekIdx}`;
+
+    // Monday – Lower Body
+    const monWu = strSecId(mon, 0, 'warmup'); const monMain = strSecId(mon, 0, 'main'); const monCd = strSecId(mon, 0, 'cooldown');
+    ex(`str-e-${w}mon-wu1`, 'Foam Rolling',                          'warm-up',   'Warm-up',     mon, 0, 0, monWu,   { parameterSource: 'toolbox' });
+    ex(`str-e-${w}mon-wu2`, 'Hip Mobility Drill',                    'warm-up',   'Warm-up',     mon, 0, 1, monWu,   { parameterSource: 'toolbox' });
+    ex(`str-e-${w}mon-sq`,  'Back Squat',                            SMETHODS[0], 'Strength',    mon, 0, 0, monMain, {});
+    ex(`str-e-${w}mon-rdl`, 'Romanian Deadlift',                     SMETHODS[0], 'Strength',    mon, 0, 1, monMain, {});
+    ex(`str-e-${w}mon-lp`,  'Leg Press',                             SMETHODS[1], 'Hypertrophy', mon, 0, 2, monMain, {});
+    ex(`str-e-${w}mon-lu`,  'Walking Lunge',                         SMETHODS[1], 'Hypertrophy', mon, 0, 3, monMain, {});
+    ex(`str-e-${w}mon-cd1`, 'Static Stretching – Quads/Hip Flexors', 'cool-down', 'Cool-down',   mon, 0, 0, monCd,   { parameterSource: 'toolbox' });
+
+    // Tuesday – Upper Body
+    const tueWu = strSecId(tue, 0, 'warmup'); const tueMain = strSecId(tue, 0, 'main'); const tueCd = strSecId(tue, 0, 'cooldown');
+    ex(`str-e-${w}tue-wu1`, 'Band Pull-Apart',    'warm-up',   'Warm-up',     tue, 0, 0, tueWu,   { parameterSource: 'toolbox' });
+    ex(`str-e-${w}tue-wu2`, 'Shoulder Circles',   'warm-up',   'Warm-up',     tue, 0, 1, tueWu,   { parameterSource: 'toolbox' });
+    ex(`str-e-${w}tue-bp`,  'Bench Press',        SMETHODS[0], 'Strength',    tue, 0, 0, tueMain, {});
+    ex(`str-e-${w}tue-pu`,  'Pull-Up',            SMETHODS[0], 'Strength',    tue, 0, 1, tueMain, {});
+    ex(`str-e-${w}tue-ohp`, 'Overhead Press',     SMETHODS[1], 'Hypertrophy', tue, 0, 2, tueMain, {});
+    ex(`str-e-${w}tue-row`, 'Bent-over Row',      SMETHODS[1], 'Hypertrophy', tue, 0, 3, tueMain, {});
+    ex(`str-e-${w}tue-cd1`, 'Doorframe Stretch',  'cool-down', 'Cool-down',   tue, 0, 0, tueCd,   { parameterSource: 'toolbox' });
+
+    // Thursday – Posterior Chain
+    const thuWu = strSecId(thu, 0, 'warmup'); const thuMain = strSecId(thu, 0, 'main'); const thuCd = strSecId(thu, 0, 'cooldown');
+    ex(`str-e-${w}thu-wu1`, 'Glute Activation',       'warm-up',   'Warm-up',    thu, 0, 0, thuWu,   { parameterSource: 'toolbox' });
+    ex(`str-e-${w}thu-wu2`, 'Dead Bug',                'warm-up',   'Warm-up',    thu, 0, 1, thuWu,   { parameterSource: 'toolbox' });
+    ex(`str-e-${w}thu-bss`, 'Bulgarian Split Squat',   SMETHODS[2], 'Accessories',thu, 0, 0, thuMain, {});
+    ex(`str-e-${w}thu-ht`,  'Hip Thrust',              SMETHODS[2], 'Accessories',thu, 0, 1, thuMain, {});
+    ex(`str-e-${w}thu-nhc`, 'Nordic Hamstring Curl',   SMETHODS[2], 'Accessories',thu, 0, 2, thuMain, {});
+    ex(`str-e-${w}thu-cp`,  'Copenhagen Plank',        SMETHODS[2], 'Accessories',thu, 0, 3, thuMain, {});
+    ex(`str-e-${w}thu-cd1`, 'Hip 90/90 Stretch',       'cool-down', 'Cool-down',  thu, 0, 0, thuCd,   { parameterSource: 'toolbox' });
+  }
+
+  // Mesocycle 2 (weeks 5–8): offset = (4 + weekIdx) * 7
+  for (let weekIdx = 0; weekIdx < 4; weekIdx++) {
+    const mon = fmtDate(addDays(planStart, (4 + weekIdx) * 7 + 0));
+    const tue = fmtDate(addDays(planStart, (4 + weekIdx) * 7 + 1));
+    const thu = fmtDate(addDays(planStart, (4 + weekIdx) * 7 + 3));
+    const w = `m2w${weekIdx}`;
+
+    // Monday – Lower Body
+    const monWu = strSecId(mon, 0, 'warmup'); const monMain = strSecId(mon, 0, 'main'); const monCd = strSecId(mon, 0, 'cooldown');
+    ex(`str-e-${w}mon-wu1`, 'Foam Rolling',                          'warm-up',   'Warm-up',     mon, 0, 0, monWu,   { parameterSource: 'toolbox' });
+    ex(`str-e-${w}mon-wu2`, 'Hip Mobility Drill',                    'warm-up',   'Warm-up',     mon, 0, 1, monWu,   { parameterSource: 'toolbox' });
+    ex(`str-e-${w}mon-sq`,  'Back Squat',                            SMETHODS[0], 'Strength',    mon, 0, 0, monMain, {});
+    ex(`str-e-${w}mon-fsq`, 'Front Squat',                           SMETHODS[0], 'Strength',    mon, 0, 1, monMain, {});
+    ex(`str-e-${w}mon-rdl`, 'Romanian Deadlift',                     SMETHODS[2], 'Accessories', mon, 0, 2, monMain, {});
+    ex(`str-e-${w}mon-hbd`, 'Hex Bar Deadlift',                      SMETHODS[2], 'Accessories', mon, 0, 3, monMain, {});
+    ex(`str-e-${w}mon-cd1`, 'Static Stretching – Quads/Hip Flexors', 'cool-down', 'Cool-down',   mon, 0, 0, monCd,   { parameterSource: 'toolbox' });
+
+    // Tuesday – Upper Body
+    const tueWu = strSecId(tue, 0, 'warmup'); const tueMain = strSecId(tue, 0, 'main'); const tueCd = strSecId(tue, 0, 'cooldown');
+    ex(`str-e-${w}tue-wu1`, 'Band Pull-Apart',    'warm-up',   'Warm-up',     tue, 0, 0, tueWu,   { parameterSource: 'toolbox' });
+    ex(`str-e-${w}tue-wu2`, 'Shoulder Circles',   'warm-up',   'Warm-up',     tue, 0, 1, tueWu,   { parameterSource: 'toolbox' });
+    ex(`str-e-${w}tue-bp`,  'Bench Press',        SMETHODS[0], 'Strength',    tue, 0, 0, tueMain, {});
+    ex(`str-e-${w}tue-wpu`, 'Weighted Pull-Up',   SMETHODS[0], 'Strength',    tue, 0, 1, tueMain, {});
+    ex(`str-e-${w}tue-pp`,  'Push Press',         SMETHODS[1], 'Hypertrophy', tue, 0, 2, tueMain, {});
+    ex(`str-e-${w}tue-pr`,  'Pendlay Row',        SMETHODS[1], 'Hypertrophy', tue, 0, 3, tueMain, {});
+    ex(`str-e-${w}tue-cd1`, 'Doorframe Stretch',  'cool-down', 'Cool-down',   tue, 0, 0, tueCd,   { parameterSource: 'toolbox' });
+
+    // Thursday – Posterior Chain
+    const thuWu = strSecId(thu, 0, 'warmup'); const thuMain = strSecId(thu, 0, 'main'); const thuCd = strSecId(thu, 0, 'cooldown');
+    ex(`str-e-${w}thu-wu1`, 'Glute Activation',    'warm-up',   'Warm-up',    thu, 0, 0, thuWu,   { parameterSource: 'toolbox' });
+    ex(`str-e-${w}thu-wu2`, 'Dead Bug',             'warm-up',   'Warm-up',    thu, 0, 1, thuWu,   { parameterSource: 'toolbox' });
+    ex(`str-e-${w}thu-bss`, 'Bulgarian Split Squat',SMETHODS[2], 'Accessories',thu, 0, 0, thuMain, {});
+    ex(`str-e-${w}thu-ht`,  'Hip Thrust',           SMETHODS[2], 'Accessories',thu, 0, 1, thuMain, {});
+    ex(`str-e-${w}thu-gb`,  'Glute Bridge',         SMETHODS[2], 'Accessories',thu, 0, 2, thuMain, {});
+    ex(`str-e-${w}thu-slr`, 'Single Leg RDL',       SMETHODS[2], 'Accessories',thu, 0, 3, thuMain, {});
+    ex(`str-e-${w}thu-cd1`, 'Hip 90/90 Stretch',    'cool-down', 'Cool-down',  thu, 0, 0, thuCd,   { parameterSource: 'toolbox' });
+  }
+
+  // Mesocycle 3 (weeks 9–12): offset = (8 + weekIdx) * 7
+  for (let weekIdx = 0; weekIdx < 4; weekIdx++) {
+    const mon = fmtDate(addDays(planStart, (8 + weekIdx) * 7 + 0));
+    const tue = fmtDate(addDays(planStart, (8 + weekIdx) * 7 + 1));
+    const thu = fmtDate(addDays(planStart, (8 + weekIdx) * 7 + 3));
+    const w = `m3w${weekIdx}`;
+
+    // Monday – Lower Body (Peak, 3 exercises)
+    const monWu = strSecId(mon, 0, 'warmup'); const monMain = strSecId(mon, 0, 'main'); const monCd = strSecId(mon, 0, 'cooldown');
+    ex(`str-e-${w}mon-wu1`, 'Foam Rolling',                          'warm-up',   'Warm-up',   mon, 0, 0, monWu,   { parameterSource: 'toolbox' });
+    ex(`str-e-${w}mon-wu2`, 'Hip Mobility Drill',                    'warm-up',   'Warm-up',   mon, 0, 1, monWu,   { parameterSource: 'toolbox' });
+    ex(`str-e-${w}mon-sq`,  'Back Squat',                            SMETHODS[0], 'Strength',  mon, 0, 0, monMain, {});
+    ex(`str-e-${w}mon-psq`, 'Paused Squat',                          SMETHODS[0], 'Strength',  mon, 0, 1, monMain, {});
+    ex(`str-e-${w}mon-rp`,  'Rack Pull',                             SMETHODS[0], 'Strength',  mon, 0, 2, monMain, {});
+    ex(`str-e-${w}mon-cd1`, 'Static Stretching – Quads/Hip Flexors', 'cool-down', 'Cool-down', mon, 0, 0, monCd,   { parameterSource: 'toolbox' });
+
+    // Tuesday – Upper Body (Peak)
+    const tueWu = strSecId(tue, 0, 'warmup'); const tueMain = strSecId(tue, 0, 'main'); const tueCd = strSecId(tue, 0, 'cooldown');
+    ex(`str-e-${w}tue-wu1`, 'Band Pull-Apart',    'warm-up',   'Warm-up',    tue, 0, 0, tueWu,   { parameterSource: 'toolbox' });
+    ex(`str-e-${w}tue-wu2`, 'Shoulder Circles',   'warm-up',   'Warm-up',    tue, 0, 1, tueWu,   { parameterSource: 'toolbox' });
+    ex(`str-e-${w}tue-bp`,  'Bench Press',        SMETHODS[0], 'Strength',   tue, 0, 0, tueMain, {});
+    ex(`str-e-${w}tue-ib`,  'Incline Bench Press',SMETHODS[0], 'Strength',   tue, 0, 1, tueMain, {});
+    ex(`str-e-${w}tue-wd`,  'Weighted Dip',       SMETHODS[0], 'Strength',   tue, 0, 2, tueMain, {});
+    ex(`str-e-${w}tue-cr`,  'Cable Row',          SMETHODS[2], 'Accessories',tue, 0, 3, tueMain, {});
+    ex(`str-e-${w}tue-cd1`, 'Doorframe Stretch',  'cool-down', 'Cool-down',  tue, 0, 0, tueCd,   { parameterSource: 'toolbox' });
+
+    // Thursday – Posterior Chain (Peak)
+    const thuWu = strSecId(thu, 0, 'warmup'); const thuMain = strSecId(thu, 0, 'main'); const thuCd = strSecId(thu, 0, 'cooldown');
+    ex(`str-e-${w}thu-wu1`, 'Glute Activation',    'warm-up',   'Warm-up',    thu, 0, 0, thuWu,   { parameterSource: 'toolbox' });
+    ex(`str-e-${w}thu-wu2`, 'Dead Bug',             'warm-up',   'Warm-up',    thu, 0, 1, thuWu,   { parameterSource: 'toolbox' });
+    ex(`str-e-${w}thu-bss`, 'Bulgarian Split Squat',SMETHODS[2], 'Accessories',thu, 0, 0, thuMain, {});
+    ex(`str-e-${w}thu-hbd`, 'Hex Bar Deadlift',     SMETHODS[2], 'Accessories',thu, 0, 1, thuMain, {});
+    ex(`str-e-${w}thu-ht`,  'Hip Thrust',           SMETHODS[2], 'Accessories',thu, 0, 2, thuMain, {});
+    ex(`str-e-${w}thu-cd1`, 'Hip 90/90 Stretch',    'cool-down', 'Cool-down',  thu, 0, 0, thuCd,   { parameterSource: 'toolbox' });
+  }
+
+  // ── parameterValues ───────────────────────────────────────────────────────
+  // pv[mesoId][microcycleIndex][methodName][sessionIdx][paramName] = value
+  // 12 progressive values (one per week)
+  const pv: Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>> = {};
+
+  // SMETHODS[0] – Max Strength – Compound Lifts
+  const strCfg0: Record<string, (string | number)[]> = {
+    'Sets':          [3, 3, 4, 2, 4, 4, 5, 3, 5, 5, 4, 3],
+    'Reps':          [8, 6, 5, 8, 5, 4, 3, 5, 3, 2, 3, 5],
+    'Intensity (% 1RM)': [70, 75, 80, 65, 80, 85, 88, 75, 88, 92, 90, 82],
+    'Rest (min)':    [1.5, 2, 2, 1.5, 2.5, 3, 3, 2, 3, 4, 3.5, 2.5],
+  };
+
+  // SMETHODS[1] – Hypertrophy – Volume Training (meso 1 and 2 only)
+  const strCfg1: Record<string, (string | number)[]> = {
+    'Sets':          [3, 4, 4, 2, 4, 4, 3, 2, 0, 0, 0, 0],
+    'Reps':          [12, 10, 10, 12, 10, 8, 10, 10, 0, 0, 0, 0],
+    'Intensity (% 1RM)': [60, 65, 68, 55, 70, 72, 70, 62, 0, 0, 0, 0],
+    'Rest (min)':    [1, 1, 1.5, 1, 1.5, 1.5, 1.5, 1, 0, 0, 0, 0],
+  };
+
+  // SMETHODS[2] – Posterior Chain & Accessories
+  const strCfg2: Record<string, (string | number)[]> = {
+    'Sets':          [3, 3, 3, 2, 3, 4, 4, 3, 4, 4, 4, 3],
+    'Reps':          [10, 10, 8, 10, 8, 8, 6, 8, 6, 5, 6, 8],
+    'Rest (min)':    [1.5, 1.5, 2, 1.5, 2, 2, 2.5, 2, 2.5, 3, 2.5, 2],
+  };
+
+  STR_MESO_IDS.forEach((mesoId, mi) => {
+    pv[mesoId] = {};
+    STR_MICRO_IDS[mi].forEach((_, microIdx) => {
+      pv[mesoId][microIdx] = {};
+      const weekIdx = mi * 4 + microIdx;
+
+      // SMETHODS[0] – always present
+      pv[mesoId][microIdx][SMETHODS[0]] = {
+        0: Object.fromEntries(
+          Object.entries(strCfg0).map(([param, vals]) => [param, vals[weekIdx]]),
+        ),
+      };
+
+      // SMETHODS[1] – meso 1 and 2 only
+      if (mi < 2) {
+        pv[mesoId][microIdx][SMETHODS[1]] = {
+          0: Object.fromEntries(
+            Object.entries(strCfg1).map(([param, vals]) => [param, vals[weekIdx]]),
+          ),
+        };
+      }
+
+      // SMETHODS[2] – always present
+      pv[mesoId][microIdx][SMETHODS[2]] = {
+        0: Object.fromEntries(
+          Object.entries(strCfg2).map(([param, vals]) => [param, vals[weekIdx]]),
+        ),
+      };
+    });
+  });
+
+  // ── methodAllocations ─────────────────────────────────────────────────────
+  const methodAllocations: Record<string, string[]> = {
+    [SMETHODS[0]]: ['str-meso-1', 'str-meso-2', 'str-meso-3'],
+    [SMETHODS[1]]: ['str-meso-1', 'str-meso-2'],
+    [SMETHODS[2]]: ['str-meso-1', 'str-meso-2', 'str-meso-3'],
+  };
+
+  // ── Assemble TrainingProgram ──────────────────────────────────────────────
+  const trainingProgram = {
+    id: STR_PROGRAM_ID,
+    name: 'Strength Development – 12-Week Plan',
+    athleteId: null,
+    athleteName: 'Demo Athlete',
+    primaryGoal: 'Increase maximal strength: Back Squat 100 kg → 130 kg in 12 weeks',
+    duration: {
+      startDate,
+      endDate,
+      weeks: 12,
+    },
+    createdAt: now,
+    lastModifiedAt: now,
+    status: 'active',
+    macrocycleData,
+    mesocycleData: { mesocycles },
+    trainingDays,
+    exerciseDistribution,
+    parameterValues: pv,
+    dailyIntensityData,
+    daySplitStates,
+    sessionSections,
+    supersets,
+    methodAllocations,
+  };
+
+  // ── Write to trainingPrograms store only (upsert by id) ──────────────────
+  try {
+    let store: { version: number; programs: { id: string }[] };
+    try {
+      const raw = localStorage.getItem('trainingPrograms');
+      store = raw ? JSON.parse(raw) : { version: 1, programs: [] };
+    } catch {
+      store = { version: 1, programs: [] };
+    }
+    store.programs = store.programs.filter((p) => p.id !== STR_PROGRAM_ID);
+    store.programs.unshift(trainingProgram);
+    localStorage.setItem('trainingPrograms', JSON.stringify(store));
+  } catch (e) {
+    console.warn('[loadStrengthPlan] trainingPrograms store write failed (quota?):', e);
+  }
+
+  console.info('[Strength Plan 12W] Loaded – id:', STR_PROGRAM_ID);
+  return trainingProgram;
 }
 
 // ── Exercise Library Seed Data ───────────────────────────────────────────────
@@ -1099,31 +1674,69 @@ const EXERCISE_SEED_LIBRARIES: SeedLibrary[] = [
     id: 'sprint-speed',
     name: 'Sprint & Speed',
     description: 'Sprint- und Schnelligkeitsübungen',
-    exercises: ['Lauf ABC (Koordination)', 'Steigerungsläufe', 'Fliegender Sprint 30m', 'Blockstart 10m'],
+    exercises: [
+      'Lauf ABC (Koordination)', 'Steigerungsläufe', 'Fliegender Sprint 30m', 'Blockstart 10m',
+      'Wicket Drills', 'Resisted Sprint 20m', 'Wicket Run', 'Flying Sprint 60m',
+      'Wall Drive Drill', 'A-Skip', 'B-Skip', 'High Knee Sprint',
+    ],
   },
   {
     id: 'kraft-unterkrper',
     name: 'Kraft – Unterkörper',
     description: 'Unterkörper-Kraftübungen',
-    exercises: ['Back Squat', 'Romanian Deadlift', 'Bulgarian Split Squat', 'Hip Thrust'],
+    exercises: [
+      'Back Squat', 'Romanian Deadlift', 'Bulgarian Split Squat', 'Hip Thrust',
+      'Front Squat', 'Hex Bar Deadlift', 'Leg Press', 'Nordic Hamstring Curl',
+      'Step-Up', 'Glute Bridge', 'Barbell Lunge', 'Box Squat',
+    ],
   },
   {
     id: 'kraft-oberkrper',
     name: 'Kraft – Oberkörper',
     description: 'Oberkörper-Kraftübungen',
-    exercises: ['Bench Press', 'Pull-Up', 'Overhead Press', 'Bent-over Row'],
+    exercises: [
+      'Bench Press', 'Pull-Up', 'Overhead Press', 'Bent-over Row',
+      'Incline Bench Press', 'Dumbbell Row', 'Face Pull', 'Dip',
+      'Landmine Press', 'Cable Row', 'Lat Pulldown', 'Push-Up Variation',
+    ],
   },
   {
     id: 'plyometrie',
     name: 'Plyometrie',
     description: 'Plyometrische Sprungübungen',
-    exercises: ['Box Jump', 'Depth Jump', 'Broad Jump', 'Single Leg Hop'],
+    exercises: [
+      'Box Jump', 'Depth Jump', 'Broad Jump', 'Single Leg Hop',
+      'Hurdle Jump', 'Triple Hop', 'Reactive Drop Jump', 'Lateral Bound',
+      'Ankle Stiffness Jump', 'Bounding', 'Tuck Jump', 'Pogo Jump',
+    ],
   },
   {
     id: 'stabilitt-mobilitt',
     name: 'Stabilität & Mobilität',
     description: 'Stabilitäts- und Mobilitätsübungen',
-    exercises: ['Copenhagen Plank', 'Nordic Hamstring Curl', 'Hip 90/90 Stretch', 'Ankle Mobility'],
+    exercises: [
+      'Copenhagen Plank', 'Nordic Hamstring Curl', 'Hip 90/90 Stretch', 'Ankle Mobility',
+      'Dead Bug', 'Pallof Press', 'Single Leg RDL', 'Hip Airplane',
+      'T-Spine Rotation', 'Thoracic Extension', 'Glute Bridge March', 'Monster Walk',
+    ],
+  },
+  {
+    id: 'olympisch',
+    name: 'Olympic Lifts',
+    description: 'Olympic weightlifting movements',
+    exercises: [
+      'Power Clean', 'Hang Power Clean', 'Power Snatch', 'Hang Power Snatch',
+      'Push Jerk', 'Clean Pull', 'Snatch Pull', 'Clean & Jerk',
+    ],
+  },
+  {
+    id: 'conditioning',
+    name: 'Conditioning',
+    description: 'Energy system conditioning',
+    exercises: [
+      'Sled Push 20m', 'Sled Pull 20m', 'Prowler Sprint', 'Tempo Run 200m',
+      'Hill Sprint 40m', 'Bike Sprint 10s', 'Row 500m', 'Ski Erg 500m',
+    ],
   },
 ];
 
@@ -1132,7 +1745,7 @@ const EXERCISE_LIB_COLUMNS = [
   { id: 'notes', name: 'Notizen', type: 'textarea' as const, required: false },
 ];
 
-export function loadExerciseLibrarySeedData(): void {
+export function loadExerciseLibrarySeedData(): unknown[] {
   const STORAGE_KEY = 'custom_libraries';
   const now = new Date().toISOString();
 
@@ -1201,4 +1814,24 @@ export function loadExerciseLibrarySeedData(): void {
   } else {
     console.info('[Exercise Library Seed] Already up to date – no changes made');
   }
+
+  // Return the seed libraries in CustomLibrary format so callers can sync to Supabase
+  let ts2 = Date.now();
+  return EXERCISE_SEED_LIBRARIES.map(lib => {
+    const exercises = lib.exercises.map((name, i) => ({
+      id: String(ts2 + i),
+      data: { name, notes: '' },
+    }));
+    ts2 += lib.exercises.length;
+    return {
+      id: lib.id,
+      name: lib.name,
+      type: 'exercise',
+      description: lib.description,
+      columns: EXERCISE_LIB_COLUMNS,
+      exercises,
+      createdAt: now,
+      lastUpdated: now,
+    };
+  });
 }

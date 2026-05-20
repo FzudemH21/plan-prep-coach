@@ -31,7 +31,10 @@ export interface Athlete {
   lastName: string;
   birthday: string | null;
   sex: Sex | null;
+  /** @deprecated single-sport legacy field — use `sports` instead */
   sport: string | null;
+  /** Multiple sports; preferred over `sport`. Backward-compat: read as `sports ?? (sport ? [sport] : [])` */
+  sports?: string[];
   team: string | null;
   occupation: string | null;
   dailyActivityLevel: DailyActivityLevel | null;
