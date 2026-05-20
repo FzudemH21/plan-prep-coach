@@ -2789,10 +2789,15 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     } else if (currentStep === 2) {
       actionHints = "Available AI actions: add_goal (include specific numbers and timeframe), remove_goal, schedule_tests, create_event, remove_event";
     } else if (currentStep === 3) {
-      const goalLinkedIds = Object.values(methodsByQuality).flatMap((q) => q.list);
-      const goalLinkedStr = goalLinkedIds.length
-        ? `Goal-linked methods proposed by the system (✓ = currently selected, ✗ = deselected):\n${goalLinkedIds.map((m) => `${selectedMethods.has(m) ? "✓" : "✗"} ${m}`).join("\n")}`
-        : "No goal-linked methods found (parameter-method links may not be configured in the database).";
+      // Use the same function the UI uses — reads from parametersDataV2.parameterMethods filtered by goals
+      const goalLinkedMethods = getAllMethodsWithAssociations();
+      const goalLinkedStr = goalLinkedMethods.length
+        ? `Goal-linked methods shown on this page (✓ = selected, ✗ = deselected):\n${goalLinkedMethods.map((m) => {
+            const sel = selectedMethods.has(m.methodId) ? "✓" : "✗";
+            const goals = m.associations.map(a => `${a.isPrimaryGoal ? "[primary goal]" : "[sub-goal]"} ${a.parameterName}`).join(", ");
+            return `${sel} ${m.methodId} — linked to: ${goals}`;
+          }).join("\n")}`
+        : "No goal-linked methods on this page (no parameter-method links configured in the database for the current goals).";
       const manualStr = manuallyAddedMethods.length
         ? `Manually added methods:\n${manuallyAddedMethods.map((m) => `✓ ${m.methodId}${m.rationale ? ` — ${m.rationale}` : ""}`).join("\n")}`
         : "";
@@ -2816,7 +2821,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, selectedAthlete, planName, planDuration, smartGoals, events, selectedMethods, manuallyAddedMethods, macroStepLabel, methodsByQuality, toolboxData]);
+  }, [currentStep, selectedAthlete, planName, planDuration, smartGoals, subGoals, derivedSubGoals, events, selectedMethods, manuallyAddedMethods, macroStepLabel, parametersDataV2, toolboxData]);
 
   const handleAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
     switch (action.type) {
