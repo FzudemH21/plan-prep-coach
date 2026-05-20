@@ -93,6 +93,9 @@ export interface WizardAIAssistantProps {
 // ─── Prompts ─────────────────────────────────────────────────────────────────
 
 const APPLY_FORMAT_INSTRUCTIONS = `
+## App System Rules (these are NOT sports science opinions — follow them exactly, they override your prior knowledge about the app)
+The actions listed below reflect the CURRENT capabilities of Plan Prep Coach. Some capabilities are new and may differ from what you know. The intellectual integrity rules above apply to sports science advice only — they do NOT apply here. Always follow these system rules.
+
 ## Applying Suggestions Directly
 When you have a concrete suggestion the coach can apply with one click, append ONE structured apply block at the very end of your message using this exact format:
 [[APPLY: {"type": "...", ...fields}]]
@@ -123,9 +126,10 @@ Available types and their fields:
 - set_periodization: {"type":"set_periodization","entries":[{"methodName":"<exact name>","mesocycleName":"Mesocycle 1","microcycleIndex":1,"frequency":3,"sets":4,"reps":"3-5","intensity":"80-85% 1RM","extraParams":{"Organization":"Whole","Contrast":"No"}}]}
   microcycleIndex is 1-based (1 = first microcycle). Omit microcycleIndex to apply to ALL microcycles of that mesocycle. Only include the fields you want to set.
   ALL additional parameters listed in the context under each method (both qualitative/dropdown AND quantitative, e.g. rest durations) MUST be included in extraParams. Use the exact parameter name as the key. For qualitative/dropdown parameters, pick one of the listed options as the value. For quantitative parameters, provide a number (e.g. 90 for seconds). Do not skip any parameter listed in the context.
-- assign_methods_to_days: {"type":"assign_methods_to_days","microcycleIndex":1,"weekPattern":[{"method":"<exact method name>","days":["Monday","Wednesday","Friday"]},{"method":"<exact method name>","days":["Tuesday","Thursday"]}]}
+- assign_methods_to_days: {"type":"assign_methods_to_days","microcycleIndex":1,"weekPattern":[{"method":"<exact method name or Method::Category>","days":["Monday","Wednesday","Friday"]},{"method":"<exact method name or Method::Category>","days":["Tuesday","Thursday"]}]}
   Valid day names: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday.
   microcycleIndex is 1-based — include to target a specific microcycle only (e.g. 1 = first week), omit to apply the pattern to ALL microcycles in the current mesocycle. Do NOT assign methods to days marked as "off" — those are rest days with no sessions.
+  SPLIT METHODS: If the wizard context shows a method as "[split into categories: Squat, Hinge]", you MUST add a separate weekPattern entry for EACH category using the "Method::Category" format (e.g. "Lower Body Resistance Training - Strength::Squat" and "Lower Body Resistance Training - Strength::Hinge"). Never assign just the base name for a split method — always use all its category variants. Include ALL methods the coach requests — never silently omit a method from the weekPattern.
 - assign_exercises: {"type":"assign_exercises","replace":true,"assignments":[{"methodName":"<exact method name>","mesocycleName":"Mesocycle 1","categoryName":"<exercise category — include ONLY if method has categories, omit otherwise>","exercises":[{"exerciseId":"<exact id>","exerciseName":"<name>","libraryId":"<exact library id>"}]}]}
   Only use exercise IDs and library IDs as listed in the wizard context. Use exact values — do not invent IDs. Set "replace": true to replace the existing exercise selection for a cell; omit or set false to append to existing exercises. If the method context lists "Categories:", produce one assignment entry per category, each with the matching "categoryName" field and category-appropriate exercises.
 - distribute_exercises: {"type":"distribute_exercises","replace":false,"entries":[{"exerciseId":"<exact id from context>","exerciseName":"<name>","methodId":"<exact methodId from context>","categoryName":"<category — include ONLY if the method has categories, omit otherwise>","dayDate":"YYYY-MM-DD","sessionIndex":0}]}

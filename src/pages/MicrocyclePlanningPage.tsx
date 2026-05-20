@@ -3350,7 +3350,13 @@ export default function MicrocyclePlanningPage() {
       (m) => resolvedMethodAllocations[m]?.length > 0
     );
     const methodsStr = availableMethods.length
-      ? `Training methods in this plan:\n${availableMethods.map((m) => `- ${m}`).join("\n")}`
+      ? `Training methods in this plan (use these EXACT names in assign_methods_to_days):\n${availableMethods.map((m) => {
+          const cats = methodExerciseCategories[m];
+          if (cats && cats.length > 0) {
+            return `- ${m} [split into categories: ${cats.join(', ')}] → assign each as "${m}::CategoryName" (e.g. "${m}::${cats[0]}")`;
+          }
+          return `- ${m}`;
+        }).join("\n")}`
       : "";
     const offDays = trainingDays
       .filter(d => d.intensity === 'off')
