@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -39,6 +39,16 @@ export function ExerciseLibraryPanel({
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [showAllocatedOnly, setShowAllocatedOnly] = useState(false);
+
+  // Auto-expand all top categories and methods when exercises load
+  useEffect(() => {
+    const topCats = new Set(Object.keys(groupedByTopCategory));
+    setExpandedTopCategories(topCats);
+    const methods = new Set(
+      Object.values(groupedByTopCategory).flatMap(ms => ms.map(m => m.methodId))
+    );
+    setExpandedMethods(methods);
+  }, [groupedByTopCategory]);
 
   const toggle = (set: Set<string>, setFn: React.Dispatch<React.SetStateAction<Set<string>>>, key: string) => {
     const next = new Set(set);
