@@ -3495,10 +3495,31 @@ export default function MicrocyclePlanningPage() {
         orderCounters[k] = Math.max(orderCounters[k] ?? 0, e.order + 1);
       });
 
+      const skippedDates: string[] = [];
+      const methodMismatches: string[] = [];
+
       const newEntries: ExerciseDistribution[] = action.entries
-        .filter(e => mesoDateSet.has(e.dayDate))
+        .filter(e => {
+          if (!mesoDateSet.has(e.dayDate)) {
+            skippedDates.push(`${e.exerciseName} (${e.dayDate} not in mesocycle)`);
+            return false;
+          }
+          return true;
+        })
         .map(e => {
           const sessionIndex = e.sessionIndex ?? 0;
+          const sessionKey = `${e.dayDate}_${sessionIndex}`;
+          const assignedMethods = dayMethodAssignments[sessionKey] ?? [];
+          // Check: is this exercise's method (or its base without ::Category) assigned to this day/session?
+          const baseMethodId = e.methodId.includes('::') ? e.methodId.split('::')[0] : e.methodId;
+          const methodOnDay = assignedMethods.some(m =>
+            m === e.methodId || m === baseMethodId || e.methodId.startsWith(m + '::')
+          );
+          if (!methodOnDay && assignedMethods.length > 0) {
+            methodMismatches.push(
+              `"${e.exerciseName}" → ${e.dayDate} session ${sessionIndex}: method "${baseMethodId}" not assigned (assigned: ${assignedMethods.join(', ')})`
+            );
+          }
           const k = `${e.dayDate}_${sessionIndex}`;
           const order = orderCounters[k] ?? 0;
           orderCounters[k] = order + 1;
@@ -3514,11 +3535,34 @@ export default function MicrocyclePlanningPage() {
           };
         });
 
-      const updated = [...base, ...newEntries];
-      setExerciseDistribution(updated);
-      localStorage.setItem('exerciseDistribution', JSON.stringify(updated));
+      if (skippedDates.length > 0) {
+        toast({
+          title: `${skippedDates.length} exercise${skippedDates.length > 1 ? 's' : ''} skipped`,
+          description: skippedDates.slice(0, 3).join('\n') + (skippedDates.length > 3 ? `\n…and ${skippedDates.length - 3} more` : ''),
+          variant: 'destructive',
+        });
+      }
+      if (methodMismatches.length > 0) {
+        toast({
+          title: `Method mismatch on ${methodMismatches.length} exercise${methodMismatches.length > 1 ? 's' : ''}`,
+          description: methodMismatches.slice(0, 2).join('\n') + (methodMismatches.length > 2 ? `\n…and ${methodMismatches.length - 2} more` : ''),
+          variant: 'destructive',
+        });
+      }
+
+      if (newEntries.length > 0) {
+        const updated = [...base, ...newEntries];
+        setExerciseDistribution(updated);
+        localStorage.setItem('exerciseDistribution', JSON.stringify(updated));
+        if (skippedDates.length === 0 && methodMismatches.length === 0) {
+          toast({
+            title: `${newEntries.length} exercise${newEntries.length > 1 ? 's' : ''} distributed`,
+            description: `Added to ${[...new Set(newEntries.map(e => e.dayDate))].length} training day${[...new Set(newEntries.map(e => e.dayDate))].length > 1 ? 's' : ''}.`,
+          });
+        }
+      }
     }
-  }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments, exerciseDistribution]);
+  }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments, exerciseDistribution, toast]);
 
   return (
     <div className="mx-auto py-6 space-y-6 px-4 w-full max-w-[98vw]">
