@@ -17,8 +17,8 @@ export type ApplySuggestion =
   | { type: "add_goal"; parameterName: string }
   /** MacrocyclePage Steps 1 & 2 — schedule or remove test dates for main goals / sub-goals, or dates for events */
   | { type: "schedule_tests"; schedule: Array<{ goalDescription: string; isMainGoal: boolean; isEvent?: boolean; action?: "add" | "remove"; dates: string[] }> }
-  /** MacrocyclePage Step 1 — change plan duration by setting a new number of weeks (keeps start date) */
-  | { type: "set_plan_duration"; weeks: number }
+  /** MacrocyclePage Step 1 — set plan start date, end date, and/or total weeks */
+  | { type: "set_plan_duration"; startDate?: string; endDate?: string; weeks?: number }
   /** MacrocyclePage Steps 1 & 2 — create a new event (without scheduling dates yet) */
   | { type: "create_event"; name: string; description?: string }
   /** MacrocyclePage Step 3 — add new methods to the training plan, each with an optional rationale */
@@ -102,7 +102,8 @@ When you have a concrete suggestion the coach can apply with one click, append O
 
 Available types and their fields:
 - set_plan_name: {"type":"set_plan_name","name":"<plan name>"}
-- set_plan_duration: {"type":"set_plan_duration","weeks":<total number of weeks>}
+- set_plan_duration: {"type":"set_plan_duration","startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","weeks":<total weeks>}
+  Sets the plan start date, end date, and/or duration. Provide startDate and endDate as ISO strings when the coach specifies actual dates. weeks is computed automatically from the dates but can be supplied alone if only duration changes (keeps existing start date). You CAN and SHOULD set dates when the coach asks.
 - add_goal: {"type":"add_goal","parameterName":"<exact parameter name from the database list>"}
 - schedule_tests: {"type":"schedule_tests","schedule":[{"goalDescription":"<exact name>","isMainGoal":<true|false>,"isEvent":<true for events, omit/false for goals>,"action":"add","dates":["YYYY-MM-DD"]}]}
   action is "add" (default) or "remove". Use ISO date strings (YYYY-MM-DD). For goals/sub-goals match goalDescription to the name in context. For events, goalDescription is the event name — created automatically if it doesn't exist yet.
