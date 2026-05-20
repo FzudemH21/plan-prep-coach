@@ -172,6 +172,12 @@ export default function MesocyclePage() {
   const { data: parametersDataV2 } = useParametersDataV2();
   const { libraries: exerciseLibraries } = useCustomLibraries();
   const mpTableRef = React.useRef<MicrocyclePlanningTableHandle>(null);
+  const [exerciseCellData, setExerciseCellData] = useState<Record<string, import('@/types/microcycle-planning').CellData>>(() => {
+    try {
+      const stored = localStorage.getItem('microcyclePlanningState');
+      return stored ? (JSON.parse(stored) as import('@/types/microcycle-planning').MicrocyclePlanningState).cellData ?? {} : {};
+    } catch { return {}; }
+  });
   const { dragState, startDrag, endDrag, addToSelection, clearSelection, fillCells } = useDragFill();
   const { toast } = useToast();
   const { athletes } = useAthletes();
@@ -4002,6 +4008,7 @@ export default function MesocyclePage() {
             methodParametersMap={methodParametersMap}
             onExerciseSelectionChange={(cellData) => {
               localStorage.setItem('exerciseSelectionData', JSON.stringify(cellData));
+              setExerciseCellData(cellData);
             }}
             getParametersForCell={getParametersForCell}
             methodAllocations={methodAllocations}
@@ -5053,23 +5060,17 @@ export default function MesocyclePage() {
         exerciseLibraryStr = libraryLines.join("\n");
       }
 
-      // Currently selected exercises (from microcyclePlanningState — the table's storage key)
-      const stored = localStorage.getItem('microcyclePlanningState');
-      if (stored) {
-        try {
-          const state = JSON.parse(stored) as { cellData: Record<string, { methodId: string; categoryName?: string; mesocycleId: string; exercises: Array<{ exerciseName: string }> }> };
-          const selectionLines: string[] = ["\nCurrently selected exercises per cell:"];
-          Object.entries(state.cellData ?? {}).forEach(([, cell]) => {
-            if (cell.exercises?.length > 0) {
-              const meso = mesocycles.find(m => m.id === cell.mesocycleId);
-              const mesoName = meso?.name ?? cell.mesocycleId;
-              const label = cell.categoryName ? `${cell.methodId}::${cell.categoryName}` : cell.methodId;
-              selectionLines.push(`  ${mesoName} | ${label}: ${cell.exercises.map(e => e.exerciseName).join(", ")}`);
-            }
-          });
-          if (selectionLines.length > 1) exerciseLibraryStr += "\n" + selectionLines.join("\n");
-        } catch { /* ignore */ }
-      }
+      // Currently selected exercises — use React state (exerciseCellData) so it's always live
+      const selectionLines: string[] = ["\nCurrently selected exercises per cell:"];
+      Object.entries(exerciseCellData).forEach(([, cell]) => {
+        if (cell.exercises?.length > 0) {
+          const meso = mesocycles.find(m => m.id === cell.mesocycleId);
+          const mesoName = meso?.name ?? cell.mesocycleId;
+          const label = cell.categoryName ? `${cell.methodId}::${cell.categoryName}` : cell.methodId;
+          selectionLines.push(`  ${mesoName} | ${label}: ${cell.exercises.map(e => e.exerciseName).join(", ")}`);
+        }
+      });
+      if (selectionLines.length > 1) exerciseLibraryStr += "\n" + selectionLines.join("\n");
     }
 
     return [
@@ -5084,7 +5085,7 @@ export default function MesocyclePage() {
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, mesocycles, methodAllocations, mesoStepLabel, exerciseLibraries]);
+  }, [currentStep, athleteName, macrocycleData, mesocycles, methodAllocations, mesoStepLabel, exerciseLibraries, exerciseCellData]);
 
   // ── AI Apply handler ──────────────────────────────────────────────────────
   const handleMesoAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
