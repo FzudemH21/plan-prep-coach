@@ -65,7 +65,6 @@ export default function MacrocyclePage() {
   const { retrieve: ragRetrieve } = useRAGRetrieval();
   const [ragContext, setRagContext] = useState('');
   const globalAIContext = useGlobalAIContext();
-  const { coachMemoryContext } = useCoachMemory({ currentMethods: Array.from(selectedMethods) });
   const [athleteDropdownOpen, setAthleteDropdownOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [planName, setPlanName] = useState<string>("");
@@ -103,6 +102,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
 
   // State for selected methods in Training Methods overview
   const [selectedMethods, setSelectedMethods] = useState<Set<string>>(new Set());
+  const { coachMemoryContext } = useCoachMemory({ currentMethods: Array.from(selectedMethods) });
 
   // State for manually added methods with rationale
   const [manuallyAddedMethods, setManuallyAddedMethods] = useState<ManuallyAddedMethod[]>([]);
