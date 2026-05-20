@@ -15,6 +15,8 @@ import { useToolboxData } from "@/hooks/useToolboxData";
 export type ApplySuggestion =
   | { type: "set_plan_name"; name: string }
   | { type: "add_goal"; parameterName: string }
+  /** MacrocyclePage Steps 1 & 2 — remove a goal by exact name */
+  | { type: "remove_goal"; goalName: string }
   /** MacrocyclePage Steps 1 & 2 — schedule or remove test dates for main goals / sub-goals, or dates for events */
   | { type: "schedule_tests"; schedule: Array<{ goalDescription: string; isMainGoal: boolean; isEvent?: boolean; action?: "add" | "remove"; dates: string[] }> }
   /** MacrocyclePage Step 1 — set plan start date, end date, and/or total weeks */
@@ -105,6 +107,8 @@ Available types and their fields:
 - set_plan_duration: {"type":"set_plan_duration","startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","weeks":<total weeks>}
   Sets the plan start date, end date, and/or duration. Provide startDate and endDate as ISO strings when the coach specifies actual dates. weeks is computed automatically from the dates but can be supplied alone if only duration changes (keeps existing start date). You CAN and SHOULD set dates when the coach asks.
 - add_goal: {"type":"add_goal","parameterName":"<exact parameter name from the database list>"}
+- remove_goal: {"type":"remove_goal","goalName":"<exact goal name from the Goals list in context>"}
+  Removes a goal entirely. Use the EXACT name shown in the Goals list.
 - schedule_tests: {"type":"schedule_tests","schedule":[{"goalDescription":"<exact name>","isMainGoal":<true|false>,"isEvent":<true for events, omit/false for goals>,"action":"add","dates":["YYYY-MM-DD"]}]}
   action is "add" (default) or "remove". Use ISO date strings (YYYY-MM-DD). For goals/sub-goals use the exact name from the Goals list in context. For events: FIRST check the Events list in context — if an event with a similar name exists, use its EXACT name (e.g. coach says "strength test" → use "Strength Test - 1RM Back Squat" if that exists). Only use create_event for brand-new events that have no match. If you are unsure which existing event the coach means, ask for clarification instead of creating a duplicate.
 - create_event: {"type":"create_event","name":"<event name>","description":"<optional description>"}
