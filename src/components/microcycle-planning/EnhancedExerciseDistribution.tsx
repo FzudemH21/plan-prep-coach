@@ -490,8 +490,9 @@ export function EnhancedExerciseDistribution({
 
   const handleDragStart = useCallback((start: DragStart) => {
     if (start.source.droppableId.startsWith('library-')) {
-      const methodId = start.source.droppableId.replace('library-', '').split('::')[0];
-      setDraggingMethodId(methodId);
+      // Keep full "methodId::category" key so split methods match correctly
+      const fullKey = start.source.droppableId.replace('library-', '');
+      setDraggingMethodId(fullKey);
     }
   }, []);
 
@@ -2532,12 +2533,22 @@ export function EnhancedExerciseDistribution({
 
                                 const sessionKey = `${day.date}_${sessionIndex}`;
                                 const sessionMethods = dayMethodAssignments?.[sessionKey] ?? [];
-                                const methodMatchState: 'match' | 'no-match' | 'neutral' =
-                                  draggingMethodId
-                                    ? (sessionMethods.length > 0
-                                        ? (sessionMethods.includes(draggingMethodId) ? 'match' : 'no-match')
-                                        : 'neutral')
-                                    : 'neutral';
+                                const methodMatchState: 'match' | 'no-match' | 'neutral' = (() => {
+                                  if (!draggingMethodId) return 'neutral';
+                                  if (sessionMethods.length === 0) return 'neutral';
+                                  // Strip trailing :: (library droppableId for unsplit methods ends with ::)
+                                  const normalized = draggingMethodId.endsWith('::')
+                                    ? draggingMethodId.slice(0, -2)
+                                    : draggingMethodId;
+                                  const hasCategory = normalized.includes('::');
+                                  const matches = sessionMethods.some(m => {
+                                    if (m === normalized) return true;
+                                    // Unsplit method dragged: also match any category-split variant
+                                    if (!hasCategory) return m.startsWith(normalized + '::');
+                                    return false;
+                                  });
+                                  return matches ? 'match' : 'no-match';
+                                })();
 
                                 return (
                                   <SessionColumnView
