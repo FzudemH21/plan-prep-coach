@@ -5022,30 +5022,44 @@ export default function MesocyclePage() {
       ? `Allocated methods:\n${allocatedMethods.map((m) => `- ${m}`).join("\n")}`
       : "";
 
-    // Step 5: add exercise library context so AI can use assign_exercises
+    // Step 5: exercise library override block + available exercises
+    let step5OverrideStr = "";
     let exerciseLibraryStr = "";
-    if (currentStep === 5 && exerciseLibraries.length > 0) {
-      const libraryLines: string[] = ["Available exercises in the database (use exact IDs for assign_exercises):"];
-      exerciseLibraries.forEach(lib => {
-        if (!lib.exercises || lib.exercises.length === 0) return;
-        const nameCol = lib.columns.find(c => c.name.toLowerCase().includes('name'));
-        const catCol = lib.columns.find(c => c.name.toLowerCase().includes('categor'));
-        libraryLines.push(`\nLibrary: "${lib.name}" (libraryId: "${lib.id}")`);
-        lib.exercises.forEach(ex => {
-          const name = nameCol ? (ex.data[nameCol.id] ?? ex.id) : ex.id;
-          const cat = catCol ? (ex.data[catCol.id] ?? '') : '';
-          libraryLines.push(`  - exerciseId: "${ex.id}" | name: "${name}"${cat ? ` | category: "${cat}"` : ''}`);
-        });
-      });
-      exerciseLibraryStr = libraryLines.join("\n");
+    if (currentStep === 5) {
+      // ⚠️ Override block — must appear FIRST so it is read before any sports science instincts fire
+      const hasLibraryExercises = exerciseLibraries.some(lib => lib.exercises?.length > 0);
+      step5OverrideStr = [
+        "⚠️ EXERCISE SELECTION RULES (App System Rules — override prior knowledge, follow exactly):",
+        "- When the coach asks which exercises to recommend: ONLY suggest exercises that appear in the Available exercises list below. Do NOT recommend exercises by generic name that are not in that list.",
+        "- If no suitable exercises exist in the database for a method, say so explicitly and tell the coach to add them to the Exercise Database first.",
+        "- When producing an assign_exercises block: include ONLY exercises whose exerciseId is listed below. For any requested exercise not found in the list, name it in your text response and explain it is missing from the database.",
+        "- Never invent exercise IDs, library IDs, or exercise names not found in the list.",
+        hasLibraryExercises ? "" : "⚠️ The exercise database is empty — tell the coach to add exercises to the Exercise Database before selection.",
+      ].filter(Boolean).join("\n");
 
-      // Also show currently selected exercises per cell
-      const stored = localStorage.getItem('exerciseSelectionData');
+      if (exerciseLibraries.length > 0) {
+        const libraryLines: string[] = ["Available exercises in the database (ONLY use these for recommendations and assign_exercises):"];
+        exerciseLibraries.forEach(lib => {
+          if (!lib.exercises || lib.exercises.length === 0) return;
+          const nameCol = lib.columns.find(c => c.name.toLowerCase().includes('name'));
+          const catCol = lib.columns.find(c => c.name.toLowerCase().includes('categor'));
+          libraryLines.push(`\nLibrary: "${lib.name}" (libraryId: "${lib.id}")`);
+          lib.exercises.forEach(ex => {
+            const name = nameCol ? (ex.data[nameCol.id] ?? ex.id) : ex.id;
+            const cat = catCol ? (ex.data[catCol.id] ?? '') : '';
+            libraryLines.push(`  - exerciseId: "${ex.id}" | name: "${name}"${cat ? ` | category: "${cat}"` : ''}`);
+          });
+        });
+        exerciseLibraryStr = libraryLines.join("\n");
+      }
+
+      // Currently selected exercises (from microcyclePlanningState — the table's storage key)
+      const stored = localStorage.getItem('microcyclePlanningState');
       if (stored) {
         try {
-          const cellMap = JSON.parse(stored) as Record<string, { methodId: string; categoryName?: string; mesocycleId: string; exercises: Array<{ exerciseName: string }> }>;
+          const state = JSON.parse(stored) as { cellData: Record<string, { methodId: string; categoryName?: string; mesocycleId: string; exercises: Array<{ exerciseName: string }> }> };
           const selectionLines: string[] = ["\nCurrently selected exercises per cell:"];
-          Object.entries(cellMap).forEach(([key, cell]) => {
+          Object.entries(state.cellData ?? {}).forEach(([, cell]) => {
             if (cell.exercises?.length > 0) {
               const meso = mesocycles.find(m => m.id === cell.mesocycleId);
               const mesoName = meso?.name ?? cell.mesocycleId;
@@ -5059,6 +5073,7 @@ export default function MesocyclePage() {
     }
 
     return [
+      step5OverrideStr,
       `Current step: ${mesoStepLabel}`,
       athleteStr,
       planStr,
