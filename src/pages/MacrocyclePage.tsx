@@ -38,6 +38,7 @@ import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
 import { WizardAIAssistant } from "@/components/wizard/WizardAIAssistant";
 import { useRAGRetrieval } from "@/hooks/useRAGRetrieval";
 import { useGlobalAIContext } from "@/hooks/useGlobalAIContext";
+import { useCoachMemory } from "@/hooks/useCoachMemory";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 import { TEST_COLOR, EVENT_COLOR, testEventGradient } from "@/lib/eventColors";
@@ -64,6 +65,7 @@ export default function MacrocyclePage() {
   const { retrieve: ragRetrieve } = useRAGRetrieval();
   const [ragContext, setRagContext] = useState('');
   const globalAIContext = useGlobalAIContext();
+  const { coachMemoryContext } = useCoachMemory({ currentMethods: Array.from(selectedMethods) });
   const [athleteDropdownOpen, setAthleteDropdownOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [planName, setPlanName] = useState<string>("");
@@ -3093,6 +3095,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         onApplySuggestion={handleAIApply}
         ragContext={ragContext}
         globalContext={globalAIContext}
+        coachMemoryContext={coachMemoryContext}
       />
     </>
   );
