@@ -26,6 +26,8 @@ export type ApplySuggestion =
   | { type: "set_mesocycle_config"; count: number; weeksDuration: number }
   /** MesocyclePage Step 1 — configure the full mesocycle/microcycle structure with per-microcycle durations and intensities */
   | { type: "configure_mesocycles"; mesocycles: Array<{ name?: string; microcycles: Array<{ duration: number; intensity?: string; name?: string }> }> }
+  /** MesocyclePage Step 1 — rename one or more meso- or microcycles without changing any other structure */
+  | { type: "rename_cycles"; renames: Array<{ currentName: string; newName: string }> }
   /** MesocyclePage Step 3 — distribute existing methods across specific mesocycles */
   | { type: "allocate_methods"; allocations: Array<{ methodName: string; mesocycleNames: string[] }> }
   /** MesocyclePage Step 3 — add new training methods to the plan */
@@ -114,6 +116,8 @@ Available types and their fields:
   Use for quick uniform setup (all mesocycles same length, all microcycles 7 days). For variable durations use configure_mesocycles instead.
 - configure_mesocycles: {"type":"configure_mesocycles","mesocycles":[{"name":"Mesocycle 1","microcycles":[{"duration":7,"intensity":"easy"},{"duration":7,"intensity":"moderate"},{"duration":7,"intensity":"hard"},{"duration":7,"intensity":"deload"}]},{"name":"Mesocycle 2","microcycles":[{"duration":7,"intensity":"moderate"},{"duration":7,"intensity":"hard"},{"duration":5,"intensity":"extremely-hard"},{"duration":2,"intensity":"deload"}]}]}
   Full structure replacement — use when microcycles have different durations or when adding/removing mesocycles or microcycles. Duration is in days. Intensity is optional (defaults to "moderate"). Valid intensities: "off","deload","easy","easy-moderate","moderate","moderate-hard","hard","extremely-hard".
+- rename_cycles: {"type":"rename_cycles","renames":[{"currentName":"Mesocycle 1","newName":"Accumulation"},{"currentName":"Microcycle 1","newName":"Week 1 - Base"}]}
+  Renames one or more mesocycles or microcycles without touching any other structure. Use the EXACT current name shown in the mesocycle structure in context.
 - allocate_methods: {"type":"allocate_methods","allocations":[{"methodName":"<exact method name>","mesocycleNames":["Mesocycle 1","Mesocycle 2"]},{"methodName":"<exact method name>","mesocycleNames":["Mesocycle 1","Mesocycle 2","Mesocycle 3"]}]}
 - remove_methods: {"type":"remove_methods","methodNames":["<exact method name>","<exact method name>"]}
   Removes methods from the plan entirely. Use exact method names as listed in the wizard context.
