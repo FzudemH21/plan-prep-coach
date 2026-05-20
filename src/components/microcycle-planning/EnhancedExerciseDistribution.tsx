@@ -339,13 +339,14 @@ export function EnhancedExerciseDistribution({
 
     // 1. Add exercises from exerciseSelectionData (Step 0)
     Object.entries(exerciseSelectionData).forEach(([key, cellData]) => {
-      if (cellData.mesocycleId !== mesocycle.id) return;
-
+      if (cellData.mesocycleId !== mesocycle.id) { console.log('[debug] skip', key, cellData.mesocycleId, '!==', mesocycle.id); return; }
       const methodId = cellData.methodId;
       const categoryName = isValidCategoryName(cellData.categoryName) ? cellData.categoryName! : '';
-
+      console.log('[debug] processing', methodId, categoryName, 'exCount', cellData.exercises.length);
       cellData.exercises.forEach(ex => {
+        console.log('[debug] addExercise', methodId, categoryName, ex.exerciseId, ex.exerciseName);
         addExercise(methodId, categoryName, ex);
+        console.log('[debug] grouped after add', JSON.stringify(Object.keys(grouped)));
       });
     });
 
