@@ -40,16 +40,6 @@ export function ExerciseLibraryPanel({
   const [searchQuery, setSearchQuery] = useState('');
   const [showAllocatedOnly, setShowAllocatedOnly] = useState(false);
 
-  // Auto-expand all top categories and methods when exercises load
-  useEffect(() => {
-    const topCats = new Set(Object.keys(groupedByTopCategory));
-    setExpandedTopCategories(topCats);
-    const methods = new Set(
-      Object.values(groupedByTopCategory).flatMap(ms => ms.map(m => m.methodId))
-    );
-    setExpandedMethods(methods);
-  }, [groupedByTopCategory]);
-
   const toggle = (set: Set<string>, setFn: React.Dispatch<React.SetStateAction<Set<string>>>, key: string) => {
     const next = new Set(set);
     next.has(key) ? next.delete(key) : next.add(key);
@@ -113,6 +103,16 @@ export function ExerciseLibraryPanel({
 
     return grouped;
   }, [filteredExercises]);
+
+  // Auto-expand all top categories and methods when exercises load
+  useEffect(() => {
+    const topCats = new Set(Object.keys(groupedByTopCategory));
+    setExpandedTopCategories(topCats);
+    const methods = new Set(
+      Object.values(groupedByTopCategory).flatMap(ms => ms.map(m => m.methodId))
+    );
+    setExpandedMethods(methods);
+  }, [groupedByTopCategory]);
 
   const renderExercise = (
     exercise: { exerciseId: string; exerciseName: string },
