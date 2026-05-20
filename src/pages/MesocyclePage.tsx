@@ -173,16 +173,13 @@ export default function MesocyclePage() {
   const { libraries: exerciseLibraries } = useCustomLibraries();
   const mpTableRef = React.useRef<MicrocyclePlanningTableHandle>(null);
   const [exerciseCellData, setExerciseCellData] = useState<Record<string, import('@/types/microcycle-planning').CellData>>({});
-  // Re-sync from localStorage whenever step 5 is entered or the table remounts (mpTableKey change).
-  // This is the ground truth — don't rely solely on callback-driven updates.
+  // Re-sync from exerciseSelectionData (the dedicated step-5 key) whenever the user
+  // arrives at step 5 or the table remounts — never rely solely on callback-driven updates.
   useEffect(() => {
     if (currentStep === 5) {
       try {
-        const stored = localStorage.getItem('microcyclePlanningState');
-        setExerciseCellData(stored
-          ? (JSON.parse(stored) as import('@/types/microcycle-planning').MicrocyclePlanningState).cellData ?? {}
-          : {}
-        );
+        const stored = localStorage.getItem('exerciseSelectionData');
+        setExerciseCellData(stored ? JSON.parse(stored) : {});
       } catch { setExerciseCellData({}); }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -5265,10 +5262,9 @@ export default function MesocyclePage() {
         break;
       }
       case "assign_exercises": {
-        // Build the newCellData in MicrocyclePlanningTable's CellData format
+        // Build newCellData in MicrocyclePlanningTable's CellData format
         // (keyed by `methodId::categoryName::mesocycleId`) and merge via the
-        // imperative handle — writing to exerciseSelectionData would hit the
-        // wrong localStorage key since the table uses microcyclePlanningState.
+        // imperative handle so the table's internal state stays in sync.
         const newCellData: Record<string, import('@/types/microcycle-planning').CellData> = {};
         action.assignments.forEach(({ methodName, mesocycleName, categoryName, exercises }) => {
           const meso = mesocycles.find(m => m.name === mesocycleName);
@@ -5291,10 +5287,10 @@ export default function MesocyclePage() {
           // For replace mode, write the cell data directly via ref (overwrites existing for each cell)
           mpTableRef.current?.mergeCellData(newCellData);
         } else {
-          // For append mode, read existing cell data first then merge
-          const stored = localStorage.getItem('microcyclePlanningState');
+          // For append mode, read existing cell data from the dedicated step-5 key
+          const stored = localStorage.getItem('exerciseSelectionData');
           const existing: Record<string, import('@/types/microcycle-planning').CellData> = stored
-            ? (JSON.parse(stored) as import('@/types/microcycle-planning').MicrocyclePlanningState).cellData
+            ? JSON.parse(stored)
             : {};
           const merged: Record<string, import('@/types/microcycle-planning').CellData> = {};
           Object.entries(newCellData).forEach(([key, cell]) => {
