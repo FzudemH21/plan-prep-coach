@@ -2789,16 +2789,14 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     } else if (currentStep === 2) {
       actionHints = "Available AI actions: add_goal (include specific numbers and timeframe), remove_goal, schedule_tests, create_event, remove_event";
     } else if (currentStep === 3) {
-      const allAvailableIds = Object.values(methodsByQuality).flatMap((q) => q.list);
-      const unselected = allAvailableIds.filter((m) => !selectedMethods.has(m));
-      const methodListStr = unselected.length
-        ? `Methods available to add (use exact names):\n${unselected.map((m) => `- ${m}`).join("\n")}`
-        : "All available methods are already selected.";
-      const selectedList = [...Array.from(selectedMethods), ...manuallyAddedMethods.filter(m => !selectedMethods.has(m.methodId)).map(m => m.methodId)];
-      const selectedListStr = selectedList.length
-        ? `Currently selected methods (use exact names for remove_methods):\n${selectedList.map((m) => `- ${m}`).join("\n")}`
+      const goalLinkedIds = Object.values(methodsByQuality).flatMap((q) => q.list);
+      const goalLinkedStr = goalLinkedIds.length
+        ? `Goal-linked methods proposed by the system (✓ = currently selected, ✗ = deselected):\n${goalLinkedIds.map((m) => `${selectedMethods.has(m) ? "✓" : "✗"} ${m}`).join("\n")}`
+        : "No goal-linked methods found.";
+      const manualStr = manuallyAddedMethods.length
+        ? `Manually added methods:\n${manuallyAddedMethods.map((m) => `✓ ${m.methodId}${m.rationale ? ` — ${m.rationale}` : ""}`).join("\n")}`
         : "";
-      actionHints = `Available AI actions: add_methods, remove_methods\n${methodListStr}${selectedListStr ? `\n${selectedListStr}` : ""}`;
+      actionHints = `Available AI actions: add_methods, remove_methods\n${goalLinkedStr}${manualStr ? `\n${manualStr}` : ""}`;
     }
     return [
       `Current step: ${macroStepLabel}`,
