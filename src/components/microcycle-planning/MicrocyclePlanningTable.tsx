@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -46,16 +46,22 @@ export function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], para
     microcycleGroups: {}
   });
 
+  // Prevents the save effect from wiping localStorage with the initial empty state on mount
+  // before the load effect's setPlanningState triggers a re-render.
+  const isMountSave = useRef(true);
+
   // Load saved state from localStorage
   useEffect(() => {
     const savedState = localStorage.getItem('microcyclePlanningState');
     if (savedState) {
       setPlanningState(JSON.parse(savedState));
     }
+    isMountSave.current = false;
   }, []);
 
-  // Save state to localStorage and notify parent whenever it changes
+  // Save state to localStorage and notify parent whenever it changes (skip on mount)
   useEffect(() => {
+    if (isMountSave.current) return;
     localStorage.setItem('microcyclePlanningState', JSON.stringify(planningState));
     onExerciseSelectionChange?.(planningState.cellData);
   }, [planningState, onExerciseSelectionChange]);
