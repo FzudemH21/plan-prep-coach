@@ -333,20 +333,13 @@ export function EnhancedExerciseDistribution({
       }
     };
 
-    // DEBUG — remove after diagnosis
-    console.log('[ExerciseDist] mesocycle.id:', mesocycle.id);
-    console.log('[ExerciseDist] cells:', JSON.stringify(Object.entries(exerciseSelectionData).map(([k, v]) => ({ key: k, mesoId: v.mesocycleId, exCount: v.exercises.length }))));
-
     // 1. Add exercises from exerciseSelectionData (Step 0)
     Object.entries(exerciseSelectionData).forEach(([key, cellData]) => {
-      if (cellData.mesocycleId !== mesocycle.id) { console.log('[debug] skip', key, cellData.mesocycleId, '!==', mesocycle.id); return; }
+      if (cellData.mesocycleId !== mesocycle.id) return;
       const methodId = cellData.methodId;
       const categoryName = isValidCategoryName(cellData.categoryName) ? cellData.categoryName! : '';
-      console.log('[debug] processing', methodId, categoryName, 'exCount', cellData.exercises.length);
       cellData.exercises.forEach(ex => {
-        console.log('[debug] addExercise', methodId, categoryName, ex.exerciseId, ex.exerciseName);
         addExercise(methodId, categoryName, ex);
-        console.log('[debug] grouped after add', JSON.stringify(Object.keys(grouped)));
       });
     });
 
@@ -373,18 +366,8 @@ export function EnhancedExerciseDistribution({
       });
     });
 
-    // 3. Filter out methods not allocated to this mesocycle (removes stale exerciseSelectionData)
-    if (Object.keys(methodAllocations).length > 0) {
-      Object.keys(grouped).forEach(methodId => {
-        if (!(methodAllocations[methodId] ?? []).includes(mesocycle.id)) {
-          delete grouped[methodId];
-        }
-      });
-    }
-
-    console.log('[ExerciseDist] grouped result:', JSON.stringify(Object.entries(grouped).map(([m, cats]) => ({ method: m, cats: Object.keys(cats) }))));
     return grouped;
-  }, [exerciseSelectionData, exerciseDistribution, mesocycle.id, methodAllocations]);
+  }, [exerciseSelectionData, exerciseDistribution, mesocycle.id]);
 
   // Helper to find superset in mapping
   const findSessionSuperset = (
