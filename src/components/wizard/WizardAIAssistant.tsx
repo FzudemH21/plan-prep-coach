@@ -51,6 +51,18 @@ export type ApplySuggestion =
   | { type: "assign_exercises"; replace?: boolean; assignments: Array<{ methodName: string; mesocycleName: string; categoryName?: string; exercises: Array<{ exerciseId: string; exerciseName: string; libraryId: string }> }> }
   /** MicrocyclePlanningPage Step 2 — distribute exercises to specific training days / sessions */
   | { type: "distribute_exercises"; replace?: boolean; entries: Array<{ exerciseId: string; exerciseName: string; methodId: string; categoryName?: string; dayDate: string; sessionIndex?: number }> }
+  /** MicrocyclePlanningPage Step 2 — create a named section block within a session */
+  | { type: "create_section"; dayDate: string; sessionIndex: number; name: string; note?: string }
+  /** MicrocyclePlanningPage Step 2 — delete a section by name */
+  | { type: "delete_section"; dayDate: string; sessionIndex: number; sectionName: string }
+  /** MicrocyclePlanningPage Step 2 — rename an existing section */
+  | { type: "rename_section"; dayDate: string; sessionIndex: number; sectionName: string; newName: string }
+  /** MicrocyclePlanningPage Step 2 — add or update a note on an exercise, section, or session */
+  | { type: "set_note"; target: "exercise" | "section" | "session"; dayDate: string; sessionIndex: number; note: string; exerciseId?: string; sectionName?: string }
+  /** MicrocyclePlanningPage Step 2 — link 2+ exercises in the same session into a superset */
+  | { type: "create_superset"; dayDate: string; sessionIndex: number; exerciseIds: string[] }
+  /** MicrocyclePlanningPage Step 2 — remove an exercise from its superset */
+  | { type: "break_superset"; dayDate: string; sessionIndex: number; exerciseId: string }
   /** Parameter Database — add a new parameter */
   | { type: "add_parameter"; name: string; category?: string; unit?: string; applicableSports?: string[] }
   /** Parameter Database — add multiple parameters at once */
@@ -160,6 +172,18 @@ Available types and their fields:
 - distribute_exercises: {"type":"distribute_exercises","replace":false,"entries":[{"exerciseId":"<exact id from context>","exerciseName":"<name>","methodId":"<exact methodId from context>","categoryName":"<category — include ONLY if the method has categories, omit otherwise>","dayDate":"YYYY-MM-DD","sessionIndex":0}]}
   IMPORTANT: Use this action in Phase 3 Step 2 whenever the coach asks to assign or distribute exercises to training days. You CAN assign exercises directly to specific calendar dates — this is exactly what this action is for. Do NOT tell the coach this is impossible or that they need to use the hierarchy manually.
   Use ONLY exerciseIds and methodIds listed under "Available exercises" in the wizard context. dayDate must be YYYY-MM-DD and must exactly match a date from the training schedule in context. sessionIndex is 0-based (0 = first session of the day). Set "replace":true to clear the existing exercise distribution for the entire current mesocycle before adding. Do NOT invent dates — use only dates from the training schedule provided in context.
+- create_section: {"type":"create_section","dayDate":"YYYY-MM-DD","sessionIndex":0,"name":"Warm-up","note":"<optional note>"}
+  Creates a named block within a session (e.g. Warm-up, Main Block, Cooldown). Use this to structure session architecture. sessionIndex is 0-based.
+- delete_section: {"type":"delete_section","dayDate":"YYYY-MM-DD","sessionIndex":0,"sectionName":"<exact section name>"}
+- rename_section: {"type":"rename_section","dayDate":"YYYY-MM-DD","sessionIndex":0,"sectionName":"<current exact name>","newName":"<new name>"}
+- set_note: {"type":"set_note","target":"exercise","dayDate":"YYYY-MM-DD","sessionIndex":0,"exerciseId":"<exact id from context>","note":"<note text>"}
+  Or for a section: {"type":"set_note","target":"section","dayDate":"YYYY-MM-DD","sessionIndex":0,"sectionName":"<exact section name>","note":"<text>"}
+  Or for a session: {"type":"set_note","target":"session","dayDate":"YYYY-MM-DD","sessionIndex":0,"note":"<text>"}
+  Adds or replaces a note/comment. target="exercise" requires exerciseId, target="section" requires sectionName, target="session" needs neither. To annotate multiple items, emit one set_note action per item.
+- create_superset: {"type":"create_superset","dayDate":"YYYY-MM-DD","sessionIndex":0,"exerciseIds":["<id1>","<id2>"]}
+  Links 2 or more exercises in the same session into a superset (the app labels them A1, A2, …). All exerciseIds must already be distributed to that day/session. To create multiple independent supersets, emit one create_superset action per group.
+- break_superset: {"type":"break_superset","dayDate":"YYYY-MM-DD","sessionIndex":0,"exerciseId":"<id>"}
+  Removes one exercise from its superset. If fewer than 2 exercises remain in the superset, it is automatically disbanded.
 - add_parameter: {"type":"add_parameter","name":"<parameter name>","category":"<one of: strength|speed|power|endurance|mobility|technique|body_composition|other>","unit":"<unit e.g. kg, s, cm — omit if not applicable>","applicableSports":["<sport>","<sport>"]}
   applicableSports is optional — include when the parameter is sport-specific (e.g. ["Soccer","Rugby"]). Omit for universal parameters.
 - add_parameters_bulk: {"type":"add_parameters_bulk","parameters":[{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>","applicableSports":["<sport>"]},{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>"}]}
@@ -352,6 +376,18 @@ function getSuggestionPreview(action: ApplySuggestion): string {
       const days = [...new Set(action.entries.map(e => e.dayDate))].length;
       return `Distribute ${total} exercise slot${total !== 1 ? "s" : ""} across ${days} day${days !== 1 ? "s" : ""}${action.replace ? " (replace existing)" : ""}`;
     }
+    case "create_section":
+      return `Create section "${action.name}" on ${action.dayDate} session ${action.sessionIndex + 1}`;
+    case "delete_section":
+      return `Delete section "${action.sectionName}" on ${action.dayDate} session ${action.sessionIndex + 1}`;
+    case "rename_section":
+      return `Rename section "${action.sectionName}" → "${action.newName}"`;
+    case "set_note":
+      return `Set ${action.target} note on ${action.dayDate} session ${action.sessionIndex + 1}`;
+    case "create_superset":
+      return `Create superset (${action.exerciseIds.length} exercises) on ${action.dayDate} session ${action.sessionIndex + 1}`;
+    case "break_superset":
+      return `Break superset on ${action.dayDate} session ${action.sessionIndex + 1}`;
     case "add_parameter":
       return `Add parameter: ${action.name}${action.category ? ` (${action.category})` : ""}${action.unit ? ` [${action.unit}]` : ""}`;
     case "add_parameters_bulk":
