@@ -9,7 +9,7 @@
  * Plan Memory   = how you've coached in specific situations (contextual)
  */
 
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,15 +18,8 @@ import { Loader2, Upload, FileText, X, CheckCircle2, Trash2 } from "lucide-react
 import { cn } from "@/lib/utils";
 import { useCoachDocuments } from "@/hooks/useCoachDocuments";
 import { useAuth } from "@/hooks/useAuth";
-import { saveUploadedPlanMemory } from "@/lib/planMemory";
+import { saveUploadedPlanMemory, fetchUploadedPlans, deleteUploadedPlanMemory, type UploadedPlanEntry } from "@/lib/planMemory";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 // ─── Drop zone ────────────────────────────────────────────────────────────────
 
@@ -110,18 +103,36 @@ const EMPTY_FORM: PlanForm = {
 
 export function TrainingPlanEnricher() {
   const { user } = useAuth();
-  const { addDocument, addFolder, folders, getDocuments, deleteDocument } = useCoachDocuments();
+  const { addDocument, addFolder, folders } = useCoachDocuments();
 
-  // Persistent list from the "Training Plans" folder
-  const trainingPlansFolder = folders.find(
-    (f) => f.name === TRAINING_PLANS_FOLDER && f.parentId === null
-  );
-  const uploadedPlans = trainingPlansFolder ? getDocuments(trainingPlansFolder.id) : [];
-
+  const [savedPlans, setSavedPlans] = useState<UploadedPlanEntry[]>([]);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [form, setForm]               = useState<PlanForm>(EMPTY_FORM);
   const [isSaving, setIsSaving]       = useState(false);
+  const [isDeleting, setIsDeleting]   = useState<string | null>(null);
   const [error, setError]             = useState<string | null>(null);
+
+  // Load saved plans from plan_memory on mount and after changes
+  const loadPlans = async () => {
+    if (!user?.id) return;
+    const plans = await fetchUploadedPlans(user.id);
+    setSavedPlans(plans);
+  };
+
+  useEffect(() => { loadPlans(); }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleDelete = async (programId: string) => {
+    if (!user?.id) return;
+    setIsDeleting(programId);
+    try {
+      await deleteUploadedPlanMemory(programId, user.id);
+      setSavedPlans(prev => prev.filter(p => p.programId !== programId));
+    } catch {
+      // non-fatal
+    } finally {
+      setIsDeleting(null);
+    }
+  };
 
   const setField = (key: keyof PlanForm) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -174,6 +185,7 @@ export function TrainingPlanEnricher() {
 
       setPendingFile(null);
       setForm(EMPTY_FORM);
+      await loadPlans();
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred. Please try again.");
     } finally {
@@ -195,24 +207,33 @@ export function TrainingPlanEnricher() {
       </div>
 
       {/* Uploaded plans list */}
-      {uploadedPlans.length > 0 && (
+      {savedPlans.length > 0 && (
         <div className="space-y-1.5">
-          {uploadedPlans.map((doc) => (
+          {savedPlans.map((plan) => (
             <div
-              key={doc.id}
-              className="flex items-center gap-2 text-sm border rounded-lg px-3 py-2 bg-muted/20"
+              key={plan.programId}
+              className="flex items-start gap-2 text-sm border rounded-lg px-3 py-2 bg-muted/20"
             >
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="truncate font-medium text-sm">{doc.name}</p>
-                <p className="text-xs text-muted-foreground">{formatBytes(doc.size)} · Saved as AI context ✓</p>
+                <p className="truncate font-medium text-sm">{plan.planName}</p>
+                <p className="text-xs text-muted-foreground">
+                  {new Date(plan.createdAt).toLocaleDateString()} · Saved as AI context ✓
+                </p>
+                {plan.outcomeNotes && (
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{plan.outcomeNotes}</p>
+                )}
               </div>
               <button
-                className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
-                title="Remove"
-                onClick={() => deleteDocument(doc.id)}
+                className="text-muted-foreground hover:text-destructive transition-colors shrink-0 mt-0.5"
+                title="Remove from AI context"
+                onClick={() => handleDelete(plan.programId)}
+                disabled={isDeleting === plan.programId}
               >
-                <Trash2 className="h-4 w-4" />
+                {isDeleting === plan.programId
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <Trash2 className="h-4 w-4" />
+                }
               </button>
             </div>
           ))}
