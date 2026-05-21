@@ -243,22 +243,33 @@ export default function MicrocyclePlanningPage() {
       setExerciseDistribution(JSON.parse(savedDistribution));
     }
 
+    // Build an authoritative intensity map from dailyIntensityData
+    // (more reliable than trainingDays which may carry stale intensity values)
+    const intensityMapInit: Record<string, string> = {};
+    if (savedDailyIntensity) {
+      try {
+        (JSON.parse(savedDailyIntensity) as Array<{ date: string; intensity: string }>)
+          .forEach(di => { intensityMapInit[di.date] = di.intensity; });
+      } catch { /* ignore */ }
+    }
+
     // Load saved day split states and backfill any missing entries from trainingDays
     const savedDaySplitStates = localStorage.getItem('daySplitStates');
     const parsedSplitStates: Record<string, number> = savedDaySplitStates
       ? JSON.parse(savedDaySplitStates)
       : {};
 
-    // For every training day that has no explicit split state yet,
-    // derive the default from day.sessions or the intensity heuristic.
-    // This ensures Step 2 shows sessions even for days that were never
-    // manually touched (copy/paste/add-session) in Step 1.
     if (savedTrainingDays) {
       const loadedDays: any[] = JSON.parse(savedTrainingDays);
       loadedDays.forEach((day: any) => {
+        const actualIntensity = intensityMapInit[day.date] ?? day.intensity;
         if (parsedSplitStates[day.date] === undefined) {
-          const defaultSessions = day.intensity === 'off' ? 0 : (day.sessions ?? 1);
-          parsedSplitStates[day.date] = defaultSessions;
+          // New entry: default to 0 for off days, 1 otherwise
+          parsedSplitStates[day.date] = actualIntensity === 'off' ? 0 : (day.sessions ?? 1);
+        } else if (actualIntensity === 'off' && parsedSplitStates[day.date] === 1) {
+          // Existing auto-default of 1 on an off day — correct it to 0.
+          // Values > 1 are treated as intentional manual overrides and left alone.
+          parsedSplitStates[day.date] = 0;
         }
       });
     }
