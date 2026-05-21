@@ -462,6 +462,15 @@ export default function MicrocyclePlanningPage() {
     localStorage.setItem('dayMethodAssignments', JSON.stringify(dayMethodAssignments));
   }, [dayMethodAssignments]);
 
+  // Auto-save to Supabase — debounced 3 s after any structural change so
+  // navigating away mid-session never loses work (localStorage is always
+  // up-to-date; this keeps Supabase in sync too)
+  useEffect(() => {
+    const timer = setTimeout(() => { saveCurrentSession(); }, 3000);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exerciseDistribution, sessionSections, supersets, dayMethodAssignments]);
+
   // Sync day split states to trainingDays
   useEffect(() => {
     setTrainingDays(prev => 
@@ -4034,26 +4043,42 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
       const currentMeso = mesocycles[currentMesocycleIndex];
       if (!currentMeso) return;
 
-      // Resolve target section
-      const targetSection = sectionName
-        ? sessionSections.find(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex && s.name === sectionName)
-        : undefined;
-      let targetSectionId = targetSection?.id;
+      // Resolve target section — exercises must ALWAYS live inside a section
+      const slotSections = sessionSections
+        .filter(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex)
+        .sort((a, b) => a.order - b.order);
 
-      // Auto-create section if named but missing
-      if (sectionName && !targetSectionId) {
-        const maxOrder = sessionSections.filter(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex).reduce((m, s) => Math.max(m, s.order), -1);
+      let targetSectionId: string | undefined;
+
+      if (sectionName) {
+        // Find by name, or create if missing
+        const existing = slotSections.find(s => s.name === sectionName);
+        if (existing) {
+          targetSectionId = existing.id;
+        } else {
+          const maxOrder = slotSections.reduce((m, s) => Math.max(m, s.order), -1);
+          const newSection: SessionSection = {
+            id: `section-ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            dayDate, sessionIndex, name: sectionName, order: maxOrder + 1,
+          };
+          setSessionSections(prev => { const u = [...prev, newSection]; localStorage.setItem('sessionSections', JSON.stringify(u)); return u; });
+          targetSectionId = newSection.id;
+        }
+      } else if (slotSections.length > 0) {
+        // No section specified — use the first existing one
+        targetSectionId = slotSections[0].id;
+      } else {
+        // No sections at all — auto-create "Section 1"
         const newSection: SessionSection = {
           id: `section-ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          dayDate, sessionIndex, name: sectionName, order: maxOrder + 1,
+          dayDate, sessionIndex, name: 'Section 1', order: 0,
         };
         setSessionSections(prev => { const u = [...prev, newSection]; localStorage.setItem('sessionSections', JSON.stringify(u)); return u; });
         targetSectionId = newSection.id;
       }
 
       const baseOrder = exerciseDistribution.filter(e =>
-        e.dayDate === dayDate && e.sessionIndex === sessionIndex &&
-        (targetSectionId ? e.sectionId === targetSectionId : !e.sectionId)
+        e.dayDate === dayDate && e.sessionIndex === sessionIndex && e.sectionId === targetSectionId
       ).length;
 
       const newEntry: ExerciseDistribution = {
@@ -4099,17 +4124,32 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
     } else if (action.type === "add_circuit") {
       const { circuitId, circuitName, libraryId, dayDate, sessionIndex, sectionName } = action;
 
-      // Resolve target section
-      const targetSection = sectionName
-        ? sessionSections.find(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex && s.name === sectionName)
-        : undefined;
-      let targetSectionId = targetSection?.id;
+      // Resolve target section — circuits must always live inside a section
+      const slotSectionsCi = sessionSections
+        .filter(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex)
+        .sort((a, b) => a.order - b.order);
 
-      if (sectionName && !targetSectionId) {
-        const maxOrder = sessionSections.filter(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex).reduce((m, s) => Math.max(m, s.order), -1);
+      let targetSectionId: string | undefined;
+
+      if (sectionName) {
+        const existing = slotSectionsCi.find(s => s.name === sectionName);
+        if (existing) {
+          targetSectionId = existing.id;
+        } else {
+          const maxOrder = slotSectionsCi.reduce((m, s) => Math.max(m, s.order), -1);
+          const newSection: SessionSection = {
+            id: `section-ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            dayDate, sessionIndex, name: sectionName, order: maxOrder + 1,
+          };
+          setSessionSections(prev => { const u = [...prev, newSection]; localStorage.setItem('sessionSections', JSON.stringify(u)); return u; });
+          targetSectionId = newSection.id;
+        }
+      } else if (slotSectionsCi.length > 0) {
+        targetSectionId = slotSectionsCi[0].id;
+      } else {
         const newSection: SessionSection = {
           id: `section-ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          dayDate, sessionIndex, name: sectionName, order: maxOrder + 1,
+          dayDate, sessionIndex, name: 'Section 1', order: 0,
         };
         setSessionSections(prev => { const u = [...prev, newSection]; localStorage.setItem('sessionSections', JSON.stringify(u)); return u; });
         targetSectionId = newSection.id;
@@ -4120,8 +4160,7 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
       const circuit = lib?.circuits?.find(c => c.id === circuitId);
 
       const baseOrder = exerciseDistribution.filter(e =>
-        e.dayDate === dayDate && e.sessionIndex === sessionIndex &&
-        (targetSectionId ? e.sectionId === targetSectionId : !e.sectionId)
+        e.dayDate === dayDate && e.sessionIndex === sessionIndex && e.sectionId === targetSectionId
       ).length;
 
       const newEntry: ExerciseDistribution = {
