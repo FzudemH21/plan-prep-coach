@@ -3978,11 +3978,12 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
         });
       }
 
-      // Add source section's methods to target session slot
-      const sectionMethods = [...new Set(srcExercises.map(e => e.methodId))];
+      // Use the source session's method assignments (already in display-name format)
+      // rather than e.methodId fields which may be stored as slugified IDs
+      const srcSlotMethods = dayMethodAssignments[`${sourceDayDate}_${sourceSessionIndex}`] ?? [];
       const tSlotKey = `${targetDayDate}_${targetSessionIndex}`;
       const existingTMethods = dayMethodAssignments[tSlotKey] ?? [];
-      const mergedMethods = [...new Set([...existingTMethods, ...sectionMethods])];
+      const mergedMethods = [...new Set([...existingTMethods, ...srcSlotMethods])];
       const newAssignmentsSec = { ...dayMethodAssignments, [tSlotKey]: mergedMethods };
       setDayMethodAssignments(newAssignmentsSec);
       localStorage.setItem('dayMethodAssignments', JSON.stringify(newAssignmentsSec));
