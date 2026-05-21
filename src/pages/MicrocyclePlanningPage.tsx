@@ -3481,16 +3481,26 @@ export default function MicrocyclePlanningPage() {
       );
       const distributed = exerciseDistribution.filter(e => microDates2.has(e.dayDate));
       if (distributed.length > 0) {
-        const bySlot: Record<string, Array<{ id: string; name: string; methodId: string }>> = {};
+        const bySlot: Record<string, Array<{ id: string; name: string; methodId: string; sectionName?: string }>> = {};
         distributed.forEach(e => {
           const key = `${e.dayDate}_${e.sessionIndex ?? 0}`;
           if (!bySlot[key]) bySlot[key] = [];
-          bySlot[key].push({ id: e.id, name: e.exerciseName, methodId: e.methodId });
+          const sectionName = e.sectionId
+            ? sessionSections.find(s => s.id === e.sectionId)?.name
+            : undefined;
+          bySlot[key].push({ id: e.id, name: e.exerciseName, methodId: e.methodId, sectionName });
         });
-        const distLines = [`Exercises already distributed in current microcycle:`];
+        const distLines = [`Exercises already distributed in current microcycle (use these exact entry ids for move_exercise, create_superset, set_note):`];
         Object.entries(bySlot).sort().forEach(([key, exs]) => {
           const [date, si] = key.split('_');
-          distLines.push(`  ${date} session ${Number(si)}: ${exs.map(e => `${e.name} (id: ${e.id}, method: ${e.methodId})`).join(', ')}`);
+          const sessionIdx = Number(si);
+          // List sections present in this session
+          const sectionNames = sessionSections
+            .filter(s => s.dayDate === date && s.sessionIndex === sessionIdx)
+            .sort((a, b) => a.order - b.order)
+            .map(s => s.name);
+          const sectionInfo = sectionNames.length ? ` [sections: ${sectionNames.join(', ')}]` : '';
+          distLines.push(`  ${date} session ${sessionIdx}${sectionInfo}: ${exs.map(e => `${e.name} (id: ${e.id}, method: ${e.methodId}${e.sectionName ? `, section: ${e.sectionName}` : ''})`).join(', ')}`);
         });
         scheduleStr = scheduleStr ? scheduleStr + '\n\n' + distLines.join('\n') : distLines.join('\n');
       }
@@ -3754,6 +3764,45 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
         localStorage.setItem('supersets', JSON.stringify(next));
         toast({ title: "Exercise removed from superset" });
       }
+
+    } else if (action.type === "move_exercise") {
+      const { exerciseId, targetDayDate, targetSessionIndex, targetSectionName } = action;
+      const entry = exerciseDistribution.find(e => e.id === exerciseId);
+      if (!entry) { toast({ title: "Exercise not found", variant: "destructive" }); return; }
+
+      // Resolve target section
+      const targetSectionId = targetSectionName
+        ? sessionSections.find(s => s.dayDate === targetDayDate && s.sessionIndex === targetSessionIndex && s.name === targetSectionName)?.id
+        : undefined;
+
+      // Place at end of target slot
+      const targetExs = exerciseDistribution.filter(
+        e => e.dayDate === targetDayDate && e.sessionIndex === targetSessionIndex &&
+          (targetSectionId ? e.sectionId === targetSectionId : !e.sectionId)
+      );
+      const newOrder = targetExs.length > 0 ? Math.max(...targetExs.map(e => e.order)) + 1 : 0;
+
+      // Remove from any superset at source
+      const nextSupersets: SupersetMapping = supersets ? JSON.parse(JSON.stringify(supersets)) : {};
+      const srcSectionKey = entry.sectionId || '__unsectioned__';
+      const srcSupersetMap = nextSupersets[entry.dayDate]?.[entry.sessionIndex]?.[srcSectionKey];
+      if (srcSupersetMap) {
+        Object.keys(srcSupersetMap).forEach(ssId => {
+          srcSupersetMap[ssId] = (srcSupersetMap[ssId] as string[]).filter((id: string) => id !== exerciseId);
+          if (srcSupersetMap[ssId].length < 2) delete srcSupersetMap[ssId];
+        });
+      }
+
+      const updatedDist = exerciseDistribution.map(e =>
+        e.id === exerciseId
+          ? { ...e, dayDate: targetDayDate, sessionIndex: targetSessionIndex, sectionId: targetSectionId, order: newOrder }
+          : e
+      );
+      setExerciseDistribution(updatedDist);
+      localStorage.setItem('exerciseDistribution', JSON.stringify(updatedDist));
+      setSupersets(nextSupersets);
+      localStorage.setItem('supersets', JSON.stringify(nextSupersets));
+      toast({ title: `${entry.exerciseName} moved to ${targetDayDate} session ${targetSessionIndex + 1}${targetSectionName ? ` / ${targetSectionName}` : ''}` });
     }
   }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments, exerciseDistribution, sessionSections, supersets, toast]);
 
