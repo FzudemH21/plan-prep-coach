@@ -3489,7 +3489,8 @@ export default function MicrocyclePlanningPage() {
             for (let s = 0; s < sessionCount; s++) {
               const key = `${day.date}_${s}`;
               const methods = dayMethodAssignments[key] ?? [];
-              sessionParts.push(`session ${s}: [${methods.join(', ') || 'no method assigned'}]`);
+              const sessionName = day.sessionNames?.[s] ?? `Session ${s + 1}`;
+              sessionParts.push(`session ${s} "${sessionName}": [${methods.join(', ') || 'no method assigned'}]`);
             }
             scheduleLines.push(`  ${day.date} (${label}): ${sessionParts.join(' | ')}`);
           }
@@ -4180,6 +4181,11 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
 
       setExerciseDistribution(prev => { const u = [...prev, newEntry]; localStorage.setItem('exerciseDistribution', JSON.stringify(u)); return u; });
       toast({ title: `Circuit "${circuitName}" added to ${dayDate} session ${sessionIndex + 1}${sectionName ? ` / ${sectionName}` : ''}` });
+
+    } else if (action.type === "rename_session") {
+      const { dayDate, sessionIndex, newName } = action;
+      handleRenameSession(dayDate, sessionIndex, newName);
+      toast({ title: `Session renamed to "${newName}"` });
     }
   }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments, exerciseDistribution, sessionSections, supersets, exerciseSelectionData, libraries, toast]);
 
