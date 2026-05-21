@@ -61,6 +61,8 @@ export type ApplySuggestion =
   | { type: "break_superset"; dayDate: string; sessionIndex: number; exerciseId: string }
   /** MicrocyclePlanningPage Step 2 — move an exercise to a different day, session, or section */
   | { type: "move_exercise"; exerciseId: string; targetDayDate: string; targetSessionIndex: number; targetSectionName?: string }
+  /** MicrocyclePlanningPage Step 2 — move multiple exercises (e.g. a whole superset group) atomically */
+  | { type: "move_exercises"; exerciseIds: string[]; targetDayDate: string; targetSessionIndex: number; targetSectionName?: string }
   /** Parameter Database — add a new parameter */
   | { type: "add_parameter"; name: string; category?: string; unit?: string; applicableSports?: string[] }
   /** Parameter Database — add multiple parameters at once */
@@ -178,7 +180,9 @@ Available types and their fields:
 - break_superset: {"type":"break_superset","dayDate":"YYYY-MM-DD","sessionIndex":0,"exerciseId":"<id>"}
   Removes one exercise from its superset. If fewer than 2 exercises remain in the superset, it is automatically disbanded.
 - move_exercise: {"type":"move_exercise","exerciseId":"<exact id from distributed exercises context>","targetDayDate":"YYYY-MM-DD","targetSessionIndex":0,"targetSectionName":"<exact section name or omit>"}
-  Moves a single exercise to a different day, session, or section. If the exercise is in a superset it is automatically removed from it. targetSectionName is optional — omit to place the exercise outside any section. To move multiple exercises, emit one move_exercise action per exercise.
+  Moves a single exercise to a different day, session, or section. If the exercise is in a superset it is automatically removed from it. targetSectionName is optional — omit to place the exercise outside any section.
+- move_exercises: {"type":"move_exercises","exerciseIds":["<id1>","<id2>"],"targetDayDate":"YYYY-MM-DD","targetSessionIndex":0,"targetSectionName":"<exact section name or omit>"}
+  Moves multiple exercises to the same target in one atomic action. ALWAYS use this (not repeated move_exercise) when moving a superset group or any set of exercises together — it applies all moves in a single step so nothing is left behind.
 - add_parameter: {"type":"add_parameter","name":"<parameter name>","category":"<one of: strength|speed|power|endurance|mobility|technique|body_composition|other>","unit":"<unit e.g. kg, s, cm — omit if not applicable>","applicableSports":["<sport>","<sport>"]}
   applicableSports is optional — include when the parameter is sport-specific (e.g. ["Soccer","Rugby"]). Omit for universal parameters.
 - add_parameters_bulk: {"type":"add_parameters_bulk","parameters":[{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>","applicableSports":["<sport>"]},{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>"}]}
@@ -385,6 +389,8 @@ function getSuggestionPreview(action: ApplySuggestion): string {
       return `Break superset on ${action.dayDate} session ${action.sessionIndex + 1}`;
     case "move_exercise":
       return `Move exercise to ${action.targetDayDate} session ${action.targetSessionIndex + 1}${action.targetSectionName ? ` / ${action.targetSectionName}` : ''}`;
+    case "move_exercises":
+      return `Move ${action.exerciseIds.length} exercises to ${action.targetDayDate} session ${action.targetSessionIndex + 1}${action.targetSectionName ? ` / ${action.targetSectionName}` : ''}`;
     case "add_parameter":
       return `Add parameter: ${action.name}${action.category ? ` (${action.category})` : ""}${action.unit ? ` [${action.unit}]` : ""}`;
     case "add_parameters_bulk":
