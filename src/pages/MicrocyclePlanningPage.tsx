@@ -137,6 +137,7 @@ export default function MicrocyclePlanningPage() {
   // New state for enhanced exercise distribution
   const [sessionSections, setSessionSections] = useState<SessionSection[]>([]);
   const [supersets, setSupersets] = useState<SupersetMapping>({});
+  const [sessionCommentsRefreshKey, setSessionCommentsRefreshKey] = useState(0);
 
   // Step 1 state: method-to-day assignments and available method allocations
   const [dayMethodAssignments, setDayMethodAssignments] = useState<Record<string, string[]>>({});
@@ -3356,6 +3357,7 @@ export default function MicrocyclePlanningPage() {
           onSelectedMicrocycleIndexChange={setCurrentMicrocycleIndex}
           methodAllocations={methodAllocations}
           methodExerciseCategories={methodExerciseCategories}
+          sessionCommentsRefreshKey={sessionCommentsRefreshKey}
         />
       </div>
     );
@@ -3705,7 +3707,11 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
       } else if (target === "session") {
         const currentMeso = mesocycles[currentMesocycleIndex];
         if (currentMeso) {
-          localStorage.setItem(`sessionComments_${currentMeso.id}_${dayDate}_${sessionIndex}`, note);
+          const wsKey = `workoutSessions_${currentMeso.id}_${dayDate}_${sessionIndex}`;
+          let existing: Record<string, unknown> = {};
+          try { existing = JSON.parse(localStorage.getItem(wsKey) ?? '{}'); } catch {}
+          localStorage.setItem(wsKey, JSON.stringify({ ...existing, comments: note }));
+          setSessionCommentsRefreshKey(k => k + 1);
           toast({ title: "Session note updated" });
         }
       }
