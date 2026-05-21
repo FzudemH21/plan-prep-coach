@@ -3421,14 +3421,13 @@ export default function MicrocyclePlanningPage() {
       ? `Goal: assign methods to training days. Do NOT assign methods to rest/off days (${offDays.join(", ") || "none"}).`
       : currentStep === 2
       ? "Goal: assign exercises from the exercise library to specific training day sessions. Use the distribute_exercises action to assign exercises directly to dates — you have the full schedule with exact dates above. Do NOT say this is impossible."
-      : "Goal: review the final training calendar with all sessions.";
+      : "Goal: review, refine, and manipulate the final training calendar. Available actions: set_day_intensity, set_session_intensity, set_exercise_params, rename_session, delete_session, create_section, delete_section, rename_section, set_note, add_exercise, add_circuit, create_superset, break_superset, move_exercise, move_exercises, copy_session, copy_section, copy_week, clear_week. Use exact IDs and dates from the Training Calendar below.";
 
-    // Step 2: build available exercises + day schedule for AI context
+    // Steps 2 & 3: build available exercises + circuits (always available for add_exercise/add_circuit)
     let exercisesStr = '';
     let circuitsStr = '';
-    let scheduleStr = '';
-    if (currentStep === 2 && currentMeso) {
-      // Available exercises per method/category from Step 5 selections
+    if ((currentStep === 2 || currentStep === 3) && currentMeso) {
+      // Available exercises per method/category from Step 5 selections (current meso)
       const exByMethod: Record<string, Record<string, Array<{ exerciseId: string; exerciseName: string }>>> = {};
       Object.values(exerciseSelectionData).forEach(cell => {
         if (cell.mesocycleId !== currentMeso.id) return;
@@ -3467,8 +3466,11 @@ export default function MicrocyclePlanningPage() {
         });
         circuitsStr = circuitLines.join('\n');
       }
+    }
 
-      // Training day schedule — ONLY the currently selected microcycle (not all meso days)
+    // Step 2: current-microcycle schedule + distributed exercises
+    let scheduleStr = '';
+    if (currentStep === 2 && currentMeso) {
       const currentMicro = currentMeso.microcycles?.[currentMicrocycleIndex] as { id: string; name?: string } | undefined;
       const microDays = currentMicro
         ? trainingDays.filter(d => d.microcycleId === currentMicro.id)
@@ -3499,10 +3501,9 @@ export default function MicrocyclePlanningPage() {
       }
 
       // Distributed exercises — what's already on each day/session
-      const currentMicro2 = currentMeso.microcycles?.[currentMicrocycleIndex] as { id: string } | undefined;
       const microDates2 = new Set(
-        currentMicro2
-          ? trainingDays.filter(d => d.microcycleId === currentMicro2.id).map(d => d.date)
+        currentMicro
+          ? trainingDays.filter(d => d.microcycleId === currentMicro.id).map(d => d.date)
           : []
       );
       const distributed = exerciseDistribution.filter(e => microDates2.has(e.dayDate));
@@ -3520,7 +3521,6 @@ export default function MicrocyclePlanningPage() {
         Object.entries(bySlot).sort().forEach(([key, exs]) => {
           const [date, si] = key.split('_');
           const sessionIdx = Number(si);
-          // List sections present in this session
           const sectionNames = sessionSections
             .filter(s => s.dayDate === date && s.sessionIndex === sessionIdx)
             .sort((a, b) => a.order - b.order)
@@ -3530,6 +3530,82 @@ export default function MicrocyclePlanningPage() {
         });
         scheduleStr = scheduleStr ? scheduleStr + '\n\n' + distLines.join('\n') : distLines.join('\n');
       }
+    }
+
+    // Step 3: full training calendar across ALL mesocycles / microcycles
+    let calendarStr = '';
+    if (currentStep === 3) {
+      const calLines = ['## Full Training Calendar (use exact dates, ids, and names for all actions)'];
+      mesocycles.forEach(meso => {
+        calLines.push(`\n### ${meso.name}`);
+        const micros = (meso.microcycles ?? []) as Array<{ id: string; name?: string }>;
+        micros.forEach((micro, mIdx) => {
+          const microDays = trainingDays.filter(d => d.microcycleId === micro.id);
+          if (microDays.length === 0) return;
+          const firstDate = microDays[0].date;
+          const lastDate = microDays[microDays.length - 1].date;
+          calLines.push(`\n#### ${micro.name ?? `Microcycle ${mIdx + 1}`} (${firstDate} → ${lastDate})`);
+          microDays.forEach(day => {
+            const label = format(new Date(day.date + 'T12:00:00'), 'EEE dd MMM');
+            if (day.intensity === 'off') {
+              calLines.push(`  ${day.date} (${label}): REST`);
+              return;
+            }
+            calLines.push(`  ${day.date} (${label}) [day intensity: ${day.intensity}]`);
+            const sessionCount = day.sessions ?? 1;
+            for (let s = 0; s < sessionCount; s++) {
+              const slotKey = `${day.date}_${s}`;
+              const methods = dayMethodAssignments[slotKey] ?? [];
+              const sessionName = day.sessionNames?.[s] ?? `Session ${s + 1}`;
+              // Read session intensity from localStorage
+              const siKey = `sessionIntensity_${meso.id}_${day.date}_${s}`;
+              const sessionIntensity = localStorage.getItem(siKey);
+              const intensityNote = sessionIntensity ? ` [session intensity: ${sessionIntensity}]` : '';
+              // Read session comment from localStorage
+              const wsKey = `workoutSessions_${meso.id}_${day.date}_${s}`;
+              let sessionComment = '';
+              try {
+                const ws = JSON.parse(localStorage.getItem(wsKey) ?? '{}');
+                if (ws.comments) sessionComment = ` [note: "${ws.comments}"]`;
+              } catch { /* ignore */ }
+              calLines.push(`    Session ${s} "${sessionName}" [methods: ${methods.join(', ') || 'none'}]${intensityNote}${sessionComment}`);
+              // Sections in this session
+              const sections = sessionSections
+                .filter(sec => sec.dayDate === day.date && sec.sessionIndex === s)
+                .sort((a, b) => a.order - b.order);
+              // Exercises in this session grouped by section
+              const sessionExercises = exerciseDistribution.filter(
+                e => e.dayDate === day.date && (e.sessionIndex ?? 0) === s
+              );
+              if (sections.length > 0) {
+                sections.forEach(sec => {
+                  const secNote = sec.comments ? ` [note: "${sec.comments}"]` : '';
+                  calLines.push(`      Section: "${sec.name}"${secNote} (sectionId: ${sec.id})`);
+                  const secExs = sessionExercises.filter(e => e.sectionId === sec.id);
+                  secExs.forEach(e => {
+                    const exNote = e.notes ? ` [note: "${e.notes}"]` : '';
+                    calLines.push(`        - ${e.exerciseName} (id: ${e.id}, method: ${e.methodId})${exNote}`);
+                  });
+                });
+                // Exercises not in any section
+                const unsectioned = sessionExercises.filter(e => !e.sectionId || !sections.find(sec => sec.id === e.sectionId));
+                unsectioned.forEach(e => {
+                  const exNote = e.notes ? ` [note: "${e.notes}"]` : '';
+                  calLines.push(`      - ${e.exerciseName} (id: ${e.id}, method: ${e.methodId}) [no section]${exNote}`);
+                });
+              } else if (sessionExercises.length > 0) {
+                sessionExercises.forEach(e => {
+                  const exNote = e.notes ? ` [note: "${e.notes}"]` : '';
+                  calLines.push(`      - ${e.exerciseName} (id: ${e.id}, method: ${e.methodId})${exNote}`);
+                });
+              } else {
+                calLines.push(`      (no exercises yet)`);
+              }
+            }
+          });
+        });
+      });
+      calendarStr = calLines.join('\n');
     }
 
     // Step 2: prepend a hard override so the AI doesn't fall back to "hierarchy" explanation
@@ -3554,11 +3630,12 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
       exercisesStr,
       circuitsStr,
       scheduleStr,
+      calendarStr,
       stepHint,
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, currentMicrocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel, exerciseSelectionData, exerciseDistribution, libraries]);
+  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, currentMicrocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel, exerciseSelectionData, exerciseDistribution, sessionSections, libraries]);
 
   const handleMicroAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
     if (action.type === "assign_methods_to_days") {
@@ -4220,8 +4297,199 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
       const { dayDate, sessionIndex } = action;
       handleRemoveSession(dayDate, sessionIndex);
       toast({ title: `Session ${sessionIndex + 1} on ${dayDate} deleted` });
+
+    } else if (action.type === "set_day_intensity") {
+      const { dayDate, intensity } = action;
+      const level = intensity as IntensityLevel;
+      setTrainingDays(prev => prev.map(d => d.date === dayDate ? { ...d, intensity: level } : d));
+      setDailyIntensityData(prev => {
+        const updated = prev.map(di => di.date === dayDate ? { ...di, intensity: level } : di);
+        localStorage.setItem('dailyIntensityData', JSON.stringify(updated));
+        return updated;
+      });
+      toast({ title: `Day intensity set to ${intensity} for ${dayDate}` });
+
+    } else if (action.type === "set_session_intensity") {
+      const { dayDate, sessionIndex, intensity } = action;
+      handleSessionIntensityChange(dayDate, sessionIndex, intensity as IntensityLevel);
+      toast({ title: `Session ${sessionIndex + 1} intensity set to ${intensity}` });
+
+    } else if (action.type === "set_exercise_params") {
+      const { dayDate, sessionIndex, methodId, params } = action;
+      const targetMeso = mesocycles.find(m =>
+        (m.microcycles ?? []).some(mc => trainingDays.some(d => d.date === dayDate && d.microcycleId === mc.id))
+      );
+      if (!targetMeso) { toast({ title: "Could not find mesocycle for that date", variant: "destructive" }); return; }
+      const mcIndex = (targetMeso.microcycles ?? []).findIndex(mc =>
+        trainingDays.some(d => d.date === dayDate && d.microcycleId === mc.id)
+      );
+      if (mcIndex === -1) { toast({ title: "Could not find microcycle index", variant: "destructive" }); return; }
+      setParameterValues(prev => {
+        const updated = JSON.parse(JSON.stringify(prev));
+        if (!updated[targetMeso.id]) updated[targetMeso.id] = {};
+        if (!updated[targetMeso.id][mcIndex]) updated[targetMeso.id][mcIndex] = {};
+        if (!updated[targetMeso.id][mcIndex][methodId]) updated[targetMeso.id][mcIndex][methodId] = {};
+        if (!updated[targetMeso.id][mcIndex][methodId][sessionIndex]) updated[targetMeso.id][mcIndex][methodId][sessionIndex] = {};
+        Object.entries(params).forEach(([k, v]) => {
+          updated[targetMeso.id][mcIndex][methodId][sessionIndex][k] = v;
+        });
+        localStorage.setItem('parameterValues', JSON.stringify(updated));
+        return updated;
+      });
+      toast({ title: `Parameters updated for [${methodId}] on ${dayDate} session ${sessionIndex + 1}` });
+
+    } else if (action.type === "copy_week") {
+      const { sourceMicrocycleName, targetMicrocycleName } = action;
+      // Find source and target microcycles across all mesocycles
+      let srcMesoId: string | undefined, srcMcIdx = -1, tgtMesoId: string | undefined, tgtMcIdx = -1;
+      for (const meso of mesocycles) {
+        (meso.microcycles ?? []).forEach((mc: { id: string; name?: string }, idx: number) => {
+          if ((mc.name ?? `Microcycle ${idx + 1}`) === sourceMicrocycleName) { srcMesoId = meso.id; srcMcIdx = idx; }
+          if ((mc.name ?? `Microcycle ${idx + 1}`) === targetMicrocycleName) { tgtMesoId = meso.id; tgtMcIdx = idx; }
+        });
+      }
+      if (!srcMesoId || srcMcIdx === -1 || !tgtMesoId || tgtMcIdx === -1) {
+        toast({ title: "Microcycle not found — check exact names", variant: "destructive" }); return;
+      }
+      const srcMicro = mesocycles.find(m => m.id === srcMesoId)?.microcycles?.[srcMcIdx] as { id: string } | undefined;
+      const tgtMicro = mesocycles.find(m => m.id === tgtMesoId)?.microcycles?.[tgtMcIdx] as { id: string } | undefined;
+      if (!srcMicro || !tgtMicro) return;
+      const srcDates = new Set(trainingDays.filter(d => d.microcycleId === srcMicro.id).map(d => d.date));
+      const tgtDays = trainingDays.filter(d => d.microcycleId === tgtMicro.id);
+      if (srcDates.size === 0 || tgtDays.length === 0) {
+        toast({ title: "No training days in source or target week", variant: "destructive" }); return;
+      }
+      // Map source days (by position) to target days
+      const srcDaysSorted = trainingDays.filter(d => d.microcycleId === srcMicro.id).sort((a, b) => a.date.localeCompare(b.date));
+      const tgtDaysSorted = tgtDays.sort((a, b) => a.date.localeCompare(b.date));
+      const dateMap = new Map<string, string>(); // srcDate → tgtDate
+      srcDaysSorted.forEach((d, i) => { if (tgtDaysSorted[i]) dateMap.set(d.date, tgtDaysSorted[i].date); });
+
+      // Build new sections and exercise distribution for target
+      const sectionIdMap = new Map<string, string>();
+      const newSections = sessionSections
+        .filter(s => srcDates.has(s.dayDate) && dateMap.has(s.dayDate))
+        .map(s => {
+          const newId = `section-cw-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+          sectionIdMap.set(s.id, newId);
+          return { ...s, id: newId, dayDate: dateMap.get(s.dayDate)! };
+        });
+      const exIdMap: Record<string, string> = {};
+      const newExercises = exerciseDistribution
+        .filter(e => srcDates.has(e.dayDate) && dateMap.has(e.dayDate))
+        .map(e => {
+          const newId = `ex-cw-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+          exIdMap[e.id] = newId;
+          return { ...e, id: newId, dayDate: dateMap.get(e.dayDate)!, sectionId: e.sectionId ? sectionIdMap.get(e.sectionId) : undefined };
+        });
+
+      // Remap supersets
+      const nextSupersets: SupersetMapping = supersets ? JSON.parse(JSON.stringify(supersets)) : {};
+      // Clear target week supersets first
+      tgtDaysSorted.forEach(d => { delete nextSupersets[d.date]; });
+      // Copy source supersets
+      srcDaysSorted.forEach(d => {
+        const tgtDate = dateMap.get(d.date);
+        if (!tgtDate || !nextSupersets[d.date]) return;
+        nextSupersets[tgtDate] = {};
+        Object.entries(nextSupersets[d.date]).forEach(([si, secMap]) => {
+          nextSupersets[tgtDate][Number(si)] = {};
+          Object.entries(secMap).forEach(([secKey, ssMap]) => {
+            const newSecKey = secKey === '__unsectioned__' ? '__unsectioned__' : (sectionIdMap.get(secKey) ?? secKey);
+            nextSupersets[tgtDate][Number(si)][newSecKey] = {};
+            Object.entries(ssMap).forEach(([ssId, ids]) => {
+              const mapped = (ids as string[]).map(id => exIdMap[id]).filter(Boolean);
+              if (mapped.length > 1) nextSupersets[tgtDate][Number(si)][newSecKey][ssId] = mapped;
+            });
+          });
+        });
+      });
+
+      // Remap method assignments
+      const newAssignments = { ...dayMethodAssignments };
+      srcDaysSorted.forEach(srcDay => {
+        const tgtDate = dateMap.get(srcDay.date);
+        if (!tgtDate) return;
+        const srcDay2 = trainingDays.find(d => d.date === srcDay.date);
+        const sessCount = srcDay2?.sessions ?? 1;
+        for (let s = 0; s < sessCount; s++) {
+          const methods = dayMethodAssignments[`${srcDay.date}_${s}`] ?? [];
+          newAssignments[`${tgtDate}_${s}`] = [...methods];
+        }
+      });
+
+      // Remove old target content and add new
+      setExerciseDistribution(prev => {
+        const tgtDateSet = new Set(tgtDaysSorted.map(d => d.date));
+        const filtered = prev.filter(e => !tgtDateSet.has(e.dayDate));
+        const u = [...filtered, ...newExercises];
+        localStorage.setItem('exerciseDistribution', JSON.stringify(u));
+        return u;
+      });
+      setSessionSections(prev => {
+        const tgtDateSet = new Set(tgtDaysSorted.map(d => d.date));
+        const filtered = prev.filter(s => !tgtDateSet.has(s.dayDate));
+        const u = [...filtered, ...newSections];
+        localStorage.setItem('sessionSections', JSON.stringify(u));
+        return u;
+      });
+      setSupersets(nextSupersets);
+      localStorage.setItem('supersets', JSON.stringify(nextSupersets));
+      setDayMethodAssignments(newAssignments);
+      localStorage.setItem('dayMethodAssignments', JSON.stringify(newAssignments));
+      // Sync day intensities and session counts
+      setTrainingDays(prev => prev.map(d => {
+        const tgtDate = tgtDaysSorted.find(td => td.date === d.date)?.date;
+        if (!tgtDate) return d;
+        const posIdx = tgtDaysSorted.findIndex(td => td.date === d.date);
+        const srcDay = srcDaysSorted[posIdx];
+        if (!srcDay) return d;
+        const srcTrainingDay = prev.find(td => td.date === srcDay.date);
+        if (!srcTrainingDay) return d;
+        return { ...d, intensity: srcTrainingDay.intensity, sessions: srcTrainingDay.sessions, sessionNames: srcTrainingDay.sessionNames };
+      }));
+      toast({ title: `Week "${sourceMicrocycleName}" copied to "${targetMicrocycleName}"` });
+
+    } else if (action.type === "clear_week") {
+      const { microcycleName } = action;
+      let targetMesoId: string | undefined, targetMcObj: { id: string } | undefined;
+      for (const meso of mesocycles) {
+        (meso.microcycles ?? []).forEach((mc: { id: string; name?: string }, idx: number) => {
+          if ((mc.name ?? `Microcycle ${idx + 1}`) === microcycleName) { targetMesoId = meso.id; targetMcObj = mc; }
+        });
+      }
+      if (!targetMesoId || !targetMcObj) {
+        toast({ title: `Microcycle "${microcycleName}" not found`, variant: "destructive" }); return;
+      }
+      const tgtDates = new Set(trainingDays.filter(d => d.microcycleId === targetMcObj!.id).map(d => d.date));
+      setExerciseDistribution(prev => {
+        const u = prev.filter(e => !tgtDates.has(e.dayDate));
+        localStorage.setItem('exerciseDistribution', JSON.stringify(u));
+        return u;
+      });
+      setSessionSections(prev => {
+        const u = prev.filter(s => !tgtDates.has(s.dayDate));
+        localStorage.setItem('sessionSections', JSON.stringify(u));
+        return u;
+      });
+      setSupersets(prev => {
+        const next: SupersetMapping = prev ? JSON.parse(JSON.stringify(prev)) : {};
+        tgtDates.forEach(date => { delete next[date]; });
+        localStorage.setItem('supersets', JSON.stringify(next));
+        return next;
+      });
+      // Also clear session-level localStorage entries
+      tgtDates.forEach(date => {
+        const day = trainingDays.find(d => d.date === date);
+        const sessCount = day?.sessions ?? 1;
+        for (let s = 0; s < sessCount; s++) {
+          localStorage.removeItem(`sessionIntensity_${targetMesoId}_${date}_${s}`);
+          localStorage.removeItem(`workoutSessions_${targetMesoId}_${date}_${s}`);
+        }
+      });
+      toast({ title: `All sessions cleared from "${microcycleName}"` });
     }
-  }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments, exerciseDistribution, sessionSections, supersets, exerciseSelectionData, libraries, toast]);
+  }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments, exerciseDistribution, sessionSections, supersets, exerciseSelectionData, libraries, parameterValues, toast]);
 
   return (
     <div className="mx-auto py-6 space-y-6 px-4 w-full max-w-[98vw]">
