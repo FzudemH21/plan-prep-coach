@@ -3926,6 +3926,12 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
       setSupersets(nextSupersets);
       localStorage.setItem('supersets', JSON.stringify(nextSupersets));
       setDaySplitStates(prev => ({ ...prev, [targetDayDate]: Math.max(prev[targetDayDate] ?? 1, newSi + 1) }));
+      setTrainingDays(prev => prev.map(day => {
+        if (day.date !== targetDayDate) return day;
+        const sessionNames = [...(day.sessionNames || [])];
+        while (sessionNames.length <= newSi) sessionNames.push(`Session ${sessionNames.length + 1}`);
+        return { ...day, sessions: newSi + 1, sessionNames };
+      }));
 
       toast({
         title: `Session copied to ${targetDayDate}`,
