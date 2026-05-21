@@ -3913,10 +3913,13 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
         });
       }
 
-      // Method mismatch check
-      const targetKey0 = `${targetDayDate}_0`;
-      const targetMethods = new Set(dayMethodAssignments[targetKey0] ?? []);
-      const mismatchMethods = [...new Set(newExercises.map(e => e.methodId).filter(m => targetMethods.size > 0 && !targetMethods.has(m)))];
+      // Method mismatch check — collect all methods assigned to any session on the target day
+      const targetDayMethods = new Set(
+        Object.entries(dayMethodAssignments)
+          .filter(([k]) => k.startsWith(`${targetDayDate}_`))
+          .flatMap(([, methods]) => methods)
+      );
+      const mismatchMethods = [...new Set(newExercises.map(e => e.methodId).filter(m => targetDayMethods.size > 0 && !targetDayMethods.has(m)))];
 
       setExerciseDistribution(prev => { const u = [...prev, ...newExercises]; localStorage.setItem('exerciseDistribution', JSON.stringify(u)); return u; });
       setSessionSections(prev => { const u = [...prev, ...newSections]; localStorage.setItem('sessionSections', JSON.stringify(u)); return u; });
@@ -3947,13 +3950,33 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
         return { ...e, id: newId, dayDate: targetDayDate, sessionIndex: targetSessionIndex, sectionId: newSectionId };
       });
 
-      // Method mismatch check
-      const tKey = `${targetDayDate}_${targetSessionIndex}`;
-      const tMethods = new Set(dayMethodAssignments[tKey] ?? []);
-      const mismatch = [...new Set(newExercises.map(e => e.methodId).filter(m => tMethods.size > 0 && !tMethods.has(m)))];
+      // Copy supersets that live in the source section
+      const srcSectionSupersets = supersets[sourceDayDate]?.[sourceSessionIndex]?.[srcSection.id];
+      const nextSupersets: SupersetMapping = supersets ? JSON.parse(JSON.stringify(supersets)) : {};
+      if (srcSectionSupersets && Object.keys(srcSectionSupersets).length > 0) {
+        if (!nextSupersets[targetDayDate]) nextSupersets[targetDayDate] = {};
+        if (!nextSupersets[targetDayDate][targetSessionIndex]) nextSupersets[targetDayDate][targetSessionIndex] = {};
+        nextSupersets[targetDayDate][targetSessionIndex][newSectionId] = {};
+        Object.entries(srcSectionSupersets).forEach(([ssId, ids]) => {
+          const mapped = (ids as string[]).map(id => exIdMap[id]).filter(Boolean);
+          if (mapped.length > 1) nextSupersets[targetDayDate][targetSessionIndex][newSectionId][ssId] = mapped;
+        });
+      }
+
+      // Method mismatch check — collect all methods assigned to any session on the target day
+      const tDayMethods = new Set(
+        Object.entries(dayMethodAssignments)
+          .filter(([k]) => k.startsWith(`${targetDayDate}_`))
+          .flatMap(([, methods]) => methods)
+      );
+      const mismatch = [...new Set(newExercises.map(e => e.methodId).filter(m => tDayMethods.size > 0 && !tDayMethods.has(m)))];
 
       setExerciseDistribution(prev => { const u = [...prev, ...newExercises]; localStorage.setItem('exerciseDistribution', JSON.stringify(u)); return u; });
       setSessionSections(prev => { const u = [...prev, newSection]; localStorage.setItem('sessionSections', JSON.stringify(u)); return u; });
+      if (srcSectionSupersets && Object.keys(srcSectionSupersets).length > 0) {
+        setSupersets(nextSupersets);
+        localStorage.setItem('supersets', JSON.stringify(nextSupersets));
+      }
 
       toast({
         title: `Section "${sourceSectionName}" copied to ${targetDayDate} session ${targetSessionIndex + 1}`,
