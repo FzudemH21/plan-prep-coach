@@ -79,6 +79,16 @@ export type ApplySuggestion =
   | { type: "add_exercise"; exerciseId: string; exerciseName: string; libraryId: string; methodId: string; dayDate: string; sessionIndex: number; sectionName?: string }
   /** MicrocyclePlanningPage Step 2 — add a circuit block to a day/session/section */
   | { type: "add_circuit"; circuitId: string; circuitName: string; libraryId: string; dayDate: string; sessionIndex: number; sectionName?: string }
+  /** MicrocyclePlanningPage Steps 2 & 3 — change the intensity of a training day */
+  | { type: "set_day_intensity"; dayDate: string; intensity: string }
+  /** MicrocyclePlanningPage Steps 2 & 3 — change the intensity of a single session */
+  | { type: "set_session_intensity"; dayDate: string; sessionIndex: number; intensity: string }
+  /** MicrocyclePlanningPage Steps 2 & 3 — override sets/reps/intensity for a method-session slot (local override, does not write back to periodization table) */
+  | { type: "set_exercise_params"; dayDate: string; sessionIndex: number; methodId: string; params: Record<string, string | number> }
+  /** MicrocyclePlanningPage Steps 2 & 3 — copy all sessions/exercises/sections from one microcycle (by name) to another */
+  | { type: "copy_week"; sourceMicrocycleName: string; targetMicrocycleName: string }
+  /** MicrocyclePlanningPage Steps 2 & 3 — clear all exercises, sections, and sessions from a microcycle (by name) */
+  | { type: "clear_week"; microcycleName: string }
   /** Parameter Database — add a new parameter */
   | { type: "add_parameter"; name: string; category?: string; unit?: string; applicableSports?: string[] }
   /** Parameter Database — add multiple parameters at once */
@@ -219,6 +229,16 @@ Available types and their fields:
   METHOD RULE: First check "Available exercises" in the context — if the exercise is already listed there under a specific method, use that method directly without asking. Only ask the coach to pick a method when the exercise is NOT found in "Available exercises" (i.e. it is a new exercise not yet assigned to any method for this mesocycle). When asking, present ONLY the methods assigned to that specific day/session as numbered options (visible in the training schedule as "session X: [Method A, Method B]"). Never suggest a method not assigned to that day/session, and never invent or add new methods.
 - add_circuit: {"type":"add_circuit","circuitId":"<exact circuitId from Available circuits context>","circuitName":"<name>","libraryId":"<exact libraryId from Available circuits context>","dayDate":"YYYY-MM-DD","sessionIndex":0,"sectionName":"<exact section name — REQUIRED>"}
   Adds a circuit block (pre-built set of exercises with rest intervals) to a session/section. Use only circuitId and libraryId values from "Available circuits" in the context. sectionName is REQUIRED — use an existing section or propose a new one.
+- set_day_intensity: {"type":"set_day_intensity","dayDate":"YYYY-MM-DD","intensity":"<intensity level>"}
+  Changes the intensity of a training day. Valid values: "off","deload","easy","easy-moderate","moderate","moderate-hard","hard","extremely-hard". Use the exact YYYY-MM-DD date from context.
+- set_session_intensity: {"type":"set_session_intensity","dayDate":"YYYY-MM-DD","sessionIndex":0,"intensity":"<intensity level>"}
+  Changes the intensity of a single session (0-based index). For single-session days this also syncs the day intensity. Valid intensity values same as above.
+- set_exercise_params: {"type":"set_exercise_params","dayDate":"YYYY-MM-DD","sessionIndex":0,"methodId":"<exact method name>","params":{"Sets":4,"Reps":"3-5","Intensity":"80-85% 1RM"}}
+  Overrides training parameters (sets, reps, intensity, etc.) for a method-session slot. This is a local override — it does NOT write back to the periodization table. methodId must match the method name as listed in the training calendar context. Use the exact parameter names as they appear in the periodization table.
+- copy_week: {"type":"copy_week","sourceMicrocycleName":"<exact microcycle name>","targetMicrocycleName":"<exact microcycle name>"}
+  Copies ALL sessions, exercises, sections, and supersets from one microcycle to another. Target week's existing content is replaced. Use exact microcycle names from context. Confirm with the coach before emitting — destructive to target week.
+- clear_week: {"type":"clear_week","microcycleName":"<exact microcycle name>"}
+  Removes ALL exercises, sections, and sessions from a microcycle. Always confirm with the coach first — irreversible. Use exact microcycle name from context.
 - add_parameter: {"type":"add_parameter","name":"<parameter name>","category":"<one of: strength|speed|power|endurance|mobility|technique|body_composition|other>","unit":"<unit e.g. kg, s, cm — omit if not applicable>","applicableSports":["<sport>","<sport>"]}
   applicableSports is optional — include when the parameter is sport-specific (e.g. ["Soccer","Rugby"]). Omit for universal parameters.
 - add_parameters_bulk: {"type":"add_parameters_bulk","parameters":[{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>","applicableSports":["<sport>"]},{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>"}]}
@@ -466,6 +486,16 @@ function getSuggestionPreview(action: ApplySuggestion): string {
       return `Add "${action.exerciseName}" to ${action.dayDate} session ${action.sessionIndex + 1}${action.sectionName ? ` / ${action.sectionName}` : ''} [${action.methodId}]`;
     case "add_circuit":
       return `Add circuit "${action.circuitName}" to ${action.dayDate} session ${action.sessionIndex + 1}${action.sectionName ? ` / ${action.sectionName}` : ''}`;
+    case "set_day_intensity":
+      return `Set ${action.dayDate} intensity → ${action.intensity}`;
+    case "set_session_intensity":
+      return `Set ${action.dayDate} session ${action.sessionIndex + 1} intensity → ${action.intensity}`;
+    case "set_exercise_params":
+      return `Override params for [${action.methodId}] on ${action.dayDate} session ${action.sessionIndex + 1}: ${Object.entries(action.params).map(([k, v]) => `${k}=${v}`).join(', ')}`;
+    case "copy_week":
+      return `Copy week "${action.sourceMicrocycleName}" → "${action.targetMicrocycleName}" (replaces target content)`;
+    case "clear_week":
+      return `Clear all sessions & exercises from "${action.microcycleName}"`;
     case "add_parameter":
       return `Add parameter: ${action.name}${action.category ? ` (${action.category})` : ""}${action.unit ? ` [${action.unit}]` : ""}`;
     case "add_parameters_bulk":
