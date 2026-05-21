@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -718,7 +719,7 @@ export function WizardAIAssistant({
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendUserMessage(); }
   };
 
-  return (
+  return createPortal(
     <>
       {/* Floating button */}
       {!isOpen && (
@@ -873,6 +874,7 @@ export function WizardAIAssistant({
           </div>
         </>
       )}
-    </>
+    </>,
+    document.body
   );
 }
