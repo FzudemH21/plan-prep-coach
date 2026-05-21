@@ -257,12 +257,7 @@ export default function MicrocyclePlanningPage() {
       const loadedDays: any[] = JSON.parse(savedTrainingDays);
       loadedDays.forEach((day: any) => {
         if (parsedSplitStates[day.date] === undefined) {
-          const defaultSessions =
-            day.sessions !== undefined
-              ? day.sessions
-              : day.intensity === 'off'
-              ? 0
-              : 1;
+          const defaultSessions = day.intensity === 'off' ? 0 : (day.sessions ?? 1);
           parsedSplitStates[day.date] = defaultSessions;
         }
       });
@@ -329,21 +324,21 @@ export default function MicrocyclePlanningPage() {
   // Sync dailyIntensityData into trainingDays on load
   useEffect(() => {
     if (dailyIntensityData.length === 0 || trainingDays.length === 0) return;
-    
+
     // Create a map of date -> intensity from dailyIntensityData
     const intensityMap = new Map<string, IntensityLevel>();
     dailyIntensityData.forEach(di => {
       intensityMap.set(di.date, di.intensity);
     });
-    
+
     // Check if any trainingDays need intensity updates
     const needsUpdate = trainingDays.some(td => {
       const correctIntensity = intensityMap.get(td.date);
       return correctIntensity && td.intensity !== correctIntensity;
     });
-    
+
     if (needsUpdate) {
-      setTrainingDays(prev => 
+      setTrainingDays(prev =>
         prev.map(day => {
           const correctIntensity = intensityMap.get(day.date);
           if (correctIntensity && day.intensity !== correctIntensity) {
@@ -352,6 +347,26 @@ export default function MicrocyclePlanningPage() {
           return day;
         })
       );
+
+      // Also sync daySplitStates: off days → 0 sessions, non-off days that
+      // were 0 (because they were previously off) → 1 session.
+      setDaySplitStates(prev => {
+        const next = { ...prev };
+        let changed = false;
+        trainingDays.forEach(day => {
+          const correctIntensity = intensityMap.get(day.date);
+          if (correctIntensity && day.intensity !== correctIntensity) {
+            if (correctIntensity === 'off') {
+              next[day.date] = 0;
+              changed = true;
+            } else if (day.intensity === 'off' && (prev[day.date] ?? 0) === 0) {
+              next[day.date] = 1;
+              changed = true;
+            }
+          }
+        });
+        return changed ? next : prev;
+      });
     }
   }, [dailyIntensityData, trainingDays]);
 
