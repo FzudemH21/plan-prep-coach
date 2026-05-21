@@ -3469,6 +3469,29 @@ export default function MicrocyclePlanningPage() {
         });
         scheduleStr = scheduleLines.join('\n');
       }
+
+      // Distributed exercises — what's already on each day/session
+      const currentMicro2 = currentMeso.microcycles?.[currentMicrocycleIndex] as { id: string } | undefined;
+      const microDates2 = new Set(
+        currentMicro2
+          ? trainingDays.filter(d => d.microcycleId === currentMicro2.id).map(d => d.date)
+          : []
+      );
+      const distributed = exerciseDistribution.filter(e => microDates2.has(e.dayDate));
+      if (distributed.length > 0) {
+        const bySlot: Record<string, Array<{ id: string; name: string; methodId: string }>> = {};
+        distributed.forEach(e => {
+          const key = `${e.dayDate}_${e.sessionIndex ?? 0}`;
+          if (!bySlot[key]) bySlot[key] = [];
+          bySlot[key].push({ id: e.exerciseId, name: e.exerciseName, methodId: e.methodId });
+        });
+        const distLines = [`Exercises already distributed in current microcycle:`];
+        Object.entries(bySlot).sort().forEach(([key, exs]) => {
+          const [date, si] = key.split('_');
+          distLines.push(`  ${date} session ${Number(si)}: ${exs.map(e => `${e.name} (id: ${e.id}, method: ${e.methodId})`).join(', ')}`);
+        });
+        scheduleStr = scheduleStr ? scheduleStr + '\n\n' + distLines.join('\n') : distLines.join('\n');
+      }
     }
 
     // Step 2: prepend a hard override so the AI doesn't fall back to "hierarchy" explanation
@@ -3496,7 +3519,7 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, currentMicrocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel, exerciseSelectionData]);
+  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, currentMicrocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel, exerciseSelectionData, exerciseDistribution]);
 
   const handleMicroAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
     if (action.type === "assign_methods_to_days") {
