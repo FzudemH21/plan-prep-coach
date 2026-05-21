@@ -3837,16 +3837,38 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
 
       setSupersets(prev => {
         const next: SupersetMapping = prev ? JSON.parse(JSON.stringify(prev)) : {};
+        const idSet = new Set(exerciseIds);
+        const targetSectionKey = targetSectionId || '__unsectioned__';
+        // Collect superset groups where ALL members are being moved together
+        const groupsToPreserve: string[][] = [];
+        const seenSsIds = new Set<string>();
         for (const entry of sourceEntries) {
           if (!entry) continue;
           const srcSectionKey = entry.sectionId || '__unsectioned__';
           const srcMap = next[entry.dayDate]?.[entry.sessionIndex]?.[srcSectionKey];
-          if (srcMap) {
-            Object.keys(srcMap).forEach(ssId => {
-              srcMap[ssId] = (srcMap[ssId] as string[]).filter((id: string) => !exerciseIds.includes(id));
-              if (srcMap[ssId].length < 2) delete srcMap[ssId];
-            });
-          }
+          if (!srcMap) continue;
+          Object.keys(srcMap).forEach(ssId => {
+            if (seenSsIds.has(ssId)) return;
+            seenSsIds.add(ssId);
+            const members: string[] = srcMap[ssId];
+            if (members.every((id: string) => idSet.has(id))) {
+              groupsToPreserve.push([...members]);
+            }
+            // Clean up source regardless
+            srcMap[ssId] = members.filter((id: string) => !idSet.has(id));
+            if (srcMap[ssId].length < 2) delete srcMap[ssId];
+          });
+        }
+        // Recreate intact superset groups at the target
+        if (groupsToPreserve.length > 0) {
+          if (!next[targetDayDate]) next[targetDayDate] = {};
+          if (!next[targetDayDate][targetSessionIndex]) next[targetDayDate][targetSessionIndex] = {};
+          if (!next[targetDayDate][targetSessionIndex][targetSectionKey]) next[targetDayDate][targetSessionIndex][targetSectionKey] = {};
+          const targetMap = next[targetDayDate][targetSessionIndex][targetSectionKey];
+          groupsToPreserve.forEach(group => {
+            const newSsId = `ss-moved-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+            targetMap[newSsId] = group;
+          });
         }
         localStorage.setItem('supersets', JSON.stringify(next));
         return next;
