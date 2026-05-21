@@ -69,8 +69,6 @@ export interface MethodSessionArchitectureProps {
   getIntensityColor: (intensity: IntensityLevel) => string;
   /** Returns the periodization-table target frequency for a method in a specific microcycle */
   getMethodFrequencyTarget?: (methodId: string, microcycleId: string) => number;
-  /** Exercise categories per method from the toolbox (methodId → string[]) */
-  methodExerciseCategories?: Record<string, string[]>;
   /** Controlled selected microcycle index (lifted to page for pill navigation) */
   selectedMicrocycleIndex?: number;
   onSelectedMicrocycleIndexChange?: (index: number) => void;
@@ -160,7 +158,6 @@ export function MethodSessionArchitecture({
   intensityLevels,
   getIntensityColor,
   getMethodFrequencyTarget,
-  methodExerciseCategories,
   selectedMicrocycleIndex: selectedMicrocycleIndexProp,
   onSelectedMicrocycleIndexChange,
 }: MethodSessionArchitectureProps) {
