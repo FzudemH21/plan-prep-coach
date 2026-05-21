@@ -723,6 +723,7 @@ export function WizardAIAssistant({
       {/* Floating button */}
       {!isOpen && (
         <button
+          data-ai-assistant
           onClick={handleOpen}
           className={cn(
             "fixed bottom-6 right-6 z-[200]",
@@ -748,12 +749,15 @@ export function WizardAIAssistant({
           />
 
           {/* Panel */}
-          <div className={cn(
-            "fixed right-0 top-0 bottom-0 z-[200]",
-            "w-full md:w-[400px]",
-            "bg-card border-l shadow-2xl",
-            "flex flex-col"
-          )}>
+          <div
+            data-ai-assistant
+            className={cn(
+              "fixed right-0 top-0 bottom-0 z-[200]",
+              "w-full md:w-[400px]",
+              "bg-card border-l shadow-2xl",
+              "flex flex-col"
+            )}
+          >
             {/* Header */}
             <div className="flex items-center gap-3 px-4 py-3 border-b bg-muted/30">
               <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">

@@ -2319,7 +2319,12 @@ export function WorkoutSessionSheet({
   return (
     <WorkoutSessionProvider value={sessionContextValue}>
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-[95vw] max-h-[95vh] w-full h-full flex flex-col p-0">
+      <DialogContent
+        className="max-w-[95vw] max-h-[95vh] w-full h-full flex flex-col p-0"
+        onInteractOutside={(e) => {
+          if ((e.target as Element)?.closest('[data-ai-assistant]')) e.preventDefault();
+        }}
+      >
         <DialogHeader className="p-6 pb-4 border-b">
           <div className="flex items-center justify-between">
             <div className="flex-1 min-w-0 pr-4">
