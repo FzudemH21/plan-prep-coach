@@ -3913,13 +3913,23 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
         });
       }
 
-      // Method mismatch check — collect all methods assigned to any session on the target day
-      const targetDayMethods = new Set(
-        Object.entries(dayMethodAssignments)
-          .filter(([k]) => k.startsWith(`${targetDayDate}_`))
-          .flatMap(([, methods]) => methods)
-      );
-      const mismatchMethods = [...new Set(newExercises.map(e => e.methodId).filter(m => targetDayMethods.size > 0 && !targetDayMethods.has(m)))];
+      // Copy method assignments from source session to new target slot
+      const srcMethods = dayMethodAssignments[`${sourceDayDate}_${sourceSessionIndex}`] ?? [];
+      const newAssignments = { ...dayMethodAssignments, [`${targetDayDate}_${newSi}`]: [...srcMethods] };
+      setDayMethodAssignments(newAssignments);
+      localStorage.setItem('dayMethodAssignments', JSON.stringify(newAssignments));
+
+      // If target day is a rest day, activate it using the source day's intensity
+      const targetDay = trainingDays.find(d => d.date === targetDayDate);
+      const srcIntensity = (trainingDays.find(d => d.date === sourceDayDate)?.intensity ?? 'moderate') as IntensityLevel;
+      if (targetDay?.intensity === 'off') {
+        setTrainingDays(prev => prev.map(d => d.date === targetDayDate ? { ...d, intensity: srcIntensity } : d));
+        setDailyIntensityData(prev => {
+          const u = prev.map(di => di.date === targetDayDate ? { ...di, intensity: srcIntensity } : di);
+          localStorage.setItem('dailyIntensityData', JSON.stringify(u));
+          return u;
+        });
+      }
 
       setExerciseDistribution(prev => { const u = [...prev, ...newExercises]; localStorage.setItem('exerciseDistribution', JSON.stringify(u)); return u; });
       setSessionSections(prev => { const u = [...prev, ...newSections]; localStorage.setItem('sessionSections', JSON.stringify(u)); return u; });
@@ -3930,12 +3940,11 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
         if (day.date !== targetDayDate) return day;
         const sessionNames = [...(day.sessionNames || [])];
         while (sessionNames.length <= newSi) sessionNames.push(`Session ${sessionNames.length + 1}`);
-        return { ...day, sessions: newSi + 1, sessionNames };
+        return { ...day, sessions: newSi + 1, sessionNames, intensity: day.intensity === 'off' ? srcIntensity : day.intensity };
       }));
 
       toast({
         title: `Session copied to ${targetDayDate}`,
-        description: mismatchMethods.length ? `⚠️ Methods not assigned to this day: ${mismatchMethods.join(', ')}` : undefined,
       });
 
     } else if (action.type === "copy_section") {
@@ -3969,13 +3978,27 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
         });
       }
 
-      // Method mismatch check — collect all methods assigned to any session on the target day
-      const tDayMethods = new Set(
-        Object.entries(dayMethodAssignments)
-          .filter(([k]) => k.startsWith(`${targetDayDate}_`))
-          .flatMap(([, methods]) => methods)
-      );
-      const mismatch = [...new Set(newExercises.map(e => e.methodId).filter(m => tDayMethods.size > 0 && !tDayMethods.has(m)))];
+      // Add source section's methods to target session slot
+      const sectionMethods = [...new Set(srcExercises.map(e => e.methodId))];
+      const tSlotKey = `${targetDayDate}_${targetSessionIndex}`;
+      const existingTMethods = dayMethodAssignments[tSlotKey] ?? [];
+      const mergedMethods = [...new Set([...existingTMethods, ...sectionMethods])];
+      const newAssignmentsSec = { ...dayMethodAssignments, [tSlotKey]: mergedMethods };
+      setDayMethodAssignments(newAssignmentsSec);
+      localStorage.setItem('dayMethodAssignments', JSON.stringify(newAssignmentsSec));
+
+      // If target day is a rest day, activate it using the source day's intensity
+      const targetDaySec = trainingDays.find(d => d.date === targetDayDate);
+      const srcIntensitySec = (trainingDays.find(d => d.date === sourceDayDate)?.intensity ?? 'moderate') as IntensityLevel;
+      if (targetDaySec?.intensity === 'off') {
+        setTrainingDays(prev => prev.map(d => d.date === targetDayDate ? { ...d, intensity: srcIntensitySec } : d));
+        setDailyIntensityData(prev => {
+          const u = prev.map(di => di.date === targetDayDate ? { ...di, intensity: srcIntensitySec } : di);
+          localStorage.setItem('dailyIntensityData', JSON.stringify(u));
+          return u;
+        });
+        setDaySplitStates(prev => ({ ...prev, [targetDayDate]: Math.max(prev[targetDayDate] ?? 0, 1) }));
+      }
 
       setExerciseDistribution(prev => { const u = [...prev, ...newExercises]; localStorage.setItem('exerciseDistribution', JSON.stringify(u)); return u; });
       setSessionSections(prev => { const u = [...prev, newSection]; localStorage.setItem('sessionSections', JSON.stringify(u)); return u; });
@@ -3986,7 +4009,6 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
 
       toast({
         title: `Section "${sourceSectionName}" copied to ${targetDayDate} session ${targetSessionIndex + 1}`,
-        description: mismatch.length ? `⚠️ Methods not assigned to this day: ${mismatch.join(', ')}` : undefined,
       });
     }
   }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments, exerciseDistribution, sessionSections, supersets, toast]);
