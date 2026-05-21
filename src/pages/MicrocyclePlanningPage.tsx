@@ -4082,20 +4082,30 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
         e.dayDate === dayDate && e.sessionIndex === sessionIndex && e.sectionId === targetSectionId
       ).length;
 
+      // Split "Method::Category" format (from dayMethodAssignments) into base method + category
+      const splitIdx = methodId.indexOf('::');
+      const baseMethodId = splitIdx !== -1 ? methodId.slice(0, splitIdx) : methodId;
+      const methodCategory = splitIdx !== -1 ? methodId.slice(splitIdx + 2) : '';
+
       const newEntry: ExerciseDistribution = {
         id: `ex-ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        exerciseId, exerciseName, methodId, categoryName: '',
+        exerciseId, exerciseName,
+        methodId: baseMethodId,
+        categoryName: methodCategory,
         dayDate, sessionIndex, order: baseOrder,
         ...(targetSectionId ? { sectionId: targetSectionId } : {}),
       };
 
       setExerciseDistribution(prev => { const u = [...prev, newEntry]; localStorage.setItem('exerciseDistribution', JSON.stringify(u)); return u; });
 
-      // Retroactively register in exerciseSelectionData for Step 5
+      // Retroactively register in exerciseSelectionData for Step 5.
+      // Match on base method + category to avoid creating a duplicate split-key cell.
       setExerciseSelectionData(prev => {
         const updated = { ...prev };
-        const existingEntry = Object.entries(updated).find(
-          ([, cell]) => cell.methodId === methodId && cell.mesocycleId === currentMeso.id
+        const existingEntry = Object.entries(updated).find(([, cell]) =>
+          cell.mesocycleId === currentMeso.id &&
+          (cell.methodId === baseMethodId || cell.methodId === methodId) &&
+          (cell.categoryName ?? '') === methodCategory
         );
         const newExSel: ExerciseSelection = { id: `exsel-ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, exerciseId, exerciseName, library: libraryId };
         if (existingEntry) {
@@ -4104,7 +4114,8 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
             updated[cellKey] = { ...cellData, exercises: [...cellData.exercises, newExSel] };
           }
         } else {
-          updated[`${methodId}::::${currentMeso.id}`] = { methodId, mesocycleId: currentMeso.id, exercises: [newExSel] };
+          const newKey = `${baseMethodId}${methodCategory ? `::${methodCategory}` : ''}::::${currentMeso.id}`;
+          updated[newKey] = { methodId: baseMethodId, categoryName: methodCategory, mesocycleId: currentMeso.id, exercises: [newExSel] };
         }
         const state = JSON.parse(localStorage.getItem('microcyclePlanningState') ?? '{}');
         localStorage.setItem('microcyclePlanningState', JSON.stringify({ ...state, cellData: updated }));
@@ -4113,8 +4124,9 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
 
       // Add method to dayMethodAssignments if missing
       const slotKey = `${dayDate}_${sessionIndex}`;
+      // Add to dayMethodAssignments using the original methodId (split format preserved for Step 1 consistency)
       const existingMethods = dayMethodAssignments[slotKey] ?? [];
-      if (!existingMethods.includes(methodId)) {
+      if (!existingMethods.includes(methodId) && !existingMethods.includes(baseMethodId)) {
         const newAssignments = { ...dayMethodAssignments, [slotKey]: [...existingMethods, methodId] };
         setDayMethodAssignments(newAssignments);
         localStorage.setItem('dayMethodAssignments', JSON.stringify(newAssignments));
