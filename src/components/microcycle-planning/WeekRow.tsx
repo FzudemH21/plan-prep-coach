@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { format } from 'date-fns';
+import { format, getISOWeek } from 'date-fns';
 import { Copy, MoreVertical, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { IntensityLevel, SubGoal, Event } from '@/types/training';
@@ -103,7 +103,6 @@ export function WeekRow({
   onAddSession,
   selectedAthleteId,
   athletePerformanceParameters,
-  microcycleLabel,
 }: WeekRowProps) {
   const [isWeekHovering, setIsWeekHovering] = useState(false);
   const weekStartDate = week[0]?.dateString;
@@ -140,10 +139,7 @@ export function WeekRow({
 
         {/* Week label */}
         <div className="text-xs text-muted-foreground flex-1">
-          Week of {format(week[0].date, 'MMM d')}
-          {microcycleLabel && (
-            <span className="text-muted-foreground"> · {microcycleLabel}</span>
-          )}
+          CW {getISOWeek(week[0].date)} · {format(week[0].date, 'MMM d')}
         </div>
 
         {/* Paste Week button - appears on hover when week is copied */}

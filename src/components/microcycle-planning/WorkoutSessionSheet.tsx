@@ -2322,7 +2322,9 @@ export function WorkoutSessionSheet({
       <DialogContent
         className="max-w-[95vw] max-h-[95vh] w-full h-full flex flex-col p-0"
         onInteractOutside={(e) => {
-          if ((e.target as Element)?.closest('[data-ai-assistant]')) e.preventDefault();
+          const target = (e as CustomEvent).detail?.originalEvent?.target as Element | null
+            ?? (e.target as Element | null);
+          if (target?.closest('[data-ai-assistant]')) e.preventDefault();
         }}
       >
         <DialogHeader className="p-6 pb-4 border-b">
