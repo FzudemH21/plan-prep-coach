@@ -3485,7 +3485,7 @@ export default function MicrocyclePlanningPage() {
         distributed.forEach(e => {
           const key = `${e.dayDate}_${e.sessionIndex ?? 0}`;
           if (!bySlot[key]) bySlot[key] = [];
-          bySlot[key].push({ id: e.exerciseId, name: e.exerciseName, methodId: e.methodId });
+          bySlot[key].push({ id: e.id, name: e.exerciseName, methodId: e.methodId });
         });
         const distLines = [`Exercises already distributed in current microcycle:`];
         Object.entries(bySlot).sort().forEach(([key, exs]) => {
@@ -3688,7 +3688,7 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
       const { target, dayDate, sessionIndex, note } = action;
       if (target === "exercise" && action.exerciseId) {
         const updatedDist = exerciseDistribution.map(e =>
-          e.exerciseId === action.exerciseId && e.dayDate === dayDate && e.sessionIndex === sessionIndex
+          e.id === action.exerciseId && e.dayDate === dayDate && e.sessionIndex === sessionIndex
             ? { ...e, notes: note }
             : e
         );
