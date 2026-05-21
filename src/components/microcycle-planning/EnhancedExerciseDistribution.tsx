@@ -75,6 +75,8 @@ interface EnhancedExerciseDistributionProps {
   onSelectedMicrocycleIndexChange?: (index: number) => void;
   /** methodName → mesocycleId[] — used to filter the left panel to assigned methods only */
   methodAllocations?: Record<string, string[]>;
+  /** methodName → exerciseCategory[] from the toolbox — methods absent here are not split */
+  methodExerciseCategories?: Record<string, string[]>;
 }
 
 // ── Pure helpers (no component state — defined outside to avoid re-creation) ──
@@ -141,6 +143,7 @@ export function EnhancedExerciseDistribution({
   selectedMicrocycleIndex: selectedMicrocycleIndexProp,
   onSelectedMicrocycleIndexChange,
   methodAllocations = {},
+  methodExerciseCategories,
 }: EnhancedExerciseDistributionProps) {
   const { toast } = useToast();
   const { libraries } = useCustomLibraries();
@@ -2344,6 +2347,7 @@ export function EnhancedExerciseDistribution({
             exercisesByMethod={exercisesByMethod}
             exerciseDistribution={exerciseDistribution}
             mesocycle={mesocycle}
+            methodExerciseCategories={methodExerciseCategories}
           />
         </div>
 
