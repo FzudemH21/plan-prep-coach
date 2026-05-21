@@ -3355,6 +3355,7 @@ export default function MicrocyclePlanningPage() {
           selectedMicrocycleIndex={currentMicrocycleIndex}
           onSelectedMicrocycleIndexChange={setCurrentMicrocycleIndex}
           methodAllocations={methodAllocations}
+          methodExerciseCategories={methodExerciseCategories}
         />
       </div>
     );

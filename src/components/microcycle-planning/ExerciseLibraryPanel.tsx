@@ -19,6 +19,8 @@ interface ExerciseLibraryPanelProps {
   }>>>;
   exerciseDistribution: ExerciseDistribution[];
   mesocycle: ExtendedMesocycle;
+  /** methodName → exerciseCategory[] from the toolbox — methods absent here are not split */
+  methodExerciseCategories?: Record<string, string[]>;
 }
 
 // Helper to detect invalid/corrupted category names
@@ -33,6 +35,7 @@ export function ExerciseLibraryPanel({
   exercisesByMethod,
   exerciseDistribution,
   mesocycle,
+  methodExerciseCategories,
 }: ExerciseLibraryPanelProps) {
   const [expandedTopCategories, setExpandedTopCategories] = useState<Set<string>>(new Set());
   const [expandedMethods, setExpandedMethods] = useState<Set<string>>(new Set());
@@ -191,8 +194,14 @@ export function ExerciseLibraryPanel({
                     {methods.map(({ methodId, subCategory, categories }) => {
                       const isMethodOpen = expandedMethods.has(methodId);
                       const categoryEntries = Object.entries(categories);
+                      // A method is only shown with category sub-groups when the toolbox
+                      // explicitly defines exercise categories for it. Methods absent from
+                      // methodExerciseCategories (or with an empty list) are not split —
+                      // show their exercises flat regardless of any categoryName on the data.
+                      const methodIsSplit = (methodExerciseCategories?.[methodId]?.length ?? 0) > 0;
                       const hasNoRealCategories =
-                        categoryEntries.length === 1 && isInvalidCategory(categoryEntries[0][0]);
+                        !methodIsSplit ||
+                        (categoryEntries.length === 1 && isInvalidCategory(categoryEntries[0][0]));
 
                       return (
                         <Collapsible
@@ -215,7 +224,7 @@ export function ExerciseLibraryPanel({
 
                           <CollapsibleContent className="ml-3 space-y-0.5">
                             {hasNoRealCategories ? (
-                              // No real exercise categories — show exercises directly
+                              // No real exercise categories — show all exercises flat
                               <Droppable
                                 droppableId={`library-${methodId}::`}
                                 type="EXERCISE"
@@ -227,7 +236,7 @@ export function ExerciseLibraryPanel({
                                     {...provided.droppableProps}
                                     className="space-y-1 mt-1"
                                   >
-                                    {categoryEntries[0][1].map((ex, idx) => renderExercise(ex, idx))}
+                                    {categoryEntries.flatMap(([, exs]) => exs).map((ex, idx) => renderExercise(ex, idx))}
                                     {provided.placeholder}
                                   </div>
                                 )}
