@@ -26,7 +26,16 @@
       "Bash(npm run:*)",
       "Bash(git commit:*)",
       "Bash(npx vite:*)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(git push *)",
+      "Bash(gh pr create --title 'fix: prevent exercise selection data loss + sync rules in CLAUDE.md' --body ' *)",
+      "Bash(gh pr *)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "mcp__Claude_in_Chrome__navigate",
+      "mcp__Claude_in_Chrome__read_console_messages",
+      "mcp__Claude_in_Chrome__read_page",
+      "mcp__Claude_in_Chrome__get_page_text",
+      "mcp__Claude_in_Chrome__javascript_tool"
     ]
   }
 }
