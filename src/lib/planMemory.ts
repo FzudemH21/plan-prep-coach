@@ -396,6 +396,56 @@ export async function saveRationaleNotes(
   }
 }
 
+// ─── Uploaded plan management ─────────────────────────────────────────────────
+
+export interface UploadedPlanEntry {
+  programId: string;
+  planName: string;
+  createdAt: string;
+  outcomeNotes: string | null;
+}
+
+/** Fetches all manually-uploaded plan entries (program_id starts with "uploaded_") */
+export async function fetchUploadedPlans(coachId: string): Promise<UploadedPlanEntry[]> {
+  const { data, error } = await supabase
+    .from('plan_memory')
+    .select('program_id, plan_name, created_at, outcome_notes')
+    .eq('coach_id', coachId)
+    .like('program_id', 'uploaded_%')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('[planMemory] fetchUploadedPlans error:', error);
+    return [];
+  }
+
+  return ((data ?? []) as Array<{
+    program_id: string;
+    plan_name: string | null;
+    created_at: string;
+    outcome_notes: string | null;
+  }>).map(r => ({
+    programId: r.program_id,
+    planName: r.plan_name ?? 'Untitled',
+    createdAt: r.created_at,
+    outcomeNotes: r.outcome_notes,
+  }));
+}
+
+/** Removes an uploaded plan entry from plan_memory */
+export async function deleteUploadedPlanMemory(programId: string, coachId: string): Promise<void> {
+  const { error } = await supabase
+    .from('plan_memory')
+    .delete()
+    .eq('program_id', programId)
+    .eq('coach_id', coachId);
+
+  if (error) {
+    console.error('[planMemory] deleteUploadedPlanMemory error:', error);
+    throw error;
+  }
+}
+
 function formatAge(isoDate: string): string {
   const diffMs = Date.now() - new Date(isoDate).getTime();
   const days = Math.floor(diffMs / 86_400_000);
