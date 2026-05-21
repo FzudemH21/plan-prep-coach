@@ -100,6 +100,8 @@ interface TrainingCalendarViewProps {
   // Athlete context for baseline value auto-fill
   selectedAthleteId?: string;
   athletePerformanceParameters?: AthletePerformanceParameter[];
+  // Callback to open the AI assistant from within the session dialog
+  onOpenAIAssistant?: () => void;
 }
 
 export interface CalendarDay {
@@ -166,6 +168,7 @@ export function TrainingCalendarView({
   daySplitStates,
   selectedAthleteId,
   athletePerformanceParameters,
+  onOpenAIAssistant,
 }: TrainingCalendarViewProps) {
   const { toast } = useToast();
   const { data: toolboxData } = useToolboxData();
@@ -1199,6 +1202,7 @@ export function TrainingCalendarView({
           })()}
           selectedAthleteId={selectedAthleteId}
           athletePerformanceParameters={athletePerformanceParameters}
+          onOpenAIAssistant={onOpenAIAssistant}
         />
       )}
 

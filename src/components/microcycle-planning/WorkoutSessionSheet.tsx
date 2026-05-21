@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, Save, PanelRightClose, PanelRight, Pencil, MessageSquare, ChevronDown, X, Trophy, Calendar as CalendarIcon } from 'lucide-react';
+import { Plus, Save, PanelRightClose, PanelRight, Pencil, MessageSquare, ChevronDown, X, Trophy, Calendar as CalendarIcon, Bot } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { WorkoutSection, WorkoutExercise, WorkoutSession, SupersetMapping } from '@/types/workout';
 import { IntensityLevel } from '@/types/training';
@@ -116,6 +116,8 @@ interface WorkoutSessionSheetProps {
   // Athlete context for baseline value auto-fill
   selectedAthleteId?: string;
   athletePerformanceParameters?: AthletePerformanceParameter[];
+  // Callback to open the AI assistant panel from within the dialog
+  onOpenAIAssistant?: () => void;
 }
 
 export function WorkoutSessionSheet({
@@ -161,6 +163,7 @@ export function WorkoutSessionSheet({
   isAdHocSession = false,
   selectedAthleteId,
   athletePerformanceParameters,
+  onOpenAIAssistant,
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
   const { libraries, updateExerciseInLibrary } = useCustomLibraries();
@@ -2528,6 +2531,16 @@ export function WorkoutSessionSheet({
               )}
             </div>
             <div className="flex items-center gap-2 pr-10">
+              {onOpenAIAssistant && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onOpenAIAssistant}
+                  title="Open AI Assistant"
+                >
+                  <Bot className="h-4 w-4" />
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
                 {sidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
               </Button>

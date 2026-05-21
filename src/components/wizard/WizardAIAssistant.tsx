@@ -139,6 +139,12 @@ export interface WizardAIAssistantProps {
    * the AI knows the full state of all three databases on every page and step.
    */
   globalContext?: string;
+  /**
+   * Increment this counter to force-open the AI panel. Use from external triggers
+   * (e.g. a button inside a modal) to bypass pointer-event blocking.
+   * Each increment opens the panel; the user can still close it manually.
+   */
+  forceOpen?: number;
 }
 
 // ─── Prompts ─────────────────────────────────────────────────────────────────
@@ -607,10 +613,16 @@ export function WizardAIAssistant({
   onApplySuggestion,
   assistantRole,
   globalContext,
+  forceOpen,
 }: WizardAIAssistantProps) {
   const { profile } = useCoachProfile();
   const { data: toolboxData } = useToolboxData();
   const [isOpen, setIsOpen] = useState(false);
+
+  // Open the panel whenever forceOpen counter increments
+  useEffect(() => {
+    if (forceOpen && forceOpen > 0) setIsOpen(true);
+  }, [forceOpen]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);

@@ -77,6 +77,7 @@ export default function MicrocyclePlanningPage() {
   const [ragContext, setRagContext] = useState('');
   const globalAIContext = useGlobalAIContext();
   const { coachMemoryContext } = useCoachMemory({ currentMethods: macrocycleData?.selectedMethods ?? [] });
+  const [aiOpenTrigger, setAiOpenTrigger] = useState(0);
   const { libraries } = useCustomLibraries();
 
   // Resolve athlete name from selectedAthleteId
@@ -2875,7 +2876,7 @@ export default function MicrocyclePlanningPage() {
     setDailyIntensityData(prev => {
       const updated = [...prev];
       const index = updated.findIndex(di => di.date === date);
-      
+
       if (index >= 0) {
         updated[index] = { ...updated[index], intensity };
       } else {
@@ -2893,12 +2894,20 @@ export default function MicrocyclePlanningPage() {
           });
         }
       }
-      
+
       // Save to localStorage immediately
       localStorage.setItem('dailyIntensityData', JSON.stringify(updated));
       return updated;
     });
-    
+
+    // For single-session days, also sync the session intensity
+    const day = trainingDays.find(d => d.date === date);
+    const sessionCount = day?.sessions ?? 1;
+    if (sessionCount === 1 && currentMesocycle) {
+      const sessionKey = `sessionIntensity_${currentMesocycle.id}_${date}_0`;
+      localStorage.setItem(sessionKey, intensity);
+    }
+
     toast({
       title: "Intensity updated",
       description: `Set to ${intensity.replace('-', ' ')}`,
@@ -4619,6 +4628,7 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
               selectedAthleteId={selectedAthleteId}
               athletePerformanceParameters={selectedAthletePerformanceParameters}
               onDeleteTestEvent={handleDeleteTestEvent}
+              onOpenAIAssistant={() => setAiOpenTrigger(c => c + 1)}
             />
         </>
       )}
@@ -4684,6 +4694,7 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
         ragContext={ragContext}
         globalContext={globalAIContext}
         coachMemoryContext={coachMemoryContext}
+        forceOpen={aiOpenTrigger}
       />
     </div>
   );
