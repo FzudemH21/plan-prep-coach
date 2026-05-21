@@ -71,6 +71,8 @@ export type ApplySuggestion =
   | { type: "copy_session"; sourceDayDate: string; sourceSessionIndex: number; targetDayDate: string }
   /** MicrocyclePlanningPage Step 2 — copy a section to another day/session */
   | { type: "copy_section"; sourceDayDate: string; sourceSessionIndex: number; sourceSectionName: string; targetDayDate: string; targetSessionIndex: number }
+  /** MicrocyclePlanningPage Step 2 — rename a session */
+  | { type: "rename_session"; dayDate: string; sessionIndex: number; newName: string }
   /** MicrocyclePlanningPage Step 2 — add a single exercise to a day/session/section and retrospectively register it for its method */
   | { type: "add_exercise"; exerciseId: string; exerciseName: string; libraryId: string; methodId: string; dayDate: string; sessionIndex: number; sectionName?: string }
   /** MicrocyclePlanningPage Step 2 — add a circuit block to a day/session/section */
@@ -184,6 +186,8 @@ Available types and their fields:
 - distribute_exercises: {"type":"distribute_exercises","replace":false,"entries":[{"exerciseId":"<exact id from context>","exerciseName":"<name>","methodId":"<exact methodId from context>","categoryName":"<category — include ONLY if the method has categories, omit otherwise>","dayDate":"YYYY-MM-DD","sessionIndex":0}]}
   IMPORTANT: Use this action in Phase 3 Step 2 whenever the coach asks to assign or distribute exercises to training days. You CAN assign exercises directly to specific calendar dates — this is exactly what this action is for. Do NOT tell the coach this is impossible or that they need to use the hierarchy manually.
   Use ONLY exerciseIds and methodIds listed under "Available exercises" in the wizard context. dayDate must be YYYY-MM-DD and must exactly match a date from the training schedule in context. sessionIndex is 0-based (0 = first session of the day). Set "replace":true to clear the existing exercise distribution for the entire current mesocycle before adding. Do NOT invent dates — use only dates from the training schedule provided in context.
+- rename_session: {"type":"rename_session","dayDate":"YYYY-MM-DD","sessionIndex":0,"newName":"<new session name>"}
+  Renames a session. Use the current session name visible in the training schedule context ("session X \"CurrentName\"") to confirm you are targeting the right one. sessionIndex is 0-based.
 - create_section: {"type":"create_section","dayDate":"YYYY-MM-DD","sessionIndex":0,"name":"Warm-up","note":"<optional note>"}
   Creates a named block within a session (e.g. Warm-up, Main Block, Cooldown). Use this to structure session architecture. sessionIndex is 0-based.
 - delete_section: {"type":"delete_section","dayDate":"YYYY-MM-DD","sessionIndex":0,"sectionName":"<exact section name>"}
@@ -431,6 +435,8 @@ function getSuggestionPreview(action: ApplySuggestion): string {
       return `Copy session ${action.sourceSessionIndex + 1} from ${action.sourceDayDate} → ${action.targetDayDate}`;
     case "copy_section":
       return `Copy section "${action.sourceSectionName}" from ${action.sourceDayDate} → ${action.targetDayDate} session ${action.targetSessionIndex + 1}`;
+    case "rename_session":
+      return `Rename session ${action.sessionIndex + 1} on ${action.dayDate} → "${action.newName}"`;
     case "add_exercise":
       return `Add "${action.exerciseName}" to ${action.dayDate} session ${action.sessionIndex + 1}${action.sectionName ? ` / ${action.sectionName}` : ''} [${action.methodId}]`;
     case "add_circuit":
