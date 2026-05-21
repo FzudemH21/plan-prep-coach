@@ -4138,6 +4138,9 @@ export default function MesocyclePage() {
           const isTestDay = !!testName;
           const isEventDay = !!eventName;
           
+          const existingIntensity = dailyIntensityData.find(di => di.date === dateStr)?.intensity;
+          const isOff = existingIntensity === 'off';
+
           days.push({
             date: dateStr,
             dayOfWeek,
@@ -4149,9 +4152,9 @@ export default function MesocyclePage() {
             isTrainingDay: true,
             testNames: testName ? [testName] : undefined,
             eventNames: eventName ? [eventName] : undefined,
-            intensity: 'moderate', // Default intensity
-            sessions: 1, // Default to 1 session
-            sessionNames: ['Session 1']
+            intensity: existingIntensity ?? 'moderate',
+            sessions: isOff ? 0 : 1,
+            sessionNames: isOff ? [] : ['Session 1']
           });
         }
         
