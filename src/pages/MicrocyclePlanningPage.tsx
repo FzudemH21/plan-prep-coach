@@ -3875,6 +3875,90 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
       });
 
       toast({ title: `${exerciseIds.length} exercises moved to ${targetDayDate} session ${targetSessionIndex + 1}${targetSectionName ? ` / ${targetSectionName}` : ''}` });
+
+    } else if (action.type === "copy_session") {
+      const { sourceDayDate, sourceSessionIndex, targetDayDate } = action;
+      const srcExercises = exerciseDistribution.filter(e => e.dayDate === sourceDayDate && e.sessionIndex === sourceSessionIndex);
+      const srcSections = sessionSections.filter(s => s.dayDate === sourceDayDate && s.sessionIndex === sourceSessionIndex);
+      if (srcExercises.length === 0) { toast({ title: "Source session has no exercises", variant: "destructive" }); return; }
+
+      // Assign new session index at end of target day
+      const maxSi = exerciseDistribution.filter(e => e.dayDate === targetDayDate).reduce((m, e) => Math.max(m, e.sessionIndex), -1);
+      const newSi = maxSi + 1;
+
+      // Remap IDs
+      const sectionIdMap = new Map<string, string>();
+      srcSections.forEach(s => sectionIdMap.set(s.id, `section-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`));
+      const exIdMap: Record<string, string> = {};
+      const newExercises = srcExercises.map(e => {
+        const newId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+        exIdMap[e.id] = newId;
+        return { ...e, id: newId, dayDate: targetDayDate, sessionIndex: newSi, sectionId: e.sectionId ? sectionIdMap.get(e.sectionId) : undefined };
+      });
+      const newSections = srcSections.map((s, idx) => ({ ...s, id: sectionIdMap.get(s.id)!, dayDate: targetDayDate, sessionIndex: newSi, order: idx }));
+
+      // Copy supersets
+      const srcSupersets = supersets[sourceDayDate]?.[sourceSessionIndex];
+      const nextSupersets: SupersetMapping = supersets ? JSON.parse(JSON.stringify(supersets)) : {};
+      if (srcSupersets) {
+        if (!nextSupersets[targetDayDate]) nextSupersets[targetDayDate] = {};
+        nextSupersets[targetDayDate][newSi] = {};
+        Object.entries(srcSupersets).forEach(([sectionKey, ssMap]) => {
+          const newKey = sectionKey === '__unsectioned__' ? '__unsectioned__' : (sectionIdMap.get(sectionKey) ?? sectionKey);
+          nextSupersets[targetDayDate][newSi][newKey] = {};
+          Object.entries(ssMap).forEach(([ssId, ids]) => {
+            const mapped = (ids as string[]).map(id => exIdMap[id]).filter(Boolean);
+            if (mapped.length > 1) nextSupersets[targetDayDate][newSi][newKey][ssId] = mapped;
+          });
+        });
+      }
+
+      // Method mismatch check
+      const targetKey0 = `${targetDayDate}_0`;
+      const targetMethods = new Set(dayMethodAssignments[targetKey0] ?? []);
+      const mismatchMethods = [...new Set(newExercises.map(e => e.methodId).filter(m => targetMethods.size > 0 && !targetMethods.has(m)))];
+
+      setExerciseDistribution(prev => { const u = [...prev, ...newExercises]; localStorage.setItem('exerciseDistribution', JSON.stringify(u)); return u; });
+      setSessionSections(prev => { const u = [...prev, ...newSections]; localStorage.setItem('sessionSections', JSON.stringify(u)); return u; });
+      setSupersets(nextSupersets);
+      localStorage.setItem('supersets', JSON.stringify(nextSupersets));
+      setDaySplitStates(prev => ({ ...prev, [targetDayDate]: Math.max(prev[targetDayDate] ?? 1, newSi + 1) }));
+
+      toast({
+        title: `Session copied to ${targetDayDate}`,
+        description: mismatchMethods.length ? `⚠️ Methods not assigned to this day: ${mismatchMethods.join(', ')}` : undefined,
+      });
+
+    } else if (action.type === "copy_section") {
+      const { sourceDayDate, sourceSessionIndex, sourceSectionName, targetDayDate, targetSessionIndex } = action;
+      const srcSection = sessionSections.find(s => s.dayDate === sourceDayDate && s.sessionIndex === sourceSessionIndex && s.name === sourceSectionName);
+      if (!srcSection) { toast({ title: `Section "${sourceSectionName}" not found`, variant: "destructive" }); return; }
+      const srcExercises = exerciseDistribution.filter(e => e.sectionId === srcSection.id);
+      if (srcExercises.length === 0) { toast({ title: "Source section has no exercises", variant: "destructive" }); return; }
+
+      const newSectionId = `section-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const maxSectionOrder = sessionSections.filter(s => s.dayDate === targetDayDate && s.sessionIndex === targetSessionIndex).reduce((m, s) => Math.max(m, s.order), -1);
+      const newSection: SessionSection = { ...srcSection, id: newSectionId, dayDate: targetDayDate, sessionIndex: targetSessionIndex, order: maxSectionOrder + 1 };
+
+      const exIdMap: Record<string, string> = {};
+      const newExercises = srcExercises.map(e => {
+        const newId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+        exIdMap[e.id] = newId;
+        return { ...e, id: newId, dayDate: targetDayDate, sessionIndex: targetSessionIndex, sectionId: newSectionId };
+      });
+
+      // Method mismatch check
+      const tKey = `${targetDayDate}_${targetSessionIndex}`;
+      const tMethods = new Set(dayMethodAssignments[tKey] ?? []);
+      const mismatch = [...new Set(newExercises.map(e => e.methodId).filter(m => tMethods.size > 0 && !tMethods.has(m)))];
+
+      setExerciseDistribution(prev => { const u = [...prev, ...newExercises]; localStorage.setItem('exerciseDistribution', JSON.stringify(u)); return u; });
+      setSessionSections(prev => { const u = [...prev, newSection]; localStorage.setItem('sessionSections', JSON.stringify(u)); return u; });
+
+      toast({
+        title: `Section "${sourceSectionName}" copied to ${targetDayDate} session ${targetSessionIndex + 1}`,
+        description: mismatch.length ? `⚠️ Methods not assigned to this day: ${mismatch.join(', ')}` : undefined,
+      });
     }
   }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments, exerciseDistribution, sessionSections, supersets, toast]);
 

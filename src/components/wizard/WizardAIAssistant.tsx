@@ -63,6 +63,10 @@ export type ApplySuggestion =
   | { type: "move_exercise"; exerciseId: string; targetDayDate: string; targetSessionIndex: number; targetSectionName?: string }
   /** MicrocyclePlanningPage Step 2 — move multiple exercises (e.g. a whole superset group) atomically */
   | { type: "move_exercises"; exerciseIds: string[]; targetDayDate: string; targetSessionIndex: number; targetSectionName?: string }
+  /** MicrocyclePlanningPage Step 2 — copy a whole session to another day (adds as new session) */
+  | { type: "copy_session"; sourceDayDate: string; sourceSessionIndex: number; targetDayDate: string }
+  /** MicrocyclePlanningPage Step 2 — copy a section to another day/session */
+  | { type: "copy_section"; sourceDayDate: string; sourceSessionIndex: number; sourceSectionName: string; targetDayDate: string; targetSessionIndex: number }
   /** Parameter Database — add a new parameter */
   | { type: "add_parameter"; name: string; category?: string; unit?: string; applicableSports?: string[] }
   /** Parameter Database — add multiple parameters at once */
@@ -183,6 +187,10 @@ Available types and their fields:
   Moves a single exercise to a different day, session, or section. If the exercise is in a superset it is automatically removed from it. targetSectionName is optional — omit to place the exercise outside any section.
 - move_exercises: {"type":"move_exercises","exerciseIds":["<id1>","<id2>"],"targetDayDate":"YYYY-MM-DD","targetSessionIndex":0,"targetSectionName":"<exact section name or omit>"}
   Moves multiple exercises to the same target in one atomic action. ALWAYS use this (not repeated move_exercise) when moving a superset group or any set of exercises together — it applies all moves in a single step so nothing is left behind.
+- copy_session: {"type":"copy_session","sourceDayDate":"YYYY-MM-DD","sourceSessionIndex":0,"targetDayDate":"YYYY-MM-DD"}
+  Copies all exercises, sections, and supersets from a source session and adds them as a new session on the target day. If exercises in the session belong to methods not assigned to the target day, the app will warn the coach.
+- copy_section: {"type":"copy_section","sourceDayDate":"YYYY-MM-DD","sourceSessionIndex":0,"sourceSectionName":"<exact section name>","targetDayDate":"YYYY-MM-DD","targetSessionIndex":0}
+  Copies a single named section (with its exercises) to a target day/session. Use exact section names from the distributed exercises context. If exercises belong to methods not assigned to the target day, the app will warn the coach.
 - add_parameter: {"type":"add_parameter","name":"<parameter name>","category":"<one of: strength|speed|power|endurance|mobility|technique|body_composition|other>","unit":"<unit e.g. kg, s, cm — omit if not applicable>","applicableSports":["<sport>","<sport>"]}
   applicableSports is optional — include when the parameter is sport-specific (e.g. ["Soccer","Rugby"]). Omit for universal parameters.
 - add_parameters_bulk: {"type":"add_parameters_bulk","parameters":[{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>","applicableSports":["<sport>"]},{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>"}]}
@@ -220,7 +228,15 @@ const INTELLECTUAL_INTEGRITY = `## Intellectual integrity (critical)
 - If the coach pushes back without new reasoning, hold your position and explain your reasoning again more clearly. It is fine to say: "I understand we see this differently — here is why I still think X."
 - The coach hired you for an honest expert opinion, not for agreement.
 - Do NOT hide behind "it depends" or "every athlete is different" as a substitute for a real answer. Those phrases are only acceptable when you follow them immediately with a concrete position based on the specific context you have. Vagueness is not neutrality — it is a failure to do your job.
-- Do NOT present false balance. If scientific consensus strongly favors one view and a fringe position opposes it, say so clearly — weight evidence by quality and volume, not by treating all views as equally valid.`;
+- Do NOT present false balance. If scientific consensus strongly favors one view and a fringe position opposes it, say so clearly — weight evidence by quality and volume, not by treating all views as equally valid.
+
+## Exercise placement judgment (apply in Phase 3)
+Before executing any structural change to a session (moving, copying, placing exercises), consider whether the placement makes physiological sense. Flag and push back on clearly inappropriate requests — do not blindly comply. Examples of things that warrant a warning or refusal:
+- Power/speed/strength exercises (cleans, squats, deadlifts, sprints, jumps) placed in a Cooldown section — these require full CNS readiness and belong in Warm-up activation or Main block.
+- High-intensity CNS work at the end of a session when the athlete will be fatigued.
+- Mobility/flexibility work placed as the primary Main block.
+- Excessive volume added to a day already at high intensity.
+When you flag an issue, briefly explain WHY it is problematic and offer the correct placement as an alternative. Still provide the action block if the coach explicitly confirms they want to proceed after your warning.`;
 
 function buildSystemPrompt(
   coachContext: string,
@@ -391,6 +407,10 @@ function getSuggestionPreview(action: ApplySuggestion): string {
       return `Move exercise to ${action.targetDayDate} session ${action.targetSessionIndex + 1}${action.targetSectionName ? ` / ${action.targetSectionName}` : ''}`;
     case "move_exercises":
       return `Move ${action.exerciseIds.length} exercises to ${action.targetDayDate} session ${action.targetSessionIndex + 1}${action.targetSectionName ? ` / ${action.targetSectionName}` : ''}`;
+    case "copy_session":
+      return `Copy session ${action.sourceSessionIndex + 1} from ${action.sourceDayDate} → ${action.targetDayDate}`;
+    case "copy_section":
+      return `Copy section "${action.sourceSectionName}" from ${action.sourceDayDate} → ${action.targetDayDate} session ${action.targetSessionIndex + 1}`;
     case "add_parameter":
       return `Add parameter: ${action.name}${action.category ? ` (${action.category})` : ""}${action.unit ? ` [${action.unit}]` : ""}`;
     case "add_parameters_bulk":
