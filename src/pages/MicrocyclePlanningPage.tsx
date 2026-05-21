@@ -33,6 +33,7 @@ import { WizardAIAssistant } from '@/components/wizard/WizardAIAssistant';
 import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
 import { useGlobalAIContext } from '@/hooks/useGlobalAIContext';
 import { useCoachMemory } from '@/hooks/useCoachMemory';
+import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 
 // Using ExerciseDistribution, SessionSection, and SupersetMapping from types file
 
@@ -76,6 +77,7 @@ export default function MicrocyclePlanningPage() {
   const [ragContext, setRagContext] = useState('');
   const globalAIContext = useGlobalAIContext();
   const { coachMemoryContext } = useCoachMemory({ currentMethods: macrocycleData?.selectedMethods ?? [] });
+  const { libraries } = useCustomLibraries();
 
   // Resolve athlete name from selectedAthleteId
   const selectedAthleteId = macrocycleData?.selectedAthleteId;
@@ -3414,6 +3416,7 @@ export default function MicrocyclePlanningPage() {
 
     // Step 2: build available exercises + day schedule for AI context
     let exercisesStr = '';
+    let circuitsStr = '';
     let scheduleStr = '';
     if (currentStep === 2 && currentMeso) {
       // Available exercises per method/category from Step 5 selections
@@ -3441,6 +3444,19 @@ export default function MicrocyclePlanningPage() {
           });
         });
         exercisesStr = lines.join('\n');
+      }
+
+      // Available circuits from all exercise libraries
+      const allCircuits = libraries.flatMap(lib =>
+        (lib.circuits ?? []).map(c => ({ lib, circuit: c }))
+      );
+      if (allCircuits.length > 0) {
+        const circuitLines = [`Available circuits:`];
+        allCircuits.forEach(({ lib, circuit }) => {
+          const exList = circuit.exercises.map((e: { name: string }) => e.name).join(', ');
+          circuitLines.push(`  "${circuit.name}" (circuitId: ${circuit.id}, libraryId: ${lib.id}) — exercises: ${exList || '(none)'}`);
+        });
+        circuitsStr = circuitLines.join('\n');
       }
 
       // Training day schedule — ONLY the currently selected microcycle (not all meso days)
@@ -3526,12 +3542,13 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
       dayStr,
       offDaysStr,
       exercisesStr,
+      circuitsStr,
       scheduleStr,
       stepHint,
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, currentMicrocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel, exerciseSelectionData, exerciseDistribution]);
+  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, currentMicrocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel, exerciseSelectionData, exerciseDistribution, libraries]);
 
   const handleMicroAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
     if (action.type === "assign_methods_to_days") {
@@ -4011,8 +4028,121 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
       toast({
         title: `Section "${sourceSectionName}" copied to ${targetDayDate} session ${targetSessionIndex + 1}`,
       });
+
+    } else if (action.type === "add_exercise") {
+      const { exerciseId, exerciseName, libraryId, methodId, dayDate, sessionIndex, sectionName } = action;
+      const currentMeso = mesocycles[currentMesocycleIndex];
+      if (!currentMeso) return;
+
+      // Resolve target section
+      const targetSection = sectionName
+        ? sessionSections.find(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex && s.name === sectionName)
+        : undefined;
+      let targetSectionId = targetSection?.id;
+
+      // Auto-create section if named but missing
+      if (sectionName && !targetSectionId) {
+        const maxOrder = sessionSections.filter(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex).reduce((m, s) => Math.max(m, s.order), -1);
+        const newSection: SessionSection = {
+          id: `section-ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          dayDate, sessionIndex, name: sectionName, order: maxOrder + 1,
+        };
+        setSessionSections(prev => { const u = [...prev, newSection]; localStorage.setItem('sessionSections', JSON.stringify(u)); return u; });
+        targetSectionId = newSection.id;
+      }
+
+      const baseOrder = exerciseDistribution.filter(e =>
+        e.dayDate === dayDate && e.sessionIndex === sessionIndex &&
+        (targetSectionId ? e.sectionId === targetSectionId : !e.sectionId)
+      ).length;
+
+      const newEntry: ExerciseDistribution = {
+        id: `ex-ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        exerciseId, exerciseName, methodId, categoryName: '',
+        dayDate, sessionIndex, order: baseOrder,
+        ...(targetSectionId ? { sectionId: targetSectionId } : {}),
+      };
+
+      setExerciseDistribution(prev => { const u = [...prev, newEntry]; localStorage.setItem('exerciseDistribution', JSON.stringify(u)); return u; });
+
+      // Retroactively register in exerciseSelectionData for Step 5
+      setExerciseSelectionData(prev => {
+        const updated = { ...prev };
+        const existingEntry = Object.entries(updated).find(
+          ([, cell]) => cell.methodId === methodId && cell.mesocycleId === currentMeso.id
+        );
+        const newExSel: ExerciseSelection = { id: `exsel-ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, exerciseId, exerciseName, library: libraryId };
+        if (existingEntry) {
+          const [cellKey, cellData] = existingEntry;
+          if (!cellData.exercises.find(e => e.exerciseId === exerciseId)) {
+            updated[cellKey] = { ...cellData, exercises: [...cellData.exercises, newExSel] };
+          }
+        } else {
+          updated[`${methodId}::::${currentMeso.id}`] = { methodId, mesocycleId: currentMeso.id, exercises: [newExSel] };
+        }
+        const state = JSON.parse(localStorage.getItem('microcyclePlanningState') ?? '{}');
+        localStorage.setItem('microcyclePlanningState', JSON.stringify({ ...state, cellData: updated }));
+        return updated;
+      });
+
+      // Add method to dayMethodAssignments if missing
+      const slotKey = `${dayDate}_${sessionIndex}`;
+      const existingMethods = dayMethodAssignments[slotKey] ?? [];
+      if (!existingMethods.includes(methodId)) {
+        const newAssignments = { ...dayMethodAssignments, [slotKey]: [...existingMethods, methodId] };
+        setDayMethodAssignments(newAssignments);
+        localStorage.setItem('dayMethodAssignments', JSON.stringify(newAssignments));
+      }
+
+      toast({ title: `"${exerciseName}" added to ${dayDate} session ${sessionIndex + 1}${sectionName ? ` / ${sectionName}` : ''}` });
+
+    } else if (action.type === "add_circuit") {
+      const { circuitId, circuitName, libraryId, dayDate, sessionIndex, sectionName } = action;
+
+      // Resolve target section
+      const targetSection = sectionName
+        ? sessionSections.find(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex && s.name === sectionName)
+        : undefined;
+      let targetSectionId = targetSection?.id;
+
+      if (sectionName && !targetSectionId) {
+        const maxOrder = sessionSections.filter(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex).reduce((m, s) => Math.max(m, s.order), -1);
+        const newSection: SessionSection = {
+          id: `section-ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          dayDate, sessionIndex, name: sectionName, order: maxOrder + 1,
+        };
+        setSessionSections(prev => { const u = [...prev, newSection]; localStorage.setItem('sessionSections', JSON.stringify(u)); return u; });
+        targetSectionId = newSection.id;
+      }
+
+      // Find the full circuit from libraries for its exercise list and rest settings
+      const lib = libraries.find(l => l.id === libraryId);
+      const circuit = lib?.circuits?.find(c => c.id === circuitId);
+
+      const baseOrder = exerciseDistribution.filter(e =>
+        e.dayDate === dayDate && e.sessionIndex === sessionIndex &&
+        (targetSectionId ? e.sectionId === targetSectionId : !e.sectionId)
+      ).length;
+
+      const newEntry: ExerciseDistribution = {
+        id: `circuit-ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        exerciseId: circuitId, exerciseName: circuitName,
+        methodId: '', categoryName: '',
+        dayDate, sessionIndex, order: baseOrder,
+        isCircuit: true, circuitId, circuitLibraryId: libraryId,
+        ...(circuit ? {
+          circuitExercises: circuit.exercises,
+          circuitRestBetweenRounds: circuit.restBetweenRounds,
+          circuitRestBetweenExercises: circuit.restBetweenExercises,
+          circuitComments: circuit.comments,
+        } : {}),
+        ...(targetSectionId ? { sectionId: targetSectionId } : {}),
+      };
+
+      setExerciseDistribution(prev => { const u = [...prev, newEntry]; localStorage.setItem('exerciseDistribution', JSON.stringify(u)); return u; });
+      toast({ title: `Circuit "${circuitName}" added to ${dayDate} session ${sessionIndex + 1}${sectionName ? ` / ${sectionName}` : ''}` });
     }
-  }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments, exerciseDistribution, sessionSections, supersets, toast]);
+  }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments, exerciseDistribution, sessionSections, supersets, exerciseSelectionData, libraries, toast]);
 
   return (
     <div className="mx-auto py-6 space-y-6 px-4 w-full max-w-[98vw]">

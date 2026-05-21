@@ -71,6 +71,10 @@ export type ApplySuggestion =
   | { type: "copy_session"; sourceDayDate: string; sourceSessionIndex: number; targetDayDate: string }
   /** MicrocyclePlanningPage Step 2 — copy a section to another day/session */
   | { type: "copy_section"; sourceDayDate: string; sourceSessionIndex: number; sourceSectionName: string; targetDayDate: string; targetSessionIndex: number }
+  /** MicrocyclePlanningPage Step 2 — add a single exercise to a day/session/section and retrospectively register it for its method */
+  | { type: "add_exercise"; exerciseId: string; exerciseName: string; libraryId: string; methodId: string; dayDate: string; sessionIndex: number; sectionName?: string }
+  /** MicrocyclePlanningPage Step 2 — add a circuit block to a day/session/section */
+  | { type: "add_circuit"; circuitId: string; circuitName: string; libraryId: string; dayDate: string; sessionIndex: number; sectionName?: string }
   /** Parameter Database — add a new parameter */
   | { type: "add_parameter"; name: string; category?: string; unit?: string; applicableSports?: string[] }
   /** Parameter Database — add multiple parameters at once */
@@ -200,6 +204,10 @@ Available types and their fields:
   Copies all exercises, sections, and supersets from a source session and adds them as a new session on the target day. If exercises in the session belong to methods not assigned to the target day, the app will warn the coach.
 - copy_section: {"type":"copy_section","sourceDayDate":"YYYY-MM-DD","sourceSessionIndex":0,"sourceSectionName":"<exact section name>","targetDayDate":"YYYY-MM-DD","targetSessionIndex":0}
   Copies a single named section (with its exercises) to a target day/session. Use exact section names from the distributed exercises context. If exercises belong to methods not assigned to the target day, the app will warn the coach.
+- add_exercise: {"type":"add_exercise","exerciseId":"<exact exerciseId from Available exercises context>","exerciseName":"<name>","libraryId":"<exact libraryId from Available exercises context>","methodId":"<exact method name>","dayDate":"YYYY-MM-DD","sessionIndex":0,"sectionName":"<exact section name or omit>"}
+  Adds a single exercise to a specific day/session/section. The exercise is also retroactively registered to the method's exercise selection (Step 5). IMPORTANT: If the coach has not specified which method the exercise belongs to, you MUST ask before emitting this action. Use only exerciseId and libraryId values from the "Available exercises" section of the context. If the exercise is not yet in the exercise selection for this mesocycle, still add it — the handler will register it automatically.
+- add_circuit: {"type":"add_circuit","circuitId":"<exact circuitId from Available circuits context>","circuitName":"<name>","libraryId":"<exact libraryId from Available circuits context>","dayDate":"YYYY-MM-DD","sessionIndex":0,"sectionName":"<exact section name or omit>"}
+  Adds a circuit block (pre-built set of exercises with rest intervals) to a session/section. Use only circuitId and libraryId values from "Available circuits" in the context.
 - add_parameter: {"type":"add_parameter","name":"<parameter name>","category":"<one of: strength|speed|power|endurance|mobility|technique|body_composition|other>","unit":"<unit e.g. kg, s, cm — omit if not applicable>","applicableSports":["<sport>","<sport>"]}
   applicableSports is optional — include when the parameter is sport-specific (e.g. ["Soccer","Rugby"]). Omit for universal parameters.
 - add_parameters_bulk: {"type":"add_parameters_bulk","parameters":[{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>","applicableSports":["<sport>"]},{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>"}]}
@@ -215,8 +223,8 @@ Available types and their fields:
   Use this when linking multiple training methods to parameters at once. Preferred over add_parameter_method when adding 2 or more links.
 
 Rules:
-- Only ONE [[APPLY: ...]] block per message, at the very end.
-- Only include it when you are confident the suggestion is appropriate and actionable.
+- You may include MULTIPLE [[APPLY: ...]] blocks in one message — one per action. Place them all at the very end of your message.
+- Only include action blocks when you are confident the suggestion is appropriate and actionable.
 - Use exact method names as listed in the wizard context.
 - Do not add commentary after the [[APPLY: ...]] block.`;
 
@@ -420,6 +428,10 @@ function getSuggestionPreview(action: ApplySuggestion): string {
       return `Copy session ${action.sourceSessionIndex + 1} from ${action.sourceDayDate} → ${action.targetDayDate}`;
     case "copy_section":
       return `Copy section "${action.sourceSectionName}" from ${action.sourceDayDate} → ${action.targetDayDate} session ${action.targetSessionIndex + 1}`;
+    case "add_exercise":
+      return `Add "${action.exerciseName}" to ${action.dayDate} session ${action.sessionIndex + 1}${action.sectionName ? ` / ${action.sectionName}` : ''} [${action.methodId}]`;
+    case "add_circuit":
+      return `Add circuit "${action.circuitName}" to ${action.dayDate} session ${action.sessionIndex + 1}${action.sectionName ? ` / ${action.sectionName}` : ''}`;
     case "add_parameter":
       return `Add parameter: ${action.name}${action.category ? ` (${action.category})` : ""}${action.unit ? ` [${action.unit}]` : ""}`;
     case "add_parameters_bulk":
