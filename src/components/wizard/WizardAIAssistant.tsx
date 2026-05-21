@@ -755,6 +755,7 @@ export function WizardAIAssistant({
           {/* Panel */}
           <div
             data-ai-assistant
+            onPointerDownCapture={(e) => e.stopPropagation()}
             className={cn(
               "fixed right-0 top-0 bottom-0 z-[200]",
               "w-full md:w-[400px]",
