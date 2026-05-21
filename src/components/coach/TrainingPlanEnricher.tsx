@@ -139,21 +139,25 @@ export function TrainingPlanEnricher() {
     setError(null);
 
     try {
-      // 1. Upload file to "Training Plans" folder in document library
+      // 1. Upload file to "Training Plans" folder — storage upload is best-effort;
+      //    if Supabase storage is unavailable the plan is still registered locally
+      //    and in plan_memory so the AI can reference it.
       const folderId = resolveTrainingPlansFolder(folders, addFolder);
-      await addDocument(pendingFile, folderId);
+      let docId = `manual_${Date.now()}`;
+      try {
+        await addDocument(pendingFile, folderId);
+        const stored = JSON.parse(localStorage.getItem(DOCS_INDEX_KEY) ?? "{}") as {
+          documents?: Array<{ id: string; folderId: string | null; uploadedAt: string }>;
+        };
+        const newestInFolder = (stored.documents ?? [])
+          .filter((d) => d.folderId === folderId)
+          .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())[0];
+        if (newestInFolder) docId = newestInFolder.id;
+      } catch {
+        // Storage upload failed — continue without cloud file (plan_memory still saved)
+      }
 
-      // 2. Derive the doc ID of the just-uploaded file (newest in folder)
-      const stored = JSON.parse(localStorage.getItem(DOCS_INDEX_KEY) ?? "{}") as {
-        documents?: Array<{ id: string; folderId: string | null; uploadedAt: string }>;
-      };
-      const allDocs = stored.documents ?? [];
-      const newestInFolder = allDocs
-        .filter((d) => d.folderId === folderId)
-        .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())[0];
-      const docId = newestInFolder?.id ?? `manual_${Date.now()}`;
-
-      // 3. Save minimal entry to plan_memory for coach memory retrieval
+      // 2. Save to plan_memory so the AI can reference this plan
       if (user?.id) {
         await saveUploadedPlanMemory(
           {
