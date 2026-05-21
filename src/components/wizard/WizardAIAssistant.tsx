@@ -73,6 +73,8 @@ export type ApplySuggestion =
   | { type: "copy_section"; sourceDayDate: string; sourceSessionIndex: number; sourceSectionName: string; targetDayDate: string; targetSessionIndex: number }
   /** MicrocyclePlanningPage Step 2 — rename a session */
   | { type: "rename_session"; dayDate: string; sessionIndex: number; newName: string }
+  /** MicrocyclePlanningPage Step 2 — delete a session (removes all exercises, sections, supersets) */
+  | { type: "delete_session"; dayDate: string; sessionIndex: number }
   /** MicrocyclePlanningPage Step 2 — add a single exercise to a day/session/section and retrospectively register it for its method */
   | { type: "add_exercise"; exerciseId: string; exerciseName: string; libraryId: string; methodId: string; dayDate: string; sessionIndex: number; sectionName?: string }
   /** MicrocyclePlanningPage Step 2 — add a circuit block to a day/session/section */
@@ -188,6 +190,8 @@ Available types and their fields:
   Use ONLY exerciseIds and methodIds listed under "Available exercises" in the wizard context. dayDate must be YYYY-MM-DD and must exactly match a date from the training schedule in context. sessionIndex is 0-based (0 = first session of the day). Set "replace":true to clear the existing exercise distribution for the entire current mesocycle before adding. Do NOT invent dates — use only dates from the training schedule provided in context.
 - rename_session: {"type":"rename_session","dayDate":"YYYY-MM-DD","sessionIndex":0,"newName":"<new session name>"}
   Renames a session. Use the current session name visible in the training schedule context ("session X \"CurrentName\"") to confirm you are targeting the right one. sessionIndex is 0-based.
+- delete_session: {"type":"delete_session","dayDate":"YYYY-MM-DD","sessionIndex":0}
+  Deletes an entire session including all its exercises, sections, and supersets. If it is the only session on that day the day reverts to a rest day. Always confirm with the coach before emitting this action — it is irreversible.
 - create_section: {"type":"create_section","dayDate":"YYYY-MM-DD","sessionIndex":0,"name":"Warm-up","note":"<optional note>"}
   Creates a named block within a session (e.g. Warm-up, Main Block, Cooldown). Use this to structure session architecture. sessionIndex is 0-based.
 - delete_section: {"type":"delete_section","dayDate":"YYYY-MM-DD","sessionIndex":0,"sectionName":"<exact section name>"}
@@ -254,13 +258,32 @@ const INTELLECTUAL_INTEGRITY = `## Intellectual integrity (critical)
 - Do NOT hide behind "it depends" or "every athlete is different" as a substitute for a real answer. Those phrases are only acceptable when you follow them immediately with a concrete position based on the specific context you have. Vagueness is not neutrality — it is a failure to do your job.
 - Do NOT present false balance. If scientific consensus strongly favors one view and a fringe position opposes it, say so clearly — weight evidence by quality and volume, not by treating all views as equally valid.
 
-## Exercise placement judgment (apply in Phase 3)
-Before executing any structural change to a session (moving, copying, placing exercises), consider whether the placement makes physiological sense. Flag and push back on clearly inappropriate requests — do not blindly comply. Examples of things that warrant a warning or refusal:
-- Power/speed/strength exercises (cleans, squats, deadlifts, sprints, jumps) placed in a Cooldown section — these require full CNS readiness and belong in Warm-up activation or Main block.
-- High-intensity CNS work at the end of a session when the athlete will be fatigued.
-- Mobility/flexibility work placed as the primary Main block.
-- Excessive volume added to a day already at high intensity.
-When you flag an issue, briefly explain WHY it is problematic and offer the correct placement as an alternative. Still provide the action block if the coach explicitly confirms they want to proceed after your warning.`;
+## Critical appraisal (apply everywhere, not just Phase 3)
+Before executing ANY request — structural changes, exercise placement, volume decisions, session design — evaluate it against your sports science knowledge AND any uploaded research in the References section. You are not a passive executor; you are an expert collaborator. This means:
+
+**Exercise placement & session structure**
+- Power/speed/strength work (cleans, squats, deadlifts, sprints, jumps) belongs early in the session when the CNS is fresh — not in a Cooldown.
+- Fatigue-sensitive qualities (maximal speed, maximal strength, complex skill work) must come before metabolic conditioning in the same session.
+- Mobility/flexibility as a standalone Main block is inappropriate unless explicitly programmed for that purpose.
+- Supersets of antagonist pairs (e.g. push/pull) are generally fine; supersets of the same movement pattern (e.g. squat + lunge) compromise quality — flag it.
+
+**Volume & intensity**
+- Cross-reference the exercise volume you are adding against the periodization table values in context (sets × reps from Phase 2). If what the coach requests would substantially exceed or contradict the planned volume, say so.
+- Adding high-intensity exercises to a day already marked as Deload or Easy is a red flag — flag it.
+- Accumulating fatigue across consecutive high-intensity days — point it out if the schedule shows it.
+
+**Method-exercise fit**
+- If an exercise doesn't match the method it is being assigned to (e.g. a pure endurance exercise assigned to a Maximal Strength method), flag the mismatch and suggest the right method.
+- If a requested exercise is missing from the library entirely, say so and suggest the closest available alternative.
+
+**Research integration**
+- When relevant uploaded research is available in the References section, cite it by name to support or challenge a decision. Do not cite research you cannot see in context.
+- If the coach's approach contradicts strong research consensus, say so clearly — do not soften the finding to avoid conflict.
+
+**Deletion & irreversible actions**
+- Before deleting sessions or sections, confirm with the coach and briefly note what will be lost.
+
+When you flag an issue: state what the problem is, why it matters physiologically, and what the better alternative is. Keep it to 2–3 sentences. Then still provide the action block if the coach confirms they want to proceed.`;
 
 function buildSystemPrompt(
   coachContext: string,
@@ -437,6 +460,8 @@ function getSuggestionPreview(action: ApplySuggestion): string {
       return `Copy section "${action.sourceSectionName}" from ${action.sourceDayDate} → ${action.targetDayDate} session ${action.targetSessionIndex + 1}`;
     case "rename_session":
       return `Rename session ${action.sessionIndex + 1} on ${action.dayDate} → "${action.newName}"`;
+    case "delete_session":
+      return `Delete session ${action.sessionIndex + 1} on ${action.dayDate} (removes all exercises & sections)`;
     case "add_exercise":
       return `Add "${action.exerciseName}" to ${action.dayDate} session ${action.sessionIndex + 1}${action.sectionName ? ` / ${action.sectionName}` : ''} [${action.methodId}]`;
     case "add_circuit":

@@ -3703,12 +3703,29 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
 
     } else if (action.type === "delete_section") {
       const { dayDate, sessionIndex, sectionName } = action;
-      const updatedSections = sessionSections.filter(
-        s => !(s.dayDate === dayDate && s.sessionIndex === sessionIndex && s.name === sectionName)
+      const targetSection = sessionSections.find(
+        s => s.dayDate === dayDate && s.sessionIndex === sessionIndex && s.name === sectionName
       );
+      const updatedSections = sessionSections.filter(s => s !== targetSection);
       setSessionSections(updatedSections);
       localStorage.setItem('sessionSections', JSON.stringify(updatedSections));
-      toast({ title: `Section "${sectionName}" deleted` });
+      // Also remove all exercises belonging to this section
+      if (targetSection) {
+        setExerciseDistribution(prev => {
+          const u = prev.filter(e => e.sectionId !== targetSection.id);
+          localStorage.setItem('exerciseDistribution', JSON.stringify(u));
+          return u;
+        });
+        setSupersets(prev => {
+          const next = prev ? JSON.parse(JSON.stringify(prev)) : {};
+          if (next[dayDate]?.[sessionIndex]?.[targetSection.id]) {
+            delete next[dayDate][sessionIndex][targetSection.id];
+          }
+          localStorage.setItem('supersets', JSON.stringify(next));
+          return next;
+        });
+      }
+      toast({ title: `Section "${sectionName}" and its exercises deleted` });
 
     } else if (action.type === "rename_section") {
       const { dayDate, sessionIndex, sectionName, newName } = action;
@@ -4198,6 +4215,11 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
       const { dayDate, sessionIndex, newName } = action;
       handleRenameSession(dayDate, sessionIndex, newName);
       toast({ title: `Session renamed to "${newName}"` });
+
+    } else if (action.type === "delete_session") {
+      const { dayDate, sessionIndex } = action;
+      handleRemoveSession(dayDate, sessionIndex);
+      toast({ title: `Session ${sessionIndex + 1} on ${dayDate} deleted` });
     }
   }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments, exerciseDistribution, sessionSections, supersets, exerciseSelectionData, libraries, toast]);
 
