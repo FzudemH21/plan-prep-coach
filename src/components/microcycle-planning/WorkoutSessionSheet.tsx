@@ -2324,11 +2324,7 @@ export function WorkoutSessionSheet({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent
         className="max-w-[95vw] max-h-[95vh] w-full h-full flex flex-col p-0"
-        onInteractOutside={(e) => {
-          const target = (e as CustomEvent).detail?.originalEvent?.target as Element | null
-            ?? (e.target as Element | null);
-          if (target?.closest('[data-ai-assistant]')) e.preventDefault();
-        }}
+        onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader className="p-6 pb-4 border-b">
           <div className="flex items-center justify-between">
