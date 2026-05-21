@@ -3807,6 +3807,52 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
       });
 
       toast({ title: `${entry.exerciseName} moved to ${targetDayDate} session ${targetSessionIndex + 1}${targetSectionName ? ` / ${targetSectionName}` : ''}` });
+
+    } else if (action.type === "move_exercises") {
+      const { exerciseIds, targetDayDate, targetSessionIndex, targetSectionName } = action;
+      if (!exerciseIds.length) return;
+
+      const targetSectionId = targetSectionName
+        ? sessionSections.find(s => s.dayDate === targetDayDate && s.sessionIndex === targetSessionIndex && s.name === targetSectionName)?.id
+        : undefined;
+
+      // Capture source entries for superset cleanup before the state update
+      const sourceEntries = exerciseIds.map(id => exerciseDistribution.find(e => e.id === id)).filter(Boolean);
+
+      setExerciseDistribution(prev => {
+        const idSet = new Set(exerciseIds);
+        // Compute base order: end of existing exercises in the target slot (excluding the ones being moved)
+        const targetExs = prev.filter(
+          e => !idSet.has(e.id) && e.dayDate === targetDayDate && e.sessionIndex === targetSessionIndex &&
+            (targetSectionId ? e.sectionId === targetSectionId : !e.sectionId)
+        );
+        let nextOrder = targetExs.length > 0 ? Math.max(...targetExs.map(e => e.order)) + 1 : 0;
+        const updated = prev.map(e => {
+          if (!idSet.has(e.id)) return e;
+          return { ...e, dayDate: targetDayDate, sessionIndex: targetSessionIndex, sectionId: targetSectionId, order: nextOrder++ };
+        });
+        localStorage.setItem('exerciseDistribution', JSON.stringify(updated));
+        return updated;
+      });
+
+      setSupersets(prev => {
+        const next: SupersetMapping = prev ? JSON.parse(JSON.stringify(prev)) : {};
+        for (const entry of sourceEntries) {
+          if (!entry) continue;
+          const srcSectionKey = entry.sectionId || '__unsectioned__';
+          const srcMap = next[entry.dayDate]?.[entry.sessionIndex]?.[srcSectionKey];
+          if (srcMap) {
+            Object.keys(srcMap).forEach(ssId => {
+              srcMap[ssId] = (srcMap[ssId] as string[]).filter((id: string) => !exerciseIds.includes(id));
+              if (srcMap[ssId].length < 2) delete srcMap[ssId];
+            });
+          }
+        }
+        localStorage.setItem('supersets', JSON.stringify(next));
+        return next;
+      });
+
+      toast({ title: `${exerciseIds.length} exercises moved to ${targetDayDate} session ${targetSessionIndex + 1}${targetSectionName ? ` / ${targetSectionName}` : ''}` });
     }
   }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments, exerciseDistribution, sessionSections, supersets, toast]);
 
