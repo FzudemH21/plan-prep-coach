@@ -448,7 +448,7 @@ function ChatMarkdown({ text }: { text: string }) {
   );
 }
 
-const APPLY_REGEX = /\[\[APPLY:\s*(\{[\s\S]*?\})\]\]/;
+const APPLY_REGEX = /\[\[APPLY:\s*(\{[\s\S]*?\})\]\]/g;
 
 function AssistantMessage({
   text,
@@ -457,24 +457,24 @@ function AssistantMessage({
   text: string;
   onApply?: (a: ApplySuggestion) => void;
 }) {
-  const match = text.match(APPLY_REGEX);
-  const cleanText = text.replace(APPLY_REGEX, "").trim();
-
-  let suggestion: ApplySuggestion | null = null;
-  if (match && onApply) {
-    try {
-      suggestion = JSON.parse(match[1]) as ApplySuggestion;
-    } catch {
-      // malformed JSON from AI — ignore the block
+  const suggestions: ApplySuggestion[] = [];
+  if (onApply) {
+    for (const m of text.matchAll(APPLY_REGEX)) {
+      try {
+        suggestions.push(JSON.parse(m[1]) as ApplySuggestion);
+      } catch {
+        // malformed JSON from AI — ignore the block
+      }
     }
   }
+  const cleanText = text.replace(APPLY_REGEX, "").trim();
 
   return (
     <span>
       <ChatMarkdown text={cleanText} />
-      {suggestion && onApply && (
-        <SuggestionCard action={suggestion} onApply={onApply} />
-      )}
+      {suggestions.map((s, i) => (
+        <SuggestionCard key={i} action={s} onApply={onApply!} />
+      ))}
     </span>
   );
 }

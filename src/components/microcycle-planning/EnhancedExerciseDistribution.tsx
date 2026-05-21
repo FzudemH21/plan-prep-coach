@@ -77,6 +77,8 @@ interface EnhancedExerciseDistributionProps {
   methodAllocations?: Record<string, string[]>;
   /** methodName → exerciseCategory[] from the toolbox — methods absent here are not split */
   methodExerciseCategories?: Record<string, string[]>;
+  /** Increment to force a re-load of session comments from localStorage */
+  sessionCommentsRefreshKey?: number;
 }
 
 // ── Pure helpers (no component state — defined outside to avoid re-creation) ──
@@ -144,6 +146,7 @@ export function EnhancedExerciseDistribution({
   onSelectedMicrocycleIndexChange,
   methodAllocations = {},
   methodExerciseCategories,
+  sessionCommentsRefreshKey,
 }: EnhancedExerciseDistributionProps) {
   const { toast } = useToast();
   const { libraries } = useCustomLibraries();
@@ -230,7 +233,7 @@ export function EnhancedExerciseDistribution({
     };
     
     loadSessionComments();
-  }, [mesocycle?.id, trainingDays]);
+  }, [mesocycle?.id, trainingDays, sessionCommentsRefreshKey]);
 
   // Debounced localStorage save function
   const debouncedSaveToLocalStorage = useMemo(() => {
