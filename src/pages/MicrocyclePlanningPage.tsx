@@ -3767,41 +3767,45 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
 
     } else if (action.type === "move_exercise") {
       const { exerciseId, targetDayDate, targetSessionIndex, targetSectionName } = action;
+      // Read entry for toast label and superset cleanup — safe to read from closure
       const entry = exerciseDistribution.find(e => e.id === exerciseId);
       if (!entry) { toast({ title: "Exercise not found", variant: "destructive" }); return; }
 
-      // Resolve target section
       const targetSectionId = targetSectionName
         ? sessionSections.find(s => s.dayDate === targetDayDate && s.sessionIndex === targetSessionIndex && s.name === targetSectionName)?.id
         : undefined;
 
-      // Place at end of target slot
-      const targetExs = exerciseDistribution.filter(
-        e => e.dayDate === targetDayDate && e.sessionIndex === targetSessionIndex &&
-          (targetSectionId ? e.sectionId === targetSectionId : !e.sectionId)
-      );
-      const newOrder = targetExs.length > 0 ? Math.max(...targetExs.map(e => e.order)) + 1 : 0;
+      // Use functional updaters so rapid back-to-back Assign clicks compose
+      // correctly instead of each overwriting the previous with stale state
+      setExerciseDistribution(prev => {
+        const targetExs = prev.filter(
+          e => e.dayDate === targetDayDate && e.sessionIndex === targetSessionIndex &&
+            (targetSectionId ? e.sectionId === targetSectionId : !e.sectionId)
+        );
+        const newOrder = targetExs.length > 0 ? Math.max(...targetExs.map(e => e.order)) + 1 : 0;
+        const updated = prev.map(e =>
+          e.id === exerciseId
+            ? { ...e, dayDate: targetDayDate, sessionIndex: targetSessionIndex, sectionId: targetSectionId, order: newOrder }
+            : e
+        );
+        localStorage.setItem('exerciseDistribution', JSON.stringify(updated));
+        return updated;
+      });
 
-      // Remove from any superset at source
-      const nextSupersets: SupersetMapping = supersets ? JSON.parse(JSON.stringify(supersets)) : {};
-      const srcSectionKey = entry.sectionId || '__unsectioned__';
-      const srcSupersetMap = nextSupersets[entry.dayDate]?.[entry.sessionIndex]?.[srcSectionKey];
-      if (srcSupersetMap) {
-        Object.keys(srcSupersetMap).forEach(ssId => {
-          srcSupersetMap[ssId] = (srcSupersetMap[ssId] as string[]).filter((id: string) => id !== exerciseId);
-          if (srcSupersetMap[ssId].length < 2) delete srcSupersetMap[ssId];
-        });
-      }
+      setSupersets(prev => {
+        const next: SupersetMapping = prev ? JSON.parse(JSON.stringify(prev)) : {};
+        const srcSectionKey = entry.sectionId || '__unsectioned__';
+        const srcSupersetMap = next[entry.dayDate]?.[entry.sessionIndex]?.[srcSectionKey];
+        if (srcSupersetMap) {
+          Object.keys(srcSupersetMap).forEach(ssId => {
+            srcSupersetMap[ssId] = (srcSupersetMap[ssId] as string[]).filter((id: string) => id !== exerciseId);
+            if (srcSupersetMap[ssId].length < 2) delete srcSupersetMap[ssId];
+          });
+        }
+        localStorage.setItem('supersets', JSON.stringify(next));
+        return next;
+      });
 
-      const updatedDist = exerciseDistribution.map(e =>
-        e.id === exerciseId
-          ? { ...e, dayDate: targetDayDate, sessionIndex: targetSessionIndex, sectionId: targetSectionId, order: newOrder }
-          : e
-      );
-      setExerciseDistribution(updatedDist);
-      localStorage.setItem('exerciseDistribution', JSON.stringify(updatedDist));
-      setSupersets(nextSupersets);
-      localStorage.setItem('supersets', JSON.stringify(nextSupersets));
       toast({ title: `${entry.exerciseName} moved to ${targetDayDate} session ${targetSessionIndex + 1}${targetSectionName ? ` / ${targetSectionName}` : ''}` });
     }
   }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments, exerciseDistribution, sessionSections, supersets, toast]);
