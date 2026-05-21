@@ -1743,8 +1743,13 @@ export default function MicrocyclePlanningPage() {
       handlePasteDay(targetDate);
       return;
     }
-    
+
     if (!copiedSession) return;
+
+    if (!trainingDays.some(d => d.date === targetDate)) {
+      toast({ title: "Cannot paste outside plan date range", variant: "destructive" });
+      return;
+    }
     
     // Determine the next session index for this day
     const targetDayExercises = exerciseDistribution.filter(ex => ex.dayDate === targetDate);
@@ -2022,10 +2027,21 @@ export default function MicrocyclePlanningPage() {
   // Handle paste week (Option B: Add as new sessions)
   const handlePasteWeek = (targetWeekStartDate: string) => {
     if (!copiedWeek) return;
-    
+
     const sourceWeekStart = parseISO(copiedWeek.weekStartDate);
     const targetWeekStart = parseISO(targetWeekStartDate);
     const dayOffset = differenceInDays(targetWeekStart, sourceWeekStart);
+
+    // Reject if any target date falls outside the plan's date range
+    const planDates = new Set(trainingDays.map(d => d.date));
+    const sourceDates = Object.keys(copiedWeek.sessionStructure);
+    const allTargetDatesInPlan = sourceDates.every(srcDate =>
+      planDates.has(format(addDays(parseISO(srcDate), dayOffset), 'yyyy-MM-dd'))
+    );
+    if (!allTargetDatesInPlan) {
+      toast({ title: "Cannot paste outside plan date range", variant: "destructive" });
+      return;
+    }
     
     // Calculate session index offsets for each target day based on existing sessions
     const sessionOffsets: Record<string, number> = {};
@@ -3999,6 +4015,9 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
 
     } else if (action.type === "copy_session") {
       const { sourceDayDate, sourceSessionIndex, targetDayDate } = action;
+      if (!trainingDays.some(d => d.date === targetDayDate)) {
+        toast({ title: "Cannot copy session outside plan date range", variant: "destructive" }); return;
+      }
       const srcExercises = exerciseDistribution.filter(e => e.dayDate === sourceDayDate && e.sessionIndex === sourceSessionIndex);
       const srcSections = sessionSections.filter(s => s.dayDate === sourceDayDate && s.sessionIndex === sourceSessionIndex);
       if (srcExercises.length === 0) { toast({ title: "Source session has no exercises", variant: "destructive" }); return; }
