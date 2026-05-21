@@ -98,17 +98,11 @@ function resolveTrainingPlansFolder(
 
 interface PlanForm {
   planName: string;
-  sportAndAthlete: string;
-  goalAndContext: string;
-  methodsAndStructure: string;
   outcomeAndNotes: string;
 }
 
 const EMPTY_FORM: PlanForm = {
   planName: "",
-  sportAndAthlete: "",
-  goalAndContext: "",
-  methodsAndStructure: "",
   outcomeAndNotes: "",
 };
 
@@ -141,10 +135,6 @@ export function TrainingPlanEnricher() {
 
   const handleSave = async () => {
     if (!pendingFile) return;
-    if (!form.sportAndAthlete.trim() || !form.goalAndContext.trim()) {
-      setError("Please fill in at least the athlete/sport and goal fields.");
-      return;
-    }
     setIsSaving(true);
     setError(null);
 
@@ -154,7 +144,6 @@ export function TrainingPlanEnricher() {
       await addDocument(pendingFile, folderId);
 
       // 2. Derive the doc ID of the just-uploaded file (newest in folder)
-      // We read fresh from localStorage since addDocument just committed there
       const stored = JSON.parse(localStorage.getItem(DOCS_INDEX_KEY) ?? "{}") as {
         documents?: Array<{ id: string; folderId: string | null; uploadedAt: string }>;
       };
@@ -164,16 +153,16 @@ export function TrainingPlanEnricher() {
         .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())[0];
       const docId = newestInFolder?.id ?? `manual_${Date.now()}`;
 
-      // 3. Save context to plan_memory (not to coach profile!)
+      // 3. Save minimal entry to plan_memory for coach memory retrieval
       if (user?.id) {
         await saveUploadedPlanMemory(
           {
             docId,
             planName: form.planName.trim() || pendingFile.name,
-            sportAndAthlete:    form.sportAndAthlete.trim(),
-            goalAndContext:      form.goalAndContext.trim(),
-            methodsAndStructure: form.methodsAndStructure.trim(),
-            outcomeAndNotes:     form.outcomeAndNotes.trim(),
+            sportAndAthlete: "",
+            goalAndContext: "",
+            methodsAndStructure: "",
+            outcomeAndNotes: form.outcomeAndNotes.trim(),
           },
           user.id
         );
@@ -188,7 +177,7 @@ export function TrainingPlanEnricher() {
     }
   };
 
-  const canSave = !!pendingFile && form.sportAndAthlete.trim() && form.goalAndContext.trim();
+  const canSave = !!pendingFile;
 
   return (
     <div className="space-y-4">
@@ -241,7 +230,7 @@ export function TrainingPlanEnricher() {
             </button>
           </div>
 
-          {/* Guided fields */}
+          {/* Fields */}
           <div className="space-y-3">
             <div className="space-y-1">
               <Label className="text-xs font-semibold">Plan name</Label>
@@ -255,55 +244,6 @@ export function TrainingPlanEnricher() {
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs font-semibold">
-                Who was this plan for? <span className="text-destructive">*</span>
-              </Label>
-              <p className="text-xs text-muted-foreground -mt-0.5">
-                Sport, discipline, level, age/gender context
-              </p>
-              <Textarea
-                value={form.sportAndAthlete}
-                onChange={setField("sportAndAthlete")}
-                placeholder="e.g. Track & field, 100m sprinter, elite level, 23y male"
-                rows={2}
-                disabled={isSaving}
-                className="text-sm resize-none"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">
-                Goal & situation? <span className="text-destructive">*</span>
-              </Label>
-              <p className="text-xs text-muted-foreground -mt-0.5">
-                Main goal, training phase, time of year, special circumstances
-              </p>
-              <Textarea
-                value={form.goalAndContext}
-                onChange={setField("goalAndContext")}
-                placeholder="e.g. National championship prep, 12-week peaking block, started after injury return"
-                rows={2}
-                disabled={isSaving}
-                className="text-sm resize-none"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Methods & structure</Label>
-              <p className="text-xs text-muted-foreground -mt-0.5">
-                Periodization approach, key methods, number of mesos, load logic
-              </p>
-              <Textarea
-                value={form.methodsAndStructure}
-                onChange={setField("methodsAndStructure")}
-                placeholder="e.g. Block periodization, 3 mesos: accumulation → intensification → realization, heavy speed-strength, 4-2-4-2 microcycle pattern"
-                rows={2}
-                disabled={isSaving}
-                className="text-sm resize-none"
-              />
-            </div>
-
-            <div className="space-y-1">
               <Label className="text-xs font-semibold">Outcome & notes (optional)</Label>
               <p className="text-xs text-muted-foreground -mt-0.5">
                 What worked, what you'd change, athlete response to load
@@ -312,7 +252,7 @@ export function TrainingPlanEnricher() {
                 value={form.outcomeAndNotes}
                 onChange={setField("outcomeAndNotes")}
                 placeholder="e.g. PB at nationals, athlete handled volume well — reduce taper block from 2 to 1.5 weeks next time"
-                rows={2}
+                rows={3}
                 disabled={isSaving}
                 className="text-sm resize-none"
               />
