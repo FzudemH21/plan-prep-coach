@@ -24,20 +24,25 @@ export function useGlobalAIContext(): string {
     const sections: string[] = [];
 
     // ── Training Toolbox ─────────────────────────────────────────────────────
-    const methodMap = new Map<string, string[]>();
+    const methodMap = new Map<string, { params: string[]; categories: Set<string> }>();
     for (const entry of toolboxData?.entries ?? []) {
       const methodId = entry.subCategory
         ? `${entry.category} - ${entry.subCategory}`
         : entry.category;
-      if (!methodMap.has(methodId)) methodMap.set(methodId, []);
-      if (entry.parameterName) methodMap.get(methodId)!.push(
+      if (!methodMap.has(methodId)) methodMap.set(methodId, { params: [], categories: new Set() });
+      const slot = methodMap.get(methodId)!;
+      if (entry.parameterName) slot.params.push(
         `${entry.parameterName} (${entry.parameterType}${entry.options?.length ? ': ' + entry.options.join('/') : ''})`
       );
+      (entry.exerciseCategories ?? []).forEach((c: string) => slot.categories.add(c));
     }
     if (methodMap.size > 0) {
-      const methodLines = Array.from(methodMap.entries()).map(([method, params]) =>
-        `- ${method}${params.length ? '\n    Parameters: ' + params.join(', ') : ''}`
-      );
+      const methodLines = Array.from(methodMap.entries()).map(([method, { params, categories }]) => {
+        const splitNote = categories.size > 0
+          ? ` [split into categories: ${Array.from(categories).join(', ')}]`
+          : ' [not split — assign exercises without a category]';
+        return `- ${method}${splitNote}${params.length ? '\n    Parameters: ' + params.join(', ') : ''}`;
+      });
       sections.push(`## Training Toolbox (${methodMap.size} methods)\n${methodLines.join('\n')}`);
     } else {
       sections.push('## Training Toolbox\nNo methods configured yet.');
