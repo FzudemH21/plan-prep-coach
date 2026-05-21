@@ -3622,8 +3622,111 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
           });
         }
       }
+    } else if (action.type === "create_section") {
+      const { dayDate, sessionIndex, name, note } = action;
+      const existingForSlot = sessionSections.filter(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex);
+      const maxOrder = existingForSlot.reduce((m, s) => Math.max(m, s.order), -1);
+      const newSection: SessionSection = {
+        id: `section-ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        dayDate,
+        sessionIndex,
+        name,
+        order: maxOrder + 1,
+        ...(note ? { comments: note } : {}),
+      };
+      const updatedSections = [...sessionSections, newSection];
+      setSessionSections(updatedSections);
+      localStorage.setItem('sessionSections', JSON.stringify(updatedSections));
+      toast({ title: `Section "${name}" created` });
+
+    } else if (action.type === "delete_section") {
+      const { dayDate, sessionIndex, sectionName } = action;
+      const updatedSections = sessionSections.filter(
+        s => !(s.dayDate === dayDate && s.sessionIndex === sessionIndex && s.name === sectionName)
+      );
+      setSessionSections(updatedSections);
+      localStorage.setItem('sessionSections', JSON.stringify(updatedSections));
+      toast({ title: `Section "${sectionName}" deleted` });
+
+    } else if (action.type === "rename_section") {
+      const { dayDate, sessionIndex, sectionName, newName } = action;
+      const updatedSections = sessionSections.map(s =>
+        s.dayDate === dayDate && s.sessionIndex === sessionIndex && s.name === sectionName
+          ? { ...s, name: newName }
+          : s
+      );
+      setSessionSections(updatedSections);
+      localStorage.setItem('sessionSections', JSON.stringify(updatedSections));
+      toast({ title: `Section renamed to "${newName}"` });
+
+    } else if (action.type === "set_note") {
+      const { target, dayDate, sessionIndex, note } = action;
+      if (target === "exercise" && action.exerciseId) {
+        const updatedDist = exerciseDistribution.map(e =>
+          e.exerciseId === action.exerciseId && e.dayDate === dayDate && e.sessionIndex === sessionIndex
+            ? { ...e, notes: note }
+            : e
+        );
+        setExerciseDistribution(updatedDist);
+        localStorage.setItem('exerciseDistribution', JSON.stringify(updatedDist));
+        toast({ title: "Exercise note updated" });
+      } else if (target === "section" && action.sectionName) {
+        const updatedSections = sessionSections.map(s =>
+          s.dayDate === dayDate && s.sessionIndex === sessionIndex && s.name === action.sectionName
+            ? { ...s, comments: note }
+            : s
+        );
+        setSessionSections(updatedSections);
+        localStorage.setItem('sessionSections', JSON.stringify(updatedSections));
+        toast({ title: "Section note updated" });
+      } else if (target === "session") {
+        const currentMeso = mesocycles[currentMesocycleIndex];
+        if (currentMeso) {
+          localStorage.setItem(`sessionComments_${currentMeso.id}_${dayDate}_${sessionIndex}`, note);
+          toast({ title: "Session note updated" });
+        }
+      }
+
+    } else if (action.type === "create_superset") {
+      const { dayDate, sessionIndex, exerciseIds } = action;
+      if (exerciseIds.length < 2) return;
+      const next: SupersetMapping = supersets ? JSON.parse(JSON.stringify(supersets)) : {};
+      if (!next[dayDate]) next[dayDate] = {};
+      if (!next[dayDate][sessionIndex]) next[dayDate][sessionIndex] = {};
+      const sectionKey = '__unsectioned__';
+      if (!next[dayDate][sessionIndex][sectionKey]) next[dayDate][sessionIndex][sectionKey] = {};
+      const sectionMap = next[dayDate][sessionIndex][sectionKey];
+      // Remove target exercises from any existing supersets in this session
+      Object.keys(sectionMap).forEach(ssId => {
+        sectionMap[ssId] = sectionMap[ssId].filter((id: string) => !exerciseIds.includes(id));
+        if (sectionMap[ssId].length < 2) delete sectionMap[ssId];
+      });
+      const newSsId = `ss-ai-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+      sectionMap[newSsId] = [...exerciseIds];
+      setSupersets(next);
+      localStorage.setItem('supersets', JSON.stringify(next));
+      toast({ title: `Superset created with ${exerciseIds.length} exercises` });
+
+    } else if (action.type === "break_superset") {
+      const { dayDate, sessionIndex, exerciseId } = action;
+      const next: SupersetMapping = supersets ? JSON.parse(JSON.stringify(supersets)) : {};
+      const daySessionMap = next[dayDate]?.[sessionIndex];
+      if (daySessionMap) {
+        Object.keys(daySessionMap).forEach(sectionKey => {
+          Object.keys(daySessionMap[sectionKey]).forEach(ssId => {
+            const idx = daySessionMap[sectionKey][ssId].indexOf(exerciseId);
+            if (idx !== -1) {
+              daySessionMap[sectionKey][ssId].splice(idx, 1);
+              if (daySessionMap[sectionKey][ssId].length < 2) delete daySessionMap[sectionKey][ssId];
+            }
+          });
+        });
+        setSupersets(next);
+        localStorage.setItem('supersets', JSON.stringify(next));
+        toast({ title: "Exercise removed from superset" });
+      }
     }
-  }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments, exerciseDistribution, toast]);
+  }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments, exerciseDistribution, sessionSections, supersets, toast]);
 
   return (
     <div className="mx-auto py-6 space-y-6 px-4 w-full max-w-[98vw]">
