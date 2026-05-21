@@ -615,21 +615,6 @@ export function WizardAIAssistant({
     if (forceOpen && forceOpen > 0) setIsOpen(true);
   }, [forceOpen]);
 
-  // Block Radix dismiss layer from seeing pointerdown events inside the AI panel.
-  // Radix registers on document with { capture: true }; window fires first in the
-  // capture chain, so stopImmediatePropagation here prevents Radix from ever
-  // detecting a click in the panel as an "outside" click.
-  useEffect(() => {
-    if (!isOpen) return;
-    const handler = (e: PointerEvent) => {
-      if ((e.target as Element)?.closest('[data-ai-assistant]')) {
-        e.stopImmediatePropagation();
-      }
-    };
-    window.addEventListener('pointerdown', handler, { capture: true });
-    return () => window.removeEventListener('pointerdown', handler, { capture: true });
-  }, [isOpen]);
-
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
