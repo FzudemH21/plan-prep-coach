@@ -103,6 +103,8 @@ interface TrainingCalendarViewProps {
   athletePerformanceParameters?: AthletePerformanceParameter[];
   // Callback to open the AI assistant from within the session dialog
   onOpenAIAssistant?: (ctx: FocusedSessionContext) => void;
+  // Increment to force a full rebuild of exercise parameters from updated parameterValues
+  forceParamRefresh?: number;
 }
 
 export interface CalendarDay {
@@ -170,6 +172,7 @@ export function TrainingCalendarView({
   selectedAthleteId,
   athletePerformanceParameters,
   onOpenAIAssistant,
+  forceParamRefresh,
 }: TrainingCalendarViewProps) {
   const { toast } = useToast();
   const { data: toolboxData } = useToolboxData();
@@ -1204,6 +1207,7 @@ export function TrainingCalendarView({
           selectedAthleteId={selectedAthleteId}
           athletePerformanceParameters={athletePerformanceParameters}
           onOpenAIAssistant={onOpenAIAssistant}
+          forceParamRefresh={forceParamRefresh}
         />
       )}
 

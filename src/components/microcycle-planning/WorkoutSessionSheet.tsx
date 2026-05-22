@@ -119,6 +119,8 @@ interface WorkoutSessionSheetProps {
   athletePerformanceParameters?: AthletePerformanceParameter[];
   // Callback to open the AI assistant panel from within the dialog
   onOpenAIAssistant?: (ctx: FocusedSessionContext) => void;
+  // Increment to force a full rebuild of exercise parameters from updated parameterValues
+  forceParamRefresh?: number;
 }
 
 export function WorkoutSessionSheet({
@@ -165,6 +167,7 @@ export function WorkoutSessionSheet({
   selectedAthleteId,
   athletePerformanceParameters,
   onOpenAIAssistant,
+  forceParamRefresh,
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
   const { libraries, updateExerciseInLibrary } = useCustomLibraries();
@@ -856,6 +859,12 @@ export function WorkoutSessionSheet({
       hasInitializedRef.current = false;
     }
   }, [isOpen]);
+
+  // External parameter update (e.g. from AI set_exercise_params action) — full rebuild
+  useEffect(() => {
+    if (!forceParamRefresh || !isOpen || exercises.length === 0) return;
+    setWorkoutSections(buildSectionsFromExercises(exercises, parameterValues));
+  }, [forceParamRefresh]); // eslint-disable-line react-hooks/exhaustive-deps
   
   // Force rebuild when dialog opens (separate effect to ensure fresh data)
   useEffect(() => {
@@ -2551,13 +2560,24 @@ export function WorkoutSessionSheet({
                   size="sm"
                   onClick={() => {
                     const uniqueMethods = [...new Set(exercises.map(e => e.categoryName))];
+                    // Build a lookup of current params from workoutSections state
+                    const paramLookup = new Map<string, Record<string, string | number>>();
+                    workoutSections.forEach(sec => {
+                      sec.exercises.forEach(ex => {
+                        paramLookup.set(ex.exerciseId, ex.parameters ?? {});
+                      });
+                    });
                     onOpenAIAssistant({
                       dayDate,
                       dayLabel: format(parseISO(`${dayDate}T12:00:00`), 'EEEE d MMMM yyyy'),
                       sessionIndex,
                       sessionName,
                       methods: uniqueMethods,
-                      exercises: exercises.map(e => ({ name: e.exerciseName, methodName: e.categoryName })),
+                      exercises: exercises.map(e => ({
+                        name: e.exerciseName,
+                        methodName: e.categoryName,
+                        params: paramLookup.get(e.exerciseId) ?? {},
+                      })),
                     });
                   }}
                   title="Open AI Assistant"
