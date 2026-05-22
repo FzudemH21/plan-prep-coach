@@ -9,7 +9,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info, Copy, ChevronDown, Columns, ChevronRight, X, Trash2, Trophy, Calendar, Check } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info, Copy, ChevronDown, Columns, ChevronRight, X, Trash2, Trophy, Calendar, Check, FileText } from 'lucide-react';
 import { ResourcesButton } from '@/components/programs/ResourcesButton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
@@ -27,7 +27,8 @@ import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu
 import { TrainingCalendarView, EnhancedExerciseDistribution, MethodSessionArchitecture } from '@/components/microcycle-planning';
 import { DropResult } from '@hello-pangea/dnd';
 import { SaveProgramButton } from '@/components/programs/SaveProgramButton';
-import { useTrainingPrograms } from '@/hooks/useTrainingPrograms';
+import { useTrainingPrograms, TrainingProgram } from '@/hooks/useTrainingPrograms';
+import { ExportPDFButton } from '@/components/pdf/ExportPDFButton';
 import { useWizardData } from '@/contexts/WizardDataContext';
 import { WizardAIAssistant, FocusedSessionContext } from '@/components/wizard/WizardAIAssistant';
 import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
@@ -80,6 +81,8 @@ export default function MicrocyclePlanningPage() {
   const [aiOpenTrigger, setAiOpenTrigger] = useState(0);
   const [focusedSessionCtx, setFocusedSessionCtx] = useState<FocusedSessionContext | undefined>(undefined);
   const [paramRefreshTrigger, setParamRefreshTrigger] = useState(0);
+  const [pdfExportProgram, setPdfExportProgram] = useState<TrainingProgram | null>(null);
+  const [pdfExportOpen, setPdfExportOpen] = useState(false);
   const { libraries } = useCustomLibraries();
 
   // Resolve athlete name from selectedAthleteId
@@ -3246,20 +3249,34 @@ export default function MicrocyclePlanningPage() {
           </Button>
 
           {isLastStep ? (
-            <Button
-              onClick={() => {
-                saveCurrentSession();
-                toast({
-                  title: "Program saved",
-                  description: "Your training program has been saved.",
-                });
-                navigate("/templates/programs");
-              }}
-              className="w-full md:w-auto"
-            >
-              <Check className="mr-2 h-4 w-4" />
-              Save & Finish
-            </Button>
+            <div className="flex gap-2 w-full md:w-auto">
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  const program = await saveCurrentSession();
+                  setPdfExportProgram(program);
+                  setPdfExportOpen(true);
+                }}
+                className="w-full md:w-auto"
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                Export PDF
+              </Button>
+              <Button
+                onClick={() => {
+                  saveCurrentSession();
+                  toast({
+                    title: "Program saved",
+                    description: "Your training program has been saved.",
+                  });
+                  navigate("/templates/programs");
+                }}
+                className="w-full md:w-auto"
+              >
+                <Check className="mr-2 h-4 w-4" />
+                Save & Finish
+              </Button>
+            </div>
           ) : (
             <Button
               onClick={() => goToStep(currentStep + 1)}
@@ -4752,6 +4769,15 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* PDF Export Dialog */}
+      {pdfExportProgram && (
+        <ExportPDFButton
+          program={pdfExportProgram}
+          open={pdfExportOpen}
+          onOpenChange={(v) => { setPdfExportOpen(v); if (!v) setPdfExportProgram(null); }}
+        />
+      )}
 
       {/* AI Assistant */}
       <WizardAIAssistant
