@@ -5108,6 +5108,39 @@ export default function MesocyclePage() {
       exerciseLibraryStr += "\n" + selectionLines.join("\n");
     }
 
+    // Periodization table params — always included once any values exist
+    let parameterTableStr = '';
+    if (Object.keys(parameterValues).length > 0) {
+      const tableLines: string[] = ['Method parameters from periodization table (Sets, Reps, Intensity per mesocycle × microcycle):'];
+      mesocycles.forEach(meso => {
+        const mesoParams = parameterValues[meso.id] ?? {};
+        if (Object.keys(mesoParams).length === 0) return;
+        const micros = (meso.microcycles ?? []) as Array<{ id: string; name?: string }>;
+        micros.forEach((micro, mIdx) => {
+          const slotData = mesoParams[mIdx] as Record<string, Record<number, Record<string, string | number>>> | undefined;
+          if (!slotData || Object.keys(slotData).length === 0) return;
+          const microLabel = micro.name ?? `Microcycle ${mIdx + 1}`;
+          const methodLines: string[] = [];
+          Object.entries(slotData).forEach(([methodId, sessions]) => {
+            const sessionEntries = Object.entries(sessions as Record<number, Record<string, string | number>>)
+              .sort(([a], [b]) => Number(a) - Number(b));
+            sessionEntries.forEach(([sIdx, params]) => {
+              const paramStr = Object.entries(params)
+                .filter(([k]) => !k.endsWith('_unit'))
+                .map(([k, v]) => `${k}: ${v}`)
+                .join(', ');
+              if (paramStr) {
+                const sessionLabel = sessionEntries.length > 1 ? ` session ${Number(sIdx) + 1}` : '';
+                methodLines.push(`    ${methodId}${sessionLabel}: ${paramStr}`);
+              }
+            });
+          });
+          if (methodLines.length) tableLines.push(`  ${meso.name} / ${microLabel}:\n${methodLines.join('\n')}`);
+        });
+      });
+      if (tableLines.length > 1) parameterTableStr = tableLines.join('\n');
+    }
+
     return [
       step5OverrideStr,
       `Current step: ${mesoStepLabel}`,
@@ -5117,11 +5150,12 @@ export default function MesocyclePage() {
       durationStr,
       mesoStr,
       methodsStr,
+      parameterTableStr,
       exerciseLibraryStr,
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, planStartDate, planEndDate, totalWeeks, expectedTotalDays, totalMesocycleDays, daysMismatch, mesocycles, methodAllocations, mesoStepLabel, exerciseLibraries, exerciseCellData]);
+  }, [currentStep, athleteName, macrocycleData, planStartDate, planEndDate, totalWeeks, expectedTotalDays, totalMesocycleDays, daysMismatch, mesocycles, methodAllocations, mesoStepLabel, exerciseLibraries, exerciseCellData, parameterValues]);
 
   // ── AI Apply handler ──────────────────────────────────────────────────────
   const handleMesoAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {

@@ -2580,7 +2580,7 @@ export function WorkoutSessionSheet({
                       })),
                     });
                   }}
-                  title="Open AI Assistant"
+                  title="AI Advisor"
                 >
                   <Bot className="h-4 w-4" />
                 </Button>

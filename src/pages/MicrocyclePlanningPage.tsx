@@ -3460,9 +3460,9 @@ export default function MicrocyclePlanningPage() {
       ? "Goal: assign exercises from the exercise library to specific training day sessions. Use the distribute_exercises action to assign exercises directly to dates — you have the full schedule with exact dates above. Do NOT say this is impossible."
       : "Goal: review, refine, and manipulate the final training calendar. Available actions: set_day_intensity, set_session_intensity, set_exercise_params, rename_session, delete_session, create_section, delete_section, rename_section, set_note, add_exercise, add_circuit, create_superset, break_superset, move_exercise, move_exercises, copy_session, copy_section, copy_week, clear_week. Use exact IDs and dates from the Training Calendar below.";
 
-    // Steps 2 & 3: method parameter values from the periodization table (all microcycles of current meso)
+    // All steps: method parameter values from the periodization table (all microcycles of current meso)
     let parameterTableStr = '';
-    if ((currentStep === 2 || currentStep === 3) && currentMeso) {
+    if (currentMeso) {
       const mesoParams = parameterValues[currentMeso.id] ?? {};
       const tableLines: string[] = [`Method parameters for ${currentMeso.name} (from periodization table — Sets, Reps, Intensity per microcycle/session):`];
       const micros = (currentMeso.microcycles ?? []) as Array<{ id: string; name?: string }>;

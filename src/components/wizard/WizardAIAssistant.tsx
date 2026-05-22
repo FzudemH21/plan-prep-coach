@@ -782,7 +782,7 @@ export function WizardAIAssistant({
             "hover:scale-105 active:scale-95 transition-transform",
             "ring-2 ring-primary/20"
           )}
-          title="Open AI Assistant"
+          title="AI Advisor"
         >
           <Bot className="h-6 w-6" />
         </button>
@@ -814,7 +814,7 @@ export function WizardAIAssistant({
                 <Bot className="h-4 w-4 text-primary-foreground" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold leading-none">AI Assistant</p>
+                <p className="text-sm font-semibold leading-none">AI Advisor</p>
                 <p className="text-xs text-muted-foreground mt-0.5 truncate">{stepLabel}</p>
               </div>
               {onApplySuggestion && (
