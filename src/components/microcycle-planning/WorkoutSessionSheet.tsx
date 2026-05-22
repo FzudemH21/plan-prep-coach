@@ -2325,6 +2325,7 @@ export function WorkoutSessionSheet({
       <DialogContent
         className="max-w-[95vw] max-h-[95vh] w-full h-full flex flex-col p-0"
         onInteractOutside={(e) => e.preventDefault()}
+        onFocusOutside={(e) => e.preventDefault()}
       >
         <DialogHeader className="p-6 pb-4 border-b">
           <div className="flex items-center justify-between">

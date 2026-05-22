@@ -2900,6 +2900,12 @@ export default function MicrocyclePlanningPage() {
       return updated;
     });
 
+    // Also update trainingDays so it stays in sync with dailyIntensityData
+    // (prevents stale intensity in localStorage.trainingDays on next reload)
+    setTrainingDays(prev =>
+      prev.map(td => td.date === date ? { ...td, intensity } : td)
+    );
+
     // For single-session days, also sync the session intensity
     const day = trainingDays.find(d => d.date === date);
     const sessionCount = day?.sessions ?? 1;
