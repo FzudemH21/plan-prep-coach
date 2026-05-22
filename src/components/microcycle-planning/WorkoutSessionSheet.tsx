@@ -2325,7 +2325,12 @@ export function WorkoutSessionSheet({
       <DialogContent
         className="max-w-[95vw] max-h-[95vh] w-full h-full flex flex-col p-0"
         onInteractOutside={(e) => e.preventDefault()}
-        onFocusOutside={(e) => e.preventDefault()}
+        onFocusOutside={(e) => {
+          // Allow focus to move into the AI panel freely (text input, close button, etc.)
+          // Only prevent focus from leaving to unrelated elements outside the dialog
+          const receiving = (e as CustomEvent).detail?.originalEvent?.relatedTarget as Element | null;
+          if (!receiving?.closest('[data-ai-assistant]')) e.preventDefault();
+        }}
       >
         <DialogHeader className="p-6 pb-4 border-b">
           <div className="flex items-center justify-between">
