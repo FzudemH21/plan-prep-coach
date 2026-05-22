@@ -29,18 +29,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { 
-  Plus, 
-  Search, 
-  ArrowLeft, 
-  MoreHorizontal, 
-  Edit, 
-  Copy, 
+import {
+  Plus,
+  Search,
+  ArrowLeft,
+  MoreHorizontal,
+  Edit,
+  Copy,
   Trash2,
   Calendar,
   User,
-  Target
+  Target,
+  FileText
 } from "lucide-react";
+import { ExportPDFButton } from "@/components/pdf/ExportPDFButton";
 import { useTrainingPrograms, TrainingProgram } from "@/hooks/useTrainingPrograms";
 import { getAthleteDisplayName } from "@/types/athlete";
 import { useAthletes } from "@/hooks/useAthletes";
@@ -58,6 +60,8 @@ export default function TrainingProgramsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [programToDelete, setProgramToDelete] = useState<TrainingProgram | null>(null);
+  const [pdfExportProgram, setPdfExportProgram] = useState<TrainingProgram | null>(null);
+  const [pdfExportOpen, setPdfExportOpen] = useState(false);
 
   // Get athlete name by ID
   const getAthleteName = (athleteId: string | null): string => {
@@ -271,8 +275,12 @@ const formatDuration = (program: TrainingProgram) => {
                           <Copy className="h-4 w-4 mr-2" />
                           Duplicate
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setPdfExportProgram(program); setPdfExportOpen(true); }}>
+                          <FileText className="h-4 w-4 mr-2" />
+                          Export PDF
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem 
+                        <DropdownMenuItem
                           onClick={(e) => { e.stopPropagation(); handleDeleteClick(program); }}
                           className="text-destructive focus:text-destructive"
                         >
@@ -308,6 +316,15 @@ const formatDuration = (program: TrainingProgram) => {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* PDF Export Dialog */}
+      {pdfExportProgram && (
+        <ExportPDFButton
+          program={pdfExportProgram}
+          open={pdfExportOpen}
+          onOpenChange={(v) => { setPdfExportOpen(v); if (!v) setPdfExportProgram(null); }}
+        />
       )}
 
       {/* Delete Confirmation Dialog */}
