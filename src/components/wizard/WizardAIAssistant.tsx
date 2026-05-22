@@ -271,7 +271,8 @@ Rules:
 - You may include MULTIPLE [[APPLY: ...]] blocks in one message — one per action. Place them all at the very end of your message.
 - Only include action blocks when you are confident the suggestion is appropriate and actionable.
 - Use exact method names as listed in the wizard context.
-- Do not add commentary after the [[APPLY: ...]] block.`;
+- Do not add commentary after the [[APPLY: ...]] block.
+- NEVER say "Done", "Applied", "I've made the change", "Done!", or any similar phrase after emitting an [[APPLY: ...]] block. The action has NOT been applied yet — the coach must click the Apply button first. If you want to confirm what will happen, say something like "Click Apply to make this change." but keep it brief.`;
 
 const DEFAULT_ROLE = `## Your role
 - Be objective and direct. If the current plan has weaknesses, gaps, or contradicts evidence — say so clearly and constructively.
@@ -711,7 +712,7 @@ export function WizardAIAssistant({
 
     setMessages([{
       role: "assistant",
-      content: `Hi! How can I help you? I've spotted a few things — let me know if you'd like me to go through them.`,
+      content: `Hi! How can I help you?`,
     }]);
   }, [coachContext, stepLabel, wizardContext, assistantRole, coachMemoryContext]);
 

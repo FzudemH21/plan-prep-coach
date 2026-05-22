@@ -3460,6 +3460,36 @@ export default function MicrocyclePlanningPage() {
       ? "Goal: assign exercises from the exercise library to specific training day sessions. Use the distribute_exercises action to assign exercises directly to dates — you have the full schedule with exact dates above. Do NOT say this is impossible."
       : "Goal: review, refine, and manipulate the final training calendar. Available actions: set_day_intensity, set_session_intensity, set_exercise_params, rename_session, delete_session, create_section, delete_section, rename_section, set_note, add_exercise, add_circuit, create_superset, break_superset, move_exercise, move_exercises, copy_session, copy_section, copy_week, clear_week. Use exact IDs and dates from the Training Calendar below.";
 
+    // Steps 2 & 3: method parameter values from the periodization table (all microcycles of current meso)
+    let parameterTableStr = '';
+    if ((currentStep === 2 || currentStep === 3) && currentMeso) {
+      const mesoParams = parameterValues[currentMeso.id] ?? {};
+      const tableLines: string[] = [`Method parameters for ${currentMeso.name} (from periodization table — Sets, Reps, Intensity per microcycle/session):`];
+      const micros = (currentMeso.microcycles ?? []) as Array<{ id: string; name?: string }>;
+      micros.forEach((micro, mIdx) => {
+        const slotData = mesoParams[mIdx] as Record<string, Record<number, Record<string, string | number>>> | undefined;
+        if (!slotData || Object.keys(slotData).length === 0) return;
+        const microLabel = micro.name ?? `Microcycle ${mIdx + 1}`;
+        const methodLines: string[] = [];
+        Object.entries(slotData).forEach(([methodId, sessions]) => {
+          const sessionEntries = Object.entries(sessions as Record<number, Record<string, string | number>>)
+            .sort(([a], [b]) => Number(a) - Number(b));
+          sessionEntries.forEach(([sIdx, params]) => {
+            const paramStr = Object.entries(params)
+              .filter(([k]) => !k.endsWith('_unit'))
+              .map(([k, v]) => `${k}: ${v}`)
+              .join(', ');
+            if (paramStr) {
+              const sessionLabel = sessionEntries.length > 1 ? ` session ${Number(sIdx) + 1}` : '';
+              methodLines.push(`    ${methodId}${sessionLabel}: ${paramStr}`);
+            }
+          });
+        });
+        if (methodLines.length) tableLines.push(`  ${microLabel}:\n${methodLines.join('\n')}`);
+      });
+      if (tableLines.length > 1) parameterTableStr = tableLines.join('\n');
+    }
+
     // Steps 2 & 3: build available exercises + circuits (always available for add_exercise/add_circuit)
     let exercisesStr = '';
     let circuitsStr = '';
@@ -3667,13 +3697,14 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
       offDaysStr,
       exercisesStr,
       circuitsStr,
+      parameterTableStr,
       scheduleStr,
       calendarStr,
       stepHint,
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, currentMicrocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel, exerciseSelectionData, exerciseDistribution, sessionSections, libraries]);
+  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, currentMicrocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel, exerciseSelectionData, exerciseDistribution, sessionSections, libraries, parameterValues]);
 
   const handleMicroAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
     if (action.type === "assign_methods_to_days") {
