@@ -79,6 +79,7 @@ export default function MicrocyclePlanningPage() {
   const { coachMemoryContext } = useCoachMemory({ currentMethods: macrocycleData?.selectedMethods ?? [] });
   const [aiOpenTrigger, setAiOpenTrigger] = useState(0);
   const [focusedSessionCtx, setFocusedSessionCtx] = useState<FocusedSessionContext | undefined>(undefined);
+  const [paramRefreshTrigger, setParamRefreshTrigger] = useState(0);
   const { libraries } = useCustomLibraries();
 
   // Resolve athlete name from selectedAthleteId
@@ -4364,18 +4365,40 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
         trainingDays.some(d => d.date === dayDate && d.microcycleId === mc.id)
       );
       if (mcIndex === -1) { toast({ title: "Could not find microcycle index", variant: "destructive" }); return; }
+
+      // Compute the method-chronological session index (how many times this method appeared
+      // in earlier day/session slots within the same microcycle) rather than using the raw
+      // day-session index, which is what WorkoutSessionSheet reads via getMethodSessionIndex.
+      const targetMicro = (targetMeso.microcycles ?? [])[mcIndex] as { id: string } | undefined;
+      const microDates = targetMicro
+        ? trainingDays.filter(d => d.microcycleId === targetMicro.id).map(d => d.date)
+        : [];
+      const methodExercisesInMicro = exerciseDistribution
+        .filter(e => e.methodId === methodId && microDates.includes(e.dayDate))
+        .sort((a, b) => a.dayDate.localeCompare(b.dayDate) || a.sessionIndex - b.sessionIndex || (a.order ?? 0) - (b.order ?? 0));
+      // Get unique day+session slots in chronological order
+      const slots: Array<{ dayDate: string; sessionIndex: number }> = [];
+      methodExercisesInMicro.forEach(e => {
+        if (!slots.some(s => s.dayDate === e.dayDate && s.sessionIndex === e.sessionIndex)) {
+          slots.push({ dayDate: e.dayDate, sessionIndex: e.sessionIndex });
+        }
+      });
+      const methodSessionIdx = Math.max(0, slots.findIndex(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex));
+
       setParameterValues(prev => {
         const updated = JSON.parse(JSON.stringify(prev));
         if (!updated[targetMeso.id]) updated[targetMeso.id] = {};
         if (!updated[targetMeso.id][mcIndex]) updated[targetMeso.id][mcIndex] = {};
         if (!updated[targetMeso.id][mcIndex][methodId]) updated[targetMeso.id][mcIndex][methodId] = {};
-        if (!updated[targetMeso.id][mcIndex][methodId][sessionIndex]) updated[targetMeso.id][mcIndex][methodId][sessionIndex] = {};
+        if (!updated[targetMeso.id][mcIndex][methodId][methodSessionIdx]) updated[targetMeso.id][mcIndex][methodId][methodSessionIdx] = {};
         Object.entries(params).forEach(([k, v]) => {
-          updated[targetMeso.id][mcIndex][methodId][sessionIndex][k] = v;
+          updated[targetMeso.id][mcIndex][methodId][methodSessionIdx][k] = v;
         });
         localStorage.setItem('parameterValues', JSON.stringify(updated));
         return updated;
       });
+      // Trigger WorkoutSessionSheet to rebuild from fresh parameterValues
+      setParamRefreshTrigger(c => c + 1);
       toast({ title: `Parameters updated for [${methodId}] on ${dayDate} session ${sessionIndex + 1}` });
 
     } else if (action.type === "copy_week") {
@@ -4641,6 +4664,7 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
               athletePerformanceParameters={selectedAthletePerformanceParameters}
               onDeleteTestEvent={handleDeleteTestEvent}
               onOpenAIAssistant={(ctx) => { setFocusedSessionCtx(ctx); setAiOpenTrigger(c => c + 1); }}
+              forceParamRefresh={paramRefreshTrigger}
             />
         </>
       )}

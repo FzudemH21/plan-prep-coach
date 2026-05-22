@@ -156,7 +156,7 @@ export interface FocusedSessionContext {
   sessionIndex: number;
   sessionName: string;
   methods: string[];     // method names in this session
-  exercises: { name: string; methodName: string }[];
+  exercises: { name: string; methodName: string; params?: Record<string, string | number> }[];
 }
 
 // ─── Prompts ─────────────────────────────────────────────────────────────────
@@ -343,10 +343,16 @@ function buildSystemPrompt(
 Day: ${focusedSessionContext.dayLabel}
 Session: ${focusedSessionContext.sessionName} (index ${focusedSessionContext.sessionIndex + 1})
 Methods in this session: ${focusedSessionContext.methods.length > 0 ? focusedSessionContext.methods.join(', ') : 'none'}
-Exercises in this session: ${focusedSessionContext.exercises.length > 0
-        ? focusedSessionContext.exercises.map(e => `${e.name} (${e.methodName})`).join(', ')
-        : 'none'}
-IMPORTANT: The coach is currently looking at this session. When they ask questions like "this", "here", "this session", or "this exercise", they are referring to the session above unless they specify otherwise.`
+Exercises in this session (CURRENT parameter values — use these exact numbers when adding/deducting sets or reps):
+${focusedSessionContext.exercises.length > 0
+        ? focusedSessionContext.exercises.map(e => {
+            const paramStr = e.params && Object.keys(e.params).length > 0
+              ? ' — ' + Object.entries(e.params).map(([k, v]) => `${k}: ${v}`).join(', ')
+              : '';
+            return `  - ${e.name} [${e.methodName}]${paramStr}`;
+          }).join('\n')
+        : '  (none)'}
+IMPORTANT: The coach is currently looking at this session. "this", "here", "this session", "this exercise" all refer to the session above. When they ask to add/deduct sets or reps, use the current values above to compute the new absolute value, then emit set_exercise_params with methodId="${focusedSessionContext.methods[0] ?? ''}" dayDate="${focusedSessionContext.dayDate}" sessionIndex=${focusedSessionContext.sessionIndex}.`
     : "";
   const roleBlock = assistantRole
     ? `## Your role\n${assistantRole}`
