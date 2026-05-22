@@ -2319,8 +2319,25 @@ export function WorkoutSessionSheet({
     handleOpenChangeLibrary,
   ]);
 
+  // Scroll lock — replaces the behavior normally provided by modal={true}
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [isOpen]);
+
   return (
     <WorkoutSessionProvider value={sessionContextValue}>
+      {/* Manual backdrop — modal={false} doesn't render one */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-[49] bg-black/80"
+          onClick={onClose}
+        />
+      )}
     <Dialog open={isOpen} onOpenChange={onClose} modal={false}>
       <DialogContent
         className="max-w-[95vw] max-h-[95vh] w-full h-full flex flex-col p-0"
