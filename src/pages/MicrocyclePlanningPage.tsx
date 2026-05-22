@@ -29,7 +29,7 @@ import { DropResult } from '@hello-pangea/dnd';
 import { SaveProgramButton } from '@/components/programs/SaveProgramButton';
 import { useTrainingPrograms } from '@/hooks/useTrainingPrograms';
 import { useWizardData } from '@/contexts/WizardDataContext';
-import { WizardAIAssistant } from '@/components/wizard/WizardAIAssistant';
+import { WizardAIAssistant, FocusedSessionContext } from '@/components/wizard/WizardAIAssistant';
 import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
 import { useGlobalAIContext } from '@/hooks/useGlobalAIContext';
 import { useCoachMemory } from '@/hooks/useCoachMemory';
@@ -78,6 +78,7 @@ export default function MicrocyclePlanningPage() {
   const globalAIContext = useGlobalAIContext();
   const { coachMemoryContext } = useCoachMemory({ currentMethods: macrocycleData?.selectedMethods ?? [] });
   const [aiOpenTrigger, setAiOpenTrigger] = useState(0);
+  const [focusedSessionCtx, setFocusedSessionCtx] = useState<FocusedSessionContext | undefined>(undefined);
   const { libraries } = useCustomLibraries();
 
   // Resolve athlete name from selectedAthleteId
@@ -4634,7 +4635,7 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
               selectedAthleteId={selectedAthleteId}
               athletePerformanceParameters={selectedAthletePerformanceParameters}
               onDeleteTestEvent={handleDeleteTestEvent}
-              onOpenAIAssistant={() => setAiOpenTrigger(c => c + 1)}
+              onOpenAIAssistant={(ctx) => { setFocusedSessionCtx(ctx); setAiOpenTrigger(c => c + 1); }}
             />
         </>
       )}
@@ -4701,6 +4702,7 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
         globalContext={globalAIContext}
         coachMemoryContext={coachMemoryContext}
         forceOpen={aiOpenTrigger}
+        focusedSessionContext={focusedSessionCtx}
       />
     </div>
   );

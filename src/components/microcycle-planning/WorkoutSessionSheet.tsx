@@ -37,6 +37,7 @@ import { getMethodSessionIndex, getModuloSessionIndex } from '@/utils/sessionInd
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { AthletePerformanceParameter } from '@/types/athlete';
+import { FocusedSessionContext } from '@/components/wizard/WizardAIAssistant';
 
 interface SessionSectionProp {
   id: string;
@@ -117,7 +118,7 @@ interface WorkoutSessionSheetProps {
   selectedAthleteId?: string;
   athletePerformanceParameters?: AthletePerformanceParameter[];
   // Callback to open the AI assistant panel from within the dialog
-  onOpenAIAssistant?: () => void;
+  onOpenAIAssistant?: (ctx: FocusedSessionContext) => void;
 }
 
 export function WorkoutSessionSheet({
@@ -2548,7 +2549,17 @@ export function WorkoutSessionSheet({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={onOpenAIAssistant}
+                  onClick={() => {
+                    const uniqueMethods = [...new Set(exercises.map(e => e.categoryName))];
+                    onOpenAIAssistant({
+                      dayDate,
+                      dayLabel: format(parseISO(`${dayDate}T12:00:00`), 'EEEE d MMMM yyyy'),
+                      sessionIndex,
+                      sessionName,
+                      methods: uniqueMethods,
+                      exercises: exercises.map(e => ({ name: e.exerciseName, methodName: e.categoryName })),
+                    });
+                  }}
                   title="Open AI Assistant"
                 >
                   <Bot className="h-4 w-4" />

@@ -24,6 +24,7 @@ import { ExerciseDetailDialog } from '@/components/shared/ExerciseDetailDialog';
 import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import { toggleSuperset, cleanupSupersetsOnExerciseDelete } from '@/utils/supersetUtils';
 import { AthletePerformanceParameter } from '@/types/athlete';
+import { FocusedSessionContext } from '@/components/wizard/WizardAIAssistant';
 
 // Local interface for internal use - compatible with WeekRow, TrainingDayCell etc.
 interface ExerciseDistribution {
@@ -101,7 +102,7 @@ interface TrainingCalendarViewProps {
   selectedAthleteId?: string;
   athletePerformanceParameters?: AthletePerformanceParameter[];
   // Callback to open the AI assistant from within the session dialog
-  onOpenAIAssistant?: () => void;
+  onOpenAIAssistant?: (ctx: FocusedSessionContext) => void;
 }
 
 export interface CalendarDay {

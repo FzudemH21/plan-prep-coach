@@ -145,6 +145,22 @@ export interface WizardAIAssistantProps {
    * Each increment opens the panel; the user can still close it manually.
    */
   forceOpen?: number;
+  /**
+   * When the AI panel is opened from within a specific session (via the Bot button
+   * in WorkoutSessionSheet), this carries the session's context so the AI knows
+   * exactly which day/session the coach is currently viewing.
+   */
+  focusedSessionContext?: FocusedSessionContext;
+}
+
+/** Context passed when the AI is opened from inside a workout session card. */
+export interface FocusedSessionContext {
+  dayDate: string;       // yyyy-MM-dd
+  dayLabel: string;      // e.g. "Monday 19 May 2025"
+  sessionIndex: number;
+  sessionName: string;
+  methods: string[];     // method names in this session
+  exercises: { name: string; methodName: string }[];
 }
 
 // ─── Prompts ─────────────────────────────────────────────────────────────────
@@ -321,6 +337,7 @@ function buildSystemPrompt(
   assistantRole?: string,
   toolboxContext?: string,
   globalContext?: string,
+  focusedSessionContext?: FocusedSessionContext,
 ): string {
   const memoryBlock = coachMemoryContext
     ? `\n\n## Coach's Past Plans (most recent first — defer to newer patterns when in doubt)\n${coachMemoryContext}`
@@ -330,6 +347,16 @@ function buildSystemPrompt(
     : "";
   const toolboxBlock = toolboxContext ? `\n\n## ${toolboxContext}` : "";
   const globalBlock = globalContext ? `\n\n${globalContext}` : "";
+  const focusedSessionBlock = focusedSessionContext
+    ? `\n\n## Currently Viewing (coach opened AI from inside this session)
+Day: ${focusedSessionContext.dayLabel}
+Session: ${focusedSessionContext.sessionName} (index ${focusedSessionContext.sessionIndex + 1})
+Methods in this session: ${focusedSessionContext.methods.length > 0 ? focusedSessionContext.methods.join(', ') : 'none'}
+Exercises in this session: ${focusedSessionContext.exercises.length > 0
+        ? focusedSessionContext.exercises.map(e => `${e.name} (${e.methodName})`).join(', ')
+        : 'none'}
+IMPORTANT: The coach is currently looking at this session. When they ask questions like "this", "here", "this session", or "this exercise", they are referring to the session above unless they specify otherwise.`
+    : "";
   const roleBlock = assistantRole
     ? `## Your role\n${assistantRole}`
     : DEFAULT_ROLE;
@@ -384,7 +411,7 @@ Use hyphens (not underscores). "Deload" = active recovery week at very low load.
 Parameter values set in the Periodization Table (Phase 2 Step 4) flow automatically down to exercises and the training calendar. Changing a value at a higher level propagates consistently downward. Tests and events scheduled in Phase 1 appear in the mesocycle calendar and athlete calendar upon plan assignment.
 
 ## Coach Background
-${coachContext}${memoryBlock}${ragBlock}${toolboxBlock}${globalBlock}
+${coachContext}${memoryBlock}${ragBlock}${toolboxBlock}${globalBlock}${focusedSessionBlock}
 
 ## ${contextLabel}
 ${wizardContext}
@@ -614,6 +641,7 @@ export function WizardAIAssistant({
   assistantRole,
   globalContext,
   forceOpen,
+  focusedSessionContext,
 }: WizardAIAssistantProps) {
   const { profile } = useCoachProfile();
   const { data: toolboxData } = useToolboxData();
@@ -712,7 +740,7 @@ export function WizardAIAssistant({
     try {
       const reply = await sendMessage(
         newMessages,
-        buildSystemPrompt(coachContext, wizardContext, !!onApplySuggestion, coachMemoryContext, ragContext, assistantRole, toolboxContext, globalContext),
+        buildSystemPrompt(coachContext, wizardContext, !!onApplySuggestion, coachMemoryContext, ragContext, assistantRole, toolboxContext, globalContext, focusedSessionContext),
         "claude-sonnet-4-5",
         8192
       );
