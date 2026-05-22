@@ -342,10 +342,8 @@ export function EnhancedExerciseDistribution({
     // 1. Add exercises from exerciseSelectionData (Step 0)
     Object.entries(exerciseSelectionData).forEach(([key, cellData]) => {
       if (cellData.mesocycleId !== mesocycle.id) return;
-
       const methodId = cellData.methodId;
       const categoryName = isValidCategoryName(cellData.categoryName) ? cellData.categoryName! : '';
-
       cellData.exercises.forEach(ex => {
         addExercise(methodId, categoryName, ex);
       });
@@ -374,17 +372,8 @@ export function EnhancedExerciseDistribution({
       });
     });
 
-    // 3. Filter out methods not allocated to this mesocycle (removes stale exerciseSelectionData)
-    if (Object.keys(methodAllocations).length > 0) {
-      Object.keys(grouped).forEach(methodId => {
-        if (!(methodAllocations[methodId] ?? []).includes(mesocycle.id)) {
-          delete grouped[methodId];
-        }
-      });
-    }
-
     return grouped;
-  }, [exerciseSelectionData, exerciseDistribution, mesocycle.id, methodAllocations]);
+  }, [exerciseSelectionData, exerciseDistribution, mesocycle.id]);
 
   // Helper to find superset in mapping
   const findSessionSuperset = (
@@ -507,8 +496,9 @@ export function EnhancedExerciseDistribution({
 
   const handleDragStart = useCallback((start: DragStart) => {
     if (start.source.droppableId.startsWith('library-')) {
-      const methodId = start.source.droppableId.replace('library-', '').split('::')[0];
-      setDraggingMethodId(methodId);
+      // Keep full "methodId::category" key so split methods match correctly
+      const fullKey = start.source.droppableId.replace('library-', '');
+      setDraggingMethodId(fullKey);
     }
   }, []);
 
@@ -2550,12 +2540,22 @@ export function EnhancedExerciseDistribution({
 
                                 const sessionKey = `${day.date}_${sessionIndex}`;
                                 const sessionMethods = dayMethodAssignments?.[sessionKey] ?? [];
-                                const methodMatchState: 'match' | 'no-match' | 'neutral' =
-                                  draggingMethodId
-                                    ? (sessionMethods.length > 0
-                                        ? (sessionMethods.includes(draggingMethodId) ? 'match' : 'no-match')
-                                        : 'neutral')
-                                    : 'neutral';
+                                const methodMatchState: 'match' | 'no-match' | 'neutral' = (() => {
+                                  if (!draggingMethodId) return 'neutral';
+                                  if (sessionMethods.length === 0) return 'neutral';
+                                  // Strip trailing :: (library droppableId for unsplit methods ends with ::)
+                                  const normalized = draggingMethodId.endsWith('::')
+                                    ? draggingMethodId.slice(0, -2)
+                                    : draggingMethodId;
+                                  const hasCategory = normalized.includes('::');
+                                  const matches = sessionMethods.some(m => {
+                                    if (m === normalized) return true;
+                                    // Unsplit method dragged: also match any category-split variant
+                                    if (!hasCategory) return m.startsWith(normalized + '::');
+                                    return false;
+                                  });
+                                  return matches ? 'match' : 'no-match';
+                                })();
 
                                 return (
                                   <SessionColumnView

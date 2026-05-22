@@ -16,12 +16,16 @@ import { useToolboxData } from "@/hooks/useToolboxData";
 export type ApplySuggestion =
   | { type: "set_plan_name"; name: string }
   | { type: "add_goal"; parameterName: string }
+  /** MacrocyclePage Steps 1 & 2 — remove a goal by exact name */
+  | { type: "remove_goal"; goalName: string }
   /** MacrocyclePage Steps 1 & 2 — schedule or remove test dates for main goals / sub-goals, or dates for events */
   | { type: "schedule_tests"; schedule: Array<{ goalDescription: string; isMainGoal: boolean; isEvent?: boolean; action?: "add" | "remove"; dates: string[] }> }
-  /** MacrocyclePage Step 1 — change plan duration by setting a new number of weeks (keeps start date) */
-  | { type: "set_plan_duration"; weeks: number }
+  /** MacrocyclePage Step 1 — set plan start date, end date, and/or total weeks */
+  | { type: "set_plan_duration"; startDate?: string; endDate?: string; weeks?: number }
   /** MacrocyclePage Steps 1 & 2 — create a new event (without scheduling dates yet) */
   | { type: "create_event"; name: string; description?: string }
+  /** MacrocyclePage Steps 1 & 2 — delete an existing event entirely */
+  | { type: "remove_event"; eventName: string }
   /** MacrocyclePage Step 3 — add new methods to the training plan, each with an optional rationale */
   | { type: "add_methods"; methods: Array<{ name: string; rationale?: string }> }
   | { type: "set_mesocycle_config"; count: number; weeksDuration: number }
@@ -33,7 +37,7 @@ export type ApplySuggestion =
   | { type: "allocate_methods"; allocations: Array<{ methodName: string; mesocycleNames: string[] }> }
   /** MesocyclePage Step 3 — add new training methods to the plan */
   | { type: "add_methods"; methods: Array<{ name: string; rationale?: string }> }
-  /** MesocyclePage Step 3 — remove methods from the plan entirely */
+  /** MacrocyclePage Step 3 & MesocyclePage Step 3 — remove methods from the plan entirely */
   | { type: "remove_methods"; methodNames: string[] }
   | { type: "set_method_intensities"; methodName: string; frequency: number; sets: number; reps: string; intensity: string }
   /** MesocyclePage Steps 1 & 2 — set mesocycle-level intensity and/or per-microcycle loading wave */
@@ -171,14 +175,19 @@ When you have a concrete suggestion the coach can apply with one click, append O
 
 Available types and their fields:
 - set_plan_name: {"type":"set_plan_name","name":"<plan name>"}
-- set_plan_duration: {"type":"set_plan_duration","weeks":<total number of weeks>}
+- set_plan_duration: {"type":"set_plan_duration","startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","weeks":<total weeks>}
+  Sets the plan start date, end date, and/or duration. Provide startDate and endDate as ISO strings when the coach specifies actual dates. weeks is computed automatically from the dates but can be supplied alone if only duration changes (keeps existing start date). You CAN and SHOULD set dates when the coach asks.
 - add_goal: {"type":"add_goal","parameterName":"<exact parameter name from the database list>"}
+- remove_goal: {"type":"remove_goal","goalName":"<exact goal name from the Goals list in context>"}
+  Removes a goal entirely. Use the EXACT name shown in the Goals list.
 - schedule_tests: {"type":"schedule_tests","schedule":[{"goalDescription":"<exact name>","isMainGoal":<true|false>,"isEvent":<true for events, omit/false for goals>,"action":"add","dates":["YYYY-MM-DD"]}]}
-  action is "add" (default) or "remove". Use ISO date strings (YYYY-MM-DD). For goals/sub-goals match goalDescription to the name in context. For events, goalDescription is the event name — created automatically if it doesn't exist yet.
+  action is "add" (default) or "remove". Use ISO date strings (YYYY-MM-DD). For goals/sub-goals use the exact name from the Goals list in context. For events: FIRST check the Events list in context — if an event with a similar name exists, use its EXACT name (e.g. coach says "strength test" → use "Strength Test - 1RM Back Squat" if that exists). Only use create_event for brand-new events that have no match. If you are unsure which existing event the coach means, ask for clarification instead of creating a duplicate.
 - create_event: {"type":"create_event","name":"<event name>","description":"<optional description>"}
-  Creates a new event entry without scheduling any dates. Use this when the coach wants to add an event to the list first and schedule it later.
+  Creates a new event entry without scheduling any dates. Use ONLY when the event does not already exist in the Events list in context.
+- remove_event: {"type":"remove_event","eventName":"<exact event name from the Events list in context>"}
+  Deletes an event entirely (removes it and all its scheduled dates). Use the EXACT name from the Events list.
 - add_methods: {"type":"add_methods","methods":[{"name":"<exact method name>","rationale":"<why this method supports the goal>"},{"name":"<exact method name>","rationale":"<rationale>"}]}
-  Always include a rationale for methods that are NOT already goal-linked (i.e. methods you are suggesting beyond what the system derived from the parameter database).
+  ONLY suggest or add methods whose exact name appears in the "Training Toolbox" list in context. Never invent method names from general knowledge. Always include a rationale for methods that are not goal-linked.
 - set_mesocycle_config: {"type":"set_mesocycle_config","count":<number>,"weeksDuration":<weeks per mesocycle>}
   Use for quick uniform setup (all mesocycles same length, all microcycles 7 days). For variable durations use configure_mesocycles instead.
 - configure_mesocycles: {"type":"configure_mesocycles","mesocycles":[{"name":"Mesocycle 1","microcycles":[{"duration":7,"intensity":"easy"},{"duration":7,"intensity":"moderate"},{"duration":7,"intensity":"hard"},{"duration":7,"intensity":"deload"}]},{"name":"Mesocycle 2","microcycles":[{"duration":7,"intensity":"moderate"},{"duration":7,"intensity":"hard"},{"duration":5,"intensity":"extremely-hard"},{"duration":2,"intensity":"deload"}]}]}

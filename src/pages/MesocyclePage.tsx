@@ -5043,11 +5043,15 @@ export default function MesocyclePage() {
       : macrocycleData?.smartGoal?.specific
       ? `Primary goal: ${macrocycleData.smartGoal.specific}`
       : "";
+    const durationStr = planStartDate && planEndDate && planEndDate > planStartDate
+      ? `Plan duration: ${format(planStartDate, 'yyyy-MM-dd')} → ${format(planEndDate, 'yyyy-MM-dd')} (${totalWeeks} weeks / ${expectedTotalDays} days total)\nMesocycle days planned: ${totalMesocycleDays}${daysMismatch ? ` ⚠️ MISMATCH — mesocycles cover ${totalMesocycleDays} days but plan is ${expectedTotalDays} days` : " ✓ matches plan"}`
+      : totalWeeks > 0 ? `Plan duration: ${totalWeeks} weeks` : "";
     const mesoCount = mesocycles.length;
     const mesoStr = mesoCount > 0
       ? `Mesocycles (${mesoCount}):\n${mesocycles.map((m) => {
-          const micros = m.microcycles?.map(mc => `  - ${mc.name} (${mc.duration}d, ${mc.intensity})`).join("\n") ?? "";
-          return `- ${m.name} (${m.weeks}w)${micros ? "\n" + micros : ""}`;
+          const mesoDays = m.microcycles?.reduce((s, mc) => s + mc.duration, 0) ?? 0;
+          const micros = m.microcycles?.map(mc => `    - ${mc.name}: ${mc.duration}d, intensity: ${mc.intensity}`).join("\n") ?? "";
+          return `  - ${m.name}: ${Math.ceil(mesoDays / 7)} weeks (${mesoDays}d)${micros ? "\n" + micros : ""}`;
         }).join("\n")}`
       : "No mesocycles configured yet";
     const allocatedMethods = Object.keys(methodAllocations).filter(
@@ -5143,6 +5147,7 @@ export default function MesocyclePage() {
       athleteStr,
       planStr,
       goalStr,
+      durationStr,
       mesoStr,
       methodsStr,
       parameterTableStr,
@@ -5150,7 +5155,7 @@ export default function MesocyclePage() {
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, mesocycles, methodAllocations, mesoStepLabel, exerciseLibraries, exerciseCellData, parameterValues]);
+  }, [currentStep, athleteName, macrocycleData, planStartDate, planEndDate, totalWeeks, expectedTotalDays, totalMesocycleDays, daysMismatch, mesocycles, methodAllocations, mesoStepLabel, exerciseLibraries, exerciseCellData, parameterValues]);
 
   // ── AI Apply handler ──────────────────────────────────────────────────────
   const handleMesoAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {

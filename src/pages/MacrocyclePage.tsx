@@ -2776,11 +2776,21 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       : "No athlete selected yet";
     const planStr = planName ? `Plan name: ${planName}` : "";
     const durationStr = planDuration
-      ? `Duration: ${planDuration.totalDays} days (${Math.round(planDuration.totalDays / 7)} weeks)`
+      ? `Plan dates: ${format(planDuration.startDate, 'yyyy-MM-dd')} → ${format(planDuration.endDate, 'yyyy-MM-dd')} (${planDuration.totalDays} days / ${Math.round(planDuration.totalDays / 7)} weeks)`
       : "";
     const goalsStr = smartGoals.length
-      ? `Goals:\n${smartGoals.map((g) => `- ${g.description || g.specific || ""}`).filter(Boolean).join("\n")}`
+      ? `Goals (use EXACT names for schedule_tests):\n${smartGoals.map((g) => {
+          const name = g.description || g.specific || "";
+          const dates = g.testDates?.length ? ` [tests: ${g.testDates.join(", ")}]` : "";
+          return `- ${name}${dates}`;
+        }).filter(Boolean).join("\n")}`
       : "";
+    const eventsStr = events.length
+      ? `Events (use EXACT names for schedule_tests — do NOT create a new event if one already exists here):\n${events.map((e) => {
+          const dates = e.eventDates?.length ? ` [scheduled: ${e.eventDates.join(", ")}]` : " [no dates yet]";
+          return `- "${e.name}"${dates}`;
+        }).join("\n")}`
+      : "Events: none yet";
     const selectedMethodList = [
       ...Array.from(selectedMethods),
       ...manuallyAddedMethods.map((m) => m.methodId),
@@ -2790,16 +2800,29 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       : "";
     let actionHints = "";
     if (currentStep === 1) {
-      actionHints = "Available AI action: set_plan_name";
+      actionHints = "Available AI actions: set_plan_name, set_plan_duration, add_goal, remove_goal, schedule_tests, create_event, remove_event";
     } else if (currentStep === 2) {
-      actionHints = "Available AI action: add_goal (include specific numbers and timeframe in the description)";
+      actionHints = "Available AI actions: add_goal (include specific numbers and timeframe), remove_goal, schedule_tests, create_event, remove_event";
     } else if (currentStep === 3) {
-      const allAvailableIds = Object.values(methodsByQuality).flatMap((q) => q.list);
-      const unselected = allAvailableIds.filter((m) => !selectedMethods.has(m));
-      const methodListStr = unselected.length
-        ? `Available methods to suggest from (use exact names):\n${unselected.map((m) => `- ${m}`).join("\n")}`
-        : "All available methods are already selected.";
-      actionHints = `Available AI action: add_methods\n${methodListStr}`;
+      // Use the same function the UI uses — reads from parametersDataV2.parameterMethods filtered by goals
+      const goalLinkedMethods = getAllMethodsWithAssociations();
+      const goalLinkedStr = goalLinkedMethods.length
+        ? `Goal-linked methods shown on this page (✓ = selected, ✗ = deselected):\n${goalLinkedMethods.map((m) => {
+            const sel = selectedMethods.has(m.methodId) ? "✓" : "✗";
+            const goals = m.associations.map(a => `${a.isPrimaryGoal ? "[primary goal]" : "[sub-goal]"} ${a.parameterName}`).join(", ");
+            return `${sel} ${m.methodId} — linked to: ${goals}`;
+          }).join("\n")}`
+        : "No goal-linked methods on this page (no parameter-method links configured in the database for the current goals).";
+      const manualStr = manuallyAddedMethods.length
+        ? `Manually added methods:\n${manuallyAddedMethods.map((m) => `✓ ${m.methodId}${m.rationale ? ` — ${m.rationale}` : ""}`).join("\n")}`
+        : "";
+      const allToolboxMethods = [...new Set(
+        (toolboxData?.entries ?? []).map(e => `${e.category} - ${e.subCategory}`)
+      )].sort();
+      const toolboxStr = allToolboxMethods.length
+        ? `Training Toolbox — ALL methods available to add (ONLY suggest from this list, use exact names):\n${allToolboxMethods.map(m => `- ${m}`).join("\n")}`
+        : "Training Toolbox: empty.";
+      actionHints = `Available AI actions: add_methods, remove_methods\n${goalLinkedStr}${manualStr ? `\n${manualStr}` : ""}\n${toolboxStr}`;
     }
     return [
       `Current step: ${macroStepLabel}`,
@@ -2807,12 +2830,13 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       planStr,
       durationStr,
       goalsStr,
+      eventsStr,
       methodsStr,
       actionHints,
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, selectedAthlete, planName, planDuration, smartGoals, selectedMethods, manuallyAddedMethods, macroStepLabel, methodsByQuality]);
+  }, [currentStep, selectedAthlete, planName, planDuration, smartGoals, subGoals, derivedSubGoals, events, selectedMethods, manuallyAddedMethods, macroStepLabel, parametersDataV2, toolboxData]);
 
   const handleAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
     switch (action.type) {
@@ -2820,10 +2844,15 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         setPlanName(action.name);
         break;
       case "set_plan_duration": {
-        const start = planDuration?.startDate ?? new Date();
-        const end = new Date(start);
-        end.setDate(end.getDate() + action.weeks * 7);
-        setPlanDuration({ startDate: start, endDate: end, totalDays: action.weeks * 7, totalWeeks: action.weeks });
+        const start = action.startDate
+          ? new Date(action.startDate + 'T12:00:00')
+          : (planDuration?.startDate ?? new Date());
+        const end = action.endDate
+          ? new Date(action.endDate + 'T12:00:00')
+          : (() => { const d = new Date(start); d.setDate(d.getDate() + (action.weeks ?? 0) * 7); return d; })();
+        const totalDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        const totalWeeks = Math.round(totalDays / 7);
+        setPlanDuration({ startDate: start, endDate: end, totalDays, totalWeeks });
         break;
       }
       case "add_goal":
@@ -2831,6 +2860,16 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           ...prev,
           { id: generateId(), description: action.parameterName, baselineValue: 0, desiredValue: 0, unit: "", percentChange: 0, testDates: [] },
         ]);
+        break;
+      case "remove_goal":
+        setSmartGoals((prev) =>
+          prev.filter((g) => (g.description || g.specific || "").toLowerCase() !== action.goalName.toLowerCase())
+        );
+        break;
+      case "remove_event":
+        setEvents((prev) =>
+          prev.filter((e) => e.name.toLowerCase() !== action.eventName.toLowerCase())
+        );
         break;
       case "schedule_tests": {
         action.schedule.forEach(({ goalDescription, isEvent, action: act = "add", dates }) => {
@@ -2880,9 +2919,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         setEvents(prev => [...prev, { id: generateId(), name: action.name, description: action.description, eventDates: [] }]);
         break;
       case "add_methods": {
-        const allAvailableIds = new Set(Object.values(methodsByQuality).flatMap((q) => q.list));
+        const goalLinkedIds = new Set(getAllMethodsWithAssociations().map(m => m.methodId));
         action.methods.forEach(({ name, rationale }) => {
-          if (allAvailableIds.has(name)) {
+          if (goalLinkedIds.has(name)) {
             setSelectedMethods((prev) => new Set([...prev, name]));
           } else {
             handleAddManualMethod({ methodId: name, rationale: rationale ?? "" });
@@ -2890,10 +2929,21 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         });
         break;
       }
+      case "remove_methods": {
+        action.methodNames.forEach((name) => {
+          const isManual = manuallyAddedMethods.some((m) => m.methodId === name);
+          if (isManual) {
+            handleRemoveManualMethod(name);
+          } else {
+            toggleMethodSelection(name, false);
+          }
+        });
+        break;
+      }
       default:
         break;
     }
-  }, [methodsByQuality, handleAddManualMethod, planDuration]);
+  }, [methodsByQuality, handleAddManualMethod, handleRemoveManualMethod, toggleMethodSelection, manuallyAddedMethods, planDuration]);
 
   return (
     <>
