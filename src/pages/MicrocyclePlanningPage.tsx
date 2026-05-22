@@ -3426,6 +3426,10 @@ export default function MicrocyclePlanningPage() {
       : "No mesocycles";
     const currentMeso = mesocycles[currentMesocycleIndex];
     const currentMesoStr = currentMeso ? `Current mesocycle: ${currentMeso.name}` : "";
+    const viewedMicro = (currentMeso?.microcycles?.[currentMicrocycleIndex] as { id: string; name?: string } | undefined);
+    const currentMicroStr = viewedMicro
+      ? `Current microcycle being viewed: ${viewedMicro.name ?? `Microcycle ${currentMicrocycleIndex + 1}`} (${currentMicrocycleIndex + 1} of ${currentMeso?.microcycles?.length ?? 1} in this mesocycle)`
+      : "";
     const assignedDays = Object.keys(dayMethodAssignments).filter(
       (d) => dayMethodAssignments[d]?.length > 0
     ).length;
@@ -3656,6 +3660,7 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
       goalStr,
       mesoStr,
       currentMesoStr,
+      currentMicroStr,
       methodsStr,
       dayStr,
       offDaysStr,
