@@ -759,16 +759,22 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             ? shiftTrainingDaysDates(program.trainingDays, normalizedOriginalStart, normalizedNewStart)
             : [];
             
-          // Derive split states from daySplitStates if available, otherwise
-          // fall back to trainingDays.sessions so programs saved before the
-          // daySplitStates field existed still show sessions after assignment.
-          const sourceSplitStates =
+          // Derive split states with three-tier fallback:
+          // 1. program.daySplitStates (most accurate — includes multi-session days)
+          // 2. program.trainingDays (has per-day intensity; off days → 0 sessions)
+          // 3. program.dailyIntensityData (per-day intensity from the loading wave)
+          const sourceSplitStates: Record<string, number> =
             program.daySplitStates && Object.keys(program.daySplitStates).length > 0
               ? program.daySplitStates
-              : (program.trainingDays ?? []).reduce<Record<string, number>>((acc, day) => {
-                  acc[day.date] = day.sessions ?? (day.intensity === 'off' ? 0 : 1);
-                  return acc;
-                }, {});
+              : (program.trainingDays ?? []).length > 0
+                ? (program.trainingDays!).reduce<Record<string, number>>((acc, day) => {
+                    acc[day.date] = day.sessions ?? (day.intensity === 'off' ? 0 : 1);
+                    return acc;
+                  }, {})
+                : (program.dailyIntensityData ?? []).reduce<Record<string, number>>((acc, di) => {
+                    acc[di.date] = di.intensity === 'off' ? 0 : 1;
+                    return acc;
+                  }, {});
 
           const shiftedDaySplitStates = shiftDaySplitStatesDates(
             sourceSplitStates,
@@ -794,11 +800,20 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           // - it has a mesocycleId that is in selectedMesoIds, OR it has no
           //   mesocycleId (old data — include unconditionally to stay safe)
           // - same rule for microcycleId
-          const filteredTrainingDays = shiftedTrainingDays.filter(td => {
+          let filteredTrainingDays = shiftedTrainingDays.filter(td => {
             const mesoOk = !td.mesocycleId || selectedMesoIds.size === 0 || selectedMesoIds.has(td.mesocycleId);
             const microOk = !td.microcycleId || selectedMicroIds.size === 0 || selectedMicroIds.has(td.microcycleId);
             return mesoOk && microOk;
           });
+
+          // ID mismatch guard: if the filter emptied the list but the program has
+          // training days, the stored mesocycle IDs don't match the selected ones
+          // (e.g. plan re-saved after mesocycle structure was regenerated). Fall
+          // back to all shifted training days so the calendar is never blank.
+          if (filteredTrainingDays.length === 0 && shiftedTrainingDays.length > 0) {
+            console.log('[ASSIGN] Mesocycle ID mismatch — including all shifted training days');
+            filteredTrainingDays = shiftedTrainingDays;
+          }
 
           // Build validDates from the filtered training days.
           let validDates = new Set<string>(filteredTrainingDays.map((td: any) => td.date));
@@ -845,6 +860,33 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           // via the cache rendering path (which relies on these fields).
           let finalDaySplitStates = filteredDaySplitStates;
           let finalTrainingDays = filteredTrainingDays;
+
+          // If training days are still empty but shifted daily intensity data is
+          // available, build them from that. This covers plans where only
+          // dailyIntensityData was saved (skipped microcycle planning step).
+          if (finalTrainingDays.length === 0 && shiftedDailyIntensity.length > 0) {
+            finalTrainingDays = shiftedDailyIntensity.map((di: any) => ({
+              date: di.date,
+              dayOfWeek: new Date(di.date + 'T12:00:00').getDay(),
+              dayName: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(di.date + 'T12:00:00').getDay()],
+              mesocycleId: di.mesocycleId,
+              microcycleId: di.microcycleId,
+              isTestDay: false,
+              isEventDay: false,
+              isTrainingDay: di.intensity !== 'off',
+              intensity: di.intensity,
+              sessions: di.intensity === 'off' ? 0 : 1,
+              sessionNames: di.intensity === 'off' ? [] : ['Session 1'],
+            }));
+            // Sync split states from this derived training days list
+            if (Object.keys(finalDaySplitStates).length === 0) {
+              finalDaySplitStates = finalTrainingDays.reduce<Record<string, number>>((acc, td: any) => {
+                acc[td.date] = td.sessions;
+                return acc;
+              }, {});
+            }
+            console.log('[ASSIGN] built trainingDays + splitStates from dailyIntensityData, days:', finalTrainingDays.length);
+          }
 
           if (Object.keys(finalDaySplitStates).length === 0 && assignment.assignedMesocycles?.length > 0) {
             const splitStates: Record<string, number> = {};
