@@ -607,7 +607,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     editing.handleMoveSession(sourceDayDate, sourceSessionIndex, destDayDate);
   }, [editing]);
 
-  const handleAssignProgram = useCallback((assignment: Omit<AthleteCalendarAssignment, 'id' | 'createdAt'>) => {
+  const handleAssignProgram = useCallback(async (assignment: Omit<AthleteCalendarAssignment, 'id' | 'createdAt'>) => {
     console.log('[ASSIGN] handleAssignProgram called, programId:', assignment.programId, 'startDate:', assignment.startDate, 'endDate:', assignment.endDate, 'assignedMesocycles:', assignment.assignedMesocycles?.length);
 
     // When an assignment is already active, merge program sessions into it instead of
@@ -617,7 +617,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     // Create the assignment record only when there is no existing assignment to merge into
     const newAssignment = mergeIntoExisting
       ? null
-      : athleteData.createCalendarAssignment(athlete.id, assignment);
+      : await athleteData.createCalendarAssignment(athlete.id, assignment);
     console.log('[ASSIGN] mergeIntoExisting:', mergeIntoExisting, '| newAssignment:', newAssignment?.id ?? 'none');
 
     // Process program workout data with shifted dates
@@ -698,7 +698,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         // If still no valid date, show error and cleanup
         if (!originalStartDate) {
           console.error('[handleAssignProgram] Could not determine original start date');
-          athleteData.deleteCalendarAssignment(newAssignment.id);
+          if (newAssignment) await athleteData.deleteCalendarAssignment(newAssignment.id);
           toast({
             title: "Assignment failed",
             description: "Could not determine the program's start date. Please ensure the program has valid training data.",
