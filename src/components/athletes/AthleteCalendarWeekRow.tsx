@@ -65,6 +65,9 @@ interface AthleteCalendarWeekRowProps {
   // Athlete context for baseline auto-fill
   athleteId?: string;
   athletePerformanceParameters?: AthletePerformanceParameter[];
+  // Parent-owned event callbacks forwarded to each DayCell
+  onAddCalendarEvent?: (athleteId: string, event: Omit<import('@/hooks/useCalendarEvents').CalendarEvent, 'id'>) => void;
+  onDeleteCalendarEvent?: (athleteId: string, eventId: string) => void;
 }
 
 export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow({
@@ -92,6 +95,8 @@ export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow
   lastDragEndRef,
   athleteId,
   athletePerformanceParameters,
+  onAddCalendarEvent,
+  onDeleteCalendarEvent,
 }: AthleteCalendarWeekRowProps) {
   const weekStartDate = format(week[0].date, 'yyyy-MM-dd');
   const hasExercisesInWeek = week.some(day => day.sessions.length > 0);
@@ -174,6 +179,8 @@ export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow
             lastDragEndRef={lastDragEndRef}
             athleteId={athleteId}
             athletePerformanceParameters={athletePerformanceParameters}
+            onAddCalendarEvent={onAddCalendarEvent}
+            onDeleteCalendarEvent={onDeleteCalendarEvent}
           />
         ))}
       </div>
