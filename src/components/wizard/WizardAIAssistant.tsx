@@ -583,12 +583,37 @@ function getSuggestionPreview(action: ApplySuggestion): string {
       return `Add exercise to library`;
     case "library_delete_exercise":
       return `Delete exercise: ${action.exerciseName ?? action.exerciseId}`;
-    case "library_update_exercise":
-      return `Update exercise: ${action.exerciseName ?? action.exerciseId} — ${Object.keys(action.updates ?? {}).join(", ")}`;
+    case "library_update_exercise": {
+      const exLabel = action.exerciseName ?? `exercise …${(action.exerciseId ?? '').slice(-6)}`;
+      const fieldCount = Object.keys(action.updates ?? {}).length;
+      return `Update ${exLabel} (${fieldCount} field${fieldCount !== 1 ? 's' : ''})`;
+    }
     case "library_add_column":
       return `Add column: "${action.name}" (${action.columnType})`;
     case "library_delete_column":
       return `Delete column: "${action.columnName ?? action.columnId}"`;
+  }
+}
+
+/** When all actions are the same repetitive type, return a single summary line instead of listing each one. */
+function buildGroupSummary(actions: ApplySuggestion[]): string | null {
+  if (actions.length <= 3) return null;
+  const types = new Set(actions.map(a => a.type));
+  if (types.size !== 1) return null;
+  const type = [...types][0];
+  switch (type) {
+    case "library_update_exercise":
+      return `Update ${actions.length} exercises`;
+    case "library_add_exercise":
+      return `Add ${actions.length} exercises to library`;
+    case "library_delete_exercise":
+      return `Delete ${actions.length} exercises`;
+    case "distribute_exercises":
+      return `Distribute ${(actions as Extract<ApplySuggestion, { type: "distribute_exercises" }>[]).reduce((n, a) => n + a.entries.length, 0)} exercises across training days`;
+    case "set_periodization":
+      return `Set periodization for ${actions.length} method-microcycle cells`;
+    default:
+      return `${actions.length} ${type.replace(/_/g, ' ')} actions`;
   }
 }
 
@@ -600,6 +625,7 @@ function SuggestionGroupCard({
   onApply: (a: ApplySuggestion) => void;
 }) {
   const [applied, setApplied] = useState(false);
+  const groupSummary = buildGroupSummary(actions);
 
   const handleApplyAll = () => {
     actions.forEach(onApply);
@@ -612,14 +638,18 @@ function SuggestionGroupCard({
         <Sparkles className="h-3 w-3 flex-shrink-0" />
         {actions.length === 1 ? "Suggested action" : `${actions.length} suggested actions`}
       </div>
-      <ul className="space-y-0.5">
-        {actions.map((action, i) => (
-          <li key={i} className="text-xs text-foreground leading-snug flex gap-1.5">
-            {actions.length > 1 && <span className="text-muted-foreground shrink-0">{i + 1}.</span>}
-            <span>{getSuggestionPreview(action)}</span>
-          </li>
-        ))}
-      </ul>
+      {groupSummary ? (
+        <p className="text-xs text-foreground leading-snug">{groupSummary}</p>
+      ) : (
+        <ul className="space-y-0.5">
+          {actions.map((action, i) => (
+            <li key={i} className="text-xs text-foreground leading-snug flex gap-1.5">
+              {actions.length > 1 && <span className="text-muted-foreground shrink-0">{i + 1}.</span>}
+              <span>{getSuggestionPreview(action)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       <Button
         size="sm"
         variant={applied ? "outline" : "default"}

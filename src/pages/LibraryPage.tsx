@@ -80,10 +80,10 @@ export default function LibraryPage() {
 
     if (action.type === 'library_add_exercise') {
       if (action.libraryId !== library.id) return;
-      // AI sends column names as keys; map to column IDs before storing
+      // AI may send column names or column IDs as keys — accept both
       const mappedData: Record<string, string> = {};
-      for (const [colName, val] of Object.entries(action.data ?? {})) {
-        const col = library.columns.find(c => c.name === colName);
+      for (const [key, val] of Object.entries(action.data ?? {})) {
+        const col = library.columns.find(c => c.name === key) ?? library.columns.find(c => c.id === key);
         if (col && col.role !== 'video' && col.role !== 'description') {
           mappedData[col.id] = val;
         }
@@ -109,10 +109,10 @@ export default function LibraryPage() {
       if (!exerciseId) return;
       const ex = library.exercises.find(e => e.id === exerciseId);
       if (!ex) return;
-      // Map column names in updates → column ids
+      // Map column names OR column IDs in updates → column ids
       const dataUpdates: Record<string, string> = { ...ex.data };
-      for (const [colName, val] of Object.entries(action.updates ?? {})) {
-        const col = library.columns.find(c => c.name === colName);
+      for (const [key, val] of Object.entries(action.updates ?? {})) {
+        const col = library.columns.find(c => c.name === key) ?? library.columns.find(c => c.id === key);
         if (col && col.role !== 'video' && col.role !== 'description') {
           dataUpdates[col.id] = val;
         }
