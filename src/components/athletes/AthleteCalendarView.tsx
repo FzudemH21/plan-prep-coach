@@ -123,7 +123,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   const athleteData = useAthletes();
   const { data: toolboxData } = useToolboxData();
   const { toast } = useToast();
-  const { addEvent: addCalendarEvent } = useCalendarEvents();
+  const { addEvent: addCalendarEvent, getEventsForAthlete } = useCalendarEvents();
 
   const assignments = useMemo(() => {
     return athleteData.getAthleteCalendarAssignments(athlete.id);
@@ -990,12 +990,21 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           // Transfer tests & events to calendarEvents (one entry per scheduled date)
           const transferTestsEvents = () => {
             try {
+              const existingEvents = getEventsForAthlete(athlete.id);
+              const existingKey = (type: string, title: string, date: string) =>
+                `${type}|${title}|${date}`;
+              const existingSet = new Set(
+                existingEvents.map(e => existingKey(e.type, e.title, e.date))
+              );
+
               (assignment.reviewedSubGoals || []).forEach(sg => {
                 sg.scheduledDates.forEach(d => {
+                  const date = d.substring(0, 10);
+                  if (existingSet.has(existingKey('test', sg.testMethod, date))) return;
                   addCalendarEvent(athlete.id, {
                     type: 'test',
                     title: sg.testMethod,
-                    date: format(new Date(d), 'yyyy-MM-dd'),
+                    date,
                     parameterId: sg.parameterLinkedId || undefined,
                     targetValue: sg.goalValue ? String(sg.goalValue) : undefined,
                     notes: sg.comments || undefined,
@@ -1004,10 +1013,12 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
               });
               (assignment.reviewedEvents || []).forEach(evt => {
                 evt.scheduledDates.forEach(d => {
+                  const date = d.substring(0, 10);
+                  if (existingSet.has(existingKey('event', evt.name, date))) return;
                   addCalendarEvent(athlete.id, {
                     type: 'event',
                     title: evt.name,
-                    date: format(new Date(d), 'yyyy-MM-dd'),
+                    date,
                     notes: evt.comments || undefined,
                   });
                 });
@@ -1027,6 +1038,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
               finalTrainingDays,
               finalDaySplitStates,
               filteredDailyIntensity,
+              program.parameterValues || {},
             );
             // Update the assignment's date range so isWithinInterval renders the correct cells
             if (selectedAssignmentId) {
@@ -1095,7 +1107,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
 
     setShowAssignDialog(false);
     setSelectedDate(null);
-  }, [athlete.id, athleteData, getProgram, addCalendarEvent, selectedAssignmentId, editing.mergeSessionData]);
+  }, [athlete.id, athleteData, getProgram, addCalendarEvent, getEventsForAthlete, selectedAssignmentId, editing.mergeSessionData]);
 
   const handleDeleteAssignment = () => {
     if (deleteAssignment) {
