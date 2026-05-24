@@ -955,10 +955,16 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           }
 
           // CLAMP: off-intensity days must have 0 sessions.
-          // Both sources may disagree — filteredDailyIntensity is authoritative for
-          // rest/training status because it comes from the loading-wave planning step.
+          // Guard: never zero out a date that was explicitly set to >0 sessions in the
+          // program's own daySplitStates — those represent deliberate coach decisions and
+          // the dailyIntensityData may be stale (e.g. saved before loading-wave was done).
+          const programmedSessionDates = new Set(
+            Object.entries(filteredDaySplitStates)
+              .filter(([, count]) => (count as number) > 0)
+              .map(([date]) => date)
+          );
           filteredDailyIntensity.forEach((di: any) => {
-            if (di.intensity === 'off') {
+            if (di.intensity === 'off' && !programmedSessionDates.has(di.date)) {
               finalDaySplitStates[di.date] = 0;
             }
           });
@@ -967,6 +973,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             const di = filteredDailyIntensity.find((d: any) => d.date === td.date);
             if (di && di.intensity !== td.intensity) {
               const isOff = di.intensity === 'off';
+              if (isOff && programmedSessionDates.has(td.date)) return td;
               return {
                 ...td,
                 intensity: di.intensity,
@@ -1460,8 +1467,12 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                   }
                   dayOffset += mc.duration;
                 }
-                // Build dates using noon-local anchoring to avoid DST off-by-one
-                const [my, mm, md] = meso.startDate.split('-').map(Number);
+                // Build dates using noon-local anchoring to avoid DST off-by-one.
+                // meso.startDate may be 'yyyy-MM-dd' or a full ISO string — normalise first.
+                const mesoDateStr = meso.startDate.length > 10
+                  ? format(new Date(meso.startDate), 'yyyy-MM-dd')
+                  : meso.startDate;
+                const [my, mm, md] = mesoDateStr.split('-').map(Number);
                 const mesoStart = new Date(my, mm - 1, md, 12, 0, 0);
                 return Array.from({ length: microDuration }, (_, i) => {
                   const d = new Date(mesoStart.getTime() + (dayOffset + i) * 86400000);

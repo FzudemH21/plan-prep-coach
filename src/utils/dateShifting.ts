@@ -105,8 +105,8 @@ export function recalculateMesocycleDates(
     
     const result: AssignedMesocycle = {
       ...meso,
-      startDate: mesoStartDate.toISOString(),
-      endDate: mesoEndDate.toISOString(),
+      startDate: format(mesoStartDate, 'yyyy-MM-dd'),
+      endDate: format(mesoEndDate, 'yyyy-MM-dd'),
       duration: totalDays,
       weeks: Math.ceil(totalDays / 7),
     };
