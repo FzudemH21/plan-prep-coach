@@ -269,18 +269,25 @@ export function AssignProgramDialog({
     setReviewedEvents(dedupedEvents);
   }, [selectedProgram, startDate, athletePerformanceParameters]);
 
-  // Check for date mismatch
+  // Warn when the chosen start date is in the past
+  const pastDateWarning = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return startDate < today;
+  }, [startDate]);
+
+  // Warn when the chosen start date differs from the program's original start
   const dateMismatchWarning = useMemo(() => {
     if (!selectedProgram?.duration?.startDate) return null;
-    
-    const originalStart = new Date(selectedProgram.duration.startDate);
-    const daysDiff = Math.abs(differenceInDays(startDate, originalStart));
-    
-    if (daysDiff > 14) {
+
+    const originalStart = new Date(selectedProgram.duration.startDate + (selectedProgram.duration.startDate.length === 10 ? 'T12:00:00' : ''));
+    const daysDiff = differenceInDays(startDate, originalStart);
+
+    if (daysDiff !== 0) {
       return {
         originalStart: format(originalStart, 'MMM d, yyyy'),
-        originalEnd: selectedProgram.duration.endDate 
-          ? format(new Date(selectedProgram.duration.endDate), 'MMM d, yyyy')
+        originalEnd: selectedProgram.duration.endDate
+          ? format(new Date(selectedProgram.duration.endDate + (selectedProgram.duration.endDate.length === 10 ? 'T12:00:00' : '')), 'MMM d, yyyy')
           : 'N/A',
         daysDiff,
       };
@@ -369,9 +376,8 @@ export function AssignProgramDialog({
     // Show warning toast if date mismatch
     if (dateMismatchWarning) {
       toast({
-        title: "Date mismatch warning",
-        description: `This program was originally created for ${dateMismatchWarning.originalStart} - ${dateMismatchWarning.originalEnd}. Dates have been shifted to match your selection.`,
-        variant: "destructive",
+        title: "Dates shifted",
+        description: `Sessions shifted ${Math.abs(dateMismatchWarning.daysDiff)} day${Math.abs(dateMismatchWarning.daysDiff) !== 1 ? 's' : ''} ${dateMismatchWarning.daysDiff > 0 ? 'forward' : 'backward'} from the original plan (${dateMismatchWarning.originalStart} – ${dateMismatchWarning.originalEnd}).`,
       });
     }
     
@@ -415,7 +421,7 @@ export function AssignProgramDialog({
 
   const STEPS = [
     { number: 1, label: 'Program & Date' },
-    { number: 2, label: 'Mesozyklen' },
+    { number: 2, label: 'Mesocycles' },
     { number: 3, label: 'Tests & Events' },
   ] as const;
 
@@ -517,13 +523,25 @@ export function AssignProgramDialog({
               </Popover>
             </div>
 
+            {pastDateWarning && (
+              <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
+                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <AlertDescription>
+                  <strong>Start date is in the past.</strong> The program will be assigned starting{' '}
+                  {format(startDate, 'MMM d, yyyy')}. You can still proceed.
+                </AlertDescription>
+              </Alert>
+            )}
+
             {dateMismatchWarning && (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
-                  <strong>Date mismatch:</strong> This program was originally created for{' '}
-                  {dateMismatchWarning.originalStart} – {dateMismatchWarning.originalEnd}{' '}
-                  ({dateMismatchWarning.daysDiff} days difference). Dates will be shifted.
+                  <strong>Date shift:</strong> This program was originally planned for{' '}
+                  {dateMismatchWarning.originalStart} – {dateMismatchWarning.originalEnd}.
+                  Assigning it here shifts all sessions by{' '}
+                  {Math.abs(dateMismatchWarning.daysDiff)} day{Math.abs(dateMismatchWarning.daysDiff) !== 1 ? 's' : ''}{' '}
+                  {dateMismatchWarning.daysDiff > 0 ? 'forward' : 'backward'}.
                 </AlertDescription>
               </Alert>
             )}
