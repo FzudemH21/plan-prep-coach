@@ -139,6 +139,13 @@ export interface WizardAIAssistantProps {
    */
   onApplySuggestion?: (action: ApplySuggestion) => void;
   /**
+   * Optional batch handler — called instead of onApplySuggestion when the card
+   * has multiple actions. Use this to apply all changes in a single atomic write
+   * (avoids stale-closure overwrite when looping over many individual updates).
+   * Falls back to forEach(onApplySuggestion) when not provided.
+   */
+  onApplyAll?: (actions: ApplySuggestion[]) => void;
+  /**
    * Optional override for the AI's role description, injected into both the
    * main system prompt and the proactive opener. Use this to give the assistant
    * a different focus in non-wizard contexts (e.g. Parameter Database).
@@ -620,15 +627,21 @@ function buildGroupSummary(actions: ApplySuggestion[]): string | null {
 function SuggestionGroupCard({
   actions,
   onApply,
+  onApplyAll,
 }: {
   actions: ApplySuggestion[];
   onApply: (a: ApplySuggestion) => void;
+  onApplyAll?: (actions: ApplySuggestion[]) => void;
 }) {
   const [applied, setApplied] = useState(false);
   const groupSummary = buildGroupSummary(actions);
 
   const handleApplyAll = () => {
-    actions.forEach(onApply);
+    if (onApplyAll) {
+      onApplyAll(actions);
+    } else {
+      actions.forEach(onApply);
+    }
     setApplied(true);
   };
 
@@ -690,12 +703,14 @@ const APPLY_REGEX = /\[\[APPLY:\s*(\{[\s\S]*?\})\]\]/g;
 function AssistantMessage({
   text,
   onApply,
+  onApplyAll,
 }: {
   text: string;
   onApply?: (a: ApplySuggestion) => void;
+  onApplyAll?: (actions: ApplySuggestion[]) => void;
 }) {
   const suggestions: ApplySuggestion[] = [];
-  if (onApply) {
+  if (onApply || onApplyAll) {
     for (const m of text.matchAll(APPLY_REGEX)) {
       try {
         suggestions.push(JSON.parse(m[1]) as ApplySuggestion);
@@ -710,7 +725,7 @@ function AssistantMessage({
     <span>
       <ChatMarkdown text={cleanText} />
       {suggestions.length > 0 && (
-        <SuggestionGroupCard actions={suggestions} onApply={onApply!} />
+        <SuggestionGroupCard actions={suggestions} onApply={onApply ?? (() => {})} onApplyAll={onApplyAll} />
       )}
     </span>
   );
@@ -724,6 +739,7 @@ export function WizardAIAssistant({
   coachMemoryContext,
   ragContext,
   onApplySuggestion,
+  onApplyAll,
   assistantRole,
   globalContext,
   forceOpen,
@@ -937,7 +953,7 @@ export function WizardAIAssistant({
                         : "bg-primary text-primary-foreground rounded-tr-sm"
                     )}>
                       {msg.role === "assistant"
-                        ? <AssistantMessage text={msg.content} onApply={onApplySuggestion} />
+                        ? <AssistantMessage text={msg.content} onApply={onApplySuggestion} onApplyAll={onApplyAll} />
                         : msg.content
                       }
                     </div>

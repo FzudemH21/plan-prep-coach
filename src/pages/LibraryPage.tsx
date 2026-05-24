@@ -34,6 +34,7 @@ export default function LibraryPage() {
     isLoading,
     addExerciseToLibrary,
     updateExerciseInLibrary,
+    batchUpdateExercisesInLibrary,
     deleteExerciseFromLibrary,
     addColumnToLibrary,
     deleteColumnFromLibrary,
@@ -145,6 +146,43 @@ export default function LibraryPage() {
     }
   }, [library, addExerciseToLibrary, updateExerciseInLibrary, deleteExerciseFromLibrary, addColumnToLibrary, deleteColumnFromLibrary]);
 
+  // Batch handler — resolves all actions in one save to avoid stale-closure overwrite
+  const handleAIApplyAll = useCallback((actions: ApplySuggestion[]) => {
+    if (!library) return;
+
+    // Group library_update_exercise actions into a single batchUpdate call
+    const updateActions = actions.filter(
+      (a): a is Extract<ApplySuggestion, { type: 'library_update_exercise' }> =>
+        a.type === 'library_update_exercise' && a.libraryId === library.id
+    );
+    if (updateActions.length > 0) {
+      const batchUpdates = updateActions.flatMap(action => {
+        const ex = action.exerciseId
+          ? library.exercises.find(e => String(e.id) === String(action.exerciseId))
+          : library.exercises.find(e => e.data[library.columns[0]?.id] === action.exerciseName);
+        if (!ex) return [];
+        const dataUpdates: Record<string, string> = { ...ex.data };
+        for (const [key, val] of Object.entries(action.updates ?? {})) {
+          const col = library.columns.find(c => c.name === key) ?? library.columns.find(c => c.id === key);
+          if (col && col.role !== 'video' && col.role !== 'description') {
+            dataUpdates[col.id] = val;
+          }
+        }
+        return [{
+          exerciseId: String(ex.id),
+          data: dataUpdates,
+          ...(action.description !== undefined ? { description: action.description } : {}),
+          ...(action.videoUrl !== undefined ? { videoUrl: action.videoUrl } : {}),
+        }];
+      });
+      if (batchUpdates.length > 0) batchUpdateExercisesInLibrary(library.id, batchUpdates);
+    }
+
+    // Handle all non-update actions individually (these are rare, not subject to stale-write)
+    const otherActions = actions.filter(a => a.type !== 'library_update_exercise');
+    otherActions.forEach(handleAIApply);
+  }, [library, batchUpdateExercisesInLibrary, handleAIApply]);
+
   if (isLoading) {
     return (
       <div className="w-full max-w-none space-y-8">
@@ -208,6 +246,7 @@ export default function LibraryPage() {
         wizardContext={buildLibraryContext()}
         assistantRole={`You are an expert strength & conditioning assistant helping a coach manage their Exercise Library called "${library.name}". You can add, update, or delete exercises and columns in this library. Always use the exact column names, exercise IDs, and library ID shown in context. When adding exercises, infer sensible values for all listed columns based on the exercise name and type. When deleting exercises or columns, always confirm with the coach first since this is irreversible.`}
         onApplySuggestion={handleAIApply}
+        onApplyAll={handleAIApplyAll}
       />
     </div>
   );
