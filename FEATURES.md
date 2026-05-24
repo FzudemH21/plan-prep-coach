@@ -43,6 +43,7 @@ Claude Chat (browser) is my sparring partner for planning, discussion, and promp
 | 🟠 Later | Adherence tracking (auto-filled from athlete app workout logs — session completion rate, missed days) | ⬜ Open – placeholder UI exists in Plan Review dialog |
 | 🟠 Later | Planned vs. Real comparison (volume, intensity, load: planned vs. actually performed — requires athlete app session data) | ⬜ Open – placeholder UI exists in Plan Review dialog |
 | 🟠 Later | AI Coaching Dialog in Plan Review (AI reflects on outcome data, identifies patterns, suggests next-cycle adjustments — powered by plan_memory + outcome annotation) | ⬜ Open – placeholder UI exists in Plan Review dialog |
+| 🟠 Later | **Replace intensity scale with Borg CR10** — swap the 8-level scale (off → extremely-hard) for Borg CR10 (0–10, 11 levels) throughout the entire app. Applied at mesocycle, microcycle, daily, and session level in the wizard. Athlete uses the same scale for post-session self-report → direct planned vs. actual comparison. Requires updating all intensity selectors, storage values, display labels, color coding, and CLAUDE.md. | ⬜ Open |
 | 🟠 Later | Goal Management + test notifications | ⬜ Open |
 | 🔵 Future | **Athlete App** — see full breakdown below | ⬜ In Planning |
 | 🔵 Future | Athlete Management System (standalone area: athlete profiles, progress tracking, communication, wearable data. Incl. AI analysis: correlations between completed training and athlete progress — coach can ask how effective a program was, which methods had the greatest effect, etc. Requires compliance tracking, test results, and Supabase.) | ⬜ Open |
@@ -60,9 +61,7 @@ Claude Chat (browser) is my sparring partner for planning, discussion, and promp
 
 > **Architecture:** PWA first (same React/Vite codebase, mobile-optimized routes), Capacitor wrapper later for App Store distribution.
 >
-> **Intensity scales — two layers that coexist:**
-> - **8-level scale** (off → extremely-hard): coach's structural planning tool in the wizard. Stays exactly as-is. Drives the training calendar and daily load structure.
-> - **Borg CR10 (0–10)**: used in two places: (1) **Coach side in wizard** — planned target RPE per mesocycle/microcycle, entered in the Periodization Table alongside sets/reps/intensity. This gives the athlete a concrete number to aim for. (2) **Athlete side in app** — post-session self-assessment. Stored as "actual RPE". The comparison planned Borg CR10 → actual Borg CR10 is then fully meaningful and surfaced in the Plan Review dialog. The 8-level scale and Borg CR10 are both present in the wizard; Borg CR10 is an additional optional parameter, not a replacement.
+> **Intensity scale:** The 8-level scale (off → extremely-hard) will be replaced by the **Borg CR10 scale (0–10, 11 levels)** throughout the entire app — coach side and athlete side. The same scale is used at mesocycle, microcycle, daily, and session level by the coach during planning, and by the athlete for post-session self-assessment. This makes planned vs. actual a direct, apples-to-apples comparison with no mapping required. See the "Replace intensity scale with Borg CR10" feature in the main table.
 
 ### Navigation (4 bottom tabs)
 | Tab | Description |
@@ -77,7 +76,7 @@ Claude Chat (browser) is my sparring partner for planning, discussion, and promp
 | Priority | Feature | Status |
 |----------|---------|--------|
 | P0 | **Invite flow** — coach sends invite link → athlete opens app → language selection → name/birthday/photo onboarding | ⬜ Open |
-| P0 | **Today tab** — personalized greeting, today's session card with daily intensity (8-level color-coded), completion ring, missed session banner | ⬜ Open |
+| P0 | **Today tab** — personalized greeting, today's session card with planned daily intensity (Borg CR10, color-coded), completion ring, missed session banner | ⬜ Open |
 | P0 | **Session flow** — preview → section navigation (swipe, dot indicators) → exercise cards with planned values (from periodization table) → set logging (actual weight/reps) → rest timer | ⬜ Open |
 | P0 | **Post-session** — completion screen, Borg CR10 rating (0–10), optional comment, summary (duration, exercises logged) | ⬜ Open |
 | P0 | **Planned vs. actual storage** — athlete's logged sets saved to Supabase, visible to coach in Plan Review dialog (feeds Adherence + Planned vs. Real placeholders) | ⬜ Open |
