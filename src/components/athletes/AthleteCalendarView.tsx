@@ -172,10 +172,24 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
       editing.handleDayIntensityChange(action.dayDate, action.intensity as IntensityLevel);
     } else if (action.type === 'set_session_intensity') {
       editing.handleSessionIntensityChange(action.dayDate, action.sessionIndex, action.intensity as IntensityLevel);
+    } else if (action.type === 'set_exercise_params') {
+      // Apply parameter overrides (sets/reps/intensity/etc.) directly from the calendar.
+      // handleParameterChange persists to parameterValues so the change is visible
+      // when the session sheet opens, enabling bulk changes across many sessions.
+      Object.entries(action.params).forEach(([paramName, value]) => {
+        editing.handleParameterChange(
+          action.dayDate,
+          action.sessionIndex,
+          action.methodId,
+          '',
+          paramName,
+          value,
+        );
+      });
     } else {
       toast({
         title: 'Open the session to apply',
-        description: 'Click on a session first, then use the AI assistant from within it for session-level changes.',
+        description: 'Click on a session first, then use the AI assistant from within it for this type of change.',
       });
     }
   }, [editing, toast]);
