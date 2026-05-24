@@ -97,17 +97,20 @@ export default function LibraryPage() {
 
     else if (action.type === 'library_delete_exercise') {
       if (action.libraryId !== library.id) return;
+      // IDs may be stored as numbers; use string coercion to match
       const exerciseId = action.exerciseId
-        ?? library.exercises.find(e => e.data[library.columns[0]?.id] === action.exerciseName)?.id;
+        ? library.exercises.find(e => String(e.id) === String(action.exerciseId))?.id
+        : library.exercises.find(e => e.data[library.columns[0]?.id] === action.exerciseName)?.id;
       if (exerciseId) deleteExerciseFromLibrary(library.id, exerciseId);
     }
 
     else if (action.type === 'library_update_exercise') {
       if (action.libraryId !== library.id) return;
-      const exerciseId = action.exerciseId
-        ?? library.exercises.find(e => e.data[library.columns[0]?.id] === action.exerciseName)?.id;
-      if (!exerciseId) return;
-      const ex = library.exercises.find(e => e.id === exerciseId);
+      // IDs may be stored as numbers; use string coercion to match
+      const ex = action.exerciseId
+        ? library.exercises.find(e => String(e.id) === String(action.exerciseId))
+        : library.exercises.find(e => e.data[library.columns[0]?.id] === action.exerciseName);
+      const exerciseId = ex?.id;
       if (!ex) return;
       // Map column names OR column IDs in updates → column ids
       const dataUpdates: Record<string, string> = { ...ex.data };
