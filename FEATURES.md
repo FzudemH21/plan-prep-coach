@@ -59,7 +59,10 @@ Claude Chat (browser) is my sparring partner for planning, discussion, and promp
 ## Athlete App — Full Feature Breakdown
 
 > **Architecture:** PWA first (same React/Vite codebase, mobile-optimized routes), Capacitor wrapper later for App Store distribution.
-> **Intensity scales:** The coach wizard keeps the 8-level scale (off → extremely-hard) for planning. The athlete uses the **Borg CR10 scale (0–10)** for post-session RPE self-assessment. These coexist: planned intensity (8-level, from wizard) vs. perceived intensity (Borg CR10, from athlete). Eventually the wizard may display Borg CR10 as a reference label alongside the 8-level scale, but the planning logic does not change.
+>
+> **Intensity scales — two layers that coexist:**
+> - **8-level scale** (off → extremely-hard): coach's structural planning tool in the wizard. Stays exactly as-is. Drives the training calendar and daily load structure.
+> - **Borg CR10 (0–10)**: used in two places: (1) **Coach side in wizard** — planned target RPE per mesocycle/microcycle, entered in the Periodization Table alongside sets/reps/intensity. This gives the athlete a concrete number to aim for. (2) **Athlete side in app** — post-session self-assessment. Stored as "actual RPE". The comparison planned Borg CR10 → actual Borg CR10 is then fully meaningful and surfaced in the Plan Review dialog. The 8-level scale and Borg CR10 are both present in the wizard; Borg CR10 is an additional optional parameter, not a replacement.
 
 ### Navigation (4 bottom tabs)
 | Tab | Description |
@@ -98,7 +101,59 @@ Claude Chat (browser) is my sparring partner for planning, discussion, and promp
 ### Data Flow (Athlete App → Coach App)
 - Athlete logs sets → stored in Supabase (`athlete_session_logs` table)
 - Coach sees adherence rate + planned vs. actual comparison in Plan Review dialog (already has placeholder UI)
-- Borg CR10 post-session rating → stored alongside planned daily intensity → coach can compare planned load vs. perceived load across entire plan
+- Borg CR10 post-session rating → stored alongside planned Borg CR10 target from wizard → coach sees planned vs. perceived load gap in Plan Review
+- Athlete logs a test result in app → auto-updates the corresponding performance parameter value in the coach's athlete profile
+
+---
+
+## Athlete Profile — Coach-Side Enhancements
+
+These features extend the existing Athlete Profile page in the coach web app. They are unlocked once the athlete app exists and athletes are connected.
+
+### New Tab: Settings (per-athlete coach controls)
+
+Inspired by EverFit's per-athlete settings. Coach controls what the athlete can see and do.
+
+| Setting | Description | Build? |
+|---------|-------------|--------|
+| **Units** | Weight (kg / lb), Distance (km / miles) — used in athlete app display | ✅ Yes |
+| **Workout visibility range** | How far ahead athlete can see their plan: Previous / Current / Next / +2 / +3 / +4 weeks | ✅ Yes |
+| **Features toggles** | Enable/disable per athlete: Training (always on), Log Activities (athlete adds own sessions), Messages, Performance Metrics | ✅ Yes |
+| **Allow athlete to add/replace exercises** | Athlete can swap exercises in-session from coach's library | 🟠 Phase 2 |
+| Food journal, Macros, Meal Plan, Tasks | Nutrition & task delivery features | ❌ Out of scope |
+| Team Permission | Multi-coach access to one athlete | 🔵 Future |
+
+### New Tab: Performance Metrics (coach view)
+
+Replaces / extends the current static parameter values in the athlete profile with a full history view.
+
+| Feature | Description | Build? |
+|---------|-------------|--------|
+| **Body Metrics tab** | Weight, height, body fat % over time — line chart + entry history | ✅ Yes |
+| **Performance/Exercise Metrics tab** | Per-exercise or per-parameter progress chart over time (e.g. Squat 1RM trend from Mar–May) | ✅ Yes |
+| **Per-session history** | For each exercise/parameter: date, session name, set-by-set log (Set #, Reps, RIR/Intensity, Weight) | ✅ Yes |
+| **1RM estimation** | Auto-calculate estimated 1RM from logged sets using Epley formula | 🟠 Phase 2 |
+| **Auto-update from athlete app** | When athlete logs a test result in the app (e.g. Sprint 30m: 4.2s) → automatically updates the parameter value in coach's athlete profile. Critical for remote athletes where coach isn't present at the test. | ✅ Yes |
+| **Link to wizard tests** | Test days scheduled in the wizard (e.g. "Test Week") appear in the metric history with a distinct marker | 🟠 Phase 2 |
+
+---
+
+## Coach Mobile App (Future)
+
+EverFit has a dedicated coach app (separate from the athlete app) that allows coaches to:
+- View all athletes and their upcoming sessions
+- Log workouts on behalf of an athlete (essential for in-person PT sessions — coach enters sets/reps/weight live)
+- Make small edits to sessions on the go
+- Send messages to athletes
+
+**Our approach:** Not a separate codebase. A mobile-optimized coach view within the same PWA, behind a "Coach" role check. Capacitor wrapper allows App Store distribution alongside the athlete app.
+
+| Feature | Description | Priority |
+|---------|-------------|---------|
+| **Log workout for athlete** | Coach selects athlete → open today's session → logs sets live (in-person PT) | P1 |
+| **Athlete overview** | List of all athletes, today's sessions at a glance, missed session flags | P1 |
+| **Quick session edit** | Adjust sets/reps/intensity for a single session directly from mobile | P2 |
+| **Send message** | Coach ↔ athlete chat from mobile | P2 |
 
 ---
 
