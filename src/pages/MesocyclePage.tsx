@@ -2616,6 +2616,116 @@ export default function MesocyclePage() {
     });
   }, [loadTemplateDialog.methodName, mesocycles, toolboxData.entries, updateParameterValue, toast]);
 
+  /** AI action: apply a saved programming template by id to a method */
+  const handleAIApplyTemplate = useCallback((templateId: string, methodName: string) => {
+    const template = templates.find(t => t.id === templateId);
+    if (!template) {
+      toast({ title: 'Template not found', description: `No template with id "${templateId}" was found.`, variant: 'destructive' });
+      return;
+    }
+
+    // Flat ordered list of (mesocycleId, microcycleIndex) pairs
+    const flatMicrocycles: Array<{ mesocycleId: string; microcycleIndex: number }> = [];
+    mesocycles.forEach(meso => {
+      (meso.microcycles || []).forEach((_, i) => {
+        flatMicrocycles.push({ mesocycleId: meso.id, microcycleIndex: i });
+      });
+    });
+
+    // Frequency param name for this method
+    const freqParamName = toolboxData.entries.find(
+      entry => `${entry.category} - ${entry.subCategory}` === methodName && entry.isFrequencyParameter,
+    )?.parameterName ?? null;
+
+    const colsToApply = template.columns.slice(0, flatMicrocycles.length);
+    const splitUpdates: Record<string, boolean> = {};
+
+    colsToApply.forEach((col, colIndex) => {
+      const { mesocycleId, microcycleIndex } = flatMicrocycles[colIndex];
+      const allHalves = [col.parameters, col.parametersB, col.parametersC, col.parametersD, col.parametersE];
+      const sessionsToFill = col.isSplit ? Math.min(col.splitCount, 5) : 1;
+
+      for (let s = 0; s < sessionsToFill; s++) {
+        const halfParams = allHalves[s] ?? {};
+        Object.entries(halfParams).forEach(([paramName, value]) => {
+          if (!value) return;
+          const sessionIndex = paramName === freqParamName ? 0 : s;
+          updateParameterValue(mesocycleId, microcycleIndex, methodName, paramName, value, sessionIndex);
+        });
+      }
+
+      if (col.isSplit) {
+        splitUpdates[`${mesocycleId}-${microcycleIndex}`] = true;
+      }
+    });
+
+    if (Object.keys(splitUpdates).length > 0) {
+      setGlobalMicrocycleSplitStates(prev => ({ ...prev, ...splitUpdates }));
+    }
+
+    toast({
+      title: 'Template applied',
+      description: `"${template.name}" applied to ${methodName}.`,
+    });
+  }, [templates, mesocycles, toolboxData.entries, updateParameterValue, toast]);
+
+  /** AI action: save current periodization values for a method as a new named template */
+  const handleAISaveAsTemplate = useCallback((methodName: string, templateName: string) => {
+    // Flat ordered list with labels
+    const flatMicrocycles: Array<{ mesocycleId: string; microcycleIndex: number; label: string }> = [];
+    mesocycles.forEach(meso => {
+      (meso.microcycles || []).forEach((mc, i) => {
+        flatMicrocycles.push({
+          mesocycleId: meso.id,
+          microcycleIndex: i,
+          label: mc.name ?? `Week ${i + 1}`,
+        });
+      });
+    });
+
+    const filterParams = (params: Record<string, string | number>): Record<string, string> =>
+      Object.fromEntries(
+        Object.entries(params)
+          .filter(([k]) => !k.endsWith('_unit'))
+          .map(([k, v]) => [k, String(v)]),
+      );
+
+    const columns: TemplateColumn[] = flatMicrocycles.map(({ mesocycleId, microcycleIndex, label }, colIdx) => {
+      const slotData = parameterValues[mesocycleId]?.[microcycleIndex]?.[methodName] ?? {};
+      const sessionEntries = Object.entries(slotData as Record<number, Record<string, string | number>>)
+        .sort(([a], [b]) => Number(a) - Number(b));
+
+      const isSplit = sessionEntries.length > 1;
+      const splitCount = isSplit ? sessionEntries.length : 2;
+
+      const col: TemplateColumn = {
+        id: `col-${colIdx}`,
+        label,
+        isSplit,
+        splitCount,
+        parameters: sessionEntries[0] ? filterParams(sessionEntries[0][1]) : {},
+        parametersB: sessionEntries[1] ? filterParams(sessionEntries[1][1]) : {},
+        parametersC: sessionEntries[2] ? filterParams(sessionEntries[2][1]) : {},
+        parametersD: sessionEntries[3] ? filterParams(sessionEntries[3][1]) : {},
+        parametersE: sessionEntries[4] ? filterParams(sessionEntries[4][1]) : {},
+      };
+      return col;
+    });
+
+    // Compute methodId from methodName ("Cat - Sub" → "Cat|||Sub")
+    const parts = methodName.split(' - ');
+    const category = parts[0].trim();
+    const subCategory = parts.slice(1).join(' - ').trim();
+    const methodId = `${category}|||${subCategory}`;
+
+    addTemplate({ name: templateName, methodId, methodName, columns });
+
+    toast({
+      title: 'Template saved',
+      description: `"${templateName}" saved as a new programming template.`,
+    });
+  }, [mesocycles, parameterValues, addTemplate, toast]);
+
   // Global keyboard shortcuts for drag-fill UX
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -5108,6 +5218,26 @@ export default function MesocyclePage() {
       exerciseLibraryStr += "\n" + selectionLines.join("\n");
     }
 
+    // Step 4: available programming templates per allocated method
+    let templatesStr = '';
+    if (currentStep === 4) {
+      const templateLines: string[] = ['Available programming templates:'];
+      allocatedMethods.forEach(method => {
+        const methodTemplates = getTemplatesForWizardMethod(method);
+        if (methodTemplates.length === 0) {
+          templateLines.push(`  ${method}:\n    (no templates saved)`);
+        } else {
+          const templateEntries = methodTemplates.map(t => {
+            const colCount = t.columns?.length ?? 0;
+            const colNames = t.columns?.map(c => c.label ?? `Week ${t.columns!.indexOf(c) + 1}`).join(', ') ?? '';
+            return `    - "${t.name}" (id: "${t.id}", ${colCount} columns: ${colNames})`;
+          });
+          templateLines.push(`  ${method}:\n${templateEntries.join('\n')}`);
+        }
+      });
+      if (allocatedMethods.length > 0) templatesStr = templateLines.join('\n');
+    }
+
     // Periodization table params — always included once any values exist
     let parameterTableStr = '';
     if (Object.keys(parameterValues).length > 0) {
@@ -5150,12 +5280,13 @@ export default function MesocyclePage() {
       durationStr,
       mesoStr,
       methodsStr,
+      templatesStr,
       parameterTableStr,
       exerciseLibraryStr,
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, planStartDate, planEndDate, totalWeeks, expectedTotalDays, totalMesocycleDays, daysMismatch, mesocycles, methodAllocations, mesoStepLabel, exerciseLibraries, exerciseCellData, parameterValues]);
+  }, [currentStep, athleteName, macrocycleData, planStartDate, planEndDate, totalWeeks, expectedTotalDays, totalMesocycleDays, daysMismatch, mesocycles, methodAllocations, mesoStepLabel, exerciseLibraries, exerciseCellData, parameterValues, templates, getTemplatesForWizardMethod]);
 
   // ── AI Apply handler ──────────────────────────────────────────────────────
   const handleMesoAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
@@ -5382,10 +5513,18 @@ export default function MesocyclePage() {
         }
         break;
       }
+      case "apply_template": {
+        handleAIApplyTemplate(action.templateId, action.methodName);
+        break;
+      }
+      case "save_as_template": {
+        handleAISaveAsTemplate(action.methodName, action.templateName);
+        break;
+      }
       default:
         break;
     }
-  }, [mesocycles, planStartDate, recalculateAllMesocycleDates, setDailyIntensityData, setTrainingDays]);
+  }, [mesocycles, planStartDate, recalculateAllMesocycleDates, setDailyIntensityData, setTrainingDays, handleAIApplyTemplate, handleAISaveAsTemplate]);
 
   return (
     <div className="w-full max-w-none space-y-6 min-w-0">
