@@ -1808,6 +1808,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
           }
           updated[existingIdx] = {
             ...existing,
+            intensity: td.intensity ?? existing.intensity,
             sessions: Math.max(existing.sessions ?? 0, newTotal),
             sessionNames: newNames,
             isTrainingDay: true,
@@ -1824,10 +1825,11 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     });
 
     setDailyIntensityData(prev => {
+      const newByDate = new Map(newDailyIntensity.map(d => [d.date, d]));
+      const merged = prev.map(d => newByDate.has(d.date) ? { ...d, ...newByDate.get(d.date) } : d);
       const existingDates = new Set(prev.map(d => d.date));
       const toAdd = newDailyIntensity.filter(d => !existingDates.has(d.date));
-      if (toAdd.length === 0) return prev;
-      return [...prev, ...toAdd].sort((a, b) => a.date.localeCompare(b.date));
+      return [...merged, ...toAdd].sort((a, b) => a.date.localeCompare(b.date));
     });
   }, [exerciseDistribution]);
 
