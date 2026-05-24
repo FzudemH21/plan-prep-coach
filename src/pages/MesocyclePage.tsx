@@ -2637,6 +2637,14 @@ export default function MesocyclePage() {
       entry => `${entry.category} - ${entry.subCategory}` === methodName && entry.isFrequencyParameter,
     )?.parameterName ?? null;
 
+    // Resolve the actual keys the periodization table uses.
+    // If the method is split by exercise category, values are stored under
+    // "Method::Category" keys — write to all of them so the table reflects the change.
+    const isCatSplit = categorySplitStates[methodName] ?? false;
+    const writeKeys = isCatSplit
+      ? getMethodExerciseCategories(methodName).map(cat => `${methodName}::${cat}`)
+      : [methodName];
+
     const colsToApply = template.columns.slice(0, flatMicrocycles.length);
     const splitUpdates: Record<string, boolean> = {};
 
@@ -2645,14 +2653,16 @@ export default function MesocyclePage() {
       const allHalves = [col.parameters, col.parametersB, col.parametersC, col.parametersD, col.parametersE];
       const sessionsToFill = col.isSplit ? Math.min(col.splitCount, 5) : 1;
 
-      for (let s = 0; s < sessionsToFill; s++) {
-        const halfParams = allHalves[s] ?? {};
-        Object.entries(halfParams).forEach(([paramName, value]) => {
-          if (!value) return;
-          const sessionIndex = paramName === freqParamName ? 0 : s;
-          updateParameterValue(mesocycleId, microcycleIndex, methodName, paramName, value, sessionIndex);
-        });
-      }
+      writeKeys.forEach(writeKey => {
+        for (let s = 0; s < sessionsToFill; s++) {
+          const halfParams = allHalves[s] ?? {};
+          Object.entries(halfParams).forEach(([paramName, value]) => {
+            if (!value) return;
+            const sessionIndex = paramName === freqParamName ? 0 : s;
+            updateParameterValue(mesocycleId, microcycleIndex, writeKey, paramName, value, sessionIndex);
+          });
+        }
+      });
 
       if (col.isSplit) {
         splitUpdates[`${mesocycleId}-${microcycleIndex}`] = true;
@@ -2667,7 +2677,7 @@ export default function MesocyclePage() {
       title: 'Template applied',
       description: `"${template.name}" applied to ${methodName}.`,
     });
-  }, [templates, mesocycles, toolboxData.entries, updateParameterValue, toast]);
+  }, [templates, mesocycles, toolboxData.entries, categorySplitStates, getMethodExerciseCategories, updateParameterValue, toast]);
 
   /** AI action: save current periodization values for a method as a new named template */
   const handleAISaveAsTemplate = useCallback((methodName: string, templateName: string) => {
@@ -2690,8 +2700,26 @@ export default function MesocyclePage() {
           .map(([k, v]) => [k, String(v)]),
       );
 
+    // Resolve the actual key(s) where the table stores values.
+    // For category-split methods, values are under "Method::Category" — use the
+    // first category with any data, falling back to the base key.
+    const isCatSplit = categorySplitStates[methodName] ?? false;
+    const readKey = (() => {
+      if (!isCatSplit) return methodName;
+      const cats = getMethodExerciseCategories(methodName);
+      const firstWithData = cats.find(cat => {
+        const key = `${methodName}::${cat}`;
+        return mesocycles.some(meso =>
+          (meso.microcycles || []).some((_, i) =>
+            Object.keys(parameterValues[meso.id]?.[i]?.[key] ?? {}).length > 0,
+          ),
+        );
+      });
+      return firstWithData ? `${methodName}::${firstWithData}` : methodName;
+    })();
+
     const columns: TemplateColumn[] = flatMicrocycles.map(({ mesocycleId, microcycleIndex, label }, colIdx) => {
-      const slotData = parameterValues[mesocycleId]?.[microcycleIndex]?.[methodName] ?? {};
+      const slotData = parameterValues[mesocycleId]?.[microcycleIndex]?.[readKey] ?? {};
       const sessionEntries = Object.entries(slotData as Record<number, Record<string, string | number>>)
         .sort(([a], [b]) => Number(a) - Number(b));
 
@@ -2724,7 +2752,7 @@ export default function MesocyclePage() {
       title: 'Template saved',
       description: `"${templateName}" saved as a new programming template.`,
     });
-  }, [mesocycles, parameterValues, addTemplate, toast]);
+  }, [mesocycles, parameterValues, categorySplitStates, getMethodExerciseCategories, addTemplate, toast]);
 
   // Global keyboard shortcuts for drag-fill UX
   useEffect(() => {
