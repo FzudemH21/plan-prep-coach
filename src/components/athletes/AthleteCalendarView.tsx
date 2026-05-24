@@ -5,7 +5,7 @@ import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Trash2, Calendar, LayoutGrid, Columns, ClipboardList } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trash2, Calendar, LayoutGrid, Columns, ClipboardList, Bot } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Athlete, AthleteCalendarAssignment } from '@/types/athlete';
 import { AssignProgramDialog } from './AssignProgramDialog';
@@ -45,6 +45,12 @@ import { AthleteCalendarWeekRow } from './AthleteCalendarWeekRow';
 import { AthleteCalendarDay, AthleteCalendarSession } from './AthleteCalendarDayCell';
 import { WorkoutSessionSheet } from '@/components/microcycle-planning/WorkoutSessionSheet';
 import { MasterPlannerGrid } from '@/components/microcycle-planning/MasterPlannerGrid';
+import { WizardAIAssistant, FocusedSessionContext, ApplySuggestion } from '@/components/wizard/WizardAIAssistant';
+import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
+import { useCoachMemory } from '@/hooks/useCoachMemory';
+import { useGlobalAIContext } from '@/hooks/useGlobalAIContext';
+import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
+import { useAthleteAIContext } from '@/hooks/useAthleteAIContext';
 import { IntensityLevel } from '@/types/training';
 import { cn } from '@/lib/utils';
 
@@ -125,10 +131,55 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   const { toast } = useToast();
   const { addEvent: addCalendarEvent, addEvents: addCalendarEvents, deleteEvent: deleteCalendarEvent, getEventsForAthlete, getEventsForDate } = useCalendarEvents();
 
+  // AI assistant state
+  const [aiOpenTrigger, setAiOpenTrigger] = useState(0);
+  const [focusedSessionCtx, setFocusedSessionCtx] = useState<FocusedSessionContext | undefined>(undefined);
+
+  // AI context hooks
+  const { retrieve: ragRetrieve } = useRAGRetrieval();
+  const [ragContext, setRagContext] = useState('');
+  const globalAIContext = useGlobalAIContext();
+  const { coachMemoryContext } = useCoachMemory();
+  const { data: parametersData } = useParametersDataV2();
+
   const assignments = useMemo(() => {
     return athleteData.getAthleteCalendarAssignments(athlete.id);
   }, [athleteData, athlete.id]);
   
+  // RAG retrieval — re-query when athlete changes
+  useEffect(() => {
+    const sports = [...(athlete.sports ?? []), ...(!athlete.sports && athlete.sport ? [athlete.sport] : [])];
+    const query = sports.length > 0
+      ? `athlete training ${sports.join(' ')} session design performance monitoring`
+      : 'athlete training session design performance monitoring';
+    ragRetrieve(query).then(setRagContext);
+  }, [ragRetrieve, athlete.id]);
+
+  // Athlete-specific AI context
+  const athleteAIContext = useAthleteAIContext({
+    athlete,
+    performanceParameters: athleteData.athletePerformanceParameters.filter(p => p.athleteId === athlete.id),
+    assignments,
+    calendarEvents: getEventsForAthlete(athlete.id),
+    programs,
+    parametersData: parametersData ?? null,
+  });
+
+  // AI apply handler — intensity changes can be applied directly; session-level
+  // actions should be triggered from within the session sheet
+  const handleAIApply = useCallback((action: ApplySuggestion) => {
+    if (action.type === 'set_day_intensity') {
+      editing.handleDayIntensityChange(action.dayDate, action.intensity as IntensityLevel);
+    } else if (action.type === 'set_session_intensity') {
+      editing.handleSessionIntensityChange(action.dayDate, action.sessionIndex, action.intensity as IntensityLevel);
+    } else {
+      toast({
+        title: 'Open the session to apply',
+        description: 'Click on a session first, then use the AI assistant from within it for session-level changes.',
+      });
+    }
+  }, [editing, toast]);
+
   // Store a map of assignment ID -> stored program data for quick lookups
   const [assignmentDataCache, setAssignmentDataCache] = useState<Record<string, any>>({});
   
@@ -1269,6 +1320,20 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                   </Button>
                 </>
               )}
+
+              {/* AI Assistant button */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5"
+                onClick={() => {
+                  setFocusedSessionCtx(undefined);
+                  setAiOpenTrigger(prev => prev + 1);
+                }}
+              >
+                <Bot className="h-4 w-4" />
+                <span className="text-xs">AI Assistant</span>
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -1566,8 +1631,28 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           }}
           useExternalIntensityOnly={true}
           isAdHocSession={true}
+          onOpenAIAssistant={(ctx: FocusedSessionContext) => {
+            setFocusedSessionCtx(ctx);
+            setAiOpenTrigger(prev => prev + 1);
+          }}
         />
       )}
+
+      {/* AI Assistant — athlete calendar context */}
+      <WizardAIAssistant
+        stepLabel="Athlete Calendar"
+        wizardContext={athleteAIContext}
+        globalContext={globalAIContext}
+        ragContext={ragContext || undefined}
+        coachMemoryContext={coachMemoryContext || undefined}
+        focusedSessionContext={focusedSessionCtx}
+        forceOpen={aiOpenTrigger}
+        assistantRole={`You are reviewing the training calendar and current status for athlete "${athlete.firstName ?? ''} ${athlete.lastName ?? ''}".
+Help the coach with: training load management, session design, exercise selection, intensity progression, upcoming test preparation, program structure analysis, and any sports science questions related to this athlete's training.
+You can also help with database management (parameters, exercises, toolbox) and program planning.
+When the coach opens the AI from within a session card, the "Currently Viewing" section above shows the exact session — use that context to give session-specific advice.`}
+        onApplySuggestion={handleAIApply}
+      />
     </div>
   );
 }
