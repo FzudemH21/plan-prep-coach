@@ -275,10 +275,13 @@ export default function MicrocyclePlanningPage() {
         if (parsedSplitStates[day.date] === undefined) {
           // New entry: default to 0 for off days, 1 otherwise
           parsedSplitStates[day.date] = actualIntensity === 'off' ? 0 : (day.sessions ?? 1);
-        } else if (actualIntensity === 'off' && parsedSplitStates[day.date] === 1) {
-          // Existing auto-default of 1 on an off day — correct it to 0.
-          // Values > 1 are treated as intentional manual overrides and left alone.
+        } else if (actualIntensity === 'off') {
+          // Intensity is off — ensure 0 sessions (clear any stale value)
           parsedSplitStates[day.date] = 0;
+        } else if (parsedSplitStates[day.date] === 0) {
+          // Non-off day with 0 sessions (e.g. day's intensity was changed from off
+          // in MesocyclePage but daySplitStates wasn't updated yet) — auto-create.
+          parsedSplitStates[day.date] = 1;
         }
       });
     }
@@ -2911,6 +2914,26 @@ export default function MicrocyclePlanningPage() {
       prev.map(td => td.date === date ? { ...td, intensity } : td)
     );
 
+    // Auto-manage sessions based on intensity:
+    // - Changing TO off → clear sessions and method assignments for this day
+    // - Changing FROM off (or 0-session day) → auto-create 1 session
+    if (intensity === 'off') {
+      setDaySplitStates(prev => ({ ...prev, [date]: 0 }));
+      setDayMethodAssignments(prev => {
+        const updated = { ...prev };
+        Object.keys(updated).forEach(key => {
+          if (key.startsWith(`${date}_`)) delete updated[key];
+        });
+        localStorage.setItem('dayMethodAssignments', JSON.stringify(updated));
+        return updated;
+      });
+    } else {
+      setDaySplitStates(prev => {
+        if ((prev[date] ?? 0) === 0) return { ...prev, [date]: 1 };
+        return prev;
+      });
+    }
+
     // For single-session days, also sync the session intensity
     const day = trainingDays.find(d => d.date === date);
     const sessionCount = day?.sessions ?? 1;
@@ -3471,6 +3494,33 @@ export default function MicrocyclePlanningPage() {
       .map(d => format(parseISO(d.date), 'EEEE'))
       .filter((v, i, a) => a.indexOf(v) === i);
     const offDaysStr = offDays.length ? `Rest days (off): ${offDays.join(", ")}` : "";
+
+    // Step 1 only: full schedule of all microcycles so the AI can target any microcycle
+    let fullScheduleStr = '';
+    if (currentStep === 1 && currentMeso) {
+      const micros = (currentMeso.microcycles ?? []) as Array<{ id: string; name?: string }>;
+      const schedLines: string[] = [`Training Schedule — ${currentMeso.name} (assign_methods_to_days scope):`];
+      schedLines.push(`  Omit microcycleIndex to apply to ALL microcycles. Use microcycleIndex: N (1-based) to target a specific one.`);
+      micros.forEach((micro, mIdx) => {
+        const microLabel = micro.name ?? `Microcycle ${mIdx + 1}`;
+        const microDays = trainingDays.filter(d => d.microcycleId === micro.id).sort((a, b) => a.date.localeCompare(b.date));
+        if (microDays.length === 0) return;
+        const firstDate = microDays[0].date;
+        const lastDate = microDays[microDays.length - 1].date;
+        schedLines.push(`  microcycleIndex ${mIdx + 1}: "${microLabel}" (${firstDate} → ${lastDate})`);
+        microDays.forEach(day => {
+          if (day.intensity === 'off') {
+            schedLines.push(`    ${day.date} (${format(parseISO(day.date), 'EEE')}): OFF`);
+            return;
+          }
+          const methods = dayMethodAssignments[`${day.date}_0`] ?? [];
+          const methodStr = methods.length > 0 ? methods.join(', ') : '(no methods yet)';
+          schedLines.push(`    ${day.date} (${format(parseISO(day.date), 'EEE')}) [${day.intensity}]: ${methodStr}`);
+        });
+      });
+      fullScheduleStr = schedLines.join('\n');
+    }
+
     const stepHint = currentStep === 1
       ? `Goal: assign methods to training days. Do NOT assign methods to rest/off days (${offDays.join(", ") || "none"}).`
       : currentStep === 2
@@ -3718,6 +3768,7 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
       exercisesStr,
       circuitsStr,
       parameterTableStr,
+      fullScheduleStr,
       scheduleStr,
       calendarStr,
       stepHint,
@@ -3761,6 +3812,23 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
       });
       setDayMethodAssignments(newAssignments);
       localStorage.setItem('dayMethodAssignments', JSON.stringify(newAssignments));
+
+      // Ensure every day that received methods has at least 1 session
+      const assignedDates = new Set<string>();
+      action.weekPattern.forEach(({ method, days }) => {
+        const dayNums = days.map((d: string) => ({ Sunday:0,Monday:1,Tuesday:2,Wednesday:3,Thursday:4,Friday:5,Saturday:6 }[d] as number | undefined)).filter((n): n is number => n != null);
+        targetDays.forEach(day => {
+          const date = new Date(day.date + 'T00:00:00');
+          if (dayNums.includes(date.getDay())) assignedDates.add(day.date);
+        });
+      });
+      if (assignedDates.size > 0) {
+        setDaySplitStates(prev => {
+          const next = { ...prev };
+          assignedDates.forEach(d => { if ((next[d] ?? 0) === 0) next[d] = 1; });
+          return next;
+        });
+      }
     } else if (action.type === "distribute_exercises") {
       const currentMeso = mesocycles[currentMesocycleIndex];
       if (!currentMeso) return;
