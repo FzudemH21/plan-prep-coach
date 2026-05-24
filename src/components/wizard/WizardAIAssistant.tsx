@@ -27,7 +27,7 @@ export type ApplySuggestion =
   /** MacrocyclePage Steps 1 & 2 — delete an existing event entirely */
   | { type: "remove_event"; eventName: string }
   /** MacrocyclePage Step 3 — add new methods to the training plan, each with an optional rationale */
-  | { type: "add_methods"; methods: Array<{ name: string; rationale?: string }> }
+  | { type: "add_methods"; methods: Array<{ name: string; rationale?: string; evidence?: string }> }
   | { type: "set_mesocycle_config"; count: number; weeksDuration: number }
   /** MesocyclePage Step 1 — configure the full mesocycle/microcycle structure with per-microcycle durations and intensities */
   | { type: "configure_mesocycles"; mesocycles: Array<{ name?: string; microcycles: Array<{ duration: number; intensity?: string; name?: string }> }> }
@@ -36,7 +36,7 @@ export type ApplySuggestion =
   /** MesocyclePage Step 3 — distribute existing methods across specific mesocycles */
   | { type: "allocate_methods"; allocations: Array<{ methodName: string; mesocycleNames: string[] }> }
   /** MesocyclePage Step 3 — add new training methods to the plan */
-  | { type: "add_methods"; methods: Array<{ name: string; rationale?: string }> }
+  | { type: "add_methods"; methods: Array<{ name: string; rationale?: string; evidence?: string }> }
   /** MacrocyclePage Step 3 & MesocyclePage Step 3 — remove methods from the plan entirely */
   | { type: "remove_methods"; methodNames: string[] }
   | { type: "set_method_intensities"; methodName: string; frequency: number; sets: number; reps: string; intensity: string }
@@ -101,9 +101,9 @@ export type ApplySuggestion =
   /** Parameter Database — add multiple interactions at once */
   | { type: "add_interactions_bulk"; interactions: Array<{ sourceParameterName: string; targetParameterName: string; direction: "contributes_to" | "improved_by"; strength?: "strong" | "moderate" | "weak" }> }
   /** Parameter Database — link a training method to a parameter */
-  | { type: "add_parameter_method"; parameterName: string; methodId: string; rationale?: string }
+  | { type: "add_parameter_method"; parameterName: string; methodId: string; rationale?: string; evidence?: string }
   /** Parameter Database — link multiple training methods to parameters at once */
-  | { type: "add_parameter_methods_bulk"; links: Array<{ parameterName: string; methodId: string; rationale?: string }> }
+  | { type: "add_parameter_methods_bulk"; links: Array<{ parameterName: string; methodId: string; rationale?: string; evidence?: string }> }
   /** Exercise Library — add a new exercise row */
   | { type: "library_add_exercise"; libraryId: string; data: Record<string, string>; description?: string; videoUrl?: string }
   /** Exercise Library — delete an exercise by id (or name as fallback) */
@@ -205,8 +205,8 @@ Available types and their fields:
   Creates a new event entry without scheduling any dates. Use ONLY when the event does not already exist in the Events list in context.
 - remove_event: {"type":"remove_event","eventName":"<exact event name from the Events list in context>"}
   Deletes an event entirely (removes it and all its scheduled dates). Use the EXACT name from the Events list.
-- add_methods: {"type":"add_methods","methods":[{"name":"<exact method name>","rationale":"<why this method supports the goal>"},{"name":"<exact method name>","rationale":"<rationale>"}]}
-  ONLY suggest or add methods whose exact name appears in the "Training Toolbox" list in context. Never invent method names from general knowledge. Always include a rationale for methods that are not goal-linked.
+- add_methods: {"type":"add_methods","methods":[{"name":"<exact method name>","rationale":"<why this method supports the goal>","evidence":"<optional: research citations or supporting evidence>"},{"name":"<exact method name>","rationale":"<rationale>"}]}
+  ONLY suggest or add methods whose exact name appears in the "Training Toolbox" list in context. Never invent method names from general knowledge. Always include a rationale for methods that are not goal-linked. evidence is optional — include when you can cite specific research.
 - set_mesocycle_config: {"type":"set_mesocycle_config","count":<number>,"weeksDuration":<weeks per mesocycle>}
   Use for quick uniform setup (all mesocycles same length, all microcycles 7 days). For variable durations use configure_mesocycles instead.
 - configure_mesocycles: {"type":"configure_mesocycles","mesocycles":[{"name":"Mesocycle 1","microcycles":[{"duration":7,"intensity":"easy"},{"duration":7,"intensity":"moderate"},{"duration":7,"intensity":"hard"},{"duration":7,"intensity":"deload"}]},{"name":"Mesocycle 2","microcycles":[{"duration":7,"intensity":"moderate"},{"duration":7,"intensity":"hard"},{"duration":5,"intensity":"extremely-hard"},{"duration":2,"intensity":"deload"}]}]}
@@ -293,9 +293,9 @@ Available types and their fields:
   direction "contributes_to" means sourceParameter positively influences targetParameter. Use exact parameter names as listed in the wizard context.
 - add_interactions_bulk: {"type":"add_interactions_bulk","interactions":[{"sourceParameterName":"<exact name>","targetParameterName":"<exact name>","direction":"contributes_to","strength":"<strong|moderate|weak>"},{"sourceParameterName":"<exact name>","targetParameterName":"<exact name>","direction":"contributes_to","strength":"<strong|moderate|weak>"}]}
   Use this when adding multiple interactions at once. Preferred over add_interaction when adding 2 or more interactions.
-- add_parameter_method: {"type":"add_parameter_method","parameterName":"<exact name of existing parameter>","methodId":"<exact method ID from wizard context>","rationale":"<optional: why this method improves this parameter>"}
+- add_parameter_method: {"type":"add_parameter_method","parameterName":"<exact name of existing parameter>","methodId":"<exact method ID from wizard context>","rationale":"<optional: why this method improves this parameter>","evidence":"<optional: research citations or supporting evidence>"}
   Only use method IDs as listed in the wizard context. Do not invent method IDs.
-- add_parameter_methods_bulk: {"type":"add_parameter_methods_bulk","links":[{"parameterName":"<exact parameter name>","methodId":"<exact method ID from wizard context>","rationale":"<optional>"},{"parameterName":"<exact parameter name>","methodId":"<exact method ID from wizard context>"}]}
+- add_parameter_methods_bulk: {"type":"add_parameter_methods_bulk","links":[{"parameterName":"<exact parameter name>","methodId":"<exact method ID from wizard context>","rationale":"<optional>","evidence":"<optional: research citations>"},{"parameterName":"<exact parameter name>","methodId":"<exact method ID from wizard context>"}]}
   Use this when linking multiple training methods to parameters at once. Preferred over add_parameter_method when adding 2 or more links.
 - library_add_exercise: {"type":"library_add_exercise","libraryId":"<exact library id from context>","data":{"<column name>":"<value>","<column name>":"<value>"},"description":"<optional notes or description>","videoUrl":"<optional video url>"}
   Adds a new exercise row to the library. Use column names EXACTLY as listed in the Library Columns section of context. libraryId must match the id shown in context. Omit any column you don't have a value for — do not include empty strings.

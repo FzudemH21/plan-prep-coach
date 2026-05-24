@@ -375,12 +375,17 @@ function extractMesoData(
       ? mesoTrainingDays.filter((td) => td.microcycleId === firstMicroId)
       : mesoTrainingDays.slice(0, 7);
 
+    const DAY_ABBR_TO_FULL: Record<string, string> = {
+      Sun: "Sunday", Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday",
+      Thu: "Thursday", Fri: "Friday", Sat: "Saturday",
+    };
+
     const enrichedDays = firstMicroDays.map((td) => {
       const dayExercises = mesoExercises.filter((ex) => ex.dayDate === td.date);
       const dayMethods = [...new Set(dayExercises.map((ex) => ex.methodId))];
       return {
         date: td.date,
-        dayName: td.dayName,
+        dayName: DAY_ABBR_TO_FULL[td.dayName] ?? td.dayName,
         intensity: td.intensity,
         sessionNames: td.sessionNames,
         methods: dayMethods,
@@ -790,12 +795,16 @@ export function TrainingPlanPDF({
   // Total goal count for badge (main + sub)
   const goals = smartGoals.map((g) => g.description ?? "").filter(Boolean);
 
-  const methods = [
-    ...(macro?.selectedMethods ?? []),
+  const methods: Array<{ name: string; rationale?: string; evidence?: string }> = [
+    ...(macro?.selectedMethods ?? []).map((name: string) => ({ name })),
     ...((macro?.manuallyAddedMethods ?? []).map(
-      (m: { name?: string; method?: string }) => m.name ?? m.method ?? "",
+      (m: { methodId?: string; name?: string; method?: string; rationale?: string; evidence?: string }) => ({
+        name: m.methodId ?? m.name ?? m.method ?? "",
+        rationale: m.rationale,
+        evidence: m.evidence,
+      }),
     )),
-  ].filter(Boolean) as string[];
+  ].filter((m) => Boolean(m.name));
 
   const mesoPdfData  = extractMesoData(program, selectedMesoIds);
   const athleteName  = athleteDisplayName || program.athleteName || "Athlete";
@@ -1478,13 +1487,32 @@ export function TrainingPlanPDF({
                       }}>
                         {String(i + 1).padStart(2, "0")}
                       </Text>
-                      <Text style={{
-                        fontFamily: "Geist", fontWeight: 700, fontSize: 11.5,
-                        color: D.ink, lineHeight: 1.2, flex: 1,
-                        textTransform: "uppercase",
-                      }}>
-                        {method}
-                      </Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{
+                          fontFamily: "Geist", fontWeight: 700, fontSize: 11.5,
+                          color: D.ink, lineHeight: 1.2,
+                          textTransform: "uppercase",
+                        }}>
+                          {method.name}
+                        </Text>
+                        {method.rationale ? (
+                          <Text style={{
+                            fontFamily: "Geist", fontWeight: 400, fontSize: 9,
+                            color: D.ink, lineHeight: 1.5, marginTop: 4,
+                          }}>
+                            {method.rationale}
+                          </Text>
+                        ) : null}
+                        {method.evidence ? (
+                          <Text style={{
+                            fontFamily: "Geist", fontWeight: 400, fontSize: 8,
+                            color: "#6b7280", lineHeight: 1.5, marginTop: 3,
+                            fontStyle: "italic",
+                          }}>
+                            {method.evidence}
+                          </Text>
+                        ) : null}
+                      </View>
                     </View>
                   </View>
                 ))}

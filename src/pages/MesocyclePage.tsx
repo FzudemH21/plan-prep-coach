@@ -6,7 +6,7 @@ import React, { useState, useEffect, useMemo, useCallback, useTransition } from 
 import { useAthletes } from '@/hooks/useAthletes';
 import { getAthleteDisplayName } from '@/types/athlete';
 import { TrainingPlanOverview } from '@/components/shared/TrainingPlanOverview';
-import { AddMethodDialog } from '@/components/ui/add-method-dialog';
+import { AddAdditionalMethodDialog } from '@/components/macrocycle/AddAdditionalMethodDialog';
 import { MethodDeleteDialog } from '@/components/shared/MethodDeleteDialog';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -5441,10 +5441,10 @@ export default function MesocyclePage() {
         {currentStep === 4 && <KeyboardShortcutsPanel />}
         
         {/* Add Method Dialog */}
-        <AddMethodDialog
+        <AddAdditionalMethodDialog
           open={isAddMethodDialogOpen}
           onOpenChange={setIsAddMethodDialogOpen}
-          onAddMethod={handleAddMethod}
+          onAdd={(m) => handleAddMethod(m.methodId)}
           excludedMethods={getExcludedMethods()}
         />
         

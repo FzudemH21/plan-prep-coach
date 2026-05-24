@@ -48,6 +48,7 @@ import { useWizardData } from "@/contexts/WizardDataContext";
 interface ManuallyAddedMethod {
   methodId: string;
   rationale?: string;
+  evidence?: string;
 }
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -2221,7 +2222,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   };
 
   // Handle adding a manually added method
-  const handleAddManualMethod = (method: { methodId: string; rationale: string }) => {
+  const handleAddManualMethod = (method: { methodId: string; rationale: string; evidence?: string }) => {
     setManuallyAddedMethods(prev => [...prev, method]);
     // Also select it
     setSelectedMethods(prev => new Set([...prev, method.methodId]));
@@ -2920,11 +2921,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         break;
       case "add_methods": {
         const goalLinkedIds = new Set(getAllMethodsWithAssociations().map(m => m.methodId));
-        action.methods.forEach(({ name, rationale }) => {
+        action.methods.forEach(({ name, rationale, evidence }) => {
           if (goalLinkedIds.has(name)) {
             setSelectedMethods((prev) => new Set([...prev, name]));
           } else {
-            handleAddManualMethod({ methodId: name, rationale: rationale ?? "" });
+            handleAddManualMethod({ methodId: name, rationale: rationale ?? "", evidence });
           }
         });
         break;

@@ -193,16 +193,16 @@ export default function AthleticismDatabaseV2() {
         toast({ title: 'Parameter not found', description: `"${action.parameterName}" does not exist yet.`, variant: 'destructive' });
         return;
       }
-      await addParameterMethod(param.id, action.methodId, action.rationale);
+      await addParameterMethod(param.id, action.methodId, action.rationale, action.evidence);
       toast({ title: `Method linked to "${action.parameterName}"` });
 
     } else if (action.type === 'add_parameter_methods_bulk') {
       const failed: string[] = [];
-      const resolved: Array<{ parameterId: string; methodId: string; rationale?: string }> = [];
+      const resolved: Array<{ parameterId: string; methodId: string; rationale?: string; evidence?: string }> = [];
       for (const link of action.links) {
         const param = findParam(link.parameterName);
         if (!param) { failed.push(link.parameterName); continue; }
-        resolved.push({ parameterId: param.id, methodId: link.methodId, rationale: link.rationale });
+        resolved.push({ parameterId: param.id, methodId: link.methodId, rationale: link.rationale, evidence: link.evidence });
       }
       if (resolved.length > 0) await addParameterMethodsBulk(resolved);
       if (resolved.length > 0) toast({ title: `${resolved.length} method link${resolved.length !== 1 ? 's' : ''} added` });
