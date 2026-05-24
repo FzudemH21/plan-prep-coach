@@ -3311,6 +3311,12 @@ export default function MicrocyclePlanningPage() {
                   const program = await saveCurrentSession();
                   if (program && user) {
                     await saveToMemory(program);
+                    const alreadyDone = localStorage.getItem(`rationale_done_${program.id}`) === '1';
+                    if (alreadyDone) {
+                      toast({ title: "Program saved", description: "Your training program has been saved." });
+                      navigate("/templates/programs");
+                      return;
+                    }
                     const summary = extractPlanSummary(program, user.id);
                     setAccumulatedProgramId(program.id);
                     setAccumulatedPlanSummary(summary.summary_text);
@@ -4971,11 +4977,13 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
         programId={accumulatedProgramId}
         userId={user?.id ?? ''}
         onJustSave={() => {
+          if (accumulatedProgramId) localStorage.setItem(`rationale_done_${accumulatedProgramId}`, '1');
           setAccumulatedDialogOpen(false);
           toast({ title: "Program saved", description: "Your training program has been saved." });
           navigate("/templates/programs");
         }}
         onDone={() => {
+          if (accumulatedProgramId) localStorage.setItem(`rationale_done_${accumulatedProgramId}`, '1');
           setAccumulatedDialogOpen(false);
           navigate("/templates/programs");
         }}
