@@ -60,7 +60,10 @@ Macrocycle
 ---
 
 ## Intensity Scale
-8 levels used consistently throughout the entire app (low → high):
+
+> **Planned refactor:** The 8-level scale will be replaced by **Borg CR10 (0–10, 11 levels)** throughout the entire app. Until the refactor is implemented, the 8-level scale below remains active. Do not introduce new code using the 8-level scale — flag it for migration instead.
+
+**Current (8-level, being phased out):**
 
 | Value | Display |
 |-------|---------|
@@ -73,7 +76,23 @@ Macrocycle
 | `hard` | Hard |
 | `extremely-hard` | Extremely Hard |
 
-Always use hyphens (not underscores). Applied at: microcycle level, daily level, and session level.
+**Target (Borg CR10, 11 levels):**
+
+| Value | Display |
+|-------|---------|
+| `0` | 0 – Rest |
+| `1` | 1 – Very Easy |
+| `2` | 2 – Easy |
+| `3` | 3 – Moderate |
+| `4` | 4 – Somewhat Hard |
+| `5` | 5 – Hard |
+| `6` | 6 – Hard+ |
+| `7` | 7 – Very Hard |
+| `8` | 8 – Very Hard+ |
+| `9` | 9 – Extremely Hard |
+| `10` | 10 – Maximal |
+
+Applied at: mesocycle level, microcycle level, daily level, and session level. Used identically by coach (planned) and athlete (self-reported) — enabling direct planned vs. actual comparison.
 
 ---
 
