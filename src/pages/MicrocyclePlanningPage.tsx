@@ -211,11 +211,8 @@ export default function MicrocyclePlanningPage() {
       }
     }
 
-    // Load day→method assignments (written by Step 1)
+    // Load day→method assignments (written by Step 1) — defer to after intensity map is built
     const savedDayMethodAssignments = localStorage.getItem('dayMethodAssignments');
-    if (savedDayMethodAssignments) {
-      try { setDayMethodAssignments(JSON.parse(savedDayMethodAssignments)); } catch { /* ignore */ }
-    }
 
     // Load method allocations (written by MesocyclePage, read-only here).
     // Validate against parameterValues: a method is only truly allocated to a mesocycle
@@ -259,6 +256,23 @@ export default function MicrocyclePlanningPage() {
       try {
         (JSON.parse(savedDailyIntensity) as Array<{ date: string; intensity: string }>)
           .forEach(di => { intensityMapInit[di.date] = di.intensity; });
+      } catch { /* ignore */ }
+    }
+
+    // Load day→method assignments now that intensityMapInit is ready — strip off-day entries
+    if (savedDayMethodAssignments) {
+      try {
+        const rawAssignments: Record<string, string[]> = JSON.parse(savedDayMethodAssignments);
+        const cleaned: Record<string, string[]> = {};
+        Object.entries(rawAssignments).forEach(([key, methods]) => {
+          const date = key.split('_')[0];
+          if ((intensityMapInit[date] ?? 'moderate') !== 'off') {
+            cleaned[key] = methods;
+          }
+        });
+        setDayMethodAssignments(cleaned);
+        // Write back the cleaned version so stale entries don't re-appear next load
+        localStorage.setItem('dayMethodAssignments', JSON.stringify(cleaned));
       } catch { /* ignore */ }
     }
 
