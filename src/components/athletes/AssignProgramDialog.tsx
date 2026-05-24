@@ -154,7 +154,7 @@ export function AssignProgramDialog({
     const reviewed: ReviewedSubGoal[] = subGoals.map(sg => {
       // Shift scheduled dates
       const shiftedDates = (sg.testDates || []).map(d => {
-        const shifted = addDays(new Date(d), dayOffset);
+        const shifted = addDays(new Date(d + (d.length === 10 ? 'T12:00:00' : '')), dayOffset);
         return shifted.toISOString();
       });
 
@@ -182,6 +182,38 @@ export function AssignProgramDialog({
         scheduledDates: shiftedDates,
         parameterLinkedId: sg.parameterLinkedId,
       };
+    });
+
+    // Also include SMART goals that have test dates (scheduled via selectedSmartGoal in MacrocyclePage)
+    const smartGoals: Array<{ id: string; description: string; baselineValue: number; desiredValue: number; unit: string; linkedParameterId?: string; testDates?: string[] }> = macro.smartGoals || [];
+    smartGoals.forEach(sg => {
+      if (!sg.testDates || sg.testDates.length === 0) return;
+      const shiftedDates = sg.testDates.map(d => {
+        const shifted = addDays(new Date(d + (d.length === 10 ? 'T12:00:00' : '')), dayOffset);
+        return shifted.toISOString();
+      });
+      let baseline = sg.baselineValue || 0;
+      if (sg.linkedParameterId && athletePerformanceParameters.length > 0) {
+        const athleteParam = athletePerformanceParameters.find(
+          pp => pp.athleticismParameterId === sg.linkedParameterId
+        );
+        if (athleteParam && athleteParam.values.length > 0) {
+          const sorted = [...athleteParam.values].sort(
+            (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+          );
+          baseline = parseFloat(sorted[0].value) || baseline;
+        }
+      }
+      reviewed.push({
+        id: sg.id,
+        testMethod: sg.description,
+        baselineValue: baseline,
+        goalValue: sg.desiredValue || 0,
+        unit: sg.unit || '',
+        comments: '',
+        scheduledDates: shiftedDates,
+        parameterLinkedId: sg.linkedParameterId,
+      });
     });
 
     // Deduplicate tests by testMethod + parameterLinkedId
