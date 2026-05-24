@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Trash2, Edit2, MoreHorizontal, Filter, RotateCcw, FileText, Upload, Download, GripVertical, Recycle } from 'lucide-react';
@@ -483,7 +484,32 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
                   exercises={safeLibrary.exercises}
                   sortDirection={filterState.sortColumn === column.id ? filterState.sortDirection : null}
                 />
-                <MoreHorizontal className="h-4 w-4" />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="p-0.5 rounded hover:bg-accent transition-colors" onClick={e => e.stopPropagation()}>
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => setTimeout(() => setRenameDialog({ isOpen: true, columnId: column.id, currentName: column.name }), 0)}>
+                      <Edit2 className="h-4 w-4 mr-2" />
+                      Rename Column
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setTimeout(() => setNewColumnDialog({ ...newColumnDialog, isOpen: true }), 0)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Column
+                    </DropdownMenuItem>
+                    {!isFirstColumn && (
+                      <DropdownMenuItem
+                        onSelect={() => setTimeout(() => setDeleteDialog({ isOpen: true, columnId: column.id, columnName: column.name }), 0)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Column
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           </TableHead>
