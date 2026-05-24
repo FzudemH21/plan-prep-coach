@@ -5445,7 +5445,7 @@ export default function MesocyclePage() {
           open={isAddMethodDialogOpen}
           onOpenChange={setIsAddMethodDialogOpen}
           onAdd={(m) => handleAddMethod(m.methodId)}
-          excludedMethods={getExcludedMethods()}
+          excludedMethods={new Set(getExcludedMethods())}
         />
         
         {/* Delete Method Dialog */}
