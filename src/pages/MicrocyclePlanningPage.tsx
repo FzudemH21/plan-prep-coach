@@ -3668,19 +3668,22 @@ export default function MicrocyclePlanningPage() {
                   const secExs = sessionExercises.filter(e => e.sectionId === sec.id);
                   secExs.forEach(e => {
                     const exNote = e.notes ? ` [note: "${e.notes}"]` : '';
-                    calLines.push(`        - ${e.exerciseName} (id: ${e.id}, method: ${e.methodId})${exNote}`);
+                    const ovNote = e.parameterOverrides && Object.keys(e.parameterOverrides).length > 0 ? ` [overrides: ${Object.entries(e.parameterOverrides).map(([k, v]) => `${k}=${v}`).join(', ')}]` : '';
+                    calLines.push(`        - ${e.exerciseName} (id: ${e.id}, exerciseId: ${e.exerciseId}, method: ${e.methodId})${exNote}${ovNote}`);
                   });
                 });
                 // Exercises not in any section
                 const unsectioned = sessionExercises.filter(e => !e.sectionId || !sections.find(sec => sec.id === e.sectionId));
                 unsectioned.forEach(e => {
                   const exNote = e.notes ? ` [note: "${e.notes}"]` : '';
-                  calLines.push(`      - ${e.exerciseName} (id: ${e.id}, method: ${e.methodId}) [no section]${exNote}`);
+                  const ovNote = e.parameterOverrides && Object.keys(e.parameterOverrides).length > 0 ? ` [overrides: ${Object.entries(e.parameterOverrides).map(([k, v]) => `${k}=${v}`).join(', ')}]` : '';
+                  calLines.push(`      - ${e.exerciseName} (id: ${e.id}, exerciseId: ${e.exerciseId}, method: ${e.methodId}) [no section]${exNote}${ovNote}`);
                 });
               } else if (sessionExercises.length > 0) {
                 sessionExercises.forEach(e => {
                   const exNote = e.notes ? ` [note: "${e.notes}"]` : '';
-                  calLines.push(`      - ${e.exerciseName} (id: ${e.id}, method: ${e.methodId})${exNote}`);
+                  const ovNote = e.parameterOverrides && Object.keys(e.parameterOverrides).length > 0 ? ` [overrides: ${Object.entries(e.parameterOverrides).map(([k, v]) => `${k}=${v}`).join(', ')}]` : '';
+                  calLines.push(`      - ${e.exerciseName} (id: ${e.id}, exerciseId: ${e.exerciseId}, method: ${e.methodId})${exNote}${ovNote}`);
                 });
               } else {
                 calLines.push(`      (no exercises yet)`);
@@ -4448,6 +4451,22 @@ Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-
       // Trigger WorkoutSessionSheet to rebuild from fresh parameterValues
       setParamRefreshTrigger(c => c + 1);
       toast({ title: `Parameters updated for [${methodId}] on ${dayDate} session ${sessionIndex + 1}` });
+
+    } else if (action.type === "set_exercise_param_override") {
+      // Per-exercise overrides: store directly on the ExerciseDistribution entry
+      setExerciseDistribution(prev =>
+        prev.map(ex => {
+          const match = action.entries.find(
+            e => e.exerciseId === ex.exerciseId && e.dayDate === ex.dayDate && e.sessionIndex === ex.sessionIndex
+          );
+          if (!match) return ex;
+          return { ...ex, parameterOverrides: { ...(ex.parameterOverrides ?? {}), ...match.params } };
+        })
+      );
+      setParamRefreshTrigger(c => c + 1);
+      const names = [...new Set(action.entries.map(e => e.exerciseName))];
+      const count = action.entries.length;
+      toast({ title: `Per-exercise overrides applied`, description: `${names.join(', ')} — ${count} slot${count !== 1 ? 's' : ''} updated` });
 
     } else if (action.type === "copy_week") {
       const { sourceMicrocycleName, targetMicrocycleName } = action;

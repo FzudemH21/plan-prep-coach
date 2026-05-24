@@ -399,8 +399,12 @@ export function WorkoutSessionSheet({
                 if (storedParams && typeof storedParams === 'object' && !Array.isArray(storedParams)) {
                   exerciseParams = storedParams as Record<string, string | number>;
                 }
-                
-                const setParamName = methodParams.find(p => p.isSetParameter)?.name || 
+                // Per-exercise overrides take precedence over method-level params
+                if (ex.parameterOverrides && Object.keys(ex.parameterOverrides).length > 0) {
+                  exerciseParams = { ...exerciseParams, ...ex.parameterOverrides };
+                }
+
+                const setParamName = methodParams.find(p => p.isSetParameter)?.name ||
                                     methodParams.find(p => /^sets?$/i.test(p.name))?.name;
                 const setCount = setParamName ? Number(exerciseParams[setParamName] || 0) : 0;
                 
@@ -666,8 +670,12 @@ export function WorkoutSessionSheet({
       if (storedParams && typeof storedParams === 'object' && !Array.isArray(storedParams)) {
         exerciseParams = storedParams as Record<string, string | number>;
       }
-      
-      const setParamName = methodParams.find(p => p.isSetParameter)?.name || 
+      // Per-exercise overrides take precedence over method-level params
+      if (ex.parameterOverrides && Object.keys(ex.parameterOverrides).length > 0) {
+        exerciseParams = { ...exerciseParams, ...ex.parameterOverrides };
+      }
+
+      const setParamName = methodParams.find(p => p.isSetParameter)?.name ||
                           methodParams.find(p => /^sets?$/i.test(p.name))?.name;
       const setCount = setParamName ? Number(exerciseParams[setParamName] || 0) : 0;
       

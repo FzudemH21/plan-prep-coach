@@ -163,6 +163,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     calendarEvents: getEventsForAthlete(athlete.id),
     programs,
     parametersData: parametersData ?? null,
+    exerciseDistribution: editing.exerciseDistribution,
   });
 
   // AI apply handler — intensity changes can be applied directly; session-level
@@ -186,6 +187,20 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           value,
         );
       });
+    } else if (action.type === 'set_exercise_param_override') {
+      // Per-exercise overrides: update parameterOverrides on the specific ExerciseDistribution entry
+      editing.setExerciseDistribution(prev =>
+        prev.map(ex => {
+          const match = action.entries.find(
+            e => e.exerciseId === ex.exerciseId && e.dayDate === ex.dayDate && e.sessionIndex === ex.sessionIndex
+          );
+          if (!match) return ex;
+          return { ...ex, parameterOverrides: { ...(ex.parameterOverrides ?? {}), ...match.params } };
+        })
+      );
+      const names = [...new Set(action.entries.map(e => e.exerciseName))];
+      const count = action.entries.length;
+      toast({ title: `Per-exercise overrides applied`, description: `${names.join(', ')} — ${count} slot${count !== 1 ? 's' : ''} updated` });
     } else {
       toast({
         title: 'Open the session to apply',

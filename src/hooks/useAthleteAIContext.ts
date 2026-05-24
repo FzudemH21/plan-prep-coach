@@ -16,6 +16,7 @@ import { Athlete, AthleteCalendarAssignment, AthletePerformanceParameter, getAth
 import { TrainingProgram } from '@/hooks/useTrainingPrograms';
 import { CalendarEvent } from '@/hooks/useCalendarEvents';
 import { ParametersDatabaseV2 } from '@/types/parametersV2';
+import { ExerciseDistribution } from '@/types/microcycle-planning';
 
 interface UseAthleteAIContextOptions {
   athlete: Athlete;
@@ -24,6 +25,7 @@ interface UseAthleteAIContextOptions {
   calendarEvents: CalendarEvent[];
   programs: TrainingProgram[];
   parametersData: ParametersDatabaseV2 | null;
+  exerciseDistribution?: ExerciseDistribution[];
 }
 
 export function useAthleteAIContext({
@@ -33,6 +35,7 @@ export function useAthleteAIContext({
   calendarEvents,
   programs,
   parametersData,
+  exerciseDistribution,
 }: UseAthleteAIContextOptions): string {
   return useMemo(() => {
     const today = format(new Date(), 'yyyy-MM-dd');
@@ -147,8 +150,38 @@ export function useAthleteAIContext({
       sections.push('## Program Library\nNo programs saved yet.');
     }
 
+    // ── Exercise Distribution ─────────────────────────────────────────────────
+    if (exerciseDistribution && exerciseDistribution.length > 0) {
+      // Group by date then session, sorted chronologically
+      const byDate: Record<string, ExerciseDistribution[]> = {};
+      exerciseDistribution.forEach(ex => {
+        if (!byDate[ex.dayDate]) byDate[ex.dayDate] = [];
+        byDate[ex.dayDate].push(ex);
+      });
+      const sortedDates = Object.keys(byDate).sort();
+      const exLines: string[] = [];
+      sortedDates.forEach(date => {
+        const dayExs = byDate[date].sort((a, b) => a.sessionIndex - b.sessionIndex || (a.order ?? 0) - (b.order ?? 0));
+        const bySess: Record<number, ExerciseDistribution[]> = {};
+        dayExs.forEach(ex => {
+          if (!bySess[ex.sessionIndex]) bySess[ex.sessionIndex] = [];
+          bySess[ex.sessionIndex].push(ex);
+        });
+        Object.entries(bySess).forEach(([sessIdx, exs]) => {
+          const overrideNote = (ex: ExerciseDistribution) => {
+            if (!ex.parameterOverrides || Object.keys(ex.parameterOverrides).length === 0) return '';
+            return ` [overrides: ${Object.entries(ex.parameterOverrides).map(([k, v]) => `${k}=${v}`).join(', ')}]`;
+          };
+          exs.forEach(ex => {
+            exLines.push(`  ${date} Session ${Number(sessIdx) + 1}: ${ex.exerciseName} [${ex.methodId}] (id: ${ex.exerciseId})${overrideNote(ex)}`);
+          });
+        });
+      });
+      sections.push(`## Exercise Distribution (${exerciseDistribution.length} exercises)\n${exLines.join('\n')}`);
+    }
+
     sections.push(`## Today\n${today}`);
 
     return sections.join('\n\n');
-  }, [athlete, performanceParameters, assignments, calendarEvents, programs, parametersData]);
+  }, [athlete, performanceParameters, assignments, calendarEvents, programs, parametersData, exerciseDistribution]);
 }
