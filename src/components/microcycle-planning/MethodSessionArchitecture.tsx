@@ -258,7 +258,7 @@ export function MethodSessionArchitecture({
     const counts: Record<string, number> = {};
     if (!selectedEntry) return counts;
     const [selectedMicroId, { days }] = selectedEntry;
-    days.filter(d => d.microcycleId === selectedMicroId).forEach(day => {
+    days.filter(d => d.microcycleId === selectedMicroId && d.intensity !== 'off').forEach(day => {
       const seen = new Set<string>();
       for (let si = 0; si < 4; si++) {
         (dayMethodAssignments[`${day.date}_${si}`] ?? []).forEach(m => seen.add(m));
