@@ -845,7 +845,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           const filteredSupersets = validDates.size > 0
             ? Object.fromEntries(Object.entries(shiftedSupersets).filter(([d]) => validDates.has(d)))
             : shiftedSupersets;
-          const filteredDailyIntensity = validDates.size > 0
+          let filteredDailyIntensity = validDates.size > 0
             ? shiftedDailyIntensity.filter(di => validDates.has(di.date))
             : shiftedDailyIntensity;
           const filteredDaySplitStates = validDates.size > 0
@@ -940,6 +940,43 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             console.log('[ASSIGN] daySplitStates from program data, keys:', Object.keys(finalDaySplitStates).length);
           }
           console.log('[ASSIGN] finalTrainingDays.length:', finalTrainingDays.length, 'finalDaySplitStates keys:', Object.keys(finalDaySplitStates).length);
+
+          // SYNC: build filteredDailyIntensity from finalTrainingDays if it came out empty.
+          // This covers the common case where program.dailyIntensityData was absent or its
+          // dates didn't overlap with validDates (e.g. the plan was saved before step 2).
+          if (filteredDailyIntensity.length === 0 && finalTrainingDays.length > 0) {
+            filteredDailyIntensity = finalTrainingDays.map((td: any) => ({
+              date: td.date,
+              intensity: td.intensity,
+              mesocycleId: td.mesocycleId,
+              microcycleId: td.microcycleId,
+            }));
+            console.log('[ASSIGN] built filteredDailyIntensity from finalTrainingDays:', filteredDailyIntensity.length);
+          }
+
+          // CLAMP: off-intensity days must have 0 sessions.
+          // Both sources may disagree — filteredDailyIntensity is authoritative for
+          // rest/training status because it comes from the loading-wave planning step.
+          filteredDailyIntensity.forEach((di: any) => {
+            if (di.intensity === 'off') {
+              finalDaySplitStates[di.date] = 0;
+            }
+          });
+          // Sync finalTrainingDays to match clamped intensity
+          finalTrainingDays = finalTrainingDays.map((td: any) => {
+            const di = filteredDailyIntensity.find((d: any) => d.date === td.date);
+            if (di && di.intensity !== td.intensity) {
+              const isOff = di.intensity === 'off';
+              return {
+                ...td,
+                intensity: di.intensity,
+                sessions: isOff ? 0 : (td.sessions || 1),
+                sessionNames: isOff ? [] : (td.sessionNames?.length ? td.sessionNames : ['Session 1']),
+                isTrainingDay: !isOff,
+              };
+            }
+            return td;
+          });
 
           // Transfer tests & events to calendarEvents (one entry per scheduled date)
           const transferTestsEvents = () => {
@@ -1403,6 +1440,37 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
               }
             }
             return 0;
+          })()}
+          microcycleDates={(() => {
+            // Compute the date range of the microcycle containing this session.
+            // WorkoutSessionSheet uses this to calculate the chronological session index
+            // (i.e. which occurrence of a method within the microcycle this exercise is),
+            // so it can look up the correct periodization-table parameters slot.
+            const trainingDay = editing.trainingDays.find(td => td.date === selectedSessionInfo.dayDate);
+            if (trainingDay?.mesocycleId && trainingDay?.microcycleId) {
+              const meso = editing.selectedAssignment?.assignedMesocycles?.find(m => m.id === trainingDay.mesocycleId);
+              if (meso) {
+                // Count day-offset of this microcycle within the mesocycle
+                let dayOffset = 0;
+                let microDuration = 7;
+                for (const mc of meso.microcycles || []) {
+                  if (mc.id === trainingDay.microcycleId) {
+                    microDuration = mc.duration;
+                    break;
+                  }
+                  dayOffset += mc.duration;
+                }
+                // Build dates using noon-local anchoring to avoid DST off-by-one
+                const [my, mm, md] = meso.startDate.split('-').map(Number);
+                const mesoStart = new Date(my, mm - 1, md, 12, 0, 0);
+                return Array.from({ length: microDuration }, (_, i) => {
+                  const d = new Date(mesoStart.getTime() + (dayOffset + i) * 86400000);
+                  return format(d, 'yyyy-MM-dd');
+                });
+              }
+            }
+            // Fallback: return all training day dates (covers the whole assignment)
+            return editing.trainingDays.map(td => td.date);
           })()}
           parameterValues={editing.parameterValues}
           onSaveParameters={(mesocycleId, microcycleIndex, methodId, sessionIndex, exerciseId, parameters) => {
