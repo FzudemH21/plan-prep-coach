@@ -85,6 +85,10 @@ interface AthleteCalendarDayCellProps {
   // Athlete context — required for tests/events storage
   athleteId?: string;
   athletePerformanceParameters?: AthletePerformanceParameter[];
+  // Parent-owned event callbacks — use these so mutations go through the
+  // authoritative hook instance, not the DayCell's own stale store.
+  onAddCalendarEvent?: (athleteId: string, event: Omit<import('@/hooks/useCalendarEvents').CalendarEvent, 'id'>) => void;
+  onDeleteCalendarEvent?: (athleteId: string, eventId: string) => void;
 }
 
 export function AthleteCalendarDayCell({
@@ -107,6 +111,8 @@ export function AthleteCalendarDayCell({
   lastDragEndRef,
   athleteId,
   athletePerformanceParameters,
+  onAddCalendarEvent,
+  onDeleteCalendarEvent,
 }: AthleteCalendarDayCellProps) {
   const [testEventDialogOpen, setTestEventDialogOpen] = useState(false);
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
@@ -624,12 +630,15 @@ export function AthleteCalendarDayCell({
         events={calendarEvents}
         onAdd={(type, title, notes, parameterId, targetValue) => {
           if (athleteId) {
-            addEvent(athleteId, { date: day.dateString, type, title, notes, parameterId, targetValue });
+            const payload = { date: day.dateString, type, title, notes, parameterId, targetValue };
+            if (onAddCalendarEvent) onAddCalendarEvent(athleteId, payload);
+            else addEvent(athleteId, payload);
           }
         }}
         onDelete={(eventId) => {
           if (athleteId) {
-            deleteEvent(athleteId, eventId);
+            if (onDeleteCalendarEvent) onDeleteCalendarEvent(athleteId, eventId);
+            else deleteEvent(athleteId, eventId);
           }
         }}
         athletePerformanceParameters={athletePerformanceParameters}

@@ -123,7 +123,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   const athleteData = useAthletes();
   const { data: toolboxData } = useToolboxData();
   const { toast } = useToast();
-  const { addEvent: addCalendarEvent, addEvents: addCalendarEvents, getEventsForAthlete, getEventsForDate } = useCalendarEvents();
+  const { addEvent: addCalendarEvent, addEvents: addCalendarEvents, deleteEvent: deleteCalendarEvent, getEventsForAthlete, getEventsForDate } = useCalendarEvents();
 
   const assignments = useMemo(() => {
     return athleteData.getAthleteCalendarAssignments(athlete.id);
@@ -1399,6 +1399,8 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                       athletePerformanceParameters={athleteData.athletePerformanceParameters.filter(
                         p => p.athleteId === athlete.id
                       )}
+                      onAddCalendarEvent={addCalendarEvent}
+                      onDeleteCalendarEvent={deleteCalendarEvent}
                     />
                   ))}
                 </div>
