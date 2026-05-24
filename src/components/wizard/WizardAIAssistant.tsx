@@ -51,7 +51,7 @@ export type ApplySuggestion =
   /** MesocyclePage Step 5 — assign exercises from the library to method × mesocycle cells */
   | { type: "assign_exercises"; replace?: boolean; assignments: Array<{ methodName: string; mesocycleName: string; categoryName?: string; exercises: Array<{ exerciseId: string; exerciseName: string; libraryId: string }> }> }
   /** MicrocyclePlanningPage Step 2 — distribute exercises to specific training days / sessions */
-  | { type: "distribute_exercises"; replace?: boolean; entries: Array<{ exerciseId: string; exerciseName: string; methodId: string; categoryName?: string; dayDate: string; sessionIndex?: number }> }
+  | { type: "distribute_exercises"; replace?: boolean; entries: Array<{ exerciseId: string; exerciseName: string; methodId: string; categoryName?: string; dayDate: string; sessionIndex?: number; sectionName?: string }> }
   /** MicrocyclePlanningPage Step 2 — create a named section block within a session */
   | { type: "create_section"; dayDate: string; sessionIndex: number; name: string; note?: string }
   /** MicrocyclePlanningPage Step 2 — delete a section by name */
@@ -220,8 +220,9 @@ Available types and their fields:
   3. When producing an assign_exercises block: include ONLY exercises whose exerciseId appears in the wizard context. If some exercises the coach requested are not in the database, still produce the block for the ones that ARE found, and in your text response explicitly list which ones were skipped and why (not in database).
   4. Never silently omit exercises — always tell the coach which exercises could not be assigned and why.
   Set "replace": true to replace the current selection; omit or false to append. If the method context lists "Categories:", produce one assignment entry per category.
-- distribute_exercises: {"type":"distribute_exercises","replace":false,"entries":[{"exerciseId":"<exact id from context>","exerciseName":"<name>","methodId":"<exact methodId from context>","categoryName":"<category — include ONLY if the method has categories, omit otherwise>","dayDate":"YYYY-MM-DD","sessionIndex":0}]}
+- distribute_exercises: {"type":"distribute_exercises","replace":false,"entries":[{"exerciseId":"<exact id from context>","exerciseName":"<name>","methodId":"<exact methodId from context>","categoryName":"<category — include ONLY if the method has categories, omit otherwise>","dayDate":"YYYY-MM-DD","sessionIndex":0,"sectionName":"<section name>"}]}
   IMPORTANT: Use this action in Phase 3 Step 2 whenever the coach asks to assign or distribute exercises to training days. You CAN assign exercises directly to specific calendar dates — this is exactly what this action is for. Do NOT tell the coach this is impossible or that they need to use the hierarchy manually.
+  Always include "sectionName" on every entry — the system will place the exercise in an existing section with that name or create it. If the coach has not specified a section name, ask them before applying.
   Use ONLY exerciseIds and methodIds listed under "Available exercises" in the wizard context. dayDate must be YYYY-MM-DD and must exactly match a date from the training schedule in context. sessionIndex is 0-based (0 = first session of the day). Set "replace":true to clear the existing exercise distribution for the entire current mesocycle before adding. Do NOT invent dates — use only dates from the training schedule provided in context.
 - rename_session: {"type":"rename_session","dayDate":"YYYY-MM-DD","sessionIndex":0,"newName":"<new session name>"}
   Renames a session. Use the current session name visible in the training schedule context ("session X \"CurrentName\"") to confirm you are targeting the right one. sessionIndex is 0-based.
