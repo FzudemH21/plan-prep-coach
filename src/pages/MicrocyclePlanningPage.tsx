@@ -76,7 +76,7 @@ export default function MicrocyclePlanningPage() {
   const { saveCurrentSession } = useTrainingPrograms();
   const { retrieve: ragRetrieve } = useRAGRetrieval();
   const [ragContext, setRagContext] = useState('');
-  const globalAIContext = useGlobalAIContext();
+  const globalAIContext = useGlobalAIContext(currentStep === 2);
   const { coachMemoryContext } = useCoachMemory({ currentMethods: macrocycleData?.selectedMethods ?? [] });
   const [aiOpenTrigger, setAiOpenTrigger] = useState(0);
   const [focusedSessionCtx, setFocusedSessionCtx] = useState<FocusedSessionContext | undefined>(undefined);

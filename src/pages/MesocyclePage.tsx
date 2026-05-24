@@ -176,7 +176,7 @@ export default function MesocyclePage() {
   const { libraries: exerciseLibraries } = useCustomLibraries();
   const { retrieve: ragRetrieve } = useRAGRetrieval();
   const [ragContext, setRagContext] = useState('');
-  const globalAIContext = useGlobalAIContext();
+  const globalAIContext = useGlobalAIContext(currentStep === 5);
   const { coachMemoryContext } = useCoachMemory({ currentMethods: macrocycleData?.selectedMethods ?? [] });
   const mpTableRef = React.useRef<MicrocyclePlanningTableHandle>(null);
   const [exerciseCellData, setExerciseCellData] = useState<Record<string, import('@/types/microcycle-planning').CellData>>({});
