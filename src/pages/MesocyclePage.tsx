@@ -2617,16 +2617,22 @@ export default function MesocyclePage() {
   }, [loadTemplateDialog.methodName, mesocycles, toolboxData.entries, updateParameterValue, toast]);
 
   /** AI action: apply a saved programming template by id to a method */
-  const handleAIApplyTemplate = useCallback((templateId: string, methodName: string) => {
+  const handleAIApplyTemplate = useCallback((templateId: string, methodName: string, mesocycleName?: string) => {
     const template = templates.find(t => t.id === templateId);
     if (!template) {
       toast({ title: 'Template not found', description: `No template with id "${templateId}" was found.`, variant: 'destructive' });
       return;
     }
 
-    // Flat ordered list of (mesocycleId, microcycleIndex) pairs
+    // Resolve optional mesocycle target
+    const targetMeso = mesocycleName
+      ? mesocycles.find((m, i) => m.name === mesocycleName || `Mesocycle ${i + 1}` === mesocycleName)
+      : null;
+
+    // Flat ordered list of (mesocycleId, microcycleIndex) pairs, filtered to target if provided
     const flatMicrocycles: Array<{ mesocycleId: string; microcycleIndex: number }> = [];
     mesocycles.forEach(meso => {
+      if (targetMeso && meso.id !== targetMeso.id) return;
       (meso.microcycles || []).forEach((_, i) => {
         flatMicrocycles.push({ mesocycleId: meso.id, microcycleIndex: i });
       });
@@ -2680,10 +2686,16 @@ export default function MesocyclePage() {
   }, [templates, mesocycles, toolboxData.entries, categorySplitStates, getMethodExerciseCategories, updateParameterValue, toast]);
 
   /** AI action: save current periodization values for a method as a new named template */
-  const handleAISaveAsTemplate = useCallback((methodName: string, templateName: string) => {
-    // Flat ordered list with labels
+  const handleAISaveAsTemplate = useCallback((methodName: string, templateName: string, mesocycleName?: string) => {
+    // Resolve optional mesocycle target
+    const targetMeso = mesocycleName
+      ? mesocycles.find((m, i) => m.name === mesocycleName || `Mesocycle ${i + 1}` === mesocycleName)
+      : null;
+
+    // Flat ordered list with labels, filtered to target mesocycle if provided
     const flatMicrocycles: Array<{ mesocycleId: string; microcycleIndex: number; label: string }> = [];
     mesocycles.forEach(meso => {
+      if (targetMeso && meso.id !== targetMeso.id) return;
       (meso.microcycles || []).forEach((mc, i) => {
         flatMicrocycles.push({
           mesocycleId: meso.id,
@@ -5542,11 +5554,11 @@ export default function MesocyclePage() {
         break;
       }
       case "apply_template": {
-        handleAIApplyTemplate(action.templateId, action.methodName);
+        handleAIApplyTemplate(action.templateId, action.methodName, action.mesocycleName);
         break;
       }
       case "save_as_template": {
-        handleAISaveAsTemplate(action.methodName, action.templateName);
+        handleAISaveAsTemplate(action.methodName, action.templateName, action.mesocycleName);
         break;
       }
       default:
