@@ -6,8 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { Upload, AlertCircle, ChevronLeft, Video, FileText } from 'lucide-react';
+import { Upload, AlertCircle, ChevronLeft, Video, FileText, Download } from 'lucide-react';
 import { LibraryColumn, CustomLibrary } from '@/hooks/useCustomLibraries';
+import { toCSV, downloadCSV } from '@/utils/csvUtils';
 
 // ---------------------------------------------------------------------------
 // CSV parsing (no external dependency)
@@ -556,20 +557,41 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
         <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4">
           {/* File upload area */}
           {!hasFile && !isExcelFile && (
-            <div
-              className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-10 text-center cursor-pointer hover:border-primary/50 transition-colors"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-              <p className="text-sm font-medium mb-1">Click to upload a CSV file</p>
-              <p className="text-xs text-muted-foreground">Excel files (.xlsx, .xls) require conversion to CSV first</p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                className="hidden"
-                onChange={handleFileChange}
-              />
+            <div className="space-y-3">
+              <div
+                className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-10 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+                <p className="text-sm font-medium mb-1">Click to upload a CSV file</p>
+                <p className="text-xs text-muted-foreground">Excel files (.xlsx, .xls) require conversion to CSV first</p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </div>
+              {library.columns.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-2"
+                  onClick={() => {
+                    const headers = library.columns.map(c => c.name);
+                    const example = library.columns.map(c =>
+                      c.role === 'video' ? 'https://youtube.com/...' :
+                      c.role === 'description' ? 'Exercise description...' :
+                      c.type === 'select' && c.options?.length ? c.options[0] : 'Example value'
+                    );
+                    downloadCSV(`${library.name}-sample.csv`, toCSV(headers, [example]));
+                  }}
+                >
+                  <Download className="h-4 w-4" />
+                  Download sample CSV
+                </Button>
+              )}
             </div>
           )}
 

@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Edit2, MoreHorizontal, Filter, RotateCcw, FileText, Upload, GripVertical, Recycle } from 'lucide-react';
+import { Plus, Trash2, Edit2, MoreHorizontal, Filter, RotateCcw, FileText, Upload, Download, GripVertical, Recycle } from 'lucide-react';
+import { toCSV, downloadCSV } from '@/utils/csvUtils';
 import { useCustomLibraries, CustomLibrary, CustomExercise, LibraryColumn, BulkImportPayload } from '@/hooks/useCustomLibraries';
 import type { Circuit } from '@/contexts/CustomLibrariesContext';
 import { CircuitBuilderDialog } from './CircuitBuilderDialog';
@@ -170,6 +171,20 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
       title: "Import complete",
       description: `${exercises.length} exercise${exercises.length !== 1 ? 's' : ''} imported successfully${newColumns.length > 0 ? ` (${newColumns.length} new column${newColumns.length !== 1 ? 's' : ''} created)` : ''}.`,
     });
+  };
+
+  const handleExportCSV = () => {
+    const cols = safeLibrary.columns;
+    const headers = cols.map(c => c.name);
+    const rows = safeLibrary.exercises.map(ex =>
+      cols.map(col => {
+        if (col.role === 'video') return ex.videoUrl ?? '';
+        if (col.role === 'description') return ex.description ?? '';
+        return String(ex.data?.[col.id] ?? '');
+      })
+    );
+    downloadCSV(`${safeLibrary.name}.csv`, toCSV(headers, rows));
+    toast({ title: 'Exported', description: `${safeLibrary.exercises.length} exercises saved as CSV.` });
   };
 
   const handleCellEdit = (exerciseId: string, columnId: string, value: string) => {
@@ -578,6 +593,10 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
             <Button onClick={() => setIsBulkImportOpen(true)} variant="outline" size="sm">
               <Upload className="h-4 w-4 mr-2" />
               Import CSV
+            </Button>
+            <Button onClick={handleExportCSV} variant="outline" size="sm" disabled={safeLibrary.exercises.length === 0}>
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
             </Button>
           </div>
           
