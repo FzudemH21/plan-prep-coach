@@ -37,6 +37,14 @@ import { useToast } from '@/hooks/use-toast';
 import { ParameterV2, ParameterInteraction, ParameterMethodV2, PARAMETER_CATEGORIES, InteractionDirection, InteractionStrength } from '@/types/parametersV2';
 import { AddParameterDialogV2 } from '@/components/goals/AddParameterDialogV2';
 import { EditParameterDialogV2 } from '@/components/goals/EditParameterDialogV2';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { toCSV, downloadCSV } from '@/utils/csvUtils';
 
 type SortColumn = 'category' | 'parameter';
 type SortDirection = 'asc' | 'desc';
@@ -231,6 +239,19 @@ export default function AthleticismDatabaseV2() {
   const [editingParameter, setEditingParameter] = useState<ParameterV2 | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<ParameterV2 | null>(null);
 
+  // CSV import preview state
+  type ImportRow = {
+    name: string;
+    category: string;
+    unit: string;
+    sports: string[];
+    status: 'new' | 'conflict' | 'unchanged';
+    overwrite: boolean;
+    existing?: ParameterV2;
+  };
+  type ImportPreviewState = { rows: ImportRow[] };
+  const [importPreview, setImportPreview] = useState<ImportPreviewState | null>(null);
+
   // Get unique categories from parameters
   const uniqueCategories = useMemo(() => {
     const categories = new Set<string>();
@@ -348,40 +369,107 @@ export default function AthleticismDatabaseV2() {
     }
   };
 
-  const handleExport = () => {
-    const exportData = JSON.stringify(data, null, 2);
-    const blob = new Blob([exportData], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'parameters-database-v2.json';
-    a.click();
-    URL.revokeObjectURL(url);
-    toast({ title: 'Export complete', description: 'Database exported as JSON.' });
+  const handleExportCSV = () => {
+    const headers = ['Name', 'Category', 'Unit', 'Applicable Sports'];
+    const rows = (data?.parameters ?? []).map((p) => [
+      p.name,
+      p.category ?? '',
+      p.unit ?? '',
+      (p.applicableSports ?? []).join(';'),
+    ]);
+    downloadCSV('parameters.csv', toCSV(headers, rows));
+    toast({ title: 'Export complete', description: `Exported ${rows.length} parameters as CSV.` });
   };
 
-  const handleImport = () => {
+  function parseSimpleCSV(text: string): { headers: string[]; rows: string[][] } {
+    const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(l => l.trim());
+    if (lines.length === 0) return { headers: [], rows: [] };
+    const parse = (line: string) => {
+      const result: string[] = []; let cur = ''; let inQ = false;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') { if (inQ && line[i+1] === '"') { cur += '"'; i++; } else inQ = !inQ; }
+        else if (c === ',' && !inQ) { result.push(cur.trim()); cur = ''; }
+        else cur += c;
+      }
+      result.push(cur.trim());
+      return result;
+    };
+    return { headers: parse(lines[0]), rows: lines.slice(1).map(parse).filter(r => r.some(c => c.trim())) };
+  }
+
+  const handleImportCSV = () => {
+    // Create a hidden file input and trigger it
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.json';
+    input.accept = '.csv';
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        const text = await file.text();
-        try {
-          const imported = JSON.parse(text);
-          if (imported.parameters && imported.interactions && imported.parameterMethods) {
-            localStorage.setItem('parameters-database-v2', text);
-            window.location.reload();
-          } else {
-            throw new Error('Invalid format');
-          }
-        } catch {
-          toast({ title: 'Import failed', description: 'Invalid file format.', variant: 'destructive' });
-        }
+      if (!file) return;
+      const text = await file.text();
+      const { headers, rows } = parseSimpleCSV(text);
+      if (headers.length === 0) {
+        toast({ title: 'Import failed', description: 'Could not parse CSV file.', variant: 'destructive' });
+        return;
       }
+      // Find column indices (case-insensitive)
+      const hi = (name: string) => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
+      const nameIdx = hi('Name');
+      const categoryIdx = hi('Category');
+      const unitIdx = hi('Unit');
+      const sportsIdx = hi('Applicable Sports');
+      if (nameIdx === -1) {
+        toast({ title: 'Import failed', description: 'CSV must have a "Name" column.', variant: 'destructive' });
+        return;
+      }
+      const params = data?.parameters ?? [];
+      const previewRows: ImportRow[] = [];
+      for (const row of rows) {
+        const name = row[nameIdx]?.trim() ?? '';
+        if (!name) continue;
+        const category = categoryIdx !== -1 ? (row[categoryIdx]?.trim() ?? '') : '';
+        const unit = unitIdx !== -1 ? (row[unitIdx]?.trim() ?? '') : '';
+        const sportsRaw = sportsIdx !== -1 ? (row[sportsIdx]?.trim() ?? '') : '';
+        const sports = sportsRaw ? sportsRaw.split(';').map(s => s.trim()).filter(Boolean) : [];
+        const existing = params.find(p => p.name.toLowerCase() === name.toLowerCase());
+        let status: 'new' | 'conflict' | 'unchanged';
+        let overwrite = false;
+        if (!existing) {
+          status = 'new';
+          overwrite = true;
+        } else {
+          const sameCategory = (existing.category ?? '') === category;
+          const sameUnit = (existing.unit ?? '') === unit;
+          const sameSports = JSON.stringify((existing.applicableSports ?? []).slice().sort()) === JSON.stringify(sports.slice().sort());
+          if (sameCategory && sameUnit && sameSports) {
+            status = 'unchanged';
+            overwrite = false;
+          } else {
+            status = 'conflict';
+            overwrite = false;
+          }
+        }
+        previewRows.push({ name, category, unit, sports, status, overwrite, existing });
+      }
+      setImportPreview({ rows: previewRows });
     };
     input.click();
+  };
+
+  const handleImportConfirm = async () => {
+    if (!importPreview) return;
+    let count = 0;
+    for (const row of importPreview.rows) {
+      if (row.status === 'new') {
+        await addParameter({ name: row.name, category: row.category || undefined, unit: row.unit || undefined, applicableSports: row.sports.length ? row.sports : undefined });
+        count++;
+      } else if (row.status === 'conflict' && row.overwrite && row.existing) {
+        await updateParameter(row.existing.id, { name: row.name, category: row.category || undefined, unit: row.unit || undefined, applicableSports: row.sports.length ? row.sports : undefined });
+        count++;
+      }
+    }
+    toast({ title: 'Import complete', description: `Imported ${count} parameters.` });
+    setImportPreview(null);
   };
 
   const getSortIcon = (column: SortColumn) => {
@@ -421,11 +509,11 @@ export default function AthleticismDatabaseV2() {
       <div className="container mx-auto px-4 py-4">
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-end">
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleImport}>
+            <Button variant="outline" size="sm" onClick={handleImportCSV}>
               <Upload className="h-4 w-4 mr-1" />
               Import
             </Button>
-            <Button variant="outline" size="sm" onClick={handleExport}>
+            <Button variant="outline" size="sm" onClick={handleExportCSV}>
               <Download className="h-4 w-4 mr-1" />
               Export
             </Button>
@@ -686,6 +774,100 @@ export default function AthleticismDatabaseV2() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* CSV Import Preview Dialog */}
+      {importPreview && (
+        <Dialog open={true} onOpenChange={(open) => { if (!open) setImportPreview(null); }}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Import Parameters — Preview</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="flex items-center gap-4 text-sm">
+                <span className="text-green-600 font-medium">
+                  {importPreview.rows.filter(r => r.status === 'new').length} new
+                </span>
+                <span className="text-yellow-600 font-medium">
+                  {importPreview.rows.filter(r => r.status === 'conflict').length} conflicts
+                </span>
+                <span className="text-muted-foreground">
+                  {importPreview.rows.filter(r => r.status === 'unchanged').length} unchanged
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto text-xs"
+                  onClick={() => {
+                    const sampleHeaders = ['Name', 'Category', 'Unit', 'Applicable Sports'];
+                    const sampleRows = [['Sprint 30m', 'speed', 's', 'Soccer;Athletics']];
+                    downloadCSV('parameters-sample.csv', toCSV(sampleHeaders, sampleRows));
+                  }}
+                >
+                  <Download className="h-3 w-3 mr-1" />
+                  Download sample CSV
+                </Button>
+              </div>
+              <ScrollArea className="h-72 border rounded-md">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Unit</TableHead>
+                      <TableHead>Applicable Sports</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {importPreview.rows.map((row, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell className="font-medium text-sm">{row.name}</TableCell>
+                        <TableCell className="text-sm">{row.category || '—'}</TableCell>
+                        <TableCell className="text-sm">{row.unit || '—'}</TableCell>
+                        <TableCell className="text-sm">{row.sports.join(', ') || '—'}</TableCell>
+                        <TableCell>
+                          {row.status === 'new' && (
+                            <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">New</Badge>
+                          )}
+                          {row.status === 'unchanged' && (
+                            <Badge variant="secondary" className="text-xs">Unchanged</Badge>
+                          )}
+                          {row.status === 'conflict' && (
+                            <div className="flex items-center gap-2">
+                              <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 text-xs">Conflict</Badge>
+                              <label className="flex items-center gap-1 text-xs cursor-pointer">
+                                <Checkbox
+                                  checked={row.overwrite}
+                                  onCheckedChange={(checked) => {
+                                    setImportPreview(prev => {
+                                      if (!prev) return prev;
+                                      const rows = prev.rows.map((r, i) =>
+                                        i === idx ? { ...r, overwrite: !!checked } : r
+                                      );
+                                      return { ...prev, rows };
+                                    });
+                                  }}
+                                />
+                                Overwrite
+                              </label>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setImportPreview(null)}>Cancel</Button>
+              <Button onClick={handleImportConfirm}>
+                Import {importPreview.rows.filter(r => r.status === 'new' || (r.status === 'conflict' && r.overwrite)).length} parameters
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* AI Assistant */}
       <WizardAIAssistant
