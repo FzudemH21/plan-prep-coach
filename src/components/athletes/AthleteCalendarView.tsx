@@ -656,7 +656,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             : program.trainingDays;
           const source = relevantDays.length > 0 ? relevantDays : program.trainingDays;
           const validDates = source
-            .map((d: any) => new Date(d.date))
+            .map((d: any) => new Date(d.date + 'T12:00:00'))
             .filter((d: Date) => !isNaN(d.getTime()));
           if (validDates.length > 0) {
             originalStartDate = new Date(Math.min(...validDates.map(d => d.getTime())));
@@ -666,7 +666,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         // Try exerciseDistribution (no mesocycleId on exercises; validDates filter below handles selection)
         if (!originalStartDate && program.exerciseDistribution && program.exerciseDistribution.length > 0) {
           const validDates = program.exerciseDistribution
-            .map((ex: any) => new Date(ex.dayDate))
+            .map((ex: any) => new Date(ex.dayDate + 'T12:00:00'))
             .filter((d: Date) => !isNaN(d.getTime()));
           if (validDates.length > 0) {
             originalStartDate = new Date(Math.min(...validDates.map(d => d.getTime())));
@@ -680,7 +680,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             : program.dailyIntensityData;
           const source = relevantIntensity.length > 0 ? relevantIntensity : program.dailyIntensityData;
           const validDates = source
-            .map((di: any) => new Date(di.date))
+            .map((di: any) => new Date(di.date + 'T12:00:00'))
             .filter((d: Date) => !isNaN(d.getTime()));
           if (validDates.length > 0) {
             originalStartDate = new Date(Math.min(...validDates.map(d => d.getTime())));
@@ -723,15 +723,6 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         ));
 
         const dayOffset = (normalizedNewStart.getTime() - normalizedOriginalStart.getTime()) / 86400000;
-        console.log('[ASSIGN DATE DEBUG]', {
-          'program.trainingDays[0]?.date': program.trainingDays?.[0]?.date,
-          'program.dailyIntensityData[0]?.date': program.dailyIntensityData?.[0]?.date,
-          'assignment.startDate': assignment.startDate,
-          originalStartDate: originalStartDate.toISOString(),
-          normalizedOriginalStart: normalizedOriginalStart.toISOString(),
-          normalizedNewStart: normalizedNewStart.toISOString(),
-          dayOffset,
-        });
 
         try {
           // Shift all program data to match the new start date using normalized dates
@@ -1037,6 +1028,25 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
               finalDaySplitStates,
               filteredDailyIntensity,
             );
+            // Update the assignment's date range so isWithinInterval renders the correct cells
+            if (selectedAssignmentId) {
+              const existingAssignment = assignments.find(a => a.id === selectedAssignmentId);
+              const newStartIso = assignment.startDate;
+              const allDates = finalTrainingDays.map((td: any) => td.date).sort();
+              const newEndDate = allDates.length > 0
+                ? new Date(allDates[allDates.length - 1] + 'T12:00:00').toISOString()
+                : assignment.startDate;
+              const updatedStart = existingAssignment
+                ? (new Date(existingAssignment.startDate) < new Date(newStartIso) ? existingAssignment.startDate : newStartIso)
+                : newStartIso;
+              const updatedEnd = existingAssignment && existingAssignment.endDate
+                ? (new Date(existingAssignment.endDate) > new Date(newEndDate) ? existingAssignment.endDate : newEndDate)
+                : newEndDate;
+              await athleteData.updateCalendarAssignment(selectedAssignmentId, {
+                startDate: updatedStart,
+                endDate: updatedEnd,
+              });
+            }
             transferTestsEvents();
           } else if (newAssignment) {
             // CREATE PATH: save to new assignment key and switch to it
