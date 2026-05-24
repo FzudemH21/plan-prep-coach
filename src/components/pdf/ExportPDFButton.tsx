@@ -28,6 +28,7 @@ import {
 import { TrainingProgram } from "@/hooks/useTrainingPrograms";
 import { useCoachProfile } from "@/hooks/useCoachProfile";
 import { useAthletes } from "@/hooks/useAthletes";
+import { useParametersDataV2 } from "@/hooks/useParametersDataV2";
 import type { PlanNarrative, NarrativeOptions } from "@/lib/generatePlanNarrative";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -100,6 +101,20 @@ export function ExportPDFButton({
 }: ExportPDFButtonProps) {
   const { profile } = useCoachProfile();
   const { athletes } = useAthletes();
+  const { data: parametersData } = useParametersDataV2();
+
+  // Build methodId → {rationale, evidence} lookup from the parameter database
+  const methodRationale = useMemo(() => {
+    const map: Record<string, { rationale?: string; evidence?: string }> = {};
+    for (const pm of parametersData.parameterMethods) {
+      if (pm.methodId && (pm.rationale || pm.evidence)) {
+        if (!map[pm.methodId]) {
+          map[pm.methodId] = { rationale: pm.rationale, evidence: pm.evidence };
+        }
+      }
+    }
+    return map;
+  }, [parametersData.parameterMethods]);
   const isControlled = controlledOpen !== undefined;
   const [internalOpen, setInternalOpen] = useState(false);
   const open = isControlled ? controlledOpen! : internalOpen;
@@ -212,6 +227,7 @@ export function ExportPDFButton({
           athleteDisplayName={athleteDisplayName}
           athleteSport={athlete?.sport}
           athleteTeam={athlete?.team}
+          methodRationale={methodRationale}
         />
       );
       const blob = await pdf(doc).toBlob();

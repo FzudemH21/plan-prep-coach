@@ -740,6 +740,8 @@ interface TrainingPlanPDFProps {
   athleteDisplayName?: string | null;
   athleteSport?: string | null;
   athleteTeam?: string | null;
+  /** Parameter DB rationale/evidence keyed by methodId */
+  methodRationale?: Record<string, { rationale?: string; evidence?: string }>;
 }
 
 export function TrainingPlanPDF({
@@ -752,6 +754,7 @@ export function TrainingPlanPDF({
   athleteDisplayName,
   athleteSport,
   athleteTeam,
+  methodRationale = {},
 }: TrainingPlanPDFProps) {
   // ── Brand ───────────────────────────────────────────────────────────────────
   const accent       = branding?.primaryColor ?? DEFAULT_ACCENT;
@@ -796,13 +799,21 @@ export function TrainingPlanPDF({
   const goals = smartGoals.map((g) => g.description ?? "").filter(Boolean);
 
   const methods: Array<{ name: string; rationale?: string; evidence?: string }> = [
-    ...(macro?.selectedMethods ?? []).map((name: string) => ({ name })),
+    ...(macro?.selectedMethods ?? []).map((name: string) => ({
+      name,
+      rationale: methodRationale[name]?.rationale,
+      evidence: methodRationale[name]?.evidence,
+    })),
     ...((macro?.manuallyAddedMethods ?? []).map(
-      (m: { methodId?: string; name?: string; method?: string; rationale?: string; evidence?: string }) => ({
-        name: m.methodId ?? m.name ?? m.method ?? "",
-        rationale: m.rationale,
-        evidence: m.evidence,
-      }),
+      (m: { methodId?: string; name?: string; method?: string; rationale?: string; evidence?: string }) => {
+        const methodName = m.methodId ?? m.name ?? m.method ?? "";
+        const dbEntry = methodRationale[methodName] ?? {};
+        return {
+          name: methodName,
+          rationale: m.rationale || dbEntry.rationale,
+          evidence: m.evidence || dbEntry.evidence,
+        };
+      },
     )),
   ].filter((m) => Boolean(m.name));
 
