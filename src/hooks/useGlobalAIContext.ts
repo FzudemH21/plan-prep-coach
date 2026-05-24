@@ -15,7 +15,7 @@ import { useAthletes } from '@/hooks/useAthletes';
 import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import { getAthleteDisplayName } from '@/types/athlete';
 
-export function useGlobalAIContext(): string {
+export function useGlobalAIContext(includeExerciseDetails = false): string {
   const { data: toolboxData } = useToolboxData();
   const { athletes } = useAthletes();
   const { libraries } = useCustomLibraries();
@@ -72,6 +72,11 @@ export function useGlobalAIContext(): string {
     // ── Exercise Libraries ───────────────────────────────────────────────────
     if (libraries.length > 0) {
       const libSections = libraries.map(lib => {
+        if (!includeExerciseDetails) {
+          // Summary only — keeps tokens low on steps that don't need exercise IDs
+          const total = lib.exercises.length;
+          return `Library: "${lib.name}" (${total} exercise${total !== 1 ? 's' : ''})`;
+        }
         const firstColId = lib.columns[0]?.id ?? 'exercise';
         const categoryCol = lib.columns.find(c =>
           c.name.toLowerCase().includes('categor') && !c.role
@@ -89,5 +94,5 @@ export function useGlobalAIContext(): string {
     }
 
     return sections.join('\n\n');
-  }, [toolboxData, athletes, libraries]);
+  }, [toolboxData, athletes, libraries, includeExerciseDetails]);
 }
