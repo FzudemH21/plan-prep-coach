@@ -44,7 +44,7 @@ Claude Chat (browser) is my sparring partner for planning, discussion, and promp
 | 🟠 Later | Planned vs. Real comparison (volume, intensity, load: planned vs. actually performed — requires athlete app session data) | ⬜ Open – placeholder UI exists in Plan Review dialog |
 | 🟠 Later | AI Coaching Dialog in Plan Review (AI reflects on outcome data, identifies patterns, suggests next-cycle adjustments — powered by plan_memory + outcome annotation) | ⬜ Open – placeholder UI exists in Plan Review dialog |
 | 🟠 Later | Goal Management + test notifications | ⬜ Open |
-| 🔵 Future | Athlete App (mobile, separate) | ⬜ Open |
+| 🔵 Future | **Athlete App** — see full breakdown below | ⬜ In Planning |
 | 🔵 Future | Athlete Management System (standalone area: athlete profiles, progress tracking, communication, wearable data. Incl. AI analysis: correlations between completed training and athlete progress — coach can ask how effective a program was, which methods had the greatest effect, etc. Requires compliance tracking, test results, and Supabase.) | ⬜ Open |
 | 🔵 Future | AI knowledge base + coach philosophy combined (AI has its own sports science knowledge base, coach profile supplements it, AI flags deviations from scientific consensus — learning effect for less experienced coaches) | ⬜ Open |
 | 🔵 Future | Wearable & app integrations (Oura, Whoop, Apple Fitness, VBT) | ⬜ Open |
@@ -53,6 +53,52 @@ Claude Chat (browser) is my sparring partner for planning, discussion, and promp
 | 🔵 Future | Booking system (athletes book with coach) + coach calendar | ⬜ Open |
 | 🔵 Future | Payment system Coach↔Athlete (marketplace model) | ⬜ Open |
 | 🔵 Future | RAG Phase 2 — AI knowledge base with sports science consensus layer: AI flags deviations from scientific consensus, learning effect for less experienced coaches. Builds on RAG Phase 1 (🟡 Soon). | ⬜ Open |
+
+---
+
+## Athlete App — Full Feature Breakdown
+
+> **Architecture:** PWA first (same React/Vite codebase, mobile-optimized routes), Capacitor wrapper later for App Store distribution.
+> **Intensity scales:** The coach wizard keeps the 8-level scale (off → extremely-hard) for planning. The athlete uses the **Borg CR10 scale (0–10)** for post-session RPE self-assessment. These coexist: planned intensity (8-level, from wizard) vs. perceived intensity (Borg CR10, from athlete). Eventually the wizard may display Borg CR10 as a reference label alongside the 8-level scale, but the planning logic does not change.
+
+### Navigation (4 bottom tabs)
+| Tab | Description |
+|-----|-------------|
+| Today | Home screen — greeting, today's session card, daily intensity, missed session banner |
+| Plan | Assigned plan overview — mesocycle/week structure, week calendar strip |
+| Messages | Direct text chat with coach (Phase 1: text only; Phase 2: photo/video) |
+| Profile | Athlete stats, parameter progress charts, activity history |
+
+### Phase 1 — Core (MVP)
+
+| Priority | Feature | Status |
+|----------|---------|--------|
+| P0 | **Invite flow** — coach sends invite link → athlete opens app → language selection → name/birthday/photo onboarding | ⬜ Open |
+| P0 | **Today tab** — personalized greeting, today's session card with daily intensity (8-level color-coded), completion ring, missed session banner | ⬜ Open |
+| P0 | **Session flow** — preview → section navigation (swipe, dot indicators) → exercise cards with planned values (from periodization table) → set logging (actual weight/reps) → rest timer | ⬜ Open |
+| P0 | **Post-session** — completion screen, Borg CR10 rating (0–10), optional comment, summary (duration, exercises logged) | ⬜ Open |
+| P0 | **Planned vs. actual storage** — athlete's logged sets saved to Supabase, visible to coach in Plan Review dialog (feeds Adherence + Planned vs. Real placeholders) | ⬜ Open |
+| P1 | **Plan tab** — shows assigned mesocycle name, current week/microcycle, week calendar strip with session dots | ⬜ Open |
+| P1 | **Activity history** — week strip calendar + timeline of past days, completed session cards (session name, planned vs perceived intensity, duration) | ⬜ Open |
+| P1 | **Messages** — text chat with coach, timestamps, read receipts | ⬜ Open |
+| P1 | **Profile tab** — avatar (initials fallback), settings, sessions completed + streak stats, parameter progress charts (from Parameter Database — Squat 1RM, Sprint 30m, VO2max etc.) | ⬜ Open |
+
+### Phase 2 — Enrichment
+
+| Priority | Feature | Status |
+|----------|---------|--------|
+| P2 | Photo/video in messages | ⬜ Open |
+| P2 | Exercise video playback in session (link to exercise database video) | ⬜ Open |
+| P2 | In-session exercise swap (alternative exercise dropdown) | ⬜ Open |
+| P2 | Tests & events visible in Plan tab calendar (synced from plan assignment) | ⬜ Open |
+| P2 | Progress photos in profile | ⬜ Open |
+| P3 | Language selection on first open (German / English minimum) | ⬜ Open |
+| P3 | Push notifications (session reminders, coach messages) | ⬜ Open |
+
+### Data Flow (Athlete App → Coach App)
+- Athlete logs sets → stored in Supabase (`athlete_session_logs` table)
+- Coach sees adherence rate + planned vs. actual comparison in Plan Review dialog (already has placeholder UI)
+- Borg CR10 post-session rating → stored alongside planned daily intensity → coach can compare planned load vs. perceived load across entire plan
 
 ---
 
