@@ -721,7 +721,18 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           assignmentDate.getMonth(),
           assignmentDate.getDate()
         ));
-        
+
+        const dayOffset = (normalizedNewStart.getTime() - normalizedOriginalStart.getTime()) / 86400000;
+        console.log('[ASSIGN DATE DEBUG]', {
+          'program.trainingDays[0]?.date': program.trainingDays?.[0]?.date,
+          'program.dailyIntensityData[0]?.date': program.dailyIntensityData?.[0]?.date,
+          'assignment.startDate': assignment.startDate,
+          originalStartDate: originalStartDate.toISOString(),
+          normalizedOriginalStart: normalizedOriginalStart.toISOString(),
+          normalizedNewStart: normalizedNewStart.toISOString(),
+          dayOffset,
+        });
+
         try {
           // Shift all program data to match the new start date using normalized dates
           const shiftedExercises = program.exerciseDistribution 
