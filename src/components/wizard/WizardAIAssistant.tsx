@@ -86,6 +86,8 @@ export type ApplySuggestion =
   | { type: "set_session_intensity"; dayDate: string; sessionIndex: number; intensity: string }
   /** MicrocyclePlanningPage Steps 2 & 3 — override sets/reps/intensity for a method-session slot (local override, does not write back to periodization table) */
   | { type: "set_exercise_params"; dayDate: string; sessionIndex: number; methodId: string; params: Record<string, string | number> }
+  /** Athlete Calendar & MicrocyclePlanningPage — per-exercise parameter override targeting a specific exercise by ID across one or many dates */
+  | { type: "set_exercise_param_override"; entries: Array<{ exerciseId: string; exerciseName: string; dayDate: string; sessionIndex: number; params: Record<string, string | number> }> }
   /** MicrocyclePlanningPage Steps 2 & 3 — copy all sessions/exercises/sections from one microcycle (by name) to another */
   | { type: "copy_week"; sourceMicrocycleName: string; targetMicrocycleName: string }
   /** MicrocyclePlanningPage Steps 2 & 3 — clear all exercises, sections, and sessions from a microcycle (by name) */
@@ -258,6 +260,8 @@ Available types and their fields:
   Changes the intensity of a single session (0-based index). For single-session days this also syncs the day intensity. Valid intensity values same as above.
 - set_exercise_params: {"type":"set_exercise_params","dayDate":"YYYY-MM-DD","sessionIndex":0,"methodId":"<exact method name>","params":{"Sets":4,"Reps":"3-5","Intensity":"80-85% 1RM"}}
   Overrides training parameters (sets, reps, intensity, etc.) for a method-session slot. This is a local override — it does NOT write back to the periodization table. methodId must match the method name as listed in the training calendar context. Use the exact parameter names as they appear in the periodization table.
+- set_exercise_param_override: {"type":"set_exercise_param_override","entries":[{"exerciseId":"<exact id from exercise distribution>","exerciseName":"<name>","dayDate":"YYYY-MM-DD","sessionIndex":0,"params":{"Intensity":"80% 1RM"}},{"exerciseId":"<exact id>","exerciseName":"<name>","dayDate":"YYYY-MM-DD","sessionIndex":0,"params":{"Intensity":"85% 1RM"}}]}
+  Sets per-exercise parameter overrides for a SPECIFIC exercise by ID, targeted to one or many dates/sessions. Unlike set_exercise_params (which applies to ALL exercises of a method-session slot), this targets ONE individual exercise. Use this when the coach wants to change parameters for a specific exercise (e.g. "increase RDL intensity by 5% each week for 4 weeks", "set RDL to 80% 1RM on May 23rd"). Use exercise IDs and dates from the Exercise Distribution section of the athlete/plan context. Multiple entries in one action for bulk/week-range changes.
 - copy_week: {"type":"copy_week","sourceMicrocycleName":"<exact microcycle name>","targetMicrocycleName":"<exact microcycle name>"}
   Copies ALL sessions, exercises, sections, and supersets from one microcycle to another. Target week's existing content is replaced. Use exact microcycle names from context. Confirm with the coach before emitting — destructive to target week.
 - clear_week: {"type":"clear_week","microcycleName":"<exact microcycle name>"}
@@ -533,6 +537,11 @@ function getSuggestionPreview(action: ApplySuggestion): string {
       return `Set ${action.dayDate} session ${action.sessionIndex + 1} intensity → ${action.intensity}`;
     case "set_exercise_params":
       return `Override params for [${action.methodId}] on ${action.dayDate} session ${action.sessionIndex + 1}: ${Object.entries(action.params).map(([k, v]) => `${k}=${v}`).join(', ')}`;
+    case "set_exercise_param_override": {
+      const names = [...new Set(action.entries.map(e => e.exerciseName))];
+      const dates = [...new Set(action.entries.map(e => e.dayDate))];
+      return `Override params for ${names.join(', ')} across ${dates.length} date${dates.length !== 1 ? 's' : ''}: ${Object.keys(action.entries[0]?.params ?? {}).join(', ')}`;
+    }
     case "copy_week":
       return `Copy week "${action.sourceMicrocycleName}" → "${action.targetMicrocycleName}" (replaces target content)`;
     case "clear_week":

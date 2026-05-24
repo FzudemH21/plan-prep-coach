@@ -111,6 +111,8 @@ export interface ExerciseDistribution {
   circuitRestBetweenRounds?: string;
   circuitRestBetweenExercises?: string;
   circuitComments?: string;
+  // Per-exercise parameter overrides set via AI (take precedence over method-level periodization params)
+  parameterOverrides?: Record<string, string | number>;
 }
 
 export interface SessionSection {
