@@ -83,6 +83,8 @@ interface CustomLibrariesContextType {
   deleteLibrary: (libraryId: string) => void;
   addExerciseToLibrary: (libraryId: string, exercise: Omit<CustomExercise, 'id'>) => CustomExercise;
   updateExerciseInLibrary: (libraryId: string, exerciseId: string, updates: Partial<CustomExercise>) => void;
+  /** Apply multiple exercise updates in a single save — avoids stale-closure overwrite when batching many updates at once. */
+  batchUpdateExercisesInLibrary: (libraryId: string, updates: Array<{ exerciseId: string } & Partial<CustomExercise>>) => void;
   deleteExerciseFromLibrary: (libraryId: string, exerciseId: string) => void;
   addColumnToLibrary: (libraryId: string, column: Omit<LibraryColumn, 'id'>) => void;
   updateColumnInLibrary: (libraryId: string, columnId: string, updates: Partial<LibraryColumn>) => void;
@@ -194,6 +196,28 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
           ? {
               ...lib,
               exercises: lib.exercises.map(ex => ex.id === exerciseId ? { ...ex, ...updates } : ex),
+              lastUpdated: new Date().toISOString(),
+            }
+          : lib
+      ),
+    });
+  }, [data, save]);
+
+  const batchUpdateExercisesInLibrary = useCallback((
+    libraryId: string,
+    updates: Array<{ exerciseId: string } & Partial<CustomExercise>>,
+  ) => {
+    const updateMap = new Map(updates.map(u => [String(u.exerciseId), u]));
+    save({
+      ...data,
+      libraries: data.libraries.map(lib =>
+        lib.id === libraryId
+          ? {
+              ...lib,
+              exercises: lib.exercises.map(ex => {
+                const u = updateMap.get(String(ex.id));
+                return u ? { ...ex, ...u } : ex;
+              }),
               lastUpdated: new Date().toISOString(),
             }
           : lib
@@ -397,6 +421,7 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
     deleteLibrary,
     addExerciseToLibrary,
     updateExerciseInLibrary,
+    batchUpdateExercisesInLibrary,
     deleteExerciseFromLibrary,
     addColumnToLibrary,
     updateColumnInLibrary,
