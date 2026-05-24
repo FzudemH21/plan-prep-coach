@@ -46,7 +46,7 @@ export type ApplySuggestion =
   /** MesocyclePage Step 4 — fill periodization table (frequency/sets/reps/intensity per method × mesocycle × microcycle) */
   | { type: "set_periodization"; entries: Array<{ methodName: string; mesocycleName: string; microcycleIndex?: number; frequency?: number; sets?: number; reps?: string; intensity?: string; extraParams?: Record<string, string | number> }> }
   /** MesocyclePage Step 4 — apply a saved programming template to the periodization table for a method */
-  | { type: "apply_template"; templateId: string; methodName: string; mesocycleName?: string }
+  | { type: "apply_template"; templateId: string; templateName?: string; methodName: string; mesocycleName?: string }
   /** MesocyclePage Step 4 — save the current periodization table values for a method as a new named template */
   | { type: "save_as_template"; methodName: string; templateName: string; mesocycleName?: string }
   /** MicrocyclePlanningPage Step 1 — assign methods to days of the week */
@@ -228,7 +228,7 @@ Available types and their fields:
 - set_periodization: {"type":"set_periodization","entries":[{"methodName":"<exact name>","mesocycleName":"Mesocycle 1","microcycleIndex":1,"frequency":3,"sets":4,"reps":"3-5","intensity":"80-85% 1RM","extraParams":{"Organization":"Whole","Contrast":"No"}}]}
   microcycleIndex is 1-based (1 = first microcycle). Omit microcycleIndex to apply to ALL microcycles of that mesocycle. Only include the fields you want to set.
   ALL additional parameters listed in the context under each method (both qualitative/dropdown AND quantitative, e.g. rest durations) MUST be included in extraParams. Use the exact parameter name as the key. For qualitative/dropdown parameters, pick one of the listed options as the value. For quantitative parameters, provide a number (e.g. 90 for seconds). Do not skip any parameter listed in the context.
-- apply_template: {"type":"apply_template","templateId":"<exact template id from context>","methodName":"<exact method name>","mesocycleName":"Mesocycle 2"}
+- apply_template: {"type":"apply_template","templateId":"<exact template id from context>","templateName":"<human-readable template name from context>","methodName":"<exact method name>","mesocycleName":"Mesocycle 2"}
   Applies a saved programming template to the periodization table for the specified method. Use ONLY template ids listed in the "Available programming templates" section of the context. Only available at Step 4.
   "mesocycleName" is optional — include it to apply the template only to that mesocycle's microcycles (template columns map in order); omit it to apply across ALL mesocycles.
   SCOPE RULE: If the coach specifies a target mesocycle (e.g. "apply to Mesocycle 2"), always include mesocycleName. If they do not specify, ask which mesocycle(s) they want to apply to before generating the action — do not assume all.
@@ -609,7 +609,7 @@ function getSuggestionPreview(action: ApplySuggestion): string {
     case "library_delete_column":
       return `Delete column: "${action.columnName ?? action.columnId}"`;
     case "apply_template":
-      return `Apply template "${action.templateId}" to ${action.methodName}${action.mesocycleName ? ` (${action.mesocycleName} only)` : ''}`;
+      return `Apply template "${action.templateName ?? action.templateId}" to ${action.methodName}${action.mesocycleName ? ` (${action.mesocycleName} only)` : ''}`;
     case "save_as_template":
       return `Save ${action.mesocycleName ? `${action.mesocycleName}'s` : 'all'} values for ${action.methodName} as template "${action.templateName}"`;
   }
