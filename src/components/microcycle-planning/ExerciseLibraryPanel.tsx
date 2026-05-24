@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -44,7 +43,6 @@ export function ExerciseLibraryPanel({
   const [expandedMethods, setExpandedMethods] = useState<Set<string>>(new Set());
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
-  const [showAllocatedOnly, setShowAllocatedOnly] = useState(false);
 
   const toggle = (set: Set<string>, setFn: React.Dispatch<React.SetStateAction<Set<string>>>, key: string) => {
     const next = new Set(set);
@@ -81,20 +79,8 @@ export function ExerciseLibraryPanel({
       }, {} as typeof filtered);
     }
 
-    if (showAllocatedOnly) {
-      filtered = Object.entries(filtered).reduce((acc, [methodId, categories]) => {
-        const filteredCategories = Object.entries(categories).reduce((catAcc, [catName, exercises]) => {
-          const filteredExs = exercises.filter(ex => getExerciseAllocationCount(ex.exerciseId) > 0);
-          if (filteredExs.length > 0) catAcc[catName] = filteredExs;
-          return catAcc;
-        }, {} as Record<string, any[]>);
-        if (Object.keys(filteredCategories).length > 0) acc[methodId] = filteredCategories;
-        return acc;
-      }, {} as typeof filtered);
-    }
-
     return filtered;
-  }, [exercisesByMethod, searchQuery, showAllocatedOnly, exerciseDistribution]);
+  }, [exercisesByMethod, searchQuery]);
 
   // Group methods by top-level category (part before " - ")
   const groupedByTopCategory = useMemo(() => {
@@ -146,9 +132,20 @@ export function ExerciseLibraryPanel({
             <GripVertical className="h-3 w-3 text-muted-foreground flex-shrink-0" />
             <span className="flex-1 truncate">{exercise.exerciseName}</span>
             {count > 0 && (
-              <Badge className="ml-1 h-4 min-w-4 px-1 text-[10px] font-semibold bg-primary/15 text-primary border-0 hover:bg-primary/15">
-                {count}
-              </Badge>
+              <span className="flex items-center gap-0.5 ml-1 flex-shrink-0">
+                {Array.from({ length: Math.min(count, 5) }).map((_, i) => (
+                  <span
+                    key={i}
+                    className={cn(
+                      "inline-block rounded-full w-1.5 h-1.5",
+                      count === 1 && "bg-emerald-500",
+                      count === 2 && "bg-yellow-400",
+                      count === 3 && "bg-orange-400",
+                      count >= 4 && "bg-red-500"
+                    )}
+                  />
+                ))}
+              </span>
             )}
           </div>
         )}
@@ -169,14 +166,6 @@ export function ExerciseLibraryPanel({
             className="pl-8 h-9"
           />
         </div>
-        <Button
-          variant={showAllocatedOnly ? "default" : "outline"}
-          size="sm"
-          onClick={() => setShowAllocatedOnly(!showAllocatedOnly)}
-          className="w-full"
-        >
-          {showAllocatedOnly ? 'Show All Exercises' : 'Show Allocated Only'}
-        </Button>
       </CardHeader>
 
       <CardContent className="flex-1 overflow-hidden p-0">
@@ -278,9 +267,6 @@ export function ExerciseLibraryPanel({
                                           ? <ChevronDown className="mr-2 h-3 w-3 shrink-0" />
                                           : <ChevronRight className="mr-2 h-3 w-3 shrink-0" />}
                                         <span className="truncate">{categoryName}</span>
-                                        <Badge variant="secondary" className="ml-auto text-xs">
-                                          {exercises.length}
-                                        </Badge>
                                       </Button>
                                     </CollapsibleTrigger>
 
