@@ -80,8 +80,16 @@ export default function LibraryPage() {
 
     if (action.type === 'library_add_exercise') {
       if (action.libraryId !== library.id) return;
+      // AI sends column names as keys; map to column IDs before storing
+      const mappedData: Record<string, string> = {};
+      for (const [colName, val] of Object.entries(action.data ?? {})) {
+        const col = library.columns.find(c => c.name === colName);
+        if (col && col.role !== 'video' && col.role !== 'description') {
+          mappedData[col.id] = val;
+        }
+      }
       addExerciseToLibrary(library.id, {
-        data: action.data ?? {},
+        data: mappedData,
         description: action.description,
         videoUrl: action.videoUrl,
       });
