@@ -43,6 +43,21 @@ export function useCalendarEvents() {
     [store, setStore],
   );
 
+  // Batch-add multiple events in a single store write to avoid stale-closure races
+  // when called in a loop (each addEvent call would read the same snapshot of store).
+  const addEvents = useCallback(
+    async (athleteId: string, events: Array<Omit<CalendarEvent, 'id'>>): Promise<CalendarEvent[]> => {
+      if (events.length === 0) return [];
+      const newEvents: CalendarEvent[] = events.map((event, i) => ({
+        ...event,
+        id: `ce-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 9)}`,
+      }));
+      await setStore({ ...store, [athleteId]: [...(store[athleteId] || []), ...newEvents] });
+      return newEvents;
+    },
+    [store, setStore],
+  );
+
   const deleteEvent = useCallback(
     async (athleteId: string, eventId: string): Promise<void> => {
       await setStore({
@@ -78,5 +93,5 @@ export function useCalendarEvents() {
     [store, setStore],
   );
 
-  return { getEventsForDate, getEventsForAthlete, addEvent, deleteEvent, updateEvent, deleteEventsForAthlete };
+  return { getEventsForDate, getEventsForAthlete, addEvent, addEvents, deleteEvent, updateEvent, deleteEventsForAthlete };
 }
