@@ -103,7 +103,17 @@ export type ApplySuggestion =
   /** Parameter Database — link a training method to a parameter */
   | { type: "add_parameter_method"; parameterName: string; methodId: string; rationale?: string }
   /** Parameter Database — link multiple training methods to parameters at once */
-  | { type: "add_parameter_methods_bulk"; links: Array<{ parameterName: string; methodId: string; rationale?: string }> };
+  | { type: "add_parameter_methods_bulk"; links: Array<{ parameterName: string; methodId: string; rationale?: string }> }
+  /** Exercise Library — add a new exercise row */
+  | { type: "library_add_exercise"; libraryId: string; data: Record<string, string>; description?: string; videoUrl?: string }
+  /** Exercise Library — delete an exercise by id (or name as fallback) */
+  | { type: "library_delete_exercise"; libraryId: string; exerciseId?: string; exerciseName?: string }
+  /** Exercise Library — update fields on an existing exercise */
+  | { type: "library_update_exercise"; libraryId: string; exerciseId?: string; exerciseName?: string; updates: Record<string, string>; description?: string; videoUrl?: string }
+  /** Exercise Library — add a new column */
+  | { type: "library_add_column"; libraryId: string; name: string; columnType: "text" | "select" | "textarea"; options?: string[] }
+  /** Exercise Library — delete a column by id (or name as fallback) */
+  | { type: "library_delete_column"; libraryId: string; columnId?: string; columnName?: string };
 
 export interface WizardAIAssistantProps {
   /** Human-readable label for the current wizard step, e.g. "Goal & Method Selection" */
@@ -280,6 +290,16 @@ Available types and their fields:
   Only use method IDs as listed in the wizard context. Do not invent method IDs.
 - add_parameter_methods_bulk: {"type":"add_parameter_methods_bulk","links":[{"parameterName":"<exact parameter name>","methodId":"<exact method ID from wizard context>","rationale":"<optional>"},{"parameterName":"<exact parameter name>","methodId":"<exact method ID from wizard context>"}]}
   Use this when linking multiple training methods to parameters at once. Preferred over add_parameter_method when adding 2 or more links.
+- library_add_exercise: {"type":"library_add_exercise","libraryId":"<exact library id from context>","data":{"<column name>":"<value>","<column name>":"<value>"},"description":"<optional notes or description>","videoUrl":"<optional video url>"}
+  Adds a new exercise row to the library. Use column names EXACTLY as listed in the Library Columns section of context. libraryId must match the id shown in context. Omit any column you don't have a value for — do not include empty strings.
+- library_delete_exercise: {"type":"library_delete_exercise","libraryId":"<exact library id>","exerciseId":"<exact id from context>","exerciseName":"<name for confirmation>"}
+  Deletes an exercise from the library. Always confirm with the coach before applying — this is irreversible. Use the exact exerciseId from context.
+- library_update_exercise: {"type":"library_update_exercise","libraryId":"<exact library id>","exerciseId":"<exact id from context>","updates":{"<column name>":"<new value>"},"description":"<new description — omit if not changing>","videoUrl":"<new video url — omit if not changing>"}
+  Updates one or more fields on an existing exercise. Only include keys you want to change. Use exact column names from context.
+- library_add_column: {"type":"library_add_column","libraryId":"<exact library id>","name":"<column name>","columnType":"text","options":[]}
+  Adds a new column to the library. columnType is "text", "select", or "textarea". For "select" type include "options" array with dropdown choices. For text/textarea omit options or leave empty.
+- library_delete_column: {"type":"library_delete_column","libraryId":"<exact library id>","columnId":"<exact id from context>","columnName":"<name for confirmation>"}
+  Deletes a column from the library. All exercise data for this column will be permanently lost. Always confirm with the coach before applying. Use the exact columnId from context.
 
 Rules:
 - You may include MULTIPLE [[APPLY: ...]] blocks in one message — one per action. Place them all at the very end of your message.
