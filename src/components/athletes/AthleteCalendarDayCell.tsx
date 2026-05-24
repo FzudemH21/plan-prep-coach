@@ -44,6 +44,9 @@ export interface AthleteCalendarDay {
   assignmentId?: string;
   programName?: string;
   intensity?: IntensityLevel; // NEW: Day-level intensity for the overview square
+  // Pre-fetched from parent's useCalendarEvents instance so new events added
+  // during the session are visible immediately without a page reload
+  calendarEvents?: import('@/hooks/useCalendarEvents').CalendarEvent[];
 }
 
 interface CopiedDayInfo {
@@ -112,9 +115,11 @@ export function AthleteCalendarDayCell({
   const { getEventsForDate, addEvent, deleteEvent } = useCalendarEvents();
   const { data: parametersData } = useParametersDataV2();
   const parameters = parametersData?.parameters ?? [];
-  const calendarEvents = athleteId
+  // Prefer events passed from the parent (single shared store instance) so that
+  // events added during the session are visible immediately without a page reload.
+  const calendarEvents = day.calendarEvents ?? (athleteId
     ? getEventsForDate(athleteId, day.dateString)
-    : [];
+    : []);
   const calendarTests = calendarEvents.filter(e => e.type === 'test');
   const calendarEventItems = calendarEvents.filter(e => e.type === 'event');
 

@@ -123,7 +123,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   const athleteData = useAthletes();
   const { data: toolboxData } = useToolboxData();
   const { toast } = useToast();
-  const { addEvent: addCalendarEvent, getEventsForAthlete } = useCalendarEvents();
+  const { addEvent: addCalendarEvent, getEventsForAthlete, getEventsForDate } = useCalendarEvents();
 
   const assignments = useMemo(() => {
     return athleteData.getAthleteCalendarAssignments(athlete.id);
@@ -493,9 +493,10 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         assignmentId,
         programName,
         intensity: dayIntensityForSquare,
+        calendarEvents: getEventsForDate(athlete.id, dateString),
       };
     });
-  }, [calendarDateRange, viewMode, assignments, assignmentDataCache, selectedAssignmentId, editing.exerciseDistribution, editing.daySplitStates, editing.trainingDays, editing.dailyIntensityData, editing.sessionIntensities]);
+  }, [calendarDateRange, viewMode, assignments, assignmentDataCache, selectedAssignmentId, editing.exerciseDistribution, editing.daySplitStates, editing.trainingDays, editing.dailyIntensityData, editing.sessionIntensities, getEventsForDate, athlete.id]);
 
   // Group days into weeks
   const weeks = useMemo(() => groupDaysIntoWeeks(calendarDays), [calendarDays]);
