@@ -455,7 +455,7 @@ Use hyphens (not underscores). "Deload" = active recovery week at very low load.
 Parameter values set in the Periodization Table (Phase 2 Step 4) flow automatically down to exercises and the training calendar. Changing a value at a higher level propagates consistently downward. Tests and events scheduled in Phase 1 appear in the mesocycle calendar and athlete calendar upon plan assignment.
 
 ## Coach Background
-${coachContext}${memoryBlock}${ragBlock}${toolboxBlock}${globalBlock}${focusedSessionBlock}
+${coachContext}${memoryBlock}${ragBlock}${globalBlock}${focusedSessionBlock}
 
 ## ${contextLabel}
 ${wizardContext}
