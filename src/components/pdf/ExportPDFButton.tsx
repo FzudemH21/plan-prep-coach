@@ -103,15 +103,20 @@ export function ExportPDFButton({
   const { athletes } = useAthletes();
   const { data: parametersData } = useParametersDataV2();
 
-  // Build methodId → {rationale, evidence} lookup from the parameter database
+  // Build methodId → {rationale, evidence} lookup from the parameter database.
+  // A method can be linked to multiple parameters, each with its own text —
+  // aggregate all unique entries so nothing is silently dropped.
   const methodRationale = useMemo(() => {
     const map: Record<string, { rationale?: string; evidence?: string }> = {};
     for (const pm of parametersData.parameterMethods) {
-      if (pm.methodId && (pm.rationale || pm.evidence)) {
-        if (!map[pm.methodId]) {
-          map[pm.methodId] = { rationale: pm.rationale, evidence: pm.evidence };
-        }
-      }
+      if (!pm.methodId) continue;
+      const existing = map[pm.methodId] ?? {};
+      const rationales = [existing.rationale, pm.rationale].filter(Boolean);
+      const evidences  = [existing.evidence,  pm.evidence ].filter(Boolean);
+      map[pm.methodId] = {
+        rationale: rationales.length > 0 ? [...new Set(rationales)].join(" | ") : undefined,
+        evidence:  evidences.length  > 0 ? [...new Set(evidences) ].join(" | ") : undefined,
+      };
     }
     return map;
   }, [parametersData.parameterMethods]);
