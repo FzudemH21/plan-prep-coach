@@ -155,6 +155,9 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     ragRetrieve(query).then(setRagContext);
   }, [ragRetrieve, athlete.id]);
 
+  // Editing hook — must be declared before useAthleteAIContext which references editing.exerciseDistribution
+  const editing = useAthleteCalendarEditing(selectedAssignmentId, assignments);
+
   // Athlete-specific AI context
   const athleteAIContext = useAthleteAIContext({
     athlete,
@@ -259,9 +262,6 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
       setSelectedAssignmentId(assignments[0].id);
     }
   }, [assignments, selectedAssignmentId]);
-
-  // Use the editing hook for master planner functionality
-  const editing = useAthleteCalendarEditing(selectedAssignmentId, assignments);
 
   // Wrapper: clear day in editing state AND patch assignmentDataCache so non-selected
   // assignment rendering (cache path) immediately reflects the cleared state.
