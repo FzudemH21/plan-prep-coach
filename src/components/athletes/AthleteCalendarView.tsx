@@ -14,7 +14,7 @@ import { useTrainingPrograms, TrainingProgram } from '@/hooks/useTrainingProgram
 import { useAthletes } from '@/hooks/useAthletes';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useAthleteCalendarEditing } from '@/hooks/useAthleteCalendarEditing';
-import { useCalendarEvents } from '@/hooks/useCalendarEvents';
+import { useCalendarEvents, CalendarEvent } from '@/hooks/useCalendarEvents';
 import {
   shiftExerciseDates,
   shiftDailyIntensityDates,
@@ -123,7 +123,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   const athleteData = useAthletes();
   const { data: toolboxData } = useToolboxData();
   const { toast } = useToast();
-  const { addEvent: addCalendarEvent, getEventsForAthlete, getEventsForDate } = useCalendarEvents();
+  const { addEvent: addCalendarEvent, addEvents: addCalendarEvents, getEventsForAthlete, getEventsForDate } = useCalendarEvents();
 
   const assignments = useMemo(() => {
     return athleteData.getAthleteCalendarAssignments(athlete.id);
@@ -989,7 +989,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           });
 
           // Transfer tests & events to calendarEvents (one entry per scheduled date)
-          const transferTestsEvents = () => {
+          const transferTestsEvents = async () => {
             try {
               const existingEvents = getEventsForAthlete(athlete.id);
               const existingKey = (type: string, title: string, date: string) =>
@@ -998,11 +998,16 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 existingEvents.map(e => existingKey(e.type, e.title, e.date))
               );
 
+              // Collect all events first, then write in a single store update to avoid
+              // stale-closure races where sequential addCalendarEvent calls all read the
+              // same snapshot and only the last one survives.
+              const toAdd: Array<Omit<CalendarEvent, 'id'>> = [];
+
               (assignment.reviewedSubGoals || []).forEach(sg => {
                 sg.scheduledDates.forEach(d => {
                   const date = d.substring(0, 10);
                   if (existingSet.has(existingKey('test', sg.testMethod, date))) return;
-                  addCalendarEvent(athlete.id, {
+                  toAdd.push({
                     type: 'test',
                     title: sg.testMethod,
                     date,
@@ -1016,7 +1021,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 evt.scheduledDates.forEach(d => {
                   const date = d.substring(0, 10);
                   if (existingSet.has(existingKey('event', evt.name, date))) return;
-                  addCalendarEvent(athlete.id, {
+                  toAdd.push({
                     type: 'event',
                     title: evt.name,
                     date,
@@ -1024,6 +1029,10 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                   });
                 });
               });
+
+              if (toAdd.length > 0) {
+                await addCalendarEvents(athlete.id, toAdd);
+              }
             } catch (evtError) {
               console.error('[handleAssignProgram] Error transferring tests/events:', evtError);
             }
@@ -1060,7 +1069,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 endDate: updatedEnd,
               });
             }
-            transferTestsEvents();
+            await transferTestsEvents();
           } else if (newAssignment) {
             // CREATE PATH: save to new assignment key and switch to it
             const storageKey = `athlete-assignment-${newAssignment.id}`;
@@ -1079,7 +1088,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             localStorage.setItem(storageKey, JSON.stringify(dataToSave));
             console.log('[ASSIGN] saved to localStorage key:', storageKey, '| daySplitStates keys:', Object.keys(dataToSave.daySplitStates).length, '| trainingDays:', dataToSave.trainingDays.length);
 
-            transferTestsEvents();
+            await transferTestsEvents();
 
             // Update cache immediately
             console.log('[ASSIGN] calling setAssignmentDataCache for:', newAssignment.id);
