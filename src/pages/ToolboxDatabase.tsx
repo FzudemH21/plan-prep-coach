@@ -6,6 +6,7 @@ import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, Plus, Search, Download, Upload, Trash2, Edit, Copy, ChevronUp, ChevronDown, AlertCircle, LayoutTemplate } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
@@ -58,6 +59,7 @@ export default function ToolboxDatabase() {
   const [expandedTemplatesKey, setExpandedTemplatesKey] = useState<string | null>(null);
   const [selectedSubCategory, setSelectedSubCategory] = useState<{ category: string; subCategory: string } | null>(null);
   const [newEntry, setNewEntry] = useState({ category: "", subCategory: "" });
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<SubCategoryData | null>(null);
 
   const resetAddDialog = () => {
     setNewEntry({ category: "", subCategory: "" });
@@ -252,17 +254,21 @@ export default function ToolboxDatabase() {
     });
   };
 
-  // Handle delete sub-category (delete all parameters in it)
+  // Handle delete sub-category — opens confirmation dialog
   const handleDeleteSubCategory = (item: SubCategoryData) => {
-    // Delete all parameters in this sub-category using the deleteEntry function from the hook
-    item.parameters.forEach(parameter => {
+    setPendingDeleteItem(item);
+  };
+
+  const confirmDeleteSubCategory = () => {
+    if (!pendingDeleteItem) return;
+    pendingDeleteItem.parameters.forEach(parameter => {
       deleteEntry(parameter.id);
     });
-    
     toast({
-      title: "Sub-Category Deleted",
-      description: `Sub-category "${item.subCategory}" and all its parameters have been deleted.`
+      title: "Method Deleted",
+      description: `"${pendingDeleteItem.subCategory}" and all its parameters have been deleted.`
     });
+    setPendingDeleteItem(null);
   };
 
   // Handle parameter management
@@ -682,6 +688,23 @@ export default function ToolboxDatabase() {
           <p className="text-muted-foreground">No sub-categories yet. Click "Add Sub-Category" to get started.</p>
         </div>
       )}
+
+      <AlertDialog open={!!pendingDeleteItem} onOpenChange={open => { if (!open) setPendingDeleteItem(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Method</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{pendingDeleteItem?.subCategory}</strong>? This will permanently remove the method and all its parameters. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteSubCategory} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );
