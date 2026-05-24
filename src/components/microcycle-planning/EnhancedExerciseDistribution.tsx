@@ -2341,6 +2341,10 @@ export function EnhancedExerciseDistribution({
             exerciseDistribution={exerciseDistribution}
             mesocycle={mesocycle}
             methodExerciseCategories={methodExerciseCategories}
+            currentMicrocycleDates={(() => {
+              const microId = (mesocycle.microcycles as Array<{ id: string }>)[selectedMcIndex]?.id;
+              return microId ? trainingDays.filter(d => d.microcycleId === microId).map(d => d.date) : undefined;
+            })()}
           />
         </div>
 

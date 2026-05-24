@@ -21,6 +21,8 @@ interface ExerciseLibraryPanelProps {
   mesocycle: ExtendedMesocycle;
   /** methodName → exerciseCategory[] from the toolbox — methods absent here are not split */
   methodExerciseCategories?: Record<string, string[]>;
+  /** Dates belonging to the currently viewed microcycle — count badge is scoped to these */
+  currentMicrocycleDates?: string[];
 }
 
 // Helper to detect invalid/corrupted category names
@@ -36,6 +38,7 @@ export function ExerciseLibraryPanel({
   exerciseDistribution,
   mesocycle,
   methodExerciseCategories,
+  currentMicrocycleDates,
 }: ExerciseLibraryPanelProps) {
   const [expandedTopCategories, setExpandedTopCategories] = useState<Set<string>>(new Set());
   const [expandedMethods, setExpandedMethods] = useState<Set<string>>(new Set());
@@ -49,8 +52,13 @@ export function ExerciseLibraryPanel({
     setFn(next);
   };
 
-  const getExerciseAllocationCount = (exerciseId: string) =>
-    exerciseDistribution.filter(ex => ex.exerciseId === exerciseId).length;
+  // Count how many times an exercise is placed in the currently viewed microcycle
+  const getExerciseAllocationCount = (exerciseId: string) => {
+    const dist = currentMicrocycleDates && currentMicrocycleDates.length > 0
+      ? exerciseDistribution.filter(ex => currentMicrocycleDates.includes(ex.dayDate))
+      : exerciseDistribution;
+    return dist.filter(ex => ex.exerciseId === exerciseId).length;
+  };
 
   // Apply search + allocated-only filters
   const filteredExercises = useMemo(() => {
@@ -120,25 +128,33 @@ export function ExerciseLibraryPanel({
   const renderExercise = (
     exercise: { exerciseId: string; exerciseName: string },
     index: number
-  ) => (
-    <Draggable key={exercise.exerciseId} draggableId={`lib-${exercise.exerciseId}`} index={index}>
-      {(provided, snapshot) => (
-        <div
-          ref={provided.innerRef}
-          {...provided.draggableProps}
-          {...provided.dragHandleProps}
-          className={cn(
-            "flex items-center gap-2 p-2 rounded-md border bg-card text-xs",
-            "hover:bg-accent hover:text-accent-foreground cursor-grab active:cursor-grabbing",
-            snapshot.isDragging && "opacity-50 shadow-lg"
-          )}
-        >
-          <GripVertical className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-          <span className="flex-1 truncate">{exercise.exerciseName}</span>
-        </div>
-      )}
-    </Draggable>
-  );
+  ) => {
+    const count = getExerciseAllocationCount(exercise.exerciseId);
+    return (
+      <Draggable key={exercise.exerciseId} draggableId={`lib-${exercise.exerciseId}`} index={index}>
+        {(provided, snapshot) => (
+          <div
+            ref={provided.innerRef}
+            {...provided.draggableProps}
+            {...provided.dragHandleProps}
+            className={cn(
+              "flex items-center gap-2 p-2 rounded-md border bg-card text-xs",
+              "hover:bg-accent hover:text-accent-foreground cursor-grab active:cursor-grabbing",
+              snapshot.isDragging && "opacity-50 shadow-lg"
+            )}
+          >
+            <GripVertical className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+            <span className="flex-1 truncate">{exercise.exerciseName}</span>
+            {count > 0 && (
+              <Badge className="ml-1 h-4 min-w-4 px-1 text-[10px] font-semibold bg-primary/15 text-primary border-0 hover:bg-primary/15">
+                {count}
+              </Badge>
+            )}
+          </div>
+        )}
+      </Draggable>
+    );
+  };
 
   return (
     <Card className="h-full flex flex-col">
