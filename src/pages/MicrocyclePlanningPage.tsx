@@ -3765,13 +3765,9 @@ export default function MicrocyclePlanningPage() {
 You are in Exercise Distribution (Phase 3 Step 2). You HAVE the ability to assign exercises to specific calendar dates using the distribute_exercises action. This is a direct date placement feature — it works even if a day shows "no method assigned".
 Do NOT explain the hierarchy. Do NOT say this is impossible. Use the exact YYYY-MM-DD dates from the training schedule below.
 
-ORGANIZATION RULE — ALWAYS FOLLOW THIS:
-Whenever the coach asks you to distribute, assign, or place exercises (for a day, a week, or broadly), you MUST first ask how they want them organized on each day before producing any [[APPLY]] block. Ask specifically:
-- Should exercises go into a single section or multiple sections? What should they be named?
-- Should any exercises be grouped as supersets or circuits?
-- Any other structural preferences (e.g. warm-up section, main section, cooldown)?
-Only after the coach answers these questions should you produce the distribute_exercises action.
-Exception: if the coach explicitly specifies organization in their request (e.g. "put RDL in the main section as a superset with leg press"), you may apply immediately without asking.`
+SECTION RULE — ALWAYS FOLLOW THIS:
+Before producing any distribute_exercises [[APPLY]] block, you MUST know which section each exercise should go into. If the coach has not specified a section name, ask them first (e.g. "Which section should I put these in?"). Once you have the answer, include "sectionName": "<name>" on every entry in the distribute_exercises action. The system will find an existing section with that name or create it automatically.
+Exception: if the coach's request already specifies a section (e.g. "put RDL in the Main section"), use that name immediately without asking.`
       : '';
 
     return [
@@ -3929,37 +3925,68 @@ Exception: if the coach explicitly specifies organization in their request (e.g.
       }
 
       if (newEntries.length > 0) {
-        // Auto-create "Section 1" for any day/session slot that has no sections yet,
-        // then assign those new entries to it (matching drag-and-drop behaviour)
+        // Resolve each entry's target section:
+        // - If sectionName is given: find existing section by name, or create it
+        // - If no sectionName and no sections exist: auto-create "Section 1"
+        // - If no sectionName and sections exist: use the first one (fallback)
         const autoSections: SessionSection[] = [];
-        const slotSectionMap = new Map<string, string>(); // "date_sessionIdx" → sectionId
+        // Key: "date_sessionIdx::sectionName" → sectionId (deduplicates across entries)
+        const resolvedSectionMap = new Map<string, string>();
 
-        const uniqueSlots = [...new Set(newEntries.map(e => `${e.dayDate}_${e.sessionIndex}`))];
-        uniqueSlots.forEach(slotKey => {
-          const [slotDate, slotIdx] = slotKey.split('_');
-          const parsedIdx = parseInt(slotIdx);
-          const existing = sessionSections.filter(s => s.dayDate === slotDate && s.sessionIndex === parsedIdx);
-          if (existing.length === 0) {
+        const allEntries = action.entries.filter(e => mesoDateSet.has(e.dayDate));
+        allEntries.forEach(e => {
+          const sessionIndex = e.sessionIndex ?? 0;
+          const slotSections = [...sessionSections, ...autoSections].filter(
+            s => s.dayDate === e.dayDate && s.sessionIndex === sessionIndex
+          );
+          const targetName = e.sectionName?.trim();
+          const mapKey = `${e.dayDate}_${sessionIndex}::${targetName ?? ''}`;
+
+          if (resolvedSectionMap.has(mapKey)) return; // already resolved for this slot+name
+
+          if (targetName) {
+            // Find existing section with that name (case-insensitive)
+            const match = slotSections.find(s => s.name.toLowerCase() === targetName.toLowerCase());
+            if (match) {
+              resolvedSectionMap.set(mapKey, match.id);
+            } else {
+              const maxOrder = slotSections.reduce((m, s) => Math.max(m, s.order), -1);
+              const newSection: SessionSection = {
+                id: `section-ai-auto-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                dayDate: e.dayDate,
+                sessionIndex,
+                name: targetName,
+                order: maxOrder + 1,
+              };
+              autoSections.push(newSection);
+              resolvedSectionMap.set(mapKey, newSection.id);
+            }
+          } else if (slotSections.length === 0) {
+            // No section specified and none exist — create "Section 1"
             const newSection: SessionSection = {
               id: `section-ai-auto-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-              dayDate: slotDate,
-              sessionIndex: parsedIdx,
+              dayDate: e.dayDate,
+              sessionIndex,
               name: 'Section 1',
               order: 0,
             };
             autoSections.push(newSection);
-            slotSectionMap.set(slotKey, newSection.id);
+            resolvedSectionMap.set(mapKey, newSection.id);
           } else {
-            // Use the first (lowest-order) existing section as the target
-            slotSectionMap.set(slotKey, existing.sort((a, b) => a.order - b.order)[0].id);
+            // No section specified but sections exist — use the first one
+            resolvedSectionMap.set(mapKey, slotSections.sort((a, b) => a.order - b.order)[0].id);
           }
         });
 
         // Assign sectionId to each new entry
-        const entriesWithSections = newEntries.map(e => ({
-          ...e,
-          sectionId: slotSectionMap.get(`${e.dayDate}_${e.sessionIndex}`),
-        }));
+        const entriesWithSections = newEntries.map(e => {
+          const sessionIndex = e.sessionIndex ?? 0;
+          const targetName = (action.entries.find(
+            ae => ae.exerciseId === e.exerciseId && ae.dayDate === e.dayDate && (ae.sessionIndex ?? 0) === sessionIndex
+          ) as { sectionName?: string } | undefined)?.sectionName?.trim();
+          const mapKey = `${e.dayDate}_${sessionIndex}::${targetName ?? ''}`;
+          return { ...e, sectionId: resolvedSectionMap.get(mapKey) };
+        });
 
         if (autoSections.length > 0) {
           const updatedSections = [...sessionSections, ...autoSections];
