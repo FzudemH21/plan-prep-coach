@@ -1718,6 +1718,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     newTrainingDays: TrainingDay[],
     newDaySplitStates: Record<string, number>,
     newDailyIntensity: Array<{ date: string; intensity: IntensityLevel | string }>,
+    newParameterValues: Record<string, any> = {},
   ) => {
     // Compute session offset per day so new sessions append after existing ones
     const sessionOffsetByDay: Record<string, number> = {};
@@ -1831,6 +1832,10 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       const toAdd = newDailyIntensity.filter(d => !existingDates.has(d.date));
       return [...merged, ...toAdd].sort((a, b) => a.date.localeCompare(b.date));
     });
+
+    if (Object.keys(newParameterValues).length > 0) {
+      setParameterValues(prev => ({ ...prev, ...newParameterValues }));
+    }
   }, [exerciseDistribution]);
 
   return {
