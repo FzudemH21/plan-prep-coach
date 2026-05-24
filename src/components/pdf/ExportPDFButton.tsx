@@ -103,13 +103,29 @@ export function ExportPDFButton({
   const { athletes } = useAthletes();
   const { data: parametersData } = useParametersDataV2();
 
-  // Build methodId → {rationale, evidence} lookup from the parameter database.
-  // A method can be linked to multiple parameters, each with its own text —
-  // aggregate all unique entries so nothing is silently dropped.
+  // Build methodId → {rationale, evidence} lookup from the parameter database,
+  // restricted to parameters that are the plan's primary or sub-goals so that
+  // only goal-relevant rationale appears in the PDF.
   const methodRationale = useMemo(() => {
+    const macro = program.macrocycleData;
+
+    // Collect the parameter IDs that are actual plan goals
+    const goalParamIds = new Set<string>();
+    (macro?.smartGoals ?? []).forEach((g: { linkedParameterId?: string }) => {
+      if (g.linkedParameterId) goalParamIds.add(g.linkedParameterId);
+    });
+    (macro?.subGoals ?? []).forEach((sg: { parameterLinkedId?: string }) => {
+      if (sg.parameterLinkedId) goalParamIds.add(sg.parameterLinkedId);
+    });
+
     const map: Record<string, { rationale?: string; evidence?: string }> = {};
+
+    // Only include rationale/evidence from parameter-method links where the
+    // parameter is one of the plan's goals
     for (const pm of parametersData.parameterMethods) {
       if (!pm.methodId) continue;
+      if (goalParamIds.size > 0 && !goalParamIds.has(pm.parameterId)) continue;
+      if (!pm.rationale && !pm.evidence) continue;
       const existing = map[pm.methodId] ?? {};
       const rationales = [existing.rationale, pm.rationale].filter(Boolean);
       const evidences  = [existing.evidence,  pm.evidence ].filter(Boolean);
@@ -119,7 +135,7 @@ export function ExportPDFButton({
       };
     }
     return map;
-  }, [parametersData.parameterMethods]);
+  }, [parametersData.parameterMethods, program.macrocycleData]);
   const isControlled = controlledOpen !== undefined;
   const [internalOpen, setInternalOpen] = useState(false);
   const open = isControlled ? controlledOpen! : internalOpen;
