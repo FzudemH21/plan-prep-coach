@@ -579,39 +579,58 @@ function getSuggestionPreview(action: ApplySuggestion): string {
       return `Link method to ${action.parameterName}${action.rationale ? `: ${action.rationale.slice(0, 60)}…` : ""}`;
     case "add_parameter_methods_bulk":
       return `Link ${action.links.length} method${action.links.length !== 1 ? "s" : ""} to parameters: ${action.links.map((l) => `${l.methodId} → ${l.parameterName}`).join(", ")}`;
+    case "library_add_exercise":
+      return `Add exercise to library`;
+    case "library_delete_exercise":
+      return `Delete exercise: ${action.exerciseName ?? action.exerciseId}`;
+    case "library_update_exercise":
+      return `Update exercise: ${action.exerciseName ?? action.exerciseId} — ${Object.keys(action.updates ?? {}).join(", ")}`;
+    case "library_add_column":
+      return `Add column: "${action.name}" (${action.columnType})`;
+    case "library_delete_column":
+      return `Delete column: "${action.columnName ?? action.columnId}"`;
   }
 }
 
-function SuggestionCard({
-  action,
+function SuggestionGroupCard({
+  actions,
   onApply,
 }: {
-  action: ApplySuggestion;
+  actions: ApplySuggestion[];
   onApply: (a: ApplySuggestion) => void;
 }) {
   const [applied, setApplied] = useState(false);
+
+  const handleApplyAll = () => {
+    actions.forEach(onApply);
+    setApplied(true);
+  };
 
   return (
     <div className="mt-2.5 rounded-xl border border-primary/25 bg-primary/5 px-3 py-2.5 space-y-2">
       <div className="flex items-center gap-1.5 text-xs text-primary font-medium">
         <Sparkles className="h-3 w-3 flex-shrink-0" />
-        Suggested action
+        {actions.length === 1 ? "Suggested action" : `${actions.length} suggested actions`}
       </div>
-      <p className="text-xs text-foreground leading-snug">{getSuggestionPreview(action)}</p>
+      <ul className="space-y-0.5">
+        {actions.map((action, i) => (
+          <li key={i} className="text-xs text-foreground leading-snug flex gap-1.5">
+            {actions.length > 1 && <span className="text-muted-foreground shrink-0">{i + 1}.</span>}
+            <span>{getSuggestionPreview(action)}</span>
+          </li>
+        ))}
+      </ul>
       <Button
         size="sm"
         variant={applied ? "outline" : "default"}
         className="h-7 text-xs w-full"
         disabled={applied}
-        onClick={() => {
-          onApply(action);
-          setApplied(true);
-        }}
+        onClick={handleApplyAll}
       >
         {applied ? (
           <><CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-green-500" />Applied</>
         ) : (
-          "Apply to wizard"
+          actions.length === 1 ? "Apply" : "Apply all"
         )}
       </Button>
     </div>
@@ -660,9 +679,9 @@ function AssistantMessage({
   return (
     <span>
       <ChatMarkdown text={cleanText} />
-      {suggestions.map((s, i) => (
-        <SuggestionCard key={i} action={s} onApply={onApply!} />
-      ))}
+      {suggestions.length > 0 && (
+        <SuggestionGroupCard actions={suggestions} onApply={onApply!} />
+      )}
     </span>
   );
 }
