@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 import { sendMessage, type Message } from "@/utils/anthropicApi";
 import { useCoachProfile } from "@/hooks/useCoachProfile";
 import { useSpeechInput } from "@/hooks/useSpeechInput";
-import { useToolboxData } from "@/hooks/useToolboxData";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -376,7 +375,6 @@ function buildSystemPrompt(
   coachMemoryContext?: string,
   ragContext?: string,
   assistantRole?: string,
-  toolboxContext?: string,
   globalContext?: string,
   focusedSessionContext?: FocusedSessionContext,
 ): string {
@@ -386,7 +384,6 @@ function buildSystemPrompt(
   const ragBlock = ragContext
     ? `\n\n## Relevant Research & References (retrieved from the coach's uploaded documents)\n${ragContext}\n\n## Research Integration Instructions\n- Cite the source document name when referencing uploaded research.\n- Cross-reference the uploaded content against your own sports science knowledge (textbooks, peer-reviewed literature, established guidelines e.g. NSCA, ACSM).\n- If an uploaded source aligns with scientific consensus, note that briefly.\n- If an uploaded source contradicts or challenges consensus, explicitly flag it: explain both positions and let the coach decide — do not silently blend conflicting views.\n- If sources within the uploaded documents contradict each other, surface that tension clearly.\n- Never fabricate citations. Only cite documents that appear in the References section above.\n\n## Evidence Hierarchy (apply when evaluating any source — uploaded or from your own knowledge)\nWeight evidence by study design, from strongest to weakest:\n1. Meta-analysis / Systematic review — highest confidence; synthesizes multiple studies; flag if heterogeneity is high (I² > 75%) as pooled conclusions may be unreliable\n2. Randomised Controlled Trial (RCT) — strong causal inference; note sample size, blinding quality, and whether the population matches the athlete\n3. Controlled trial without randomisation — moderate confidence; confounding risk higher\n4. Prospective cohort study — useful for dose-response and long-term outcomes; observational only\n5. Case-control study — good for rare outcomes; susceptible to recall and selection bias\n6. Cross-sectional study — snapshot only; cannot establish causality\n7. Case series / Case report — hypothesis-generating; very low generalisability\n8. Expert opinion / Consensus statement — useful when evidence is sparse; weight by the credibility of the body issuing it (e.g. NSCA, ACSM, IOC)\nWhen citing or evaluating a source, briefly indicate its level (e.g. "RCT, n=24" or "systematic review of 12 RCTs"). When a recommendation rests only on lower-level evidence, say so explicitly rather than presenting it with the same confidence as meta-analytic findings.`
     : "";
-  const toolboxBlock = toolboxContext ? `\n\n## ${toolboxContext}` : "";
   const globalBlock = globalContext ? `\n\n${globalContext}` : "";
   const focusedSessionBlock = focusedSessionContext
     ? `\n\n## Currently Viewing (coach opened AI from inside this session)
@@ -607,6 +604,10 @@ function getSuggestionPreview(action: ApplySuggestion): string {
       return `Add column: "${action.name}" (${action.columnType})`;
     case "library_delete_column":
       return `Delete column: "${action.columnName ?? action.columnId}"`;
+    case "apply_template":
+      return `Apply template "${action.templateId}" to ${action.methodName}`;
+    case "save_as_template":
+      return `Save current values for ${action.methodName} as template "${action.templateName}"`;
   }
 }
 
@@ -754,7 +755,6 @@ export function WizardAIAssistant({
   focusedSessionContext,
 }: WizardAIAssistantProps) {
   const { profile } = useCoachProfile();
-  const { data: toolboxData } = useToolboxData();
   const [isOpen, setIsOpen] = useState(false);
 
   // Open the panel whenever forceOpen counter increments
@@ -782,16 +782,6 @@ export function WizardAIAssistant({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  // Build full toolbox method list (available on every page/step)
-  const toolboxContext = (() => {
-    const names = Array.from(
-      new Set((toolboxData?.entries ?? []).filter((e) => e.subCategory).map((e) => e.subCategory))
-    ).sort();
-    return names.length
-      ? `Training Toolbox (all available methods):\n${names.map((n) => `- ${n}`).join("\n")}`
-      : "";
-  })();
 
   // Build coach context string from profile
   const coachContext = profile
@@ -850,16 +840,17 @@ export function WizardAIAssistant({
     try {
       const reply = await sendMessage(
         newMessages,
-        buildSystemPrompt(coachContext, wizardContext, !!onApplySuggestion, coachMemoryContext, ragContext, assistantRole, toolboxContext, globalContext, focusedSessionContext),
+        buildSystemPrompt(coachContext, wizardContext, !!onApplySuggestion, coachMemoryContext, ragContext, assistantRole, globalContext, focusedSessionContext),
         "claude-sonnet-4-5",
         8192
       );
       setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
     } catch (err) {
       console.error("[WizardAIAssistant] sendMessage failed:", err);
+      const errMsg = err instanceof Error ? err.message : String(err);
       setMessages((prev) => [...prev, {
         role: "assistant",
-        content: "Sorry, an error occurred. Please try again.",
+        content: `Sorry, an error occurred: ${errMsg}`,
       }]);
     } finally {
       setIsLoading(false);
