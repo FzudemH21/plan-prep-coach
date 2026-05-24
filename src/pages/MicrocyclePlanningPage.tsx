@@ -34,7 +34,10 @@ import { WizardAIAssistant, FocusedSessionContext } from '@/components/wizard/Wi
 import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
 import { useGlobalAIContext } from '@/hooks/useGlobalAIContext';
 import { useCoachMemory } from '@/hooks/useCoachMemory';
+import { useAuth } from '@/hooks/useAuth';
 import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
+import { AccumulatedContextDialog } from '@/components/wizard/AccumulatedContextDialog';
+import { extractPlanSummary } from '@/lib/planMemory';
 
 // Using ExerciseDistribution, SessionSection, and SupersetMapping from types file
 
@@ -77,7 +80,11 @@ export default function MicrocyclePlanningPage() {
   const { retrieve: ragRetrieve } = useRAGRetrieval();
   const [ragContext, setRagContext] = useState('');
   const globalAIContext = useGlobalAIContext(currentStep === 2);
-  const { coachMemoryContext } = useCoachMemory({ currentMethods: macrocycleData?.selectedMethods ?? [] });
+  const { coachMemoryContext, saveToMemory } = useCoachMemory({ currentMethods: macrocycleData?.selectedMethods ?? [] });
+  const { user } = useAuth();
+  const [accumulatedDialogOpen, setAccumulatedDialogOpen] = useState(false);
+  const [accumulatedProgramId, setAccumulatedProgramId] = useState('');
+  const [accumulatedPlanSummary, setAccumulatedPlanSummary] = useState('');
   const [aiOpenTrigger, setAiOpenTrigger] = useState(0);
   const [focusedSessionCtx, setFocusedSessionCtx] = useState<FocusedSessionContext | undefined>(undefined);
   const [paramRefreshTrigger, setParamRefreshTrigger] = useState(0);
@@ -3300,13 +3307,18 @@ export default function MicrocyclePlanningPage() {
                 Export PDF
               </Button>
               <Button
-                onClick={() => {
-                  saveCurrentSession();
-                  toast({
-                    title: "Program saved",
-                    description: "Your training program has been saved.",
-                  });
-                  navigate("/templates/programs");
+                onClick={async () => {
+                  const program = await saveCurrentSession();
+                  if (program && user) {
+                    await saveToMemory(program);
+                    const summary = extractPlanSummary(program, user.id);
+                    setAccumulatedProgramId(program.id);
+                    setAccumulatedPlanSummary(summary.summary_text);
+                    setAccumulatedDialogOpen(true);
+                  } else {
+                    toast({ title: "Program saved", description: "Your training program has been saved." });
+                    navigate("/templates/programs");
+                  }
                 }}
                 className="w-full md:w-auto"
               >
@@ -4951,6 +4963,23 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
           onOpenChange={(v) => { setPdfExportOpen(v); if (!v) setPdfExportProgram(null); }}
         />
       )}
+
+      {/* Accumulated context dialog — triggered after Save & Finish */}
+      <AccumulatedContextDialog
+        open={accumulatedDialogOpen}
+        planSummary={accumulatedPlanSummary}
+        programId={accumulatedProgramId}
+        userId={user?.id ?? ''}
+        onJustSave={() => {
+          setAccumulatedDialogOpen(false);
+          toast({ title: "Program saved", description: "Your training program has been saved." });
+          navigate("/templates/programs");
+        }}
+        onDone={() => {
+          setAccumulatedDialogOpen(false);
+          navigate("/templates/programs");
+        }}
+      />
 
       {/* AI Assistant */}
       <WizardAIAssistant

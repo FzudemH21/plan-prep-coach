@@ -75,8 +75,8 @@ async function generateQuestions(planSummary: string): Promise<string[]> {
     "claude-haiku-4-5",
   );
 
-  // Extract the last assistant message content
-  const text = response[response.length - 1]?.content ?? "";
+  // sendMessage returns a plain string
+  const text = response;
 
   // Parse JSON array from response
   const match = text.match(/\[[\s\S]*\]/);
