@@ -12,7 +12,7 @@ import { useToolboxData } from "@/hooks/useToolboxData";
 interface AddAdditionalMethodDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAdd: (method: { methodId: string; rationale: string }) => void;
+  onAdd: (method: { methodId: string; rationale: string; evidence?: string }) => void;
   excludedMethods: Set<string>;
 }
 
@@ -25,6 +25,7 @@ export function AddAdditionalMethodDialog({
   const { data: toolboxData } = useToolboxData();
   const [selectedMethod, setSelectedMethod] = useState<string>("");
   const [rationale, setRationale] = useState("");
+  const [evidence, setEvidence] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   // Get all unique methods from toolbox, grouped by category
@@ -70,16 +71,18 @@ export function AddAdditionalMethodDialog({
 
   const handleAdd = () => {
     if (!selectedMethod) return;
-    onAdd({ methodId: selectedMethod, rationale: rationale.trim() });
+    onAdd({ methodId: selectedMethod, rationale: rationale.trim(), evidence: evidence.trim() || undefined });
     // Reset form
     setSelectedMethod("");
     setRationale("");
+    setEvidence("");
     onOpenChange(false);
   };
 
   const handleCancel = () => {
     setSelectedMethod("");
     setRationale("");
+    setEvidence("");
     onOpenChange(false);
   };
 
@@ -160,6 +163,20 @@ export function AddAdditionalMethodDialog({
                 Methods without rationale will show a warning
               </p>
             )}
+          </div>
+
+          {/* Evidence Input */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              Evidence
+              <span className="text-muted-foreground text-xs font-normal">(optional)</span>
+            </Label>
+            <Textarea
+              value={evidence}
+              onChange={(e) => setEvidence(e.target.value)}
+              placeholder="Research citations or supporting evidence..."
+              className="min-h-[60px]"
+            />
           </div>
         </div>
 

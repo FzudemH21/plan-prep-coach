@@ -173,9 +173,11 @@ export function EditParameterDialogV2({
   const [newContributesToStrength, setNewContributesToStrength] = useState<InteractionStrength>('moderate');
   const [newImprovedByStrength, setNewImprovedByStrength] = useState<InteractionStrength>('moderate');
   
-  // State for editing method rationale
+  // State for editing method rationale / evidence
   const [editingRationale, setEditingRationale] = useState<string | null>(null);
   const [rationaleValue, setRationaleValue] = useState('');
+  const [editingEvidence, setEditingEvidence] = useState<string | null>(null);
+  const [evidenceValue, setEvidenceValue] = useState('');
 
   // Get interactions where this parameter is the SOURCE (contributes to others)
   const contributesToInteractions = useMemo(() => 
@@ -292,6 +294,17 @@ export function EditParameterDialogV2({
     onUpdateMethod(methodDbId, { rationale: rationaleValue });
     setEditingRationale(null);
     setRationaleValue('');
+  };
+
+  const handleStartEditEvidence = (methodId: string, currentEvidence: string) => {
+    setEditingEvidence(methodId);
+    setEvidenceValue(currentEvidence || '');
+  };
+
+  const handleSaveEvidence = (methodDbId: string) => {
+    onUpdateMethod(methodDbId, { evidence: evidenceValue });
+    setEditingEvidence(null);
+    setEvidenceValue('');
   };
 
   const getStrengthIcon = (strength?: InteractionStrength) => {
@@ -813,7 +826,7 @@ export function EditParameterDialogV2({
                       ) : (
                         <div className="mt-1">
                           {method.rationale ? (
-                            <p 
+                            <p
                               className="text-xs text-muted-foreground cursor-pointer hover:text-foreground"
                               onClick={() => handleStartEditRationale(method.id, method.rationale || '')}
                             >
@@ -825,6 +838,54 @@ export function EditParameterDialogV2({
                               onClick={() => handleStartEditRationale(method.id, '')}
                             >
                               + Add rationale
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Evidence section */}
+                      {editingEvidence === method.id ? (
+                        <div className="mt-2 space-y-2">
+                          <Textarea
+                            value={evidenceValue}
+                            onChange={(e) => setEvidenceValue(e.target.value)}
+                            placeholder="Research citations or supporting evidence..."
+                            className="text-sm min-h-[60px]"
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleSaveEvidence(method.id)}
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditingEvidence(null);
+                                setEvidenceValue('');
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-1">
+                          {method.evidence ? (
+                            <p
+                              className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:text-foreground"
+                              onClick={() => handleStartEditEvidence(method.id, method.evidence || '')}
+                            >
+                              {method.evidence}
+                            </p>
+                          ) : (
+                            <button
+                              className="text-xs text-muted-foreground hover:text-foreground"
+                              onClick={() => handleStartEditEvidence(method.id, '')}
+                            >
+                              + Add evidence
                             </button>
                           )}
                         </div>
