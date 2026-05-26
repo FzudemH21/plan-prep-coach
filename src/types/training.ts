@@ -1,6 +1,8 @@
 export type DisplayMode = "step-by-step" | "macro" | "meso" | "micro";
 
-export type IntensityLevel = "off" | "deload" | "easy" | "easy-moderate" | "moderate" | "moderate-hard" | "hard" | "extremely-hard";
+// IntensityLevel is now the Borg CR10 scale (0–10).
+// Legacy string values ("off", "easy" etc.) are migrated on load via migrateLegacyIntensity().
+export type { BorgLevel as IntensityLevel } from "@/utils/intensityScale";
 
 export interface AthleteInfo {
   id: string;

@@ -1,4 +1,5 @@
-export type Intensity = "off" | "deload" | "easy" | "easy-moderate" | "moderate" | "moderate-hard" | "hard" | "extremely-hard";
+// Intensity is now the Borg CR10 scale (0–10). Re-exported from central utility.
+export type { BorgLevel as Intensity } from "@/utils/intensityScale";
 
 export interface Microcycle {
   id: string;
