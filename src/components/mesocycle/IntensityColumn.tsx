@@ -2,7 +2,8 @@ import React from 'react';
 import { BorgLevel, BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabel, getBorgValue, getBorgFromValue, getBorgStyleLight, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { IntensityLevel } from '@/types/training';
 import { TrainingDay } from '@/types/daily-intensity';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
+import { parseDateStr } from '@/utils/dateUtils';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
 import { Badge } from '@/components/ui/badge';
 import { Trophy, Calendar } from 'lucide-react';
@@ -122,7 +123,7 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
           : undefined
       }
     >
-      <div className="font-medium">{format(parseISO(day.date), 'MMM d')}</div>
+      <div className="font-medium">{format(parseDateStr(day.date), 'MMM d')}</div>
       <div className="text-xs">{day.dayName}</div>
 
       <div className="absolute -top-1 -right-1 flex gap-0.5">

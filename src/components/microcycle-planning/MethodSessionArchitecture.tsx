@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
+import { parseDateStr } from '@/utils/dateUtils';
 import { TrainingDay } from '@/types/daily-intensity';
 import { ExtendedMesocycle, Microcycle } from '@/features/planner/types';
 import { SessionSection, ExerciseDistribution } from '@/types/microcycle-planning';
@@ -750,7 +751,7 @@ export function MethodSessionArchitecture({
                       typeof mesocycle.endDate === 'string'
                         ? mesocycle.endDate.split('T')[0]
                         : format(mesocycle.endDate as Date, 'yyyy-MM-dd');
-                    return `${format(parseISO(s), 'MMM d, yyyy')} – ${format(parseISO(e), 'MMM d, yyyy')}`;
+                    return `${format(parseDateStr(s), 'MMM d, yyyy')} – ${format(parseDateStr(e), 'MMM d, yyyy')}`;
                   })()}
                 </p>
               </div>

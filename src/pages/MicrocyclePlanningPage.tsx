@@ -23,6 +23,7 @@ import { IntensityLevel } from '@/types/training';
 import { migrateLegacyIntensity } from '@/utils/intensityScale';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { format, addDays, differenceInDays, parseISO } from 'date-fns';
+import { parseDateStr } from '@/utils/dateUtils';
 import { cn } from '@/lib/utils';
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
 import { TrainingCalendarView, EnhancedExerciseDistribution, MethodSessionArchitecture } from '@/components/microcycle-planning';
@@ -2733,7 +2734,7 @@ export default function MicrocyclePlanningPage() {
 
     toast({
       title: `${type === 'test' ? 'Test' : 'Event'} added`,
-      description: `${testEventName} scheduled for ${format(parseISO(dayDate), 'PPP')}`,
+      description: `${testEventName} scheduled for ${format(parseDateStr(dayDate), 'PPP')}`,
     });
   };
 
@@ -2799,7 +2800,7 @@ export default function MicrocyclePlanningPage() {
 
     toast({
       title: `${type === 'test' ? 'Test' : 'Event'} deleted`,
-      description: `${name} removed from ${format(parseISO(dayDate), 'PPP')}`,
+      description: `${name} removed from ${format(parseDateStr(dayDate), 'PPP')}`,
     });
   };
 
@@ -3506,7 +3507,7 @@ export default function MicrocyclePlanningPage() {
       : "";
     const offDays = trainingDays
       .filter(d => d.intensity === '0')
-      .map(d => format(parseISO(d.date), 'EEEE'))
+      .map(d => format(parseDateStr(d.date), 'EEEE'))
       .filter((v, i, a) => a.indexOf(v) === i);
     const offDaysStr = offDays.length ? `Rest days (off): ${offDays.join(", ")}` : "";
 
@@ -3525,12 +3526,12 @@ export default function MicrocyclePlanningPage() {
         schedLines.push(`  microcycleIndex ${mIdx + 1}: "${microLabel}" (${firstDate} → ${lastDate})`);
         microDays.forEach(day => {
           if (day.intensity === '0') {
-            schedLines.push(`    ${day.date} (${format(parseISO(day.date), 'EEE')}): OFF`);
+            schedLines.push(`    ${day.date} (${format(parseDateStr(day.date), 'EEE')}): OFF`);
             return;
           }
           const methods = dayMethodAssignments[`${day.date}_0`] ?? [];
           const methodStr = methods.length > 0 ? methods.join(', ') : '(no methods yet)';
-          schedLines.push(`    ${day.date} (${format(parseISO(day.date), 'EEE')}) [${day.intensity}]: ${methodStr}`);
+          schedLines.push(`    ${day.date} (${format(parseDateStr(day.date), 'EEE')}) [${day.intensity}]: ${methodStr}`);
         });
       });
       fullScheduleStr = schedLines.join('\n');

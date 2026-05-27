@@ -27,7 +27,8 @@ import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, 
 import { Textarea } from '@/components/ui/textarea';
 import { TrainingDay } from '@/types/daily-intensity';
 import { IntensityLevel } from '@/types/training';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
+import { parseDateStr } from '@/utils/dateUtils';
 import { cn } from '@/lib/utils';
 import { ExerciseDistribution, SessionSection } from '@/types/microcycle-planning';
 import { displayMethodLabel } from './methodLabelUtils';
@@ -205,7 +206,7 @@ export function SessionColumnView({
     return null;
   }
   
-  const dateObj = parseISO(day.date);
+  const dateObj = parseDateStr(day.date);
   const dayName = format(dateObj, 'EEEE');
   const dateStr = format(dateObj, 'MMM d');
   const sessionName = day.sessionNames?.[sessionIndex] || `Session ${sessionIndex + 1}`;

@@ -48,7 +48,8 @@ import { ResourcesButton } from "@/components/programs/ResourcesButton";
 import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
-import { format, addWeeks, differenceInWeeks, addDays, differenceInDays, parseISO } from "date-fns";
+import { format, addWeeks, differenceInWeeks, addDays, differenceInDays } from "date-fns";
+import { parseDateStr } from "@/utils/dateUtils";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 import { IntensityLevel } from "@/types/training";
 import { BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabelFull, getBorgStyleLight, migrateLegacyIntensity } from "@/utils/intensityScale";
@@ -275,8 +276,8 @@ export default function MesocyclePage() {
       const rawEndDate = data.planDuration?.endDate || data.smartGoal?.endDate;
       const rawTotalWeeks = data.planDuration?.totalWeeks || data.smartGoal?.totalWeeks;
 
-      const startDate = rawStartDate ? new Date(rawStartDate) : new Date();
-      const endDate = rawEndDate ? new Date(rawEndDate) : addWeeks(startDate, 12);
+      const startDate = rawStartDate ? parseDateStr(rawStartDate) : new Date();
+      const endDate = rawEndDate ? parseDateStr(rawEndDate) : addWeeks(startDate, 12);
       const weeks = rawTotalWeeks ||
         (rawStartDate && rawEndDate
           ? Math.ceil((Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))) / 7)
@@ -673,14 +674,14 @@ export default function MesocyclePage() {
     athleteCalendarEvents
       .filter(e => e.type === 'test')
       .forEach(e => {
-        const d = parseISO(e.date);
+        const d = parseDateStr(e.date);
         if (d >= start && d <= end) addTest(e.title, d);
       });
     // Source 2: plan-state (wizard-assigned sub-goal tests)
     macrocycleData?.subGoals?.forEach((sg: any) => {
       const name = sg.testMethod || sg.description || 'Test';
       sg.testDates?.forEach((td: string) => {
-        const d = parseISO(td);
+        const d = parseDateStr(td);
         if (d >= start && d <= end) addTest(name, d);
       });
     });
@@ -688,7 +689,7 @@ export default function MesocyclePage() {
     macrocycleData?.smartGoals?.forEach((sg: any) => {
       const name = sg.description || 'Test';
       sg.testDates?.forEach((td: string) => {
-        const d = parseISO(td);
+        const d = parseDateStr(td);
         if (d >= start && d <= end) addTest(name, d);
       });
     });
@@ -710,14 +711,14 @@ export default function MesocyclePage() {
     athleteCalendarEvents
       .filter(e => e.type === 'event')
       .forEach(e => {
-        const d = parseISO(e.date);
+        const d = parseDateStr(e.date);
         if (d >= start && d <= end) addEvent(e.title, d);
       });
     // Source 2: plan-state (wizard-assigned events)
     macrocycleData?.events?.forEach((e: any) => {
       const name = e.name || 'Event';
       e.eventDates?.forEach((ed: string) => {
-        const d = parseISO(ed);
+        const d = parseDateStr(ed);
         if (d >= start && d <= end) addEvent(name, d);
       });
     });
@@ -1447,7 +1448,7 @@ export default function MesocyclePage() {
     };
     // Source 1: calendarEvents (athlete-bound)
     athleteCalendarEvents.forEach(e => {
-      const d = parseISO(e.date);
+      const d = parseDateStr(e.date);
       if (d >= mesoStart && d <= mesoEnd) {
         if (e.type === 'test') addTest(e.title, d);
         else addEvent(e.title, d);
@@ -1457,7 +1458,7 @@ export default function MesocyclePage() {
     macrocycleData?.smartGoals?.forEach((sg: any) => {
       const name = sg.description || 'Test';
       sg.testDates?.forEach((td: string) => {
-        const d = parseISO(td);
+        const d = parseDateStr(td);
         if (d >= mesoStart && d <= mesoEnd) addTest(name, d);
       });
     });
@@ -1465,7 +1466,7 @@ export default function MesocyclePage() {
     macrocycleData?.subGoals?.forEach((sg: any) => {
       const name = sg.testMethod || sg.description || 'Test';
       sg.testDates?.forEach((td: string) => {
-        const d = parseISO(td);
+        const d = parseDateStr(td);
         if (d >= mesoStart && d <= mesoEnd) addTest(name, d);
       });
     });
@@ -1473,7 +1474,7 @@ export default function MesocyclePage() {
     macrocycleData?.events?.forEach((e: any) => {
       const name = e.name || 'Event';
       e.eventDates?.forEach((ed: string) => {
-        const d = parseISO(ed);
+        const d = parseDateStr(ed);
         if (d >= mesoStart && d <= mesoEnd) addEvent(name, d);
       });
     });

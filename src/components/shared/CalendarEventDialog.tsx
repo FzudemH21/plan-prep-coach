@@ -15,7 +15,8 @@ import { Label } from '@/components/ui/label';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Trophy, Calendar, X, Plus, ChevronsUpDown, Check } from 'lucide-react';
 import { CalendarEvent } from '@/hooks/useCalendarEvents';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
+import { parseDateStr } from '@/utils/dateUtils';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { AthletePerformanceParameter } from '@/types/athlete';
@@ -164,7 +165,7 @@ export function CalendarEventDialog({
           >
             <DialogHeader>
               <DialogTitle>
-                Tests & Events — {format(parseISO(date), 'PPP')}
+                Tests & Events — {format(parseDateStr(date), 'PPP')}
               </DialogTitle>
             </DialogHeader>
 

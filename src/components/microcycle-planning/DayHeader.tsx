@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
+import { parseDateStr } from '@/utils/dateUtils';
 import { Trophy, Calendar } from 'lucide-react';
 import { IntensityLevel } from '@/types/training';
 import { BorgLevel, BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabel, getBorgLabelFull, migrateLegacyIntensity } from '@/utils/intensityScale';
@@ -28,7 +29,7 @@ export function DayHeader({
 }: DayHeaderProps) {
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
 
-  const parsedDate = parseISO(date);
+  const parsedDate = parseDateStr(date);
   const dayOfWeek = format(parsedDate, 'EEEE').toUpperCase();
   const monthDay = format(parsedDate, 'MMM d, yyyy');
 
