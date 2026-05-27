@@ -58,9 +58,24 @@ export default function AthleteConnectPage() {
       const { data: authData, error: signUpError } = await supabase.auth.signUp({ email, password });
       if (signUpError) throw signUpError;
       const userId = authData.user?.id;
-      if (!userId) throw new Error('Account creation failed — no user id returned.');
+      if (!userId) throw new Error('Account creation failed — please try again.');
 
-      // 2. Link the connection row
+      // 2. Ensure we have an active session (signUp may not auto-sign-in if email
+      //    confirmation is enabled in Supabase; signing in explicitly handles both cases).
+      if (!authData.session) {
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInError) {
+          // Email confirmation is required — surface a clear message
+          setStep('success'); // reuse success card with custom message below
+          setError('confirm-email');
+          return;
+        }
+      }
+
+      // 3. Tag user as athlete in metadata (requires active session)
+      await supabase.auth.updateUser({ data: { role: 'athlete' } });
+
+      // 4. Link the connection row — now that auth.uid() is set, the RLS policy allows this
       const { error: linkError } = await supabase
         .from('athlete_connections')
         .update({
@@ -69,10 +84,7 @@ export default function AthleteConnectPage() {
           connected_at: new Date().toISOString(),
         })
         .eq('id', connectionId);
-      if (linkError) throw linkError;
-
-      // 3. Tag user as athlete in metadata
-      await supabase.auth.updateUser({ data: { role: 'athlete' } });
+      if (linkError) throw new Error(`Could not link account: ${linkError.message}`);
 
       setStep('success');
       setTimeout(() => navigate('/athlete/today'), 2500);
@@ -196,11 +208,25 @@ export default function AthleteConnectPage() {
         {step === 'success' && (
           <Card>
             <CardContent className="py-8 flex flex-col items-center gap-3 text-center">
-              <CheckCircle2 className="h-8 w-8 text-green-500" />
-              <p className="font-medium">Account created!</p>
-              <p className="text-sm text-muted-foreground">
-                Taking you to your training plan…
-              </p>
+              {error === 'confirm-email' ? (
+                <>
+                  <CheckCircle2 className="h-8 w-8 text-blue-500" />
+                  <p className="font-medium">Check your email</p>
+                  <p className="text-sm text-muted-foreground">
+                    We sent a confirmation link to <strong>{email}</strong>.
+                    Click it, then sign in at{' '}
+                    <a href="/athlete/login" className="underline text-primary">athlete login</a>.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-8 w-8 text-green-500" />
+                  <p className="font-medium">Account created!</p>
+                  <p className="text-sm text-muted-foreground">
+                    Taking you to your training plan…
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
         )}
