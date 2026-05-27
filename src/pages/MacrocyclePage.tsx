@@ -26,7 +26,8 @@ import {
 import { useDisplayMode } from "@/contexts/DisplayModeContext";
 import { useParametersDataV2 } from "@/hooks/useParametersDataV2";
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
-import { format, parseISO, addDays, differenceInDays } from "date-fns";
+import { format, addDays, differenceInDays } from "date-fns";
+import { parseDateStr } from "@/utils/dateUtils";
 import { useAthletes } from "@/hooks/useAthletes";
 import { getAthleteDisplayName, Athlete } from "@/types/athlete";
 import { cn } from "@/lib/utils";
@@ -1166,7 +1167,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                     </p>
                     {goal.testDates && goal.testDates.length > 0 && (
                       <p className="text-xs text-green-600 mt-1">
-                        📅 {goal.testDates.map(d => format(parseISO(d), 'd MMM yyyy')).join(', ')}
+                        📅 {goal.testDates.map(d => format(parseDateStr(d), 'd MMM yyyy')).join(', ')}
                       </p>
                     )}
                   </div>
@@ -1570,7 +1571,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                                         <p>{subGoal.description}</p>
                                       )}
                                       {subGoal.testDates && subGoal.testDates.length > 0 && (
-                                        <p>📅 {subGoal.testDates.map(d => format(parseISO(d), 'd MMM yyyy')).join(', ')}</p>
+                                        <p>📅 {subGoal.testDates.map(d => format(parseDateStr(d), 'd MMM yyyy')).join(', ')}</p>
                                       )}
                                     </div>
                                   </CollapsibleContent>
@@ -1648,7 +1649,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                               </div>
                               {event.eventDates && event.eventDates.length > 0 && (
                                 <div className="text-xs text-muted-foreground mt-1">
-                                  📅 {event.eventDates.map(d => format(parseISO(d), 'd MMM yyyy')).join(', ')}
+                                  📅 {event.eventDates.map(d => format(parseDateStr(d), 'd MMM yyyy')).join(', ')}
                                 </div>
                               )}
                             </div>
@@ -1741,7 +1742,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                     scheduled: subGoals
                       .flatMap(sg => sg.testDates || [])
                       .concat(events.flatMap(e => e.eventDates || []))
-                      .map(dateStr => parseISO(dateStr))
+                      .map(dateStr => parseDateStr(dateStr))
                   }}
                   modifiersStyles={{
                     start: { 

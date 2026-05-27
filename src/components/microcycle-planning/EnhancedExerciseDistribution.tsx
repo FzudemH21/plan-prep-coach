@@ -11,7 +11,8 @@ import { SessionColumnView } from './SessionColumnView';
 import { DayHeader } from './DayHeader';
 import { displayMethodLabel } from './methodLabelUtils';
 import { useToast } from '@/hooks/use-toast';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
+import { parseDateStr } from '@/utils/dateUtils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight, Copy, Loader2, Plus, Trash2, Recycle, Trophy, Calendar as CalendarIcon } from 'lucide-react';
@@ -2385,7 +2386,7 @@ export function EnhancedExerciseDistribution({
                     const mesocycleEndDate = typeof mesocycle.endDate === 'string'
                       ? (mesocycle.endDate as string).split('T')[0]
                       : format(mesocycle.endDate as Date, 'yyyy-MM-dd');
-                    return `${format(parseISO(mesocycleStartDate), 'MMM d, yyyy')} - ${format(parseISO(mesocycleEndDate), 'MMM d, yyyy')}`;
+                    return `${format(parseDateStr(mesocycleStartDate), 'MMM d, yyyy')} - ${format(parseDateStr(mesocycleEndDate), 'MMM d, yyyy')}`;
                   })()}
                 </p>
               </div>
