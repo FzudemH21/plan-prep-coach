@@ -98,13 +98,16 @@ const filterByRange = (values: ParameterValue[], range: TimeRange): ParameterVal
   return values.filter(v => new Date(v.recordedAt) >= cutoff);
 };
 
+// recordedAt is always a full ISO string — use parseISO to avoid appending T12:00 twice
+const parseRecordedAt = (recordedAt: string): Date => parseISO(recordedAt);
+
 const toChartData = (values: ParameterValue[], range: TimeRange) => {
   const filtered = filterByRange(values, range);
   return filtered
     .filter(v => !isNaN(parseFloat(v.value)))
     .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime())
     .map(v => ({
-      date: format(new Date(v.recordedAt + 'T12:00:00'), 'MMM d'),
+      date: format(parseRecordedAt(v.recordedAt), 'MMM d'),
       value: parseFloat(v.value),
       id: v.id,
     }));
@@ -143,7 +146,7 @@ function ParameterListItem({
         <div className="text-sm font-medium truncate">{name}</div>
         {latestValue ? (
           <div className="text-xs text-muted-foreground">
-            {latestValue.value}{unit ? ` ${unit}` : ''} · {format(new Date(latestValue.recordedAt + 'T12:00:00'), 'MMM d, yyyy')}
+            {latestValue.value}{unit ? ` ${unit}` : ''} · {format(parseRecordedAt(latestValue.recordedAt), 'MMM d, yyyy')}
           </div>
         ) : (
           <div className="text-xs text-muted-foreground">No data</div>
@@ -448,7 +451,7 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
                         <span className="text-muted-foreground text-sm">{selectedUnit}</span>
                       )}
                       <span className="text-xs text-muted-foreground ml-1">
-                        as of {format(new Date(latestValue.recordedAt + 'T12:00:00'), 'MMM d, yyyy')}
+                        as of {format(parseRecordedAt(latestValue.recordedAt), 'MMM d, yyyy')}
                       </span>
                     </div>
                   ) : (
@@ -572,7 +575,7 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
                     {sortedHistory.map(v => (
                       <div key={v.id} className="flex items-center justify-between px-4 py-2.5 text-sm group">
                         <span className="text-muted-foreground text-xs w-28 shrink-0">
-                          {format(new Date(v.recordedAt + 'T12:00:00'), 'MMM d, yyyy')}
+                          {format(parseRecordedAt(v.recordedAt), 'MMM d, yyyy')}
                         </span>
                         <span className="font-medium flex-1">
                           {v.value}{selectedUnit ? ` ${selectedUnit}` : ''}
