@@ -42,12 +42,6 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import {
   Plus,
@@ -59,8 +53,6 @@ import {
   LineChart,
   Search,
   Dumbbell,
-  ChevronDown,
-  ChevronRight,
 } from 'lucide-react';
 import {
   Athlete,
@@ -89,7 +81,7 @@ type SelectedPerformance = {
 
 type SelectedItem = SelectedBiometric | SelectedPerformance;
 type TimeRange = '1M' | '3M' | '6M' | '1Y' | 'All';
-type TopTab = 'body' | 'exercise';
+type TopTab = 'bio' | 'performance' | 'exercise';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -123,36 +115,6 @@ const toChartData = (values: ParameterValue[], range: TimeRange) => {
 };
 
 // ── Sub-components ────────────────────────────────────────────────────────────
-
-function SectionHeader({
-  icon,
-  label,
-  count,
-  expanded,
-  onToggle,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  count: number;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      onClick={onToggle}
-      className="w-full flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide hover:bg-muted/40 transition-colors"
-    >
-      {expanded ? (
-        <ChevronDown className="h-3 w-3 shrink-0" />
-      ) : (
-        <ChevronRight className="h-3 w-3 shrink-0" />
-      )}
-      {icon}
-      <span className="flex-1 text-left">{label}</span>
-      <span className="normal-case font-normal text-[11px]">{count}</span>
-    </button>
-  );
-}
 
 function MetricRow({
   name,
@@ -224,11 +186,8 @@ interface AthletePerformanceTabProps {
 }
 
 export function AthletePerformanceTab({ athlete, athleteData }: AthletePerformanceTabProps) {
-  const [topTab, setTopTab] = useState<TopTab>('body');
+  const [topTab, setTopTab] = useState<TopTab>('bio');
   const [search, setSearch] = useState('');
-  const [expandBio, setExpandBio] = useState(true);
-  const [expandPerf, setExpandPerf] = useState(true);
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
 
   const [selected, setSelected] = useState<SelectedItem | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>('All');
@@ -291,19 +250,21 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
     });
   }, [athletePerformanceParams, search, athleticismParameters]);
 
-  // Keep selected item in sync when underlying data changes
+  // Keep selected item in sync; only resolve if it matches the active tab
   const resolvedSelected = useMemo<SelectedItem | null>(() => {
     if (!selected) return null;
     if (selected.kind === 'biometric') {
+      if (topTab !== 'bio') return null;
       const ab = athleteBiometrics.find(x => x.id === selected.ab.id);
       if (!ab) return null;
       return { kind: 'biometric', ab, def: selected.def };
     } else {
+      if (topTab !== 'performance') return null;
       const pp = athletePerformanceParams.find(x => x.id === selected.pp.id);
       if (!pp) return null;
       return { kind: 'performance', pp, param: selected.param };
     }
-  }, [selected, athleteBiometrics, athletePerformanceParams]);
+  }, [selected, topTab, athleteBiometrics, athletePerformanceParams]);
 
   const selectedValues = resolvedSelected
     ? resolvedSelected.kind === 'biometric'
@@ -402,44 +363,208 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
+  // Shared right panel (used by bio + performance tabs)
+  const rightPanel = (
+    <div className="flex-1 min-w-0 flex flex-col">
+      {!resolvedSelected ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+          <LineChart className="h-10 w-10 opacity-30" />
+          <p className="text-sm">Select a metric to view its history</p>
+        </div>
+      ) : (
+        <ScrollArea className="flex-1">
+          <div className="p-5 space-y-5">
+
+            {/* Header */}
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-semibold">{selectedName}</h3>
+                {latestValue ? (
+                  <div className="flex items-baseline gap-1.5 mt-1">
+                    <span className="text-3xl font-bold">{latestValue.value}</span>
+                    {selectedUnit && (
+                      <span className="text-muted-foreground text-sm">{selectedUnit}</span>
+                    )}
+                    <span className="text-xs text-muted-foreground ml-1">
+                      as of {format(parseRecordedAt(latestValue.recordedAt), 'MMM d, yyyy')}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground mt-1">No measurements yet</p>
+                )}
+              </div>
+              {resolvedSelected.kind === 'performance' && (
+                <Badge variant="secondary" className="text-xs">
+                  {resolvedSelected.param.category || 'Performance'}
+                </Badge>
+              )}
+            </div>
+
+            {/* Chart */}
+            {isQuantitative && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-1">
+                  {(['1M', '3M', '6M', '1Y', 'All'] as TimeRange[]).map(r => (
+                    <Button
+                      key={r}
+                      variant={timeRange === r ? 'default' : 'ghost'}
+                      size="sm"
+                      className="h-7 text-xs px-2.5"
+                      onClick={() => setTimeRange(r)}
+                    >
+                      {r}
+                    </Button>
+                  ))}
+                </div>
+                {chartData.length >= 2 ? (
+                  <div className="h-48 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="performanceGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.25} />
+                            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis
+                          dataKey="date"
+                          tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                          axisLine={false}
+                          tickLine={false}
+                          domain={['auto', 'auto']}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--popover))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                          }}
+                          formatter={(v: number) => [`${v}${selectedUnit ? ` ${selectedUnit}` : ''}`, selectedName]}
+                          labelStyle={{ color: 'hsl(var(--muted-foreground))' }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="value"
+                          stroke="hsl(var(--primary))"
+                          strokeWidth={2}
+                          fill="url(#performanceGrad)"
+                          dot={{ r: 3, fill: 'hsl(var(--primary))' }}
+                          activeDot={{ r: 5 }}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="h-48 w-full flex items-center justify-center border rounded-lg bg-muted/20">
+                    <p className="text-sm text-muted-foreground">
+                      {selectedValues.length === 0
+                        ? 'Add measurements to see the chart'
+                        : 'Add at least 2 measurements to see the chart'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Add measurement */}
+            <div className="border rounded-lg p-4 space-y-3">
+              <h4 className="text-sm font-medium">Add measurement</h4>
+              <div className="flex gap-2 items-end">
+                <div className="space-y-1">
+                  <Label className="text-xs">Date</Label>
+                  <Input
+                    type="date"
+                    value={newDate}
+                    onChange={e => setNewDate(e.target.value)}
+                    className="h-8 text-sm w-36"
+                  />
+                </div>
+                <div className="space-y-1 flex-1">
+                  <Label className="text-xs">Value{selectedUnit ? ` (${selectedUnit})` : ''}</Label>
+                  <Input
+                    value={newValue}
+                    onChange={e => setNewValue(e.target.value)}
+                    placeholder={isQuantitative ? '0.0' : 'Enter value'}
+                    className="h-8 text-sm"
+                    onKeyDown={e => e.key === 'Enter' && handleAddValue()}
+                  />
+                </div>
+                <Button size="sm" className="h-8" onClick={handleAddValue} disabled={!newValue.trim()}>
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Add
+                </Button>
+              </div>
+            </div>
+
+            {/* History */}
+            {sortedHistory.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium">History</h4>
+                <div className="border rounded-lg divide-y">
+                  {sortedHistory.map(v => (
+                    <div key={v.id} className="flex items-center justify-between px-4 py-2.5 text-sm group">
+                      <span className="text-muted-foreground text-xs w-28 shrink-0">
+                        {format(parseRecordedAt(v.recordedAt), 'MMM d, yyyy')}
+                      </span>
+                      <span className="font-medium flex-1">
+                        {v.value}{selectedUnit ? ` ${selectedUnit}` : ''}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleDeleteValue(v.id)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          </div>
+        </ScrollArea>
+      )}
+    </div>
+  );
+
   return (
     <div className="flex flex-col h-full min-h-0">
 
-      {/* ── Top section tabs ──────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b shrink-0">
-        <button
-          onClick={() => setTopTab('body')}
-          className={cn(
-            'flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors',
-            topTab === 'body'
-              ? 'bg-primary text-primary-foreground'
-              : 'text-muted-foreground hover:bg-muted'
-          )}
-        >
-          <Activity className="h-3.5 w-3.5" />
-          Body Metrics
-        </button>
-        <button
-          onClick={() => setTopTab('exercise')}
-          className={cn(
-            'flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors',
-            topTab === 'exercise'
-              ? 'bg-primary text-primary-foreground'
-              : 'text-muted-foreground hover:bg-muted'
-          )}
-        >
-          <Dumbbell className="h-3.5 w-3.5" />
-          Exercise Metrics
-        </button>
+      {/* ── Top tabs ──────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-1 px-4 py-3 border-b shrink-0">
+        {([
+          { key: 'bio',         label: 'Anthropometrics & Biomarkers', icon: <Activity className="h-3.5 w-3.5" /> },
+          { key: 'performance', label: 'Performance',                  icon: <TrendingUp className="h-3.5 w-3.5" /> },
+          { key: 'exercise',    label: 'Exercise Metrics',             icon: <Dumbbell className="h-3.5 w-3.5" /> },
+        ] as { key: TopTab; label: string; icon: React.ReactNode }[]).map(({ key, label, icon }) => (
+          <button
+            key={key}
+            onClick={() => { setTopTab(key); setSearch(''); }}
+            className={cn(
+              'flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors',
+              topTab === key
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted'
+            )}
+          >
+            {icon}
+            {label}
+          </button>
+        ))}
       </div>
 
-      {topTab === 'body' ? (
+      {/* ── Anthropometrics & Biomarkers ──────────────────────────────────── */}
+      {topTab === 'bio' && (
         <div className="flex flex-1 min-h-0">
-
-          {/* ── Left panel: metric list ──────────────────────────────────── */}
           <div className="w-72 shrink-0 border-r flex flex-col">
-
-            {/* Search + Add New */}
             <div className="p-3 border-b flex items-center gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
@@ -450,297 +575,101 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
                   className="pl-8 h-8 text-sm"
                 />
               </div>
-              <DropdownMenu open={addMenuOpen} onOpenChange={setAddMenuOpen}>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-8 gap-1 shrink-0 text-xs">
-                    <Plus className="h-3.5 w-3.5" />
-                    Add New
-                    <ChevronDown className="h-3 w-3 opacity-60" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => { setAddMenuOpen(false); setShowAddBiometric(true); }}>
-                    <Activity className="h-4 w-4 mr-2 text-muted-foreground" />
-                    Body Metric
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { setAddMenuOpen(false); setShowAddPerformance(true); }}>
-                    <TrendingUp className="h-4 w-4 mr-2 text-muted-foreground" />
-                    Performance Parameter
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button variant="outline" size="sm" className="h-8 gap-1 shrink-0 text-xs" onClick={() => setShowAddBiometric(true)}>
+                <Plus className="h-3.5 w-3.5" />
+                Add
+              </Button>
             </div>
-
             <ScrollArea className="flex-1">
-              <div>
-
-                {/* ── Anthropometrics & Biomarkers ─────────────────────── */}
-                <SectionHeader
-                  icon={<Activity className="h-3 w-3" />}
-                  label="Anthropometrics & Biomarkers"
-                  count={filteredBiometrics.length}
-                  expanded={expandBio}
-                  onToggle={() => setExpandBio(v => !v)}
-                />
-                {expandBio && (
-                  <>
-                    <ColumnHeaders />
-                    {filteredBiometrics.length === 0 ? (
-                      <p className="text-xs text-muted-foreground px-3 py-2.5">
-                        {search ? 'No matches.' : 'No metrics tracked yet.'}
-                      </p>
-                    ) : (
-                      filteredBiometrics.map(ab => {
-                        const def = athleteData.getBiometricDefinition(ab.biometricDefinitionId);
-                        if (!def) return null;
-                        const latest = getLatestValue(ab.values);
-                        const isSel = resolvedSelected?.kind === 'biometric' && resolvedSelected.ab.id === ab.id;
-                        return (
-                          <MetricRow
-                            key={ab.id}
-                            name={def.name}
-                            unit={def.unit}
-                            latestValue={latest}
-                            isSelected={isSel}
-                            isSystem={def.isSystem}
-                            onSelect={() => setSelected({ kind: 'biometric', ab, def })}
-                            onRemove={() => handleRemoveBiometric(ab)}
-                          />
-                        );
-                      })
-                    )}
-                  </>
-                )}
-
-                <div className="border-t my-1" />
-
-                {/* ── Performance Parameters ───────────────────────────── */}
-                <SectionHeader
-                  icon={<TrendingUp className="h-3 w-3" />}
-                  label="Performance"
-                  count={filteredPerformance.length}
-                  expanded={expandPerf}
-                  onToggle={() => setExpandPerf(v => !v)}
-                />
-                {expandPerf && (
-                  <>
-                    <ColumnHeaders />
-                    {filteredPerformance.length === 0 ? (
-                      <p className="text-xs text-muted-foreground px-3 py-2.5">
-                        {search ? 'No matches.' : 'No performance parameters tracked.'}
-                      </p>
-                    ) : (
-                      filteredPerformance.map(pp => {
-                        const param = athleticismParameters.find(p => p.id === pp.athleticismParameterId);
-                        if (!param) return null;
-                        const latest = getLatestValue(pp.values);
-                        const isSel = resolvedSelected?.kind === 'performance' && resolvedSelected.pp.id === pp.id;
-                        return (
-                          <MetricRow
-                            key={pp.id}
-                            name={param.name}
-                            unit={param.unit}
-                            latestValue={latest}
-                            isSelected={isSel}
-                            onSelect={() => setSelected({ kind: 'performance', pp, param })}
-                            onRemove={() => handleRemovePerformance(pp)}
-                          />
-                        );
-                      })
-                    )}
-                  </>
-                )}
-
-              </div>
+              <ColumnHeaders />
+              {filteredBiometrics.length === 0 ? (
+                <p className="text-xs text-muted-foreground px-3 py-2.5">
+                  {search ? 'No matches.' : 'No metrics tracked yet.'}
+                </p>
+              ) : (
+                filteredBiometrics.map(ab => {
+                  const def = athleteData.getBiometricDefinition(ab.biometricDefinitionId);
+                  if (!def) return null;
+                  const latest = getLatestValue(ab.values);
+                  const isSel = resolvedSelected?.kind === 'biometric' && resolvedSelected.ab.id === ab.id;
+                  return (
+                    <MetricRow
+                      key={ab.id}
+                      name={def.name}
+                      unit={def.unit}
+                      latestValue={latest}
+                      isSelected={isSel}
+                      isSystem={def.isSystem}
+                      onSelect={() => setSelected({ kind: 'biometric', ab, def })}
+                      onRemove={() => handleRemoveBiometric(ab)}
+                    />
+                  );
+                })
+              )}
             </ScrollArea>
           </div>
-
-          {/* ── Right panel: chart + history ─────────────────────────────── */}
-          <div className="flex-1 min-w-0 flex flex-col">
-            {!resolvedSelected ? (
-              <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
-                <LineChart className="h-10 w-10 opacity-30" />
-                <p className="text-sm">Select a metric to view its history</p>
-              </div>
-            ) : (
-              <ScrollArea className="flex-1">
-                <div className="p-5 space-y-5">
-
-                  {/* Header */}
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold">{selectedName}</h3>
-                      {latestValue ? (
-                        <div className="flex items-baseline gap-1.5 mt-1">
-                          <span className="text-3xl font-bold">{latestValue.value}</span>
-                          {selectedUnit && (
-                            <span className="text-muted-foreground text-sm">{selectedUnit}</span>
-                          )}
-                          <span className="text-xs text-muted-foreground ml-1">
-                            as of {format(parseRecordedAt(latestValue.recordedAt), 'MMM d, yyyy')}
-                          </span>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground mt-1">No measurements yet</p>
-                      )}
-                    </div>
-                    {resolvedSelected.kind === 'performance' && (
-                      <Badge variant="secondary" className="text-xs">
-                        {resolvedSelected.param.category || 'Performance'}
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Chart */}
-                  {isQuantitative && (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1">
-                        {(['1M', '3M', '6M', '1Y', 'All'] as TimeRange[]).map(r => (
-                          <Button
-                            key={r}
-                            variant={timeRange === r ? 'default' : 'ghost'}
-                            size="sm"
-                            className="h-7 text-xs px-2.5"
-                            onClick={() => setTimeRange(r)}
-                          >
-                            {r}
-                          </Button>
-                        ))}
-                      </div>
-                      {chartData.length >= 2 ? (
-                        <div className="h-48 w-full">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                              <defs>
-                                <linearGradient id="performanceGrad" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.25} />
-                                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                                </linearGradient>
-                              </defs>
-                              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                              <XAxis
-                                dataKey="date"
-                                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                                axisLine={false}
-                                tickLine={false}
-                              />
-                              <YAxis
-                                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                                axisLine={false}
-                                tickLine={false}
-                                domain={['auto', 'auto']}
-                              />
-                              <Tooltip
-                                contentStyle={{
-                                  backgroundColor: 'hsl(var(--popover))',
-                                  border: '1px solid hsl(var(--border))',
-                                  borderRadius: '6px',
-                                  fontSize: '12px',
-                                }}
-                                formatter={(v: number) => [`${v}${selectedUnit ? ` ${selectedUnit}` : ''}`, selectedName]}
-                                labelStyle={{ color: 'hsl(var(--muted-foreground))' }}
-                              />
-                              <Area
-                                type="monotone"
-                                dataKey="value"
-                                stroke="hsl(var(--primary))"
-                                strokeWidth={2}
-                                fill="url(#performanceGrad)"
-                                dot={{ r: 3, fill: 'hsl(var(--primary))' }}
-                                activeDot={{ r: 5 }}
-                              />
-                            </AreaChart>
-                          </ResponsiveContainer>
-                        </div>
-                      ) : (
-                        <div className="h-48 w-full flex items-center justify-center border rounded-lg bg-muted/20">
-                          <p className="text-sm text-muted-foreground">
-                            {selectedValues.length === 0
-                              ? 'Add measurements to see the chart'
-                              : 'Add at least 2 measurements to see the chart'}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Add measurement */}
-                  <div className="border rounded-lg p-4 space-y-3">
-                    <h4 className="text-sm font-medium">Add measurement</h4>
-                    <div className="flex gap-2 items-end">
-                      <div className="space-y-1">
-                        <Label className="text-xs">Date</Label>
-                        <Input
-                          type="date"
-                          value={newDate}
-                          onChange={e => setNewDate(e.target.value)}
-                          className="h-8 text-sm w-36"
-                        />
-                      </div>
-                      <div className="space-y-1 flex-1">
-                        <Label className="text-xs">Value{selectedUnit ? ` (${selectedUnit})` : ''}</Label>
-                        <Input
-                          value={newValue}
-                          onChange={e => setNewValue(e.target.value)}
-                          placeholder={isQuantitative ? '0.0' : 'Enter value'}
-                          className="h-8 text-sm"
-                          onKeyDown={e => e.key === 'Enter' && handleAddValue()}
-                        />
-                      </div>
-                      <Button size="sm" className="h-8" onClick={handleAddValue} disabled={!newValue.trim()}>
-                        <Plus className="h-3.5 w-3.5 mr-1" /> Add
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* History */}
-                  {sortedHistory.length > 0 && (
-                    <div className="space-y-2">
-                      <h4 className="text-sm font-medium">History</h4>
-                      <div className="border rounded-lg divide-y">
-                        {sortedHistory.map(v => (
-                          <div key={v.id} className="flex items-center justify-between px-4 py-2.5 text-sm group">
-                            <span className="text-muted-foreground text-xs w-28 shrink-0">
-                              {format(parseRecordedAt(v.recordedAt), 'MMM d, yyyy')}
-                            </span>
-                            <span className="font-medium flex-1">
-                              {v.value}{selectedUnit ? ` ${selectedUnit}` : ''}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-                              onClick={() => handleDeleteValue(v.id)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                </div>
-              </ScrollArea>
-            )}
-          </div>
-
+          {rightPanel}
         </div>
-      ) : (
+      )}
 
-        /* ── Exercise Metrics tab ─────────────────────────────────────────── */
+      {/* ── Performance ───────────────────────────────────────────────────── */}
+      {topTab === 'performance' && (
         <div className="flex flex-1 min-h-0">
+          <div className="w-72 shrink-0 border-r flex flex-col">
+            <div className="p-3 border-b flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                <Input
+                  placeholder="Search parameters…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="pl-8 h-8 text-sm"
+                />
+              </div>
+              <Button variant="outline" size="sm" className="h-8 gap-1 shrink-0 text-xs" onClick={() => setShowAddPerformance(true)}>
+                <Plus className="h-3.5 w-3.5" />
+                Add
+              </Button>
+            </div>
+            <ScrollArea className="flex-1">
+              <ColumnHeaders />
+              {filteredPerformance.length === 0 ? (
+                <p className="text-xs text-muted-foreground px-3 py-2.5">
+                  {search ? 'No matches.' : 'No performance parameters tracked.'}
+                </p>
+              ) : (
+                filteredPerformance.map(pp => {
+                  const param = athleticismParameters.find(p => p.id === pp.athleticismParameterId);
+                  if (!param) return null;
+                  const latest = getLatestValue(pp.values);
+                  const isSel = resolvedSelected?.kind === 'performance' && resolvedSelected.pp.id === pp.id;
+                  return (
+                    <MetricRow
+                      key={pp.id}
+                      name={param.name}
+                      unit={param.unit}
+                      latestValue={latest}
+                      isSelected={isSel}
+                      onSelect={() => setSelected({ kind: 'performance', pp, param })}
+                      onRemove={() => handleRemovePerformance(pp)}
+                    />
+                  );
+                })
+              )}
+            </ScrollArea>
+          </div>
+          {rightPanel}
+        </div>
+      )}
 
-          {/* Left panel */}
+      {/* ── Exercise Metrics (placeholder) ────────────────────────────────── */}
+      {topTab === 'exercise' && (
+        <div className="flex flex-1 min-h-0">
           <div className="w-72 shrink-0 border-r flex flex-col">
             <div className="p-3 border-b">
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                <Input
-                  placeholder="Search exercises…"
-                  className="pl-8 h-8 text-sm"
-                  disabled
-                />
+                <Input placeholder="Search exercises…" className="pl-8 h-8 text-sm" disabled />
               </div>
             </div>
             <div className="flex-1 flex items-center justify-center p-4">
@@ -749,8 +678,6 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
               </p>
             </div>
           </div>
-
-          {/* Right panel — placeholder */}
           <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
             <div className="rounded-full bg-muted/50 p-5">
               <Dumbbell className="h-10 w-10 text-muted-foreground opacity-40" />
@@ -763,7 +690,6 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
             </div>
             <Badge variant="secondary" className="text-xs">Coming soon</Badge>
           </div>
-
         </div>
       )}
 
