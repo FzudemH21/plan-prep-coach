@@ -2,11 +2,11 @@
 
 export type Sex = 'male' | 'female' | 'other';
 
-export type DailyActivityLevel = 
-  | 'sedentary' 
-  | 'lightly_active' 
-  | 'moderately_active' 
-  | 'very_active' 
+export type DailyActivityLevel =
+  | 'sedentary'
+  | 'lightly_active'
+  | 'moderately_active'
+  | 'very_active'
   | 'extremely_active';
 
 export type ParameterType = 'text' | 'quantitative';
@@ -23,6 +23,52 @@ export interface AthleteNote {
   /** ISO date string */
   timestamp: string;
 }
+
+// ============ ATHLETE SETTINGS ============
+
+export interface AthleteSettings {
+  units: {
+    weight: 'metric' | 'imperial';   // kg vs lb
+    distance: 'metric' | 'imperial'; // km vs miles
+    length: 'metric' | 'imperial';   // cm vs inch
+  };
+  timezone: string;
+  dateFormat: 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'YYYY-MM-DD';
+  features: {
+    training: boolean;
+    workoutComments: boolean;
+    restDayMessage: boolean;
+    logActivities: boolean;
+    activityComments: boolean;
+    bodyMetrics: boolean;
+  };
+  athleteApp: {
+    calendarRange: 'current' | '+1week' | '+2weeks' | '+3weeks' | '+4weeks';
+    allowRearrangeWorkouts: boolean;
+    allowCreateWorkouts: boolean;
+    allowAddExercises: boolean;
+  };
+}
+
+export const DEFAULT_ATHLETE_SETTINGS: AthleteSettings = {
+  units: { weight: 'metric', distance: 'metric', length: 'metric' },
+  timezone: 'Europe/Berlin',
+  dateFormat: 'DD/MM/YYYY',
+  features: {
+    training: true,
+    workoutComments: true,
+    restDayMessage: true,
+    logActivities: true,
+    activityComments: true,
+    bodyMetrics: true,
+  },
+  athleteApp: {
+    calendarRange: '+2weeks',
+    allowRearrangeWorkouts: false,
+    allowCreateWorkouts: false,
+    allowAddExercises: false,
+  },
+};
 
 export interface Athlete {
   id: string;
@@ -45,6 +91,7 @@ export interface Athlete {
   /** @deprecated use notesHistory instead — kept for migration */
   notes?: string;
   notesHistory?: AthleteNote[];
+  settings?: AthleteSettings;
 }
 
 // Helper to get display name
@@ -61,6 +108,8 @@ export interface BiometricDefinition {
   name: string;
   type: ParameterType;
   unit: string | null; // Only for quantitative
+  /** System biometrics (Height, Weight) cannot be deleted */
+  isSystem?: boolean;
   createdAt: string;
 }
 
@@ -98,10 +147,14 @@ export type ParameterDefinition = BiometricDefinition;
 /** @deprecated Use AthleteBiometric instead */
 export type AthleteParameter = AthleteBiometric;
 
-// Default biometrics (health metrics)
+// Default biometrics (health metrics) — seeded when database is first initialized.
+// Height and Weight are system biometrics (isSystem: true) — cannot be deleted by coach.
+// Body Fat and Resting Heart Rate are pre-seeded examples but can be removed per athlete.
 export const DEFAULT_BIOMETRICS: Omit<BiometricDefinition, 'id' | 'createdAt'>[] = [
-  { name: 'Height', type: 'quantitative', unit: 'cm' },
-  { name: 'Weight', type: 'quantitative', unit: 'kg' },
+  { name: 'Height', type: 'quantitative', unit: 'cm', isSystem: true },
+  { name: 'Weight', type: 'quantitative', unit: 'kg', isSystem: true },
+  { name: 'Body Fat', type: 'quantitative', unit: '%' },
+  { name: 'Resting Heart Rate', type: 'quantitative', unit: 'bpm' },
 ];
 
 // Legacy alias
@@ -152,22 +205,22 @@ export interface AthleteCalendarAssignment {
   athleteId: string;
   programId: string;           // Reference to source TrainingProgram
   programName: string;         // Snapshot of program name at assignment time
-  
+
   // Assignment dates (shifted to athlete's calendar)
   startDate: string;           // ISO date string
   endDate: string;             // ISO date string
-  
+
   // Original program dates (for reference/warning)
   originalStartDate: string;
   originalEndDate: string;
-  
+
   // Selection filters (what portions were assigned)
   selectedMesocycleIds: string[];      // Empty = all mesocycles
   selectedMicrocycleIds: string[];     // Empty = all microcycles in selected mesocycles
-  
+
   // Copied data (snapshot at assignment time)
   assignedMesocycles: AssignedMesocycle[];  // Full mesocycle data with shifted dates
-  
+
   // Metadata
   createdAt: string;
   notes?: string;

@@ -54,7 +54,7 @@ const migrateData = (data: LegacyAthleteDatabase | AthleteDatabase): AthleteData
   return {
     groups: data.groups || [],
     athletes: (data.athletes || []).map(a => ({ ...a, groupIds: a.groupIds ?? [] })),
-    biometricDefinitions: (data as AthleteDatabase).biometricDefinitions || [],
+    biometricDefinitions: ensureDefaultBiometrics((data as AthleteDatabase).biometricDefinitions || []),
     athleteBiometrics: biometrics,
     athletePerformanceParameters: (data as AthleteDatabase).athletePerformanceParameters || [],
     calendarAssignments: (data as AthleteDatabase).calendarAssignments || [],
@@ -68,6 +68,7 @@ function getInitialData(): AthleteDatabase {
     name: p.name,
     type: p.type,
     unit: p.unit,
+    isSystem: p.isSystem,
     createdAt: now,
   }));
   return {
@@ -78,6 +79,35 @@ function getInitialData(): AthleteDatabase {
     athletePerformanceParameters: [],
     calendarAssignments: [],
   };
+}
+
+/**
+ * Ensures existing databases have all expected default biometric definitions.
+ * Adds any missing defaults (e.g. Body Fat, Resting Heart Rate added in a later version).
+ * Also stamps isSystem on Height/Weight if missing.
+ */
+function ensureDefaultBiometrics(defs: BiometricDefinition[]): BiometricDefinition[] {
+  let result = defs.map(d => {
+    // Stamp isSystem on Height/Weight if not already set
+    if (d.name === 'Height' || d.name === 'Weight') {
+      return { ...d, isSystem: true };
+    }
+    return d;
+  });
+  const now = new Date().toISOString();
+  DEFAULT_BIOMETRICS.forEach((p, i) => {
+    if (!result.some(d => d.name === p.name)) {
+      result = [...result, {
+        id: `default-param-${i}`,
+        name: p.name,
+        type: p.type,
+        unit: p.unit,
+        isSystem: p.isSystem,
+        createdAt: now,
+      }];
+    }
+  });
+  return result;
 }
 
 export function useAthletes() {
@@ -185,8 +215,8 @@ export function useAthletes() {
     await setData(prev => ({ ...prev, athleteBiometrics: prev.athleteBiometrics.filter(ab => ab.id !== athleteBiometricId) }));
   }, [setData]);
 
-  const addBiometricValue = useCallback(async (athleteBiometricId: string, value: string): Promise<ParameterValue> => {
-    const newValue: ParameterValue = { id: generateId(), value, recordedAt: new Date().toISOString() };
+  const addBiometricValue = useCallback(async (athleteBiometricId: string, value: string, recordedAt?: string): Promise<ParameterValue> => {
+    const newValue: ParameterValue = { id: generateId(), value, recordedAt: recordedAt ?? new Date().toISOString() };
     await setData(prev => ({
       ...prev,
       athleteBiometrics: prev.athleteBiometrics.map(ab =>
@@ -230,8 +260,8 @@ export function useAthletes() {
     await setData(prev => ({ ...prev, athletePerformanceParameters: prev.athletePerformanceParameters.filter(pp => pp.id !== performanceParameterId) }));
   }, [setData]);
 
-  const addPerformanceParameterValue = useCallback(async (performanceParameterId: string, value: string): Promise<ParameterValue> => {
-    const newValue: ParameterValue = { id: generateId(), value, recordedAt: new Date().toISOString() };
+  const addPerformanceParameterValue = useCallback(async (performanceParameterId: string, value: string, recordedAt?: string): Promise<ParameterValue> => {
+    const newValue: ParameterValue = { id: generateId(), value, recordedAt: recordedAt ?? new Date().toISOString() };
     await setData(prev => ({
       ...prev,
       athletePerformanceParameters: prev.athletePerformanceParameters.map(pp =>
