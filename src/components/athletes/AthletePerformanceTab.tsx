@@ -535,161 +535,141 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
     </div>
   );
 
-  return (
-    <div className="flex flex-col h-full min-h-0">
+  const TABS = [
+    { key: 'bio'         as TopTab, label: 'Body Metrics',     icon: <Activity   className="h-3.5 w-3.5" /> },
+    { key: 'performance' as TopTab, label: 'Performance',      icon: <TrendingUp className="h-3.5 w-3.5" /> },
+    { key: 'exercise'    as TopTab, label: 'Exercise Metrics', icon: <Dumbbell   className="h-3.5 w-3.5" /> },
+  ];
 
-      {/* ── Top tabs ──────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 px-4 py-3 border-b shrink-0">
-        {([
-          { key: 'bio',         label: 'Anthropometrics & Biomarkers', icon: <Activity className="h-3.5 w-3.5" /> },
-          { key: 'performance', label: 'Performance',                  icon: <TrendingUp className="h-3.5 w-3.5" /> },
-          { key: 'exercise',    label: 'Exercise Metrics',             icon: <Dumbbell className="h-3.5 w-3.5" /> },
-        ] as { key: TopTab; label: string; icon: React.ReactNode }[]).map(({ key, label, icon }) => (
-          <button
-            key={key}
-            onClick={() => { setTopTab(key); setSearch(''); }}
-            className={cn(
-              'flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors',
-              topTab === key
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-muted'
+  return (
+    <div className="flex flex-1 min-h-0">
+
+      {/* ── Left panel ────────────────────────────────────────────────────── */}
+      <div className="w-80 shrink-0 border-r flex flex-col">
+
+        {/* Tab strip inside the left panel */}
+        <div className="flex border-b shrink-0">
+          {TABS.map(({ key, label, icon }) => (
+            <button
+              key={key}
+              onClick={() => { setTopTab(key); setSearch(''); }}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px',
+                topTab === key
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40'
+              )}
+            >
+              {icon}
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Search + Add (bio & performance only) */}
+        {topTab !== 'exercise' && (
+          <div className="p-3 border-b flex items-center gap-2 shrink-0">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <Input
+                placeholder={topTab === 'bio' ? 'Search metrics…' : 'Search parameters…'}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="pl-8 h-8 text-sm"
+              />
+            </div>
+            <Button
+              variant="outline" size="sm" className="h-8 gap-1 shrink-0 text-xs"
+              onClick={() => topTab === 'bio' ? setShowAddBiometric(true) : setShowAddPerformance(true)}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add
+            </Button>
+          </div>
+        )}
+
+        {/* List area */}
+        {topTab === 'bio' && (
+          <ScrollArea className="flex-1">
+            <ColumnHeaders />
+            {filteredBiometrics.length === 0 ? (
+              <p className="text-xs text-muted-foreground px-3 py-2.5">
+                {search ? 'No matches.' : 'No metrics tracked yet.'}
+              </p>
+            ) : (
+              filteredBiometrics.map(ab => {
+                const def = athleteData.getBiometricDefinition(ab.biometricDefinitionId);
+                if (!def) return null;
+                const latest = getLatestValue(ab.values);
+                const isSel = resolvedSelected?.kind === 'biometric' && resolvedSelected.ab.id === ab.id;
+                return (
+                  <MetricRow
+                    key={ab.id}
+                    name={def.name}
+                    unit={def.unit}
+                    latestValue={latest}
+                    isSelected={isSel}
+                    isSystem={def.isSystem}
+                    onSelect={() => setSelected({ kind: 'biometric', ab, def })}
+                    onRemove={() => handleRemoveBiometric(ab)}
+                  />
+                );
+              })
             )}
-          >
-            {icon}
-            {label}
-          </button>
-        ))}
+          </ScrollArea>
+        )}
+
+        {topTab === 'performance' && (
+          <ScrollArea className="flex-1">
+            <ColumnHeaders />
+            {filteredPerformance.length === 0 ? (
+              <p className="text-xs text-muted-foreground px-3 py-2.5">
+                {search ? 'No matches.' : 'No performance parameters tracked.'}
+              </p>
+            ) : (
+              filteredPerformance.map(pp => {
+                const param = athleticismParameters.find(p => p.id === pp.athleticismParameterId);
+                if (!param) return null;
+                const latest = getLatestValue(pp.values);
+                const isSel = resolvedSelected?.kind === 'performance' && resolvedSelected.pp.id === pp.id;
+                return (
+                  <MetricRow
+                    key={pp.id}
+                    name={param.name}
+                    unit={param.unit}
+                    latestValue={latest}
+                    isSelected={isSel}
+                    onSelect={() => setSelected({ kind: 'performance', pp, param })}
+                    onRemove={() => handleRemovePerformance(pp)}
+                  />
+                );
+              })
+            )}
+          </ScrollArea>
+        )}
+
+        {topTab === 'exercise' && (
+          <div className="flex-1 flex items-center justify-center p-4">
+            <p className="text-xs text-muted-foreground text-center leading-relaxed">
+              Exercise data will appear here once the athlete app integration is live.
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* ── Anthropometrics & Biomarkers ──────────────────────────────────── */}
-      {topTab === 'bio' && (
-        <div className="flex flex-1 min-h-0">
-          <div className="w-72 shrink-0 border-r flex flex-col">
-            <div className="p-3 border-b flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                <Input
-                  placeholder="Search metrics…"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  className="pl-8 h-8 text-sm"
-                />
-              </div>
-              <Button variant="outline" size="sm" className="h-8 gap-1 shrink-0 text-xs" onClick={() => setShowAddBiometric(true)}>
-                <Plus className="h-3.5 w-3.5" />
-                Add
-              </Button>
-            </div>
-            <ScrollArea className="flex-1">
-              <ColumnHeaders />
-              {filteredBiometrics.length === 0 ? (
-                <p className="text-xs text-muted-foreground px-3 py-2.5">
-                  {search ? 'No matches.' : 'No metrics tracked yet.'}
-                </p>
-              ) : (
-                filteredBiometrics.map(ab => {
-                  const def = athleteData.getBiometricDefinition(ab.biometricDefinitionId);
-                  if (!def) return null;
-                  const latest = getLatestValue(ab.values);
-                  const isSel = resolvedSelected?.kind === 'biometric' && resolvedSelected.ab.id === ab.id;
-                  return (
-                    <MetricRow
-                      key={ab.id}
-                      name={def.name}
-                      unit={def.unit}
-                      latestValue={latest}
-                      isSelected={isSel}
-                      isSystem={def.isSystem}
-                      onSelect={() => setSelected({ kind: 'biometric', ab, def })}
-                      onRemove={() => handleRemoveBiometric(ab)}
-                    />
-                  );
-                })
-              )}
-            </ScrollArea>
+      {/* ── Right panel ───────────────────────────────────────────────────── */}
+      {topTab !== 'exercise' ? rightPanel : (
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
+          <div className="rounded-full bg-muted/50 p-5">
+            <Dumbbell className="h-10 w-10 text-muted-foreground opacity-40" />
           </div>
-          {rightPanel}
-        </div>
-      )}
-
-      {/* ── Performance ───────────────────────────────────────────────────── */}
-      {topTab === 'performance' && (
-        <div className="flex flex-1 min-h-0">
-          <div className="w-72 shrink-0 border-r flex flex-col">
-            <div className="p-3 border-b flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                <Input
-                  placeholder="Search parameters…"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  className="pl-8 h-8 text-sm"
-                />
-              </div>
-              <Button variant="outline" size="sm" className="h-8 gap-1 shrink-0 text-xs" onClick={() => setShowAddPerformance(true)}>
-                <Plus className="h-3.5 w-3.5" />
-                Add
-              </Button>
-            </div>
-            <ScrollArea className="flex-1">
-              <ColumnHeaders />
-              {filteredPerformance.length === 0 ? (
-                <p className="text-xs text-muted-foreground px-3 py-2.5">
-                  {search ? 'No matches.' : 'No performance parameters tracked.'}
-                </p>
-              ) : (
-                filteredPerformance.map(pp => {
-                  const param = athleticismParameters.find(p => p.id === pp.athleticismParameterId);
-                  if (!param) return null;
-                  const latest = getLatestValue(pp.values);
-                  const isSel = resolvedSelected?.kind === 'performance' && resolvedSelected.pp.id === pp.id;
-                  return (
-                    <MetricRow
-                      key={pp.id}
-                      name={param.name}
-                      unit={param.unit}
-                      latestValue={latest}
-                      isSelected={isSel}
-                      onSelect={() => setSelected({ kind: 'performance', pp, param })}
-                      onRemove={() => handleRemovePerformance(pp)}
-                    />
-                  );
-                })
-              )}
-            </ScrollArea>
+          <div className="max-w-xs space-y-2">
+            <h3 className="font-semibold text-base">Exercise Metrics</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Whenever an athlete logs a workout in the athlete app — sets, reps, weight, tempo — the data will automatically sync and appear here.
+            </p>
           </div>
-          {rightPanel}
-        </div>
-      )}
-
-      {/* ── Exercise Metrics (placeholder) ────────────────────────────────── */}
-      {topTab === 'exercise' && (
-        <div className="flex flex-1 min-h-0">
-          <div className="w-72 shrink-0 border-r flex flex-col">
-            <div className="p-3 border-b">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                <Input placeholder="Search exercises…" className="pl-8 h-8 text-sm" disabled />
-              </div>
-            </div>
-            <div className="flex-1 flex items-center justify-center p-4">
-              <p className="text-xs text-muted-foreground text-center leading-relaxed">
-                Exercise data will appear here once the athlete app integration is live.
-              </p>
-            </div>
-          </div>
-          <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
-            <div className="rounded-full bg-muted/50 p-5">
-              <Dumbbell className="h-10 w-10 text-muted-foreground opacity-40" />
-            </div>
-            <div className="max-w-xs space-y-2">
-              <h3 className="font-semibold text-base">Exercise Metrics</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Whenever an athlete logs a workout in the athlete app — sets, reps, weight, tempo — the data will automatically sync and appear here.
-              </p>
-            </div>
-            <Badge variant="secondary" className="text-xs">Coming soon</Badge>
-          </div>
+          <Badge variant="secondary" className="text-xs">Coming soon</Badge>
         </div>
       )}
 
