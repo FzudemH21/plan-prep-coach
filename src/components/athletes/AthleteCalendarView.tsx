@@ -24,6 +24,8 @@ import {
   shiftTrainingDaysDates,
   shiftDaySplitStatesDates,
 } from '@/utils/dateShifting';
+import { useAthleteConnections } from '@/hooks/useAthleteConnections';
+import { syncAthleteSchedule } from '@/utils/athleteScheduleSync';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -111,6 +113,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   const athleteData = useAthletes();
   const { data: toolboxData } = useToolboxData();
   const { toast } = useToast();
+  const { getConnectionForAthlete } = useAthleteConnections();
   const { addEvent: addCalendarEvent, addEvents: addCalendarEvents, deleteEvent: deleteCalendarEvent, getEventsForAthlete, getEventsForDate } = useCalendarEvents();
 
   // AI assistant state
@@ -1131,6 +1134,18 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 endDate: updatedEnd,
               });
             }
+            // Sync merged data to athlete_schedule
+            const mergeConnection = getConnectionForAthlete(athlete.id);
+            if (mergeConnection) {
+              syncAthleteSchedule(
+                mergeConnection.id,
+                assignment as AthleteCalendarAssignment,
+                finalTrainingDays,
+                filteredExercises,
+                program.name ?? program.wizardData?.planName ?? 'Training Plan',
+              ).catch(e => console.error('[ASSIGN] athlete schedule sync (merge) failed:', e));
+            }
+
             await transferTestsEvents();
           } else if (newAssignment) {
             // CREATE PATH: save to new assignment key and switch to it
@@ -1149,6 +1164,18 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
 
             localStorage.setItem(storageKey, JSON.stringify(dataToSave));
             console.log('[ASSIGN] saved to localStorage key:', storageKey, '| daySplitStates keys:', Object.keys(dataToSave.daySplitStates).length, '| trainingDays:', dataToSave.trainingDays.length);
+
+            // Sync to athlete_schedule so the athlete app can read sessions
+            const connection = getConnectionForAthlete(athlete.id);
+            if (connection) {
+              syncAthleteSchedule(
+                connection.id,
+                newAssignment,
+                dataToSave.trainingDays,
+                dataToSave.exerciseDistribution,
+                program.name ?? program.wizardData?.planName ?? 'Training Plan',
+              ).catch(e => console.error('[ASSIGN] athlete schedule sync failed:', e));
+            }
 
             await transferTestsEvents();
 
