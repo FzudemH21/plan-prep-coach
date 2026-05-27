@@ -15,9 +15,9 @@ const MICRO_IDS = [
 ] as const;
 
 const MICRO_INTENSITIES = [
-  ['easy', 'easy-moderate', 'moderate', 'deload'],
-  ['moderate', 'moderate-hard', 'hard', 'deload'],
-  ['moderate-hard', 'hard', 'extremely-hard', 'moderate'],
+  ['2', '4', '5', '1'],
+  ['5', '6', '7', '1'],
+  ['6', '7', '9', '5'],
 ] as const;
 
 const METHODS = [
@@ -169,15 +169,15 @@ export function loadSeedData(): unknown {
       startDate: planStart.toISOString(),
       endDate: addDays(planStart, 27).toISOString(),
       duration: 4,
-      intensity: 'moderate',
+      intensity: '5',
       trainingMethods: [...METHODS],
       allocatedSubGoals: [SUB1, SUB2],
       trainingQualities: ['Maximalkraft', 'Schnellkraft', 'Beschleunigung'],
       microcycles: [
-        { id: 'demo-micro-1-1', name: 'Woche 1', duration: 7, intensity: 'easy' },
-        { id: 'demo-micro-1-2', name: 'Woche 2', duration: 7, intensity: 'easy-moderate' },
-        { id: 'demo-micro-1-3', name: 'Woche 3', duration: 7, intensity: 'moderate' },
-        { id: 'demo-micro-1-4', name: 'Woche 4 (Deload)', duration: 7, intensity: 'deload' },
+        { id: 'demo-micro-1-1', name: 'Woche 1', duration: 7, intensity: '2' },
+        { id: 'demo-micro-1-2', name: 'Woche 2', duration: 7, intensity: '4' },
+        { id: 'demo-micro-1-3', name: 'Woche 3', duration: 7, intensity: '5' },
+        { id: 'demo-micro-1-4', name: 'Woche 4 (Deload)', duration: 7, intensity: '1' },
       ],
     },
     {
@@ -189,15 +189,15 @@ export function loadSeedData(): unknown {
       startDate: addDays(planStart, 28).toISOString(),
       endDate: addDays(planStart, 55).toISOString(),
       duration: 4,
-      intensity: 'hard',
+      intensity: '7',
       trainingMethods: [...METHODS],
       allocatedSubGoals: [SUB1, SUB2],
       trainingQualities: ['Maximalkraft', 'Schnellkraft', 'Maximalgeschwindigkeit'],
       microcycles: [
-        { id: 'demo-micro-2-1', name: 'Woche 5', duration: 7, intensity: 'moderate' },
-        { id: 'demo-micro-2-2', name: 'Woche 6', duration: 7, intensity: 'moderate-hard' },
-        { id: 'demo-micro-2-3', name: 'Woche 7', duration: 7, intensity: 'hard' },
-        { id: 'demo-micro-2-4', name: 'Woche 8 (Deload)', duration: 7, intensity: 'deload' },
+        { id: 'demo-micro-2-1', name: 'Woche 5', duration: 7, intensity: '5' },
+        { id: 'demo-micro-2-2', name: 'Woche 6', duration: 7, intensity: '6' },
+        { id: 'demo-micro-2-3', name: 'Woche 7', duration: 7, intensity: '7' },
+        { id: 'demo-micro-2-4', name: 'Woche 8 (Deload)', duration: 7, intensity: '1' },
       ],
     },
     {
@@ -209,32 +209,32 @@ export function loadSeedData(): unknown {
       startDate: addDays(planStart, 56).toISOString(),
       endDate: addDays(planStart, 83).toISOString(),
       duration: 4,
-      intensity: 'extremely-hard',
+      intensity: '9',
       trainingMethods: [METHODS[1], METHODS[2], METHODS[3]], // No max strength in peak phase
       allocatedSubGoals: [SUB1, SUB2],
       trainingQualities: ['Schnellkraft', 'Beschleunigung', 'Maximalgeschwindigkeit'],
       microcycles: [
-        { id: 'demo-micro-3-1', name: 'Woche 9', duration: 7, intensity: 'moderate-hard' },
-        { id: 'demo-micro-3-2', name: 'Woche 10', duration: 7, intensity: 'hard' },
-        { id: 'demo-micro-3-3', name: 'Woche 11', duration: 7, intensity: 'extremely-hard' },
-        { id: 'demo-micro-3-4', name: 'Woche 12 (Taper)', duration: 7, intensity: 'moderate' },
+        { id: 'demo-micro-3-1', name: 'Woche 9', duration: 7, intensity: '6' },
+        { id: 'demo-micro-3-2', name: 'Woche 10', duration: 7, intensity: '7' },
+        { id: 'demo-micro-3-3', name: 'Woche 11', duration: 7, intensity: '9' },
+        { id: 'demo-micro-3-4', name: 'Woche 12 (Taper)', duration: 7, intensity: '5' },
       ],
     },
   ];
 
   const microIntensityMap: Record<string, string> = {
-    'demo-micro-1-1': 'easy',
-    'demo-micro-1-2': 'easy-moderate',
-    'demo-micro-1-3': 'moderate',
-    'demo-micro-1-4': 'deload',
-    'demo-micro-2-1': 'moderate',
-    'demo-micro-2-2': 'moderate-hard',
-    'demo-micro-2-3': 'hard',
-    'demo-micro-2-4': 'deload',
-    'demo-micro-3-1': 'moderate-hard',
-    'demo-micro-3-2': 'hard',
-    'demo-micro-3-3': 'extremely-hard',
-    'demo-micro-3-4': 'moderate',
+    'demo-micro-1-1': '2',
+    'demo-micro-1-2': '4',
+    'demo-micro-1-3': '5',
+    'demo-micro-1-4': '1',
+    'demo-micro-2-1': '5',
+    'demo-micro-2-2': '6',
+    'demo-micro-2-3': '7',
+    'demo-micro-2-4': '1',
+    'demo-micro-3-1': '6',
+    'demo-micro-3-2': '7',
+    'demo-micro-3-3': '9',
+    'demo-micro-3-4': '5',
   };
 
   // ── trainingDays + dailyIntensityData ───────────────────────────────────────
@@ -261,7 +261,7 @@ export function loadSeedData(): unknown {
 
       // Training: Mon(1), Wed(3), Fri(5)
       const isTraining = dow === 1 || dow === 3 || dow === 5;
-      const intensity = isTraining ? microIntensity : 'off';
+      const intensity = isTraining ? microIntensity : '0';
       const isTestDay = dateStr === testDayDate && dow === 1;
       const isEventDay = dateStr === eventDayDate;
 
@@ -613,10 +613,10 @@ const D2_MICRO = [
 const D2_METHODS = ['Kraft – Grundübungen', 'Sprint – Beschleunigung'] as const;
 
 const D2_MICRO_INTENSITIES: Record<string, string> = {
-  'demo2-micro-1-1': 'easy',
-  'demo2-micro-1-2': 'moderate',
-  'demo2-micro-2-1': 'hard',
-  'demo2-micro-2-2': 'deload',
+  'demo2-micro-1-1': '2',
+  'demo2-micro-1-2': '5',
+  'demo2-micro-2-1': '7',
+  'demo2-micro-2-2': '1',
 };
 
 function d2SecId(date: string, si: number, label: string): string {
@@ -805,13 +805,13 @@ export function loadDemoPlan2026(): unknown {
       startDate: planStart.toISOString(),
       endDate: addDays(planStart, 13).toISOString(),
       duration: 2,
-      intensity: 'moderate',
+      intensity: '5',
       trainingMethods: [...D2_METHODS],
       allocatedSubGoals: [D2_SUB1],
       trainingQualities: ['Maximalkraft', 'Beschleunigung'],
       microcycles: [
-        { id: 'demo2-micro-1-1', name: 'Woche 1', duration: 7, intensity: 'easy' },
-        { id: 'demo2-micro-1-2', name: 'Woche 2', duration: 7, intensity: 'moderate' },
+        { id: 'demo2-micro-1-1', name: 'Woche 1', duration: 7, intensity: '2' },
+        { id: 'demo2-micro-1-2', name: 'Woche 2', duration: 7, intensity: '5' },
       ],
     },
     {
@@ -823,13 +823,13 @@ export function loadDemoPlan2026(): unknown {
       startDate: addDays(planStart, 14).toISOString(),
       endDate: planEnd.toISOString(),
       duration: 2,
-      intensity: 'hard',
+      intensity: '7',
       trainingMethods: [...D2_METHODS],
       allocatedSubGoals: [D2_SUB1],
       trainingQualities: ['Maximalkraft', 'Beschleunigung'],
       microcycles: [
-        { id: 'demo2-micro-2-1', name: 'Woche 3', duration: 7, intensity: 'hard' },
-        { id: 'demo2-micro-2-2', name: 'Woche 4 (Deload)', duration: 7, intensity: 'deload' },
+        { id: 'demo2-micro-2-1', name: 'Woche 3', duration: 7, intensity: '7' },
+        { id: 'demo2-micro-2-2', name: 'Woche 4 (Deload)', duration: 7, intensity: '1' },
       ],
     },
   ];
@@ -863,7 +863,7 @@ export function loadDemoPlan2026(): unknown {
       const dayName = DAY_NAMES[dow];
 
       const isTraining = dow === 1 || dow === 3 || dow === 5; // Mon/Wed/Fri
-      const intensity  = isTraining ? microIntensity : 'off';
+      const intensity  = isTraining ? microIntensity : '0';
       const isTestDay  = dateStr === testDay1 || dateStr === testDay2;
       const isEventDay = dateStr === eventDay1 || dateStr === eventDay2;
 
@@ -1137,18 +1137,18 @@ export function loadStrengthPlan(): unknown {
 
   // ── Microcycle intensity map ─────────────────────────────────────────────
   const strMicroIntensityMap: Record<string, string> = {
-    'str-micro-1-1': 'easy',
-    'str-micro-1-2': 'moderate',
-    'str-micro-1-3': 'hard',
-    'str-micro-1-4': 'deload',
-    'str-micro-2-1': 'moderate',
-    'str-micro-2-2': 'moderate-hard',
-    'str-micro-2-3': 'hard',
-    'str-micro-2-4': 'deload',
-    'str-micro-3-1': 'hard',
-    'str-micro-3-2': 'extremely-hard',
-    'str-micro-3-3': 'hard',
-    'str-micro-3-4': 'easy',
+    'str-micro-1-1': '2',
+    'str-micro-1-2': '5',
+    'str-micro-1-3': '7',
+    'str-micro-1-4': '1',
+    'str-micro-2-1': '5',
+    'str-micro-2-2': '6',
+    'str-micro-2-3': '7',
+    'str-micro-2-4': '1',
+    'str-micro-3-1': '7',
+    'str-micro-3-2': '9',
+    'str-micro-3-3': '7',
+    'str-micro-3-4': '2',
   };
 
   // ── macrocycleData ────────────────────────────────────────────────────────
@@ -1275,13 +1275,13 @@ export function loadStrengthPlan(): unknown {
       startDate,
       endDate: addDays(planStart, 27).toISOString(),
       duration: 4,
-      intensity: 'moderate',
+      intensity: '5',
       trainingMethods: [...SMETHODS],
       microcycles: [
-        { id: 'str-micro-1-1', name: 'Week 1', duration: 7, intensity: 'easy' },
-        { id: 'str-micro-1-2', name: 'Week 2', duration: 7, intensity: 'moderate' },
-        { id: 'str-micro-1-3', name: 'Week 3', duration: 7, intensity: 'hard' },
-        { id: 'str-micro-1-4', name: 'Week 4 (Deload)', duration: 7, intensity: 'deload' },
+        { id: 'str-micro-1-1', name: 'Week 1', duration: 7, intensity: '2' },
+        { id: 'str-micro-1-2', name: 'Week 2', duration: 7, intensity: '5' },
+        { id: 'str-micro-1-3', name: 'Week 3', duration: 7, intensity: '7' },
+        { id: 'str-micro-1-4', name: 'Week 4 (Deload)', duration: 7, intensity: '1' },
       ],
     },
     {
@@ -1293,13 +1293,13 @@ export function loadStrengthPlan(): unknown {
       startDate: addDays(planStart, 28).toISOString(),
       endDate: addDays(planStart, 55).toISOString(),
       duration: 4,
-      intensity: 'hard',
+      intensity: '7',
       trainingMethods: [...SMETHODS],
       microcycles: [
-        { id: 'str-micro-2-1', name: 'Week 5', duration: 7, intensity: 'moderate' },
-        { id: 'str-micro-2-2', name: 'Week 6', duration: 7, intensity: 'moderate-hard' },
-        { id: 'str-micro-2-3', name: 'Week 7', duration: 7, intensity: 'hard' },
-        { id: 'str-micro-2-4', name: 'Week 8 (Deload)', duration: 7, intensity: 'deload' },
+        { id: 'str-micro-2-1', name: 'Week 5', duration: 7, intensity: '5' },
+        { id: 'str-micro-2-2', name: 'Week 6', duration: 7, intensity: '6' },
+        { id: 'str-micro-2-3', name: 'Week 7', duration: 7, intensity: '7' },
+        { id: 'str-micro-2-4', name: 'Week 8 (Deload)', duration: 7, intensity: '1' },
       ],
     },
     {
@@ -1311,13 +1311,13 @@ export function loadStrengthPlan(): unknown {
       startDate: addDays(planStart, 56).toISOString(),
       endDate: addDays(planStart, 83).toISOString(),
       duration: 4,
-      intensity: 'extremely-hard',
+      intensity: '9',
       trainingMethods: [SMETHODS[0], SMETHODS[2]], // No volume training in peak phase
       microcycles: [
-        { id: 'str-micro-3-1', name: 'Week 9', duration: 7, intensity: 'hard' },
-        { id: 'str-micro-3-2', name: 'Week 10', duration: 7, intensity: 'extremely-hard' },
-        { id: 'str-micro-3-3', name: 'Week 11', duration: 7, intensity: 'hard' },
-        { id: 'str-micro-3-4', name: 'Week 12', duration: 7, intensity: 'easy' },
+        { id: 'str-micro-3-1', name: 'Week 9', duration: 7, intensity: '7' },
+        { id: 'str-micro-3-2', name: 'Week 10', duration: 7, intensity: '9' },
+        { id: 'str-micro-3-3', name: 'Week 11', duration: 7, intensity: '7' },
+        { id: 'str-micro-3-4', name: 'Week 12', duration: 7, intensity: '2' },
       ],
     },
   ];
@@ -1342,7 +1342,7 @@ export function loadStrengthPlan(): unknown {
 
       // Training: Mon(1), Tue(2), Thu(4)
       const isTraining = dow === 1 || dow === 2 || dow === 4;
-      const intensity = isTraining ? microIntensity : 'off';
+      const intensity = isTraining ? microIntensity : '0';
 
       let sessionName: string | undefined;
       if (dow === 1) sessionName = 'Lower Body – Squat';

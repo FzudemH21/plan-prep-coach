@@ -21,6 +21,7 @@ import {
 } from '@/types/microcycle-planning';
 import { cn } from '@/lib/utils';
 import { getParametersForMethod, MethodParameter } from '@/data/methodParameters';
+import { getBorgBg, getBorgFg, getBorgLabelFull, getBorgStyleLight, migrateLegacyIntensity } from '@/utils/intensityScale';
 
 export interface MicrocyclePlanningTableHandle {
   mergeCellData: (newCellData: Record<string, CellData>) => void;
@@ -519,45 +520,22 @@ export const MicrocyclePlanningTable = forwardRef<MicrocyclePlanningTableHandle,
     }).flat();
   }, [visibleMesocycles, planningState]);
 
-// Get intensity-based color for mesocycles and microcycles
-const getIntensityColor = (intensity: string, isLight: boolean = false, isGroup: boolean = false) => {
-  // Use neutral colors for grouped microcycles
+// Get intensity-based inline style for mesocycles and microcycles
+const getIntensityStyle = (intensity: string, isLight: boolean = false, isGroup: boolean = false): React.CSSProperties => {
   if (isGroup) {
-    return 'bg-muted/20 text-foreground';
+    return {}; // neutral — use className bg-muted/20
   }
-  
-  const suffix = isLight ? '-light' : '';
-  const colors: Record<string, string> = {
-    'off': `bg-intensity-off${suffix} text-foreground`,
-    'deload': `bg-intensity-deload${suffix} text-foreground`,
-    'easy': `bg-intensity-easy${suffix} text-foreground`,
-    'easy-moderate': `bg-intensity-easy-moderate${suffix} text-foreground`,
-    'moderate': `bg-intensity-moderate${suffix} text-foreground`,
-    'moderate-hard': `bg-intensity-moderate-hard${suffix} text-foreground`,
-    'hard': `bg-intensity-hard${suffix} text-foreground`,
-    'extremely-hard': `bg-intensity-extremely-hard${suffix} text-foreground`,
-  };
-  return colors[intensity] || 'bg-muted text-muted-foreground';
+  const safeLevel = migrateLegacyIntensity(intensity);
+  if (isLight) {
+    return getBorgStyleLight(safeLevel, 0.15);
+  }
+  return { backgroundColor: getBorgBg(safeLevel), color: getBorgFg(safeLevel) };
 };
 
-// Get intensity badge styling for display-only badges
-const getIntensityBadgeColor = (intensity: string): string => {
-  const colors: Record<string, string> = {
-    'off': 'bg-intensity-off text-foreground',
-    'deload': 'bg-intensity-deload text-foreground',
-    'easy': 'bg-intensity-easy text-foreground',
-    'easy-moderate': 'bg-intensity-easy-moderate text-foreground',
-    'moderate': 'bg-intensity-moderate text-foreground',
-    'moderate-hard': 'bg-intensity-moderate-hard text-foreground',
-    'hard': 'bg-intensity-hard text-foreground',
-    'extremely-hard': 'bg-intensity-extremely-hard text-foreground',
-  };
-  return colors[intensity] || 'bg-muted text-muted-foreground';
-};
-
-// Format intensity for display
-const formatIntensityLabel = (intensity: string): string => {
-  return intensity.replace(/-/g, ' ').toUpperCase();
+// Get intensity badge inline styles for display-only badges
+const getIntensityBadgeStyle = (intensity: string): React.CSSProperties => {
+  const safeLevel = migrateLegacyIntensity(intensity);
+  return { backgroundColor: getBorgBg(safeLevel), color: getBorgFg(safeLevel) };
 };
   // Create mesocycle header structure for two-row headers
 const mesocycleHeaders = useMemo(() => {
@@ -1220,8 +1198,8 @@ const updateCellData = (
                         <div className="flex flex-col items-center gap-2 py-2 w-full">
                           <div className="flex items-center gap-2 justify-center">
                             <span className="font-semibold">{header.mesocycleName}</span>
-                            <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded", getIntensityBadgeColor(mesocycle?.intensity || 'moderate'))}>
-                              {formatIntensityLabel(mesocycle?.intensity || 'moderate')}
+                            <span className="text-[10px] font-medium px-2 py-0.5 rounded" style={getIntensityBadgeStyle(mesocycle?.intensity || '5')}>
+                              {getBorgLabelFull(migrateLegacyIntensity(mesocycle?.intensity || '5'))}
                             </span>
                           </div>
                           <div className="flex items-center gap-1">
@@ -1358,15 +1336,17 @@ const updateCellData = (
                     );
                   }
                   
-                  const colorClass = getIntensityColor(intensity, isLight, isGroup);
-                  
+                  const intensityStyle = isGroup ? {} : getIntensityStyle(intensity, isLight, isGroup);
+
                   return (
-                    <TableHead 
-                      key={column.id} 
+                    <TableHead
+                      key={column.id}
                       className={cn(
-                        "text-center min-w-[200px] min-h-[120px] border-r border-border bg-muted/20",
-                        column.type === 'mesocycle' ? "text-foreground font-semibold" : "text-foreground"
+                        "text-center min-w-[200px] min-h-[120px] border-r border-border",
+                        isGroup ? "bg-muted/20" : "",
+                        column.type === 'mesocycle' ? "font-semibold" : ""
                       )}
+                      style={isGroup ? {} : intensityStyle}
                     >
                        <div className="flex flex-col items-center gap-2 py-2">
                          {/* Title line: show microcycle/group names; only show mesocycle name here when no split headers are shown */}
@@ -1475,10 +1455,10 @@ const updateCellData = (
                                {/* Intensity Badge - inline with name */}
                                {(() => {
                                  const microcycle = mesocycles.find(m => m.id === column.mesocycleId)?.microcycles.find(mc => mc.id === column.microcycleId);
-                                 const badgeIntensity = microcycle?.intensity || 'moderate';
+                                 const badgeIntensity = microcycle?.intensity || '5';
                                  return (
-                                   <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded", getIntensityBadgeColor(badgeIntensity))}>
-                                     {formatIntensityLabel(badgeIntensity)}
+                                   <span className="text-[10px] font-medium px-2 py-0.5 rounded" style={getIntensityBadgeStyle(badgeIntensity)}>
+                                     {getBorgLabelFull(migrateLegacyIntensity(badgeIntensity))}
                                    </span>
                                  );
                                })()}
@@ -1523,8 +1503,8 @@ const updateCellData = (
                               <div className="flex items-center gap-2 justify-center">
                                 <span className="font-medium">{column.mesocycleName}</span>
                                 {/* Intensity Badge - inline with name */}
-                                <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded", getIntensityBadgeColor(mesocycle?.intensity || 'moderate'))}>
-                                  {formatIntensityLabel(mesocycle?.intensity || 'moderate')}
+                                <span className="text-[10px] font-medium px-2 py-0.5 rounded" style={getIntensityBadgeStyle(mesocycle?.intensity || '5')}>
+                                  {getBorgLabelFull(migrateLegacyIntensity(mesocycle?.intensity || '5'))}
                                 </span>
                               </div>
                               <div className="flex items-center gap-1">

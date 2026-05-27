@@ -45,7 +45,6 @@ interface MasterPlannerGridProps {
   selectedDayOfWeek: number; // 1=Monday, 7=Sunday
   onSessionClick?: (dayDate: string, sessionIndex: number, exercises: ExerciseDistribution[]) => void;
   onAddSession?: (dayDate: string) => void;
-  getIntensityColor?: (intensity: IntensityLevel) => string;
   dailyIntensityData?: any[];
   parameterValues?: Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>;
   currentMesocycle?: ExtendedMesocycle;
@@ -73,7 +72,6 @@ interface MasterPlannerGridProps {
   // New props for Phase 4 - intensity editing
   onDayIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
   onSessionIntensityChange?: (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => void;
-  intensityLevels?: IntensityLevel[];
   // New props for Phase 5 - section and exercise reordering
   onSectionReorder?: (dayDate: string, sessionIndex: number, sectionId: string, direction: 'up' | 'down') => void;
   onExerciseReorder?: (dayDate: string, sessionIndex: number, sectionId: string, exerciseId: string, direction: 'up' | 'down') => void;
@@ -132,7 +130,6 @@ export function MasterPlannerGrid({
   selectedDayOfWeek,
   onSessionClick,
   onAddSession,
-  getIntensityColor,
   dailyIntensityData,
   parameterValues,
   currentMesocycle,
@@ -149,7 +146,6 @@ export function MasterPlannerGrid({
   onExerciseAutoCalcChange,
   onDayIntensityChange,
   onSessionIntensityChange,
-  intensityLevels,
   onSectionReorder,
   onExerciseReorder,
   onAddSectionToSession,
@@ -267,7 +263,6 @@ export function MasterPlannerGrid({
               weekNumber={startWeekOffset + idx + 1}
               onSessionClick={onSessionClick}
               onAddSession={onAddSession}
-              getIntensityColor={getIntensityColor}
               dailyIntensityData={dailyIntensityData}
               parameterValues={parameterValues}
               currentMesocycle={currentMesocycle}
@@ -285,7 +280,6 @@ export function MasterPlannerGrid({
               onExerciseAutoCalcChange={onExerciseAutoCalcChange}
               onDayIntensityChange={onDayIntensityChange}
               onSessionIntensityChange={onSessionIntensityChange}
-              intensityLevels={intensityLevels}
               onSectionReorder={onSectionReorder}
               onExerciseReorder={onExerciseReorder}
               onAddSectionToSession={onAddSectionToSession}

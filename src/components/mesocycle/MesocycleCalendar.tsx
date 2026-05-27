@@ -1,13 +1,14 @@
+import React from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Mesocycle } from "@/types/training";
 import { DayPicker, DayProps } from "react-day-picker";
-import { cn } from "@/lib/utils";
 import { addDays, format, isWithinInterval, startOfDay } from "date-fns";
 import { Trophy, CalendarDays } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
+import { getBorgBg, getBorgFg, migrateLegacyIntensity } from "@/utils/intensityScale";
 
 interface SubGoal {
   testDates?: string[];
@@ -97,19 +98,10 @@ export default function MesocycleCalendar({
     );
   };
 
-  // Get intensity color using design system tokens
-  const getIntensityColorClass = (intensity: string) => {
-    const colorMap = {
-      "off": "bg-[hsl(var(--intensity-off))] text-black",
-      "deload": "bg-[hsl(var(--intensity-deload))] text-white",
-      "easy": "bg-[hsl(var(--intensity-easy))] text-white",
-      "easy-moderate": "bg-[hsl(var(--intensity-easy-moderate))] text-white",
-      "moderate": "bg-[hsl(var(--intensity-moderate))] text-black",
-      "moderate-hard": "bg-[hsl(var(--intensity-moderate-hard))] text-white",
-      "hard": "bg-[hsl(var(--intensity-hard))] text-white",
-      "extremely-hard": "bg-[hsl(var(--intensity-extremely-hard))] text-white"
-    };
-    return colorMap[intensity as keyof typeof colorMap] || "bg-muted text-muted-foreground";
+  // Get intensity style using Borg CR10 scale
+  const getIntensityStyle = (intensity: string): React.CSSProperties => {
+    const level = migrateLegacyIntensity(intensity);
+    return { backgroundColor: getBorgBg(level), color: getBorgFg(level) };
   };
 
   // Filter out weeks with no training
@@ -118,7 +110,7 @@ export default function MesocycleCalendar({
     
     const trainingWeeks = [];
     for (const meso of mesocyclesWithDates) {
-      if (meso.intensity !== "off") {
+      if (migrateLegacyIntensity(meso.intensity) !== "0") {
         trainingWeeks.push({
           start: meso.startDate,
           end: meso.endDate
@@ -170,13 +162,9 @@ export default function MesocycleCalendar({
     const eventsOnDate = getEventsForDate(date);
     
     return (
-      <div 
-        className={cn(
-          "relative w-full h-16 p-1 rounded border cursor-default",
-          mesocycle 
-            ? getIntensityColorClass(mesocycle.intensity)
-            : "bg-background border-border text-foreground"
-        )}
+      <div
+        className="relative w-full h-16 p-1 rounded border cursor-default"
+        style={mesocycle ? getIntensityStyle(mesocycle.intensity) : undefined}
       >
         <div className="flex justify-between items-start">
           <div className="text-xs font-medium">
@@ -264,11 +252,12 @@ export default function MesocycleCalendar({
         <div className="space-y-2">
           <h4 className="text-sm font-medium">Legend</h4>
           <div className="flex flex-wrap gap-3 items-center">
-            {mesocyclesWithDates.map((meso, index) => (
-              <Badge 
+            {mesocyclesWithDates.map((meso) => (
+              <Badge
                 key={meso.id}
-                variant="outline" 
-                className={cn("text-xs", getIntensityColorClass(meso.intensity))}
+                variant="outline"
+                className="text-xs"
+                style={getIntensityStyle(meso.intensity)}
               >
                 {meso.name} ({meso.duration}w)
               </Badge>
@@ -325,7 +314,7 @@ export default function MesocycleCalendar({
               disabled={(date) => {
                 // Hide days that are not part of any mesocycle or are "off" days
                 const mesocycle = getMesocycleForDate(date);
-                return !mesocycle || mesocycle.intensity === "off";
+                return !mesocycle || migrateLegacyIntensity(mesocycle.intensity) === "0";
               }}
             />
           </div>

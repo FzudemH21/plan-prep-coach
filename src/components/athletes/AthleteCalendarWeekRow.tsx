@@ -36,7 +36,6 @@ interface AthleteCalendarWeekRowProps {
   onDayClick?: (date: Date) => void;
   onAddSession?: (date: Date) => void;
   onDeleteAssignment?: (assignmentId: string) => void;
-  getIntensityColor?: (intensity: string) => string;
   // Week operations
   copiedWeek?: CopiedWeekInfo | null;
   onCopyWeek?: (weekStartDate: string) => void;
@@ -58,7 +57,6 @@ interface AthleteCalendarWeekRowProps {
   availableTests?: unknown[];
   availableEvents?: unknown[];
   // Intensity editing
-  intensityLevels?: IntensityLevel[];
   onIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
   // Ref-based drag end timestamp for click suppression (sync update, not state)
   lastDragEndRef?: React.MutableRefObject<number>;
@@ -77,7 +75,6 @@ export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow
   onDayClick,
   onAddSession,
   onDeleteAssignment,
-  getIntensityColor,
   copiedWeek,
   onCopyWeek,
   onClearWeek,
@@ -90,7 +87,6 @@ export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow
   onCopySession,
   onDeleteSession,
   onPasteSession,
-  intensityLevels,
   onIntensityChange,
   lastDragEndRef,
   athleteId,
@@ -165,7 +161,6 @@ export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow
             onDayClick={onDayClick}
             onAddSession={onAddSession}
             onDeleteAssignment={onDeleteAssignment}
-            getIntensityColor={getIntensityColor}
             copiedDay={copiedDay}
             onCopyDay={onCopyDay}
             onClearDay={onClearDay}
@@ -174,7 +169,6 @@ export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow
             onCopySession={onCopySession}
             onDeleteSession={onDeleteSession}
             onPasteSession={onPasteSession}
-            intensityLevels={intensityLevels}
             onIntensityChange={onIntensityChange}
             lastDragEndRef={lastDragEndRef}
             athleteId={athleteId}

@@ -20,6 +20,7 @@ import { ExtendedMesocycle, Microcycle } from '@/features/planner/types';
 import { TrainingDay } from '@/types/daily-intensity';
 import { CellData, ExerciseSelection, SessionSection, SupersetMapping, ExerciseDistribution } from '@/types/microcycle-planning';
 import { IntensityLevel } from '@/types/training';
+import { migrateLegacyIntensity } from '@/utils/intensityScale';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { format, addDays, differenceInDays, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -160,22 +161,6 @@ export default function MicrocyclePlanningPage() {
 
   const totalSteps = 3; // Step 1: Method & Session Architecture, Step 2: Exercise Distribution, Step 3: Training Calendar
 
-  // Define intensity levels and color function
-  const intensityLevels: IntensityLevel[] = ["off", "deload", "easy", "easy-moderate", "moderate", "moderate-hard", "hard", "extremely-hard"];
-
-  const getIntensityColor = (intensity: IntensityLevel) => {
-    const colors = {
-      "off": "bg-[hsl(var(--intensity-off))] text-black border-2",
-      "deload": "bg-[hsl(var(--intensity-deload))] text-white",
-      "easy": "bg-[hsl(var(--intensity-easy))] text-white", 
-      "easy-moderate": "bg-[hsl(var(--intensity-easy-moderate))] text-white",
-      "moderate": "bg-[hsl(var(--intensity-moderate))] text-black",
-      "moderate-hard": "bg-[hsl(var(--intensity-moderate-hard))] text-white",
-      "hard": "bg-[hsl(var(--intensity-hard))] text-white",
-      "extremely-hard": "bg-[hsl(var(--intensity-extremely-hard))] text-white"
-    };
-    return colors[intensity] || "bg-muted text-muted-foreground";
-  };
 
   // Load data from localStorage
   useEffect(() => {
@@ -273,7 +258,7 @@ export default function MicrocyclePlanningPage() {
         const cleaned: Record<string, string[]> = {};
         Object.entries(rawAssignments).forEach(([key, methods]) => {
           const date = key.split('_')[0];
-          if ((intensityMapInit[date] ?? 'moderate') !== 'off') {
+          if ((intensityMapInit[date] ?? '5') !== 'off') {
             cleaned[key] = methods;
           }
         });
@@ -403,7 +388,7 @@ export default function MicrocyclePlanningPage() {
             if (correctIntensity === 'off') {
               next[day.date] = 0;
               changed = true;
-            } else if (day.intensity === 'off' && (prev[day.date] ?? 0) === 0) {
+            } else if (day.intensity === '0' && (prev[day.date] ?? 0) === 0) {
               next[day.date] = 1;
               changed = true;
             }
@@ -509,8 +494,8 @@ export default function MicrocyclePlanningPage() {
         if (daySplitStates[day.date] !== undefined) {
           return { ...day, sessions: daySplitStates[day.date] };
         }
-        // Otherwise, default to 0 if intensity is "off", else 1
-        const defaultSessions = day.intensity === 'off' ? 0 : 1;
+        // Otherwise, default to 0 if intensity is rest ("0"), else 1
+        const defaultSessions = migrateLegacyIntensity(day.intensity ?? '5') === '0' ? 0 : 1;
         return { ...day, sessions: defaultSessions };
       })
     );
@@ -1211,11 +1196,11 @@ export default function MicrocyclePlanningPage() {
         return newSupersets;
       });
       
-      // Set day intensity to "off"
+      // Set day intensity to "0" (rest)
       setDailyIntensityData(prev => {
         const updated = prev.map(di => {
           if (di.date === dayDate) {
-            return { ...di, intensity: 'off' as IntensityLevel };
+            return { ...di, intensity: '0' as IntensityLevel };
           }
           return di;
         });
@@ -1229,7 +1214,7 @@ export default function MicrocyclePlanningPage() {
           if (day.date === dayDate) {
             return { 
               ...day, 
-              intensity: 'off' as IntensityLevel,
+              intensity: '0' as IntensityLevel,
               sessions: 0,
               sessionNames: []
             };
@@ -2682,7 +2667,7 @@ export default function MicrocyclePlanningPage() {
           isTrainingDay: true,
           testNames: type === 'test' ? [testEventName] : undefined,
           eventNames: type === 'event' ? [testEventName] : undefined,
-          intensity: 'moderate',
+          intensity: '5',
           sessions: 1,
           sessionNames: ['Session 1']
         };
@@ -2938,7 +2923,7 @@ export default function MicrocyclePlanningPage() {
     // Auto-manage sessions based on intensity:
     // - Changing TO off → clear sessions and method assignments for this day
     // - Changing FROM off (or 0-session day) → auto-create 1 session
-    if (intensity === 'off') {
+    if (intensity === '0') {
       setDaySplitStates(prev => ({ ...prev, [date]: 0 }));
       setDayMethodAssignments(prev => {
         const updated = { ...prev };
@@ -3444,13 +3429,11 @@ export default function MicrocyclePlanningPage() {
           onDistributionChange={setExerciseDistribution}
           onSectionsChange={setSessionSections}
           onSupersetsChange={setSupersets}
-          getIntensityColor={getIntensityColor}
           onAddSession={handleAddSession}
           onRemoveSession={handleRemoveSession}
           onRenameSession={handleRenameSession}
           onSessionIntensityChange={handleSessionIntensityChange}
           onDayIntensityChange={handleDayIntensityChange}
-          intensityLevels={intensityLevels}
           onClearMicrocycle={handleClearMicrocycleData}
           onClearMesocycle={handleClearMesocycleData}
           copiedSection={copiedSection}
@@ -3522,7 +3505,7 @@ export default function MicrocyclePlanningPage() {
         }).join("\n")}`
       : "";
     const offDays = trainingDays
-      .filter(d => d.intensity === 'off')
+      .filter(d => d.intensity === '0')
       .map(d => format(parseISO(d.date), 'EEEE'))
       .filter((v, i, a) => a.indexOf(v) === i);
     const offDaysStr = offDays.length ? `Rest days (off): ${offDays.join(", ")}` : "";
@@ -3541,7 +3524,7 @@ export default function MicrocyclePlanningPage() {
         const lastDate = microDays[microDays.length - 1].date;
         schedLines.push(`  microcycleIndex ${mIdx + 1}: "${microLabel}" (${firstDate} → ${lastDate})`);
         microDays.forEach(day => {
-          if (day.intensity === 'off') {
+          if (day.intensity === '0') {
             schedLines.push(`    ${day.date} (${format(parseISO(day.date), 'EEE')}): OFF`);
             return;
           }
@@ -3649,7 +3632,7 @@ export default function MicrocyclePlanningPage() {
         ];
         microDays.forEach(day => {
           const label = format(new Date(day.date + 'T12:00:00'), 'EEE dd MMM');
-          if (day.intensity === 'off') {
+          if (day.intensity === '0') {
             scheduleLines.push(`  ${day.date} (${label}): REST`);
           } else {
             const sessionCount = day.sessions ?? 1;
@@ -3713,7 +3696,7 @@ export default function MicrocyclePlanningPage() {
           calLines.push(`\n#### ${micro.name ?? `Microcycle ${mIdx + 1}`} (${firstDate} → ${lastDate})`);
           microDays.forEach(day => {
             const label = format(new Date(day.date + 'T12:00:00'), 'EEE dd MMM');
-            if (day.intensity === 'off') {
+            if (day.intensity === '0') {
               calLines.push(`  ${day.date} (${label}): REST`);
               return;
             }
@@ -3822,7 +3805,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
       if (!currentMeso) return;
 
       const targetDays = trainingDays.filter(d => {
-        if (d.intensity === 'off') return false;
+        if (d.intensity === '0') return false;
         if (action.microcycleIndex != null) {
           const micro = currentMeso.microcycles?.[action.microcycleIndex - 1];
           if (!micro || d.microcycleId !== micro.id) return false;
@@ -4306,8 +4289,8 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
 
       // If target day is a rest day, activate it using the source day's intensity
       const targetDay = trainingDays.find(d => d.date === targetDayDate);
-      const srcIntensity = (trainingDays.find(d => d.date === sourceDayDate)?.intensity ?? 'moderate') as IntensityLevel;
-      if (targetDay?.intensity === 'off') {
+      const srcIntensity = (trainingDays.find(d => d.date === sourceDayDate)?.intensity ?? '5') as IntensityLevel;
+      if (targetDay?.intensity === '0') {
         setTrainingDays(prev => prev.map(d => d.date === targetDayDate ? { ...d, intensity: srcIntensity } : d));
         setDailyIntensityData(prev => {
           const u = prev.map(di => di.date === targetDayDate ? { ...di, intensity: srcIntensity } : di);
@@ -4325,7 +4308,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
         if (day.date !== targetDayDate) return day;
         const sessionNames = [...(day.sessionNames || [])];
         while (sessionNames.length <= newSi) sessionNames.push(`Session ${sessionNames.length + 1}`);
-        return { ...day, sessions: newSi + 1, sessionNames, intensity: day.intensity === 'off' ? srcIntensity : day.intensity };
+        return { ...day, sessions: newSi + 1, sessionNames, intensity: day.intensity === '0' ? srcIntensity : day.intensity };
       }));
 
       toast({
@@ -4375,8 +4358,8 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
 
       // If target day is a rest day, activate it using the source day's intensity
       const targetDaySec = trainingDays.find(d => d.date === targetDayDate);
-      const srcIntensitySec = (trainingDays.find(d => d.date === sourceDayDate)?.intensity ?? 'moderate') as IntensityLevel;
-      if (targetDaySec?.intensity === 'off') {
+      const srcIntensitySec = (trainingDays.find(d => d.date === sourceDayDate)?.intensity ?? '5') as IntensityLevel;
+      if (targetDaySec?.intensity === '0') {
         setTrainingDays(prev => prev.map(d => d.date === targetDayDate ? { ...d, intensity: srcIntensitySec } : d));
         setDailyIntensityData(prev => {
           const u = prev.map(di => di.date === targetDayDate ? { ...di, intensity: srcIntensitySec } : di);
@@ -4841,8 +4824,6 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
             onAddSession={handleAddSession}
             onRemoveSession={handleRemoveSession}
             onRenameSession={handleRenameSession}
-            intensityLevels={intensityLevels}
-            getIntensityColor={getIntensityColor}
             getMethodFrequencyTarget={getMethodFrequency}
             selectedMicrocycleIndex={currentMicrocycleIndex}
             onSelectedMicrocycleIndexChange={setCurrentMicrocycleIndex}
@@ -4879,8 +4860,6 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
               dailyIntensityData={dailyIntensityData}
               onIntensityChange={handleIntensityChange}
               onSessionIntensityChange={handleSessionIntensityChange}
-              getIntensityColor={getIntensityColor}
-              intensityLevels={intensityLevels}
               parameterValues={parameterValues}
               onSaveParameters={handleSaveParameters}
               onUpdateTestComment={handleUpdateTestComment}

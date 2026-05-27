@@ -51,6 +51,7 @@ import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 import { format, addWeeks, differenceInWeeks, addDays, differenceInDays, parseISO } from "date-fns";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 import { IntensityLevel } from "@/types/training";
+import { BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabelFull, getBorgStyleLight, migrateLegacyIntensity } from "@/utils/intensityScale";
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
@@ -343,9 +344,9 @@ export default function MesocyclePage() {
           id: `micro-${i + 1}-${j + 1}`,
           name: `Microcycle ${j + 1}`,
           duration: 7, // 7 days default
-          intensity: "moderate" as Intensity
+          intensity: "5" as Intensity
         }));
-        
+
         return {
           id: `meso-${i + 1}`,
           name: `Mesocycle ${i + 1}`,
@@ -355,7 +356,7 @@ export default function MesocyclePage() {
           startDate: currentStartDate,
           endDate: currentEndDate,
           duration: mesocycleWeeks,
-          intensity: i === suggestedMesocycleCount - 1 ? "deload" : "moderate" as IntensityLevel,
+          intensity: i === suggestedMesocycleCount - 1 ? "1" : "5" as IntensityLevel,
           trainingMethods: [],
           trainingQualities: [],
           microcycles
@@ -565,36 +566,9 @@ export default function MesocyclePage() {
       .filter(item => item.rationale);
   };
 
-  const intensityLevels: IntensityLevel[] = ["off", "deload", "easy", "easy-moderate", "moderate", "moderate-hard", "hard", "extremely-hard"];
-
-  const getIntensityColor = (intensity: IntensityLevel) => {
-    const colors = {
-      "off": "bg-[hsl(var(--intensity-off))] text-black border-2",
-      "deload": "bg-[hsl(var(--intensity-deload))] text-white",
-      "easy": "bg-[hsl(var(--intensity-easy))] text-white", 
-      "easy-moderate": "bg-[hsl(var(--intensity-easy-moderate))] text-white",
-      "moderate": "bg-[hsl(var(--intensity-moderate))] text-black",
-      "moderate-hard": "bg-[hsl(var(--intensity-moderate-hard))] text-white",
-      "hard": "bg-[hsl(var(--intensity-hard))] text-white",
-      "extremely-hard": "bg-[hsl(var(--intensity-extremely-hard))] text-white"
-    };
-    return colors[intensity] || "bg-muted text-muted-foreground";
-  };
-
   // Helper to get subtle intensity-tinted background for Step 2 headers
-  const getSubtleIntensityBg = (intensity: IntensityLevel): string => {
-    const bgMappings: Record<IntensityLevel, string> = {
-      "off": "bg-[hsl(var(--intensity-off)/0.15)]",
-      "deload": "bg-[hsl(var(--intensity-deload)/0.15)]",
-      "easy": "bg-[hsl(var(--intensity-easy)/0.15)]",
-      "easy-moderate": "bg-[hsl(var(--intensity-easy-moderate)/0.15)]",
-      "moderate": "bg-[hsl(var(--intensity-moderate)/0.15)]",
-      "moderate-hard": "bg-[hsl(var(--intensity-moderate-hard)/0.15)]",
-      "hard": "bg-[hsl(var(--intensity-hard)/0.15)]",
-      "extremely-hard": "bg-[hsl(var(--intensity-extremely-hard)/0.20)]"
-    };
-    return bgMappings[intensity] || "bg-muted/50";
-  };
+  const getSubtleIntensityBg = (intensity: IntensityLevel): React.CSSProperties =>
+    getBorgStyleLight(migrateLegacyIntensity(intensity), 0.15);
 
   const renderTrainingPlanOverview = () => {
     const primaryGoal = macrocycleData?.smartGoals?.[0]?.description || 
@@ -634,21 +608,16 @@ export default function MesocyclePage() {
   // Helper to count daily intensity distribution for a microcycle
   const getMicrocycleIntensityDistribution = (microcycleId: string): Record<IntensityLevel, number> => {
     const distribution: Record<IntensityLevel, number> = {
-      "off": 0,
-      "deload": 0,
-      "easy": 0,
-      "easy-moderate": 0,
-      "moderate": 0,
-      "moderate-hard": 0,
-      "hard": 0,
-      "extremely-hard": 0
+      "0": 0, "1": 0, "2": 0, "3": 0, "4": 0, "5": 0,
+      "6": 0, "7": 0, "8": 0, "9": 0, "10": 0
     };
-    
+
     dailyIntensityData
       .filter(day => day.microcycleId === microcycleId)
       .forEach(day => {
-        if (distribution.hasOwnProperty(day.intensity)) {
-          distribution[day.intensity]++;
+        const level = migrateLegacyIntensity(day.intensity);
+        if (distribution.hasOwnProperty(level)) {
+          distribution[level]++;
         }
       });
     
@@ -803,7 +772,7 @@ export default function MesocyclePage() {
       id: `micro-${mesocycleIndex + 1}-${mesocycle.microcycles.length + 1}`,
       name: `Microcycle ${mesocycle.microcycles.length + 1}`,
       duration: 7,
-      intensity: "moderate"
+      intensity: "5"
     };
     mesocycle.microcycles.push(newMicrocycle);
     
@@ -939,7 +908,7 @@ export default function MesocyclePage() {
                   id: `micro-${i + 1}-${j + 1}`,
                   name: `Microcycle ${j + 1}`,
                   duration: 7,
-                  intensity: "moderate" as Intensity
+                  intensity: "5" as Intensity
                 }));
 
                 return {
@@ -951,7 +920,7 @@ export default function MesocyclePage() {
                   startDate: new Date(),
                   endDate: new Date(),
                   duration: mesocycleWeeks,
-                  intensity: "moderate" as IntensityLevel,
+                  intensity: "5" as IntensityLevel,
                   trainingMethods: [],
                   trainingQualities: [],
                   microcycles
@@ -1007,16 +976,16 @@ export default function MesocyclePage() {
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <div className="flex items-center space-x-2">
-                                  <div className={`w-3 h-3 rounded ${getIntensityColor(meso.intensity)}`}></div>
+                                  <div className="w-3 h-3 rounded" style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(meso.intensity)) }}></div>
                                   <SelectValue />
                                 </div>
                               </SelectTrigger>
                               <SelectContent>
-                                {intensityLevels.map((level) => (
+                                {BORG_LEVELS.map((level) => (
                                   <SelectItem key={level} value={level}>
                                     <div className="flex items-center space-x-2">
-                                      <div className={`w-3 h-3 rounded ${getIntensityColor(level)}`}></div>
-                                      <span className="capitalize">{level.replace("-", " ")}</span>
+                                      <div className="w-3 h-3 rounded" style={{ backgroundColor: getBorgBg(level) }}></div>
+                                      <span>{getBorgLabelFull(level)}</span>
                                     </div>
                                   </SelectItem>
                                 ))}
@@ -1089,10 +1058,8 @@ export default function MesocyclePage() {
             {/* Microcycle Intensity Planning Chart */}
             <div className="mt-6">
               <h4 className="font-semibold mb-4">Microcycle Intensity Configuration</h4>
-              <MicrocycleIntensityPlanning 
+              <MicrocycleIntensityPlanning
                 mesocycles={mesocycles}
-                intensityLevels={intensityLevels}
-                getIntensityColor={getIntensityColor}
                 onMicrocycleIntensityChange={handleMicrocycleIntensityChange}
                 onMesocycleIntensityChange={(mesocycleId, intensity) => {
                   const mesoIndex = mesocycles.findIndex(m => m.id === mesocycleId);
@@ -1699,7 +1666,7 @@ export default function MesocyclePage() {
                   return (
                     <div key={meso.id} className="p-3 text-center border-r last:border-r-0">
                       <div className="flex items-center justify-center gap-2 mb-1">
-                        <div className={`w-3 h-3 rounded ${getIntensityColor(meso.intensity)}`}></div>
+                        <div className="w-3 h-3 rounded" style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(meso.intensity)) }}></div>
                         <span className="font-medium text-sm">{meso.name}</span>
                         <TooltipProvider>
                           <Tooltip>
@@ -3213,28 +3180,10 @@ export default function MesocyclePage() {
     };
 
 
-    // Helper function for intensity colors with transparency
-    const intensityBg = (intensity: string) => {
-      switch (intensity) {
-        case "off":
-          return "bg-[hsl(var(--intensity-off)/0.7)] text-foreground border-2";
-        case "deload":
-          return "bg-[hsl(var(--intensity-deload)/0.7)] text-white";
-        case "easy":
-          return "bg-[hsl(var(--intensity-easy)/0.7)] text-white";
-        case "easy-moderate":
-          return "bg-[hsl(var(--intensity-easy-moderate)/0.7)] text-white";
-        case "moderate":
-          return "bg-[hsl(var(--intensity-moderate)/0.7)] text-foreground";
-        case "moderate-hard":
-          return "bg-[hsl(var(--intensity-moderate-hard)/0.7)] text-white";
-        case "hard":
-          return "bg-[hsl(var(--intensity-hard)/0.7)] text-white";
-        case "extremely-hard":
-          return "bg-[hsl(var(--intensity-extremely-hard)/0.7)] text-white";
-        default:
-          return "bg-muted text-muted-foreground";
-      }
+    // Helper function for intensity colors using Borg CR10 scale
+    const intensityBgStyle = (intensity: string): React.CSSProperties => {
+      const level = migrateLegacyIntensity(intensity);
+      return { backgroundColor: getBorgBg(level), color: getBorgFg(level) };
     };
 
     // Helper function to get maximum sessions needed for a method across all microcycles (for grid layout)
@@ -3384,12 +3333,10 @@ export default function MesocyclePage() {
                                  )}
                                  <div 
                                    key={`${meso.id}-header`} 
-                                   className={cn(
-                                     "p-2 font-medium text-sm border rounded-t-lg text-center",
-                                     intensityBg(meso.intensity)
-                                   )}
-                                   style={{ 
-                                     gridColumn: `span ${meso.microcycles?.length || 0}` 
+                                   className="p-2 font-medium text-sm border rounded-t-lg text-center"
+                                   style={{
+                                     gridColumn: `span ${meso.microcycles?.length || 0}`,
+                                     ...intensityBgStyle(meso.intensity)
                                    }}
                                  >
                                    <div className="flex items-center justify-center space-x-2">
@@ -3490,7 +3437,7 @@ export default function MesocyclePage() {
                                       <TooltipProvider key={`${meso.id}-micro-${microcycleIndex}`}>
                                         <Tooltip>
                                           <TooltipTrigger asChild>
-                                            <div className={`text-center border rounded-b cursor-help ${intensityBg(intensity)}`}>
+                                            <div className="text-center border rounded-b cursor-help" style={intensityBgStyle(intensity)}>
                                               <div className="text-xs p-1 font-medium">
                                                 {microcycle.name || `Mic${microcycleIndex + 1}`}
                                               </div>
@@ -3521,14 +3468,11 @@ export default function MesocyclePage() {
                                                 <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                                                   {Object.entries(distribution)
                                                     .filter(([_, count]) => count > 0)
-                                                    .sort(([a], [b]) => {
-                                                      const order = ["extremely-hard", "hard", "moderate-hard", "moderate", "easy-moderate", "easy", "deload", "off"];
-                                                      return order.indexOf(a) - order.indexOf(b);
-                                                    })
+                                                    .sort(([a], [b]) => Number(b) - Number(a))
                                                     .map(([level, count]) => (
                                                       <div key={level} className="flex items-center gap-2 text-xs">
-                                                        <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", getIntensityColor(level as IntensityLevel))} />
-                                                        <span className="capitalize truncate">{level.replace(/-/g, ' ')}</span>
+                                                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(level as IntensityLevel)) }} />
+                                                        <span className="truncate">{getBorgLabelFull(migrateLegacyIntensity(level as IntensityLevel))}</span>
                                                         <span className="text-muted-foreground ml-auto">{count}</span>
                                                       </div>
                                                     ))}
@@ -3814,7 +3758,8 @@ export default function MesocyclePage() {
                                                 return (
                                                   <div 
                                                     key={`${meso.id}-${microcycleIndex}`} 
-                                                    className={`relative z-10 p-2 text-xs text-center font-medium border-l border-r ${intensityBg(microcycle.intensity)} ${!isAllocated ? 'opacity-50' : ''} ${!hasFrequencyParam ? 'border-2 border-destructive/50' : ''} flex flex-col items-center gap-1`}
+                                                    className={`relative z-10 p-2 text-xs text-center font-medium border-l border-r ${!isAllocated ? 'opacity-50' : ''} ${!hasFrequencyParam ? 'border-2 border-destructive/50' : ''} flex flex-col items-center gap-1`}
+                                                    style={intensityBgStyle(microcycle.intensity)}
                                                  >
                                                    {/* Show warning icon if no frequency parameter */}
                                                    {!hasFrequencyParam && (
@@ -4302,7 +4247,7 @@ export default function MesocyclePage() {
             isTrainingDay: true,
             testNames: testName ? [testName] : undefined,
             eventNames: eventName ? [eventName] : undefined,
-            intensity: existingIntensity ?? 'moderate',
+            intensity: existingIntensity ?? '5',
             sessions: isOff ? 0 : 1,
             sessionNames: isOff ? [] : ['Session 1']
           });
@@ -4350,7 +4295,7 @@ export default function MesocyclePage() {
         mesocycleId: day.mesocycleId,
         microcycleId: day.microcycleId,
         dayOfWeek: day.dayOfWeek,
-        intensity: "off" as IntensityLevel,
+        intensity: "0" as IntensityLevel,
         isTestDay: day.isTestDay,
         isEventDay: day.isEventDay
       }
@@ -4468,7 +4413,7 @@ export default function MesocyclePage() {
       const updated = [...prev];
       targetDays.forEach((currentDay, index) => {
         if (sourceDays[index]) {
-          const sourceIntensity = prev.find(di => di.date === sourceDays[index].date)?.intensity || "moderate";
+          const sourceIntensity = prev.find(di => di.date === sourceDays[index].date)?.intensity || '5';
           const currentIndex = updated.findIndex(di => di.date === currentDay.date);
           if (currentIndex !== -1) {
             updated[currentIndex] = { ...updated[currentIndex], intensity: sourceIntensity };
@@ -4649,7 +4594,7 @@ export default function MesocyclePage() {
     
     // Create a map of previous day intensities by day index
     const intensityMap = previousDays.map(day => {
-      const intensity = dailyIntensityData.find(di => di.date === day.date)?.intensity || "moderate";
+      const intensity = dailyIntensityData.find(di => di.date === day.date)?.intensity || '5';
       return intensity;
     });
     
@@ -4711,7 +4656,7 @@ export default function MesocyclePage() {
       targetDays.forEach((targetDay, index) => {
         if (index < sourceDays.length) {
           const sourceDay = sourceDays[index];
-          const sourceIntensity = dailyIntensityData.find(di => di.date === sourceDay.date)?.intensity || "moderate";
+          const sourceIntensity = dailyIntensityData.find(di => di.date === sourceDay.date)?.intensity || '5';
           
           // Update or add the intensity for target day
           const existingIndex = updated.findIndex(di => di.date === targetDay.date);
@@ -4761,31 +4706,31 @@ export default function MesocyclePage() {
         const existingIndex = updated.findIndex(di => di.date === day.date);
         
         if (existingIndex >= 0) {
-          // Update existing entry to "off"
+          // Update existing entry to "0" (rest)
           updated[existingIndex] = {
             ...updated[existingIndex],
-            intensity: "off"
+            intensity: "0"
           };
         } else {
-          // Create new entry with "off"
+          // Create new entry with "0" (rest)
           updated.push({
             date: day.date,
             mesocycleId: mesocycleId,
             microcycleId: day.microcycleId,
             dayOfWeek: day.dayOfWeek,
-            intensity: "off",
+            intensity: "0",
             isTestDay: day.isTestDay,
             isEventDay: day.isEventDay
           });
         }
       });
-      
+
       return updated;
     });
-    
+
     toast({
       title: "Intensities cleared",
-      description: `Set all daily intensities to "off" for ${mesocycle.name}`
+      description: `Set all daily intensities to Rest (0) for ${mesocycle.name}`
     });
   };
 
@@ -4793,34 +4738,34 @@ export default function MesocyclePage() {
   const clearMicrocycleDailyIntensity = (mesocycleId: string, microcycleId: string) => {
     const mesocycle = mesocycles.find(m => m.id === mesocycleId);
     if (!mesocycle) return;
-    
+
     const microcycle = mesocycle.microcycles.find(m => m.id === microcycleId);
     if (!microcycle) return;
-    
+
     // Get all training days for this microcycle
     const microcycleDays = trainingDays.filter(day => day.microcycleId === microcycleId);
-    
-    // Set all daily intensity entries to "off" for these days
+
+    // Set all daily intensity entries to "0" (rest) for these days
     setDailyIntensityData(prev => {
       const updated = [...prev];
-      
+
       microcycleDays.forEach(day => {
         const existingIndex = updated.findIndex(di => di.date === day.date);
-        
+
         if (existingIndex >= 0) {
-          // Update existing entry to "off"
+          // Update existing entry to "0" (rest)
           updated[existingIndex] = {
             ...updated[existingIndex],
-            intensity: "off"
+            intensity: "0"
           };
         } else {
-          // Create new entry with "off"
+          // Create new entry with "0" (rest)
           updated.push({
             date: day.date,
             mesocycleId: mesocycleId,
             microcycleId: microcycleId,
             dayOfWeek: day.dayOfWeek,
-            intensity: "off",
+            intensity: "0",
             isTestDay: day.isTestDay,
             isEventDay: day.isEventDay
           });
@@ -4928,10 +4873,10 @@ export default function MesocyclePage() {
                       {currentMeso && (() => {
                         const width = currentMeso.microcycles.reduce((acc, micro) => acc + micro.duration * 100, 0);
                         return currentMeso.microcycles.length > 0 ? (
-                          <div 
+                          <div
                             key={currentMeso.id}
-                            className={cn("relative text-center border border-border rounded-md font-semibold py-3 shrink-0", getSubtleIntensityBg(currentMeso.intensity))}
-                            style={{ width: `${width}px` }}
+                            className="relative text-center border border-border rounded-md font-semibold py-3 shrink-0"
+                            style={{ width: `${width}px`, ...getSubtleIntensityBg(currentMeso.intensity) }}
                           >
                             {/* Mesocycle Name Row with Clickable Intensity Badge */}
                             <div className="flex items-center justify-center gap-2">
@@ -4941,34 +4886,29 @@ export default function MesocyclePage() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className={cn(
-                                      "text-xs font-medium px-2 py-0.5 h-auto hover:opacity-80 rounded",
-                                      getIntensityColor(currentMeso.intensity)
-                                    )}
+                                    className="text-xs font-medium px-2 py-0.5 h-auto hover:opacity-80 rounded"
+                                    style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(currentMeso.intensity)), color: getBorgFg(migrateLegacyIntensity(currentMeso.intensity)) }}
                                   >
-                                    {currentMeso.intensity.replace(/-/g, ' ').toUpperCase()}
+                                    {getBorgLabelFull(migrateLegacyIntensity(currentMeso.intensity))}
                                   </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-56 p-2 bg-popover" align="center">
                                   <div className="space-y-1">
                                     <div className="text-sm font-medium mb-2">Change Mesocycle Intensity</div>
-                                    {intensityLevels.map((level) => (
+                                    {BORG_LEVELS.map((level) => (
                                       <Button
                                         key={level}
                                         variant="ghost"
                                         size="sm"
-                                        className={cn(
-                                          "w-full justify-start text-xs",
-                                          level === currentMeso.intensity && "bg-accent"
-                                        )}
+                                        className={cn("w-full justify-start text-xs", level === migrateLegacyIntensity(currentMeso.intensity) && "bg-accent")}
                                         onClick={() => {
                                           const updated = [...mesocycles];
-                                          updated[currentMesocycleIndexDailyPlanning].intensity = level;
+                                          updated[currentMesocycleIndexDailyPlanning].intensity = level as IntensityLevel;
                                           setMesocycles(updated);
                                         }}
                                       >
-                                        <span className={cn("inline-block w-3 h-3 rounded-full mr-2", getIntensityColor(level))} />
-                                        {level.replace(/-/g, ' ')}
+                                        <span className="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: getBorgBg(level) }} />
+                                        {getBorgLabelFull(level)}
                                       </Button>
                                     ))}
                                   </div>
@@ -5046,10 +4986,10 @@ export default function MesocyclePage() {
                         }
                         
                         return (
-                          <div 
+                          <div
                             key={micro.id}
-                            className={cn("relative text-center text-sm font-semibold py-1 px-2 shrink-0 border-l border-border/50 border border-border rounded-md", getSubtleIntensityBg(micro.intensity))}
-                            style={{ width: `${width}px` }}
+                            className="relative text-center text-sm font-semibold py-1 px-2 shrink-0 border-l border-border/50 border border-border rounded-md"
+                            style={{ width: `${width}px`, ...getSubtleIntensityBg(micro.intensity) }}
                           >
                             <div className="flex items-center justify-center gap-1">
                               <span>{micro.name}</span>
@@ -5058,34 +4998,29 @@ export default function MesocyclePage() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className={cn(
-                                      "text-xs font-medium px-1.5 py-0.5 h-auto hover:opacity-80 rounded",
-                                      getIntensityColor(micro.intensity)
-                                    )}
+                                    className="text-xs font-medium px-1.5 py-0.5 h-auto hover:opacity-80 rounded"
+                                    style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(micro.intensity)), color: getBorgFg(migrateLegacyIntensity(micro.intensity)) }}
                                   >
-                                    {micro.intensity.replace(/-/g, ' ').toUpperCase()}
+                                    {getBorgLabelFull(migrateLegacyIntensity(micro.intensity))}
                                   </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-56 p-2 bg-popover" align="center">
                                   <div className="space-y-1">
                                     <div className="text-sm font-medium mb-2">Change Microcycle Intensity</div>
-                                    {intensityLevels.map((level) => (
+                                    {BORG_LEVELS.map((level) => (
                                       <Button
                                         key={level}
                                         variant="ghost"
                                         size="sm"
-                                        className={cn(
-                                          "w-full justify-start text-xs",
-                                          level === micro.intensity && "bg-accent"
-                                        )}
+                                        className={cn("w-full justify-start text-xs", level === migrateLegacyIntensity(micro.intensity) && "bg-accent")}
                                         onClick={() => {
                                           const updated = [...mesocycles];
-                                          updated[currentMesocycleIndexDailyPlanning].microcycles[microIndex].intensity = level;
+                                          updated[currentMesocycleIndexDailyPlanning].microcycles[microIndex].intensity = level as IntensityLevel;
                                           setMesocycles(updated);
                                         }}
                                       >
-                                        <span className={cn("inline-block w-3 h-3 rounded-full mr-2", getIntensityColor(level))} />
-                                        {level.replace(/-/g, ' ')}
+                                        <span className="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: getBorgBg(level) }} />
+                                        {getBorgLabelFull(level)}
                                       </Button>
                                     ))}
                                   </div>
@@ -5132,17 +5067,14 @@ export default function MesocyclePage() {
                   <div className="flex items-end flex-nowrap">
                     {/* Intensity Scale - Sticky */}
                     <div className="sticky left-0 z-30 bg-background shrink-0">
-                      <IntensityScale
-                        intensityLevels={intensityLevels}
-                        getIntensityColor={getIntensityColor}
-                      />
+                      <IntensityScale />
                     </div>
 
                     {/* Day Columns - Only show current mesocycle's days */}
                     <TooltipProvider>
                       <div className="flex items-end flex-nowrap">
                         {currentMesoTrainingDays.map((day, index) => {
-                          const dayIntensity = dailyIntensityData.find(di => di.date === day.date)?.intensity || "moderate";
+                          const dayIntensity = migrateLegacyIntensity(dailyIntensityData.find(di => di.date === day.date)?.intensity || "5");
                           const isLastDayOfMicro = index === currentMesoTrainingDays.length - 1 || 
                             (index < currentMesoTrainingDays.length - 1 && currentMesoTrainingDays[index + 1].microcycleId !== day.microcycleId);
                           const isLastDayOfMeso = index === currentMesoTrainingDays.length - 1;
@@ -5156,8 +5088,6 @@ export default function MesocyclePage() {
                               tooltipContent={getTooltipContent(day)}
                               isLastDayOfMicrocycle={isLastDayOfMicro}
                               isLastDayOfMesocycle={isLastDayOfMeso}
-                              intensityLevels={intensityLevels}
-                              getIntensityColor={getIntensityColor}
                               calendarEventsForDay={athleteCalendarEvents.filter(e => e.date === day.date)}
                             />
                           );
@@ -5343,14 +5273,14 @@ export default function MesocyclePage() {
           startDate: planStartDate,
           endDate: planStartDate,
           duration: weeksEach,
-          intensity: "moderate" as IntensityLevel,
+          intensity: "5" as IntensityLevel,
           trainingMethods: [],
           trainingQualities: [],
           microcycles: Array.from({ length: weeksEach }, (_, j) => ({
             id: `micro-${i + 1}-${j + 1}`,
             name: `Microcycle ${j + 1}`,
             duration: 7,
-            intensity: "moderate" as IntensityLevel,
+            intensity: "5" as IntensityLevel,
           })),
         }));
         setMesocycles(recalculateAllMesocycleDates(newMesocycles, planStartDate));
@@ -5366,14 +5296,14 @@ export default function MesocyclePage() {
           startDate: planStartDate,
           endDate: planStartDate,
           duration: m.microcycles.reduce((s, mc) => s + mc.duration, 0),
-          intensity: (m.microcycles.at(-1)?.intensity ?? "moderate") as IntensityLevel,
+          intensity: migrateLegacyIntensity(m.microcycles.at(-1)?.intensity ?? "5") as IntensityLevel,
           trainingMethods: [],
           trainingQualities: [],
           microcycles: m.microcycles.map((mc, j) => ({
             id: `micro-${i + 1}-${j + 1}`,
             name: mc.name ?? `Microcycle ${j + 1}`,
             duration: mc.duration,
-            intensity: (mc.intensity ?? "moderate") as IntensityLevel,
+            intensity: migrateLegacyIntensity(mc.intensity ?? "5") as IntensityLevel,
           })),
         }));
         setMesocycles(recalculateAllMesocycleDates(newMesocycles, planStartDate));

@@ -60,8 +60,6 @@ interface WeekRowProps {
   availableEvents?: Event[];
   dailyIntensityData?: any[];
   onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
-  getIntensityColor?: (intensity: IntensityLevel) => string;
-  intensityLevels?: IntensityLevel[];
   onMoveSessionUp?: (dayDate: string, sessionIndex: number) => void;
   onMoveSessionDown?: (dayDate: string, sessionIndex: number) => void;
   onAddSession?: (dayDate: string) => void;
@@ -96,8 +94,6 @@ export function WeekRow({
   availableEvents,
   dailyIntensityData,
   onIntensityChange,
-  getIntensityColor,
-  intensityLevels,
   onMoveSessionUp,
   onMoveSessionDown,
   onAddSession,
@@ -182,8 +178,6 @@ export function WeekRow({
             availableEvents={availableEvents}
             dailyIntensityData={dailyIntensityData}
             onIntensityChange={onIntensityChange}
-            getIntensityColor={getIntensityColor}
-            intensityLevels={intensityLevels}
             onMoveSessionUp={onMoveSessionUp}
             onMoveSessionDown={onMoveSessionDown}
             onAddSession={onAddSession}

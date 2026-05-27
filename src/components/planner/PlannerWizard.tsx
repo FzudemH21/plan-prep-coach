@@ -142,7 +142,7 @@ export default function PlannerWizard({ onComplete, initial }: WizardProps) {
           id: `micro-${i + 1}-${j + 1}`,
           name: `Microcycle ${j + 1}`,
           duration: 7,
-          intensity: "moderate" as const 
+          intensity: "5" as const
         })),
       };
     });

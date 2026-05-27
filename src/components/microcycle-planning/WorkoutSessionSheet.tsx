@@ -13,6 +13,7 @@ import { Plus, Save, PanelRightClose, PanelRight, Pencil, MessageSquare, Chevron
 import { useToast } from '@/hooks/use-toast';
 import { WorkoutSection, WorkoutExercise, WorkoutSession, SupersetMapping } from '@/types/workout';
 import { IntensityLevel } from '@/types/training';
+import { BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabel, getBorgLabelFull, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { TrainingDay } from '@/types/daily-intensity';
 import { WorkoutSectionCard } from './WorkoutSectionCard';
 import { WorkoutSessionProvider, WorkoutSessionContextValue } from './WorkoutSessionContext';
@@ -78,8 +79,6 @@ interface WorkoutSessionSheetProps {
   dailyIntensityData?: any[];
   onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
   onSessionIntensityChange?: (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => void;
-  getIntensityColor?: (intensity: IntensityLevel) => string;
-  intensityLevels?: IntensityLevel[];
   totalSessionsOnDay?: number;
   trainingDay?: TrainingDay;
   availableTests?: any[];
@@ -136,8 +135,6 @@ export function WorkoutSessionSheet({
   dailyIntensityData,
   onIntensityChange,
   onSessionIntensityChange,
-  getIntensityColor,
-  intensityLevels,
   totalSessionsOnDay = 1,
   trainingDay,
   availableTests,
@@ -181,7 +178,7 @@ export function WorkoutSessionSheet({
   const [sessionName, setSessionName] = useState<string>('');
   const [sessionComments, setSessionComments] = useState<string>('');
   const [isEditingName, setIsEditingName] = useState(false);
-  const [sessionIntensity, setSessionIntensity] = useState<IntensityLevel>('moderate');
+  const [sessionIntensity, setSessionIntensity] = useState<IntensityLevel>('5');
   const [dayIntensityPopoverOpen, setDayIntensityPopoverOpen] = useState(false);
   const [sessionIntensityPopoverOpen, setSessionIntensityPopoverOpen] = useState(false);
   const [isTestEventDialogOpen, setIsTestEventDialogOpen] = useState(false);
@@ -2416,67 +2413,42 @@ export function WorkoutSessionSheet({
               </DialogDescription>
               
               {/* Editable Day Intensity */}
-              {getIntensityColor && intensityLevels && onIntensityChange && (
+              {onIntensityChange && (
                 <div className="flex items-center gap-2 mt-2">
-                  <span className="text-sm text-muted-foreground">
-                    Day intensity:
-                  </span>
+                  <span className="text-sm text-muted-foreground">Day intensity:</span>
                   <Popover open={dayIntensityPopoverOpen} onOpenChange={setDayIntensityPopoverOpen}>
                     <PopoverTrigger asChild>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        className="flex items-center gap-2 h-7 px-2 hover:bg-accent"
-                      >
-                        <div 
-                          className={cn(
-                            "w-5 h-5 rounded-sm border shrink-0",
-                            getIntensityColor(currentIntensity)
-                          )}
+                      <Button variant="ghost" size="sm" className="flex items-center gap-2 h-7 px-2 hover:bg-accent">
+                        <div
+                          className="w-5 h-5 rounded-sm border shrink-0"
+                          style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(currentIntensity)) }}
                         />
-                        <span className="text-xs font-medium capitalize">
-                          {currentIntensity.replace('-', ' ')}
+                        <span className="text-xs font-medium">
+                          {getBorgLabelFull(migrateLegacyIntensity(currentIntensity))}
                         </span>
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent 
-                      className="w-52 p-2 z-[120] bg-popover" 
-                      align="start"
-                      onClick={(e) => e.stopPropagation()}
-                    >
+                    <PopoverContent className="w-52 p-2 z-[120] bg-popover" align="start" onClick={(e) => e.stopPropagation()}>
                       <div className="space-y-1">
-                        <p className="text-xs font-medium mb-2 text-muted-foreground">
-                          Change Day Intensity
-                        </p>
-                        {intensityLevels.map((level) => (
+                        <p className="text-xs font-medium mb-2 text-muted-foreground">Change Day Intensity</p>
+                        {BORG_LEVELS.map((level) => (
                           <button
                             key={level}
                             onClick={(e) => {
                               e.stopPropagation();
-                              onIntensityChange(dayDate, level);
-                              // If single session, also update session intensity state AND persist
+                              onIntensityChange(dayDate, level as IntensityLevel);
                               if (isSingleSessionDay) {
-                                setSessionIntensity(level);
+                                setSessionIntensity(level as IntensityLevel);
                                 if (onSessionIntensityChange) {
-                                  onSessionIntensityChange(dayDate, sessionIndex, level);
+                                  onSessionIntensityChange(dayDate, sessionIndex, level as IntensityLevel);
                                 }
                               }
                               setDayIntensityPopoverOpen(false);
                             }}
-                            className={cn(
-                              "w-full flex items-center gap-2 p-2 rounded hover:bg-accent transition-colors text-left",
-                              level === currentIntensity && "bg-accent"
-                            )}
+                            className={cn("w-full flex items-center gap-2 p-2 rounded hover:bg-accent transition-colors text-left", level === migrateLegacyIntensity(currentIntensity) && "bg-accent")}
                           >
-                            <div 
-                              className={cn(
-                                "w-4 h-4 rounded-sm border shrink-0",
-                                getIntensityColor(level)
-                              )}
-                            />
-                            <span className="text-xs capitalize">
-                              {level.replace('-', ' ')}
-                            </span>
+                            <div className="w-4 h-4 rounded-sm border shrink-0" style={{ backgroundColor: getBorgBg(level) }} />
+                            <span className="text-xs">{getBorgLabelFull(level)}</span>
                           </button>
                         ))}
                       </div>
@@ -2486,80 +2458,52 @@ export function WorkoutSessionSheet({
               )}
 
               {/* Editable Session Intensity */}
-              {getIntensityColor && intensityLevels && (
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="text-sm text-muted-foreground">
-                    Session intensity:
-                  </span>
-                  <Popover open={sessionIntensityPopoverOpen} onOpenChange={setSessionIntensityPopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        className="flex items-center gap-2 h-7 px-2 hover:bg-accent"
-                      >
-                        <div 
-                          className={cn(
-                            "w-5 h-5 rounded-sm border shrink-0",
-                            getIntensityColor(sessionIntensity)
-                          )}
-                        />
-                        <span className="text-xs font-medium capitalize">
-                          {sessionIntensity.replace('-', ' ')}
-                        </span>
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent 
-                      className="w-52 p-2 z-[120] bg-popover" 
-                      align="start"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium mb-2 text-muted-foreground">
-                          Change Session Intensity
-                          {isSingleSessionDay && (
-                            <span className="block text-[10px] text-muted-foreground/70 mt-0.5">
-                              (Linked to day intensity)
-                            </span>
-                          )}
-                        </p>
-                        {intensityLevels.map((level) => (
-                          <button
-                            key={level}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSessionIntensity(level);
-                              // Immediately persist session intensity
-                              if (onSessionIntensityChange) {
-                                onSessionIntensityChange(dayDate, sessionIndex, level);
-                              }
-                              // If single session, also update day intensity
-                              if (isSingleSessionDay && onIntensityChange) {
-                                onIntensityChange(dayDate, level);
-                              }
-                              setSessionIntensityPopoverOpen(false);
-                            }}
-                            className={cn(
-                              "w-full flex items-center gap-2 p-2 rounded hover:bg-accent transition-colors text-left",
-                              level === sessionIntensity && "bg-accent"
-                            )}
-                          >
-                            <div 
-                              className={cn(
-                                "w-4 h-4 rounded-sm border shrink-0",
-                                getIntensityColor(level)
-                              )}
-                            />
-                            <span className="text-xs capitalize">
-                              {level.replace('-', ' ')}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              )}
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-sm text-muted-foreground">Session intensity:</span>
+                <Popover open={sessionIntensityPopoverOpen} onOpenChange={setSessionIntensityPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="sm" className="flex items-center gap-2 h-7 px-2 hover:bg-accent">
+                      <div
+                        className="w-5 h-5 rounded-sm border shrink-0"
+                        style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(sessionIntensity)) }}
+                      />
+                      <span className="text-xs font-medium">
+                        {getBorgLabelFull(migrateLegacyIntensity(sessionIntensity))}
+                      </span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-52 p-2 z-[120] bg-popover" align="start" onClick={(e) => e.stopPropagation()}>
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium mb-2 text-muted-foreground">
+                        Change Session Intensity
+                        {isSingleSessionDay && (
+                          <span className="block text-[10px] text-muted-foreground/70 mt-0.5">(Linked to day intensity)</span>
+                        )}
+                      </p>
+                      {BORG_LEVELS.map((level) => (
+                        <button
+                          key={level}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSessionIntensity(level as IntensityLevel);
+                            if (onSessionIntensityChange) {
+                              onSessionIntensityChange(dayDate, sessionIndex, level as IntensityLevel);
+                            }
+                            if (isSingleSessionDay && onIntensityChange) {
+                              onIntensityChange(dayDate, level as IntensityLevel);
+                            }
+                            setSessionIntensityPopoverOpen(false);
+                          }}
+                          className={cn("w-full flex items-center gap-2 p-2 rounded hover:bg-accent transition-colors text-left", level === migrateLegacyIntensity(sessionIntensity) && "bg-accent")}
+                        >
+                          <div className="w-4 h-4 rounded-sm border shrink-0" style={{ backgroundColor: getBorgBg(level) }} />
+                          <span className="text-xs">{getBorgLabelFull(level)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
             <div className="flex items-center gap-2 pr-10">
               {onOpenAIAssistant && (
