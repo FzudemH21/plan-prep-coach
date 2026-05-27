@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, isSameMonth, isWithinInterval, parseISO } from 'date-fns';
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, isSameMonth, isWithinInterval } from 'date-fns';
+import { parseDateStr } from '@/utils/dateUtils';
 import { useCalendarGrid, groupDaysIntoWeeks } from '@/hooks/useCalendarGrid';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { Button } from '@/components/ui/button';
@@ -316,8 +317,8 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
       weeks: meso.weeks,
       sessionsPerWeek: meso.sessionsPerWeek,
       sessionLength: meso.sessionLength,
-      startDate: new Date(meso.startDate),
-      endDate: new Date(meso.endDate),
+      startDate: parseDateStr(meso.startDate),
+      endDate: parseDateStr(meso.endDate),
       duration: meso.duration,
       intensity: meso.intensity as any,
       microcycles: (meso.microcycles || []).map(m => ({
@@ -423,8 +424,8 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
       {
         const dayAssignments = assignments.filter(assignment => {
           if (assignment.id === selectedAssignmentId && usedLiveEditingState) return false;
-          const assignmentStart = new Date(assignment.startDate);
-          const assignmentEnd = new Date(assignment.endDate);
+          const assignmentStart = parseDateStr(assignment.startDate);
+          const assignmentEnd = parseDateStr(assignment.endDate);
           return isWithinInterval(date, { start: assignmentStart, end: assignmentEnd });
         });
 
@@ -565,7 +566,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   // Calculate date range display
   const dateRangeDisplay = useMemo(() => {
     if (viewMode === 'master' && editing.selectedAssignment) {
-      return `${format(new Date(editing.selectedAssignment.startDate), 'MMM d')} - ${format(new Date(editing.selectedAssignment.endDate), 'MMM d, yyyy')}`;
+      return `${format(parseDateStr(editing.selectedAssignment.startDate), 'MMM d')} - ${format(parseDateStr(editing.selectedAssignment.endDate), 'MMM d, yyyy')}`;
     }
     if (calendarDays.length === 0) return '';
     const firstDay = calendarDays[0].date;
@@ -777,7 +778,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           originalStartDate.getDate()
         ));
         
-        const assignmentDate = new Date(assignment.startDate);
+        const assignmentDate = parseDateStr(assignment.startDate);
         const normalizedNewStart = new Date(Date.UTC(
           assignmentDate.getFullYear(),
           assignmentDate.getMonth(),
@@ -888,8 +889,8 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           if (validDates.size === 0 && (assignment.assignedMesocycles || []).length > 0) {
             console.log('[ASSIGN] No training days with meso/micro IDs found — falling back to assignedMesocycles date ranges');
             assignment.assignedMesocycles.forEach(meso => {
-              const mesoStart = new Date(meso.startDate);
-              const mesoEnd = new Date(meso.endDate);
+              const mesoStart = parseDateStr(meso.startDate);
+              const mesoEnd = parseDateStr(meso.endDate);
               eachDayOfInterval({ start: mesoStart, end: mesoEnd }).forEach(day => {
                 validDates.add(format(day, 'yyyy-MM-dd'));
               });
@@ -963,8 +964,8 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             });
 
             assignment.assignedMesocycles.forEach(meso => {
-              const mesoStart = new Date(meso.startDate);
-              const mesoEnd = new Date(meso.endDate);
+              const mesoStart = parseDateStr(meso.startDate);
+              const mesoEnd = parseDateStr(meso.endDate);
               const allDays = eachDayOfInterval({ start: mesoStart, end: mesoEnd });
               let microOffset = 0;
               (meso.microcycles || []).forEach(micro => {
@@ -1243,7 +1244,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
               {(() => {
                 const sel = editing.selectedAssignment;
                 if (!sel) return null;
-                const ended = new Date(sel.endDate) < new Date();
+                const ended = parseDateStr(sel.endDate) < new Date();
                 if (!ended) return null;
                 const hasReview =
                   sel.outcomeRating != null ||
@@ -1586,7 +1587,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 // Build dates using noon-local anchoring to avoid DST off-by-one.
                 // meso.startDate may be 'yyyy-MM-dd' or a full ISO string — normalise first.
                 const mesoDateStr = meso.startDate.length > 10
-                  ? format(new Date(meso.startDate), 'yyyy-MM-dd')
+                  ? format(parseDateStr(meso.startDate), 'yyyy-MM-dd')
                   : meso.startDate;
                 const [my, mm, md] = mesoDateStr.split('-').map(Number);
                 const mesoStart = new Date(my, mm - 1, md, 12, 0, 0);
