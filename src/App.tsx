@@ -26,6 +26,7 @@ import CoachProfilePage from "./pages/CoachProfilePage";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import AthleteLoginPage from "./pages/athlete/AthleteLoginPage";
+import AthleteConnectPage from "./pages/athlete/AthleteConnectPage";
 import AthleteTodayPage from "./pages/athlete/AthleteTodayPage";
 import AthletePlanPage from "./pages/athlete/AthletePlanPage";
 import AthleteMessagesPage from "./pages/athlete/AthleteMessagesPage";
@@ -78,8 +79,9 @@ const App = () => (
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/onboarding" element={<OnboardingPage />} />
 
-              {/* Athlete app — public login */}
+              {/* Athlete app — public routes (no auth required) */}
               <Route path="/athlete/login" element={<AthleteLoginPage />} />
+              <Route path="/athlete/connect" element={<AthleteConnectPage />} />
 
               {/* Athlete app — protected shell with nested tabs */}
               <Route

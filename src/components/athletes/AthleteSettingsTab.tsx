@@ -1,7 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -9,6 +11,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import {
@@ -17,8 +27,14 @@ import {
   LayoutGrid,
   CalendarRange,
   Dumbbell,
+  Smartphone,
+  Copy,
+  Check,
+  Link2,
+  UserX,
 } from 'lucide-react';
 import { Athlete, AthleteSettings, DEFAULT_ATHLETE_SETTINGS } from '@/types/athlete';
+import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -105,6 +121,187 @@ function FeatureToggle({
   );
 }
 
+// ── App Account Card ──────────────────────────────────────────────────────────
+
+function AppAccountCard({ athlete }: { athlete: Athlete }) {
+  const { getConnectionForAthlete, createConnection, revokeConnection, loading } = useAthleteConnections();
+  const connection = getConnectionForAthlete(athlete.id);
+
+  const [creating, setCreating] = useState(false);
+  const [revoking, setRevoking] = useState(false);
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [showRevokeConfirm, setShowRevokeConfirm] = useState(false);
+
+  const inviteLink = `${window.location.origin}/athlete/connect?code=${inviteCode}`;
+
+  const handleCreate = async () => {
+    setCreating(true);
+    try {
+      const conn = await createConnection(
+        athlete.id,
+        `${athlete.firstName} ${athlete.lastName}`.trim(),
+        athlete.email ?? undefined,
+      );
+      setInviteCode(conn.inviteCode);
+      setShowInviteDialog(true);
+    } catch (e) {
+      console.error('Failed to create connection', e);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(inviteLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleRevoke = async () => {
+    if (!connection) return;
+    setRevoking(true);
+    try {
+      await revokeConnection(connection.id);
+    } catch (e) {
+      console.error('Failed to revoke connection', e);
+    } finally {
+      setRevoking(false);
+      setShowRevokeConfirm(false);
+    }
+  };
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Smartphone className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-base">Athlete App Account</CardTitle>
+          </div>
+          <CardDescription>
+            Give this athlete access to the Plan Prep Coach athlete app.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : connection ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Badge variant="default" className="gap-1">
+                  <Check className="h-3 w-3" />
+                  {connection.connectedAt ? 'Connected' : 'Invite sent'}
+                </Badge>
+                {connection.connectedAt && (
+                  <span className="text-xs text-muted-foreground">
+                    since {new Date(connection.connectedAt).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+              {connection.athleteEmail && (
+                <p className="text-sm text-muted-foreground">{connection.athleteEmail}</p>
+              )}
+              {!connection.connectedAt && (
+                <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
+                  <Link2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="text-xs font-mono truncate flex-1">
+                    {window.location.origin}/athlete/connect?code={connection.inviteCode}
+                  </span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        `${window.location.origin}/athlete/connect?code=${connection.inviteCode}`
+                      );
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                    className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-destructive hover:text-destructive gap-1.5"
+                onClick={() => setShowRevokeConfirm(true)}
+              >
+                <UserX className="h-3.5 w-3.5" />
+                Revoke Access
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                No app account yet. Create one to generate an invite link you can send to the athlete.
+              </p>
+              <Button size="sm" onClick={handleCreate} disabled={creating} className="gap-1.5">
+                <Smartphone className="h-3.5 w-3.5" />
+                {creating ? 'Creating…' : 'Create App Account'}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Invite dialog */}
+      <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>App Account Created</DialogTitle>
+            <DialogDescription>
+              Share this link with {athlete.firstName}. They'll open it to create their password and connect to the app.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
+              <Link2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="text-xs font-mono truncate flex-1">{inviteLink}</span>
+              <button
+                onClick={handleCopy}
+                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              The link contains a one-time invite code. It can only be used once to create the account.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleCopy} variant="outline" className="gap-1.5">
+              {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? 'Copied!' : 'Copy Link'}
+            </Button>
+            <Button onClick={() => setShowInviteDialog(false)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Revoke confirm dialog */}
+      <Dialog open={showRevokeConfirm} onOpenChange={setShowRevokeConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Revoke App Access?</DialogTitle>
+            <DialogDescription>
+              {athlete.firstName} will immediately lose access to the athlete app. You can create a new account for them at any time.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRevokeConfirm(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleRevoke} disabled={revoking}>
+              {revoking ? 'Revoking…' : 'Revoke Access'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 interface AthleteSettingsTabProps {
@@ -146,6 +343,9 @@ export function AthleteSettingsTab({ athlete, onUpdateAthlete }: AthleteSettings
   return (
     <ScrollArea className="h-full">
       <div className="p-4 space-y-4 max-w-2xl">
+
+        {/* App Account */}
+        <AppAccountCard athlete={athlete} />
 
         {/* Units */}
         <Card>
