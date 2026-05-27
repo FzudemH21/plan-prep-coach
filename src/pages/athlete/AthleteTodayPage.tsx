@@ -1,9 +1,8 @@
 import { BedDouble, Dumbbell, ChevronRight } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { useAthleteApp, AthleteScheduleEntry } from '@/hooks/useAthleteApp';
 import { cn } from '@/lib/utils';
-import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -79,7 +78,7 @@ function IntensityBadge({ intensity }: { intensity: string | null }) {
 }
 
 function TrainingEntry({ entry }: { entry: AthleteScheduleEntry }) {
-  const { toast } = useToast();
+  const navigate = useNavigate();
 
   return (
     <div className="space-y-4">
@@ -98,11 +97,11 @@ function TrainingEntry({ entry }: { entry: AthleteScheduleEntry }) {
         {entry.sessions.length === 0 ? (
           <p className="text-sm text-muted-foreground">No sessions scheduled.</p>
         ) : (
-          entry.sessions.map(session => (
+          entry.sessions.map((session, index) => (
             <Card
               key={session.id}
-              className="cursor-pointer hover:bg-accent/50 transition-colors"
-              onClick={() => toast({ title: 'Session detail coming soon' })}
+              className="cursor-pointer hover:bg-muted/60 active:scale-[0.98] transition-all"
+              onClick={() => navigate('/athlete/session', { state: { entry, sessionIdx: index } })}
             >
               <CardContent className="flex items-center justify-between p-4">
                 <div className="flex items-center gap-3">

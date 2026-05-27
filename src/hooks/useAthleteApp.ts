@@ -12,6 +12,15 @@ export interface AthleteConnection {
   connectedAt: string | null;
 }
 
+export interface ExerciseSummary {
+  id: string;
+  name: string;
+  order: number;
+  sectionId?: string;
+  notes?: string;
+  isCircuit?: boolean;
+}
+
 export interface SessionSummary {
   id: string;
   name: string;
@@ -20,6 +29,7 @@ export interface SessionSummary {
   exerciseCount: number;
   duration?: number;
   notes?: string;
+  exercises: ExerciseSummary[];
 }
 
 export interface AthleteScheduleEntry {

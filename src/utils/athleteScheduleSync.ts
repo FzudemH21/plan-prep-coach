@@ -18,9 +18,38 @@ interface TrainingDay {
   microcycleId?: string;
 }
 
+export interface ExerciseSummary {
+  id: string;
+  name: string;
+  order: number;
+  sectionId?: string;
+  notes?: string;
+  isCircuit?: boolean;
+}
+
+export interface SessionSummary {
+  id: string;
+  name: string;
+  order: number;
+  exerciseCount: number;
+  methodCount: number;
+  duration?: number;
+  notes?: string;
+  exercises: ExerciseSummary[];
+}
+
 interface ExerciseEntry {
+  id: string;
+  exerciseId: string;
+  exerciseName?: string;
+  methodId?: string;
+  categoryName?: string;
   dayDate: string;
   sessionIndex: number;
+  order: number;
+  sectionId?: string;
+  notes?: string;
+  isCircuit?: boolean;
   [key: string]: unknown;
 }
 
@@ -69,16 +98,26 @@ export async function syncAthleteSchedule(
     .filter(td => td.isTrainingDay && td.sessions > 0)
     .map(td => {
       const sessionCount = td.sessions;
-      const sessions = Array.from({ length: sessionCount }, (_, i) => {
-        const exerciseCount = exercises.filter(
-          ex => ex.dayDate === td.date && ex.sessionIndex === i
-        ).length;
+      const sessions: SessionSummary[] = Array.from({ length: sessionCount }, (_, i) => {
+        const exercisesForSession: ExerciseSummary[] = exercises
+          .filter(ex => ex.dayDate === td.date && ex.sessionIndex === i)
+          .sort((a, b) => a.order - b.order)
+          .map(ex => ({
+            id: ex.id,
+            name: ex.exerciseName ?? ex.exerciseId,
+            order: ex.order,
+            sectionId: ex.sectionId,
+            notes: ex.notes,
+            isCircuit: ex.isCircuit,
+          }));
+
         return {
           id: `${td.date}-${i}`,
           name: td.sessionNames?.[i] ?? `Session ${i + 1}`,
           order: i,
-          exerciseCount,
+          exerciseCount: exercisesForSession.length,
           methodCount: 0,
+          exercises: exercisesForSession,
         };
       });
 

@@ -31,6 +31,7 @@ import AthleteTodayPage from "./pages/athlete/AthleteTodayPage";
 import AthletePlanPage from "./pages/athlete/AthletePlanPage";
 import AthleteMessagesPage from "./pages/athlete/AthleteMessagesPage";
 import AthleteProfilePage from "./pages/athlete/AthleteProfilePage";
+import AthleteSessionPage from "./pages/athlete/AthleteSessionPage";
 import { hasCoachProfile } from "./hooks/useCoachProfile";
 import { useAuth } from "./hooks/useAuth";
 
@@ -97,6 +98,7 @@ const App = () => (
                 <Route path="plan" element={<AthletePlanPage />} />
                 <Route path="messages" element={<AthleteMessagesPage />} />
                 <Route path="profile" element={<AthleteProfilePage />} />
+                <Route path="session" element={<AthleteSessionPage />} />
               </Route>
 
               <Route
