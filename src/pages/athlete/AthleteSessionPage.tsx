@@ -51,15 +51,21 @@ function IntensityBadge({ intensity }: { intensity: string | null }) {
   );
 }
 
-// ── Borg CR10 button colors ──────────────────────────────────────────────────
+// ── Official Borg CR10 labels ────────────────────────────────────────────────
 
-function borgColor(value: number): string {
-  if (value === 0) return 'border-slate-300 text-slate-500 data-[selected=true]:bg-slate-500 data-[selected=true]:text-white data-[selected=true]:border-slate-500';
-  if (value <= 3) return 'border-green-400 text-green-700 data-[selected=true]:bg-green-500 data-[selected=true]:text-white data-[selected=true]:border-green-500';
-  if (value <= 6) return 'border-yellow-400 text-yellow-700 data-[selected=true]:bg-yellow-500 data-[selected=true]:text-white data-[selected=true]:border-yellow-500';
-  if (value <= 8) return 'border-orange-400 text-orange-700 data-[selected=true]:bg-orange-500 data-[selected=true]:text-white data-[selected=true]:border-orange-500';
-  return 'border-red-400 text-red-700 data-[selected=true]:bg-red-500 data-[selected=true]:text-white data-[selected=true]:border-red-500';
-}
+const BORG_CR10_LABELS: Record<number, string> = {
+  0: 'Nothing at all',
+  1: 'Very weak',
+  2: 'Weak',
+  3: 'Moderate',
+  4: 'Somewhat strong',
+  5: 'Strong (Heavy)',
+  6: '',
+  7: 'Very strong',
+  8: '',
+  9: '',
+  10: 'Extremely strong',
+};
 
 // ── Date formatter ───────────────────────────────────────────────────────────
 
@@ -144,54 +150,54 @@ function CompletionSheet({
 
   return (
     <Sheet open={open} onOpenChange={open => { if (!open) onClose(); }}>
-      <SheetContent side="bottom" className="rounded-t-2xl pb-safe-area-inset-bottom">
-        <SheetHeader className="mb-4">
-          <SheetTitle>How was the session?</SheetTitle>
-        </SheetHeader>
+      <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] overflow-y-auto p-0">
+        <div className="max-w-sm mx-auto px-5 pt-4 pb-6">
+          <SheetHeader className="mb-4">
+            <SheetTitle>How was the session?</SheetTitle>
+          </SheetHeader>
 
-        {/* Borg CR10 rating */}
-        <div className="mb-5">
-          <p className="text-sm font-medium mb-3">Effort (Borg CR10)</p>
-          <div className="flex gap-1.5 flex-wrap">
-            {Array.from({ length: 11 }, (_, v) => (
-              <button
-                key={v}
-                data-selected={borgRating === v}
-                onClick={() => setBorgRating(borgRating === v ? null : v)}
-                className={cn(
-                  'w-9 h-9 rounded-lg border-2 text-sm font-semibold transition-colors',
-                  borgColor(v)
-                )}
-              >
-                {v}
-              </button>
-            ))}
+          {/* Borg CR10 rating */}
+          <div className="mb-5">
+            <p className="text-sm font-medium mb-3">Effort (Borg CR10)</p>
+            <div className="flex flex-col gap-1">
+              {Array.from({ length: 11 }, (_, v) => (
+                <button
+                  key={v}
+                  onClick={() => setBorgRating(borgRating === v ? null : v)}
+                  className={cn(
+                    'flex items-center gap-3 w-full rounded-lg border px-3 py-2 text-sm text-left transition-colors',
+                    'border-border hover:bg-muted/60',
+                    borgRating === v && 'border-primary bg-primary/10 font-semibold'
+                  )}
+                >
+                  <span className="w-5 text-center font-bold tabular-nums shrink-0">{v}</span>
+                  <span className={cn('text-sm', borgRating === v ? 'text-foreground' : 'text-muted-foreground')}>
+                    {BORG_CR10_LABELS[v] ? BORG_CR10_LABELS[v] : <span className="opacity-30">—</span>}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
-          {borgRating !== null && (
-            <p className="text-xs text-muted-foreground mt-2">
-              {INTENSITY_CONFIG[String(borgRating)]?.label ?? ''}
-            </p>
-          )}
-        </div>
 
-        {/* Comment */}
-        <div className="mb-6">
-          <p className="text-sm font-medium mb-2">Notes (optional)</p>
-          <Textarea
-            value={comment}
-            onChange={e => setComment(e.target.value)}
-            placeholder="Any notes about this session…"
-            className="resize-none h-24"
-          />
-        </div>
+          {/* Comment */}
+          <div className="mb-6">
+            <p className="text-sm font-medium mb-2">Notes (optional)</p>
+            <Textarea
+              value={comment}
+              onChange={e => setComment(e.target.value)}
+              placeholder="Any notes about this session…"
+              className="resize-none h-24"
+            />
+          </div>
 
-        <Button
-          className="w-full"
-          disabled={saving}
-          onClick={handleSave}
-        >
-          {saving ? 'Saving…' : 'Save'}
-        </Button>
+          <Button
+            className="w-full"
+            disabled={saving}
+            onClick={handleSave}
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
       </SheetContent>
     </Sheet>
   );
