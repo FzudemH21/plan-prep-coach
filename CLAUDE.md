@@ -207,12 +207,22 @@ Applied at: mesocycle level, microcycle level, daily level, and session level. U
 - Create, manage, and assign training plans to athletes
 - AI chat available everywhere
 
-### Athlete App (Mobile-first, future)
+### Athlete App (Mobile-first — phones are the primary target)
 - Lean view — only what's relevant for the athlete
 - Personal calendar with assigned sessions
 - Daily intensities visible
 - Open sessions and view details (exercises, sets, reps, intensity etc.)
 - No access to planning level
+
+> **Critical — Athlete App Layout Rules (apply to every component under `src/pages/athlete/` and `src/components/athlete-app/`):**
+> - **Design for a 390px wide phone screen first.** Everything must be usable on a small phone without horizontal scrolling.
+> - The `AthleteAppLayout` shell constrains content to `max-w-[480px] mx-auto` on desktop — never assume more width than that.
+> - Use large tap targets (minimum 44×44 px) for all interactive elements.
+> - Bottom sheets, modals, and overlays that use a Portal (shadcn `Sheet`, `Dialog`, etc.) escape the shell container and render at body level. They must be explicitly constrained: add `sm:w-[480px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2` (or equivalent) so they match the phone shell width on desktop.
+> - Scrollable lists must use `ScrollArea` or `overflow-y-auto` with a bounded height — never let a list push the bottom action bar off screen.
+> - Fixed bottom bars (action buttons, nav) must use `shrink-0` and sit outside any scroll container.
+> - Font sizes: body text `text-sm` (14px), labels `text-xs` (12px) — never smaller.
+> - Avoid hover-only interactions; always pair with `active:` states for touch feedback.
 
 ---
 
