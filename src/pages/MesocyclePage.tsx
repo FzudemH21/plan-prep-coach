@@ -276,8 +276,8 @@ export default function MesocyclePage() {
       const rawEndDate = data.planDuration?.endDate || data.smartGoal?.endDate;
       const rawTotalWeeks = data.planDuration?.totalWeeks || data.smartGoal?.totalWeeks;
 
-      const startDate = rawStartDate ? parseDateStr(rawStartDate) : new Date();
-      const endDate = rawEndDate ? parseDateStr(rawEndDate) : addWeeks(startDate, 12);
+      const startDate = rawStartDate ? new Date(rawStartDate) : new Date();
+      const endDate = rawEndDate ? new Date(rawEndDate) : addWeeks(startDate, 12);
       const weeks = rawTotalWeeks ||
         (rawStartDate && rawEndDate
           ? Math.ceil((Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))) / 7)
