@@ -7,6 +7,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { DisplayModeProvider } from "@/contexts/DisplayModeContext";
 import { CustomLibrariesProvider } from "@/contexts/CustomLibrariesContext";
 import { WizardDataProvider } from "@/contexts/WizardDataContext";
+import { AthleteAppLayout } from "@/components/athlete-app/AthleteAppLayout";
 import HomePage from "./pages/HomePage";
 import MacrocyclePage from "./pages/MacrocyclePage";
 import MesocyclePage from "./pages/MesocyclePage";
@@ -24,16 +25,33 @@ import OnboardingPage from "./pages/OnboardingPage";
 import CoachProfilePage from "./pages/CoachProfilePage";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
+import AthleteLoginPage from "./pages/athlete/AthleteLoginPage";
+import AthleteTodayPage from "./pages/athlete/AthleteTodayPage";
+import AthletePlanPage from "./pages/athlete/AthletePlanPage";
+import AthleteMessagesPage from "./pages/athlete/AthleteMessagesPage";
+import AthleteProfilePage from "./pages/athlete/AthleteProfilePage";
 import { hasCoachProfile } from "./hooks/useCoachProfile";
 import { useAuth } from "./hooks/useAuth";
 
 const queryClient = new QueryClient();
 
-/** Blocks access until a Supabase session exists; redirects to /login otherwise. */
+/** Blocks access until a Supabase session exists; redirects to /login otherwise.
+ *  Also redirects athletes away from the coach app. */
 function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { session, loading } = useAuth();
+  const { session, user, loading } = useAuth();
   if (loading) return null; // wait for session hydration — avoids flash redirect
   if (!session) return <Navigate to="/login" replace />;
+  // Athletes belong in the athlete app, not the coach app
+  if (user?.user_metadata?.role === 'athlete') return <Navigate to="/athlete" replace />;
+  return <>{children}</>;
+}
+
+/** Blocks athlete app routes until a Supabase session with role=athlete exists. */
+function AthleteAuthGuard({ children }: { children: React.ReactNode }) {
+  const { session, user, loading } = useAuth();
+  if (loading) return null;
+  if (!session) return <Navigate to="/athlete/login" replace />;
+  if (user?.user_metadata?.role !== 'athlete') return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -59,6 +77,26 @@ const App = () => (
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/onboarding" element={<OnboardingPage />} />
+
+              {/* Athlete app — public login */}
+              <Route path="/athlete/login" element={<AthleteLoginPage />} />
+
+              {/* Athlete app — protected shell with nested tabs */}
+              <Route
+                path="/athlete"
+                element={
+                  <AthleteAuthGuard>
+                    <AthleteAppLayout />
+                  </AthleteAuthGuard>
+                }
+              >
+                <Route index element={<Navigate to="/athlete/today" replace />} />
+                <Route path="today" element={<AthleteTodayPage />} />
+                <Route path="plan" element={<AthletePlanPage />} />
+                <Route path="messages" element={<AthleteMessagesPage />} />
+                <Route path="profile" element={<AthleteProfilePage />} />
+              </Route>
+
               <Route
                 path="*"
                 element={
