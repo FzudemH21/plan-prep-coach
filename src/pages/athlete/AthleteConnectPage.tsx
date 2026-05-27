@@ -54,28 +54,43 @@ export default function AthleteConnectPage() {
 
     setSubmitting(true);
     try {
-      // 1. Create Supabase auth user
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({ email, password });
-      if (signUpError) throw signUpError;
-      const userId = authData.user?.id;
-      if (!userId) throw new Error('Account creation failed — please try again.');
+      let userId: string | undefined;
 
-      // 2. Ensure we have an active session (signUp may not auto-sign-in if email
-      //    confirmation is enabled in Supabase; signing in explicitly handles both cases).
-      if (!authData.session) {
-        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-        if (signInError) {
-          // Email confirmation is required — surface a clear message
-          setStep('success'); // reuse success card with custom message below
-          setError('confirm-email');
-          return;
+      // 1. Try to create a new account; if the email is already registered, sign in instead.
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({ email, password });
+
+      if (signUpError) {
+        // "User already registered" — try signing in with the provided credentials
+        const alreadyRegistered =
+          signUpError.message.toLowerCase().includes('already registered') ||
+          signUpError.message.toLowerCase().includes('already exists') ||
+          signUpError.status === 422;
+
+        if (!alreadyRegistered) throw signUpError;
+
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInError) throw new Error('This email is already registered. Please use the correct password, or contact your coach for a new invite link.');
+        userId = signInData.user?.id;
+      } else {
+        userId = authData.user?.id;
+
+        // Ensure active session (email confirmation path)
+        if (!authData.session) {
+          const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+          if (signInError) {
+            setStep('success');
+            setError('confirm-email');
+            return;
+          }
         }
       }
 
-      // 3. Tag user as athlete in metadata (requires active session)
+      if (!userId) throw new Error('Could not determine user ID — please try again.');
+
+      // 2. Tag user as athlete in metadata
       await supabase.auth.updateUser({ data: { role: 'athlete' } });
 
-      // 4. Link the connection row — now that auth.uid() is set, the RLS policy allows this
+      // 3. Link the connection row (requires the athlete_claim_connection RLS policy)
       const { error: linkError } = await supabase
         .from('athlete_connections')
         .update({
