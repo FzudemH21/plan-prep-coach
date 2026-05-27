@@ -54,17 +54,17 @@ function IntensityBadge({ intensity }: { intensity: string | null }) {
 // ── Official Borg CR10 labels ────────────────────────────────────────────────
 
 const BORG_CR10_LABELS: Record<number, string> = {
-  0: 'Nothing at all',
-  1: 'Very weak',
-  2: 'Weak',
+  0: 'Rest',
+  1: 'Very, Very Easy',
+  2: 'Easy',
   3: 'Moderate',
-  4: 'Somewhat strong',
-  5: 'Strong (Heavy)',
+  4: 'Somewhat Hard',
+  5: 'Hard',
   6: '',
-  7: 'Very strong',
+  7: 'Very Hard',
   8: '',
   9: '',
-  10: 'Extremely strong',
+  10: 'Maximal',
 };
 
 // ── Date formatter ───────────────────────────────────────────────────────────
@@ -150,8 +150,8 @@ function CompletionSheet({
 
   return (
     <Sheet open={open} onOpenChange={open => { if (!open) onClose(); }}>
-      <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] overflow-y-auto p-0">
-        <div className="max-w-sm mx-auto px-5 pt-4 pb-6">
+      <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] overflow-y-auto p-0 sm:w-[480px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:rounded-2xl">
+        <div className="px-5 pt-4 pb-6">
           <SheetHeader className="mb-4">
             <SheetTitle>How was the session?</SheetTitle>
           </SheetHeader>
