@@ -54,15 +54,18 @@ All colors MUST be HSL.
 
     --sidebar-ring: 217.2 91.2% 59.8%;
     
-    /* Intensity scale tokens (HSL) - vibrant with transparency */
-    --intensity-off: 0 0% 95%;           /* light gray */
-    --intensity-deload: 120 40% 30%;     /* dark green */
-    --intensity-easy: 120 60% 50%;       /* green */
-    --intensity-easy-moderate: 210 80% 60%; /* blue */
-    --intensity-moderate: 45 95% 55%;    /* yellow */
-    --intensity-moderate-hard: 25 95% 55%; /* orange */
-    --intensity-hard: 0 80% 55%;         /* red */
-    --intensity-extremely-hard: 0 60% 35%;    /* dark red */
+    /* Borg CR10 intensity scale tokens (0–10) */
+    --intensity-0:  213 19% 65%;   /* Rest           #94a3b8 */
+    --intensity-1:  145 59% 20%;   /* Very,Very Easy #14532d */
+    --intensity-2:  142 71% 65%;   /* Easy           #4ade80 */
+    --intensity-3:  55  99% 76%;   /* Moderate       #fef08a */
+    --intensity-4:  46  97% 48%;   /* Somewhat Hard  #eab308 */
+    --intensity-5:  25  95% 53%;   /* Hard           #f97316 */
+    --intensity-6:  21  90% 48%;   /* Hard+          #ea580c */
+    --intensity-7:  0   91% 71%;   /* Very Hard      #f87171 */
+    --intensity-8:  0   84% 60%;   /* Very Hard+     #ef4444 */
+    --intensity-9:  0   70% 35%;   /* Extremely Hard #991b1b */
+    --intensity-10: 222 47% 11%;   /* Maximal        #111827 */
 
     --intensity-foreground: 0 0% 100%;
 
@@ -124,15 +127,18 @@ All colors MUST be HSL.
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
 
-    /* Intensity scale tokens (HSL) - dark mode, vibrant */
-    --intensity-off: 0 0% 20%;           /* dark gray */
-    --intensity-deload: 120 40% 35%;     /* dark green */
-    --intensity-easy: 120 60% 45%;       /* green */
-    --intensity-easy-moderate: 210 80% 55%; /* blue */
-    --intensity-moderate: 45 95% 50%;    /* yellow */
-    --intensity-moderate-hard: 25 95% 50%; /* orange */
-    --intensity-hard: 0 80% 50%;         /* red */
-    --intensity-extremely-hard: 0 60% 30%;    /* dark red */
+    /* Borg CR10 intensity scale tokens — dark mode (slightly adjusted lightness) */
+    --intensity-0:  213 19% 55%;
+    --intensity-1:  145 59% 25%;
+    --intensity-2:  142 71% 55%;
+    --intensity-3:  55  99% 66%;
+    --intensity-4:  46  97% 43%;
+    --intensity-5:  25  95% 48%;
+    --intensity-6:  21  90% 43%;
+    --intensity-7:  0   91% 65%;
+    --intensity-8:  0   84% 55%;
+    --intensity-9:  0   70% 30%;
+    --intensity-10: 222 47% 18%;
 
     --intensity-foreground: 0 0% 98%;
 
@@ -180,25 +186,31 @@ All colors MUST be HSL.
   overflow-x: auto;
 }
 
-/* Intensity background utility classes for consistent transparent coloring */
+/* Borg CR10 intensity background utility classes */
 @layer components {
-  .bg-intensity-off { background-color: hsl(var(--intensity-off) / 0.24); }
-  .bg-intensity-deload { background-color: hsl(var(--intensity-deload) / 0.24); }
-  .bg-intensity-easy { background-color: hsl(var(--intensity-easy) / 0.24); }
-  .bg-intensity-easy-moderate { background-color: hsl(var(--intensity-easy-moderate) / 0.24); }
-  .bg-intensity-moderate { background-color: hsl(var(--intensity-moderate) / 0.24); }
-  .bg-intensity-moderate-hard { background-color: hsl(var(--intensity-moderate-hard) / 0.24); }
-  .bg-intensity-hard { background-color: hsl(var(--intensity-hard) / 0.24); }
-  .bg-intensity-extremely-hard { background-color: hsl(var(--intensity-extremely-hard) / 0.24); }
+  .bg-intensity-0  { background-color: hsl(var(--intensity-0)  / 0.24); }
+  .bg-intensity-1  { background-color: hsl(var(--intensity-1)  / 0.24); }
+  .bg-intensity-2  { background-color: hsl(var(--intensity-2)  / 0.24); }
+  .bg-intensity-3  { background-color: hsl(var(--intensity-3)  / 0.24); }
+  .bg-intensity-4  { background-color: hsl(var(--intensity-4)  / 0.24); }
+  .bg-intensity-5  { background-color: hsl(var(--intensity-5)  / 0.24); }
+  .bg-intensity-6  { background-color: hsl(var(--intensity-6)  / 0.24); }
+  .bg-intensity-7  { background-color: hsl(var(--intensity-7)  / 0.24); }
+  .bg-intensity-8  { background-color: hsl(var(--intensity-8)  / 0.24); }
+  .bg-intensity-9  { background-color: hsl(var(--intensity-9)  / 0.24); }
+  .bg-intensity-10 { background-color: hsl(var(--intensity-10) / 0.24); }
 
-  .bg-intensity-off-light { background-color: hsl(var(--intensity-off) / 0.12); }
-  .bg-intensity-deload-light { background-color: hsl(var(--intensity-deload) / 0.12); }
-  .bg-intensity-easy-light { background-color: hsl(var(--intensity-easy) / 0.12); }
-  .bg-intensity-easy-moderate-light { background-color: hsl(var(--intensity-easy-moderate) / 0.12); }
-  .bg-intensity-moderate-light { background-color: hsl(var(--intensity-moderate) / 0.12); }
-  .bg-intensity-moderate-hard-light { background-color: hsl(var(--intensity-moderate-hard) / 0.12); }
-  .bg-intensity-hard-light { background-color: hsl(var(--intensity-hard) / 0.12); }
-  .bg-intensity-extremely-hard-light { background-color: hsl(var(--intensity-extremely-hard) / 0.12); }
+  .bg-intensity-0-light  { background-color: hsl(var(--intensity-0)  / 0.12); }
+  .bg-intensity-1-light  { background-color: hsl(var(--intensity-1)  / 0.12); }
+  .bg-intensity-2-light  { background-color: hsl(var(--intensity-2)  / 0.12); }
+  .bg-intensity-3-light  { background-color: hsl(var(--intensity-3)  / 0.12); }
+  .bg-intensity-4-light  { background-color: hsl(var(--intensity-4)  / 0.12); }
+  .bg-intensity-5-light  { background-color: hsl(var(--intensity-5)  / 0.12); }
+  .bg-intensity-6-light  { background-color: hsl(var(--intensity-6)  / 0.12); }
+  .bg-intensity-7-light  { background-color: hsl(var(--intensity-7)  / 0.12); }
+  .bg-intensity-8-light  { background-color: hsl(var(--intensity-8)  / 0.12); }
+  .bg-intensity-9-light  { background-color: hsl(var(--intensity-9)  / 0.12); }
+  .bg-intensity-10-light { background-color: hsl(var(--intensity-10) / 0.12); }
 }
 
 /* Ensure DnD drag handles remain interactive */

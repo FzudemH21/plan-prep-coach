@@ -5,6 +5,7 @@ import { TrainingDay } from '@/types/daily-intensity';
 import { ExtendedMesocycle, Microcycle } from '@/features/planner/types';
 import { SessionSection, ExerciseDistribution } from '@/types/microcycle-planning';
 import { IntensityLevel } from '@/types/training';
+import { BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabelFull, getBorgStyleLight, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { DayHeader } from './DayHeader';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -65,8 +66,6 @@ export interface MethodSessionArchitectureProps {
   onAddSession: (dayDate: string) => void;
   onRemoveSession: (dayDate: string, sessionIndex: number) => void;
   onRenameSession: (dayDate: string, sessionIndex: number, newName: string) => void;
-  intensityLevels: IntensityLevel[];
-  getIntensityColor: (intensity: IntensityLevel) => string;
   /** Returns the periodization-table target frequency for a method in a specific microcycle */
   getMethodFrequencyTarget?: (methodId: string, microcycleId: string) => number;
   /** Controlled selected microcycle index (lifted to page for pill navigation) */
@@ -76,30 +75,9 @@ export interface MethodSessionArchitectureProps {
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-const INTENSITY_LABELS: Record<IntensityLevel, string> = {
-  off: 'OFF',
-  deload: 'DELOAD',
-  easy: 'EASY',
-  'easy-moderate': 'EASY-MOD',
-  moderate: 'MODERATE',
-  'moderate-hard': 'MOD-HARD',
-  hard: 'HARD',
-  'extremely-hard': 'EXT. HARD',
-};
-
-const SUBTLE_BG: Record<IntensityLevel, string> = {
-  off: 'bg-[hsl(var(--intensity-off)/0.15)]',
-  deload: 'bg-[hsl(var(--intensity-deload)/0.15)]',
-  easy: 'bg-[hsl(var(--intensity-easy)/0.15)]',
-  'easy-moderate': 'bg-[hsl(var(--intensity-easy-moderate)/0.15)]',
-  moderate: 'bg-[hsl(var(--intensity-moderate)/0.15)]',
-  'moderate-hard': 'bg-[hsl(var(--intensity-moderate-hard)/0.15)]',
-  hard: 'bg-[hsl(var(--intensity-hard)/0.15)]',
-  'extremely-hard': 'bg-[hsl(var(--intensity-extremely-hard)/0.20)]',
-};
-
-function subtleBg(intensity: IntensityLevel) {
-  return SUBTLE_BG[intensity] ?? 'bg-primary/10';
+/** Returns a subtle background style object using Borg CR10 colors */
+function subtleBg(intensity: IntensityLevel): React.CSSProperties {
+  return getBorgStyleLight(migrateLegacyIntensity(intensity), 0.15);
 }
 
 /** Returns the sub-category part of "Category - SubCategory", else the full string */
@@ -155,8 +133,6 @@ export function MethodSessionArchitecture({
   onAddSession,
   onRemoveSession,
   onRenameSession,
-  intensityLevels,
-  getIntensityColor,
   getMethodFrequencyTarget,
   selectedMicrocycleIndex: selectedMicrocycleIndexProp,
   onSelectedMicrocycleIndexChange,
@@ -745,14 +721,15 @@ export function MethodSessionArchitecture({
             <div className="w-max min-w-full">
 
               {/* Mesocycle header */}
-              <div className={cn('mb-4 rounded-md border border-border pb-3', subtleBg(mesocycle.intensity))}>
+              <div className="mb-4 rounded-md border border-border pb-3" style={subtleBg(mesocycle.intensity)}>
                 <div className="flex items-center justify-center gap-3 px-4 py-2">
                   <h2 className="text-xl font-bold">{mesocycle.name}</h2>
                   <Badge
                     variant="secondary"
-                    className={cn('font-semibold', getIntensityColor(mesocycle.intensity))}
+                    className="font-semibold"
+                    style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(mesocycle.intensity)), color: getBorgFg(migrateLegacyIntensity(mesocycle.intensity)) }}
                   >
-                    {INTENSITY_LABELS[mesocycle.intensity] ?? mesocycle.intensity.toUpperCase()}
+                    {getBorgLabelFull(migrateLegacyIntensity(mesocycle.intensity))}
                   </Badge>
                   <Button
                     size="sm" variant="ghost"
@@ -785,7 +762,7 @@ export function MethodSessionArchitecture({
                 const isLast = clampedMicrocycleIndex === microcycleEntries.length - 1;
                 const isVeryFirst = allMesocycles.findIndex(m => m.id === mesocycle.id) === 0 && isFirst;
                 return (
-                  <div className={cn('flex items-center justify-between gap-3 mb-3 px-3 py-2 rounded-md border border-border', subtleBg(microcycle.intensity))}>
+                  <div className="flex items-center justify-between gap-3 mb-3 px-3 py-2 rounded-md border border-border" style={subtleBg(microcycle.intensity)}>
                     <Button
                       size="sm" variant="ghost" className="h-7 w-7 p-0"
                       disabled={isFirst}
@@ -796,8 +773,12 @@ export function MethodSessionArchitecture({
 
                     <div className="flex items-center gap-2 flex-1 justify-center">
                       <span className="font-semibold text-sm">{microcycle.name}</span>
-                      <Badge variant="secondary" className={cn('font-semibold text-xs', getIntensityColor(microcycle.intensity))}>
-                        {INTENSITY_LABELS[microcycle.intensity] ?? microcycle.intensity.toUpperCase()}
+                      <Badge
+                        variant="secondary"
+                        className="font-semibold text-xs"
+                        style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(microcycle.intensity)), color: getBorgFg(migrateLegacyIntensity(microcycle.intensity)) }}
+                      >
+                        {getBorgLabelFull(migrateLegacyIntensity(microcycle.intensity))}
                       </Badge>
                       <span className="text-xs text-muted-foreground">
                         {clampedMicrocycleIndex + 1} / {microcycleEntries.length}
@@ -839,9 +820,10 @@ export function MethodSessionArchitecture({
                 {selectedEntry && (() => {
                   const [, { days }] = selectedEntry;
                   return days.map(day => {
-                        // Off days always show 0 sessions regardless of stored count
+                        // Off days (Borg level "0") always show 0 sessions
+                        const migratedDayIntensity = migrateLegacyIntensity(day.intensity);
                         const sessionsCount =
-                          day.intensity === 'off' ? 0
+                          migratedDayIntensity === '0' ? 0
                           : (daySplitStates[day.date] ?? day.sessions ?? 1);
 
                         const hasTest  = (day.testNames?.length  ?? 0) > 0;
@@ -860,9 +842,7 @@ export function MethodSessionArchitecture({
                             {/* Day header */}
                             <DayHeader
                               date={day.date}
-                              intensity={day.intensity ?? 'moderate'}
-                              intensityLevels={intensityLevels}
-                              getIntensityColor={getIntensityColor}
+                              intensity={migratedDayIntensity as IntensityLevel}
                               onDayIntensityChange={onDayIntensityChange}
                               sessionCount={sessionsCount}
                               testNames={day.testNames}
@@ -898,9 +878,10 @@ export function MethodSessionArchitecture({
                                     const sessionName =
                                       day.sessionNames?.[si] ?? `Session ${si + 1}`;
                                     const intensityKey = `${day.date}_${si}`;
-                                    const sessionIntensity =
+                                    const sessionIntensity = migrateLegacyIntensity(
                                       sessionIntensityMap[intensityKey] ??
-                                      (day.intensity ?? 'moderate');
+                                      (day.intensity ?? '5')
+                                    );
                                     const popoverKey = `${day.date}_${si}`;
                                     const isRenamingThisSession =
                                       renamingSession?.dayDate === day.date &&
@@ -998,20 +979,18 @@ export function MethodSessionArchitecture({
                                           >
                                             <PopoverTrigger asChild>
                                               <Badge
-                                                className={cn(
-                                                  'cursor-pointer text-[10px] px-1.5 py-0 h-4 shrink-0',
-                                                  getIntensityColor(sessionIntensity)
-                                                )}
+                                                className="cursor-pointer text-[10px] px-1.5 py-0 h-4 shrink-0"
+                                                style={{ backgroundColor: getBorgBg(sessionIntensity), color: getBorgFg(sessionIntensity) }}
                                                 title="Change session intensity"
                                               >
-                                                {(INTENSITY_LABELS[sessionIntensity] ?? sessionIntensity.toUpperCase()).slice(0, 7)}
+                                                {getBorgLabelFull(sessionIntensity).slice(0, 7)}
                                               </Badge>
                                             </PopoverTrigger>
                                             <PopoverContent
                                               className="w-44 p-1"
                                               align="end"
                                             >
-                                              {intensityLevels.map(level => (
+                                              {BORG_LEVELS.map(level => (
                                                 <button
                                                   key={level}
                                                   onClick={() => {
@@ -1026,13 +1005,10 @@ export function MethodSessionArchitecture({
                                                       return next;
                                                     });
                                                   }}
-                                                  className={cn(
-                                                    'w-full text-left px-2 py-1 text-xs rounded mb-0.5',
-                                                    getIntensityColor(level),
-                                                    'hover:opacity-90'
-                                                  )}
+                                                  className="w-full text-left px-2 py-1 text-xs rounded mb-0.5 hover:opacity-90"
+                                                  style={{ backgroundColor: getBorgBg(level), color: getBorgFg(level) }}
                                                 >
-                                                  {INTENSITY_LABELS[level] ?? level}
+                                                  {getBorgLabelFull(level)}
                                                 </button>
                                               ))}
                                             </PopoverContent>

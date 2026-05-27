@@ -1,4 +1,5 @@
 import React from 'react';
+import { BorgLevel, getBorgBg, getBorgLabel, getBorgValue, getBorgFromValue, getBorgStyleLight, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { IntensityLevel } from '@/types/training';
 import { Microcycle } from '@/features/planner/types';
 import { Trophy, CalendarDays } from 'lucide-react';
@@ -6,6 +7,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+
+// Band height per level: 100% / 11 levels
+const BAND_HEIGHT = 100 / 11;
 
 interface TestDetail {
   name: string;
@@ -24,28 +28,11 @@ interface MicrocycleIntensityColumnProps {
   intensity: IntensityLevel;
   onIntensityChange: (mesocycleId: string, microcycleId: string, intensity: IntensityLevel) => void;
   isLastMicrocycleOfMesocycle: boolean;
-  intensityLevels: IntensityLevel[];
-  getIntensityColor: (intensity: IntensityLevel) => string;
   testDetails?: TestDetail[];
   eventDetails?: EventDetail[];
   startDate?: Date;
   endDate?: Date;
 }
-
-// Helper to get subtle intensity-tinted background (same color, transparent)
-const getSubtleIntensityBg = (intensity: IntensityLevel): string => {
-  const bgMappings: Record<IntensityLevel, string> = {
-    "off": "bg-[hsl(var(--intensity-off)/0.10)]",
-    "deload": "bg-[hsl(var(--intensity-deload)/0.10)]",
-    "easy": "bg-[hsl(var(--intensity-easy)/0.10)]",
-    "easy-moderate": "bg-[hsl(var(--intensity-easy-moderate)/0.10)]",
-    "moderate": "bg-[hsl(var(--intensity-moderate)/0.10)]",
-    "moderate-hard": "bg-[hsl(var(--intensity-moderate-hard)/0.10)]",
-    "hard": "bg-[hsl(var(--intensity-hard)/0.10)]",
-    "extremely-hard": "bg-[hsl(var(--intensity-extremely-hard)/0.15)]"
-  };
-  return bgMappings[intensity] || "bg-primary/10";
-};
 
 const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
   microcycle,
@@ -53,95 +40,59 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
   intensity,
   onIntensityChange,
   isLastMicrocycleOfMesocycle,
-  intensityLevels,
-  getIntensityColor,
   testDetails = [],
   eventDetails = [],
   startDate,
-  endDate
+  endDate,
 }) => {
-  const chartHeight = 200; // Fixed chart area height
-  
-  // Calculate column height based on intensity level (full band heights)
-  const calculateColumnHeight = (intensityLevel: IntensityLevel): number => {
-    const heightMappings = {
-      "off": 12.5,
-      "deload": 25,
-      "easy": 37.5,
-      "easy-moderate": 50,
-      "moderate": 62.5,
-      "moderate-hard": 75,
-      "hard": 87.5,
-      "extremely-hard": 100
-    };
-    
-    return heightMappings[intensityLevel] || 0;
-  };
+  // Migrate any legacy intensity value on read
+  const safeIntensity: BorgLevel = migrateLegacyIntensity(intensity);
 
-  const columnHeight = calculateColumnHeight(intensity);
-  const actualHeight = (columnHeight / 100) * chartHeight;
+  const chartHeight = 200;
 
-  // Handle column click with precise intensity mapping
+  // Map BorgLevel (0–10) to column fill height
+  const borgValue = getBorgValue(safeIntensity);
+  const columnHeightPct = (borgValue / 10) * 100;
+  const actualHeight = (columnHeightPct / 100) * chartHeight;
+
   const handleColumnClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    
     const rect = e.currentTarget.getBoundingClientRect();
-    const clickY = rect.bottom - e.clientY; // Distance from bottom
-    const clickPercentage = (clickY / rect.height) * 100;
-    
-    // Map click position to intensity levels based on full band ranges
-    let targetIntensity: IntensityLevel = "off";
-    
-    if (clickPercentage >= 87.5) targetIntensity = "extremely-hard";
-    else if (clickPercentage >= 75) targetIntensity = "hard";
-    else if (clickPercentage >= 62.5) targetIntensity = "moderate-hard";
-    else if (clickPercentage >= 50) targetIntensity = "moderate";
-    else if (clickPercentage >= 37.5) targetIntensity = "easy-moderate";
-    else if (clickPercentage >= 25) targetIntensity = "easy";
-    else if (clickPercentage >= 12.5) targetIntensity = "deload";
-    else targetIntensity = "off";
-    
-    onIntensityChange(mesocycleId, microcycle.id, targetIntensity);
+    const clickY = rect.bottom - e.clientY;
+    const clickPct = (clickY / rect.height) * 100;
+    const borgIdx = Math.max(0, Math.min(10, Math.round((clickPct / 100) * 10)));
+    onIntensityChange(mesocycleId, microcycle.id, getBorgFromValue(borgIdx) as IntensityLevel);
   };
 
-  // Generate horizontal grid lines
-  const generateGridLines = () => {
-    const gridPercentages = [0, 12.5, 25, 37.5, 50, 62.5, 75, 87.5, 100];
-    return gridPercentages.map((percentage, index) => (
+  const generateGridLines = () =>
+    Array.from({ length: 12 }, (_, i) => i * BAND_HEIGHT).map((pct) => (
       <div
-        key={percentage}
+        key={pct}
         className="absolute w-full border-t border-border/50 z-10"
-        style={{ 
-          bottom: `${percentage}%`,
-          borderStyle: percentage === 0 || percentage === 100 ? 'solid' : 'dashed'
+        style={{
+          bottom: `${pct}%`,
+          borderStyle: pct === 0 || pct === 100 ? 'solid' : 'dashed',
         }}
       />
     ));
-  };
 
-  // Get border classes for mesocycle boundaries
-  const getBorderClasses = () => {
-    let borderClasses = 'border-r border-border/60'; // Default microcycle border
-    
-    if (isLastMicrocycleOfMesocycle) {
-      borderClasses = 'border-r-4 border-border/80';
-    }
-    
-    return borderClasses;
-  };
+  const getBorderClasses = () =>
+    isLastMicrocycleOfMesocycle ? 'border-r-4 border-border/80' : 'border-r border-border/60';
 
+  const subtleBgStyle = getBorgStyleLight(safeIntensity, 0.10);
   const hasIcons = testDetails.length > 0 || eventDetails.length > 0;
 
   return (
-    <div className={cn("flex flex-col w-[160px] shrink-0 box-border border-l border-border/40", getBorderClasses())}>
+    <div className={cn('flex flex-col w-[160px] shrink-0 box-border border-l border-border/40', getBorderClasses())}>
       {/* Microcycle header */}
-      <div className={cn("h-24 text-center text-xs rounded-md border border-border w-full mb-2 flex flex-col p-1", getSubtleIntensityBg(intensity))}>
-        {/* Content wrapper - vertically centered */}
+      <div
+        className="h-24 text-center text-xs rounded-md border border-border w-full mb-2 flex flex-col p-1"
+        style={subtleBgStyle}
+      >
         <div className="flex-1 flex flex-col items-center justify-center">
-          {/* Microcycle name */}
-          <div className="font-medium truncate w-full px-1" title={microcycle.name}>{microcycle.name}</div>
-          
-          {/* Date range with duration */}
+          <div className="font-medium truncate w-full px-1" title={microcycle.name}>
+            {microcycle.name}
+          </div>
           <div className="text-[10px] text-muted-foreground">
             {startDate && endDate ? (
               <>
@@ -152,8 +103,7 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
             )}
           </div>
         </div>
-        
-        {/* Icons row - always at bottom when present */}
+
         {hasIcons && (
           <div className="flex items-center justify-center gap-1 pt-1 border-t border-border/30 mt-auto">
             {testDetails.length > 0 && (
@@ -172,7 +122,7 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
                       <div key={i} className="text-xs text-muted-foreground">
                         <div>• {test.goal ? `${test.goal}: ` : ''}{test.name}</div>
                         <div className="pl-2 text-[10px]">
-                          {test.dates.map(d => format(d, 'MMM d')).join(', ')}
+                          {test.dates.map((d) => format(d, 'MMM d')).join(', ')}
                         </div>
                       </div>
                     ))}
@@ -196,7 +146,7 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
                       <div key={i} className="text-xs text-muted-foreground">
                         <div>• {event.name}</div>
                         <div className="pl-2 text-[10px]">
-                          {event.dates.map(d => format(d, 'MMM d')).join(', ')}
+                          {event.dates.map((d) => format(d, 'MMM d')).join(', ')}
                         </div>
                       </div>
                     ))}
@@ -207,35 +157,34 @@ const MicrocycleIntensityColumn: React.FC<MicrocycleIntensityColumnProps> = ({
           </div>
         )}
       </div>
-      
-      {/* Fixed Chart container with grid */}
-      <div 
+
+      {/* Chart container */}
+      <div
         className="relative cursor-pointer transition-all duration-200 hover:shadow-md w-full"
         style={{ height: `${chartHeight}px` }}
         onClick={handleColumnClick}
       >
-        {/* Background column (full height, light gray) */}
-        <div 
+        <div
           className="absolute bottom-0 w-full bg-muted/30 border border-border rounded-t z-0"
           style={{ height: `${chartHeight}px` }}
         />
-        
-        {/* Grid lines */}
+
         {generateGridLines()}
-        
-        {/* Intensity column */}
-        <div 
-          className={`absolute bottom-0 w-full rounded-t transition-all duration-300 border-2 border-transparent z-20 ${getIntensityColor(intensity)}`}
-          style={{ height: `${actualHeight}px` }}
+
+        <div
+          className="absolute bottom-0 w-full rounded-t transition-all duration-300 border-2 border-transparent z-20"
+          style={{
+            height: `${actualHeight}px`,
+            backgroundColor: getBorgBg(safeIntensity),
+          }}
         />
-        
-        {/* Hover overlay */}
+
         <div className="absolute inset-0 bg-black/5 opacity-0 hover:opacity-100 transition-opacity duration-200 rounded-t z-30" />
       </div>
-      
-      {/* Fixed Intensity label - prevent width changes */}
-      <div className="text-xs mt-2 text-center capitalize font-medium w-[160px] whitespace-nowrap overflow-hidden text-ellipsis">
-        {intensity.replace('-', ' ')}
+
+      {/* Intensity label */}
+      <div className="text-xs mt-2 text-center font-medium w-[160px] whitespace-nowrap overflow-hidden text-ellipsis">
+        {safeIntensity} – {getBorgLabel(safeIntensity)}
       </div>
     </div>
   );

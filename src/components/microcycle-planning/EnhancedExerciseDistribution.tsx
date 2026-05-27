@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { cleanupSupersetsOnExerciseDelete, toggleSuperset } from '@/utils/supersetUtils';
+import { getBorgBg, getBorgFg, getBorgLabelFull, getBorgStyleLight, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { CircuitBuilderDialog } from '@/components/templates/CircuitBuilderDialog';
 
 interface EnhancedExerciseDistributionProps {
@@ -48,13 +49,11 @@ interface EnhancedExerciseDistributionProps {
   onDistributionChange: (distribution: ExerciseDistribution[]) => void;
   onSectionsChange: (sections: SessionSection[]) => void;
   onSupersetsChange: (supersets: SupersetMapping) => void;
-  getIntensityColor: (intensity: IntensityLevel) => string;
   onAddSession: (dayDate: string) => void;
   onRemoveSession: (dayDate: string, sessionIndex: number) => void;
   onRenameSession?: (dayDate: string, sessionIndex: number, newName: string) => void;
   onSessionIntensityChange?: (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => void;
   onDayIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
-  intensityLevels?: IntensityLevel[];
   onClearMicrocycle?: (microcycleId: string) => void;
   onClearMesocycle?: (mesocycleId: string) => void;
   copiedSection?: any;
@@ -83,32 +82,8 @@ interface EnhancedExerciseDistributionProps {
 
 // ── Pure helpers (no component state — defined outside to avoid re-creation) ──
 
-function formatIntensityLabel(intensity: IntensityLevel): string {
-  const labels: Record<IntensityLevel, string> = {
-    'off': 'OFF',
-    'deload': 'DELOAD',
-    'easy': 'EASY',
-    'easy-moderate': 'EASY-MODERATE',
-    'moderate': 'MODERATE',
-    'moderate-hard': 'MODERATE-HARD',
-    'hard': 'HARD',
-    'extremely-hard': 'EXTREMELY HARD',
-  };
-  return labels[intensity] || intensity.toUpperCase();
-}
-
-function getSubtleIntensityBg(intensity: IntensityLevel): string {
-  const bgMappings: Record<IntensityLevel, string> = {
-    'off': 'bg-[hsl(var(--intensity-off)/0.15)]',
-    'deload': 'bg-[hsl(var(--intensity-deload)/0.15)]',
-    'easy': 'bg-[hsl(var(--intensity-easy)/0.15)]',
-    'easy-moderate': 'bg-[hsl(var(--intensity-easy-moderate)/0.15)]',
-    'moderate': 'bg-[hsl(var(--intensity-moderate)/0.15)]',
-    'moderate-hard': 'bg-[hsl(var(--intensity-moderate-hard)/0.15)]',
-    'hard': 'bg-[hsl(var(--intensity-hard)/0.15)]',
-    'extremely-hard': 'bg-[hsl(var(--intensity-extremely-hard)/0.20)]',
-  };
-  return bgMappings[intensity] || 'bg-primary/10';
+function getSubtleIntensityBgStyle(intensity: IntensityLevel): React.CSSProperties {
+  return getBorgStyleLight(migrateLegacyIntensity(intensity), 0.15);
 }
 
 export function EnhancedExerciseDistribution({
@@ -122,7 +97,6 @@ export function EnhancedExerciseDistribution({
   onDistributionChange,
   onSectionsChange,
   onSupersetsChange,
-  getIntensityColor,
   onAddSession,
   onRemoveSession,
   onRenameSession,
@@ -130,7 +104,6 @@ export function EnhancedExerciseDistribution({
   onClearMesocycle,
   onSessionIntensityChange,
   onDayIntensityChange,
-  intensityLevels,
   copiedSection,
   onCopySection,
   onPasteSection,
@@ -2353,17 +2326,17 @@ export function EnhancedExerciseDistribution({
             <div className="w-max min-w-full">
               
               {/* Mesocycle Header */}
-              <div className={cn(
-                "mb-4 rounded-md border border-border pb-3 relative",
-                getSubtleIntensityBg(mesocycle.intensity)
-              )}>
+              <div
+                className="mb-4 rounded-md border border-border pb-3 relative"
+                style={getSubtleIntensityBgStyle(mesocycle.intensity)}
+              >
                 <div className="flex items-center justify-center px-4 py-2">
                   <div className="flex items-center gap-3">
                     <h2 className="text-xl font-bold">
                       {mesocycle.name}
                     </h2>
-                    <Badge variant="secondary" className={cn("font-semibold", getIntensityColor(mesocycle.intensity))}>
-                      {formatIntensityLabel(mesocycle.intensity)}
+                    <Badge variant="secondary" className="font-semibold" style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(mesocycle.intensity)), color: getBorgFg(migrateLegacyIntensity(mesocycle.intensity)) }}>
+                      {getBorgLabelFull(migrateLegacyIntensity(mesocycle.intensity))}
                     </Badge>
                     <div className="flex items-center gap-1">
                       {(() => {
@@ -2424,10 +2397,10 @@ export function EnhancedExerciseDistribution({
                 const isLast = clampedMcIdx === microcycleEntries.length - 1;
                 const isVeryFirstMicrocycle = allMesocycles.findIndex(m => m.id === mesocycle.id) === 0 && isFirst;
                 return (
-                  <div className={cn(
-                    'flex items-center justify-between gap-3 mb-3 px-3 py-2 rounded-md border border-border',
-                    getSubtleIntensityBg(microcycle.intensity)
-                  )}>
+                  <div
+                    className="flex items-center justify-between gap-3 mb-3 px-3 py-2 rounded-md border border-border"
+                    style={getSubtleIntensityBgStyle(microcycle.intensity)}
+                  >
                     <Button size="sm" variant="ghost" className="h-7 w-7 p-0"
                       disabled={isFirst} onClick={() => setSelectedMcIndex(i => Math.max(0, i - 1))}>
                       <ChevronLeft className="h-4 w-4" />
@@ -2435,8 +2408,8 @@ export function EnhancedExerciseDistribution({
 
                     <div className="flex items-center gap-2 flex-1 justify-center">
                       <span className="font-semibold text-sm">{microcycle.name}</span>
-                      <Badge variant="secondary" className={cn('font-semibold text-xs', getIntensityColor(microcycle.intensity))}>
-                        {formatIntensityLabel(microcycle.intensity)}
+                      <Badge variant="secondary" className="font-semibold text-xs" style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(microcycle.intensity)), color: getBorgFg(migrateLegacyIntensity(microcycle.intensity)) }}>
+                        {getBorgLabelFull(migrateLegacyIntensity(microcycle.intensity))}
                       </Badge>
                       <span className="text-xs text-muted-foreground">{clampedMcIdx + 1} / {microcycleEntries.length}</span>
                       {!isVeryFirstMicrocycle && (
@@ -2493,9 +2466,7 @@ export function EnhancedExerciseDistribution({
                             {/* Day Header - Shows once per day */}
                 <DayHeader
                   date={day.date}
-                  intensity={day.intensity || 'moderate'}
-                  intensityLevels={intensityLevels}
-                  getIntensityColor={getIntensityColor}
+                  intensity={day.intensity || '5'}
                   onDayIntensityChange={onDayIntensityChange}
                   sessionCount={sessionsCount}
                   testNames={day.testNames}
@@ -2598,8 +2569,6 @@ export function EnhancedExerciseDistribution({
                                     onRemoveSession={onRemoveSession}
                                     onRenameSession={onRenameSession}
                                     onSessionIntensityChange={onSessionIntensityChange}
-                                    intensityLevels={intensityLevels}
-                                    getIntensityColor={getIntensityColor}
                                     mesocycleId={mesocycle.id}
                                     sessionComments={sessionComments}
                                     onSessionCommentsChange={handleSessionCommentsChange}

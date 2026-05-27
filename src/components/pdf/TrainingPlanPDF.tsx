@@ -74,6 +74,7 @@ import { TrainingProgram } from "@/hooks/useTrainingPrograms";
 import { PlanNarrative, MesocycleNarrative } from "@/lib/generatePlanNarrative";
 import type { DetailLevel } from "./ExportPDFButton";
 import { ExerciseDistribution } from "@/types/microcycle-planning";
+import { getBorgBg, getBorgFg, getBorgLabelFull, getBorgValue, migrateLegacyIntensity } from "@/utils/intensityScale";
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 // Source: design_handoff_plan_prep_coach/design_system/colors_and_type.css
@@ -94,47 +95,19 @@ const D = {
 
 const DEFAULT_ACCENT = "#e2522b";
 
-/** Intensity palette — exact hex from design tokens */
-const IC: Record<string, { bg: string; fg: string }> = {
-  "off":             { bg: "#f2f2f2", fg: "#78716c" },
-  "deload":          { bg: "#2e7a2e", fg: "#ffffff" },
-  "easy":            { bg: "#33cc33", fg: "#ffffff" },
-  "easy-moderate":   { bg: "#3d8df0", fg: "#ffffff" },
-  "moderate":        { bg: "#f7c512", fg: "#0c0a09" },
-  "moderate-hard":   { bg: "#f78d12", fg: "#ffffff" },
-  "hard":            { bg: "#e22424", fg: "#ffffff" },
-  "extremely-hard":  { bg: "#8f1f1f", fg: "#ffffff" },
-  "extremely_hard":  { bg: "#8f1f1f", fg: "#ffffff" },
-};
-
-/** Bar height ratios (0–1) for intensity bar charts */
-const IH: Record<string, number> = {
-  "off":            0.06,
-  "deload":         0.20,
-  "easy":           0.30,
-  "easy-moderate":  0.44,
-  "moderate":       0.56,
-  "moderate-hard":  0.70,
-  "hard":           0.84,
-  "extremely-hard": 1.00,
-  "extremely_hard": 1.00,
-};
-
-const IL: Record<string, string> = {
-  "off":            "Off",
-  "deload":         "Deload",
-  "easy":           "Easy",
-  "easy-moderate":  "Easy–Mod",
-  "moderate":       "Moderate",
-  "moderate-hard":  "Mod–Hard",
-  "hard":           "Hard",
-  "extremely-hard": "Extremely Hard",
-  "extremely_hard": "Extremely Hard",
-};
-
-function iColor(key: string) { return IC[key] ?? { bg: D.bgMuted, fg: D.fg3 }; }
-function iLabel(key: string) { return IL[key] ?? key; }
-function iHeight(key: string) { return IH[key] ?? 0.5; }
+/** Intensity helpers — delegate to Borg CR10 utility, fall back gracefully */
+function iColor(key: string): { bg: string; fg: string } {
+  const level = migrateLegacyIntensity(key);
+  return { bg: getBorgBg(level), fg: getBorgFg(level) };
+}
+function iLabel(key: string): string {
+  return getBorgLabelFull(migrateLegacyIntensity(key));
+}
+function iHeight(key: string): number {
+  // getBorgValue returns 0–10; map to 0.06–1.00 range
+  const v = getBorgValue(migrateLegacyIntensity(key));
+  return v === 0 ? 0.06 : v / 10;
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -622,7 +595,7 @@ function RepWeekChart({ trainingDays }: { trainingDays: MesoPdfData["trainingDay
   const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   const dayMap = new Map(trainingDays.map((td) => [td.dayName, td]));
   const days = DAY_NAMES.map((name) =>
-    dayMap.get(name) ?? { dayName: name, intensity: "off", sessionNames: [], methods: [] },
+    dayMap.get(name) ?? { dayName: name, intensity: "0", sessionNames: [], methods: [] },
   );
 
   return (
@@ -649,7 +622,7 @@ function RepWeekChart({ trainingDays }: { trainingDays: MesoPdfData["trainingDay
         borderBottomWidth: 1, borderBottomColor: D.border,
       }}>
         {days.map((day, i) => {
-          const isOff = day.intensity === "off";
+          const isOff = migrateLegacyIntensity(day.intensity) === "0";
           const col = iColor(day.intensity);
           const ratio = iHeight(day.intensity);
           const barH = Math.max(3, ratio * CHART_H);

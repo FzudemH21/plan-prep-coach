@@ -58,25 +58,6 @@ interface AthleteCalendarViewProps {
   athlete: Athlete;
 }
 
-type ViewMode = '1week' | '2week' | '4week' | 'master';
-
-// Intensity color helper matching the training calendar
-const getIntensityColor = (intensity: IntensityLevel | string): string => {
-  const colors: Record<string, string> = {
-    "off": "bg-[hsl(var(--intensity-off))] text-black border-2",
-    "deload": "bg-[hsl(var(--intensity-deload))] text-white",
-    "easy": "bg-[hsl(var(--intensity-easy))] text-white", 
-    "easy-moderate": "bg-[hsl(var(--intensity-easy-moderate))] text-white",
-    "moderate": "bg-[hsl(var(--intensity-moderate))] text-black",
-    "moderate-hard": "bg-[hsl(var(--intensity-moderate-hard))] text-white",
-    "hard": "bg-[hsl(var(--intensity-hard))] text-white",
-    "extremely-hard": "bg-[hsl(var(--intensity-extremely-hard))] text-white"
-  };
-  return colors[intensity] || "bg-muted text-muted-foreground";
-};
-
-const intensityLevels: IntensityLevel[] = ["off", "deload", "easy", "easy-moderate", "moderate", "moderate-hard", "hard", "extremely-hard"];
-
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
@@ -395,7 +376,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           programName = selectedAssignment?.programName;
 
           // Get day intensity from live dailyIntensity data, fall back to trainingDays intensity
-          let dayIntensity: IntensityLevel = liveTrainingDay?.intensity || 'moderate';
+          let dayIntensity: IntensityLevel = liveTrainingDay?.intensity || '5';
           const liveDayIntensity = editing.dailyIntensityData.find(
             (d: any) => d.date === dateString
           );
@@ -462,7 +443,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             const liveSplitState = editing.daySplitStates[dateString];
             const liveTrainingDay = editing.trainingDays.find((td: any) => td.date === dateString);
 
-            let dayIntensity: IntensityLevel = liveTrainingDay?.intensity || 'moderate';
+            let dayIntensity: IntensityLevel = liveTrainingDay?.intensity || '5';
             const liveDayIntensity = editing.dailyIntensityData.find(
               (d: any) => d.date === dateString
             );
@@ -851,11 +832,11 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
               ? program.daySplitStates
               : (program.trainingDays ?? []).length > 0
                 ? (program.trainingDays!).reduce<Record<string, number>>((acc, day) => {
-                    acc[day.date] = day.sessions ?? (day.intensity === 'off' ? 0 : 1);
+                    acc[day.date] = day.sessions ?? (day.intensity === '0' ? 0 : 1);
                     return acc;
                   }, {})
                 : (program.dailyIntensityData ?? []).reduce<Record<string, number>>((acc, di) => {
-                    acc[di.date] = di.intensity === 'off' ? 0 : 1;
+                    acc[di.date] = di.intensity === '0' ? 0 : 1;
                     return acc;
                   }, {});
 
@@ -956,10 +937,10 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
               microcycleId: di.microcycleId,
               isTestDay: false,
               isEventDay: false,
-              isTrainingDay: di.intensity !== 'off',
+              isTrainingDay: di.intensity !== '0',
               intensity: di.intensity,
-              sessions: di.intensity === 'off' ? 0 : 1,
-              sessionNames: di.intensity === 'off' ? [] : ['Session 1'],
+              sessions: di.intensity === '0' ? 0 : 1,
+              sessionNames: di.intensity === '0' ? [] : ['Session 1'],
             }));
             // Sync split states from this derived training days list
             if (Object.keys(finalDaySplitStates).length === 0) {
@@ -987,14 +968,14 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
               const allDays = eachDayOfInterval({ start: mesoStart, end: mesoEnd });
               let microOffset = 0;
               (meso.microcycles || []).forEach(micro => {
-                const microIntensity = (micro.intensity || meso.intensity || 'moderate') as string;
+                const microIntensity = (micro.intensity || meso.intensity || '5') as string;
                 for (let i = 0; i < micro.duration; i++) {
                   const day = allDays[microOffset + i];
                   if (!day) continue;
                   const dateString = format(day, 'yyyy-MM-dd');
                   // Per-day intensity overrides microcycle intensity
                   const intensity = dailyIntensityLookup.get(dateString) || microIntensity;
-                  const numSessions = intensity === 'off' ? 0 : 1;
+                  const numSessions = intensity === '0' ? 0 : 1;
                   splitStates[dateString] = numSessions;
                   trainingDaysList.push({
                     date: dateString,
@@ -1004,7 +985,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                     microcycleId: micro.id,
                     isTestDay: false,
                     isEventDay: false,
-                    isTrainingDay: intensity !== 'off',
+                    isTrainingDay: intensity !== '0',
                     intensity,
                     sessions: numSessions,
                     sessionNames: numSessions > 0 ? ['Session 1'] : [],
@@ -1047,7 +1028,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
               .map(([date]) => date)
           );
           filteredDailyIntensity.forEach((di: any) => {
-            if (di.intensity === 'off' && !programmedSessionDates.has(di.date)) {
+            if (di.intensity === '0' && !programmedSessionDates.has(di.date)) {
               finalDaySplitStates[di.date] = 0;
             }
           });
@@ -1055,7 +1036,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           finalTrainingDays = finalTrainingDays.map((td: any) => {
             const di = filteredDailyIntensity.find((d: any) => d.date === td.date);
             if (di && di.intensity !== td.intensity) {
-              const isOff = di.intensity === 'off';
+              const isOff = di.intensity === '0';
               if (isOff && programmedSessionDates.has(td.date)) return td;
               return {
                 ...td,
@@ -1394,7 +1375,6 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                     setSessionSheetOpen(true);
                   }
                 }}
-                getIntensityColor={getIntensityColor}
                 dailyIntensityData={editing.dailyIntensityData}
                 parameterValues={editing.parameterValues}
                 currentMesocycle={currentMesocycleFromAssignment}
@@ -1413,7 +1393,6 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 onExerciseAutoCalcChange={editing.handleExerciseAutoCalcChange}
                 onDayIntensityChange={editing.handleDayIntensityChange}
                 onSessionIntensityChange={editing.handleSessionIntensityChange}
-                intensityLevels={intensityLevels}
                 onSectionReorder={editing.handleSectionReorder}
                 onExerciseReorder={editing.handleExerciseReorder}
                 onAddSectionToSession={editing.handleAddSectionToSession}
@@ -1467,7 +1446,6 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                       onDayClick={handleDayClick}
                       onAddSession={handleAddSession}
                       onDeleteAssignment={handleDeleteAssignmentById}
-                      getIntensityColor={getIntensityColor}
                       // Week operations
                       copiedWeek={editing.copiedWeek}
                       onCopyWeek={editing.handleCopyWeek}
@@ -1484,7 +1462,6 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                       onDeleteSession={editing.handleDeleteSession}
                       onPasteSession={editing.handlePasteSession}
                       // Intensity editing
-                      intensityLevels={intensityLevels}
                       onIntensityChange={editing.handleDayIntensityChange}
                       // Ref-based drag end timestamp for click suppression
                       lastDragEndRef={lastDragEndRef}
@@ -1644,8 +1621,6 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           onRenameSession={editing.handleSessionNameChange}
           onIntensityChange={editing.handleDayIntensityChange}
           onSessionIntensityChange={editing.handleSessionIntensityChange}
-          getIntensityColor={getIntensityColor}
-          intensityLevels={intensityLevels}
           sessionSections={editing.sessionSections}
           supersets={editing.supersets}
           onSectionsChange={(sections) => editing.setSessionSections(sections)}

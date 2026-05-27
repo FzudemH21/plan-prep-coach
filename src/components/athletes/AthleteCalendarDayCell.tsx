@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabelFull, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { Dumbbell, Trophy, Calendar, Plus, MoreVertical, Trash2, CalendarPlus, Copy, ClipboardPaste, Settings, GripVertical } from 'lucide-react';
 import { IntensityLevel } from '@/types/training';
 import {
@@ -66,7 +67,6 @@ interface AthleteCalendarDayCellProps {
   onDayClick?: (date: Date) => void;
   onAddSession?: (date: Date) => void;
   onDeleteAssignment?: (assignmentId: string) => void;
-  getIntensityColor?: (intensity: string) => string;
   // Day operations
   copiedDay?: CopiedDayInfo | null;
   onCopyDay?: (dayDate: string) => void;
@@ -78,7 +78,6 @@ interface AthleteCalendarDayCellProps {
   onDeleteSession?: (dayDate: string, sessionIndex: number) => void;
   onPasteSession?: (dayDate: string) => void;
   // Intensity editing
-  intensityLevels?: IntensityLevel[];
   onIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
   // Ref-based drag end timestamp for click suppression (sync update, not state)
   lastDragEndRef?: React.MutableRefObject<number>;
@@ -97,7 +96,6 @@ export function AthleteCalendarDayCell({
   onDayClick,
   onAddSession,
   onDeleteAssignment,
-  getIntensityColor,
   copiedDay,
   onCopyDay,
   onClearDay,
@@ -106,7 +104,6 @@ export function AthleteCalendarDayCell({
   onCopySession,
   onDeleteSession,
   onPasteSession,
-  intensityLevels,
   onIntensityChange,
   lastDragEndRef,
   athleteId,
@@ -168,47 +165,40 @@ export function AthleteCalendarDayCell({
             </div>
 
             {/* Day Intensity Indicator - Clickable (uses day.intensity, NOT session 0 intensity) */}
-            {hasTraining && day.intensity && getIntensityColor && intensityLevels && onIntensityChange ? (
+            {hasTraining && day.intensity && onIntensityChange ? (
               <Popover open={intensityPopoverOpen} onOpenChange={setIntensityPopoverOpen}>
                 <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                  <button 
-                    className={cn(
-                      "w-5 h-5 rounded-sm border transition-all hover:scale-110 cursor-pointer shrink-0",
-                      getIntensityColor(day.intensity)
-                    )}
-                    title={`Day Intensity: ${day.intensity.replace('-', ' ')}`}
+                  <button
+                    className="w-5 h-5 rounded-sm border transition-all hover:scale-110 cursor-pointer shrink-0"
+                    style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(day.intensity)) }}
+                    title={`Day Intensity: ${getBorgLabelFull(migrateLegacyIntensity(day.intensity))}`}
                   />
                 </PopoverTrigger>
                 <PopoverContent className="w-48 p-2 z-[100]" align="end">
                   <div className="space-y-1">
                     <p className="text-xs font-medium mb-2 text-muted-foreground">Select Day Intensity</p>
-                    {intensityLevels.map((level) => (
+                    {BORG_LEVELS.map((level) => (
                       <button
                         key={level}
                         onClick={(e) => {
                           e.stopPropagation();
-                          onIntensityChange(day.dateString, level);
+                          onIntensityChange(day.dateString, level as IntensityLevel);
                           setIntensityPopoverOpen(false);
                         }}
-                        className={cn(
-                          "w-full flex items-center gap-2 p-2 rounded hover:bg-accent transition-colors text-left",
-                          level === day.intensity && "bg-accent"
-                        )}
+                        className={cn("w-full flex items-center gap-2 p-2 rounded hover:bg-accent transition-colors text-left", level === migrateLegacyIntensity(day.intensity) && "bg-accent")}
                       >
-                        <div className={cn("w-3 h-3 rounded-sm border shrink-0", getIntensityColor(level))} />
-                        <span className="text-xs capitalize">{level.replace('-', ' ')}</span>
+                        <div className="w-3 h-3 rounded-sm border shrink-0" style={{ backgroundColor: getBorgBg(level) }} />
+                        <span className="text-xs">{getBorgLabelFull(level)}</span>
                       </button>
                     ))}
                   </div>
                 </PopoverContent>
               </Popover>
-            ) : hasTraining && day.intensity && getIntensityColor ? (
+            ) : hasTraining && day.intensity ? (
               <div
-                className={cn(
-                  "w-5 h-5 rounded-sm border shrink-0",
-                  getIntensityColor(day.intensity)
-                )}
-                title={`Day Intensity: ${day.intensity.replace('-', ' ')}`}
+                className="w-5 h-5 rounded-sm border shrink-0"
+                style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(day.intensity)) }}
+                title={`Day Intensity: ${getBorgLabelFull(migrateLegacyIntensity(day.intensity))}`}
               />
             ) : null}
           </div>
@@ -452,13 +442,11 @@ export function AthleteCalendarDayCell({
                               </span>
 
                               {/* Session Intensity Indicator */}
-                              {session.intensity && getIntensityColor && (
+                              {session.intensity && (
                                 <div
-                                  className={cn(
-                                    "w-3 h-3 rounded-sm border shrink-0",
-                                    getIntensityColor(session.intensity)
-                                  )}
-                                  title={`Session intensity: ${session.intensity.replace('-', ' ')}`}
+                                  className="w-3 h-3 rounded-sm border shrink-0"
+                                  style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(session.intensity)) }}
+                                  title={`Session intensity: ${getBorgLabelFull(migrateLegacyIntensity(session.intensity))}`}
                                 />
                               )}
                             </div>

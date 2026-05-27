@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { IntensityLevel } from '@/types/training';
+import { BorgLevel, getBorgBg, getBorgFg, getBorgLabel, getBorgLabelFull, getBorgStyleLight, migrateLegacyIntensity, BORG_LEVELS } from '@/utils/intensityScale';
 import IntensityScale from './IntensityScale';
 import MicrocycleIntensityColumn from './MicrocycleIntensityColumn';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -35,8 +36,6 @@ interface EventDetail {
 
 interface MicrocycleIntensityPlanningProps {
   mesocycles: ExtendedMesocycle[];
-  intensityLevels: IntensityLevel[];
-  getIntensityColor: (intensity: IntensityLevel) => string;
   onMicrocycleIntensityChange: (mesocycleId: string, microcycleId: string, intensity: IntensityLevel) => void;
   onMesocycleIntensityChange?: (mesocycleId: string, intensity: IntensityLevel) => void;
   onCopyMesocycle?: (mesocycleId: string) => void;
@@ -47,8 +46,6 @@ interface MicrocycleIntensityPlanningProps {
 
 const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = ({
   mesocycles,
-  intensityLevels,
-  getIntensityColor,
   onMicrocycleIntensityChange,
   onMesocycleIntensityChange,
   onCopyMesocycle,
@@ -56,19 +53,9 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
   events = [],
   planStartDate
 }) => {
-  // Helper to get subtle intensity-tinted background (same color, transparent)
-  const getSubtleIntensityBg = (intensity: IntensityLevel): string => {
-    const bgMappings: Record<IntensityLevel, string> = {
-      "off": "bg-[hsl(var(--intensity-off)/0.15)]",
-      "deload": "bg-[hsl(var(--intensity-deload)/0.15)]",
-      "easy": "bg-[hsl(var(--intensity-easy)/0.15)]",
-      "easy-moderate": "bg-[hsl(var(--intensity-easy-moderate)/0.15)]",
-      "moderate": "bg-[hsl(var(--intensity-moderate)/0.15)]",
-      "moderate-hard": "bg-[hsl(var(--intensity-moderate-hard)/0.15)]",
-      "hard": "bg-[hsl(var(--intensity-hard)/0.15)]",
-      "extremely-hard": "bg-[hsl(var(--intensity-extremely-hard)/0.20)]"
-    };
-    return bgMappings[intensity] || "bg-muted/50";
+  // Helper to get subtle intensity-tinted background using Borg CR10 inline style
+  const getSubtleIntensityBg = (intensity: IntensityLevel): React.CSSProperties => {
+    return getBorgStyleLight(migrateLegacyIntensity(intensity), 0.15);
   };
   // Calculate microcycle date ranges
   const microcycleDates = useMemo(() => {
@@ -161,10 +148,10 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                 {mesocycles.map((meso, mesoIndex) => {
                   const width = meso.microcycles.length * 160; // 160px per microcycle
                   return meso.microcycles.length > 0 ? (
-                    <div 
+                    <div
                       key={meso.id}
-                      className={cn("relative text-center border font-semibold border-border py-3 shrink-0 rounded-md overflow-hidden", getSubtleIntensityBg(meso.intensity))}
-                      style={{ width: `${width}px` }}
+                      className="relative text-center border font-semibold border-border py-3 shrink-0 rounded-md overflow-hidden"
+                      style={{ width: `${width}px`, ...getSubtleIntensityBg(meso.intensity) }}
                     >
                       {/* Mesocycle Name Row with Clickable Intensity Badge */}
                       <div className="flex items-center justify-center gap-1.5 flex-wrap min-w-0 px-2">
@@ -175,38 +162,36 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className={cn(
-                                  "text-xs font-medium px-2 py-0.5 h-auto hover:opacity-80 rounded",
-                                  getIntensityColor(meso.intensity)
-                                )}
+                                className="text-xs font-medium px-2 py-0.5 h-auto hover:opacity-80 rounded"
+                                style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(meso.intensity)), color: getBorgFg(migrateLegacyIntensity(meso.intensity)) }}
                               >
-                                {meso.intensity.replace(/-/g, ' ').toUpperCase()}
+                                {migrateLegacyIntensity(meso.intensity)} – {getBorgLabel(migrateLegacyIntensity(meso.intensity))}
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-56 p-2 bg-popover" align="center">
                               <div className="space-y-1">
                                 <div className="text-sm font-medium mb-2">Change Mesocycle Intensity</div>
-                                {intensityLevels.map((level) => (
+                                {BORG_LEVELS.map((level) => (
                                   <Button
                                     key={level}
                                     variant="ghost"
                                     size="sm"
-                                    className={cn(
-                                      "w-full justify-start text-xs",
-                                      level === meso.intensity && "bg-accent"
-                                    )}
+                                    className={cn("w-full justify-start text-xs", level === migrateLegacyIntensity(meso.intensity) && "bg-accent")}
                                     onClick={() => onMesocycleIntensityChange(meso.id, level)}
                                   >
-                                    <span className={cn("inline-block w-3 h-3 rounded-full mr-2", getIntensityColor(level))} />
-                                    {level.replace(/-/g, ' ')}
+                                    <span className="inline-block w-3 h-3 rounded-full mr-2 border border-black/10" style={{ backgroundColor: getBorgBg(level) }} />
+                                    {level} – {getBorgLabel(level)}
                                   </Button>
                                 ))}
                               </div>
                             </PopoverContent>
                           </Popover>
                         ) : (
-                          <span className={cn("text-xs font-medium px-2 py-0.5 rounded", getIntensityColor(meso.intensity))}>
-                            {meso.intensity.replace(/-/g, ' ').toUpperCase()}
+                          <span
+                            className="text-xs font-medium px-2 py-0.5 rounded"
+                            style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(meso.intensity)), color: getBorgFg(migrateLegacyIntensity(meso.intensity)) }}
+                          >
+                            {migrateLegacyIntensity(meso.intensity)} – {getBorgLabel(migrateLegacyIntensity(meso.intensity))}
                           </span>
                         )}
                         
@@ -244,10 +229,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
             <div className="flex items-end">
               {/* Intensity Scale - Sticky */}
               <div className="sticky left-0 z-30 bg-background shrink-0">
-                <IntensityScale
-                  intensityLevels={intensityLevels}
-                  getIntensityColor={getIntensityColor}
-                />
+                <IntensityScale />
               </div>
 
               {/* Microcycle Columns */}
@@ -268,8 +250,6 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                           intensity={micro.intensity}
                           onIntensityChange={onMicrocycleIntensityChange}
                           isLastMicrocycleOfMesocycle={isLastMicrocycle}
-                          intensityLevels={intensityLevels}
-                          getIntensityColor={getIntensityColor}
                           testDetails={testDetails}
                           eventDetails={eventDetails}
                           startDate={dateRange?.start}

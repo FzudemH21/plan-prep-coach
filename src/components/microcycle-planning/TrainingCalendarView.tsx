@@ -67,8 +67,6 @@ interface TrainingCalendarViewProps {
   dailyIntensityData?: any[];
   onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
   onSessionIntensityChange?: (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => void;
-  getIntensityColor?: (intensity: IntensityLevel) => string;
-  intensityLevels?: IntensityLevel[];
   parameterValues?: Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>;
   onSaveParameters?: (
     mesocycleId: string,
@@ -149,8 +147,6 @@ export function TrainingCalendarView({
   dailyIntensityData,
   onIntensityChange,
   onSessionIntensityChange,
-  getIntensityColor,
-  intensityLevels,
   parameterValues = {},
   onSaveParameters,
   onUpdateTestComment,
@@ -325,7 +321,7 @@ export function TrainingCalendarView({
           // Load session intensity from localStorage
           const intensityKey = `sessionIntensity_${currentMesocycle.id}_${dateString}_${idx}`;
           const storedIntensity = localStorage.getItem(intensityKey);
-          const dayIntensity = trainingDay ? (dailyIntensityData?.find(di => di.date === dateString)?.intensity || 'moderate') : 'moderate';
+          const dayIntensity = trainingDay ? (dailyIntensityData?.find(di => di.date === dateString)?.intensity || '5') : 'moderate';
           const sessionIntensity = storedIntensity || dayIntensity;
           
           return {
@@ -406,7 +402,7 @@ export function TrainingCalendarView({
           
           const intensityKey = `sessionIntensity_${viewedMesocycle.id}_${dateString}_${idx}`;
           const storedIntensity = localStorage.getItem(intensityKey);
-          const dayIntensity = trainingDay ? (dailyIntensityData?.find(di => di.date === dateString)?.intensity || 'moderate') : 'moderate';
+          const dayIntensity = trainingDay ? (dailyIntensityData?.find(di => di.date === dateString)?.intensity || '5') : 'moderate';
           const sessionIntensity = storedIntensity || dayIntensity;
           
           return {
@@ -684,7 +680,6 @@ export function TrainingCalendarView({
                 });
               }}
               onAddSession={onAddSession}
-              getIntensityColor={getIntensityColor}
               dailyIntensityData={dailyIntensityData}
               parameterValues={parameterValues}
               currentMesocycle={viewedMesocycle}
@@ -751,7 +746,6 @@ export function TrainingCalendarView({
               // Phase 4: Pass intensity editing props
               onDayIntensityChange={onIntensityChange}
               onSessionIntensityChange={onSessionIntensityChange}
-              intensityLevels={intensityLevels}
               // Phase 5: Pass section and exercise reordering props
               onSectionReorder={(dayDate, sessionIndex, sectionId, direction) => {
                 if (!sessionSections || !onSectionsChange) return;
@@ -1134,8 +1128,6 @@ export function TrainingCalendarView({
                     availableEvents={availableEvents}
                     dailyIntensityData={dailyIntensityData}
                     onIntensityChange={onIntensityChange}
-                    getIntensityColor={getIntensityColor}
-                    intensityLevels={intensityLevels}
                     onMoveSessionUp={onMoveSessionUp}
                     onMoveSessionDown={onMoveSessionDown}
                     onAddSession={onAddSession}
@@ -1168,8 +1160,6 @@ export function TrainingCalendarView({
           dailyIntensityData={dailyIntensityData}
           onIntensityChange={onIntensityChange}
           onSessionIntensityChange={onSessionIntensityChange}
-          getIntensityColor={getIntensityColor}
-          intensityLevels={intensityLevels}
           totalSessionsOnDay={selectedSession.totalSessions}
           trainingDay={
             calendarDays.find(d => d.dateString === selectedSession.dayDate)?.trainingDay

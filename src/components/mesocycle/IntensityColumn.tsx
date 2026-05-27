@@ -1,4 +1,5 @@
 import React from 'react';
+import { BorgLevel, BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabel, getBorgValue, getBorgFromValue, getBorgStyleLight, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { IntensityLevel } from '@/types/training';
 import { TrainingDay } from '@/types/daily-intensity';
 import { format, parseISO } from 'date-fns';
@@ -9,6 +10,9 @@ import { cn } from '@/lib/utils';
 import { CalendarEvent } from '@/hooks/useCalendarEvents';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 
+// Band height per level: 100% / 11 levels
+const BAND_HEIGHT = 100 / 11;
+
 interface IntensityColumnProps {
   day: TrainingDay;
   intensity: IntensityLevel;
@@ -16,25 +20,8 @@ interface IntensityColumnProps {
   tooltipContent?: string;
   isLastDayOfMicrocycle: boolean;
   isLastDayOfMesocycle: boolean;
-  intensityLevels: IntensityLevel[];
-  getIntensityColor: (intensity: IntensityLevel) => string;
   calendarEventsForDay?: CalendarEvent[];
 }
-
-// Helper to get subtle intensity-tinted background for day headers
-const getSubtleIntensityBg = (intensity: IntensityLevel): string => {
-  const bgMappings: Record<IntensityLevel, string> = {
-    "off": "bg-[hsl(var(--intensity-off)/0.10)]",
-    "deload": "bg-[hsl(var(--intensity-deload)/0.10)]",
-    "easy": "bg-[hsl(var(--intensity-easy)/0.10)]",
-    "easy-moderate": "bg-[hsl(var(--intensity-easy-moderate)/0.10)]",
-    "moderate": "bg-[hsl(var(--intensity-moderate)/0.10)]",
-    "moderate-hard": "bg-[hsl(var(--intensity-moderate-hard)/0.10)]",
-    "hard": "bg-[hsl(var(--intensity-hard)/0.10)]",
-    "extremely-hard": "bg-[hsl(var(--intensity-extremely-hard)/0.15)]"
-  };
-  return bgMappings[intensity] || "bg-primary/10";
-};
 
 const IntensityColumn: React.FC<IntensityColumnProps> = ({
   day,
@@ -43,19 +30,19 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
   tooltipContent,
   isLastDayOfMicrocycle,
   isLastDayOfMesocycle,
-  intensityLevels,
-  getIntensityColor,
   calendarEventsForDay = [],
 }) => {
   const { data: parametersData } = useParametersDataV2();
   const parameters = parametersData?.parameters ?? [];
+
+  // Migrate any legacy intensity value on read
+  const safeIntensity: BorgLevel = migrateLegacyIntensity(intensity);
 
   const hookTests = calendarEventsForDay.filter(e => e.type === 'test');
   const hookEventItems = calendarEventsForDay.filter(e => e.type === 'event');
   const hasTests = day.isTestDay || hookTests.length > 0;
   const hasEvents = day.isEventDay || hookEventItems.length > 0;
 
-  // Live name lookup for hook tests: parameterId → name, fallback to title
   const getTestName = (ev: CalendarEvent): string => {
     if (ev.parameterId) {
       const param = parameters.find(p => p.id === ev.parameterId);
@@ -64,7 +51,6 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
     return ev.title;
   };
 
-  // Merge test/event names from both sources for tooltips
   const allTestNames = [
     ...(day.testNames || []),
     ...hookTests.map(getTestName),
@@ -73,98 +59,72 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
     ...(day.eventNames || []),
     ...hookEventItems.map(e => e.title),
   ];
-  const chartHeight = 200; // Fixed chart area height
-  
-  // Calculate column height based on intensity level (full band heights)
-  const calculateColumnHeight = (intensityLevel: IntensityLevel): number => {
-    // Map intensity levels to full band heights
-    const heightMappings = {
-      "off": 12.5,
-      "deload": 25,
-      "easy": 37.5,
-      "easy-moderate": 50,
-      "moderate": 62.5,
-      "moderate-hard": 75,
-      "hard": 87.5,
-      "extremely-hard": 100
-    };
-    
-    return heightMappings[intensityLevel] || 0;
-  };
 
-  const columnHeight = calculateColumnHeight(intensity);
-  const actualHeight = (columnHeight / 100) * chartHeight;
+  const chartHeight = 200;
 
-  // Handle column click with precise intensity mapping
+  // Map BorgLevel (0–10) to column fill height (proportional to numeric value)
+  const borgValue = getBorgValue(safeIntensity);
+  const columnHeightPct = (borgValue / 10) * 100;
+  const actualHeight = (columnHeightPct / 100) * chartHeight;
+
+  // Click on the chart area to set intensity based on click position
   const handleColumnClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    
     const rect = e.currentTarget.getBoundingClientRect();
-    const clickY = rect.bottom - e.clientY; // Distance from bottom
-    const clickPercentage = (clickY / rect.height) * 100;
-    
-    // Map click position to intensity levels based on full band ranges
-    let targetIntensity: IntensityLevel = "off";
-    
-    if (clickPercentage >= 87.5) targetIntensity = "extremely-hard";
-    else if (clickPercentage >= 75) targetIntensity = "hard";
-    else if (clickPercentage >= 62.5) targetIntensity = "moderate-hard";
-    else if (clickPercentage >= 50) targetIntensity = "moderate";
-    else if (clickPercentage >= 37.5) targetIntensity = "easy-moderate";
-    else if (clickPercentage >= 25) targetIntensity = "easy";
-    else if (clickPercentage >= 12.5) targetIntensity = "deload";
-    else targetIntensity = "off";
-    
-    onIntensityChange(day.date, targetIntensity);
+    const clickY = rect.bottom - e.clientY; // distance from bottom
+    const clickPct = (clickY / rect.height) * 100;
+    // Map percentage to Borg level 0–10
+    const borgIdx = Math.max(0, Math.min(10, Math.round((clickPct / 100) * 10)));
+    onIntensityChange(day.date, getBorgFromValue(borgIdx) as IntensityLevel);
   };
 
-  // Generate horizontal grid lines
+  // Generate 11 grid lines (one per band boundary)
   const generateGridLines = () => {
-    const gridPercentages = [0, 12.5, 25, 37.5, 50, 62.5, 75, 87.5, 100];
-    return gridPercentages.map((percentage, index) => (
+    return Array.from({ length: 12 }, (_, i) => i * BAND_HEIGHT).map((pct) => (
       <div
-        key={percentage}
+        key={pct}
         className="absolute w-full border-t border-border/50 z-10"
-        style={{ 
-          bottom: `${percentage}%`,
-          borderStyle: percentage === 0 || percentage === 100 ? 'solid' : 'dashed'
+        style={{
+          bottom: `${pct}%`,
+          borderStyle: pct === 0 || pct === 100 ? 'solid' : 'dashed',
         }}
       />
     ));
   };
 
-  // Get border classes for microcycle/mesocycle boundaries
   const getBorderClasses = () => {
-    let borderClasses = 'border-r border-border/60'; // Default day border
-    
-    if (isLastDayOfMesocycle) {
-      borderClasses = 'border-r-4 border-border/80';
-    } else if (isLastDayOfMicrocycle) {
-      borderClasses = 'border-r-2 border-border/70';
-    }
-    
-    return borderClasses;
+    if (isLastDayOfMesocycle) return 'border-r-4 border-border/80';
+    if (isLastDayOfMicrocycle) return 'border-r-2 border-border/70';
+    return 'border-r border-border/60';
   };
+
+  // Subtle tinted background using inline style (Borg colors)
+  const subtleBgStyle = getBorgStyleLight(safeIntensity, 0.10);
 
   const dayHeader = (
     <div
       className={cn(
         "relative h-16 text-center text-xs rounded-md border border-border w-full mb-2 flex flex-col items-center justify-center",
-        !hasTests && !hasEvents && getSubtleIntensityBg(intensity),
         hasTests && !hasEvents && 'bg-amber-50 border-amber-400 dark:bg-amber-950/20',
         !hasTests && hasEvents && 'bg-blue-50 border-blue-400 dark:bg-blue-950/20',
       )}
-      style={hasTests && hasEvents ? {
-        border: '1px solid transparent',
-        backgroundImage: 'linear-gradient(hsl(var(--card)), hsl(var(--card))), linear-gradient(to right, #f59e0b 50%, #3b82f6 50%)',
-        backgroundOrigin: 'padding-box, border-box',
-        backgroundClip: 'padding-box, border-box',
-      } : undefined}
+      style={
+        hasTests && hasEvents
+          ? {
+              border: '1px solid transparent',
+              backgroundImage:
+                'linear-gradient(hsl(var(--card)), hsl(var(--card))), linear-gradient(to right, #f59e0b 50%, #3b82f6 50%)',
+              backgroundOrigin: 'padding-box, border-box',
+              backgroundClip: 'padding-box, border-box',
+            }
+          : !hasTests && !hasEvents
+          ? subtleBgStyle
+          : undefined
+      }
     >
       <div className="font-medium">{format(parseISO(day.date), 'MMM d')}</div>
       <div className="text-xs">{day.dayName}</div>
 
-      {/* Test/Event Icons with Hover Cards */}
       <div className="absolute -top-1 -right-1 flex gap-0.5">
         {allTestNames.length > 0 && (
           <HoverCard openDelay={100}>
@@ -175,12 +135,7 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
                 </Badge>
               </div>
             </HoverCardTrigger>
-            <HoverCardContent
-              className="w-auto max-w-xs p-3 z-[200]"
-              side="top"
-              align="center"
-              sideOffset={5}
-            >
+            <HoverCardContent className="w-auto max-w-xs p-3 z-[200]" side="top" align="center" sideOffset={5}>
               <div className="space-y-1">
                 <p className="text-xs font-semibold text-foreground">
                   {allTestNames.length > 1 ? 'Tests:' : 'Test:'}
@@ -204,12 +159,7 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
                 </Badge>
               </div>
             </HoverCardTrigger>
-            <HoverCardContent
-              className="w-auto max-w-xs p-3 z-[200]"
-              side="top"
-              align="center"
-              sideOffset={5}
-            >
+            <HoverCardContent className="w-auto max-w-xs p-3 z-[200]" side="top" align="center" sideOffset={5}>
               <div className="space-y-1">
                 <p className="text-xs font-semibold text-foreground">
                   {allEventNames.length > 1 ? 'Events:' : 'Event:'}
@@ -227,47 +177,45 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
     </div>
   );
 
-  const columnElement = (
+  return (
     <div className={`flex flex-col w-[100px] shrink-0 box-border ${getBorderClasses()}`}>
-      {/* Day header */}
       {dayHeader}
-      
-      {/* Fixed Chart container with grid */}
-      <div 
+
+      <div
         className="relative cursor-pointer transition-all duration-200 hover:shadow-md w-full"
         style={{ height: `${chartHeight}px` }}
         onClick={handleColumnClick}
       >
-        {/* Background column (full height, light gray) */}
-        <div 
+        {/* Background column */}
+        <div
           className="absolute bottom-0 w-full bg-muted/30 border border-border rounded-t z-0"
           style={{ height: `${chartHeight}px` }}
         />
-        
+
         {/* Grid lines */}
         {generateGridLines()}
-        
-        {/* Intensity column */}
+
+        {/* Intensity fill */}
         <div
-          className={`absolute bottom-0 w-full rounded-t transition-all duration-300 border-2 z-20 ${getIntensityColor(intensity)} ${
-            hasTests ? 'border-amber-400' :
-            hasEvents ? 'border-blue-400' : 'border-transparent'
+          className={`absolute bottom-0 w-full rounded-t transition-all duration-300 border-2 z-20 ${
+            hasTests ? 'border-amber-400' : hasEvents ? 'border-blue-400' : 'border-transparent'
           }`}
-          style={{ height: `${actualHeight}px` }}
+          style={{
+            height: `${actualHeight}px`,
+            backgroundColor: getBorgBg(safeIntensity),
+          }}
         />
-        
+
         {/* Hover overlay */}
         <div className="absolute inset-0 bg-black/5 opacity-0 hover:opacity-100 transition-opacity duration-200 rounded-t z-30" />
       </div>
-      
-      {/* Fixed Intensity label - prevent width changes */}
-      <div className="text-xs mt-2 text-center capitalize font-medium w-[100px] whitespace-nowrap overflow-hidden text-ellipsis">
-        {intensity.replace('-', ' ')}
+
+      {/* Intensity label */}
+      <div className="text-xs mt-2 text-center font-medium w-[100px] whitespace-nowrap overflow-hidden text-ellipsis">
+        {safeIntensity} – {getBorgLabel(safeIntensity)}
       </div>
     </div>
   );
-
-  return columnElement;
 };
 
 export default IntensityColumn;

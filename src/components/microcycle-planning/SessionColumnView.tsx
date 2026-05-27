@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { BorgLevel, BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabel, getBorgLabelFull, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -46,8 +47,6 @@ interface SessionColumnViewProps {
   onRemoveSession?: (dayDate: string, sessionIndex: number) => void;
   onRenameSession?: (dayDate: string, sessionIndex: number, newName: string) => void;
   onSessionIntensityChange?: (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => void;
-  intensityLevels?: IntensityLevel[];
-  getIntensityColor?: (intensity: IntensityLevel) => string;
   mesocycleId?: string;
   sessionComments?: string;
   onSessionCommentsChange?: (dayDate: string, sessionIndex: number, comments: string) => void;
@@ -88,8 +87,6 @@ export function SessionColumnView({
   onRemoveSession,
   onRenameSession,
   onSessionIntensityChange,
-  intensityLevels,
-  getIntensityColor,
   mesocycleId,
   sessionComments,
   onSessionCommentsChange,
@@ -216,8 +213,7 @@ export function SessionColumnView({
   // Get session-specific intensity or fall back to day intensity
   const sessionIntensityKey = mesocycleId ? `sessionIntensity_${mesocycleId}_${day.date}_${sessionIndex}` : '';
   const storedSessionIntensity = sessionIntensityKey ? localStorage.getItem(sessionIntensityKey) : null;
-  const displayIntensity = (storedSessionIntensity || day.intensity || 'moderate') as IntensityLevel;
-  const intensityClass = getIntensityColor ? getIntensityColor(displayIntensity) : 'bg-muted text-muted-foreground';
+  const displayIntensity: BorgLevel = migrateLegacyIntensity(storedSessionIntensity || day.intensity);
 
   // Superset styling - blue left border to match Master Planner
   const getSupersetColor = (supersetId: string): string => {
@@ -527,52 +523,48 @@ export function SessionColumnView({
             
             {/* Intensity Badge - Editable */}
             <div className="flex items-center gap-2">
-              {getIntensityColor && intensityLevels && onSessionIntensityChange ? (
+              {onSessionIntensityChange ? (
                 <Popover open={intensityPopoverOpen} onOpenChange={setIntensityPopoverOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className={cn(
-                        "text-xs font-medium px-2 py-1 h-auto hover:opacity-80",
-                        intensityClass
-                      )}
+                      className="text-xs font-medium px-2 py-1 h-auto hover:opacity-80"
+                      style={{ backgroundColor: getBorgBg(displayIntensity), color: getBorgFg(displayIntensity) }}
                     >
-                      {displayIntensity.replace('-', ' ').toUpperCase()}
+                      {getBorgLabelFull(displayIntensity)}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-56 p-2" align="start">
                     <div className="space-y-2">
                       <div className="text-sm font-medium">Change Session Intensity</div>
-                      {intensityLevels.map((level) => (
+                      {BORG_LEVELS.map((level) => (
                         <Button
                           key={level}
                           variant="ghost"
                           size="sm"
-                          className={cn(
-                            "w-full justify-start text-xs",
-                            level === displayIntensity && "bg-accent"
-                          )}
+                          className={cn("w-full justify-start text-xs", level === displayIntensity && "bg-accent")}
                           onClick={() => {
-                            onSessionIntensityChange(day.date, sessionIndex, level);
+                            onSessionIntensityChange(day.date, sessionIndex, level as IntensityLevel);
                             setIntensityPopoverOpen(false);
                           }}
                         >
                           <span
-                            className={cn(
-                              "inline-block w-3 h-3 rounded-full mr-2",
-                              getIntensityColor(level)
-                            )}
+                            className="inline-block w-3 h-3 rounded-full mr-2 border border-black/10"
+                            style={{ backgroundColor: getBorgBg(level) }}
                           />
-                          {level.replace('-', ' ')}
+                          {getBorgLabelFull(level)}
                         </Button>
                       ))}
                     </div>
                   </PopoverContent>
                 </Popover>
               ) : (
-                <Badge className={cn("text-xs font-medium px-2 py-1", intensityClass)}>
-                  {displayIntensity.replace('-', ' ').toUpperCase()}
+                <Badge
+                  className="text-xs font-medium px-2 py-1"
+                  style={{ backgroundColor: getBorgBg(displayIntensity), color: getBorgFg(displayIntensity) }}
+                >
+                  {getBorgLabelFull(displayIntensity)}
                 </Badge>
               )}
               <span className="text-xs text-muted-foreground">

@@ -17,6 +17,7 @@ import { ToolboxDatabase } from '@/types/toolbox';
 import { ExerciseDistribution, SessionSection, SupersetMapping } from '@/types/microcycle-planning';
 import { getSupersetLabelFromMapping } from '@/utils/supersetUtils';
 import { getMethodSessionIndex, getModuloSessionIndex } from '@/utils/sessionIndexUtils';
+import { BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabelFull, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { AthletePerformanceParameter } from '@/types/athlete';
@@ -104,7 +105,6 @@ interface MasterPlannerColumnProps {
   weekNumber: number;
   onSessionClick?: (dayDate: string, sessionIndex: number, exercises: ExerciseDistribution[]) => void;
   onAddSession?: (dayDate: string) => void;
-  getIntensityColor?: (intensity: IntensityLevel) => string;
   dailyIntensityData?: any[];
   parameterValues?: Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>;
   currentMesocycle?: ExtendedMesocycle;
@@ -133,7 +133,6 @@ interface MasterPlannerColumnProps {
   // New props for Phase 4 - intensity editing
   onDayIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
   onSessionIntensityChange?: (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => void;
-  intensityLevels?: IntensityLevel[];
   // New props for Phase 5 - section and exercise reordering
   onSectionReorder?: (dayDate: string, sessionIndex: number, sectionId: string, direction: 'up' | 'down') => void;
   onExerciseReorder?: (dayDate: string, sessionIndex: number, sectionId: string, exerciseId: string, direction: 'up' | 'down') => void;
@@ -462,7 +461,6 @@ export function MasterPlannerColumn({
   weekNumber,
   onSessionClick,
   onAddSession,
-  getIntensityColor,
   dailyIntensityData,
   parameterValues,
   currentMesocycle,
@@ -480,7 +478,6 @@ export function MasterPlannerColumn({
   onExerciseAutoCalcChange,
   onDayIntensityChange,
   onSessionIntensityChange,
-  intensityLevels,
   onSectionReorder,
   onExerciseReorder,
   onAddSectionToSession,
@@ -539,7 +536,7 @@ export function MasterPlannerColumn({
   const isExerciseCollapsed = (exerciseId: string) => !expandedExercises[exerciseId];
   const hasTraining = day.sessions.length > 0;
   const isSingleSession = day.sessions.length === 1;
-  const currentIntensity: IntensityLevel = dailyIntensityData?.find(di => di.date === day.dateString)?.intensity || 'moderate';
+  const currentIntensity: IntensityLevel = migrateLegacyIntensity(dailyIntensityData?.find(di => di.date === day.dateString)?.intensity || '5') as IntensityLevel;
 
   // Helper: check if two exercises are linked in a superset
   // Uses distribution id (exercise.id) which is what Step 1 uses when creating supersets
@@ -994,8 +991,8 @@ export function MasterPlannerColumn({
             sessionName={session.sessionName || `Session ${session.sessionIndex + 1}`}
             onSave={(name) => onSessionNameChange?.(day.dateString, session.sessionIndex, name)}
           />
-          {session.sessionIntensity && getIntensityColor && intensityLevels && onSessionIntensityChange ? (
-            <Popover 
+          {session.sessionIntensity && onSessionIntensityChange ? (
+            <Popover
               open={sessionIntensityPopovers[session.sessionIndex] || false}
               onOpenChange={(open) => setSessionIntensityPopovers(prev => ({ ...prev, [session.sessionIndex]: open }))}
             >
@@ -1003,13 +1000,11 @@ export function MasterPlannerColumn({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={cn(
-                    "ml-auto text-[10px] font-medium px-1.5 py-0.5 h-auto hover:opacity-80",
-                    getIntensityColor(session.sessionIntensity)
-                  )}
+                  className="ml-auto text-[10px] font-medium px-1.5 py-0.5 h-auto hover:opacity-80"
+                  style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(session.sessionIntensity)), color: getBorgFg(migrateLegacyIntensity(session.sessionIntensity)) }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {session.sessionIntensity.replace('-', ' ').toUpperCase()}
+                  {getBorgLabelFull(migrateLegacyIntensity(session.sessionIntensity))}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-48 p-2 z-[200]" align="end" onClick={(e) => e.stopPropagation()}>
@@ -1017,41 +1012,31 @@ export function MasterPlannerColumn({
                   <div className="text-xs font-medium mb-2">
                     {isSingleSession ? 'Change Intensity' : 'Session Intensity'}
                   </div>
-                  {intensityLevels.map((level) => (
+                  {BORG_LEVELS.map((level) => (
                     <Button
                       key={level}
                       variant="ghost"
                       size="sm"
-                      className={cn(
-                        "w-full justify-start text-xs h-7",
-                        level === session.sessionIntensity && "bg-accent"
-                      )}
+                      className={cn("w-full justify-start text-xs h-7", level === migrateLegacyIntensity(session.sessionIntensity) && "bg-accent")}
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleSessionIntensityChange(session.sessionIndex, level);
+                        handleSessionIntensityChange(session.sessionIndex, level as IntensityLevel);
                       }}
                     >
-                      <span
-                        className={cn(
-                          "inline-block w-2.5 h-2.5 rounded-full mr-2",
-                          getIntensityColor(level)
-                        )}
-                      />
-                      {level.replace('-', ' ')}
+                      <span className="inline-block w-2.5 h-2.5 rounded-full mr-2" style={{ backgroundColor: getBorgBg(level) }} />
+                      {getBorgLabelFull(level)}
                     </Button>
                   ))}
                 </div>
               </PopoverContent>
             </Popover>
-          ) : session.sessionIntensity && getIntensityColor && (
-            <div 
-              className={cn(
-                "w-3.5 h-3.5 rounded-sm border ml-auto",
-                getIntensityColor(session.sessionIntensity)
-              )}
-              title={`Session intensity: ${session.sessionIntensity.replace('-', ' ')}`}
+          ) : session.sessionIntensity ? (
+            <div
+              className="w-3.5 h-3.5 rounded-sm border ml-auto"
+              style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(session.sessionIntensity)) }}
+              title={`Session intensity: ${getBorgLabelFull(migrateLegacyIntensity(session.sessionIntensity))}`}
             />
-          )}
+          ) : null}
 
           {/* Session 3-dot menu for copy/delete */}
           {(onCopySession || onDeleteSession) && (
@@ -1710,18 +1695,16 @@ export function MasterPlannerColumn({
             <Badge variant="outline" className="text-xs font-semibold">
               Week {weekNumber}
             </Badge>
-            {getIntensityColor && intensityLevels && onDayIntensityChange ? (
+            {onDayIntensityChange ? (
               <Popover open={dayIntensityPopoverOpen} onOpenChange={setDayIntensityPopoverOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className={cn(
-                      "text-[10px] font-medium px-1.5 py-0.5 h-auto hover:opacity-80",
-                      getIntensityColor(currentIntensity)
-                    )}
+                    className="text-[10px] font-medium px-1.5 py-0.5 h-auto hover:opacity-80"
+                    style={{ backgroundColor: getBorgBg(currentIntensity), color: getBorgFg(currentIntensity) }}
                   >
-                    {currentIntensity.replace('-', ' ').toUpperCase()}
+                    {getBorgLabelFull(currentIntensity)}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-48 p-2 z-[200]" align="start">
@@ -1729,36 +1712,26 @@ export function MasterPlannerColumn({
                     <div className="text-xs font-medium mb-2">
                       {isSingleSession ? 'Change Intensity' : 'Day Intensity'}
                     </div>
-                    {intensityLevels.map((level) => (
+                    {BORG_LEVELS.map((level) => (
                       <Button
                         key={level}
                         variant="ghost"
                         size="sm"
-                        className={cn(
-                          "w-full justify-start text-xs h-7",
-                          level === currentIntensity && "bg-accent"
-                        )}
-                        onClick={() => handleDayIntensityChange(level)}
+                        className={cn("w-full justify-start text-xs h-7", level === currentIntensity && "bg-accent")}
+                        onClick={() => handleDayIntensityChange(level as IntensityLevel)}
                       >
-                        <span
-                          className={cn(
-                            "inline-block w-2.5 h-2.5 rounded-full mr-2",
-                            getIntensityColor(level)
-                          )}
-                        />
-                        {level.replace('-', ' ')}
+                        <span className="inline-block w-2.5 h-2.5 rounded-full mr-2" style={{ backgroundColor: getBorgBg(level) }} />
+                        {getBorgLabelFull(level)}
                       </Button>
                     ))}
                   </div>
                 </PopoverContent>
               </Popover>
-            ) : getIntensityColor && (
-              <div 
-                className={cn(
-                  "w-4 h-4 rounded-sm border",
-                  getIntensityColor(currentIntensity)
-                )}
-                title={`Intensity: ${currentIntensity.replace('-', ' ')}`}
+            ) : (
+              <div
+                className="w-4 h-4 rounded-sm border"
+                style={{ backgroundColor: getBorgBg(currentIntensity) }}
+                title={`Intensity: ${getBorgLabelFull(currentIntensity)}`}
               />
             )}
           </div>

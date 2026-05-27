@@ -3,6 +3,7 @@ import { format, isToday } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { BorgLevel, BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabel, getBorgLabelFull, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { Dumbbell, Trophy, Calendar, GripVertical, MoreVertical, Copy, Trash2, ChevronDown, ArrowUp, ArrowDown, Plus } from 'lucide-react';
 import { IntensityLevel } from '@/types/training';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -94,8 +95,6 @@ interface TrainingDayCellProps {
 
   dailyIntensityData?: any[];
   onIntensityChange?: (date: string, intensity: IntensityLevel) => void;
-  getIntensityColor?: (intensity: IntensityLevel) => string;
-  intensityLevels?: IntensityLevel[];
   // Athlete context — used to scope tests/events in the new storage
   selectedAthleteId?: string;
   athletePerformanceParameters?: AthletePerformanceParameter[];
@@ -116,8 +115,6 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
   onAddSession,
   dailyIntensityData,
   onIntensityChange,
-  getIntensityColor,
-  intensityLevels,
   selectedAthleteId,
   athletePerformanceParameters,
   onDeleteTestEvent,
@@ -172,8 +169,10 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
   const isTodayDate = isToday(day.date);
   const isSpecialDay = isTestDay || isEventDay;
 
-  // Get current intensity for this day
-  const currentIntensity: IntensityLevel = dailyIntensityData?.find(di => di.date === day.dateString)?.intensity || 'moderate';
+  // Get current intensity for this day — migrate legacy values on read
+  const currentIntensity: IntensityLevel = migrateLegacyIntensity(
+    dailyIntensityData?.find(di => di.date === day.dateString)?.intensity
+  ) as IntensityLevel;
 
   // Get primary method name (first method from first session)
   const primaryMethod = day.sessions[0]?.methods[0]?.split(' - ')[0] || '';
@@ -223,30 +222,28 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
           </div>
 
           {/* Intensity Indicator - Moved next to day number */}
-          {getIntensityColor && intensityLevels && onIntensityChange && (
+          {onIntensityChange && (
             <Popover open={intensityPopoverOpen} onOpenChange={setIntensityPopoverOpen}>
               <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                <button 
-                  className={cn(
-                    "w-5 h-5 rounded-sm border transition-all hover:scale-110 cursor-pointer shrink-0",
-                    getIntensityColor(currentIntensity)
-                  )}
-                  title={`Intensity: ${currentIntensity.replace('-', ' ')}`}
+                <button
+                  className="w-5 h-5 rounded-sm border transition-all hover:scale-110 cursor-pointer shrink-0"
+                  style={{ backgroundColor: getBorgBg(currentIntensity as BorgLevel) }}
+                  title={`Intensity: ${getBorgLabelFull(currentIntensity as BorgLevel)}`}
                 />
               </PopoverTrigger>
-              <PopoverContent 
-                className="w-48 p-2 z-[100] bg-popover" 
+              <PopoverContent
+                className="w-48 p-2 z-[100] bg-popover"
                 align="end"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="space-y-1">
                   <p className="text-xs font-medium mb-2 text-muted-foreground">Select Intensity</p>
-                  {intensityLevels.map((level) => (
+                  {BORG_LEVELS.map((level) => (
                     <button
                       key={level}
                       onClick={(e) => {
                         e.stopPropagation();
-                        onIntensityChange(day.dateString, level);
+                        onIntensityChange(day.dateString, level as IntensityLevel);
                         setIntensityPopoverOpen(false);
                       }}
                       className={cn(
@@ -254,15 +251,11 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
                         level === currentIntensity && "bg-accent"
                       )}
                     >
-                      <div 
-                        className={cn(
-                          "w-3 h-3 rounded-sm border shrink-0",
-                          getIntensityColor(level)
-                        )}
+                      <div
+                        className="w-3 h-3 rounded-sm border shrink-0"
+                        style={{ backgroundColor: getBorgBg(level) }}
                       />
-                      <span className="text-xs capitalize">
-                        {level.replace('-', ' ')}
-                      </span>
+                      <span className="text-xs">{getBorgLabelFull(level)}</span>
                     </button>
                   ))}
                 </div>
@@ -453,13 +446,11 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
                             </span>
                             
                             {/* Session Intensity Indicator */}
-                            {session.sessionIntensity && getIntensityColor && (
-                              <div 
-                                className={cn(
-                                  "w-3.5 h-3.5 rounded-sm border shrink-0",
-                                  getIntensityColor(session.sessionIntensity)
-                                )}
-                                title={`Session intensity: ${session.sessionIntensity.replace('-', ' ')}`}
+                            {session.sessionIntensity && (
+                              <div
+                                className="w-3.5 h-3.5 rounded-sm border shrink-0"
+                                style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(session.sessionIntensity)) }}
+                                title={`Session intensity: ${getBorgLabelFull(migrateLegacyIntensity(session.sessionIntensity))}`}
                               />
                             )}
                           </div>
