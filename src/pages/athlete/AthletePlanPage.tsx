@@ -47,7 +47,7 @@ function formatDayHeader(dateStr: string): { weekday: string; dateLabel: string 
   const d = new Date(dateStr + 'T12:00:00');
   return {
     weekday: d.toLocaleDateString('en-US', { weekday: 'long' }),
-    dateLabel: `${fmtShort(dateStr).replace('.', '')}. ${d.toLocaleDateString('en-US', { month: 'short' })}`,
+    dateLabel: d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' }),
   };
 }
 

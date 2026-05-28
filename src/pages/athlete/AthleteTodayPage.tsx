@@ -91,27 +91,36 @@ function RestDay() {
   );
 }
 
-function UpcomingStrip({ entries }: { entries: AthleteScheduleEntry[] }) {
+function addDays(dateStr: string, n: number): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  return new Date(d.getTime() + n * 86400000).toISOString().slice(0, 10);
+}
+
+function UpcomingStrip({ schedule }: { schedule: AthleteScheduleEntry[] }) {
   const today = new Date().toISOString().slice(0, 10);
-  // Skip today (already shown above), show next 5
-  const upcoming = entries.filter(e => e.date > today).slice(0, 5);
-  if (upcoming.length === 0) return null;
+
+  // Build a map for quick lookup
+  const scheduleMap = new Map(schedule.map(e => [e.date, e]));
+
+  // Always show the next 5 consecutive days after today
+  const upcomingDates = Array.from({ length: 5 }, (_, i) => addDays(today, i + 1));
 
   return (
     <div>
       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Coming Up</p>
       <div className="flex gap-2">
-        {upcoming.map(entry => {
-          const { day, num } = formatShortDate(entry.date);
-          const hasTraining = entry.sessions.length > 0;
+        {upcomingDates.map(dateStr => {
+          const { day, num } = formatShortDate(dateStr);
+          const entry = scheduleMap.get(dateStr);
+          const hasTraining = (entry?.sessions.length ?? 0) > 0;
           return (
-            <div key={entry.date} className="flex flex-col items-center gap-1.5 flex-1">
+            <div key={dateStr} className="flex flex-col items-center gap-1.5 flex-1">
               <span className="text-xs text-muted-foreground">{day}</span>
               <span className="text-sm font-medium">{num}</span>
               <div
                 className={cn(
                   'w-2 h-2 rounded-full',
-                  hasTraining ? getDotColor(entry.intensity) : 'bg-slate-200'
+                  hasTraining ? getDotColor(entry?.intensity ?? null) : 'bg-slate-200'
                 )}
               />
             </div>
@@ -123,7 +132,7 @@ function UpcomingStrip({ entries }: { entries: AthleteScheduleEntry[] }) {
 }
 
 export default function AthleteTodayPage() {
-  const { connection, loading, error, getTodayEntry, getUpcomingDays } = useAthleteApp();
+  const { connection, schedule, loading, error, getTodayEntry } = useAthleteApp();
 
   if (loading) {
     return (
@@ -142,7 +151,6 @@ export default function AthleteTodayPage() {
   }
 
   const todayEntry = getTodayEntry();
-  const upcomingDays = getUpcomingDays(6); // today + 5 upcoming
 
   return (
     <div className="p-4 space-y-6">
@@ -158,7 +166,7 @@ export default function AthleteTodayPage() {
       {todayEntry ? <TrainingEntry entry={todayEntry} /> : <RestDay />}
 
       {/* Upcoming strip */}
-      <UpcomingStrip entries={upcomingDays} />
+      <UpcomingStrip schedule={schedule} />
     </div>
   );
 }
