@@ -76,7 +76,6 @@ export function ParameterManagementDialog({
     isFrequencyParameter: false,
     isSetParameter: false,
     showInGridByDefault: true,
-    showInAthleteApp: false,
     isCalculated: false,
     formula: '',
     sourceParameterIds: [] as string[],
@@ -131,7 +130,6 @@ export function ParameterManagementDialog({
       isFrequencyParameter: newParameter.isCalculated ? false : newParameter.isFrequencyParameter,
       isSetParameter: newParameter.isCalculated ? false : newParameter.isSetParameter,
       showInGridByDefault: newParameter.showInGridByDefault,
-      showInAthleteApp: newParameter.showInAthleteApp,
       isCalculated: newParameter.isCalculated,
       formula: newParameter.isCalculated ? newParameter.formula : undefined,
       sourceParameterIds: newParameter.isCalculated ? newParameter.sourceParameterIds : undefined,
@@ -165,7 +163,6 @@ export function ParameterManagementDialog({
       isFrequencyParameter: false,
       isSetParameter: false,
       showInGridByDefault: true,
-      showInAthleteApp: false,
       isCalculated: false,
       formula: '',
       sourceParameterIds: [],
@@ -646,33 +643,6 @@ export function ParameterManagementDialog({
                 </p>
               </div>
 
-              <div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="showInAthleteApp"
-                    checked={editingParameter.showInAthleteApp ?? false}
-                    disabled={editingParameter.isFrequencyParameter || editingParameter.isSetParameter}
-                    onChange={(e) => {
-                      setEditingParameter({
-                        ...editingParameter,
-                        showInAthleteApp: e.target.checked
-                      });
-                    }}
-                    className="h-4 w-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                  <Label
-                    htmlFor="showInAthleteApp"
-                    className={`text-sm font-medium ${editingParameter.isFrequencyParameter || editingParameter.isSetParameter ? 'text-muted-foreground' : ''}`}
-                  >
-                    Show in athlete app session grid
-                  </Label>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  When enabled, athletes will see this parameter as a column in their per-set logging table during a workout.
-                </p>
-              </div>
-
               {/* Calculated Parameter Section */}
               {editingParameter.parameterType === 'quantitative' && (
                 <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
@@ -974,33 +944,6 @@ export function ParameterManagementDialog({
                 {newParameter.isFrequencyParameter || newParameter.isSetParameter
                   ? 'Structural parameters (frequency/set) cannot be toggled for grid visibility'
                   : 'When disabled, this parameter will be shown as a label badge on the exercise instead of in the set grid. Users can still toggle visibility in workout views.'}
-              </p>
-            </div>
-
-            <div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="newShowInAthleteApp"
-                  checked={newParameter.showInAthleteApp}
-                  disabled={newParameter.isFrequencyParameter || newParameter.isSetParameter}
-                  onChange={(e) => {
-                    setNewParameter({
-                      ...newParameter,
-                      showInAthleteApp: e.target.checked
-                    });
-                  }}
-                  className="h-4 w-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-                <Label
-                  htmlFor="newShowInAthleteApp"
-                  className={`text-sm font-medium ${newParameter.isFrequencyParameter || newParameter.isSetParameter ? 'text-muted-foreground' : ''}`}
-                >
-                  Show in athlete app session grid
-                </Label>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                When enabled, athletes will see this parameter as a column in their per-set logging table during a workout.
               </p>
             </div>
 

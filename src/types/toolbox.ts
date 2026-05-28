@@ -12,10 +12,8 @@ export interface ToolboxEntry {
   isFrequencyParameter?: boolean;
   // Set parameter indicator (determines number of rows in exercise detail view)
   isSetParameter?: boolean;
-  // Whether to show this parameter in the grid by default (defaults to true)
+  // Whether to show this parameter in the grid by default (also controls athlete app session grid visibility)
   showInGridByDefault?: boolean;
-  // Whether to show this parameter in the athlete app session grid (defaults to false for safety)
-  showInAthleteApp?: boolean;
   // Calculated parameter support
   isCalculated?: boolean;           // Flag to mark as calculated
   formula?: string;                 // Formula expression, e.g., "Sets * Ground Contacts"

@@ -140,7 +140,7 @@ export async function syncAthleteSchedule(
   if (toolboxEntries) {
     const grouped = new Map<string, string[]>();
     for (const entry of toolboxEntries) {
-      if (!entry.showInAthleteApp || entry.isFrequencyParameter || entry.isSetParameter) continue;
+      if (entry.showInGridByDefault === false || entry.isFrequencyParameter || entry.isSetParameter) continue;
       const key = entry.subCategory
         ? `${entry.category} - ${entry.subCategory}`
         : entry.category;
@@ -251,17 +251,36 @@ export async function syncAthleteSchedule(
       };
     });
 
-  if (rows.length === 0) return;
+  // Delete all dates covered by trainingDays first so cleared days are removed.
+  // This must happen even when rows is empty (full calendar clear case).
+  const allDates = trainingDays.map(td => td.date);
+  const DEL_BATCH = 200;
+  for (let i = 0; i < allDates.length; i += DEL_BATCH) {
+    const batch = allDates.slice(i, i + DEL_BATCH);
+    const { error: delError } = await supabase
+      .from('athlete_schedule')
+      .delete()
+      .eq('athlete_connection_id', connectionId)
+      .in('date', batch);
+    if (delError) {
+      console.error('[athleteScheduleSync] delete error:', delError.message);
+    }
+  }
 
-  // Upsert in batches of 200 (Supabase row limit per request)
+  if (rows.length === 0) {
+    console.log(`[athleteScheduleSync] cleared ${allDates.length} dates for connection ${connectionId}`);
+    return;
+  }
+
+  // Re-insert active training days
   const BATCH = 200;
   for (let i = 0; i < rows.length; i += BATCH) {
     const batch = rows.slice(i, i + BATCH);
     const { error } = await supabase
       .from('athlete_schedule')
-      .upsert(batch, { onConflict: 'athlete_connection_id,date' });
+      .insert(batch);
     if (error) {
-      console.error('[athleteScheduleSync] upsert error:', error.message);
+      console.error('[athleteScheduleSync] insert error:', error.message);
     }
   }
 
