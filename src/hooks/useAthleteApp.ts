@@ -31,6 +31,7 @@ export interface ExerciseSummary {
   plannedSets?: number;
   plannedParams?: Record<string, string | number>;
   visibleParams?: string[];
+  restParamName?: string;
 }
 
 export interface SessionSummary {

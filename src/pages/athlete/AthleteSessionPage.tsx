@@ -74,29 +74,69 @@ function getPlannedValue(ex: ExerciseSummary, paramName: string, setIdx: number)
   return String(val);
 }
 
-/** Rest-time detection heuristic.
- *  Looks for a base (non-per-set) parameter whose name suggests it is an
- *  inter-set rest / pause.  Matches "rest", "pause", "recovery" in any case
- *  (covers German "Pause" and English variants).  Unit keys (_unit suffix)
- *  and per-set keys (_set\d+) are skipped so we read the single representative
- *  value.  A dedicated isRestParameter flag in the toolbox is the planned
- *  long-term replacement for this heuristic. */
+/** Resolve rest duration in seconds for an exercise.
+ *  Priority: explicit restParamName from toolbox → regex heuristic → 90 s default. */
 function getRestSeconds(ex: ExerciseSummary): number {
   if (!ex.plannedParams) return 90;
+
+  function parseRestValue(key: string): number | null {
+    const val = ex.plannedParams![key];
+    if (val === undefined || val === '') return null;
+    const n = Number(val);
+    if (isNaN(n) || n <= 0) return null;
+    const unitKey = ex.plannedParams![`${key}_unit`];
+    if (/min/i.test(String(unitKey)) || n <= 15) return n * 60;
+    return n;
+  }
+
+  // 1. Use the named rest parameter set by the toolbox
+  if (ex.restParamName) {
+    const secs = parseRestValue(ex.restParamName);
+    if (secs !== null) return secs;
+  }
+
+  // 2. Heuristic fallback: scan for a key that smells like rest/pause/recovery
   const REST = /rest|pause|recovery/i;
-  for (const [key, val] of Object.entries(ex.plannedParams)) {
-    if (/_set\d+$/.test(key) || key.endsWith('_unit')) continue; // skip per-set and unit keys
+  for (const key of Object.keys(ex.plannedParams)) {
+    if (/_set\d+$/.test(key) || key.endsWith('_unit')) continue;
     if (REST.test(key)) {
-      const n = Number(val);
-      if (!isNaN(n) && n > 0) {
-        // If the unit key says "min", convert; otherwise treat values ≤ 15 as minutes
-        const unitKey = ex.plannedParams[`${key}_unit`];
-        if (/min/i.test(String(unitKey)) || n <= 15) return n * 60;
-        return n; // assume seconds
-      }
+      const secs = parseRestValue(key);
+      if (secs !== null) return secs;
     }
   }
+
   return 90;
+}
+
+/** Returns base param entries that have a non-empty planned value but are NOT
+ *  shown in the set-table columns — to be displayed as info chips below the grid. */
+function getHiddenParamTags(ex: ExerciseSummary): Array<{ name: string; value: string; unit?: string }> {
+  if (!ex.plannedParams) return [];
+  const visible = new Set(getParamColumns(ex));
+  const SET_RE = /^sets?$/i;
+  const REST_RE = /rest|pause|recovery/i;
+  const restNameLc = ex.restParamName?.toLowerCase();
+
+  const seen = new Set<string>();
+  const tags: Array<{ name: string; value: string; unit?: string }> = [];
+
+  for (const key of Object.keys(ex.plannedParams)) {
+    if (/_set\d+$/.test(key) || key.endsWith('_unit')) continue;
+    if (visible.has(key)) continue;
+    if (SET_RE.test(key)) continue;
+    if (REST_RE.test(key) || (restNameLc && key.toLowerCase() === restNameLc)) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const val = ex.plannedParams[key];
+    if (val === undefined || val === null || val === '') continue;
+
+    const unitRaw = ex.plannedParams[`${key}_unit`];
+    const unit = unitRaw !== undefined && unitRaw !== '' ? String(unitRaw) : undefined;
+    tags.push({ name: key, value: String(val), unit });
+  }
+
+  return tags;
 }
 
 function formatTime(s: number): string {
@@ -741,6 +781,24 @@ export default function AthleteSessionPage() {
                   onCompleteSet={handleCompleteSet}
                   onMarkAll={handleMarkAll}
                 />
+
+                {/* Hidden param tags — params configured but not visible in the grid */}
+                {(() => {
+                  const tags = getHiddenParamTags(ex);
+                  if (tags.length === 0) return null;
+                  return (
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      {tags.map(tag => (
+                        <span
+                          key={tag.name}
+                          className="text-xs bg-muted text-muted-foreground rounded-full px-2.5 py-0.5 border border-border/50"
+                        >
+                          {tag.name}: {tag.value}{tag.unit ? ` ${tag.unit}` : ''}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
 
                 {/* Planned info chip */}
                 {ex.plannedSets && (

@@ -12,6 +12,8 @@ export interface ToolboxEntry {
   isFrequencyParameter?: boolean;
   // Set parameter indicator (determines number of rows in exercise detail view)
   isSetParameter?: boolean;
+  // Rest/pause parameter indicator (used to drive the rest timer in athlete app)
+  isRestParameter?: boolean;
   // Whether to show this parameter in the grid by default (also controls athlete app session grid visibility)
   showInGridByDefault?: boolean;
   // Calculated parameter support

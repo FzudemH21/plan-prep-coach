@@ -34,6 +34,7 @@ export interface ExerciseSummary {
   plannedSets?: number;
   plannedParams?: Record<string, string | number>;  // flat planned params (Reps_set1, etc.)
   visibleParams?: string[];  // param names the coach marked showInAthleteApp
+  restParamName?: string;    // name of the rest/pause parameter for this exercise's method
 }
 
 export interface SessionSummary {
@@ -142,18 +143,31 @@ export async function syncAthleteSchedule(
   }
 
   // Build toolbox visible-params lookup: "category - subCategory" → string[]
+  // Also build rest-param lookup: "category - subCategory" → restParamName
   const toolboxVisibleMap = new Map<string, string[]>();
+  const toolboxRestMap = new Map<string, string>();
   if (toolboxEntries) {
     const grouped = new Map<string, string[]>();
     for (const entry of toolboxEntries) {
-      if (entry.showInGridByDefault === false || entry.isFrequencyParameter || entry.isSetParameter) continue;
       const key = entry.subCategory
         ? `${entry.category} - ${entry.subCategory}`
         : entry.category;
+      // Track rest parameter name for this method key
+      if (entry.isRestParameter) {
+        toolboxRestMap.set(key, entry.parameterName);
+      }
+      if (entry.showInGridByDefault === false || entry.isFrequencyParameter || entry.isSetParameter || entry.isRestParameter) continue;
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key)!.push(entry.parameterName);
     }
     for (const [k, v] of grouped) toolboxVisibleMap.set(k, v);
+  }
+
+  /** Strip the ::ExerciseCategory split suffix from a method key, e.g.
+   *  "Lower Body Strength - Power::Squat" → "Lower Body Strength - Power" */
+  function stripSplitSuffix(methodKey: string): string {
+    const idx = methodKey.indexOf('::');
+    return idx !== -1 ? methodKey.slice(0, idx) : methodKey;
   }
 
   // Helper: get planned params for an exercise
@@ -161,26 +175,45 @@ export async function syncAthleteSchedule(
     plannedSets: number | undefined;
     plannedParams: Record<string, string | number> | undefined;
     visibleParams: string[] | undefined;
+    restParamName: string | undefined;
   } {
+    // Base method key without any ::ExerciseCategory split suffix
+    const baseMethodKey = stripSplitSuffix(ex.methodId ?? '');
+
     // Ad-hoc (toolbox-sourced) exercises carry their own params — no periodization lookup needed.
-    if (ex.parameterSource === 'toolbox' && ex.adhocPlannedParams) {
-      const adhocParams = ex.adhocPlannedParams as Record<string, string | number>;
-      const setsKey = Object.keys(adhocParams).find(k => /^sets?$/i.test(k));
-      const plannedSets = setsKey ? Number(adhocParams[setsKey]) : undefined;
-      const visibleParams = Array.isArray(ex.adhocVisibleParams)
-        ? (ex.adhocVisibleParams as string[])
-        : undefined;
+    if (ex.parameterSource === 'toolbox') {
+      if (ex.adhocPlannedParams) {
+        const adhocParams = ex.adhocPlannedParams as Record<string, string | number>;
+        const setsKey = Object.keys(adhocParams).find(k => /^sets?$/i.test(k));
+        const plannedSets = setsKey ? Number(adhocParams[setsKey]) : undefined;
+        const visibleParams = Array.isArray(ex.adhocVisibleParams)
+          ? (ex.adhocVisibleParams as string[])
+          : undefined;
+        const restParamName = toolboxRestMap.get(baseMethodKey);
+        return {
+          plannedSets: plannedSets && !isNaN(plannedSets) ? plannedSets : undefined,
+          plannedParams: adhocParams,
+          visibleParams: visibleParams && visibleParams.length > 0 ? visibleParams : undefined,
+          restParamName,
+        };
+      }
+
+      // Legacy ad-hoc exercise (added before adhocPlannedParams was introduced):
+      // derive visibility from toolbox, no planned values available.
+      const vp = toolboxVisibleMap.get(baseMethodKey);
+      const restParamName = toolboxRestMap.get(baseMethodKey);
       return {
-        plannedSets: plannedSets && !isNaN(plannedSets) ? plannedSets : undefined,
-        plannedParams: adhocParams,
-        visibleParams: visibleParams && visibleParams.length > 0 ? visibleParams : undefined,
+        plannedSets: undefined,
+        plannedParams: undefined,
+        visibleParams: vp && vp.length > 0 ? vp : undefined,
+        restParamName,
       };
     }
 
-    if (!paramValues) return { plannedSets: undefined, plannedParams: undefined, visibleParams: undefined };
+    if (!paramValues) return { plannedSets: undefined, plannedParams: undefined, visibleParams: undefined, restParamName: undefined };
 
     const meta = mesoByDate.get(ex.dayDate);
-    if (!meta) return { plannedSets: undefined, plannedParams: undefined, visibleParams: undefined };
+    if (!meta) return { plannedSets: undefined, plannedParams: undefined, visibleParams: undefined, restParamName: undefined };
 
     const { mesocycleId, microcycleIndex } = meta;
     const methodKey = ex.methodId ?? '';
@@ -191,24 +224,28 @@ export async function syncAthleteSchedule(
       {};
 
     if (Object.keys(storedParams).length === 0) {
-      return { plannedSets: undefined, plannedParams: undefined, visibleParams: undefined };
+      return { plannedSets: undefined, plannedParams: undefined, visibleParams: undefined, restParamName: undefined };
     }
 
     // Extract set count
     const setsKey = Object.keys(storedParams).find(k => /^sets?$/i.test(k));
     const plannedSets = setsKey && storedParams[setsKey] ? Number(storedParams[setsKey]) : undefined;
 
-    // Get visible params from toolbox
+    // Get visible params from toolbox — strip ::suffix before lookup
     let visibleParams: string[] | undefined;
-    if (toolboxEntries && methodKey) {
-      const vp = toolboxVisibleMap.get(methodKey);
+    if (toolboxEntries && baseMethodKey) {
+      const vp = toolboxVisibleMap.get(baseMethodKey);
       if (vp && vp.length > 0) visibleParams = vp;
     }
+
+    // Get rest param name from toolbox
+    const restParamName = toolboxRestMap.get(baseMethodKey);
 
     return {
       plannedSets,
       plannedParams: storedParams,
       visibleParams,
+      restParamName,
     };
   }
 
@@ -222,7 +259,7 @@ export async function syncAthleteSchedule(
           .filter(ex => ex.dayDate === td.date && ex.sessionIndex === i)
           .sort((a, b) => a.order - b.order)
           .map(ex => {
-            const { plannedSets, plannedParams, visibleParams } = getPlannedParams(ex);
+            const { plannedSets, plannedParams, visibleParams, restParamName } = getPlannedParams(ex);
 
             // Section info
             let sectionName: string | undefined;
@@ -247,6 +284,7 @@ export async function syncAthleteSchedule(
               plannedSets,
               plannedParams,
               visibleParams,
+              restParamName,
             };
           });
 

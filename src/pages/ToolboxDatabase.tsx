@@ -223,6 +223,7 @@ export default function ToolboxDatabase() {
         options: [],
         isFrequencyParameter: true,
         isSetParameter: false,
+        isRestParameter: false,
         showInGridByDefault: false,
       },
       {
@@ -233,7 +234,19 @@ export default function ToolboxDatabase() {
         options: ["#"],
         isFrequencyParameter: false,
         isSetParameter: true,
+        isRestParameter: false,
         showInGridByDefault: true,
+      },
+      {
+        category,
+        subCategory,
+        parameterName: "Rest",
+        parameterType: "quantitative",
+        options: ["s"],
+        isFrequencyParameter: false,
+        isSetParameter: false,
+        isRestParameter: true,
+        showInGridByDefault: false,
       },
     ]);
 

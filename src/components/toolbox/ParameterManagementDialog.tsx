@@ -75,6 +75,7 @@ export function ParameterManagementDialog({
     options: [] as string[],
     isFrequencyParameter: false,
     isSetParameter: false,
+    isRestParameter: false,
     showInGridByDefault: true,
     isCalculated: false,
     formula: '',
@@ -93,25 +94,34 @@ export function ParameterManagementDialog({
   const handleSaveEditedParameter = () => {
     if (!editingParameter) return;
 
-    let updatedParameters = parameters.map(p => 
-      p.id === editingParameter.id ? editingParameter : p
+    const isStructural = editingParameter.isFrequencyParameter || editingParameter.isSetParameter || editingParameter.isRestParameter;
+    const finalEntry: ToolboxEntry = {
+      ...editingParameter,
+      showInGridByDefault: isStructural ? false : editingParameter.showInGridByDefault,
+    };
+
+    let updatedParameters = parameters.map(p =>
+      p.id === finalEntry.id ? finalEntry : p
     );
 
     // If this parameter is marked as frequency, unmark all others
-    if (editingParameter.isFrequencyParameter) {
-      updatedParameters = updatedParameters.map(p => 
-        p.id === editingParameter.id 
-          ? p 
-          : { ...p, isFrequencyParameter: false }
+    if (finalEntry.isFrequencyParameter) {
+      updatedParameters = updatedParameters.map(p =>
+        p.id === finalEntry.id ? p : { ...p, isFrequencyParameter: false }
       );
     }
 
     // If this parameter is marked as set parameter, unmark all others
-    if (editingParameter.isSetParameter) {
-      updatedParameters = updatedParameters.map(p => 
-        p.id === editingParameter.id 
-          ? p 
-          : { ...p, isSetParameter: false }
+    if (finalEntry.isSetParameter) {
+      updatedParameters = updatedParameters.map(p =>
+        p.id === finalEntry.id ? p : { ...p, isSetParameter: false }
+      );
+    }
+
+    // If this parameter is marked as rest parameter, unmark all others
+    if (finalEntry.isRestParameter) {
+      updatedParameters = updatedParameters.map(p =>
+        p.id === finalEntry.id ? p : { ...p, isRestParameter: false }
       );
     }
 
@@ -120,6 +130,7 @@ export function ParameterManagementDialog({
   };
 
   const handleAddParameter = () => {
+    const isStructural = newParameter.isFrequencyParameter || newParameter.isSetParameter || newParameter.isRestParameter;
     const parameter: ToolboxEntry = {
       id: Date.now().toString(),
       category,
@@ -129,7 +140,8 @@ export function ParameterManagementDialog({
       options: newParameter.isCalculated ? [] : newParameter.options,
       isFrequencyParameter: newParameter.isCalculated ? false : newParameter.isFrequencyParameter,
       isSetParameter: newParameter.isCalculated ? false : newParameter.isSetParameter,
-      showInGridByDefault: newParameter.showInGridByDefault,
+      isRestParameter: newParameter.isCalculated ? false : newParameter.isRestParameter,
+      showInGridByDefault: isStructural ? false : newParameter.showInGridByDefault,
       isCalculated: newParameter.isCalculated,
       formula: newParameter.isCalculated ? newParameter.formula : undefined,
       sourceParameterIds: newParameter.isCalculated ? newParameter.sourceParameterIds : undefined,
@@ -139,19 +151,22 @@ export function ParameterManagementDialog({
 
     // If this new parameter is marked as frequency, unmark all others
     if (newParameter.isFrequencyParameter) {
-      updatedParameters = updatedParameters.map(p => 
-        p.id === parameter.id 
-          ? p 
-          : { ...p, isFrequencyParameter: false }
+      updatedParameters = updatedParameters.map(p =>
+        p.id === parameter.id ? p : { ...p, isFrequencyParameter: false }
       );
     }
 
     // If this new parameter is marked as set parameter, unmark all others
     if (newParameter.isSetParameter) {
-      updatedParameters = updatedParameters.map(p => 
-        p.id === parameter.id 
-          ? p 
-          : { ...p, isSetParameter: false }
+      updatedParameters = updatedParameters.map(p =>
+        p.id === parameter.id ? p : { ...p, isSetParameter: false }
+      );
+    }
+
+    // If this new parameter is marked as rest parameter, unmark all others
+    if (newParameter.isRestParameter) {
+      updatedParameters = updatedParameters.map(p =>
+        p.id === parameter.id ? p : { ...p, isRestParameter: false }
       );
     }
 
@@ -162,6 +177,7 @@ export function ParameterManagementDialog({
       options: [],
       isFrequencyParameter: false,
       isSetParameter: false,
+      isRestParameter: false,
       showInGridByDefault: true,
       isCalculated: false,
       formula: '',
@@ -252,9 +268,20 @@ export function ParameterManagementDialog({
 
   const exerciseCategories = parameters[0]?.exerciseCategories || [];
 
-  // Check if another parameter already has frequency/set flags
+  // Check if another parameter already has frequency/set/rest flags
   const existingFrequencyParameterId = parameters.find(p => p.isFrequencyParameter)?.id;
   const existingSetParameterId = parameters.find(p => p.isSetParameter)?.id;
+  const existingRestParameterId = parameters.find(p => p.isRestParameter)?.id;
+
+  // Block save in Edit dialog if it would leave no frequency parameter
+  const editSaveWouldRemoveFrequency =
+    !!editingParameter &&
+    editingParameter.id === existingFrequencyParameterId &&
+    !editingParameter.isFrequencyParameter;
+  const editHasNoFrequencyAtAll =
+    !!editingParameter &&
+    !parameters.some(p => p.isFrequencyParameter) &&
+    !editingParameter.isFrequencyParameter;
 
   // Get available quantitative parameters for formula building (excluding calculated params and current param being edited)
   const availableSourceParameters = useMemo(() => {
@@ -527,8 +554,9 @@ export function ParameterManagementDialog({
                     id="isFrequencyParameter"
                     checked={editingParameter.isFrequencyParameter || false}
                     disabled={
-                      editingParameter.parameterType !== 'quantitative' || 
+                      editingParameter.parameterType !== 'quantitative' ||
                       editingParameter.isSetParameter ||
+                      editingParameter.isRestParameter ||
                       editingParameter.isCalculated ||
                       (!!existingFrequencyParameterId && existingFrequencyParameterId !== editingParameter.id)
                     }
@@ -536,17 +564,17 @@ export function ParameterManagementDialog({
                       setEditingParameter({
                         ...editingParameter,
                         isFrequencyParameter: e.target.checked,
-                        // Frequency parameters should never show in grid
-                        showInGridByDefault: e.target.checked ? false : editingParameter.showInGridByDefault
+                        showInGridByDefault: e.target.checked ? false : editingParameter.showInGridByDefault,
                       });
                     }}
                     className="h-4 w-4 disabled:opacity-50 disabled:cursor-not-allowed"
                   />
-                  <Label 
-                    htmlFor="isFrequencyParameter" 
+                  <Label
+                    htmlFor="isFrequencyParameter"
                     className={`text-sm font-medium ${
-                      editingParameter.parameterType !== 'quantitative' || 
+                      editingParameter.parameterType !== 'quantitative' ||
                       editingParameter.isSetParameter ||
+                      editingParameter.isRestParameter ||
                       editingParameter.isCalculated ||
                       (existingFrequencyParameterId && existingFrequencyParameterId !== editingParameter.id)
                         ? 'text-muted-foreground' : ''
@@ -560,9 +588,9 @@ export function ParameterManagementDialog({
                     ? 'Calculated parameters cannot be frequency parameters'
                     : existingFrequencyParameterId && existingFrequencyParameterId !== editingParameter.id
                       ? 'Another parameter is already marked as the Training Frequency parameter'
-                      : editingParameter.isSetParameter
-                        ? 'Cannot be both frequency and set parameter'
-                        : editingParameter.parameterType === 'quantitative' 
+                      : editingParameter.isSetParameter || editingParameter.isRestParameter
+                        ? 'Cannot combine frequency with set or rest parameter'
+                        : editingParameter.parameterType === 'quantitative'
                           ? 'Mark this parameter as the training frequency indicator (sessions per microcycle/week)'
                           : 'Only quantitative parameters can be used as frequency indicators'}
                 </p>
@@ -575,24 +603,26 @@ export function ParameterManagementDialog({
                     id="isSetParameter"
                     checked={editingParameter.isSetParameter || false}
                     disabled={
-                      editingParameter.parameterType !== 'quantitative' || 
+                      editingParameter.parameterType !== 'quantitative' ||
                       editingParameter.isFrequencyParameter ||
+                      editingParameter.isRestParameter ||
                       editingParameter.isCalculated ||
                       (!!existingSetParameterId && existingSetParameterId !== editingParameter.id)
                     }
                     onChange={(e) => {
-                      setNewParameter({
-                        ...newParameter,
-                        isSetParameter: e.target.checked
+                      setEditingParameter({
+                        ...editingParameter,
+                        isSetParameter: e.target.checked,
                       });
                     }}
                     className="h-4 w-4 disabled:opacity-50 disabled:cursor-not-allowed"
                   />
-                  <Label 
-                    htmlFor="isSetParameter" 
+                  <Label
+                    htmlFor="isSetParameter"
                     className={`text-sm font-medium ${
-                      editingParameter.parameterType !== 'quantitative' || 
+                      editingParameter.parameterType !== 'quantitative' ||
                       editingParameter.isFrequencyParameter ||
+                      editingParameter.isRestParameter ||
                       editingParameter.isCalculated ||
                       (existingSetParameterId && existingSetParameterId !== editingParameter.id)
                         ? 'text-muted-foreground' : ''
@@ -606,9 +636,9 @@ export function ParameterManagementDialog({
                     ? 'Calculated parameters cannot be set parameters'
                     : existingSetParameterId && existingSetParameterId !== editingParameter.id
                       ? 'Another parameter is already marked as the Set parameter'
-                      : editingParameter.isFrequencyParameter
-                        ? 'Cannot be both set and frequency parameter'
-                        : editingParameter.parameterType === 'quantitative' 
+                      : editingParameter.isFrequencyParameter || editingParameter.isRestParameter
+                        ? 'Cannot combine set with frequency or rest parameter'
+                        : editingParameter.parameterType === 'quantitative'
                           ? 'Mark this parameter as the set parameter (determines number of rows in exercise detail view)'
                           : 'Only quantitative parameters can be used as set parameters'}
                 </p>
@@ -618,9 +648,58 @@ export function ParameterManagementDialog({
                 <div className="flex items-center space-x-2">
                   <input
                     type="checkbox"
+                    id="isRestParameter"
+                    checked={editingParameter.isRestParameter || false}
+                    disabled={
+                      editingParameter.parameterType !== 'quantitative' ||
+                      editingParameter.isFrequencyParameter ||
+                      editingParameter.isSetParameter ||
+                      editingParameter.isCalculated ||
+                      (!!existingRestParameterId && existingRestParameterId !== editingParameter.id)
+                    }
+                    onChange={(e) => {
+                      setEditingParameter({
+                        ...editingParameter,
+                        isRestParameter: e.target.checked,
+                        showInGridByDefault: e.target.checked ? false : editingParameter.showInGridByDefault,
+                      });
+                    }}
+                    className="h-4 w-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <Label
+                    htmlFor="isRestParameter"
+                    className={`text-sm font-medium ${
+                      editingParameter.parameterType !== 'quantitative' ||
+                      editingParameter.isFrequencyParameter ||
+                      editingParameter.isSetParameter ||
+                      editingParameter.isCalculated ||
+                      (existingRestParameterId && existingRestParameterId !== editingParameter.id)
+                        ? 'text-muted-foreground' : ''
+                    }`}
+                  >
+                    Rest / Pause Parameter
+                  </Label>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {editingParameter.isCalculated
+                    ? 'Calculated parameters cannot be rest parameters'
+                    : existingRestParameterId && existingRestParameterId !== editingParameter.id
+                      ? 'Another parameter is already marked as the Rest parameter'
+                      : editingParameter.isFrequencyParameter || editingParameter.isSetParameter
+                        ? 'Cannot combine rest with frequency or set parameter'
+                        : editingParameter.parameterType === 'quantitative'
+                          ? 'Mark this as the rest/pause duration parameter — drives the rest timer in the athlete app'
+                          : 'Only quantitative parameters can be rest parameters'}
+                </p>
+              </div>
+
+              <div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
                     id="showInGridByDefault"
                     checked={editingParameter.showInGridByDefault ?? true}
-                    disabled={editingParameter.isFrequencyParameter || editingParameter.isSetParameter}
+                    disabled={editingParameter.isFrequencyParameter || editingParameter.isSetParameter || editingParameter.isRestParameter}
                     onChange={(e) => {
                       setEditingParameter({
                         ...editingParameter,
@@ -631,14 +710,14 @@ export function ParameterManagementDialog({
                   />
                   <Label
                     htmlFor="showInGridByDefault"
-                    className={`text-sm font-medium ${editingParameter.isFrequencyParameter || editingParameter.isSetParameter ? 'text-muted-foreground' : ''}`}
+                    className={`text-sm font-medium ${editingParameter.isFrequencyParameter || editingParameter.isSetParameter || editingParameter.isRestParameter ? 'text-muted-foreground' : ''}`}
                   >
                     Show in parameter grid by default
                   </Label>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {editingParameter.isFrequencyParameter || editingParameter.isSetParameter
-                    ? 'Structural parameters (frequency/set) cannot be toggled for grid visibility'
+                  {editingParameter.isFrequencyParameter || editingParameter.isSetParameter || editingParameter.isRestParameter
+                    ? 'Structural parameters (frequency/set/rest) are not shown in the set grid'
                     : 'When disabled, this parameter will be shown as a label badge on the exercise instead of in the set grid. Users can still toggle visibility in workout views.'}
                 </p>
               </div>
@@ -760,9 +839,17 @@ export function ParameterManagementDialog({
                 </div>
               )}
 
+              {(editSaveWouldRemoveFrequency || editHasNoFrequencyAtAll) && !editingParameter.isFrequencyParameter && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-800 rounded-md p-3 text-sm text-red-800 dark:text-red-200">
+                  ⚠️ Every method must have a Training Frequency parameter. Please keep or reassign the frequency flag before saving.
+                </div>
+              )}
+
               <div className="flex justify-between">
                 <Button
                   variant="destructive"
+                  disabled={editingParameter.isFrequencyParameter}
+                  title={editingParameter.isFrequencyParameter ? 'Cannot delete the frequency parameter — reassign the flag first' : undefined}
                   onClick={() => {
                     handleDeleteParameter(editingParameter.id);
                     setEditingParameter(null);
@@ -774,7 +861,10 @@ export function ParameterManagementDialog({
                   <Button variant="outline" onClick={() => setEditingParameter(null)}>
                     Cancel
                   </Button>
-                  <Button onClick={handleSaveEditedParameter}>
+                  <Button
+                    onClick={handleSaveEditedParameter}
+                    disabled={editSaveWouldRemoveFrequency || editHasNoFrequencyAtAll}
+                  >
                     Save Changes
                   </Button>
                 </div>
@@ -831,8 +921,9 @@ export function ParameterManagementDialog({
                   id="newIsFrequencyParameter"
                   checked={newParameter.isFrequencyParameter || false}
                   disabled={
-                    newParameter.parameterType !== 'quantitative' || 
+                    newParameter.parameterType !== 'quantitative' ||
                     newParameter.isSetParameter ||
+                    newParameter.isRestParameter ||
                     newParameter.isCalculated ||
                     !!existingFrequencyParameterId
                   }
@@ -840,17 +931,17 @@ export function ParameterManagementDialog({
                     setNewParameter({
                       ...newParameter,
                       isFrequencyParameter: e.target.checked,
-                      // Frequency parameters should never show in grid
-                      showInGridByDefault: e.target.checked ? false : newParameter.showInGridByDefault
+                      showInGridByDefault: e.target.checked ? false : newParameter.showInGridByDefault,
                     });
                   }}
                   className="h-4 w-4 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
-                <Label 
-                  htmlFor="newIsFrequencyParameter" 
+                <Label
+                  htmlFor="newIsFrequencyParameter"
                   className={`text-sm font-medium ${
-                    newParameter.parameterType !== 'quantitative' || 
+                    newParameter.parameterType !== 'quantitative' ||
                     newParameter.isSetParameter ||
+                    newParameter.isRestParameter ||
                     newParameter.isCalculated ||
                     existingFrequencyParameterId
                       ? 'text-muted-foreground' : ''
@@ -864,9 +955,9 @@ export function ParameterManagementDialog({
                   ? 'Calculated parameters cannot be frequency parameters'
                   : existingFrequencyParameterId
                     ? 'Another parameter is already marked as the Training Frequency parameter'
-                    : newParameter.isSetParameter
-                      ? 'Cannot be both frequency and set parameter'
-                      : newParameter.parameterType === 'quantitative' 
+                    : newParameter.isSetParameter || newParameter.isRestParameter
+                      ? 'Cannot combine frequency with set or rest parameter'
+                      : newParameter.parameterType === 'quantitative'
                         ? 'Mark this parameter as the training frequency indicator (sessions per microcycle/week)'
                         : 'Only quantitative parameters can be used as frequency indicators'}
               </p>
@@ -879,24 +970,23 @@ export function ParameterManagementDialog({
                   id="newIsSetParameter"
                   checked={newParameter.isSetParameter || false}
                   disabled={
-                    newParameter.parameterType !== 'quantitative' || 
+                    newParameter.parameterType !== 'quantitative' ||
                     newParameter.isFrequencyParameter ||
+                    newParameter.isRestParameter ||
                     newParameter.isCalculated ||
                     !!existingSetParameterId
                   }
                   onChange={(e) => {
-                    setNewParameter({
-                      ...newParameter,
-                      isSetParameter: e.target.checked
-                    });
+                    setNewParameter({ ...newParameter, isSetParameter: e.target.checked });
                   }}
                   className="h-4 w-4 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
-                <Label 
-                  htmlFor="newIsSetParameter" 
+                <Label
+                  htmlFor="newIsSetParameter"
                   className={`text-sm font-medium ${
-                    newParameter.parameterType !== 'quantitative' || 
+                    newParameter.parameterType !== 'quantitative' ||
                     newParameter.isFrequencyParameter ||
+                    newParameter.isRestParameter ||
                     newParameter.isCalculated ||
                     existingSetParameterId
                       ? 'text-muted-foreground' : ''
@@ -910,9 +1000,9 @@ export function ParameterManagementDialog({
                   ? 'Calculated parameters cannot be set parameters'
                   : existingSetParameterId
                     ? 'Another parameter is already marked as the Set parameter'
-                    : newParameter.isFrequencyParameter
-                      ? 'Cannot be both set and frequency parameter'
-                      : newParameter.parameterType === 'quantitative' 
+                    : newParameter.isFrequencyParameter || newParameter.isRestParameter
+                      ? 'Cannot combine set with frequency or rest parameter'
+                      : newParameter.parameterType === 'quantitative'
                         ? 'Mark this parameter as the set parameter (determines number of rows in exercise detail view)'
                         : 'Only quantitative parameters can be used as set parameters'}
               </p>
@@ -922,27 +1012,73 @@ export function ParameterManagementDialog({
               <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
-                  id="newShowInGridByDefault"
-                  checked={newParameter.showInGridByDefault}
-                  disabled={newParameter.isFrequencyParameter || newParameter.isSetParameter}
+                  id="newIsRestParameter"
+                  checked={newParameter.isRestParameter || false}
+                  disabled={
+                    newParameter.parameterType !== 'quantitative' ||
+                    newParameter.isFrequencyParameter ||
+                    newParameter.isSetParameter ||
+                    newParameter.isCalculated ||
+                    !!existingRestParameterId
+                  }
                   onChange={(e) => {
                     setNewParameter({
                       ...newParameter,
-                      showInGridByDefault: e.target.checked
+                      isRestParameter: e.target.checked,
+                      showInGridByDefault: e.target.checked ? false : newParameter.showInGridByDefault,
                     });
                   }}
                   className="h-4 w-4 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <Label
+                  htmlFor="newIsRestParameter"
+                  className={`text-sm font-medium ${
+                    newParameter.parameterType !== 'quantitative' ||
+                    newParameter.isFrequencyParameter ||
+                    newParameter.isSetParameter ||
+                    newParameter.isCalculated ||
+                    existingRestParameterId
+                      ? 'text-muted-foreground' : ''
+                  }`}
+                >
+                  Rest / Pause Parameter
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {newParameter.isCalculated
+                  ? 'Calculated parameters cannot be rest parameters'
+                  : existingRestParameterId
+                    ? 'Another parameter is already marked as the Rest parameter'
+                    : newParameter.isFrequencyParameter || newParameter.isSetParameter
+                      ? 'Cannot combine rest with frequency or set parameter'
+                      : newParameter.parameterType === 'quantitative'
+                        ? 'Mark this as the rest/pause duration parameter — drives the rest timer in the athlete app'
+                        : 'Only quantitative parameters can be rest parameters'}
+              </p>
+            </div>
+
+            <div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="newShowInGridByDefault"
+                  checked={newParameter.showInGridByDefault}
+                  disabled={newParameter.isFrequencyParameter || newParameter.isSetParameter || newParameter.isRestParameter}
+                  onChange={(e) => {
+                    setNewParameter({ ...newParameter, showInGridByDefault: e.target.checked });
+                  }}
+                  className="h-4 w-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                <Label
                   htmlFor="newShowInGridByDefault"
-                  className={`text-sm font-medium ${newParameter.isFrequencyParameter || newParameter.isSetParameter ? 'text-muted-foreground' : ''}`}
+                  className={`text-sm font-medium ${newParameter.isFrequencyParameter || newParameter.isSetParameter || newParameter.isRestParameter ? 'text-muted-foreground' : ''}`}
                 >
                   Show in parameter grid by default
                 </Label>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                {newParameter.isFrequencyParameter || newParameter.isSetParameter
-                  ? 'Structural parameters (frequency/set) cannot be toggled for grid visibility'
+                {newParameter.isFrequencyParameter || newParameter.isSetParameter || newParameter.isRestParameter
+                  ? 'Structural parameters (frequency/set/rest) are not shown in the set grid'
                   : 'When disabled, this parameter will be shown as a label badge on the exercise instead of in the set grid. Users can still toggle visibility in workout views.'}
               </p>
             </div>

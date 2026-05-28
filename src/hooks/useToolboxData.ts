@@ -15,6 +15,7 @@ interface LegacyToolboxEntry {
   exerciseCategories?: string[];
   isFrequencyParameter?: boolean;
   isSetParameter?: boolean;
+  isRestParameter?: boolean;
   showInGridByDefault?: boolean;
   isCalculated?: boolean;
   formula?: string;
@@ -33,6 +34,7 @@ function migrateLegacyEntry(entry: LegacyToolboxEntry): ToolboxEntry {
       exerciseCategories: entry.exerciseCategories || [],
       isFrequencyParameter: entry.isFrequencyParameter,
       isSetParameter: entry.isSetParameter,
+      isRestParameter: entry.isRestParameter,
       showInGridByDefault: entry.showInGridByDefault ?? true,
       isCalculated: entry.isCalculated,
       formula: entry.formula,
@@ -63,6 +65,7 @@ function migrateLegacyEntry(entry: LegacyToolboxEntry): ToolboxEntry {
       exerciseCategories: entry.exerciseCategories || [],
       isFrequencyParameter: entry.isFrequencyParameter,
       isSetParameter: entry.isSetParameter,
+      isRestParameter: entry.isRestParameter,
       showInGridByDefault: entry.showInGridByDefault ?? true,
       isCalculated: entry.isCalculated,
       formula: entry.formula,
@@ -80,6 +83,7 @@ function migrateLegacyEntry(entry: LegacyToolboxEntry): ToolboxEntry {
     exerciseCategories: entry.exerciseCategories || [],
     isFrequencyParameter: entry.isFrequencyParameter,
     isSetParameter: entry.isSetParameter,
+    isRestParameter: entry.isRestParameter,
     showInGridByDefault: entry.showInGridByDefault ?? true,
     isCalculated: entry.isCalculated,
     formula: entry.formula,
@@ -131,10 +135,35 @@ function migrateSetParameter(entries: ToolboxEntry[]): ToolboxEntry[] {
   });
 }
 
+function migrateRestParameter(entries: ToolboxEntry[]): ToolboxEntry[] {
+  const byMethod = new Map<string, ToolboxEntry[]>();
+  entries.forEach(entry => {
+    const key = `${entry.category}::${entry.subCategory}`;
+    if (!byMethod.has(key)) byMethod.set(key, []);
+    byMethod.get(key)!.push(entry);
+  });
+  return entries.map(entry => {
+    const methodKey = `${entry.category}::${entry.subCategory}`;
+    const methodEntries = byMethod.get(methodKey) || [];
+    const hasMarkedRestParam = methodEntries.some(e => e.isRestParameter);
+    if (hasMarkedRestParam) return entry;
+    const paramNameLower = entry.parameterName.toLowerCase();
+    const isRestLike =
+      paramNameLower.includes('rest') ||
+      paramNameLower.includes('pause') ||
+      paramNameLower.includes('recovery');
+    if (isRestLike && entry.parameterType === 'quantitative') {
+      return { ...entry, isRestParameter: true, showInGridByDefault: false };
+    }
+    return entry;
+  });
+}
+
 function applyAllMigrations(entries: LegacyToolboxEntry[]): ToolboxEntry[] {
   let migrated = entries.map(migrateLegacyEntry);
   migrated = migrateFrequencyParameter(migrated);
   migrated = migrateSetParameter(migrated);
+  migrated = migrateRestParameter(migrated);
   return migrated;
 }
 
