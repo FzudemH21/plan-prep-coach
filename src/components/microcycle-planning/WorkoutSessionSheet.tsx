@@ -1702,6 +1702,30 @@ export function WorkoutSessionSheet({
       })
     );
 
+    // Auto-register the section in sessionSections if it isn't there yet.
+    // This covers the initial 'section-0' placeholder (and any other section
+    // created locally before the user explicitly clicks "Add Section") so that
+    // exercises added to it arrive in the athlete-app sync with a proper name
+    // instead of the raw section id.
+    if (onSectionsChange) {
+      const alreadyRegistered = sessionSectionsProp?.some(
+        s => s.id === currentSectionId && s.dayDate === dayDate && s.sessionIndex === sessionIndex
+      );
+      if (!alreadyRegistered) {
+        const otherSections = sessionSectionsProp?.filter(
+          s => !(s.dayDate === dayDate && s.sessionIndex === sessionIndex)
+        ) || [];
+        const currentSections = sessionSectionsProp?.filter(
+          s => s.dayDate === dayDate && s.sessionIndex === sessionIndex
+        ) || [];
+        onSectionsChange([
+          ...otherSections,
+          ...currentSections,
+          { id: section.id, dayDate, sessionIndex, name: section.name, order: section.order },
+        ]);
+      }
+    }
+
     // Sync to Step 1 - create ExerciseDistribution entries with parameterSource: 'toolbox'
     if (onDistributionChange && allExerciseDistribution) {
       const newDistributionEntries = selectedExercisesForMethod.map((ex, index) => ({
@@ -2092,17 +2116,23 @@ export function WorkoutSessionSheet({
   }, []);
 
   const handleAddSection = () => {
-    const newSectionNumber = workoutSections.length + 1;
+    // Strip the initial 'section-0' placeholder if it is still empty so it
+    // doesn't ghost alongside the user's explicitly-named sections.
+    const baseSections = workoutSections.filter(
+      s => !(s.id === 'section-0' && s.exercises.length === 0)
+    );
+
+    const newSectionNumber = baseSections.length + 1;
     const newSection: WorkoutSection = {
       id: `section-${Date.now()}`,
       name: `Section ${newSectionNumber}`,
-      order: workoutSections.length,
-      exercises: []
+      order: baseSections.length,
+      exercises: [],
     };
-    
-    setWorkoutSections([...workoutSections, newSection]);
-    
-    // Sync to Step 1
+
+    setWorkoutSections([...baseSections, newSection]);
+
+    // Sync to Step 1 — also drop the placeholder from the persisted section list
     if (onSectionsChange) {
       const step1Section: SessionSectionProp = {
         id: newSection.id,
@@ -2114,12 +2144,13 @@ export function WorkoutSessionSheet({
       const otherSections = sessionSectionsProp?.filter(
         s => !(s.dayDate === dayDate && s.sessionIndex === sessionIndex)
       ) || [];
+      // Exclude the placeholder ('section-0') from the persisted list
       const currentSections = sessionSectionsProp?.filter(
-        s => s.dayDate === dayDate && s.sessionIndex === sessionIndex
+        s => s.dayDate === dayDate && s.sessionIndex === sessionIndex && s.id !== 'section-0'
       ) || [];
       onSectionsChange([...otherSections, ...currentSections, step1Section]);
     }
-    
+
     toast({
       title: "Section added",
       description: "New section created successfully",
