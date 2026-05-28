@@ -162,6 +162,21 @@ export async function syncAthleteSchedule(
     plannedParams: Record<string, string | number> | undefined;
     visibleParams: string[] | undefined;
   } {
+    // Ad-hoc (toolbox-sourced) exercises carry their own params — no periodization lookup needed.
+    if (ex.parameterSource === 'toolbox' && ex.adhocPlannedParams) {
+      const adhocParams = ex.adhocPlannedParams as Record<string, string | number>;
+      const setsKey = Object.keys(adhocParams).find(k => /^sets?$/i.test(k));
+      const plannedSets = setsKey ? Number(adhocParams[setsKey]) : undefined;
+      const visibleParams = Array.isArray(ex.adhocVisibleParams)
+        ? (ex.adhocVisibleParams as string[])
+        : undefined;
+      return {
+        plannedSets: plannedSets && !isNaN(plannedSets) ? plannedSets : undefined,
+        plannedParams: adhocParams,
+        visibleParams: visibleParams && visibleParams.length > 0 ? visibleParams : undefined,
+      };
+    }
+
     if (!paramValues) return { plannedSets: undefined, plannedParams: undefined, visibleParams: undefined };
 
     const meta = mesoByDate.get(ex.dayDate);

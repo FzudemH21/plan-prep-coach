@@ -74,13 +74,25 @@ function getPlannedValue(ex: ExerciseSummary, paramName: string, setIdx: number)
   return String(val);
 }
 
+/** Rest-time detection heuristic.
+ *  Looks for a base (non-per-set) parameter whose name suggests it is an
+ *  inter-set rest / pause.  Matches "rest", "pause", "recovery" in any case
+ *  (covers German "Pause" and English variants).  Unit keys (_unit suffix)
+ *  and per-set keys (_set\d+) are skipped so we read the single representative
+ *  value.  A dedicated isRestParameter flag in the toolbox is the planned
+ *  long-term replacement for this heuristic. */
 function getRestSeconds(ex: ExerciseSummary): number {
   if (!ex.plannedParams) return 90;
+  const REST = /rest|pause|recovery/i;
   for (const [key, val] of Object.entries(ex.plannedParams)) {
-    if (/rest/i.test(key)) {
+    if (/_set\d+$/.test(key) || key.endsWith('_unit')) continue; // skip per-set and unit keys
+    if (REST.test(key)) {
       const n = Number(val);
       if (!isNaN(n) && n > 0) {
-        return /min/i.test(key) ? n * 60 : n < 10 ? n * 60 : n;
+        // If the unit key says "min", convert; otherwise treat values ≤ 15 as minutes
+        const unitKey = ex.plannedParams[`${key}_unit`];
+        if (/min/i.test(String(unitKey)) || n <= 15) return n * 60;
+        return n; // assume seconds
       }
     }
   }
@@ -202,12 +214,14 @@ interface SetTableProps {
   completedSets: Record<string, number[]>;
   onLogValue: (exId: string, setIdx: number, paramName: string, val: string) => void;
   onCompleteSet: (exId: string, setIdx: number) => void;
+  onMarkAll: (exId: string) => void;
 }
 
-function SetTable({ exercise, loggedValues, completedSets, onLogValue, onCompleteSet }: SetTableProps) {
+function SetTable({ exercise, loggedValues, completedSets, onLogValue, onCompleteSet, onMarkAll }: SetTableProps) {
   const setCount = getSetCount(exercise);
   const columns = getParamColumns(exercise);
   const doneArr = completedSets[exercise.id] ?? [];
+  const allDone = doneArr.length >= setCount;
 
   return (
     <div className="overflow-x-auto rounded-lg border bg-background">
@@ -220,7 +234,22 @@ function SetTable({ exercise, loggedValues, completedSets, onLogValue, onComplet
                 {col}
               </th>
             ))}
-            <th className="w-10 py-2" />
+            {/* Mark-all header button */}
+            <th className="w-10 py-2 text-center">
+              <button
+                onClick={() => !allDone && onMarkAll(exercise.id)}
+                disabled={allDone}
+                title="Mark all sets done"
+                className={cn(
+                  'w-8 h-8 rounded-full flex items-center justify-center mx-auto transition-all text-xs font-bold',
+                  allDone
+                    ? 'bg-primary/20 text-primary cursor-default'
+                    : 'border-2 border-dashed border-border hover:border-primary hover:bg-primary/10 active:scale-95 text-muted-foreground',
+                )}
+              >
+                ✓✓
+              </button>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -233,14 +262,17 @@ function SetTable({ exercise, loggedValues, completedSets, onLogValue, onComplet
                 </td>
                 {columns.map(col => {
                   const planned = getPlannedValue(exercise, col, setIdx);
-                  const actual = loggedValues[exercise.id]?.[setIdx]?.[col] ?? '';
+                  const logged = loggedValues[exercise.id]?.[setIdx]?.[col];
+                  // Show logged value if the athlete typed one, otherwise fall back to the
+                  // planned value so the athlete can see targets without re-typing them.
+                  const displayValue = (logged !== undefined && logged !== '') ? logged : planned;
                   return (
                     <td key={col} className="py-1.5 px-1.5">
                       <input
                         type="text"
                         inputMode="decimal"
-                        value={actual}
-                        placeholder={planned || '—'}
+                        value={displayValue}
+                        placeholder="—"
                         onChange={e => onLogValue(exercise.id, setIdx, col, e.target.value)}
                         disabled={isDone}
                         className={cn(
@@ -248,6 +280,8 @@ function SetTable({ exercise, loggedValues, completedSets, onLogValue, onComplet
                           'focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary',
                           'disabled:opacity-50 disabled:cursor-not-allowed',
                           isDone && 'line-through text-muted-foreground',
+                          // Distinguish pre-filled planned values (not yet confirmed by athlete)
+                          !logged && planned && !isDone && 'text-muted-foreground italic',
                         )}
                       />
                     </td>
@@ -353,12 +387,29 @@ export default function AthleteSessionPage() {
     }));
   }
 
+  /** Auto-log the planned value for every column in a set that the athlete
+   *  hasn't typed a value for, so the Borg/completion payload captures the
+   *  target values even when the athlete just taps the check without editing. */
+  function autoFillPlanned(ex: ExerciseSummary, setIdx: number) {
+    const cols = getParamColumns(ex);
+    cols.forEach(col => {
+      const already = loggedValues[ex.id]?.[setIdx]?.[col];
+      if (already !== undefined && already !== '') return;
+      const planned = getPlannedValue(ex, col, setIdx);
+      if (planned) handleLogValue(ex.id, setIdx, col, planned);
+    });
+  }
+
   function handleCompleteSet(exerciseId: string, setIdx: number) {
     const doneArr = completedSets[exerciseId] ?? [];
     if (doneArr.includes(setIdx)) return; // already marked
 
     const ex = currentExercise;
     if (!ex) return;
+
+    // Persist planned values for any cell the athlete didn't manually fill
+    autoFillPlanned(ex, setIdx);
+
     const setCount = getSetCount(ex);
     const newDoneArr = [...doneArr, setIdx];
     const allSetsDone = newDoneArr.length >= setCount &&
@@ -382,6 +433,34 @@ export default function AthleteSessionPage() {
     } else {
       // Between sets — rest then return
       startRest(restSecs, () => setPhase('active'));
+    }
+  }
+
+  /** Mark every remaining set for the current exercise as done in one tap. */
+  function handleMarkAll(exerciseId: string) {
+    const ex = currentExercise;
+    if (!ex || ex.id !== exerciseId) return;
+    const setCount = getSetCount(ex);
+    const doneArr = completedSets[exerciseId] ?? [];
+    const undone = Array.from({ length: setCount }, (_, i) => i).filter(i => !doneArr.includes(i));
+    if (undone.length === 0) return;
+
+    // Auto-fill planned values for every undone set
+    undone.forEach(setIdx => autoFillPlanned(ex, setIdx));
+
+    const newDoneArr = [...doneArr, ...undone];
+    setCompletedSets(prev => ({ ...prev, [exerciseId]: newDoneArr }));
+
+    const isLastExercise = exerciseIdx === (currentSection?.exercises.length ?? 0) - 1;
+    const isLastSection = sectionIdx === sections.length - 1;
+    const restSecs = getRestSeconds(ex);
+
+    if (isLastExercise && isLastSection) {
+      startRest(restSecs, () => { setPhase('done'); setBorgSheetOpen(true); });
+    } else if (isLastExercise) {
+      startRest(restSecs, () => setPhase('sectionDone'));
+    } else {
+      startRest(restSecs, () => { setExerciseIdx(i => i + 1); setPhase('active'); });
     }
   }
 
@@ -660,6 +739,7 @@ export default function AthleteSessionPage() {
                   completedSets={completedSets}
                   onLogValue={handleLogValue}
                   onCompleteSet={handleCompleteSet}
+                  onMarkAll={handleMarkAll}
                 />
 
                 {/* Planned info chip */}

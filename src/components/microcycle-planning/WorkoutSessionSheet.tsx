@@ -1670,6 +1670,21 @@ export function WorkoutSessionSheet({
       return params;
     };
 
+    // Derive the list of params the athlete should see (visible columns in the set table).
+    // Excludes frequency and set-count params; applies any visibility overrides the coach
+    // toggled in the Configure Parameters dialog.
+    const adhocVisibleParams: string[] = methodEntries
+      .filter(e => !e.isFrequencyParameter && !e.isSetParameter)
+      .filter(e => {
+        const override = parameterVisibility[e.parameterName];
+        if (typeof override === 'boolean') return override;
+        return e.showInGridByDefault !== false;
+      })
+      .map(e => e.parameterName);
+
+    // Build the per-set parameter map once (same for every exercise in this batch)
+    const sharedParams = buildExerciseParams();
+
     // Create new exercises with parameterSource marker
     const newExercises = selectedExercisesForMethod.map((ex, index) => {
       return {
@@ -1679,7 +1694,7 @@ export function WorkoutSessionSheet({
         methodId,
         categoryName: categoryName || section.name,
         order: section.exercises.length + index,
-        parameters: buildExerciseParams(),
+        parameters: sharedParams,
         parameterSource: 'toolbox' as const, // Mark as toolbox-sourced
       } as WorkoutExercise;
     });
@@ -1739,7 +1754,11 @@ export function WorkoutSessionSheet({
         sessionIndex,
         order: section.exercises.length + index,
         sectionId: currentSectionId,
-        parameterSource: 'toolbox' as const, // Mark as toolbox-sourced to skip periodization
+        parameterSource: 'toolbox' as const,
+        // Carry planned params + visible column list so athlete_schedule
+        // sync can populate the set table without a periodization lookup.
+        adhocPlannedParams: newExercises[index]?.parameters ?? sharedParams,
+        adhocVisibleParams,
       }));
       
       onDistributionChange([...allExerciseDistribution, ...newDistributionEntries]);

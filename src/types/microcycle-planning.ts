@@ -113,6 +113,10 @@ export interface ExerciseDistribution {
   circuitComments?: string;
   // Per-exercise parameter overrides set via AI (take precedence over method-level periodization params)
   parameterOverrides?: Record<string, string | number>;
+  // For ad-hoc (toolbox-sourced) exercises: store the full planned params and visible param list
+  // so they flow through to athlete_schedule without needing a periodization-table lookup.
+  adhocPlannedParams?: Record<string, string | number>;
+  adhocVisibleParams?: string[];
 }
 
 export interface SessionSection {
