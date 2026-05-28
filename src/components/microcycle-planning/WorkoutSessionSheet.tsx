@@ -855,9 +855,16 @@ export function WorkoutSessionSheet({
       }
       
       prevExerciseCountRef.current = currentCount;
+    } else if (isOpen && exercises.length === 0 && !hasInitializedRef.current) {
+      // Opening for a new/empty session — reset to blank so stale exercises from a
+      // previously-viewed session don't bleed through (workoutSections useState only
+      // runs on mount, not on subsequent opens).
+      setWorkoutSections([{ id: 'section-0', name: 'Uncategorized', order: 0, exercises: [] }]);
+      hasInitializedRef.current = true;
+      prevExerciseCountRef.current = 0;
     }
   }, [isOpen, exercises.length, dayDate, sessionIndex, parameterValuesKey]);
-  
+
   // Reset initialization flag when dialog closes
   useEffect(() => {
     if (!isOpen) {
