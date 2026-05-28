@@ -86,6 +86,16 @@ const App = () => (
               <Route path="/athlete/connect" element={<AthleteConnectPage />} />
               <Route path="/athlete/onboarding" element={<AthleteAuthGuard><AthleteOnboardingPage /></AthleteAuthGuard>} />
 
+              {/* Athlete session — full-screen, no nav shell */}
+              <Route
+                path="/athlete/session"
+                element={
+                  <AthleteAuthGuard>
+                    <AthleteSessionPage />
+                  </AthleteAuthGuard>
+                }
+              />
+
               {/* Athlete app — protected shell with nested tabs */}
               <Route
                 path="/athlete"
@@ -100,7 +110,6 @@ const App = () => (
                 <Route path="plan" element={<AthletePlanPage />} />
                 <Route path="messages" element={<AthleteMessagesPage />} />
                 <Route path="profile" element={<AthleteProfilePage />} />
-                <Route path="session" element={<AthleteSessionPage />} />
               </Route>
 
               <Route

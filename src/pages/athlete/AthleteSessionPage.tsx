@@ -430,7 +430,7 @@ export default function AthleteSessionPage() {
 
   if (phase === 'overview') {
     return (
-      <div className="flex flex-col h-screen bg-background">
+      <div className="flex flex-col h-screen bg-background max-w-[480px] mx-auto">
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
           <button
@@ -503,7 +503,7 @@ export default function AthleteSessionPage() {
 
   if (phase === 'rest') {
     return (
-      <div className="flex flex-col h-screen bg-background items-center justify-center gap-8 px-6">
+      <div className="flex flex-col h-screen bg-background items-center justify-center gap-8 px-6 max-w-[480px] mx-auto">
         <div className="flex flex-col items-center gap-2">
           <Timer className="h-8 w-8 text-primary opacity-70" />
           <p className="text-lg font-semibold text-muted-foreground">Rest</p>
@@ -552,7 +552,7 @@ export default function AthleteSessionPage() {
     const nextSection = sections[sectionIdx + 1];
 
     return (
-      <div className="flex flex-col h-screen bg-background items-center justify-center gap-6 px-6">
+      <div className="flex flex-col h-screen bg-background items-center justify-center gap-6 px-6 max-w-[480px] mx-auto">
         <CheckCircle2 className="h-16 w-16 text-green-500" />
         <div className="text-center">
           <p className="text-2xl font-bold">Section Complete!</p>
@@ -597,7 +597,7 @@ export default function AthleteSessionPage() {
     const totalExercisesInSection = currentSection?.exercises.length ?? 0;
 
     return (
-      <div className="flex flex-col h-screen bg-background">
+      <div className="flex flex-col h-screen bg-background max-w-[480px] mx-auto">
         {/* Header */}
         <div className="flex items-center gap-2 px-4 py-3 border-b shrink-0">
           <button
