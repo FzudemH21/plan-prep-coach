@@ -102,7 +102,7 @@ export default function AthleteConnectPage() {
       if (linkError) throw new Error(`Could not link account: ${linkError.message}`);
 
       setStep('success');
-      setTimeout(() => navigate('/athlete/today'), 2500);
+      setTimeout(() => navigate('/athlete/onboarding'), 2500);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong. Please try again.');
     } finally {

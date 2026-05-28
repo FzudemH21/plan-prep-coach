@@ -183,10 +183,22 @@ function AppAccountCard({ athlete }: { athlete: Athlete }) {
   const handleCreate = async () => {
     setCreating(true);
     try {
+      const profileData = {
+        firstName: athlete.firstName,
+        middleName: athlete.middleName,
+        lastName: athlete.lastName,
+        birthday: athlete.birthday,
+        sex: athlete.sex,
+        sports: athlete.sports ?? (athlete.sport ? [athlete.sport] : []),
+        team: athlete.team,
+        occupation: athlete.occupation,
+        dailyActivityLevel: athlete.dailyActivityLevel,
+      };
       const conn = await createConnection(
         athlete.id,
         `${athlete.firstName} ${athlete.lastName}`.trim(),
         athlete.email ?? undefined,
+        profileData,
       );
       setInviteCode(conn.inviteCode);
       setShowInviteDialog(true);

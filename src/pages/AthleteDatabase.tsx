@@ -1,14 +1,41 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
+import { useAthleteConnections } from '@/hooks/useAthleteConnections';
+import type { AthleteProfileData } from '@/hooks/useAthleteConnections';
 import { AthleteGroupSidebar } from '@/components/athletes/AthleteGroupSidebar';
 import { AthleteProfileView } from '@/components/athletes/AthleteProfileView';
 import { Button } from '@/components/ui/button';
 import { Plus, Users } from 'lucide-react';
+import type { Athlete } from '@/types/athlete';
 
 export default function AthleteDatabase() {
   const athleteData = useAthletes();
   const { deleteEventsForAthlete } = useCalendarEvents();
+  const { getConnectionForAthlete, syncProfileToConnection } = useAthleteConnections();
+
+  const handleUpdateAthlete = useCallback(async (
+    athlete: Athlete,
+    updates: Partial<Omit<Athlete, 'id' | 'createdAt'>>,
+  ) => {
+    await athleteData.updateAthlete(athlete.id, updates);
+    const connection = getConnectionForAthlete(athlete.id);
+    if (connection) {
+      const merged = { ...athlete, ...updates };
+      const profileData: AthleteProfileData = {
+        firstName: merged.firstName,
+        middleName: merged.middleName,
+        lastName: merged.lastName,
+        birthday: merged.birthday,
+        sex: merged.sex,
+        sports: merged.sports ?? (merged.sport ? [merged.sport] : []),
+        team: merged.team,
+        occupation: merged.occupation,
+        dailyActivityLevel: merged.dailyActivityLevel,
+      };
+      syncProfileToConnection(connection.id, profileData).catch(console.error);
+    }
+  }, [athleteData, getConnectionForAthlete, syncProfileToConnection]);
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
   const [isNewAthlete, setIsNewAthlete] = useState(false);
   const [selectedGroupForNew, setSelectedGroupForNew] = useState<string | null>(null);
@@ -112,7 +139,7 @@ export default function AthleteDatabase() {
         {selectedAthlete ? (
           <AthleteProfileView
             athlete={selectedAthlete}
-            onUpdateAthlete={(updates) => athleteData.updateAthlete(selectedAthlete.id, updates)}
+            onUpdateAthlete={(updates) => handleUpdateAthlete(selectedAthlete, updates)}
             onDeleteAthlete={() => {
               athleteData.deleteAthlete(selectedAthlete.id);
               deleteEventsForAthlete(selectedAthlete.id);

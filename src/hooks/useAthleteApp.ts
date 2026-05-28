@@ -1,6 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import type { AthleteProfileData } from '@/hooks/useAthleteConnections';
+
+export type { AthleteProfileData };
 
 export interface AthleteConnection {
   id: string;
@@ -11,6 +14,7 @@ export interface AthleteConnection {
   inviteCode: string;
   connectedAt: string | null;
   weeksAhead: number;
+  profileData: AthleteProfileData;
 }
 
 export interface ExerciseSummary {
@@ -74,6 +78,7 @@ export function useAthleteApp() {
           inviteCode: connData.invite_code,
           connectedAt: connData.connected_at,
           weeksAhead: connData.weeks_ahead ?? 4,
+          profileData: (connData.profile_data as AthleteProfileData) ?? {},
         };
         setConnection(conn);
 
@@ -111,6 +116,17 @@ export function useAthleteApp() {
     load();
   }, [user, authLoading, isAthlete]);
 
+  const updateProfile = useCallback(async (patch: AthleteProfileData) => {
+    if (!connection) return;
+    const merged = { ...connection.profileData, ...patch };
+    const { error } = await supabase
+      .from('athlete_connections')
+      .update({ profile_data: merged })
+      .eq('id', connection.id);
+    if (error) throw error;
+    setConnection(prev => prev ? { ...prev, profileData: merged } : prev);
+  }, [connection]);
+
   const getTodayEntry = (): AthleteScheduleEntry | null => {
     const today = new Date().toISOString().slice(0, 10);
     return schedule.find(e => e.date === today) ?? null;
@@ -121,5 +137,5 @@ export function useAthleteApp() {
     return schedule.filter(e => e.date >= today).slice(0, n);
   };
 
-  return { connection, schedule, loading, error, isAthlete, getTodayEntry, getUpcomingDays };
+  return { connection, schedule, loading, error, isAthlete, getTodayEntry, getUpcomingDays, updateProfile };
 }
