@@ -410,45 +410,98 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
 
   const handleDeleteSession = useCallback((dayDate: string, sessionIndex: number) => {
     const currentSessions = daySplitStates[dayDate] ?? 1;
-    
+
+    let newExercises: ExerciseDistribution[];
+    let newSections: SessionSection[];
+    let newSupersetsVal: SupersetMapping;
+    let newDaySplitStates: Record<string, number>;
+    let newTrainingDays: TrainingDay[];
+    let newDailyIntensityData: typeof dailyIntensityData;
+
     if (currentSessions <= 1) {
-      // Last session - set to off
-      setExerciseDistribution(prev => prev.filter(ex => ex.dayDate !== dayDate));
-      setSessionSections(prev => prev.filter(s => s.dayDate !== dayDate));
-      setSupersets(prev => {
-        const newSupersets = { ...prev };
-        delete newSupersets[dayDate];
-        return newSupersets;
-      });
-      setDaySplitStates(prev => ({ ...prev, [dayDate]: 0 }));
-      setTrainingDays(prev =>
-        prev.map(day => day.date === dayDate ? { ...day, sessions: 0, sessionNames: [], intensity: 'off' as IntensityLevel } : day)
+      // Last session — clear the day and set intensity to 'off'
+      newExercises = exerciseDistribution.filter(ex => ex.dayDate !== dayDate);
+      newSections = sessionSections.filter(s => s.dayDate !== dayDate);
+      newSupersetsVal = { ...supersets };
+      delete newSupersetsVal[dayDate];
+      newDaySplitStates = { ...daySplitStates, [dayDate]: 0 };
+      newTrainingDays = trainingDays.map(day =>
+        day.date === dayDate
+          ? { ...day, sessions: 0, sessionNames: [], intensity: 'off' as IntensityLevel }
+          : day
       );
-      setDailyIntensityData(prev =>
-        prev.map(di => di.date === dayDate ? { ...di, intensity: 'off' } : di)
+      newDailyIntensityData = dailyIntensityData.map(di =>
+        di.date === dayDate ? { ...di, intensity: 'off' } : di
       );
-      toast({ title: "Last session deleted", description: "Day intensity set to 'off'" });
-      return;
+    } else {
+      // Remove the target session; shift indices of later sessions down by 1
+      newExercises = exerciseDistribution
+        .filter(ex => !(ex.dayDate === dayDate && ex.sessionIndex === sessionIndex))
+        .map(ex =>
+          ex.dayDate === dayDate && ex.sessionIndex > sessionIndex
+            ? { ...ex, sessionIndex: ex.sessionIndex - 1 }
+            : ex
+        );
+      newSections = sessionSections
+        .filter(s => !(s.dayDate === dayDate && s.sessionIndex === sessionIndex))
+        .map(s =>
+          s.dayDate === dayDate && s.sessionIndex > sessionIndex
+            ? { ...s, sessionIndex: s.sessionIndex - 1 }
+            : s
+        );
+      newSupersetsVal = supersets;   // supersets not affected for mid-session deletes
+      newDaySplitStates = { ...daySplitStates, [dayDate]: currentSessions - 1 };
+      newTrainingDays = trainingDays;
+      newDailyIntensityData = dailyIntensityData;
     }
-    
-    // Delete exercises and shift
-    setExerciseDistribution(prev =>
-      prev.filter(ex => !(ex.dayDate === dayDate && ex.sessionIndex === sessionIndex))
-        .map(ex => ex.dayDate === dayDate && ex.sessionIndex > sessionIndex
-          ? { ...ex, sessionIndex: ex.sessionIndex - 1 }
-          : ex)
-    );
-    
-    setSessionSections(prev =>
-      prev.filter(s => !(s.dayDate === dayDate && s.sessionIndex === sessionIndex))
-        .map(s => s.dayDate === dayDate && s.sessionIndex > sessionIndex
-          ? { ...s, sessionIndex: s.sessionIndex - 1 }
-          : s)
-    );
-    
-    setDaySplitStates(prev => ({ ...prev, [dayDate]: currentSessions - 1 }));
-    toast({ title: "Session deleted" });
-  }, [daySplitStates, toast]);
+
+    // Apply React state
+    setExerciseDistribution(newExercises);
+    setSessionSections(newSections);
+    setSupersets(newSupersetsVal);
+    setDaySplitStates(newDaySplitStates);
+    setTrainingDays(newTrainingDays);
+    setDailyIntensityData(newDailyIntensityData);
+
+    // IMMEDIATE localStorage write (bypass debounce) — prevents stale data on page refresh
+    if (selectedAssignmentId) {
+      const storageKey = `athlete-assignment-${selectedAssignmentId}`;
+      const savePayload = {
+        exerciseDistribution: newExercises,
+        sessionSections: newSections,
+        supersets: newSupersetsVal,
+        parameterValues,
+        dailyIntensity: newDailyIntensityData,
+        trainingDays: newTrainingDays,
+        daySplitStates: newDaySplitStates,
+        sessionIntensities,
+        testEventDays,
+        lastModified: new Date().toISOString(),
+      };
+      localStorage.setItem(storageKey, JSON.stringify(savePayload));
+      lastSavedStateRef.current = JSON.stringify({
+        exerciseDistribution: newExercises,
+        sessionSections: newSections,
+        supersets: newSupersetsVal,
+        parameterValues,
+        dailyIntensity: newDailyIntensityData,
+        trainingDays: newTrainingDays,
+        daySplitStates: newDaySplitStates,
+        sessionIntensities,
+        testEventDays,
+      });
+      setLastSavedAt(new Date().toISOString());
+    }
+
+    toast({
+      title: currentSessions <= 1 ? "Last session deleted" : "Session deleted",
+      ...(currentSessions <= 1 ? { description: "Day intensity set to 'off'" } : {}),
+    });
+  }, [
+    daySplitStates, exerciseDistribution, sessionSections, supersets,
+    trainingDays, dailyIntensityData, parameterValues, sessionIntensities,
+    testEventDays, selectedAssignmentId, toast,
+  ]);
 
   // Move a session from one day to another (for drag-and-drop)
   const handleMoveSession = useCallback((
