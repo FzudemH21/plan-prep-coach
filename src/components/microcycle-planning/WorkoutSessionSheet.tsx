@@ -377,8 +377,12 @@ export function WorkoutSessionSheet({
                   {};
                 
                 // PRIMARY: Derive parameters from storedParams (method periodization grid)
+                // Filter out _unit keys and per-set keys (e.g. Reps_set1) — the latter can
+                // appear when storedParams was previously written by handleSave which stores
+                // the full expanded exercise.parameters (base + per-set).  Treating per-set
+                // keys as base params causes column bloat and can make visibleParams empty.
                 let methodParams: { name: string; type: string; isSetParameter?: boolean; defaultValue?: any; unit?: string }[] = Object.keys(storedParams)
-                  .filter(k => !k.endsWith('_unit'))
+                  .filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k))
                   .map((name) => ({
                     name,
                     type: typeof (storedParams as any)[name] === 'number' ? 'number' : 'text',
@@ -648,8 +652,12 @@ export function WorkoutSessionSheet({
         {};
       
       // PRIMARY: Derive parameters from storedParams (method periodization grid)
+      // Filter out _unit keys and per-set keys (e.g. Reps_set1) — the latter can
+      // appear when storedParams was previously written by handleSave which stores
+      // the full expanded exercise.parameters (base + per-set).  Treating per-set
+      // keys as base params causes column bloat and can make visibleParams empty.
       let methodParams: { name: string; type: string; isSetParameter?: boolean; defaultValue?: any; unit?: string }[] = Object.keys(storedParams)
-        .filter(k => !k.endsWith('_unit'))
+        .filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k))
         .map((name) => ({
           name,
           type: typeof (storedParams as any)[name] === 'number' ? 'number' : 'text',
