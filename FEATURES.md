@@ -79,14 +79,14 @@ Claude Chat (browser) is my sparring partner for planning, discussion, and promp
 | Priority | Feature | Status |
 |----------|---------|--------|
 | P0 | **Invite flow** — coach sends invite link → athlete opens app → language selection → name/birthday/photo onboarding | ⬜ Open |
-| P0 | **Today tab** — personalized greeting, today's session card with planned daily intensity (Borg CR10, color-coded), completion ring, missed session banner | ⬜ Open |
-| P0 | **Session flow** — preview → section navigation (swipe, dot indicators) → exercise cards with planned values (from periodization table) → set logging (actual weight/reps) → rest timer | ⬜ Open |
-| P0 | **Post-session** — completion screen, Borg CR10 rating (0–10), optional comment, summary (duration, exercises logged) | ⬜ Open |
-| P0 | **Planned vs. actual storage** — athlete's logged sets saved to Supabase, visible to coach in Plan Review dialog (feeds Adherence + Planned vs. Real placeholders) | ⬜ Open |
-| P1 | **Plan tab** — shows assigned mesocycle name, current week/microcycle, week calendar strip with session dots | ⬜ Open |
-| P1 | **Activity history** — week strip calendar + timeline of past days, completed session cards (session name, planned vs perceived intensity, duration) | ⬜ Open |
+| P0 | **Today tab** — personalized greeting, today's session card with planned daily intensity (Borg CR10, color-coded), completion ring, missed session banner | ✅ Done — greeting, today's session card(s), intensity badge, coming-up strip (next 5 consecutive days with colour-coded dots). Completion ring + missed session banner open. |
+| P0 | **Session flow** — preview → section navigation (swipe, dot indicators) → exercise cards with planned values (from periodization table) → set logging (actual weight/reps) → rest timer | ✅ Done — exercise list, complete session button, Borg CR10 bottom sheet (vertical list, official labels), saves to athlete_session_logs. Set logging + rest timer open (Phase 2). |
+| P0 | **Post-session** — completion screen, Borg CR10 rating (0–10), optional comment, summary (duration, exercises logged) | ✅ Done — Borg CR10 rating + optional notes saved to Supabase. Summary screen open. |
+| P0 | **Planned vs. actual storage** — athlete's logged sets saved to Supabase, visible to coach in Plan Review dialog (feeds Adherence + Planned vs. Real placeholders) | ✅ Partial — session completion + Borg rating stored in athlete_session_logs. Set-by-set logging open. |
+| P1 | **Plan tab** — shows assigned mesocycle name, current week/microcycle, week calendar strip with session dots | ✅ Done — arrow week navigation (← DD.MM. – DD.MM.YYYY →), Mon–Sun day list, intensity badges, session cards, today highlight, past days dimmed, coach-controlled weeks-ahead visibility limit. |
+| P1 | **Activity history** — week strip calendar + timeline of past days, completed session cards (session name, planned vs perceived intensity, duration) | ✅ Partial — recent sessions visible in Profile tab. Dedicated history view open. |
 | P1 | **Messages** — text chat with coach, timestamps, read receipts | ⬜ Open |
-| P1 | **Profile tab** — avatar (initials fallback), settings, sessions completed + streak stats, parameter progress charts (from Parameter Database — Squat 1RM, Sprint 30m, VO2max etc.) | ⬜ Open |
+| P1 | **Profile tab** — avatar (initials fallback), settings, sessions completed + streak stats, parameter progress charts (from Parameter Database — Squat 1RM, Sprint 30m, VO2max etc.) | ✅ Done — initials avatar, name/email, sessions completed + day streak stats, recent session history (last 10 with date + RPE), sign out. Parameter progress charts open (requires metrics wiring). |
 
 ### Phase 2 — Enrichment
 
