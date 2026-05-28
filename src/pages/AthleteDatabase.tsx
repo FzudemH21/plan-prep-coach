@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
@@ -12,7 +12,52 @@ import type { Athlete } from '@/types/athlete';
 export default function AthleteDatabase() {
   const athleteData = useAthletes();
   const { deleteEventsForAthlete } = useCalendarEvents();
-  const { getConnectionForAthlete, syncProfileToConnection } = useAthleteConnections();
+  const { connections, loading: connectionsLoading, getConnectionForAthlete, syncProfileToConnection } = useAthleteConnections();
+
+  // ── Load-time sync: pull athlete-edited profile_data back into the coach blob ──
+  // Runs once per session after both data sources are ready.
+  // This ensures athlete changes (sport, team, etc.) are visible in the coach app
+  // and prevents stale coach-blob values from being saved back to profile_data.
+  const syncedConnIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (athleteData.isLoading || connectionsLoading) return;
+    for (const conn of connections) {
+      if (syncedConnIds.current.has(conn.id)) continue;
+      syncedConnIds.current.add(conn.id);
+
+      const pd = conn.profileData;
+      if (!pd || Object.keys(pd).length === 0) continue;
+
+      const athlete = athleteData.getAthlete(conn.athleteLocalId);
+      if (!athlete) continue;
+
+      // Build a patch of only the fields that differ — avoids unnecessary writes
+      const patch: Partial<Omit<Athlete, 'id' | 'createdAt'>> = {};
+      if (pd.firstName !== undefined && pd.firstName !== athlete.firstName)
+        patch.firstName = pd.firstName;
+      if (pd.lastName !== undefined && pd.lastName !== athlete.lastName)
+        patch.lastName = pd.lastName;
+      if (pd.birthday !== undefined && pd.birthday !== athlete.birthday)
+        patch.birthday = pd.birthday ?? null;
+      if (pd.sex !== undefined && pd.sex !== athlete.sex)
+        patch.sex = pd.sex ?? null;
+      const pdSport = pd.sports?.[0] ?? null;
+      if (pdSport !== athlete.sport) patch.sport = pdSport;
+      if (pd.team !== undefined && pd.team !== athlete.team)
+        patch.team = pd.team ?? null;
+      if (pd.occupation !== undefined && pd.occupation !== athlete.occupation)
+        patch.occupation = pd.occupation ?? null;
+      if (pd.dailyActivityLevel !== undefined && pd.dailyActivityLevel !== athlete.dailyActivityLevel)
+        patch.dailyActivityLevel = pd.dailyActivityLevel ?? null;
+
+      if (Object.keys(patch).length > 0) {
+        // Call updateAthlete directly — bypass handleUpdateAthlete to avoid
+        // re-syncing the freshly-read profile_data back to Supabase.
+        athleteData.updateAthlete(athlete.id, patch);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [athleteData.isLoading, connectionsLoading, connections]);
 
   const handleUpdateAthlete = useCallback(async (
     athlete: Athlete,
