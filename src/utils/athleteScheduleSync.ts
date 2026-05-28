@@ -86,6 +86,8 @@ export async function syncAthleteSchedule(
 ): Promise<void> {
   if (!connectionId || trainingDays.length === 0) return;
 
+  console.log(`[syncAthleteSchedule] ▶ start | connectionId=${connectionId} | trainingDays=${trainingDays.length} | exercises=${exercises.length}`);
+
   // Build a lookup: date → mesocycle/microcycle name + ids
   const mesoByDate = new Map<string, {
     mesoName: string;
@@ -254,6 +256,7 @@ export async function syncAthleteSchedule(
   // Delete all dates covered by trainingDays first so cleared days are removed.
   // This must happen even when rows is empty (full calendar clear case).
   const allDates = trainingDays.map(td => td.date);
+  console.log(`[syncAthleteSchedule] plan: DELETE ${allDates.length} dates → UPSERT ${rows.length} training-day rows`);
   const DEL_BATCH = 200;
   for (let i = 0; i < allDates.length; i += DEL_BATCH) {
     const batch = allDates.slice(i, i + DEL_BATCH);
@@ -263,26 +266,31 @@ export async function syncAthleteSchedule(
       .eq('athlete_connection_id', connectionId)
       .in('date', batch);
     if (delError) {
-      console.error('[athleteScheduleSync] delete error:', delError.message);
+      console.error(`[syncAthleteSchedule] ✗ DELETE error (code ${delError.code}):`, delError.message, delError.hint ?? '');
+    } else {
+      console.log(`[syncAthleteSchedule] ✓ DELETE batch: ${batch.length} dates`);
     }
   }
 
   if (rows.length === 0) {
-    console.log(`[athleteScheduleSync] cleared ${allDates.length} dates for connection ${connectionId}`);
+    console.log(`[syncAthleteSchedule] ✓ cleared ${allDates.length} dates for connection ${connectionId}`);
     return;
   }
 
-  // Re-insert active training days
+  // Upsert active training days (idempotent — handles retries and partial DELETE failures)
   const BATCH = 200;
   for (let i = 0; i < rows.length; i += BATCH) {
     const batch = rows.slice(i, i + BATCH);
     const { error } = await supabase
       .from('athlete_schedule')
-      .insert(batch);
+      .upsert(batch, { onConflict: 'athlete_connection_id,date' });
     if (error) {
-      console.error('[athleteScheduleSync] insert error:', error.message);
+      console.error(`[syncAthleteSchedule] ✗ UPSERT error (code ${error.code}):`, error.message, error.hint ?? '');
+      throw new Error(`athlete_schedule upsert failed: ${error.message} (code: ${error.code})`);
+    } else {
+      console.log(`[syncAthleteSchedule] ✓ UPSERT batch: ${batch.length} rows`);
     }
   }
 
-  console.log(`[athleteScheduleSync] synced ${rows.length} days for connection ${connectionId}`);
+  console.log(`[syncAthleteSchedule] ✓ done — ${rows.length} rows synced for connection ${connectionId}`);
 }

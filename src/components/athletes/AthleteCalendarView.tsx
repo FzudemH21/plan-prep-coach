@@ -26,6 +26,8 @@ import {
 } from '@/utils/dateShifting';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { syncAthleteSchedule } from '@/utils/athleteScheduleSync';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -89,6 +91,9 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   // Global click suppression: swallow the very next click after any drag
   const suppressNextClickRef = useRef(false);
   const suppressNextClickTimeoutRef = useRef<number | null>(null);
+
+  // Prevent spamming the user with repeated "sync failed" toasts — show at most once per mount
+  const syncErrorShownRef = useRef(false);
   
   // Install global capture-phase click listener to swallow post-drag clicks
   useEffect(() => {
@@ -109,11 +114,12 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     };
   }, []);
 
+  const { user } = useAuth();
   const { programs, getProgram } = useTrainingPrograms();
   const athleteData = useAthletes();
   const { data: toolboxData } = useToolboxData();
   const { toast } = useToast();
-  const { getConnectionForAthlete } = useAthleteConnections();
+  const { getConnectionForAthlete, loading: connectionsLoading } = useAthleteConnections();
   const { addEvent: addCalendarEvent, addEvents: addCalendarEvents, deleteEvent: deleteCalendarEvent, getEventsForAthlete, getEventsForDate } = useCalendarEvents();
 
   // AI assistant state
@@ -149,9 +155,19 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   useEffect(() => {
     if (!editing.lastSavedAt || !selectedAssignmentId) return;
     const connection = getConnectionForAthlete(athlete.id);
-    if (!connection) return;
+    if (!connection) {
+      // Distinguish: connections still loading vs. athlete has no invite link
+      if (connectionsLoading) {
+        console.log('[autoSync] connections still loading — sync deferred to next edit');
+      } else {
+        console.warn('[autoSync] no connection found for athlete', athlete.id,
+          '— schedule sync skipped. Open the athlete profile → Invite tab and create an invite link to enable app sync.');
+      }
+      return;
+    }
     const assignment = editing.selectedAssignment;
     if (!assignment) return;
+    console.log(`[autoSync] ▶ syncing | connectionId=${connection.id} | trainingDays=${editing.trainingDays.length} | exercises=${editing.exerciseDistribution.length}`);
     syncAthleteSchedule(
       connection.id,
       assignment,
@@ -161,7 +177,18 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
       editing.parameterValues,
       editing.sessionSections,
       toolboxData?.entries,
-    ).catch(e => console.error('[autoSync] athlete schedule sync failed:', e));
+    ).catch(e => {
+      console.error('[autoSync] ✗ sync failed:', e);
+      // Show a toast once per mount so the coach knows something is wrong
+      if (!syncErrorShownRef.current) {
+        syncErrorShownRef.current = true;
+        toast({
+          title: 'Athlete schedule sync failed',
+          description: e?.message ?? 'Check the browser console (F12) for details.',
+          variant: 'destructive',
+        });
+      }
+    });
   // Only re-run when a save actually completes — not on every state change
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing.lastSavedAt]);
@@ -1158,10 +1185,25 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
               });
             }
             // Sync merged data to athlete_schedule
-            const mergeConnection = getConnectionForAthlete(athlete.id);
-            if (mergeConnection) {
+            // Use React state first; fall back to a direct Supabase query if connections
+            // haven't finished loading yet (avoids the race condition on first render).
+            let mergeConnectionId = getConnectionForAthlete(athlete.id)?.id;
+            if (!mergeConnectionId && user) {
+              const { data: connRow } = await supabase
+                .from('athlete_connections')
+                .select('id')
+                .eq('athlete_local_id', athlete.id)
+                .eq('coach_user_id', user.id)
+                .maybeSingle();
+              mergeConnectionId = connRow?.id;
+              if (mergeConnectionId) {
+                console.log('[ASSIGN] merge: resolved connectionId via direct Supabase query');
+              }
+            }
+            if (mergeConnectionId) {
+              console.log(`[ASSIGN] merge: syncing | connectionId=${mergeConnectionId} | days=${finalTrainingDays.length} | exercises=${filteredExercises.length}`);
               syncAthleteSchedule(
-                mergeConnection.id,
+                mergeConnectionId,
                 assignment as AthleteCalendarAssignment,
                 finalTrainingDays,
                 filteredExercises,
@@ -1169,7 +1211,10 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 program.parameterValues || {},
                 filteredSections,
                 toolboxData?.entries,
-              ).catch(e => console.error('[ASSIGN] athlete schedule sync (merge) failed:', e));
+              ).catch(e => console.error('[ASSIGN] ✗ athlete schedule sync (merge) failed:', e));
+            } else {
+              console.warn('[ASSIGN] merge: no connection found for athlete', athlete.id,
+                '— schedule not synced. Create an invite link for this athlete to enable app sync.');
             }
 
             await transferTestsEvents();
@@ -1191,11 +1236,26 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
             localStorage.setItem(storageKey, JSON.stringify(dataToSave));
             console.log('[ASSIGN] saved to localStorage key:', storageKey, '| daySplitStates keys:', Object.keys(dataToSave.daySplitStates).length, '| trainingDays:', dataToSave.trainingDays.length);
 
-            // Sync to athlete_schedule so the athlete app can read sessions
-            const connection = getConnectionForAthlete(athlete.id);
-            if (connection) {
+            // Sync to athlete_schedule so the athlete app can read sessions.
+            // Use React state first; fall back to a direct Supabase query if connections
+            // haven't finished loading yet (avoids the race condition on first render).
+            let createConnectionId = getConnectionForAthlete(athlete.id)?.id;
+            if (!createConnectionId && user) {
+              const { data: connRow } = await supabase
+                .from('athlete_connections')
+                .select('id')
+                .eq('athlete_local_id', athlete.id)
+                .eq('coach_user_id', user.id)
+                .maybeSingle();
+              createConnectionId = connRow?.id;
+              if (createConnectionId) {
+                console.log('[ASSIGN] create: resolved connectionId via direct Supabase query');
+              }
+            }
+            if (createConnectionId) {
+              console.log(`[ASSIGN] create: syncing | connectionId=${createConnectionId} | days=${dataToSave.trainingDays.length} | exercises=${dataToSave.exerciseDistribution.length}`);
               syncAthleteSchedule(
-                connection.id,
+                createConnectionId,
                 newAssignment,
                 dataToSave.trainingDays,
                 dataToSave.exerciseDistribution,
@@ -1203,7 +1263,10 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 dataToSave.parameterValues || {},
                 dataToSave.sessionSections,
                 toolboxData?.entries,
-              ).catch(e => console.error('[ASSIGN] athlete schedule sync failed:', e));
+              ).catch(e => console.error('[ASSIGN] ✗ athlete schedule sync failed:', e));
+            } else {
+              console.warn('[ASSIGN] create: no connection found for athlete', athlete.id,
+                '— schedule not synced. Create an invite link for this athlete to enable app sync.');
             }
 
             await transferTestsEvents();
@@ -1235,7 +1298,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
 
     setShowAssignDialog(false);
     setSelectedDate(null);
-  }, [athlete.id, athleteData, getProgram, addCalendarEvent, getEventsForAthlete, selectedAssignmentId, editing.mergeSessionData]);
+  }, [athlete.id, athleteData, getProgram, addCalendarEvent, getEventsForAthlete, selectedAssignmentId, editing.mergeSessionData, user]);
 
   const handleDeleteAssignment = () => {
     if (deleteAssignment) {
