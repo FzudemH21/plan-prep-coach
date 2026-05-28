@@ -143,6 +143,29 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   // Editing hook — must be declared before useAthleteAIContext which references editing.exerciseDistribution
   const editing = useAthleteCalendarEditing(selectedAssignmentId, assignments);
 
+  // Auto-sync to athlete_schedule whenever the editing hook persists a change to localStorage.
+  // This ensures manually-added sessions and exercises appear in the athlete app without
+  // requiring a full plan re-assignment.
+  useEffect(() => {
+    if (!editing.lastSavedAt || !selectedAssignmentId) return;
+    const connection = getConnectionForAthlete(athlete.id);
+    if (!connection) return;
+    const assignment = editing.selectedAssignment;
+    if (!assignment) return;
+    syncAthleteSchedule(
+      connection.id,
+      assignment,
+      editing.trainingDays,
+      editing.exerciseDistribution,
+      assignment.programName ?? 'Training Plan',
+      editing.parameterValues,
+      editing.sessionSections,
+      toolboxData?.entries,
+    ).catch(e => console.error('[autoSync] athlete schedule sync failed:', e));
+  // Only re-run when a save actually completes — not on every state change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing.lastSavedAt]);
+
   // Athlete-specific AI context
   const athleteAIContext = useAthleteAIContext({
     athlete,

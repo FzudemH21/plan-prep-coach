@@ -76,6 +76,9 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   // Test/Event days - stored independently of trainingDays so any calendar day can have them
   const [testEventDays, setTestEventDays] = useState<Record<string, { testNames: string[]; eventNames: string[] }>>({});
   
+  // Timestamp updated after each successful localStorage write — watchers use this to trigger Supabase sync
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+
   // Flag to prevent auto-save during initial load
   const [isInitializing, setIsInitializing] = useState(false);
   
@@ -344,6 +347,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       console.log('[autoSave] saved to localStorage:', storageKey, 'trainingDays.length:', savePayload.trainingDays.length);
       lastSavedStateRef.current = stateFingerprint;
       pendingSaveRef.current = null; // Clear pending after successful save
+      setLastSavedAt(new Date().toISOString());
     }, 300);
 
     // Cleanup timeout on unmount or deps change
@@ -863,6 +867,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         daySplitStates: newDaySplitStates,
         sessionIntensities,
       });
+      setLastSavedAt(new Date().toISOString());
     }
 
     toast({ title: "Day cleared" });
@@ -1084,6 +1089,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         daySplitStates: newDaySplitStates,
         sessionIntensities,
       });
+      setLastSavedAt(new Date().toISOString());
     }
 
     toast({ title: "Week cleared" });
@@ -1840,6 +1846,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
 
   return {
     // State
+    lastSavedAt,
     exerciseDistribution,
     sessionSections,
     supersets,
