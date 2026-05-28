@@ -110,10 +110,6 @@ function SessionLogRow({ log }: { log: SessionLog }) {
 // ── Profile edit form ─────────────────────────────────────────────────────────
 
 interface ProfileFormState {
-  firstName: string;
-  lastName: string;
-  birthday: string;
-  sex: string;
   sport: string;
   team: string;
   occupation: string;
@@ -125,25 +121,17 @@ function ProfileCard() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<ProfileFormState>({
-    firstName: '',
-    lastName: '',
-    birthday: '',
-    sex: '',
     sport: '',
     team: '',
     occupation: '',
     dailyActivityLevel: '',
   });
 
-  // Sync form from connection profileData
+  // Sync editable fields from connection profileData
   useEffect(() => {
     if (!connection) return;
     const p = connection.profileData;
     setForm({
-      firstName: p.firstName ?? connection.athleteName.split(' ')[0] ?? '',
-      lastName: p.lastName ?? connection.athleteName.split(' ').slice(1).join(' ') ?? '',
-      birthday: p.birthday ?? '',
-      sex: p.sex ?? '',
       sport: p.sports?.[0] ?? '',
       team: p.team ?? '',
       occupation: p.occupation ?? '',
@@ -155,10 +143,6 @@ function ProfileCard() {
     setSaving(true);
     try {
       await updateProfile({
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
-        birthday: form.birthday || null,
-        sex: form.sex || null,
         sports: form.sport.trim() ? [form.sport.trim()] : [],
         team: form.team.trim() || null,
         occupation: form.occupation.trim() || null,
@@ -173,14 +157,9 @@ function ProfileCard() {
   };
 
   const handleCancel = () => {
-    // Reset form to current values
     if (connection) {
       const p = connection.profileData;
       setForm({
-        firstName: p.firstName ?? connection.athleteName.split(' ')[0] ?? '',
-        lastName: p.lastName ?? connection.athleteName.split(' ').slice(1).join(' ') ?? '',
-        birthday: p.birthday ?? '',
-        sex: p.sex ?? '',
         sport: p.sports?.[0] ?? '',
         team: p.team ?? '',
         occupation: p.occupation ?? '',
@@ -196,6 +175,19 @@ function ProfileCard() {
     <div className="flex justify-between items-baseline py-1.5 border-b last:border-0">
       <span className="text-xs text-muted-foreground w-32 shrink-0">{label}</span>
       <span className="text-sm text-right">{value || <span className="text-muted-foreground/50 text-xs">Not set</span>}</span>
+    </div>
+  );
+
+  // Identity fields are always read-only (set during sign-up / by coach)
+  const identitySection = (
+    <div className="mb-3">
+      <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wide mb-1.5">
+        Identity · set during sign-up
+      </p>
+      {displayRow('First name', p.firstName)}
+      {displayRow('Last name', p.lastName)}
+      {displayRow('Date of birth', p.birthday)}
+      {displayRow('Sex', p.sex ? SEX_LABELS[p.sex] ?? p.sex : null)}
     </div>
   );
 
@@ -221,10 +213,8 @@ function ProfileCard() {
       <CardContent className="pt-0">
         {!editing ? (
           <div>
-            {displayRow('First name', p.firstName)}
-            {displayRow('Last name', p.lastName)}
-            {displayRow('Date of birth', p.birthday)}
-            {displayRow('Sex', p.sex ? SEX_LABELS[p.sex] ?? p.sex : null)}
+            {identitySection}
+            <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wide mb-1.5">Sport & context</p>
             {displayRow('Sport', p.sports?.[0])}
             {displayRow('Team / Club', p.team)}
             {displayRow('Occupation', p.occupation)}
@@ -232,31 +222,9 @@ function ProfileCard() {
           </div>
         ) : (
           <div className="space-y-3 pt-1">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">First name</Label>
-                <Input value={form.firstName} onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Last name</Label>
-                <Input value={form.lastName} onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))} />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Date of birth</Label>
-              <Input type="date" value={form.birthday} onChange={e => setForm(f => ({ ...f, birthday: e.target.value }))} max={new Date().toISOString().slice(0, 10)} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Sex</Label>
-              <Select value={form.sex} onValueChange={v => setForm(f => ({ ...f, sex: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="male">Male</SelectItem>
-                  <SelectItem value="female">Female</SelectItem>
-                  <SelectItem value="other">Other / prefer not to say</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Identity fields — read-only in edit mode too */}
+            {identitySection}
+            <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wide">Sport & context</p>
             <div className="space-y-1">
               <Label className="text-xs">Sport</Label>
               <Input value={form.sport} onChange={e => setForm(f => ({ ...f, sport: e.target.value }))} placeholder="e.g. 100m Sprint" />
