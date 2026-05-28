@@ -10,6 +10,7 @@ export interface AthleteConnection {
   athleteEmail: string | null;
   inviteCode: string;
   connectedAt: string | null;
+  weeksAhead: number;
 }
 
 export interface ExerciseSummary {
@@ -72,6 +73,7 @@ export function useAthleteApp() {
           athleteEmail: connData.athlete_email,
           inviteCode: connData.invite_code,
           connectedAt: connData.connected_at,
+          weeksAhead: connData.weeks_ahead ?? 4,
         };
         setConnection(conn);
 

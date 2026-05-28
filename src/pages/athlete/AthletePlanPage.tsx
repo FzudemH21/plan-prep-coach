@@ -1,52 +1,53 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Dumbbell, ChevronRight } from 'lucide-react';
+import { Dumbbell, ChevronRight, ChevronLeft } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAthleteApp, AthleteScheduleEntry } from '@/hooks/useAthleteApp';
 import { IntensityBadge, getDotColor } from '@/components/athlete-app/IntensityBadge';
 import { cn } from '@/lib/utils';
 
-// ── Date helpers ─────────────────────────────────────────────────────────────
-
-function toDateStr(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
+// ── Date helpers ──────────────────────────────────────────────────────────────
 
 function addDays(dateStr: string, n: number): string {
   const d = new Date(dateStr + 'T12:00:00');
-  return toDateStr(new Date(d.getTime() + n * 86400000));
+  return new Date(d.getTime() + n * 86400000).toISOString().slice(0, 10);
 }
 
-/** Returns the Monday (yyyy-MM-dd) of the week containing dateStr. */
+/** Monday of the week containing dateStr (Monday-based weeks). */
 function getMondayOf(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00');
   const dow = d.getDay(); // 0=Sun
   const diff = dow === 0 ? -6 : 1 - dow;
-  return toDateStr(new Date(d.getTime() + diff * 86400000));
+  return new Date(d.getTime() + diff * 86400000).toISOString().slice(0, 10);
 }
 
-function formatWeekLabel(mondayStr: string, currentWeekMonday: string): string {
-  if (mondayStr === currentWeekMonday) return 'This week';
-  const next = addDays(currentWeekMonday, 7);
-  if (mondayStr === next) return 'Next week';
-  const mon = new Date(mondayStr + 'T12:00:00');
-  return mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+/** Format date as DD.MM. (no year) */
+function fmtShort(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  const day = String(d.getDate()).padStart(2, '0');
+  const mon = String(d.getMonth() + 1).padStart(2, '0');
+  return `${day}.${mon}.`;
+}
+
+/** Format date as DD.MM.YYYY */
+function fmtFull(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  const day = String(d.getDate()).padStart(2, '0');
+  const mon = String(d.getMonth() + 1).padStart(2, '0');
+  return `${day}.${mon}.${d.getFullYear()}`;
 }
 
 function formatWeekRange(mondayStr: string): string {
-  const mon = new Date(mondayStr + 'T12:00:00');
-  const sun = new Date(mon.getTime() + 6 * 86400000);
-  const m = mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const s = sun.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  return `${m} – ${s}`;
+  const sunday = addDays(mondayStr, 6);
+  return `${fmtShort(mondayStr)} – ${fmtFull(sunday)}`;
 }
 
 function formatDayHeader(dateStr: string): { weekday: string; dateLabel: string } {
   const d = new Date(dateStr + 'T12:00:00');
   return {
     weekday: d.toLocaleDateString('en-US', { weekday: 'long' }),
-    dateLabel: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    dateLabel: `${fmtShort(dateStr).replace('.', '')}. ${d.toLocaleDateString('en-US', { month: 'short' })}`,
   };
 }
 
@@ -107,7 +108,6 @@ function DaySection({
 
   return (
     <div
-      id={`day-${dateStr}`}
       className={cn(
         'rounded-xl p-3 space-y-2',
         isToday && 'bg-primary/5 ring-1 ring-primary/20'
@@ -115,8 +115,11 @@ function DaySection({
     >
       {/* Day header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className={cn('text-sm font-semibold', isToday ? 'text-primary' : isPast ? 'text-muted-foreground' : 'text-foreground')}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={cn(
+            'text-sm font-semibold',
+            isToday ? 'text-primary' : isPast ? 'text-muted-foreground' : 'text-foreground'
+          )}>
             {weekday}
           </span>
           <span className="text-xs text-muted-foreground">{dateLabel}</span>
@@ -127,7 +130,7 @@ function DaySection({
           )}
         </div>
         {entry?.intensity && (
-          <div className={cn('w-2.5 h-2.5 rounded-full shrink-0', getDotColor(entry.intensity))} />
+          <div className={cn('w-2.5 h-2.5 rounded-full shrink-0 ml-2', getDotColor(entry.intensity))} />
         )}
       </div>
 
@@ -159,39 +162,43 @@ function DaySection({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function AthletePlanPage() {
-  const { schedule, loading, error } = useAthleteApp();
+  const { connection, schedule, loading, error } = useAthleteApp();
 
   const today = new Date().toISOString().slice(0, 10);
   const currentWeekMonday = getMondayOf(today);
+  const weeksAhead = connection?.weeksAhead ?? 4;
 
-  // Build sorted list of unique week mondays that have schedule data,
-  // always including the current week.
-  const weeks = useMemo(() => {
-    const set = new Set<string>([currentWeekMonday]);
-    schedule.forEach(e => set.add(getMondayOf(e.date)));
-    return Array.from(set).sort();
+  // Max week the athlete is allowed to see
+  const maxWeekMonday = getMondayOf(addDays(today, weeksAhead * 7));
+
+  // Min week: earliest Monday in schedule data (don't go further back than that)
+  const minWeekMonday = useMemo(() => {
+    if (schedule.length === 0) return currentWeekMonday;
+    return getMondayOf(schedule[0].date);
   }, [schedule, currentWeekMonday]);
 
   const [selectedWeek, setSelectedWeek] = useState<string>(currentWeekMonday);
 
-  // Build schedule lookup map
+  // Keep selectedWeek clamped if weeksAhead changes
+  const clampedWeek = selectedWeek > maxWeekMonday ? maxWeekMonday : selectedWeek;
+
+  const prevWeek = addDays(clampedWeek, -7);
+  const nextWeek = addDays(clampedWeek, 7);
+  const canGoPrev = prevWeek >= minWeekMonday;
+  const canGoNext = nextWeek <= maxWeekMonday;
+
+  // Schedule lookup map
   const scheduleMap = useMemo(() => {
     const m = new Map<string, AthleteScheduleEntry>();
     schedule.forEach(e => m.set(e.date, e));
     return m;
   }, [schedule]);
 
-  // Days in selected week (Mon–Sun)
-  const weekDays = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => addDays(selectedWeek, i));
-  }, [selectedWeek]);
-
-  // Scroll week strip to selected week pill
-  const weekStripRef = useRef<HTMLDivElement>(null);
-  const selectedPillRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    selectedPillRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-  }, [selectedWeek]);
+  // Days Mon–Sun for the selected week
+  const weekDays = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => addDays(clampedWeek, i)),
+    [clampedWeek]
+  );
 
   if (loading) {
     return (
@@ -211,40 +218,44 @@ export default function AthletePlanPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Page header */}
-      <div className="px-4 pt-4 pb-2 shrink-0">
-        <h1 className="text-xl font-bold">Plan</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">{formatWeekRange(selectedWeek)}</p>
-      </div>
+      {/* Week navigation header */}
+      <div className="flex items-center gap-2 px-3 py-3 border-b shrink-0">
+        <button
+          onClick={() => setSelectedWeek(prevWeek)}
+          disabled={!canGoPrev}
+          className={cn(
+            'w-9 h-9 flex items-center justify-center rounded-full transition-colors shrink-0',
+            canGoPrev
+              ? 'hover:bg-muted active:bg-muted/80'
+              : 'opacity-30 cursor-not-allowed'
+          )}
+          aria-label="Previous week"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
 
-      {/* Week strip */}
-      <div
-        ref={weekStripRef}
-        className="flex gap-2 px-4 pb-3 overflow-x-auto scrollbar-hide shrink-0"
-      >
-        {weeks.map(monday => {
-          const isSelected = monday === selectedWeek;
-          return (
-            <button
-              key={monday}
-              ref={isSelected ? selectedPillRef : undefined}
-              onClick={() => setSelectedWeek(monday)}
-              className={cn(
-                'shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-colors whitespace-nowrap',
-                isSelected
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              )}
-            >
-              {formatWeekLabel(monday, currentWeekMonday)}
-            </button>
-          );
-        })}
+        <p className="flex-1 text-center text-sm font-semibold tabular-nums">
+          {formatWeekRange(clampedWeek)}
+        </p>
+
+        <button
+          onClick={() => setSelectedWeek(nextWeek)}
+          disabled={!canGoNext}
+          className={cn(
+            'w-9 h-9 flex items-center justify-center rounded-full transition-colors shrink-0',
+            canGoNext
+              ? 'hover:bg-muted active:bg-muted/80'
+              : 'opacity-30 cursor-not-allowed'
+          )}
+          aria-label="Next week"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
       </div>
 
       {/* Day list */}
       <ScrollArea className="flex-1 px-4">
-        <div className="space-y-2 pb-4">
+        <div className="space-y-2 py-3 pb-4">
           {weekDays.map(dateStr => (
             <DaySection
               key={dateStr}

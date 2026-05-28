@@ -18,6 +18,7 @@ export interface AthleteConnection {
   inviteCode: string;
   connectedAt: string | null;
   createdAt: string;
+  weeksAhead: number;
 }
 
 function rowToConnection(row: Record<string, unknown>): AthleteConnection {
@@ -31,6 +32,7 @@ function rowToConnection(row: Record<string, unknown>): AthleteConnection {
     inviteCode: row.invite_code as string,
     connectedAt: (row.connected_at as string) ?? null,
     createdAt: row.created_at as string,
+    weeksAhead: (row.weeks_ahead as number) ?? 4,
   };
 }
 
@@ -78,6 +80,18 @@ export function useAthleteConnections() {
     return conn;
   }, [user]);
 
+  /** Update how many weeks ahead the athlete can see in the app. */
+  const updateWeeksAhead = useCallback(async (connectionId: string, weeks: number) => {
+    const { error } = await supabase
+      .from('athlete_connections')
+      .update({ weeks_ahead: weeks })
+      .eq('id', connectionId);
+    if (error) throw error;
+    setConnections(prev =>
+      prev.map(c => c.id === connectionId ? { ...c, weeksAhead: weeks } : c)
+    );
+  }, []);
+
   /** Delete a connection (revoke athlete app access). */
   const revokeConnection = useCallback(async (connectionId: string) => {
     const { error } = await supabase
@@ -95,5 +109,5 @@ export function useAthleteConnections() {
     [connections],
   );
 
-  return { connections, loading, createConnection, revokeConnection, getConnectionForAthlete, reload: load };
+  return { connections, loading, createConnection, revokeConnection, updateWeeksAhead, getConnectionForAthlete, reload: load };
 }

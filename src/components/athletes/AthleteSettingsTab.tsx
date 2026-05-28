@@ -121,6 +121,50 @@ function FeatureToggle({
   );
 }
 
+// ── Weeks-ahead selector (Supabase-backed) ───────────────────────────────────
+
+function WeeksAheadSelect({ athlete }: { athlete: Athlete }) {
+  const { getConnectionForAthlete, updateWeeksAhead } = useAthleteConnections();
+  const connection = getConnectionForAthlete(athlete.id);
+  const [saving, setSaving] = useState(false);
+
+  if (!connection) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Create an app account above to configure plan visibility.
+      </p>
+    );
+  }
+
+  const handleChange = async (val: string) => {
+    setSaving(true);
+    try {
+      await updateWeeksAhead(connection.id, parseInt(val));
+    } catch (e) {
+      console.error('Failed to update weeks ahead', e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Select value={String(connection.weeksAhead)} onValueChange={handleChange} disabled={saving}>
+      <SelectTrigger className="w-56">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="1">1 week ahead</SelectItem>
+        <SelectItem value="2">2 weeks ahead</SelectItem>
+        <SelectItem value="3">3 weeks ahead</SelectItem>
+        <SelectItem value="4">4 weeks ahead</SelectItem>
+        <SelectItem value="6">6 weeks ahead</SelectItem>
+        <SelectItem value="8">8 weeks ahead</SelectItem>
+        <SelectItem value="12">12 weeks ahead</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
 // ── App Account Card ──────────────────────────────────────────────────────────
 
 function AppAccountCard({ athlete }: { athlete: Athlete }) {
@@ -332,14 +376,6 @@ export function AthleteSettingsTab({ athlete, onUpdateAthlete }: AthleteSettings
     'Australia/Sydney', 'Pacific/Auckland',
   ];
 
-  const CALENDAR_RANGE_LABELS: Record<AthleteSettings['athleteApp']['calendarRange'], string> = {
-    'current': 'Current week only',
-    '+1week': 'Current + 1 week ahead',
-    '+2weeks': 'Current + 2 weeks ahead',
-    '+3weeks': 'Current + 3 weeks ahead',
-    '+4weeks': 'Current + 4 weeks ahead',
-  };
-
   return (
     <ScrollArea className="h-full">
       <div className="p-4 space-y-4 max-w-2xl">
@@ -491,25 +527,13 @@ export function AthleteSettingsTab({ athlete, onUpdateAthlete }: AthleteSettings
               <CardTitle className="text-base">Calendar Access</CardTitle>
             </div>
             <CardDescription>
-              Choose how much of the training calendar the athlete can see in their app.
+              Choose how many weeks ahead the athlete can see in their app.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Visible date range</Label>
-              <Select
-                value={settings.athleteApp.calendarRange}
-                onValueChange={v => updateAthleteApp({ calendarRange: v as AthleteSettings['athleteApp']['calendarRange'] })}
-              >
-                <SelectTrigger className="w-64">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.entries(CALENDAR_RANGE_LABELS) as [AthleteSettings['athleteApp']['calendarRange'], string][]).map(([val, label]) => (
-                    <SelectItem key={val} value={val}>{label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Weeks visible in advance</Label>
+              <WeeksAheadSelect athlete={athlete} />
             </div>
             <div className="divide-y border rounded-lg">
               <FeatureToggle
