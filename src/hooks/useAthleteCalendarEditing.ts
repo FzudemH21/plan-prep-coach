@@ -390,21 +390,38 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   // === Session Management Handlers ===
 
   const handleAddSession = useCallback((dayDate: string) => {
+    // ?? 0 (not ?? 1): an off-day has daySplitStates = 0, a day outside the
+    // plan range has undefined — both should produce exactly 1 session after
+    // the first add.  Using ?? 1 would make undefined days start at 2.
     setDaySplitStates(prev => {
-      const currentSessions = prev[dayDate] ?? 1;
+      const currentSessions = prev[dayDate] ?? 0;
       return { ...prev, [dayDate]: currentSessions + 1 };
     });
-    
+
     setTrainingDays(prev =>
       prev.map(day => {
         if (day.date !== dayDate) return day;
         const sessions = (day.sessions || 0) + 1;
         const sessionNames = [...(day.sessionNames || [])];
         sessionNames.push(`Session ${sessions}`);
-        return { ...day, sessions, sessionNames };
+        // If the day was 'off', promote it to 'moderate' so the session
+        // is visible in the calendar (display logic hides 'off' days with
+        // no exercises).
+        const intensity = day.intensity === 'off' ? 'moderate' as IntensityLevel : day.intensity;
+        return { ...day, sessions, sessionNames, intensity, isTrainingDay: true };
       })
     );
-    
+
+    // Mirror the intensity reset in dailyIntensityData so the display
+    // correctly renders the newly-added session for formerly-off days.
+    setDailyIntensityData(prev =>
+      prev.map(di =>
+        di.date === dayDate && di.intensity === 'off'
+          ? { ...di, intensity: 'moderate' as IntensityLevel }
+          : di
+      )
+    );
+
     toast({ title: "Session added" });
   }, [toast]);
 

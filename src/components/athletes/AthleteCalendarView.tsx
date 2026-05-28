@@ -646,10 +646,22 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
 
   const handleAddSession = (date: Date) => {
     const dateString = format(date, 'yyyy-MM-dd');
+    if (!selectedAssignmentId) return;
+
+    // New session index = current count before the increment.
+    // daySplitStates[day] is 0 for off-days, undefined for days outside the
+    // plan range, and ≥1 for plan days — all normalised to 0 via ?? 0.
+    const newSessionIndex = editing.daySplitStates[dateString] ?? 0;
+
+    // Increment the session count in the editing state FIRST so the
+    // calendar display shows the new session immediately.
+    editing.handleAddSession(dateString);
+
+    // Open the WorkoutSessionSheet for the newly created (empty) session.
     setSelectedSessionInfo({
       dayDate: dateString,
-      sessionIndex: 0,
-      assignmentId: '',
+      sessionIndex: newSessionIndex,
+      assignmentId: selectedAssignmentId,
     });
     setSessionSheetOpen(true);
   };
