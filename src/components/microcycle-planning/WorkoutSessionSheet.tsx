@@ -802,9 +802,12 @@ export function WorkoutSessionSheet({
       
       // Only rebuild if:
       // 1. First time opening (not initialized)
-      // 2. Exercises were added (count increased)
-      // 3. Dialog just opened (hasInitializedRef is false)
-      if (!hasInitializedRef.current || currentCount > prevCount) {
+      // 2. Exercises were added (count increased) AND we're NOT in ad-hoc mode.
+      //    In ad-hoc sessions, handleAdHocMethodSelected updates workoutSections
+      //    directly with the correct section structure.  Rebuilding from the exercises
+      //    prop (which groups by categoryName) would split same-section exercises into
+      //    different sections or discard them, causing the "exercise disappears" bug.
+      if (!hasInitializedRef.current || (currentCount > prevCount && !isAdHocSession)) {
         const newSections = buildSectionsFromExercises(exercises, parameterValues);
         
         // MERGE: Preserve existing exercise parameters (especially toolbox-sourced blank ones)
@@ -1725,14 +1728,16 @@ export function WorkoutSessionSheet({
         const existing = localStorage.getItem(metadataKey);
         const parsed = existing ? JSON.parse(existing) : {};
         
-        // Merge visibility overrides per exercise
-        newExercises.forEach(ex => {
-          parsed.parameterVisibility = parsed.parameterVisibility || {};
-          parsed.parameterVisibility[ex.id] = parameterVisibility;
-        });
-        
+        // Merge visibility overrides as a flat map (paramName → bool),
+        // not nested under exercise IDs.  The state and reader both expect
+        // Record<string, boolean> at the top level.
+        parsed.parameterVisibility = {
+          ...(parsed.parameterVisibility || {}),
+          ...parameterVisibility,
+        };
+
         localStorage.setItem(metadataKey, JSON.stringify(parsed));
-        setParameterVisibilityOverrides(parsed.parameterVisibility || {});
+        setParameterVisibilityOverrides(prev => ({ ...prev, ...parameterVisibility }));
       } catch (e) {
         console.error('Failed to save parameter visibility:', e);
       }
