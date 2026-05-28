@@ -7,6 +7,7 @@
  */
 import { supabase } from '@/lib/supabase';
 import { AthleteCalendarAssignment } from '@/types/athlete';
+import type { ToolboxEntry } from '@/types/toolbox';
 
 interface TrainingDay {
   date: string;
@@ -18,13 +19,21 @@ interface TrainingDay {
   microcycleId?: string;
 }
 
+// Shared interface — also re-exported from useAthleteApp.ts (keep in sync)
 export interface ExerciseSummary {
   id: string;
   name: string;
   order: number;
   sectionId?: string;
+  sectionName?: string;
+  sectionOrder?: number;
   notes?: string;
   isCircuit?: boolean;
+  // Planned values from the periodization table
+  methodKey?: string;
+  plannedSets?: number;
+  plannedParams?: Record<string, string | number>;  // flat planned params (Reps_set1, etc.)
+  visibleParams?: string[];  // param names the coach marked showInAthleteApp
 }
 
 export interface SessionSummary {
@@ -44,6 +53,7 @@ interface ExerciseEntry {
   exerciseName?: string;
   methodId?: string;
   categoryName?: string;
+  subCategory?: string;
   dayDate: string;
   sessionIndex: number;
   order: number;
@@ -53,44 +63,132 @@ interface ExerciseEntry {
   [key: string]: unknown;
 }
 
+interface SessionSectionEntry {
+  id: string;
+  dayDate: string;
+  sessionIndex: number;
+  name: string;
+  order: number;
+}
+
+// parameterValues: [mesocycleId][microcycleIndex][methodKey][sessionIndex][paramName]
+type ParamValues = Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>;
+
 export async function syncAthleteSchedule(
   connectionId: string,
   assignment: AthleteCalendarAssignment,
   trainingDays: TrainingDay[],
   exercises: ExerciseEntry[],
   programName: string,
+  paramValues?: ParamValues,
+  sessionSections?: SessionSectionEntry[],
+  toolboxEntries?: ToolboxEntry[],
 ): Promise<void> {
   if (!connectionId || trainingDays.length === 0) return;
 
-  // Build a lookup: date → mesocycle/microcycle name
-  const mesoByDate = new Map<string, { mesoName: string; microName: string | null }>();
+  // Build a lookup: date → mesocycle/microcycle name + ids
+  const mesoByDate = new Map<string, {
+    mesoName: string;
+    microName: string | null;
+    mesocycleId: string;
+    microcycleIndex: number;
+  }>();
   for (const meso of assignment.assignedMesocycles) {
-    for (const micro of meso.microcycles || []) {
-      // Compute dates covered by this microcycle
-      const start = new Date(meso.startDate + 'T12:00:00');
-      let microStart = new Date(start);
-      // Find offset of this micro within the meso
-      let offset = 0;
-      for (const m of meso.microcycles) {
-        if (m.id === micro.id) break;
-        offset += m.duration;
-      }
-      microStart = new Date(start.getTime() + offset * 86400000);
+    const start = new Date(meso.startDate + 'T12:00:00');
+    let microOffset = 0;
+    for (let microIdx = 0; microIdx < (meso.microcycles?.length ?? 0); microIdx++) {
+      const micro = meso.microcycles[microIdx];
       for (let d = 0; d < micro.duration; d++) {
-        const day = new Date(microStart.getTime() + d * 86400000);
+        const day = new Date(start.getTime() + (microOffset + d) * 86400000);
         const dateStr = day.toISOString().slice(0, 10);
-        mesoByDate.set(dateStr, { mesoName: meso.name, microName: micro.name ?? null });
+        mesoByDate.set(dateStr, {
+          mesoName: meso.name,
+          microName: micro.name ?? null,
+          mesocycleId: meso.id,
+          microcycleIndex: microIdx,
+        });
       }
+      microOffset += micro.duration;
     }
-    // Fallback if no microcycles: cover full meso range
+    // Fallback if no microcycles
     if (!meso.microcycles?.length) {
-      const start = new Date(meso.startDate + 'T12:00:00');
-      const end = new Date(meso.endDate + 'T12:00:00');
-      for (let d = new Date(start); d <= end; d = new Date(d.getTime() + 86400000)) {
+      const startD = new Date(meso.startDate + 'T12:00:00');
+      const endD = new Date(meso.endDate + 'T12:00:00');
+      for (let d = new Date(startD); d <= endD; d = new Date(d.getTime() + 86400000)) {
         const dateStr = d.toISOString().slice(0, 10);
-        mesoByDate.set(dateStr, { mesoName: meso.name, microName: null });
+        mesoByDate.set(dateStr, {
+          mesoName: meso.name,
+          microName: null,
+          mesocycleId: meso.id,
+          microcycleIndex: 0,
+        });
       }
     }
+  }
+
+  // Build section lookup: "dayDate-sessionIndex-sectionId" → { name, order }
+  const sectionLookup = new Map<string, { name: string; order: number }>();
+  if (sessionSections) {
+    for (const sec of sessionSections) {
+      const key = `${sec.dayDate}-${sec.sessionIndex}-${sec.id}`;
+      sectionLookup.set(key, { name: sec.name, order: sec.order });
+    }
+  }
+
+  // Build toolbox visible-params lookup: "category - subCategory" → string[]
+  const toolboxVisibleMap = new Map<string, string[]>();
+  if (toolboxEntries) {
+    const grouped = new Map<string, string[]>();
+    for (const entry of toolboxEntries) {
+      if (!entry.showInAthleteApp || entry.isFrequencyParameter || entry.isSetParameter) continue;
+      const key = entry.subCategory
+        ? `${entry.category} - ${entry.subCategory}`
+        : entry.category;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key)!.push(entry.parameterName);
+    }
+    for (const [k, v] of grouped) toolboxVisibleMap.set(k, v);
+  }
+
+  // Helper: get planned params for an exercise
+  function getPlannedParams(ex: ExerciseEntry): {
+    plannedSets: number | undefined;
+    plannedParams: Record<string, string | number> | undefined;
+    visibleParams: string[] | undefined;
+  } {
+    if (!paramValues) return { plannedSets: undefined, plannedParams: undefined, visibleParams: undefined };
+
+    const meta = mesoByDate.get(ex.dayDate);
+    if (!meta) return { plannedSets: undefined, plannedParams: undefined, visibleParams: undefined };
+
+    const { mesocycleId, microcycleIndex } = meta;
+    const methodKey = ex.methodId ?? '';
+
+    // Try to find stored params — same fallback chain as WorkoutSessionSheet
+    const storedParams: Record<string, string | number> =
+      (paramValues?.[mesocycleId]?.[microcycleIndex]?.[methodKey]?.[0] as Record<string, string | number>) ||
+      {};
+
+    if (Object.keys(storedParams).length === 0) {
+      return { plannedSets: undefined, plannedParams: undefined, visibleParams: undefined };
+    }
+
+    // Extract set count
+    const setsKey = Object.keys(storedParams).find(k => /^sets?$/i.test(k));
+    const plannedSets = setsKey && storedParams[setsKey] ? Number(storedParams[setsKey]) : undefined;
+
+    // Get visible params from toolbox
+    let visibleParams: string[] | undefined;
+    if (toolboxEntries && methodKey) {
+      const vp = toolboxVisibleMap.get(methodKey);
+      if (vp && vp.length > 0) visibleParams = vp;
+    }
+
+    return {
+      plannedSets,
+      plannedParams: storedParams,
+      visibleParams,
+    };
   }
 
   // Build rows — one per training day that has sessions
@@ -102,14 +200,34 @@ export async function syncAthleteSchedule(
         const exercisesForSession: ExerciseSummary[] = exercises
           .filter(ex => ex.dayDate === td.date && ex.sessionIndex === i)
           .sort((a, b) => a.order - b.order)
-          .map(ex => ({
-            id: ex.id,
-            name: ex.exerciseName ?? ex.exerciseId,
-            order: ex.order,
-            sectionId: ex.sectionId,
-            notes: ex.notes,
-            isCircuit: ex.isCircuit,
-          }));
+          .map(ex => {
+            const { plannedSets, plannedParams, visibleParams } = getPlannedParams(ex);
+
+            // Section info
+            let sectionName: string | undefined;
+            let sectionOrder: number | undefined;
+            if (ex.sectionId) {
+              const secKey = `${ex.dayDate}-${i}-${ex.sectionId}`;
+              const secInfo = sectionLookup.get(secKey);
+              sectionName = secInfo?.name;
+              sectionOrder = secInfo?.order;
+            }
+
+            return {
+              id: ex.id,
+              name: ex.exerciseName ?? ex.exerciseId,
+              order: ex.order,
+              sectionId: ex.sectionId,
+              sectionName,
+              sectionOrder,
+              notes: ex.notes,
+              isCircuit: ex.isCircuit,
+              methodKey: ex.methodId,
+              plannedSets,
+              plannedParams,
+              visibleParams,
+            };
+          });
 
         return {
           id: `${td.date}-${i}`,

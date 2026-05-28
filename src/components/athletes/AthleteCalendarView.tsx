@@ -1143,6 +1143,9 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 finalTrainingDays,
                 filteredExercises,
                 program.name ?? program.wizardData?.planName ?? 'Training Plan',
+                program.parameterValues || {},
+                filteredSections,
+                toolboxData?.entries,
               ).catch(e => console.error('[ASSIGN] athlete schedule sync (merge) failed:', e));
             }
 
@@ -1174,6 +1177,9 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 dataToSave.trainingDays,
                 dataToSave.exerciseDistribution,
                 program.name ?? program.wizardData?.planName ?? 'Training Plan',
+                dataToSave.parameterValues || {},
+                dataToSave.sessionSections,
+                toolboxData?.entries,
               ).catch(e => console.error('[ASSIGN] athlete schedule sync failed:', e));
             }
 

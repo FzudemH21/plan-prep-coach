@@ -22,8 +22,15 @@ export interface ExerciseSummary {
   name: string;
   order: number;
   sectionId?: string;
+  sectionName?: string;
+  sectionOrder?: number;
   notes?: string;
   isCircuit?: boolean;
+  // Planned values synced from coach periodization table
+  methodKey?: string;
+  plannedSets?: number;
+  plannedParams?: Record<string, string | number>;
+  visibleParams?: string[];
 }
 
 export interface SessionSummary {
