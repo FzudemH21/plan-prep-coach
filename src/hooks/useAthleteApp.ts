@@ -65,9 +65,14 @@ export function useAthleteApp() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || !isAthlete) { setLoading(false); return; }
+    if (!user || !isAthlete) {
+      console.log(`[useAthleteApp] no load — user=${user?.id ?? 'null'} isAthlete=${isAthlete} authLoading=${authLoading}`);
+      setLoading(false);
+      return;
+    }
 
     async function load() {
+      console.log(`[useAthleteApp] ▶ loading for user=${user!.id} role=${user!.user_metadata?.role}`);
       try {
         // Load connection
         const { data: connData, error: connErr } = await supabase
@@ -75,7 +80,11 @@ export function useAthleteApp() {
           .select('*')
           .eq('athlete_auth_user_id', user!.id)
           .single();
-        if (connErr) throw connErr;
+        if (connErr) {
+          console.error('[useAthleteApp] ✗ connection query failed:', connErr.code, connErr.message);
+          throw connErr;
+        }
+        console.log(`[useAthleteApp] ✓ connection found: id=${connData.id} name=${connData.athlete_name}`);
         const conn: AthleteConnection = {
           id: connData.id,
           coachUserId: connData.coach_user_id,
@@ -95,6 +104,7 @@ export function useAthleteApp() {
         const to = new Date(today); to.setDate(today.getDate() + 90);
         const fromStr = from.toISOString().slice(0, 10);
         const toStr = to.toISOString().slice(0, 10);
+        console.log(`[useAthleteApp] querying athlete_schedule | connectionId=${conn.id} | from=${fromStr} to=${toStr}`);
 
         const { data: schedData, error: schedErr } = await supabase
           .from('athlete_schedule')
@@ -103,7 +113,11 @@ export function useAthleteApp() {
           .gte('date', fromStr)
           .lte('date', toStr)
           .order('date', { ascending: true });
-        if (schedErr) throw schedErr;
+        if (schedErr) {
+          console.error('[useAthleteApp] ✗ schedule query failed:', schedErr.code, schedErr.message);
+          throw schedErr;
+        }
+        console.log(`[useAthleteApp] ✓ schedule rows returned: ${(schedData || []).length} | dates: ${(schedData || []).map((r: Record<string,unknown>) => r.date).join(', ').slice(0, 120)}`);
 
         setSchedule((schedData || []).map((row: Record<string, unknown>) => ({
           id: row.id as string,

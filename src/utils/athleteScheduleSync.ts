@@ -96,7 +96,11 @@ export async function syncAthleteSchedule(
     microcycleIndex: number;
   }>();
   for (const meso of assignment.assignedMesocycles) {
-    const start = new Date(meso.startDate + 'T12:00:00');
+    // Normalise to yyyy-MM-dd before appending the noon-local suffix.
+    // startDate/endDate may arrive as a full ISO timestamp ("2026-05-25T00:00:00.000Z")
+    // from the assignment record; appending 'T12:00:00' to a full ISO string produces
+    // an invalid date and causes toISOString() to throw "Invalid time value".
+    const start = new Date(meso.startDate.slice(0, 10) + 'T12:00:00');
     let microOffset = 0;
     for (let microIdx = 0; microIdx < (meso.microcycles?.length ?? 0); microIdx++) {
       const micro = meso.microcycles[microIdx];
@@ -114,8 +118,8 @@ export async function syncAthleteSchedule(
     }
     // Fallback if no microcycles
     if (!meso.microcycles?.length) {
-      const startD = new Date(meso.startDate + 'T12:00:00');
-      const endD = new Date(meso.endDate + 'T12:00:00');
+      const startD = new Date(meso.startDate.slice(0, 10) + 'T12:00:00');
+      const endD = new Date(meso.endDate.slice(0, 10) + 'T12:00:00');
       for (let d = new Date(startD); d <= endD; d = new Date(d.getTime() + 86400000)) {
         const dateStr = d.toISOString().slice(0, 10);
         mesoByDate.set(dateStr, {
