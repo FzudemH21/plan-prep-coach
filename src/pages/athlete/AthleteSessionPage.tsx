@@ -53,18 +53,41 @@ function getSetCount(ex: ExerciseSummary): number {
 
 /** Derive which param names to show as columns (excluding the "sets" count param). */
 function getParamColumns(ex: ExerciseSummary): string[] {
-  // Coach-configured list takes priority
-  if (ex.visibleParams && ex.visibleParams.length > 0) return ex.visibleParams;
-  // Derive from _setN keys in plannedParams
-  if (ex.plannedParams) {
+  // Build candidate list: coach-configured params take priority, otherwise
+  // derive from all _setN keys present in plannedParams.
+  let candidates: string[];
+  if (ex.visibleParams && ex.visibleParams.length > 0) {
+    candidates = ex.visibleParams;
+  } else if (ex.plannedParams) {
     const bases = new Set<string>();
     for (const key of Object.keys(ex.plannedParams)) {
       const m = key.match(/^(.+)_set\d+$/);
       if (m) bases.add(m[1]);
     }
-    if (bases.size > 0) return Array.from(bases);
+    candidates = bases.size > 0 ? Array.from(bases) : ['Reps'];
+  } else {
+    return ['Reps'];
   }
-  return ['Reps'];
+
+  // Filter to only columns that have at least one non-empty planned value.
+  // Params the coach never filled in (empty per-set keys) produce "—"-only
+  // columns in the athlete app, which is confusing. Only show what was planned.
+  if (ex.plannedParams) {
+    const withValues = candidates.filter(param => {
+      for (const [key, val] of Object.entries(ex.plannedParams!)) {
+        const m = key.match(/^(.+)_set\d+$/);
+        if (m && m[1] === param && val !== undefined && val !== null && val !== '') {
+          return true;
+        }
+      }
+      return false;
+    });
+    if (withValues.length > 0) return withValues;
+  }
+
+  // No params have values yet — return the full candidate list so the athlete
+  // can still see the expected columns and log their own values.
+  return candidates;
 }
 
 function getPlannedValue(ex: ExerciseSummary, paramName: string, setIdx: number): string {
