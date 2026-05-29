@@ -276,10 +276,19 @@ export function WorkoutSessionSheet({
                                       'Sets';
 
                   // Restore previously saved values for this toolbox exercise
-                  const savedParamsA: Record<string, string | number> =
+                  let savedParamsA: Record<string, string | number> =
                     (currentParamValues?.[mesocycleId]?.[microcycleIndex]?.[ex.methodId ?? '']?.[sessionIndex] as Record<string, string | number>) ?? {};
-                  const _mcData = currentParamValues?.[mesocycleId]?.[microcycleIndex];
-                  console.log(`[toolbox-restore-A] mesoId=${mesocycleId} mcIdx=${microcycleIndex} methodId="${ex.methodId}" sessIdx=${sessionIndex} | methodKeysInMc=[${Object.keys(_mcData ?? {}).join(' | ')}] | savedParams=${JSON.stringify(savedParamsA).slice(0, 300)}`);
+                  // Fallback: read from saved workoutSections localStorage when parameterValues has no entry
+                  if (Object.keys(savedParamsA).length === 0) {
+                    try {
+                      const savedJson = localStorage.getItem(`workoutSections_${mesocycleId}_${dayDate}_${sessionIndex}`);
+                      if (savedJson) {
+                        const savedSects = JSON.parse(savedJson) as WorkoutSection[];
+                        const savedEx = savedSects.flatMap(s => s.exercises).find(e => e.exerciseId === ex.exerciseId);
+                        if (savedEx?.parameters) savedParamsA = savedEx.parameters as Record<string, string | number>;
+                      }
+                    } catch {}
+                  }
                   const savedSetCountA = savedParamsA[setParamName];
                   const setCount = (savedSetCountA !== undefined && savedSetCountA !== '' && !isNaN(Number(savedSetCountA)))
                     ? Number(savedSetCountA)
@@ -566,9 +575,19 @@ export function WorkoutSessionSheet({
                             'Sets';
 
         // Restore previously saved values for this toolbox exercise
-        const savedParamsB: Record<string, string | number> =
+        let savedParamsB: Record<string, string | number> =
           (currentParamValues?.[mesocycleId]?.[microcycleIndex]?.[ex.methodId ?? '']?.[sessionIndex] as Record<string, string | number>) ?? {};
-        console.log(`[toolbox-restore-B] mesoId=${mesocycleId} mcIdx=${microcycleIndex} methodId="${ex.methodId}" sessIdx=${sessionIndex} | mesoKeys=[${Object.keys(currentParamValues).join(',')}] mcKeys=[${Object.keys(currentParamValues?.[mesocycleId] ?? {}).join(',')}] | savedParams=${JSON.stringify(savedParamsB).slice(0, 300)}`);
+        // Fallback: read from saved workoutSections localStorage when parameterValues has no entry
+        if (Object.keys(savedParamsB).length === 0) {
+          try {
+            const savedJson = localStorage.getItem(`workoutSections_${mesocycleId}_${dayDate}_${sessionIndex}`);
+            if (savedJson) {
+              const savedSects = JSON.parse(savedJson) as WorkoutSection[];
+              const savedEx = savedSects.flatMap(s => s.exercises).find(e => e.exerciseId === ex.exerciseId);
+              if (savedEx?.parameters) savedParamsB = savedEx.parameters as Record<string, string | number>;
+            }
+          } catch {}
+        }
         const savedSetCountB = savedParamsB[setParamName];
         const setCount = (savedSetCountB !== undefined && savedSetCountB !== '' && !isNaN(Number(savedSetCountB)))
           ? Number(savedSetCountB)
@@ -1433,7 +1452,6 @@ export function WorkoutSessionSheet({
     // Save all parameter changes
     workoutSections.forEach(section => {
       section.exercises.forEach(exercise => {
-        console.log(`[handleSave] saving mesoId=${mesocycleId} mcIdx=${microcycleIndex} methodId="${exercise.methodId}" sessIdx=${sessionIndex} exId=${exercise.exerciseId} paramCount=${Object.keys(exercise.parameters).length} paramSample=${JSON.stringify(exercise.parameters).slice(0,150)}`);
         onSaveParameters(
           mesocycleId,
           microcycleIndex,
