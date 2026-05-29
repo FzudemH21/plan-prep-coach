@@ -248,21 +248,32 @@ export async function syncAthleteSchedule(
       if (vp && vp.length > 0) visibleParams = vp;
     }
 
-    // Override with the coach's per-session visibility (set via ParameterVisibilityPopover).
+    // Apply the coach's per-session visibility overrides (set via ParameterVisibilityPopover).
     // Key format matches WorkoutSessionSheet: workoutSessions_{mesoId}_{shiftedDate}_{sessionIdx}
+    //
+    // IMPORTANT: parameterVisibility is a DELTA relative to showInGridByDefault — it only
+    // stores params where the coach changed from the toolbox default:
+    //   { Tempo: true }  → Tempo was hidden by default, coach turned it ON
+    //   { Organization: false } → Organization was visible by default, coach turned it OFF
+    // Params absent from the record keep their toolbox default (showInGridByDefault).
+    // We must apply overrides as a patch on top of visibleParams, not replace it entirely.
     try {
       const visKey = `workoutSessions_${mesocycleId}_${ex.dayDate}_${ex.sessionIndex}`;
       const storedVis = localStorage.getItem(visKey);
       if (storedVis) {
         const parsed = JSON.parse(storedVis) as { parameterVisibility?: Record<string, boolean> };
         const { parameterVisibility } = parsed;
-        if (parameterVisibility && typeof parameterVisibility === 'object') {
-          const sessionVisParams = (Object.entries(parameterVisibility) as [string, boolean][])
-            .filter(([, visible]) => visible)
-            .map(([param]) => param);
-          if (sessionVisParams.length > 0) {
-            visibleParams = sessionVisParams;
+        if (parameterVisibility && typeof parameterVisibility === 'object' && Object.keys(parameterVisibility).length > 0) {
+          // Start with toolbox defaults as mutable base
+          let base: string[] = visibleParams ? [...visibleParams] : [];
+          for (const [param, visible] of Object.entries(parameterVisibility)) {
+            if (visible && !base.includes(param)) {
+              base.push(param);          // was hidden by default → turn on
+            } else if (!visible) {
+              base = base.filter(p => p !== param);  // was visible by default → turn off
+            }
           }
+          if (base.length > 0) visibleParams = base;
         }
       }
     } catch {
