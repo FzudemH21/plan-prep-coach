@@ -192,7 +192,7 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
     // PRIMARY: Derive parameters from exercise.parameters (populated from method periodization grid)
     const keys = Object.keys(exercise.parameters || {});
     const baseKeys = keys.filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k));
-    console.log(`[ExerciseCard] ${exercise.exerciseName} allKeys=`, keys, 'baseKeys=', baseKeys, 'toolboxParams=', toolboxParams?.map(t=>t.parameterName));
+
 
     if (baseKeys.length > 0) {
       return baseKeys.map(name => {
@@ -244,7 +244,7 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
   const hiddenParams = displayableParams.filter(p =>
     !isParameterVisible(p.name, p.showInGridByDefault, visibilityOverrides)
   );
-  console.log(`[ExerciseCard] ${exercise.exerciseName} displayable=`, displayableParams.map(p=>`${p.name}(grid=${p.showInGridByDefault})`), 'visible=', visibleParams.map(p=>p.name), 'overrides=', visibilityOverrides);
+
 
   // Detect %1RM and %maxHR parameters for auto-calculation toggles
   const autoCalcDetection = useMemo(() => {

@@ -271,28 +271,40 @@ export function WorkoutSessionSheet({
                   
                   // Find set parameter
                   const setParamEntry = methodEntries.find(e => e.isSetParameter);
-                  const setParamName = setParamEntry?.parameterName || 
+                  const setParamName = setParamEntry?.parameterName ||
                                       methodEntries.find(e => /^sets?$/i.test(e.parameterName))?.parameterName ||
                                       'Sets';
-                  const setCount = 3; // Default blank
-                  
-                  // Build BLANK parameters
+
+                  // Restore previously saved values for this toolbox exercise
+                  const savedParamsA: Record<string, string | number> =
+                    (currentParamValues?.[mesocycleId]?.[microcycleIndex]?.[ex.methodId ?? '']?.[sessionIndex] as Record<string, string | number>) ?? {};
+                  const savedSetCountA = savedParamsA[setParamName];
+                  const setCount = (savedSetCountA !== undefined && savedSetCountA !== '' && !isNaN(Number(savedSetCountA)))
+                    ? Number(savedSetCountA)
+                    : 3;
+
+                  // Build parameters, restoring saved values where available
                   const blankParameters: Record<string, string | number> = {};
                   blankParameters[setParamName] = setCount;
-                  
+
                   methodEntries.forEach(entry => {
                     if (entry.isFrequencyParameter) return;
                     const paramName = entry.parameterName;
-                    
-                    // Add unit if quantitative
+
+                    // Add unit if quantitative (restore saved or default to first option)
                     if (entry.parameterType === 'quantitative' && entry.options?.length > 0) {
-                      blankParameters[`${paramName}_unit`] = entry.options[0];
+                      blankParameters[`${paramName}_unit`] = savedParamsA[`${paramName}_unit`] ?? entry.options[0];
                     }
-                    
-                    // Create per-set keys (all blank)
+
+                    // Add base key (required for WorkoutExerciseCard column derivation)
+                    if (!entry.isSetParameter) {
+                      blankParameters[paramName] = savedParamsA[paramName] ?? '';
+                    }
+
+                    // Create per-set keys, restoring saved values
                     if (!entry.isSetParameter && setCount > 0) {
                       for (let i = 1; i <= setCount; i++) {
-                        blankParameters[`${paramName}_set${i}`] = '';
+                        blankParameters[`${paramName}_set${i}`] = savedParamsA[`${paramName}_set${i}`] ?? '';
                       }
                     }
                   });
@@ -376,7 +388,7 @@ export function WorkoutSessionSheet({
                   currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[0] ||
                   {};
 
-                console.log(`[buildSections] ex=${ex.exerciseName} fullMethodKey=${fullMethodKey} methodId=${ex.methodId} storedParams=`, JSON.stringify(storedParams).slice(0,200));
+
 
                 // PRIMARY: Derive parameters from storedParams (method periodization grid)
                 // Filter out _unit keys and per-set keys (e.g. Reps_set1) — the latter can
@@ -547,28 +559,40 @@ export function WorkoutSessionSheet({
         
         // Find set parameter
         const setParamEntry = methodEntries.find(e => e.isSetParameter);
-        const setParamName = setParamEntry?.parameterName || 
+        const setParamName = setParamEntry?.parameterName ||
                             methodEntries.find(e => /^sets?$/i.test(e.parameterName))?.parameterName ||
                             'Sets';
-        const setCount = 3; // Default blank
-        
-        // Build BLANK parameters
+
+        // Restore previously saved values for this toolbox exercise
+        const savedParamsB: Record<string, string | number> =
+          (currentParamValues?.[mesocycleId]?.[microcycleIndex]?.[ex.methodId ?? '']?.[sessionIndex] as Record<string, string | number>) ?? {};
+        const savedSetCountB = savedParamsB[setParamName];
+        const setCount = (savedSetCountB !== undefined && savedSetCountB !== '' && !isNaN(Number(savedSetCountB)))
+          ? Number(savedSetCountB)
+          : 3;
+
+        // Build parameters, restoring saved values where available
         const blankParameters: Record<string, string | number> = {};
         blankParameters[setParamName] = setCount;
-        
+
         methodEntries.forEach(entry => {
           if (entry.isFrequencyParameter) return;
           const paramName = entry.parameterName;
-          
-          // Add unit if quantitative
+
+          // Add unit if quantitative (restore saved or default to first option)
           if (entry.parameterType === 'quantitative' && entry.options?.length > 0) {
-            blankParameters[`${paramName}_unit`] = entry.options[0];
+            blankParameters[`${paramName}_unit`] = savedParamsB[`${paramName}_unit`] ?? entry.options[0];
           }
-          
-          // Create per-set keys (all blank)
+
+          // Add base key (required for WorkoutExerciseCard column derivation)
+          if (!entry.isSetParameter) {
+            blankParameters[paramName] = savedParamsB[paramName] ?? '';
+          }
+
+          // Create per-set keys, restoring saved values
           if (!entry.isSetParameter && setCount > 0) {
             for (let i = 1; i <= setCount; i++) {
-              blankParameters[`${paramName}_set${i}`] = '';
+              blankParameters[`${paramName}_set${i}`] = savedParamsB[`${paramName}_set${i}`] ?? '';
             }
           }
         });
@@ -653,7 +677,7 @@ export function WorkoutSessionSheet({
         currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[0] ||
         {};
 
-      console.log(`[buildSections2] ex=${ex.exerciseName} fullMethodKey=${fullMethodKey} methodId=${ex.methodId} storedParams=`, JSON.stringify(storedParams).slice(0,200));
+
 
       // PRIMARY: Derive parameters from storedParams (method periodization grid)
       // Filter out _unit keys and per-set keys (e.g. Reps_set1) — the latter can
