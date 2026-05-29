@@ -209,6 +209,43 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     const connection = getConnectionForAthlete(athlete.id);
     if (!connection) return;
 
+    // If parameterValues is empty but the assignment has periodization-sourced
+    // exercises, avoid overwriting correct Supabase data (written by the
+    // assign-time sync) with an empty payload. Try to recover from the wizard's
+    // active localStorage key first; skip entirely if recovery also fails.
+    let loadSyncParamValues: typeof editing.parameterValues = editing.parameterValues;
+    const hasPeriodizationExercises = editing.exerciseDistribution.some(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (ex) => (ex as any).parameterSource !== 'toolbox'
+    );
+    if (hasPeriodizationExercises && Object.keys(loadSyncParamValues).length === 0) {
+      try {
+        const localPvStr = localStorage.getItem('parameterValues');
+        if (localPvStr) {
+          const localPv = JSON.parse(localPvStr);
+          if (localPv && Object.keys(localPv).length > 0) {
+            // Validate: at least one key matches a mesocycle ID from the current assignment
+            const assignedMesoIds = new Set<string>(
+              (editing.selectedAssignment?.assignedMesocycles ?? []).map(m => m.id).filter(Boolean)
+            );
+            const hasMatch = assignedMesoIds.size === 0 ||
+              Object.keys(localPv).some(k => assignedMesoIds.has(k));
+            if (hasMatch) {
+              loadSyncParamValues = localPv as typeof editing.parameterValues;
+              console.log('[loadSync] recovered parameterValues from wizard localStorage —', Object.keys(localPv).length, 'mesocycle key(s)');
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      if (Object.keys(loadSyncParamValues).length === 0) {
+        console.log('[loadSync] skipping — empty parameterValues for periodization exercises; assign-time sync already wrote the correct data');
+        return;
+      }
+    }
+
     loadSyncedRef.current.add(selectedAssignmentId);
     console.log(`[loadSync] ▶ syncing on load | assignmentId=${selectedAssignmentId} | trainingDays=${editing.trainingDays.length}`);
     syncAthleteSchedule(
@@ -217,7 +254,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
       editing.trainingDays,
       editing.exerciseDistribution,
       editing.selectedAssignment.programName ?? 'Training Plan',
-      editing.parameterValues,
+      loadSyncParamValues,
       editing.sessionSections,
       toolboxData?.entries,
     ).catch(e => console.error('[loadSync] ✗ sync failed:', e));
@@ -797,7 +834,40 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
       if (!program) {
         program = getProgram(assignment.programId);
       }
-      
+
+      // If program.parameterValues is missing (Supabase copy may be stale — saved before
+      // periodization was filled), recover from the wizard's localStorage key.
+      // Validate the recovered data belongs to this program by checking that at least
+      // one key in localStorage['parameterValues'] matches a mesocycle ID in this program.
+      if (program && (!program.parameterValues || Object.keys(program.parameterValues).length === 0)) {
+        try {
+          const localPvStr = localStorage.getItem('parameterValues');
+          if (localPvStr) {
+            const localPv = JSON.parse(localPvStr) as Record<string, unknown>;
+            if (localPv && Object.keys(localPv).length > 0) {
+              // Extract mesocycle IDs from the program's stored mesocycle structure
+              const mesoData = Array.isArray(program.mesocycleData)
+                ? program.mesocycleData
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                : (program.mesocycleData as any)?.mesocycles;
+              const programMesoIds = new Set<string>(
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                Array.isArray(mesoData) ? mesoData.map((m: any) => m.id).filter(Boolean) : []
+              );
+              // Accept if there are no IDs to validate (optimistic) or at least one key matches
+              const hasMatch = programMesoIds.size === 0 ||
+                Object.keys(localPv).some(k => programMesoIds.has(k));
+              if (hasMatch) {
+                program = { ...program, parameterValues: localPv };
+                console.log('[ASSIGN] recovered parameterValues from wizard localStorage —', Object.keys(localPv).length, 'mesocycle key(s)');
+              }
+            }
+          }
+        } catch {
+          // ignore — fall through with empty parameterValues
+        }
+      }
+
       if (program) {
         // Compute a robust originalStartDate from the earliest valid date in SELECTED mesocycles' data.
         // Filter by selectedMesocycleIds so that assigning only meso 2 anchors the shift to meso 2's
