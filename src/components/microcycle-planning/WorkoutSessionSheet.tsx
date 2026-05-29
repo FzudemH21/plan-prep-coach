@@ -1433,6 +1433,7 @@ export function WorkoutSessionSheet({
     // Save all parameter changes
     workoutSections.forEach(section => {
       section.exercises.forEach(exercise => {
+        console.log(`[handleSave] saving mesoId=${mesocycleId} mcIdx=${microcycleIndex} methodId="${exercise.methodId}" sessIdx=${sessionIndex} exId=${exercise.exerciseId} paramCount=${Object.keys(exercise.parameters).length} paramSample=${JSON.stringify(exercise.parameters).slice(0,150)}`);
         onSaveParameters(
           mesocycleId,
           microcycleIndex,
