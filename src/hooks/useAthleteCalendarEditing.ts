@@ -1721,6 +1721,29 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     });
   }, []);
 
+  // Persist the full parameter snapshot for a specific exercise into adhocPlannedParams /
+  // adhocVisibleParams on the exercise distribution entry.  The auto-save effect picks up
+  // the exerciseDistribution change and triggers the Supabase sync, so the values appear
+  // in the athlete app without a full plan re-assignment.
+  const handleExerciseParameterSave = useCallback((
+    dayDate: string,
+    sessionIndex: number,
+    exerciseId: string,
+    parameters: Record<string, string | number>,
+    visibleParamNames: string[],
+  ) => {
+    setExerciseDistribution(prev => prev.map(ex =>
+      ex.dayDate === dayDate && ex.sessionIndex === sessionIndex && ex.exerciseId === exerciseId
+        ? {
+            ...ex,
+            adhocPlannedParams: parameters,
+            adhocVisibleParams: visibleParamNames.length > 0 ? visibleParamNames : ex.adhocVisibleParams,
+            parameterSource: 'toolbox' as const,
+          }
+        : ex
+    ));
+  }, []);
+
   // === Calculate Calendar Days for Master Planner ===
   
   const allAssignmentDays = useMemo((): CalendarDay[] => {
@@ -1983,6 +2006,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     
     // Parameter handlers
     handleParameterChange,
+    handleExerciseParameterSave,
     
     // State setters for direct manipulation
     setExerciseDistribution,

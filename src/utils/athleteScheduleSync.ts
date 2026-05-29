@@ -156,7 +156,7 @@ export async function syncAthleteSchedule(
       if (entry.isRestParameter) {
         toolboxRestMap.set(key, entry.parameterName);
       }
-      if (entry.showInGridByDefault === false || entry.isFrequencyParameter || entry.isSetParameter || entry.isRestParameter) continue;
+      if (!entry.showInGridByDefault || entry.isFrequencyParameter || entry.isSetParameter || entry.isRestParameter) continue;
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key)!.push(entry.parameterName);
     }

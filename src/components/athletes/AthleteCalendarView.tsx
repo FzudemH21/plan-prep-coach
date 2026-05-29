@@ -1733,17 +1733,21 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           })()}
           parameterValues={editing.parameterValues}
           onSaveParameters={(mesocycleId, microcycleIndex, methodId, sessionIndex, exerciseId, parameters) => {
-            // Adapt the WorkoutSessionSheet signature to the editing hook signature
-            Object.entries(parameters).forEach(([paramName, value]) => {
-              editing.handleParameterChange(
-                selectedSessionInfo.dayDate,
-                sessionIndex,
-                methodId,
-                '', // categoryName - not used in this context
-                paramName,
-                value
-              );
-            });
+            // Derive which params should be visible in the athlete app grid (showInGridByDefault only)
+            const baseMethodKey = methodId.includes('::') ? methodId.split('::')[0] : methodId;
+            const visibleParamNames = (toolboxData?.entries ?? [])
+              .filter(e => {
+                const key = e.subCategory ? `${e.category} - ${e.subCategory}` : e.category;
+                return key === baseMethodKey && e.showInGridByDefault && !e.isFrequencyParameter && !e.isSetParameter && !e.isRestParameter;
+              })
+              .map(e => e.parameterName);
+            editing.handleExerciseParameterSave(
+              selectedSessionInfo.dayDate,
+              sessionIndex,
+              exerciseId,
+              parameters,
+              visibleParamNames,
+            );
           }}
           dailyIntensityData={editing.dailyIntensityData}
           sessionNameFromState={(() => {
