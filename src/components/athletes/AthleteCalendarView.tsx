@@ -1343,10 +1343,47 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     setSelectedDate(null);
   }, [athlete.id, athleteData, getProgram, addCalendarEvent, getEventsForAthlete, selectedAssignmentId, editing.mergeSessionData, user]);
 
-  const handleDeleteAssignment = () => {
-    if (deleteAssignment) {
-      athleteData.deleteCalendarAssignment(deleteAssignment.id);
-      setDeleteAssignment(null);
+  const handleDeleteAssignment = async () => {
+    if (!deleteAssignment) return;
+    const assignmentToDelete = deleteAssignment;
+    setDeleteAssignment(null);
+
+    // Remove from assignments list
+    athleteData.deleteCalendarAssignment(assignmentToDelete.id);
+
+    // Clean up localStorage entry for this assignment
+    localStorage.removeItem(`athlete-assignment-${assignmentToDelete.id}`);
+
+    // If this was the selected assignment, deselect it
+    if (selectedAssignmentId === assignmentToDelete.id) {
+      setSelectedAssignmentId(null);
+    }
+
+    // Delete athlete_schedule rows for every date covered by this assignment
+    const connection = getConnectionForAthlete(athlete.id);
+    if (connection) {
+      const datesToDelete: string[] = [];
+      for (const meso of assignmentToDelete.assignedMesocycles) {
+        const start = new Date(meso.startDate.slice(0, 10) + 'T12:00:00');
+        const end = new Date(meso.endDate.slice(0, 10) + 'T12:00:00');
+        for (let d = new Date(start); d <= end; d = new Date(d.getTime() + 86400000)) {
+          datesToDelete.push(d.toISOString().slice(0, 10));
+        }
+      }
+      if (datesToDelete.length > 0) {
+        const BATCH = 200;
+        for (let i = 0; i < datesToDelete.length; i += BATCH) {
+          const batch = datesToDelete.slice(i, i + BATCH);
+          const { error } = await supabase
+            .from('athlete_schedule')
+            .delete()
+            .eq('athlete_connection_id', connection.id)
+            .in('date', batch);
+          if (error) {
+            console.error('[deleteAssignment] ✗ failed to remove schedule rows:', error.message);
+          }
+        }
+      }
     }
   };
 

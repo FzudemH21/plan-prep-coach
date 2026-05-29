@@ -87,7 +87,7 @@ export async function syncAthleteSchedule(
 ): Promise<void> {
   if (!connectionId || trainingDays.length === 0) return;
 
-  console.log(`[syncAthleteSchedule] ▶ start | connectionId=${connectionId} | trainingDays=${trainingDays.length} | exercises=${exercises.length}`);
+  console.log(`[syncAthleteSchedule] ▶ start | connectionId=${connectionId} | trainingDays=${trainingDays.length} | exercises=${exercises.length} | paramKeys=${Object.keys(paramValues ?? {}).length}`);
 
   // Build a lookup: date → mesocycle/microcycle name + ids
   const mesoByDate = new Map<string, {
