@@ -248,6 +248,27 @@ export async function syncAthleteSchedule(
       if (vp && vp.length > 0) visibleParams = vp;
     }
 
+    // Override with the coach's per-session visibility (set via ParameterVisibilityPopover).
+    // Key format matches WorkoutSessionSheet: workoutSessions_{mesoId}_{shiftedDate}_{sessionIdx}
+    try {
+      const visKey = `workoutSessions_${mesocycleId}_${ex.dayDate}_${ex.sessionIndex}`;
+      const storedVis = localStorage.getItem(visKey);
+      if (storedVis) {
+        const parsed = JSON.parse(storedVis) as { parameterVisibility?: Record<string, boolean> };
+        const { parameterVisibility } = parsed;
+        if (parameterVisibility && typeof parameterVisibility === 'object') {
+          const sessionVisParams = (Object.entries(parameterVisibility) as [string, boolean][])
+            .filter(([, visible]) => visible)
+            .map(([param]) => param);
+          if (sessionVisParams.length > 0) {
+            visibleParams = sessionVisParams;
+          }
+        }
+      }
+    } catch {
+      // ignore — fall through with toolbox-derived visibleParams
+    }
+
     // Get rest param name from toolbox
     const restParamName = toolboxRestMap.get(baseMethodKey);
 
