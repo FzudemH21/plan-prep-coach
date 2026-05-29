@@ -1326,7 +1326,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 program.parameterValues || {},
                 filteredSections,
                 toolboxData?.entries,
-                editing.supersets,
+                filteredSupersets,
               ).catch(e => console.error('[ASSIGN] ✗ athlete schedule sync (merge) failed:', e));
             } else {
               console.warn('[ASSIGN] merge: no connection found for athlete', athlete.id,
@@ -1379,7 +1379,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 dataToSave.parameterValues || {},
                 dataToSave.sessionSections,
                 toolboxData?.entries,
-                editing.supersets,
+                dataToSave.supersets,
               ).catch(e => console.error('[ASSIGN] ✗ athlete schedule sync failed:', e));
             } else {
               console.warn('[ASSIGN] create: no connection found for athlete', athlete.id,

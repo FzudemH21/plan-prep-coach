@@ -146,36 +146,6 @@ function getRestSeconds(ex: ExerciseSummary): number {
   return 90;
 }
 
-/** Returns base param entries that have a non-empty planned value but are NOT
- *  shown in the set-table columns — to be displayed as info chips below the grid. */
-function getHiddenParamTags(ex: ExerciseSummary): Array<{ name: string; value: string; unit?: string }> {
-  if (!ex.plannedParams) return [];
-  const visible = new Set(getParamColumns(ex));
-  const SET_RE = /^sets?$/i;
-  const REST_RE = /rest|pause|recovery/i;
-  const restNameLc = ex.restParamName?.toLowerCase();
-
-  const seen = new Set<string>();
-  const tags: Array<{ name: string; value: string; unit?: string }> = [];
-
-  for (const key of Object.keys(ex.plannedParams)) {
-    if (/_set\d+$/.test(key) || key.endsWith('_unit')) continue;
-    if (visible.has(key)) continue;
-    if (SET_RE.test(key)) continue;
-    if (REST_RE.test(key) || (restNameLc && key.toLowerCase() === restNameLc)) continue;
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    const val = ex.plannedParams[key];
-    if (val === undefined || val === null || val === '') continue;
-
-    const unitRaw = ex.plannedParams[`${key}_unit`];
-    const unit = unitRaw !== undefined && unitRaw !== '' ? String(unitRaw) : undefined;
-    tags.push({ name: key, value: String(val), unit });
-  }
-
-  return tags;
-}
 
 function formatTime(s: number): string {
   const m = Math.floor(s / 60);
@@ -966,7 +936,6 @@ export default function AthleteSessionPage() {
                 const exSetCount = getSetCount(ex);
                 const exComplete = exDone.length >= exSetCount &&
                   Array.from({ length: exSetCount }, (_, i) => i).every(i => exDone.includes(i));
-                const tags = getHiddenParamTags(ex);
 
                 return (
                   <div key={ex.id} className={cn('p-4 space-y-3 transition-colors', supersetLabel ? '' : 'rounded-xl border', exComplete ? 'bg-primary/5' : '')}>
@@ -987,15 +956,6 @@ export default function AthleteSessionPage() {
                         {ex.notes && <p className="text-xs text-muted-foreground mt-0.5">{ex.notes}</p>}
                       </div>
                     </div>
-                    {tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {tags.map(tag => (
-                          <span key={tag.name} className="text-xs bg-muted text-muted-foreground rounded-full px-2.5 py-0.5 border border-border/50">
-                            {tag.name}: {tag.value}{tag.unit ? ` ${tag.unit}` : ''}
-                          </span>
-                        ))}
-                      </div>
-                    )}
                     <SetTable
                       exercise={ex}
                       loggedValues={loggedValues}
