@@ -16,7 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type Phase = 'overview' | 'active' | 'rest' | 'sectionDone' | 'done';
+type Phase = 'overview' | 'sectionIntro' | 'active' | 'rest' | 'sectionDone' | 'done';
 
 interface SectionData {
   id: string;
@@ -407,6 +407,10 @@ export default function AthleteSessionPage() {
   const [completedSets, setCompletedSets] = useState<Record<string, number[]>>({});
   const [borgSheetOpen, setBorgSheetOpen] = useState(false);
 
+  // Workout elapsed timer — counts up from the moment the athlete starts the first section
+  const workoutStartTimeRef = useRef<number | null>(null);
+  const [workoutElapsed, setWorkoutElapsed] = useState(0);
+
   // ── Derived ────────────────────────────────────────────────────────────────
 
   const sections = useMemo<SectionData[]>(() => {
@@ -417,6 +421,24 @@ export default function AthleteSessionPage() {
 
   const currentSection = sections[sectionIdx];
   const currentExercise = currentSection?.exercises[exerciseIdx];
+
+  // ── Workout elapsed timer ──────────────────────────────────────────────────
+
+  useEffect(() => {
+    const TICKING: Phase[] = ['sectionIntro', 'active', 'rest', 'sectionDone'];
+    if (!TICKING.includes(phase) || workoutStartTimeRef.current === null) return;
+    const id = setInterval(() => {
+      setWorkoutElapsed(Math.floor((Date.now() - workoutStartTimeRef.current!) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [phase]);
+
+  function startWorkoutTimer() {
+    if (workoutStartTimeRef.current === null) {
+      workoutStartTimeRef.current = Date.now();
+      setWorkoutElapsed(0);
+    }
+  }
 
   // ── Rest timer ─────────────────────────────────────────────────────────────
 
@@ -537,7 +559,7 @@ export default function AthleteSessionPage() {
   function handleNextSection() {
     setSectionIdx(i => i + 1);
     setExerciseIdx(0);
-    setPhase('active');
+    setPhase('sectionIntro');
   }
 
   function handleSaved() {
@@ -598,52 +620,77 @@ export default function AthleteSessionPage() {
           </p>
         </div>
 
-        <ScrollArea className="flex-1">
-          <div className="p-4 space-y-3">
-            {sections.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
-                <Dumbbell className="h-8 w-8 opacity-30" />
-                <p className="text-sm">No exercises assigned yet.</p>
-              </div>
-            ) : (
-              sections.map((sec, i) => (
-                <Card key={sec.id} className="border-border/60">
-                  <CardContent className="flex items-center gap-4 p-4">
-                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0 text-sm font-bold text-primary">
-                      {i + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm">{sec.name}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {sec.exercises.length} exercise{sec.exercises.length !== 1 ? 's' : ''}
-                        {sec.exercises.some(e => e.isCircuit) ? ' · circuit' : ''}
-                      </p>
-                      {/* Mini exercise preview */}
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        {sec.exercises.slice(0, 4).map(ex => (
-                          <span key={ex.id} className="text-xs bg-muted rounded px-1.5 py-0.5 truncate max-w-[120px]">
-                            {ex.name}
-                          </span>
-                        ))}
-                        {sec.exercises.length > 4 && (
-                          <span className="text-xs text-muted-foreground">+{sec.exercises.length - 4} more</span>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </div>
-        </ScrollArea>
+        <div className="flex-1 flex flex-col items-center justify-center px-6 gap-6">
+          {sections.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 text-muted-foreground">
+              <Dumbbell className="h-8 w-8 opacity-30" />
+              <p className="text-sm">No exercises assigned yet.</p>
+            </div>
+          ) : (
+            <>
+              {session.notes ? (
+                <p className="text-sm text-muted-foreground text-center leading-relaxed max-w-xs">
+                  {session.notes}
+                </p>
+              ) : null}
+              <Button className="w-full max-w-xs" size="lg" onClick={() => setPhase('sectionIntro')}>
+                Start
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
-        {sections.length > 0 && (
-          <div className="px-4 py-4 border-t bg-background shrink-0">
-            <Button className="w-full" size="lg" onClick={() => setPhase('active')}>
-              Start Workout
-            </Button>
-          </div>
-        )}
+  // ── Screen: Section intro ──────────────────────────────────────────────────
+
+  if (phase === 'sectionIntro') {
+    const introSection = sections[sectionIdx];
+    const isFirst = sectionIdx === 0;
+    const totalSections = sections.length;
+
+    return (
+      <div className="flex flex-col h-screen bg-background max-w-[480px] mx-auto">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
+          <button
+            onClick={() => isFirst ? setPhase('overview') : setPhase('sectionDone')}
+            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <h1 className="flex-1 text-center font-semibold text-base truncate pr-8">{session.name}</h1>
+        </div>
+
+        {/* Section intro body */}
+        <div className="flex-1 flex flex-col items-center justify-center px-6 gap-6">
+          {totalSections > 1 && (
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Section {sectionIdx + 1} of {totalSections}
+            </p>
+          )}
+          <h2 className="text-3xl font-bold text-center">{introSection?.name}</h2>
+          {introSection && (
+            <p className="text-sm text-muted-foreground">
+              {introSection.exercises.length} exercise{introSection.exercises.length !== 1 ? 's' : ''}
+            </p>
+          )}
+        </div>
+
+        {/* CTA */}
+        <div className="px-6 py-6 shrink-0">
+          <Button
+            className="w-full"
+            size="lg"
+            onClick={() => {
+              startWorkoutTimer();
+              setPhase('active');
+            }}
+          >
+            {isFirst ? 'Begin' : 'Start Section'}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -755,9 +802,14 @@ export default function AthleteSessionPage() {
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <div className="flex-1 min-w-0 text-center pr-8">
+          <div className="flex-1 min-w-0 text-center">
             <p className="text-xs text-muted-foreground truncate">{session.name}</p>
             <p className="text-sm font-semibold truncate">{currentSection?.name}</p>
+          </div>
+          {/* Elapsed workout timer */}
+          <div className="flex items-center gap-1 text-xs text-muted-foreground tabular-nums shrink-0 w-10 justify-end">
+            <Timer className="h-3 w-3 shrink-0" />
+            <span>{formatTime(workoutElapsed)}</span>
           </div>
         </div>
 
