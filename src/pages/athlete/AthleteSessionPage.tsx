@@ -925,22 +925,12 @@ export default function AthleteSessionPage() {
                   </div>
                 </div>
 
-                {/* Set logging table */}
-                <SetTable
-                  exercise={ex}
-                  loggedValues={loggedValues}
-                  completedSets={completedSets}
-                  onLogValue={handleLogValue}
-                  onCompleteSet={handleCompleteSet}
-                  onMarkAll={handleMarkAll}
-                />
-
-                {/* Hidden param tags — params configured but not visible in the grid */}
+                {/* Hidden param tags — params configured but not shown in the grid */}
                 {(() => {
                   const tags = getHiddenParamTags(ex);
                   if (tags.length === 0) return null;
                   return (
-                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    <div className="flex flex-wrap gap-1.5">
                       {tags.map(tag => (
                         <span
                           key={tag.name}
@@ -952,6 +942,16 @@ export default function AthleteSessionPage() {
                     </div>
                   );
                 })()}
+
+                {/* Set logging table */}
+                <SetTable
+                  exercise={ex}
+                  loggedValues={loggedValues}
+                  completedSets={completedSets}
+                  onLogValue={handleLogValue}
+                  onCompleteSet={handleCompleteSet}
+                  onMarkAll={handleMarkAll}
+                />
 
                 {/* Planned info chip */}
                 {ex.plannedSets && (
