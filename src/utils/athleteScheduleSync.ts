@@ -156,9 +156,12 @@ export async function syncAthleteSchedule(
       if (entry.isRestParameter) {
         toolboxRestMap.set(key, entry.parameterName);
       }
-      // Only include quantitative params in the grid; qualitative ones (Set Type,
-      // Organization, Comments, etc.) appear as info chips below the grid instead.
-      if (!entry.showInGridByDefault || entry.isFrequencyParameter || entry.isSetParameter || entry.isRestParameter || entry.parameterType === 'qualitative') continue;
+      // Include all params that are shown in the grid by default (per toolbox config).
+      // Qualitative params (e.g. Intensity expressed as "75-80% 1RM") and rest params
+      // (e.g. "Inter-Set Rest Duration") are intentionally kept here — the coach app
+      // shows them in the session grid and the athlete app should match.
+      // Frequency and Set params are structural (not per-set columns) so always excluded.
+      if (!entry.showInGridByDefault || entry.isFrequencyParameter || entry.isSetParameter) continue;
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key)!.push(entry.parameterName);
     }
