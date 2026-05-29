@@ -1699,18 +1699,20 @@ export default function MicrocyclePlanningPage() {
     exerciseId: string,
     parameters: Record<string, string | number>
   ) => {
+    console.log(`[handleSaveParameters] called mesoId=${mesocycleId} mcIdx=${microcycleIndex} methodId="${methodId}" sessIdx=${sessionIndex} paramCount=${Object.keys(parameters).length}`);
     setParameterValues(prev => {
       const updated = JSON.parse(JSON.stringify(prev));
       if (!updated[mesocycleId]) updated[mesocycleId] = {};
       if (!updated[mesocycleId][microcycleIndex]) updated[mesocycleId][microcycleIndex] = {};
       if (!updated[mesocycleId][microcycleIndex][methodId]) updated[mesocycleId][microcycleIndex][methodId] = {};
       if (!updated[mesocycleId][microcycleIndex][methodId][sessionIndex]) updated[mesocycleId][microcycleIndex][methodId][sessionIndex] = {};
-      
+
       // Store each parameter as a separate key-value pair at method/session level (no exercise-specific prefix)
       Object.entries(parameters).forEach(([key, value]) => {
         updated[mesocycleId][microcycleIndex][methodId][sessionIndex][key] = value;
       });
-      
+
+      console.log(`[handleSaveParameters] stored — methodKeysInMc=[${Object.keys(updated[mesocycleId]?.[microcycleIndex] ?? {}).join(' | ')}]`);
       // Save to localStorage
       localStorage.setItem('parameterValues', JSON.stringify(updated));
       return updated;
