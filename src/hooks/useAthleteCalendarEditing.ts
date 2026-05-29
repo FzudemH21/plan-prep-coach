@@ -1732,16 +1732,18 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     parameters: Record<string, string | number>,
     visibleParamNames: string[],
   ) => {
-    setExerciseDistribution(prev => prev.map(ex =>
-      ex.dayDate === dayDate && ex.sessionIndex === sessionIndex && ex.exerciseId === exerciseId
-        ? {
-            ...ex,
-            adhocPlannedParams: parameters,
-            adhocVisibleParams: visibleParamNames.length > 0 ? visibleParamNames : ex.adhocVisibleParams,
-            parameterSource: 'toolbox' as const,
-          }
-        : ex
-    ));
+    setExerciseDistribution(prev => prev.map(ex => {
+      if (ex.dayDate !== dayDate || ex.sessionIndex !== sessionIndex || ex.exerciseId !== exerciseId) return ex;
+      // Only persist ad-hoc params for toolbox-sourced exercises.
+      // Periodization exercises derive planned values from the assignment's parameterValues;
+      // overwriting parameterSource would send them through the wrong lookup path on reopen.
+      if (ex.parameterSource !== 'toolbox') return ex;
+      return {
+        ...ex,
+        adhocPlannedParams: parameters,
+        adhocVisibleParams: visibleParamNames.length > 0 ? visibleParamNames : ex.adhocVisibleParams,
+      };
+    }));
   }, []);
 
   // === Calculate Calendar Days for Master Planner ===
