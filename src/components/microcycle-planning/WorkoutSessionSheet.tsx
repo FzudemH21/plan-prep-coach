@@ -278,7 +278,7 @@ export function WorkoutSessionSheet({
                   // Restore previously saved values for this toolbox exercise
                   const savedParamsA: Record<string, string | number> =
                     (currentParamValues?.[mesocycleId]?.[microcycleIndex]?.[ex.methodId ?? '']?.[sessionIndex] as Record<string, string | number>) ?? {};
-                  console.log('[toolbox-restore-A]', { mesoId: mesocycleId, mcIdx: microcycleIndex, methodId: ex.methodId, sessIdx: sessionIndex, mesoKeys: Object.keys(currentParamValues), mcKeys: Object.keys(currentParamValues?.[mesocycleId] ?? {}), savedParams: JSON.stringify(savedParamsA).slice(0, 200) });
+                  console.log(`[toolbox-restore-A] mesoId=${mesocycleId} mcIdx=${microcycleIndex} methodId="${ex.methodId}" sessIdx=${sessionIndex} | mesoKeys=[${Object.keys(currentParamValues).join(',')}] mcKeys=[${Object.keys(currentParamValues?.[mesocycleId] ?? {}).join(',')}] | savedParams=${JSON.stringify(savedParamsA).slice(0, 300)}`);
                   const savedSetCountA = savedParamsA[setParamName];
                   const setCount = (savedSetCountA !== undefined && savedSetCountA !== '' && !isNaN(Number(savedSetCountA)))
                     ? Number(savedSetCountA)
@@ -567,7 +567,7 @@ export function WorkoutSessionSheet({
         // Restore previously saved values for this toolbox exercise
         const savedParamsB: Record<string, string | number> =
           (currentParamValues?.[mesocycleId]?.[microcycleIndex]?.[ex.methodId ?? '']?.[sessionIndex] as Record<string, string | number>) ?? {};
-        console.log('[toolbox-restore-B]', { mesoId: mesocycleId, mcIdx: microcycleIndex, methodId: ex.methodId, sessIdx: sessionIndex, mesoKeys: Object.keys(currentParamValues), mcKeys: Object.keys(currentParamValues?.[mesocycleId] ?? {}), savedParams: JSON.stringify(savedParamsB).slice(0, 200) });
+        console.log(`[toolbox-restore-B] mesoId=${mesocycleId} mcIdx=${microcycleIndex} methodId="${ex.methodId}" sessIdx=${sessionIndex} | mesoKeys=[${Object.keys(currentParamValues).join(',')}] mcKeys=[${Object.keys(currentParamValues?.[mesocycleId] ?? {}).join(',')}] | savedParams=${JSON.stringify(savedParamsB).slice(0, 300)}`);
         const savedSetCountB = savedParamsB[setParamName];
         const setCount = (savedSetCountB !== undefined && savedSetCountB !== '' && !isNaN(Number(savedSetCountB)))
           ? Number(savedSetCountB)
