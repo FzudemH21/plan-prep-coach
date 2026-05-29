@@ -248,7 +248,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     }
 
     loadSyncedRef.current.add(selectedAssignmentId);
-    console.log(`[loadSync] ▶ syncing on load | assignmentId=${selectedAssignmentId} | trainingDays=${editing.trainingDays.length}`);
+    console.log(`[loadSync] ▶ syncing on load | assignmentId=${selectedAssignmentId} | trainingDays=${editing.trainingDays.length} | supersets dates=${Object.keys(editing.supersets ?? {}).join(', ') || '(none)'}`);
     syncAthleteSchedule(
       connection.id,
       editing.selectedAssignment,
