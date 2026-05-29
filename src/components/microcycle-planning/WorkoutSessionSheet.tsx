@@ -1512,6 +1512,31 @@ export function WorkoutSessionSheet({
       onDistributionChange(updatedDistribution);
     }
 
+    // Sync workoutSections → sessionSections so the athlete-schedule section lookup
+    // resolves the correct section name and notes for the athlete app.
+    // This is needed because:
+    //   1. Programs from the wizard often have no sessionSections stored (sections were
+    //      only in workoutSections_ localStorage, not in the top-level sessionSections key).
+    //   2. handleRenameSection only maps over existing sessionSectionsProp entries, so
+    //      renaming a section that isn't in sessionSectionsProp is silently lost.
+    // By always syncing on save we ensure editing.sessionSections stays in step with
+    // what the coach sees and configured inside the dialog.
+    if (onSectionsChange) {
+      // Preserve sections for other dates / sessions and replace only this one
+      const otherSections = (sessionSectionsProp ?? []).filter(
+        s => !(s.dayDate === dayDate && s.sessionIndex === sessionIndex)
+      );
+      const thisSections: SessionSectionProp[] = workoutSections.map(section => ({
+        id: section.id,
+        dayDate,
+        sessionIndex,
+        name: section.name,
+        order: section.order,
+        comments: section.comments,
+      }));
+      onSectionsChange([...otherSections, ...thisSections]);
+    }
+
     toast({
       title: "Changes saved",
       description: "Workout session updated successfully",

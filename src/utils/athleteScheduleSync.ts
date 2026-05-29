@@ -27,6 +27,7 @@ export interface ExerciseSummary {
   sectionId?: string;
   sectionName?: string;
   sectionOrder?: number;
+  sectionNotes?: string;
   notes?: string;
   isCircuit?: boolean;
   // Planned values from the periodization table
@@ -133,12 +134,12 @@ export async function syncAthleteSchedule(
     }
   }
 
-  // Build section lookup: "dayDate-sessionIndex-sectionId" → { name, order }
-  const sectionLookup = new Map<string, { name: string; order: number }>();
+  // Build section lookup: "dayDate-sessionIndex-sectionId" → { name, order, notes }
+  const sectionLookup = new Map<string, { name: string; order: number; notes?: string }>();
   if (sessionSections) {
     for (const sec of sessionSections) {
       const key = `${sec.dayDate}-${sec.sessionIndex}-${sec.id}`;
-      sectionLookup.set(key, { name: sec.name, order: sec.order });
+      sectionLookup.set(key, { name: sec.name, order: sec.order, notes: (sec as any).comments ?? undefined });
     }
   }
 
@@ -309,11 +310,13 @@ export async function syncAthleteSchedule(
             // Section info
             let sectionName: string | undefined;
             let sectionOrder: number | undefined;
+            let sectionNotes: string | undefined;
             if (ex.sectionId) {
               const secKey = `${ex.dayDate}-${i}-${ex.sectionId}`;
               const secInfo = sectionLookup.get(secKey);
               sectionName = secInfo?.name;
               sectionOrder = secInfo?.order;
+              sectionNotes = secInfo?.notes;
             }
 
             return {
@@ -323,6 +326,7 @@ export async function syncAthleteSchedule(
               sectionId: ex.sectionId,
               sectionName,
               sectionOrder,
+              sectionNotes,
               notes: ex.notes,
               isCircuit: ex.isCircuit,
               methodKey: ex.methodId,

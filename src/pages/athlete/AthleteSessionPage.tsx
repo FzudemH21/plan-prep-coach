@@ -22,6 +22,7 @@ interface SectionData {
   id: string;
   name: string;
   order: number;
+  notes?: string;
   exercises: ExerciseSummary[];
 }
 
@@ -35,8 +36,10 @@ function groupIntoSections(exercises: ExerciseSummary[]): SectionData[] {
     if (!map.has(sid)) {
       map.set(sid, {
         id: sid,
-        name: ex.sectionName ?? (sid === '__none__' ? 'Workout' : sid),
+        name: ex.sectionName ?? (sid === '__none__' ? 'Workout' : 'Section'),
         order: ex.sectionOrder ?? 0,
+        // sectionNotes is the same for every exercise in the section — grab once
+        notes: ex.sectionNotes || undefined,
         exercises: [],
       });
     }
@@ -624,13 +627,6 @@ export default function AthleteSessionPage() {
           <h1 className="flex-1 text-center font-semibold text-base truncate pr-8">{session.name}</h1>
         </div>
 
-        {/* Sub-header */}
-        <div className="px-4 py-2 border-b bg-muted/30 shrink-0">
-          <p className="text-xs text-muted-foreground text-center">
-            {[entry.programName, entry.mesocycleName, formatDate(entry.date)].filter(Boolean).join(' · ')}
-          </p>
-        </div>
-
         {sections.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
             <Dumbbell className="h-8 w-8 opacity-30" />
@@ -734,7 +730,7 @@ export default function AthleteSessionPage() {
         </div>
 
         {/* Section intro body */}
-        <div className="flex-1 flex flex-col items-center justify-center px-6 gap-6">
+        <div className="flex-1 flex flex-col items-center justify-center px-6 gap-4">
           {totalSections > 1 && (
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Section {sectionIdx + 1} of {totalSections}
@@ -744,6 +740,11 @@ export default function AthleteSessionPage() {
           {introSection && (
             <p className="text-sm text-muted-foreground">
               {introSection.exercises.length} exercise{introSection.exercises.length !== 1 ? 's' : ''}
+            </p>
+          )}
+          {introSection?.notes && (
+            <p className="text-sm text-muted-foreground text-center leading-relaxed max-w-xs">
+              {introSection.notes}
             </p>
           )}
         </div>
