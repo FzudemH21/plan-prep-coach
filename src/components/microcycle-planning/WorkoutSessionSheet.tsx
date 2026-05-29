@@ -843,28 +843,36 @@ export function WorkoutSessionSheet({
       //    directly with the correct section structure.  Rebuilding from the exercises
       //    prop (which groups by categoryName) would split same-section exercises into
       //    different sections or discard them, causing the "exercise disappears" bug.
-      if (!hasInitializedRef.current || (currentCount > prevCount && !isAdHocSession)) {
+      if (!hasInitializedRef.current) {
+        // FRESH OPEN: use buildSectionsFromExercises directly — it already restores
+        // saved parameter values from parameterValues (including toolbox exercises).
+        // Do NOT merge with stale in-memory workoutSections from a previous dialog open,
+        // as that would overwrite the restored values with old blank ones.
         const newSections = buildSectionsFromExercises(exercises, parameterValues);
-        
-        // MERGE: Preserve existing exercise parameters (especially toolbox-sourced blank ones)
-        // Build a map of existing exercise IDs to their state
+        freshlyAddedExerciseIdsRef.current.clear();
+        setWorkoutSections(newSections);
+        hasInitializedRef.current = true;
+      } else if (currentCount > prevCount && !isAdHocSession) {
+        // EXERCISE ADDED to already-open session: merge to preserve user-entered values
+        // for existing exercises while giving the new exercise its built parameters.
+        const newSections = buildSectionsFromExercises(exercises, parameterValues);
+
+        // Build a map of existing exercise IDs to their current (user-edited) state
         const existingExerciseMap = new Map<string, WorkoutExercise>();
         workoutSections.forEach(section => {
           section.exercises.forEach(ex => {
             existingExerciseMap.set(ex.id, ex);
           });
         });
-        
-        // Merge: for each exercise in newSections, if it already exists in workoutSections
-        // OR was just added via handleAdHocMethodSelected (freshly added), preserve its parameters.
+
         const mergedSections = newSections.map(section => ({
           ...section,
           exercises: section.exercises.map(newEx => {
             const existing = existingExerciseMap.get(newEx.id);
             const isFreshlyAdded = freshlyAddedExerciseIdsRef.current.has(newEx.id);
-            
+
             if (existing) {
-              // Preserve existing state (parameters, notes, parameterSource, etc.) - don't overwrite with rebuilt values
+              // Preserve current user-edited state — don't overwrite with rebuilt values
               return {
                 ...newEx,
                 parameters: existing.parameters,
@@ -872,25 +880,21 @@ export function WorkoutSessionSheet({
                 eachSide: existing.eachSide,
                 autoCalculateWeight: existing.autoCalculateWeight,
                 autoCalculateTargetHR: existing.autoCalculateTargetHR,
-                parameterSource: (existing as any).parameterSource, // Preserve parameterSource marker
+                parameterSource: (existing as any).parameterSource,
               };
             }
-            
+
             if (isFreshlyAdded) {
-              // Freshly added via ad-hoc dialog - skip rebuild, keep blank params from handleAdHocMethodSelected
+              // Freshly added via ad-hoc dialog — keep blank params from handleAdHocMethodSelected
               return newEx;
             }
-            
-            // New exercise - use the built parameters
+
             return newEx;
           })
         }));
-        
-        // Clear freshly added IDs after merge
+
         freshlyAddedExerciseIdsRef.current.clear();
-        
         setWorkoutSections(mergedSections);
-        hasInitializedRef.current = true;
       }
       
       prevExerciseCountRef.current = currentCount;
