@@ -94,6 +94,9 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
 
   // Prevent spamming the user with repeated "sync failed" toasts — show at most once per mount
   const syncErrorShownRef = useRef(false);
+
+  // Track which assignment IDs have already received a load-time sync so we don't repeat it
+  const loadSyncedRef = useRef<Set<string>>(new Set());
   
   // Install global capture-phase click listener to swallow post-drag clicks
   useEffect(() => {
@@ -192,6 +195,34 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   // Only re-run when a save actually completes — not on every state change
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing.lastSavedAt]);
+
+  // Re-sync to athlete_schedule once per assignment when data finishes loading.
+  // This ensures stale Supabase records (written before a code fix) are refreshed
+  // even when the coach makes no edits that would trigger the auto-save path.
+  useEffect(() => {
+    if (!selectedAssignmentId) return;
+    if (editing.isInitializing) return;
+    if (!editing.selectedAssignment || editing.trainingDays.length === 0) return;
+    if (connectionsLoading) return;
+    if (loadSyncedRef.current.has(selectedAssignmentId)) return;
+
+    const connection = getConnectionForAthlete(athlete.id);
+    if (!connection) return;
+
+    loadSyncedRef.current.add(selectedAssignmentId);
+    console.log(`[loadSync] ▶ syncing on load | assignmentId=${selectedAssignmentId} | trainingDays=${editing.trainingDays.length}`);
+    syncAthleteSchedule(
+      connection.id,
+      editing.selectedAssignment,
+      editing.trainingDays,
+      editing.exerciseDistribution,
+      editing.selectedAssignment.programName ?? 'Training Plan',
+      editing.parameterValues,
+      editing.sessionSections,
+      toolboxData?.entries,
+    ).catch(e => console.error('[loadSync] ✗ sync failed:', e));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAssignmentId, editing.isInitializing, editing.trainingDays.length, connectionsLoading]);
 
   // Athlete-specific AI context
   const athleteAIContext = useAthleteAIContext({

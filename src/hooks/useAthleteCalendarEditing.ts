@@ -1942,6 +1942,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   return {
     // State
     lastSavedAt,
+    isInitializing,
     exerciseDistribution,
     sessionSections,
     supersets,

@@ -216,11 +216,19 @@ export async function syncAthleteSchedule(
     if (!meta) return { plannedSets: undefined, plannedParams: undefined, visibleParams: undefined, restParamName: undefined };
 
     const { mesocycleId, microcycleIndex } = meta;
-    const methodKey = ex.methodId ?? '';
+    const methodKeyBase = ex.methodId ?? '';
 
-    // Try to find stored params — same fallback chain as WorkoutSessionSheet
+    // Mirror WorkoutSessionSheet's fallback chain:
+    // 1. Try category-qualified key (for split methods stored as "Method::Category")
+    // 2. Fall back to base method key (for unsplit methods)
+    // Both at session index 0 (the periodization table default).
+    const methodKeyFull = (ex.categoryName && ex.categoryName !== 'Uncategorized' && ex.categoryName !== '')
+      ? `${methodKeyBase}::${ex.categoryName}`
+      : methodKeyBase;
+
     const storedParams: Record<string, string | number> =
-      (paramValues?.[mesocycleId]?.[microcycleIndex]?.[methodKey]?.[0] as Record<string, string | number>) ||
+      (paramValues?.[mesocycleId]?.[microcycleIndex]?.[methodKeyFull]?.[0] as Record<string, string | number>) ||
+      (paramValues?.[mesocycleId]?.[microcycleIndex]?.[methodKeyBase]?.[0] as Record<string, string | number>) ||
       {};
 
     if (Object.keys(storedParams).length === 0) {
