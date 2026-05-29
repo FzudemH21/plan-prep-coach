@@ -70,15 +70,16 @@ function getParamColumns(ex: ExerciseSummary): string[] {
   }
 
   // Filter to only columns that have at least one non-empty planned value.
-  // Params the coach never filled in (empty per-set keys) produce "—"-only
-  // columns in the athlete app, which is confusing. Only show what was planned.
+  // Supports two storage formats:
+  //   • Per-set keys: "Reps_set1", "Reps_set2", … (ad-hoc/toolbox exercises)
+  //   • Plain keys:   "Reps", "Tempo", …          (periodization-table exercises)
   if (ex.plannedParams) {
     const withValues = candidates.filter(param => {
       for (const [key, val] of Object.entries(ex.plannedParams!)) {
+        if (val === undefined || val === null || val === '') continue;
         const m = key.match(/^(.+)_set\d+$/);
-        if (m && m[1] === param && val !== undefined && val !== null && val !== '') {
-          return true;
-        }
+        if (m && m[1] === param) return true;  // per-set format
+        if (key === param) return true;          // plain format (periodization table)
       }
       return false;
     });
@@ -94,9 +95,13 @@ function getParamColumns(ex: ExerciseSummary): string[] {
 
 function getPlannedValue(ex: ExerciseSummary, paramName: string, setIdx: number): string {
   if (!ex.plannedParams) return '';
-  const val = ex.plannedParams[`${paramName}_set${setIdx + 1}`];
-  if (val === undefined || val === '') return '';
-  return String(val);
+  // Per-set format (ad-hoc/toolbox exercises): "Reps_set1", "Reps_set2", …
+  const perSetVal = ex.plannedParams[`${paramName}_set${setIdx + 1}`];
+  if (perSetVal !== undefined && perSetVal !== null && perSetVal !== '') return String(perSetVal);
+  // Plain format (periodization-table exercises): one value applies to all sets
+  const plainVal = ex.plannedParams[paramName];
+  if (plainVal !== undefined && plainVal !== null && plainVal !== '') return String(plainVal);
+  return '';
 }
 
 /** Resolve rest duration in seconds for an exercise.
