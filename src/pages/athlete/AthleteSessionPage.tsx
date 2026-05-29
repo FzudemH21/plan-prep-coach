@@ -919,16 +919,49 @@ export default function AthleteSessionPage() {
           </p>
         </div>
 
-        {/* All exercises in this section */}
+        {/* All exercises in this section — grouped by superset */}
         <ScrollArea className="flex-1">
-          <div className="px-4 py-3 space-y-6">
+          <div className="px-4 py-3 space-y-4">
             {sectionExercises.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
                 <Dumbbell className="h-8 w-8 opacity-30" />
                 <p className="text-sm">No exercises in this section.</p>
               </div>
-            ) : (
-              sectionExercises.map((ex, idx) => {
+            ) : (() => {
+              // ── Build superset groups ───────────────────────────────────────
+              const LABELS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+              const supersetLabel = new Map<string, string>();
+              let labelCount = 0;
+              for (const ex of sectionExercises) {
+                if (ex.supersetId && !supersetLabel.has(ex.supersetId)) {
+                  supersetLabel.set(ex.supersetId, LABELS[labelCount++ % 26]);
+                }
+              }
+
+              type Group =
+                | { kind: 'single'; ex: ExerciseSummary; n: number }
+                | { kind: 'superset'; ssId: string; label: string; members: Array<{ ex: ExerciseSummary; n: number }> };
+
+              const groups: Group[] = [];
+              const seen = new Set<string>();
+              let counter = 1;
+
+              for (const ex of sectionExercises) {
+                if (seen.has(ex.id)) continue;
+                if (ex.supersetId && !seen.has(ex.supersetId + '__group')) {
+                  seen.add(ex.supersetId + '__group');
+                  const members = sectionExercises
+                    .filter(e => e.supersetId === ex.supersetId)
+                    .map(e => { seen.add(e.id); return { ex: e, n: counter++ }; });
+                  groups.push({ kind: 'superset', ssId: ex.supersetId, label: supersetLabel.get(ex.supersetId)!, members });
+                } else if (!ex.supersetId) {
+                  seen.add(ex.id);
+                  groups.push({ kind: 'single', ex, n: counter++ });
+                }
+              }
+
+              // ── Render groups ───────────────────────────────────────────────
+              const renderExerciseCard = (ex: ExerciseSummary, displayN: number, supersetLabel?: string) => {
                 const exDone = completedSets[ex.id] ?? [];
                 const exSetCount = getSetCount(ex);
                 const exComplete = exDone.length >= exSetCount &&
@@ -936,54 +969,33 @@ export default function AthleteSessionPage() {
                 const tags = getHiddenParamTags(ex);
 
                 return (
-                  <div
-                    key={ex.id}
-                    className={cn(
-                      'rounded-xl border p-4 space-y-3 transition-colors',
-                      exComplete ? 'bg-primary/5 border-primary/20' : 'bg-background border-border',
-                    )}
-                  >
-                    {/* Exercise header */}
+                  <div key={ex.id} className={cn('p-4 space-y-3 transition-colors', supersetLabel ? '' : 'rounded-xl border', exComplete ? 'bg-primary/5' : '')}>
                     <div className="flex items-start gap-3">
                       <div className={cn(
                         'w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 text-sm font-bold',
                         exComplete ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground',
                       )}>
-                        {exComplete
-                          ? <Check className="h-4 w-4" />
-                          : idx + 1}
+                        {exComplete ? <Check className="h-4 w-4" /> : (supersetLabel ? supersetLabel : displayN)}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           {ex.isCircuit && <RefreshCw className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
-                          <h3 className={cn(
-                            'font-semibold text-base leading-snug',
-                            exComplete && 'text-muted-foreground',
-                          )}>
+                          <h3 className={cn('font-semibold text-base leading-snug', exComplete && 'text-muted-foreground')}>
                             {ex.name}
                           </h3>
                         </div>
-                        {ex.notes && (
-                          <p className="text-xs text-muted-foreground mt-0.5">{ex.notes}</p>
-                        )}
+                        {ex.notes && <p className="text-xs text-muted-foreground mt-0.5">{ex.notes}</p>}
                       </div>
                     </div>
-
-                    {/* Hidden param tags */}
                     {tags.length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
                         {tags.map(tag => (
-                          <span
-                            key={tag.name}
-                            className="text-xs bg-muted text-muted-foreground rounded-full px-2.5 py-0.5 border border-border/50"
-                          >
+                          <span key={tag.name} className="text-xs bg-muted text-muted-foreground rounded-full px-2.5 py-0.5 border border-border/50">
                             {tag.name}: {tag.value}{tag.unit ? ` ${tag.unit}` : ''}
                           </span>
                         ))}
                       </div>
                     )}
-
-                    {/* Set logging table */}
                     <SetTable
                       exercise={ex}
                       loggedValues={loggedValues}
@@ -994,44 +1006,71 @@ export default function AthleteSessionPage() {
                     />
                   </div>
                 );
-              })
-            )}
-            {/* Bottom padding so last card clears the action bar */}
+              };
+
+              return groups.map(group => {
+                if (group.kind === 'single') {
+                  return (
+                    <div key={group.ex.id} className={cn(
+                      'rounded-xl border transition-colors',
+                      (completedSets[group.ex.id] ?? []).length >= getSetCount(group.ex) ? 'border-primary/20' : 'border-border',
+                    )}>
+                      {renderExerciseCard(group.ex, group.n)}
+                    </div>
+                  );
+                }
+                // Superset group — connected card with dividers
+                const allDone = group.members.every(({ ex }) => {
+                  const sc = getSetCount(ex);
+                  const done = completedSets[ex.id] ?? [];
+                  return done.length >= sc && Array.from({ length: sc }, (_, i) => i).every(i => done.includes(i));
+                });
+                return (
+                  <div key={group.ssId} className={cn(
+                    'rounded-xl border overflow-hidden transition-colors',
+                    allDone ? 'border-primary/20' : 'border-primary/40',
+                  )}>
+                    {/* Superset header badge */}
+                    <div className="flex items-center gap-2 px-4 py-1.5 bg-primary/5 border-b border-primary/20">
+                      <span className="text-xs font-bold text-primary tracking-wider">SUPERSET {group.label}</span>
+                    </div>
+                    {group.members.map(({ ex, n }, mi) => (
+                      <div key={ex.id}>
+                        {renderExerciseCard(ex, n, group.label)}
+                        {mi < group.members.length - 1 && (
+                          <div className="mx-4 border-t border-dashed border-primary/20" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              });
+            })()}
             <div className="h-2" />
           </div>
         </ScrollArea>
 
-        {/* Bottom action bar */}
+        {/* Bottom action bar — always shows the finish action */}
         <div className="px-4 py-4 border-t bg-background shrink-0">
-          {sectionComplete ? (
-            isLastSection ? (
-              <Button
-                className="w-full"
-                size="lg"
-                onClick={() => { setPhase('done'); setBorgSheetOpen(true); }}
-              >
-                <Check className="h-4 w-4 mr-2" />
-                Finish Workout
-              </Button>
-            ) : (
-              <Button
-                className="w-full"
-                size="lg"
-                onClick={() => setPhase('sectionDone')}
-              >
-                <Check className="h-4 w-4 mr-2" />
-                Section Complete
-              </Button>
-            )
-          ) : (
+          {isLastSection ? (
             <Button
-              variant="outline"
               className="w-full"
               size="lg"
-              onClick={() => setPhase('overview')}
+              variant={sectionComplete ? 'default' : 'outline'}
+              onClick={() => { setPhase('done'); setBorgSheetOpen(true); }}
             >
-              <ChevronLeft className="h-4 w-4 mr-2" />
-              Back to Overview
+              <Check className="h-4 w-4 mr-2" />
+              Finish Workout
+            </Button>
+          ) : (
+            <Button
+              className="w-full"
+              size="lg"
+              variant={sectionComplete ? 'default' : 'outline'}
+              onClick={() => setPhase('sectionDone')}
+            >
+              <Check className="h-4 w-4 mr-2" />
+              Finish Section
             </Button>
           )}
         </div>

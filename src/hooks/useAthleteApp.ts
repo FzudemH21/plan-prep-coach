@@ -24,8 +24,10 @@ export interface ExerciseSummary {
   sectionId?: string;
   sectionName?: string;
   sectionOrder?: number;
+  sectionNotes?: string;
   notes?: string;
   isCircuit?: boolean;
+  supersetId?: string;   // shared key for all exercises in the same superset group
   // Planned values synced from coach periodization table
   methodKey?: string;
   plannedSets?: number;

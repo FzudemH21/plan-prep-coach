@@ -30,6 +30,7 @@ export interface ExerciseSummary {
   sectionNotes?: string;
   notes?: string;
   isCircuit?: boolean;
+  supersetId?: string;       // shared key for all exercises in the same superset group
   // Planned values from the periodization table
   methodKey?: string;
   plannedSets?: number;
@@ -76,6 +77,9 @@ interface SessionSectionEntry {
 // parameterValues: [mesocycleId][microcycleIndex][methodKey][sessionIndex][paramName]
 type ParamValues = Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>;
 
+// SupersetMapping mirrors the type in microcycle-planning.ts (avoided circular import)
+type SupersetMapping = Record<string, Record<number, Record<string, Record<string, string[]>>>>;
+
 export async function syncAthleteSchedule(
   connectionId: string,
   assignment: AthleteCalendarAssignment,
@@ -85,6 +89,7 @@ export async function syncAthleteSchedule(
   paramValues?: ParamValues,
   sessionSections?: SessionSectionEntry[],
   toolboxEntries?: ToolboxEntry[],
+  supersets?: SupersetMapping,
 ): Promise<void> {
   if (!connectionId || trainingDays.length === 0) return;
 
@@ -140,6 +145,24 @@ export async function syncAthleteSchedule(
     for (const sec of sessionSections) {
       const key = `${sec.dayDate}-${sec.sessionIndex}-${sec.id}`;
       sectionLookup.set(key, { name: sec.name, order: sec.order, notes: (sec as any).comments ?? undefined });
+    }
+  }
+
+  // Build superset lookup: exerciseId → supersetGroupId
+  // SupersetMapping shape: { dayDate: { sessionIndex: { sectionId: { supersetId: exerciseId[] } } } }
+  const supersetLookup = new Map<string, string>();
+  if (supersets) {
+    for (const [dayDate, bySession] of Object.entries(supersets)) {
+      for (const [sessionIdxStr, bySection] of Object.entries(bySession)) {
+        for (const [_sectionId, groups] of Object.entries(bySection)) {
+          for (const [supersetId, exerciseIds] of Object.entries(groups)) {
+            for (const exId of exerciseIds) {
+              // Key: "dayDate-sessionIndex-exerciseId" to avoid collisions across days/sessions
+              supersetLookup.set(`${dayDate}-${sessionIdxStr}-${exId}`, supersetId);
+            }
+          }
+        }
+      }
     }
   }
 
@@ -319,6 +342,9 @@ export async function syncAthleteSchedule(
               sectionNotes = secInfo?.notes;
             }
 
+            // Look up superset group for this exercise
+            const supersetId = supersetLookup.get(`${ex.dayDate}-${i}-${ex.id}`);
+
             return {
               id: ex.id,
               name: ex.exerciseName ?? ex.exerciseId,
@@ -329,6 +355,7 @@ export async function syncAthleteSchedule(
               sectionNotes,
               notes: ex.notes,
               isCircuit: ex.isCircuit,
+              supersetId,
               methodKey: ex.methodId,
               plannedSets,
               plannedParams,
