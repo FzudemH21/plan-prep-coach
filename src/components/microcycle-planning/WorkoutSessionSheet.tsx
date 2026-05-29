@@ -278,7 +278,8 @@ export function WorkoutSessionSheet({
                   // Restore previously saved values for this toolbox exercise
                   const savedParamsA: Record<string, string | number> =
                     (currentParamValues?.[mesocycleId]?.[microcycleIndex]?.[ex.methodId ?? '']?.[sessionIndex] as Record<string, string | number>) ?? {};
-                  console.log(`[toolbox-restore-A] mesoId=${mesocycleId} mcIdx=${microcycleIndex} methodId="${ex.methodId}" sessIdx=${sessionIndex} | mesoKeys=[${Object.keys(currentParamValues).join(',')}] mcKeys=[${Object.keys(currentParamValues?.[mesocycleId] ?? {}).join(',')}] | savedParams=${JSON.stringify(savedParamsA).slice(0, 300)}`);
+                  const _mcData = currentParamValues?.[mesocycleId]?.[microcycleIndex];
+                  console.log(`[toolbox-restore-A] mesoId=${mesocycleId} mcIdx=${microcycleIndex} methodId="${ex.methodId}" sessIdx=${sessionIndex} | methodKeysInMc=[${Object.keys(_mcData ?? {}).join(' | ')}] | savedParams=${JSON.stringify(savedParamsA).slice(0, 300)}`);
                   const savedSetCountA = savedParamsA[setParamName];
                   const setCount = (savedSetCountA !== undefined && savedSetCountA !== '' && !isNaN(Number(savedSetCountA)))
                     ? Number(savedSetCountA)
