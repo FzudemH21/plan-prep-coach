@@ -333,12 +333,29 @@ export async function syncAthleteSchedule(
             };
           });
 
+        // Read session notes (comments) from localStorage — same key used by WorkoutSessionSheet
+        let sessionNotes: string | undefined;
+        try {
+          const mesoId = mesoByDate.get(td.date)?.mesocycleId;
+          if (mesoId) {
+            const metaKey = `workoutSessions_${mesoId}_${td.date}_${i}`;
+            const stored = localStorage.getItem(metaKey);
+            if (stored) {
+              const parsed = JSON.parse(stored) as { comments?: string };
+              if (parsed.comments && parsed.comments.trim()) {
+                sessionNotes = parsed.comments.trim();
+              }
+            }
+          }
+        } catch { /* ignore */ }
+
         return {
           id: `${td.date}-${i}`,
           name: td.sessionNames?.[i] ?? `Session ${i + 1}`,
           order: i,
           exerciseCount: exercisesForSession.length,
           methodCount: 0,
+          notes: sessionNotes,
           exercises: exercisesForSession,
         };
       });

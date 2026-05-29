@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  ChevronLeft, ChevronRight, Check, Dumbbell, RefreshCw,
+  ChevronLeft, ChevronRight, ChevronDown, Check, Dumbbell, RefreshCw,
   CheckCircle2, Timer,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -411,6 +411,10 @@ export default function AthleteSessionPage() {
   const workoutStartTimeRef = useRef<number | null>(null);
   const [workoutElapsed, setWorkoutElapsed] = useState(0);
 
+  // Overview: which section cards are expanded (by section id); all start expanded
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set<string>());
+  const expandedInitRef = useRef(false);
+
   // ── Derived ────────────────────────────────────────────────────────────────
 
   const sections = useMemo<SectionData[]>(() => {
@@ -439,6 +443,13 @@ export default function AthleteSessionPage() {
       setWorkoutElapsed(0);
     }
   }
+
+  // Initialise all section cards as expanded once sections are available
+  useEffect(() => {
+    if (expandedInitRef.current || sections.length === 0) return;
+    expandedInitRef.current = true;
+    setExpandedSections(new Set(sections.map(s => s.id)));
+  }, [sections]);
 
   // ── Rest timer ─────────────────────────────────────────────────────────────
 
@@ -620,25 +631,84 @@ export default function AthleteSessionPage() {
           </p>
         </div>
 
-        <div className="flex-1 flex flex-col items-center justify-center px-6 gap-6">
-          {sections.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 text-muted-foreground">
-              <Dumbbell className="h-8 w-8 opacity-30" />
-              <p className="text-sm">No exercises assigned yet.</p>
-            </div>
-          ) : (
-            <>
-              {session.notes ? (
-                <p className="text-sm text-muted-foreground text-center leading-relaxed max-w-xs">
-                  {session.notes}
-                </p>
-              ) : null}
-              <Button className="w-full max-w-xs" size="lg" onClick={() => setPhase('sectionIntro')}>
+        {sections.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+            <Dumbbell className="h-8 w-8 opacity-30" />
+            <p className="text-sm">No exercises assigned yet.</p>
+          </div>
+        ) : (
+          <>
+            <ScrollArea className="flex-1">
+              <div className="px-4 py-4 space-y-3">
+                {/* Session notes */}
+                {session.notes && (
+                  <p className="text-sm text-muted-foreground leading-relaxed pb-1">
+                    {session.notes}
+                  </p>
+                )}
+
+                {/* Collapsible section cards */}
+                {sections.map(sec => {
+                  const isOpen = expandedSections.has(sec.id);
+                  return (
+                    <Card key={sec.id} className="overflow-hidden">
+                      {/* Section header — tap to toggle */}
+                      <button
+                        className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 active:bg-muted/60 transition-colors"
+                        onClick={() =>
+                          setExpandedSections(prev => {
+                            const next = new Set(prev);
+                            isOpen ? next.delete(sec.id) : next.add(sec.id);
+                            return next;
+                          })
+                        }
+                      >
+                        <div className="text-left">
+                          <p className="font-semibold text-sm">{sec.name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {sec.exercises.length} exercise{sec.exercises.length !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+                        <ChevronDown
+                          className={cn(
+                            'h-4 w-4 text-muted-foreground transition-transform duration-200 shrink-0',
+                            isOpen && 'rotate-180'
+                          )}
+                        />
+                      </button>
+
+                      {/* Exercise list — shown when expanded */}
+                      {isOpen && (
+                        <div className="border-t divide-y divide-border/50">
+                          {sec.exercises.map((ex, i) => (
+                            <div key={ex.id} className="flex items-center gap-3 px-4 py-2.5">
+                              <span className="text-xs text-muted-foreground w-4 shrink-0 text-right tabular-nums">
+                                {i + 1}
+                              </span>
+                              <span className="text-sm flex-1">{ex.name}</span>
+                              {ex.plannedSets && (
+                                <span className="text-xs text-muted-foreground shrink-0">
+                                  {ex.plannedSets} sets
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+
+            {/* Start CTA */}
+            <div className="px-4 py-4 border-t bg-background shrink-0">
+              <Button className="w-full" size="lg" onClick={() => setPhase('sectionIntro')}>
                 Start
               </Button>
-            </>
-          )}
-        </div>
+            </div>
+          </>
+        )}
       </div>
     );
   }
