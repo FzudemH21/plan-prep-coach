@@ -85,9 +85,11 @@ function getParamColumns(ex: ExerciseSummary): string[] {
     if (withValues.length > 0) return withValues;
   }
 
-  // No params have values yet — return the full candidate list so the athlete
-  // can still see the expected columns and log their own values.
-  return candidates;
+  // plannedParams exists but no candidate has a non-empty _setN value.
+  // This happens when the Supabase sync ran before the periodization table
+  // was filled (stale data, plannedParams = {}).  Show a minimal grid rather
+  // than an all-"—" table spanning every toolbox parameter.
+  return ['Reps'];
 }
 
 function getPlannedValue(ex: ExerciseSummary, paramName: string, setIdx: number): string {
