@@ -369,13 +369,15 @@ export function WorkoutSessionSheet({
                   : rawChronologicalIndex;
                 
                 // Try chronological session index FIRST for split methods, then fallback to session 0
-                const storedParams = 
+                const storedParams =
                   currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[chronologicalSessionIndex] ||
                   currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[0] ||
                   currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[chronologicalSessionIndex] ||
                   currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[0] ||
                   {};
-                
+
+                console.log(`[buildSections] ex=${ex.exerciseName} fullMethodKey=${fullMethodKey} methodId=${ex.methodId} storedParams=`, JSON.stringify(storedParams).slice(0,200));
+
                 // PRIMARY: Derive parameters from storedParams (method periodization grid)
                 // Filter out _unit keys and per-set keys (e.g. Reps_set1) — the latter can
                 // appear when storedParams was previously written by handleSave which stores
@@ -644,13 +646,15 @@ export function WorkoutSessionSheet({
         : rawChronologicalIndex;
       
       // Try chronological session index FIRST for split methods, then fallback to session 0
-      const storedParams = 
+      const storedParams =
         currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[chronologicalSessionIndex] ||
         currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[0] ||
         currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[chronologicalSessionIndex] ||
         currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[0] ||
         {};
-      
+
+      console.log(`[buildSections2] ex=${ex.exerciseName} fullMethodKey=${fullMethodKey} methodId=${ex.methodId} storedParams=`, JSON.stringify(storedParams).slice(0,200));
+
       // PRIMARY: Derive parameters from storedParams (method periodization grid)
       // Filter out _unit keys and per-set keys (e.g. Reps_set1) — the latter can
       // appear when storedParams was previously written by handleSave which stores
