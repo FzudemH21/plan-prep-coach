@@ -156,7 +156,9 @@ export async function syncAthleteSchedule(
       if (entry.isRestParameter) {
         toolboxRestMap.set(key, entry.parameterName);
       }
-      if (!entry.showInGridByDefault || entry.isFrequencyParameter || entry.isSetParameter || entry.isRestParameter) continue;
+      // Only include quantitative params in the grid; qualitative ones (Set Type,
+      // Organization, Comments, etc.) appear as info chips below the grid instead.
+      if (!entry.showInGridByDefault || entry.isFrequencyParameter || entry.isSetParameter || entry.isRestParameter || entry.parameterType === 'qualitative') continue;
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key)!.push(entry.parameterName);
     }
