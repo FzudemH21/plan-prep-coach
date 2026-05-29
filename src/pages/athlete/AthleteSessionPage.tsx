@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  ChevronLeft, ChevronRight, ChevronDown, Check, Dumbbell, RefreshCw,
+  ChevronLeft, ChevronDown, Check, Dumbbell, RefreshCw,
   CheckCircle2, Timer,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -87,13 +87,18 @@ function getParamColumns(ex: ExerciseSummary): string[] {
       return false;
     });
     if (withValues.length > 0) return withValues;
+
+    // plannedParams exists but no candidate has a non-empty value yet.
+    // This happens for brand-new toolbox exercises (adhocPlannedParams has all
+    // empty per-set placeholder keys) or when the periodization table wasn't filled.
+    // If the coach configured visible columns, show them so the athlete can
+    // fill in their actual values during the workout.
+    if (candidates.length > 0) return candidates;
   }
 
-  // plannedParams exists but no candidate has a non-empty _setN value.
-  // This happens when the Supabase sync ran before the periodization table
-  // was filled (stale data, plannedParams = {}).  Show a minimal grid rather
-  // than an all-"—" table spanning every toolbox parameter.
-  return ['Reps'];
+  // No plannedParams or it was empty — fall back to the configured visible
+  // columns if available, otherwise default to a single Reps column.
+  return candidates.length > 0 ? candidates : ['Reps'];
 }
 
 function getPlannedValue(ex: ExerciseSummary, paramName: string, setIdx: number): string {
@@ -400,7 +405,6 @@ export default function AthleteSessionPage() {
 
   const [phase, setPhase] = useState<Phase>('overview');
   const [sectionIdx, setSectionIdx] = useState(0);
-  const [exerciseIdx, setExerciseIdx] = useState(0);
   const [restSecondsLeft, setRestSecondsLeft] = useState(90);
   const nextAfterRestRef = useRef<(() => void) | null>(null);
 
@@ -427,7 +431,6 @@ export default function AthleteSessionPage() {
   }, [state]);
 
   const currentSection = sections[sectionIdx];
-  const currentExercise = currentSection?.exercises[exerciseIdx];
 
   // ── Workout elapsed timer ──────────────────────────────────────────────────
 
@@ -506,73 +509,81 @@ export default function AthleteSessionPage() {
     });
   }
 
+  /** Returns true when every exercise in the given section has all its sets ticked,
+   *  given a (possibly speculative) completedSets map. */
+  function isSectionComplete(
+    section: SectionData,
+    cs: Record<string, number[]>,
+  ): boolean {
+    return section.exercises.every(ex => {
+      const sc = getSetCount(ex);
+      const done = cs[ex.id] ?? [];
+      return done.length >= sc &&
+        Array.from({ length: sc }, (_, i) => i).every(i => done.includes(i));
+    });
+  }
+
   function handleCompleteSet(exerciseId: string, setIdx: number) {
     const doneArr = completedSets[exerciseId] ?? [];
     if (doneArr.includes(setIdx)) return; // already marked
 
-    const ex = currentExercise;
+    // Find the exercise in the current section (not exerciseIdx-dependent)
+    const ex = currentSection?.exercises.find(e => e.id === exerciseId);
     if (!ex) return;
 
-    // Persist planned values for any cell the athlete didn't manually fill
     autoFillPlanned(ex, setIdx);
 
     const setCount = getSetCount(ex);
     const newDoneArr = [...doneArr, setIdx];
-    const allSetsDone = newDoneArr.length >= setCount &&
-      Array.from({ length: setCount }, (_, i) => i).every(i => newDoneArr.includes(i));
 
-    setCompletedSets(prev => ({
-      ...prev,
-      [exerciseId]: [...(prev[exerciseId] ?? []), setIdx],
-    }));
+    const newCS = { ...completedSets, [exerciseId]: newDoneArr };
+    setCompletedSets(newCS);
 
-    const isLastExercise = exerciseIdx === (currentSection?.exercises.length ?? 0) - 1;
     const isLastSection = sectionIdx === sections.length - 1;
     const restSecs = getRestSeconds(ex);
 
-    if (allSetsDone && isLastExercise && isLastSection) {
-      startRest(restSecs, () => { setPhase('done'); setBorgSheetOpen(true); });
-    } else if (allSetsDone && isLastExercise) {
-      startRest(restSecs, () => setPhase('sectionDone'));
-    } else if (allSetsDone) {
-      startRest(restSecs, () => { setExerciseIdx(i => i + 1); setPhase('active'); });
+    if (isSectionComplete(currentSection!, newCS)) {
+      if (isLastSection) {
+        startRest(restSecs, () => { setPhase('done'); setBorgSheetOpen(true); });
+      } else {
+        startRest(restSecs, () => setPhase('sectionDone'));
+      }
     } else {
-      // Between sets — rest then return
+      // Between sets or exercises — brief rest, then return to the section view
       startRest(restSecs, () => setPhase('active'));
     }
   }
 
-  /** Mark every remaining set for the current exercise as done in one tap. */
+  /** Mark every remaining set for an exercise as done in one tap. */
   function handleMarkAll(exerciseId: string) {
-    const ex = currentExercise;
-    if (!ex || ex.id !== exerciseId) return;
+    const ex = currentSection?.exercises.find(e => e.id === exerciseId);
+    if (!ex) return;
     const setCount = getSetCount(ex);
     const doneArr = completedSets[exerciseId] ?? [];
     const undone = Array.from({ length: setCount }, (_, i) => i).filter(i => !doneArr.includes(i));
     if (undone.length === 0) return;
 
-    // Auto-fill planned values for every undone set
     undone.forEach(setIdx => autoFillPlanned(ex, setIdx));
 
     const newDoneArr = [...doneArr, ...undone];
-    setCompletedSets(prev => ({ ...prev, [exerciseId]: newDoneArr }));
+    const newCS = { ...completedSets, [exerciseId]: newDoneArr };
+    setCompletedSets(newCS);
 
-    const isLastExercise = exerciseIdx === (currentSection?.exercises.length ?? 0) - 1;
     const isLastSection = sectionIdx === sections.length - 1;
-    const restSecs = getRestSeconds(ex);
 
-    if (isLastExercise && isLastSection) {
-      startRest(restSecs, () => { setPhase('done'); setBorgSheetOpen(true); });
-    } else if (isLastExercise) {
-      startRest(restSecs, () => setPhase('sectionDone'));
-    } else {
-      startRest(restSecs, () => { setExerciseIdx(i => i + 1); setPhase('active'); });
+    if (isSectionComplete(currentSection!, newCS)) {
+      const restSecs = getRestSeconds(ex);
+      if (isLastSection) {
+        startRest(restSecs, () => { setPhase('done'); setBorgSheetOpen(true); });
+      } else {
+        startRest(restSecs, () => setPhase('sectionDone'));
+      }
     }
+    // If section not yet complete, just update completed sets — no rest needed
   }
 
   function handleNextSection() {
     setSectionIdx(i => i + 1);
-    setExerciseIdx(0);
     setPhase('sectionIntro');
   }
 
@@ -856,12 +867,16 @@ export default function AthleteSessionPage() {
     );
   }
 
-  // ── Screen: Active exercise ────────────────────────────────────────────────
+  // ── Screen: Active section — all exercises visible, scrollable ───────────────
 
   if (phase === 'active' || phase === 'done') {
-    const ex = currentExercise;
     const totalSections = sections.length;
-    const totalExercisesInSection = currentSection?.exercises.length ?? 0;
+    const sectionExercises = currentSection?.exercises ?? [];
+    const doneCounts = sectionExercises.map(ex => (completedSets[ex.id] ?? []).length);
+    const totalSetsDone = doneCounts.reduce((a, b) => a + b, 0);
+    const totalSetsPlanned = sectionExercises.reduce((a, ex) => a + getSetCount(ex), 0);
+    const sectionComplete = isSectionComplete(currentSection!, completedSets);
+    const isLastSection = sectionIdx === sections.length - 1;
 
     return (
       <div className="flex flex-col h-screen bg-background max-w-[480px] mx-auto">
@@ -884,9 +899,8 @@ export default function AthleteSessionPage() {
           </div>
         </div>
 
-        {/* Section + exercise progress indicators */}
+        {/* Section progress bar */}
         <div className="px-4 pt-3 pb-2 shrink-0">
-          {/* Section dots */}
           {totalSections > 1 && (
             <div className="flex justify-center gap-1.5 mb-2">
               {sections.map((_, i) => (
@@ -900,125 +914,126 @@ export default function AthleteSessionPage() {
               ))}
             </div>
           )}
-          {/* Exercise counter */}
           <p className="text-xs text-center text-muted-foreground">
-            Exercise {exerciseIdx + 1} of {totalExercisesInSection}
+            {totalSetsDone} / {totalSetsPlanned} sets done
           </p>
         </div>
 
-        <ScrollArea className="flex-1 px-4">
-          <div className="py-3 space-y-4">
-            {ex ? (
-              <>
-                {/* Exercise header */}
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                    {ex.isCircuit
-                      ? <RefreshCw className="h-4 w-4 text-primary" />
-                      : <Dumbbell className="h-4 w-4 text-primary" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-lg font-bold leading-snug">{ex.name}</h2>
-                    {ex.notes && (
-                      <p className="text-sm text-muted-foreground mt-0.5">{ex.notes}</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Hidden param tags — params configured but not shown in the grid */}
-                {(() => {
-                  const tags = getHiddenParamTags(ex);
-                  if (tags.length === 0) return null;
-                  return (
-                    <div className="flex flex-wrap gap-1.5">
-                      {tags.map(tag => (
-                        <span
-                          key={tag.name}
-                          className="text-xs bg-muted text-muted-foreground rounded-full px-2.5 py-0.5 border border-border/50"
-                        >
-                          {tag.name}: {tag.value}{tag.unit ? ` ${tag.unit}` : ''}
-                        </span>
-                      ))}
-                    </div>
-                  );
-                })()}
-
-                {/* Set logging table */}
-                <SetTable
-                  exercise={ex}
-                  loggedValues={loggedValues}
-                  completedSets={completedSets}
-                  onLogValue={handleLogValue}
-                  onCompleteSet={handleCompleteSet}
-                  onMarkAll={handleMarkAll}
-                />
-
-                {/* Planned info chip */}
-                {ex.plannedSets && (
-                  <p className="text-xs text-muted-foreground text-center">
-                    Planned: {ex.plannedSets} sets
-                  </p>
-                )}
-              </>
-            ) : (
+        {/* All exercises in this section */}
+        <ScrollArea className="flex-1">
+          <div className="px-4 py-3 space-y-6">
+            {sectionExercises.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
                 <Dumbbell className="h-8 w-8 opacity-30" />
-                <p className="text-sm">No exercise selected.</p>
+                <p className="text-sm">No exercises in this section.</p>
               </div>
+            ) : (
+              sectionExercises.map((ex, idx) => {
+                const exDone = completedSets[ex.id] ?? [];
+                const exSetCount = getSetCount(ex);
+                const exComplete = exDone.length >= exSetCount &&
+                  Array.from({ length: exSetCount }, (_, i) => i).every(i => exDone.includes(i));
+                const tags = getHiddenParamTags(ex);
+
+                return (
+                  <div
+                    key={ex.id}
+                    className={cn(
+                      'rounded-xl border p-4 space-y-3 transition-colors',
+                      exComplete ? 'bg-primary/5 border-primary/20' : 'bg-background border-border',
+                    )}
+                  >
+                    {/* Exercise header */}
+                    <div className="flex items-start gap-3">
+                      <div className={cn(
+                        'w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 text-sm font-bold',
+                        exComplete ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground',
+                      )}>
+                        {exComplete
+                          ? <Check className="h-4 w-4" />
+                          : idx + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          {ex.isCircuit && <RefreshCw className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                          <h3 className={cn(
+                            'font-semibold text-base leading-snug',
+                            exComplete && 'text-muted-foreground',
+                          )}>
+                            {ex.name}
+                          </h3>
+                        </div>
+                        {ex.notes && (
+                          <p className="text-xs text-muted-foreground mt-0.5">{ex.notes}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Hidden param tags */}
+                    {tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {tags.map(tag => (
+                          <span
+                            key={tag.name}
+                            className="text-xs bg-muted text-muted-foreground rounded-full px-2.5 py-0.5 border border-border/50"
+                          >
+                            {tag.name}: {tag.value}{tag.unit ? ` ${tag.unit}` : ''}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Set logging table */}
+                    <SetTable
+                      exercise={ex}
+                      loggedValues={loggedValues}
+                      completedSets={completedSets}
+                      onLogValue={handleLogValue}
+                      onCompleteSet={handleCompleteSet}
+                      onMarkAll={handleMarkAll}
+                    />
+                  </div>
+                );
+              })
             )}
+            {/* Bottom padding so last card clears the action bar */}
+            <div className="h-2" />
           </div>
         </ScrollArea>
 
-        {/* Bottom navigation */}
+        {/* Bottom action bar */}
         <div className="px-4 py-4 border-t bg-background shrink-0">
-          <div className="flex gap-3">
-            <Button
-              variant="outline"
-              size="lg"
-              className="flex-1"
-              disabled={exerciseIdx === 0 && sectionIdx === 0}
-              onClick={() => {
-                if (exerciseIdx > 0) {
-                  setExerciseIdx(i => i - 1);
-                } else if (sectionIdx > 0) {
-                  setSectionIdx(i => i - 1);
-                  setExerciseIdx(sections[sectionIdx - 1].exercises.length - 1);
-                }
-              }}
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Prev
-            </Button>
-
-            {exerciseIdx < (currentSection?.exercises.length ?? 0) - 1 ? (
+          {sectionComplete ? (
+            isLastSection ? (
               <Button
+                className="w-full"
                 size="lg"
-                className="flex-1"
-                onClick={() => setExerciseIdx(i => i + 1)}
+                onClick={() => { setPhase('done'); setBorgSheetOpen(true); }}
               >
-                Next
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            ) : sectionIdx < sections.length - 1 ? (
-              <Button
-                size="lg"
-                className="flex-1"
-                onClick={() => setPhase('sectionDone')}
-              >
-                Done
-                <Check className="h-4 w-4" />
+                <Check className="h-4 w-4 mr-2" />
+                Finish Workout
               </Button>
             ) : (
               <Button
+                className="w-full"
                 size="lg"
-                className="flex-1"
-                onClick={() => { setPhase('done'); setBorgSheetOpen(true); }}
+                onClick={() => setPhase('sectionDone')}
               >
-                Finish
-                <Check className="h-4 w-4" />
+                <Check className="h-4 w-4 mr-2" />
+                Section Complete
               </Button>
-            )}
-          </div>
+            )
+          ) : (
+            <Button
+              variant="outline"
+              className="w-full"
+              size="lg"
+              onClick={() => setPhase('overview')}
+            >
+              <ChevronLeft className="h-4 w-4 mr-2" />
+              Back to Overview
+            </Button>
+          )}
         </div>
 
         {/* Borg completion sheet */}

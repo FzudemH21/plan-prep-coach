@@ -1492,21 +1492,34 @@ export function WorkoutSessionSheet({
     // without this step, exercises keep sectionId: undefined and the athlete app shows
     // every exercise in a single "Workout" fallback bucket.
     if (onDistributionChange && allExerciseDistribution) {
-      // Map each exercise id → the id of the section it currently lives in
-      const sectionForExId = new Map<string, string>();
+      // Map each exercise id → { sectionId, parameters } from the current workoutSections state.
+      // workoutSections is the source of truth for both section membership and per-exercise
+      // parameter values (including any edits the coach made inside the session dialog).
+      const exInfoMap = new Map<string, { sectionId: string; parameters: Record<string, string | number> }>();
       workoutSections.forEach(section => {
         section.exercises.forEach(ex => {
-          if (ex.id) sectionForExId.set(ex.id, section.id);
+          if (ex.id) exInfoMap.set(ex.id, { sectionId: section.id, parameters: ex.parameters });
         });
       });
 
       const updatedDistribution = allExerciseDistribution.map(distEx => {
         if (distEx.dayDate !== dayDate || distEx.sessionIndex !== sessionIndex) return distEx;
         const exId = (distEx as any).id || distEx.exerciseId;
-        const newSectionId = sectionForExId.get(exId);
-        if (newSectionId === undefined) return distEx; // no change (not in any section)
-        if ((distEx as any).sectionId === newSectionId) return distEx; // already correct
-        return { ...distEx, sectionId: newSectionId };
+        const info = exInfoMap.get(exId);
+        if (!info) return distEx; // not in any section (shouldn't happen)
+
+        let updated = distEx as any;
+        // Always sync sectionId
+        if (updated.sectionId !== info.sectionId) {
+          updated = { ...updated, sectionId: info.sectionId };
+        }
+        // For toolbox exercises, sync adhocPlannedParams from the current workoutSections
+        // parameters so that any edits the coach made inside the dialog are persisted
+        // and flow through to the athlete app via athleteScheduleSync.
+        if (updated.parameterSource === 'toolbox') {
+          updated = { ...updated, adhocPlannedParams: info.parameters };
+        }
+        return updated;
       });
 
       onDistributionChange(updatedDistribution);
