@@ -704,7 +704,7 @@ export default function AthleteSessionPage() {
             {/* Start CTA */}
             <div className="px-4 py-4 border-t bg-background shrink-0">
               <Button className="w-full" size="lg" onClick={() => setPhase('sectionIntro')}>
-                Start
+                Next
               </Button>
             </div>
           </>
@@ -758,7 +758,7 @@ export default function AthleteSessionPage() {
               setPhase('active');
             }}
           >
-            {isFirst ? 'Begin' : 'Start Section'}
+            Start Section
           </Button>
         </div>
       </div>

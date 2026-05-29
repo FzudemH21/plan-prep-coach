@@ -817,15 +817,25 @@ export function WorkoutSessionSheet({
   };
 
   const [workoutSections, setWorkoutSections] = useState<WorkoutSection[]>(() => {
-    // PRIORITY: Fresh exercises prop takes precedence over stale localStorage
-    if (exercises.length > 0) {
-      return buildSectionsFromExercises(exercises, parameterValues);
-    }
-    
-    // Only use localStorage if exercises prop is empty (backward compatibility)
     const sectionsKey = `workoutSections_${mesocycleId}_${dayDate}_${sessionIndex}`;
+
+    if (exercises.length > 0) {
+      const built = buildSectionsFromExercises(exercises, parameterValues);
+      // Merge saved section comments back — buildSectionsFromExercises only touches
+      // exercise parameters, so section-level comments are stripped on every rebuild.
+      try {
+        const saved = localStorage.getItem(sectionsKey);
+        if (saved) {
+          const savedSects = JSON.parse(saved) as WorkoutSection[];
+          const commentMap = new Map(savedSects.map(s => [s.id, s.comments]));
+          return built.map(s => ({ ...s, comments: commentMap.get(s.id) ?? s.comments }));
+        }
+      } catch { /* ignore */ }
+      return built;
+    }
+
+    // Only use localStorage if exercises prop is empty (backward compatibility)
     const storedSections = localStorage.getItem(sectionsKey);
-    
     if (storedSections) {
       try {
         return JSON.parse(storedSections);
@@ -833,7 +843,7 @@ export function WorkoutSessionSheet({
         // Fall through to default
       }
     }
-    
+
     // Default empty state
     return [{ id: 'section-0', name: 'Uncategorized', order: 0, exercises: [] }];
   });
@@ -871,8 +881,21 @@ export function WorkoutSessionSheet({
         // Do NOT merge with stale in-memory workoutSections from a previous dialog open,
         // as that would overwrite the restored values with old blank ones.
         const newSections = buildSectionsFromExercises(exercises, parameterValues);
+        // Merge saved section comments — they're stripped by buildSectionsFromExercises
+        const sectionsWithComments = (() => {
+          try {
+            const sectionsKey = `workoutSections_${mesocycleId}_${dayDate}_${sessionIndex}`;
+            const saved = localStorage.getItem(sectionsKey);
+            if (saved) {
+              const savedSects = JSON.parse(saved) as WorkoutSection[];
+              const commentMap = new Map(savedSects.map(s => [s.id, s.comments]));
+              return newSections.map(s => ({ ...s, comments: commentMap.get(s.id) ?? s.comments }));
+            }
+          } catch { /* ignore */ }
+          return newSections;
+        })();
         freshlyAddedExerciseIdsRef.current.clear();
-        setWorkoutSections(newSections);
+        setWorkoutSections(sectionsWithComments);
         hasInitializedRef.current = true;
       } else if (currentCount > prevCount && !isAdHocSession) {
         // EXERCISE ADDED to already-open session: merge to preserve user-entered values
@@ -1463,11 +1486,37 @@ export function WorkoutSessionSheet({
       });
     });
 
+    // Sync section assignments back to allExerciseDistribution so the athlete-schedule
+    // sync can correctly attach sectionId to each exercise in Supabase.
+    // workoutSections is the source of truth for which exercise belongs to which section;
+    // without this step, exercises keep sectionId: undefined and the athlete app shows
+    // every exercise in a single "Workout" fallback bucket.
+    if (onDistributionChange && allExerciseDistribution) {
+      // Map each exercise id → the id of the section it currently lives in
+      const sectionForExId = new Map<string, string>();
+      workoutSections.forEach(section => {
+        section.exercises.forEach(ex => {
+          if (ex.id) sectionForExId.set(ex.id, section.id);
+        });
+      });
+
+      const updatedDistribution = allExerciseDistribution.map(distEx => {
+        if (distEx.dayDate !== dayDate || distEx.sessionIndex !== sessionIndex) return distEx;
+        const exId = (distEx as any).id || distEx.exerciseId;
+        const newSectionId = sectionForExId.get(exId);
+        if (newSectionId === undefined) return distEx; // no change (not in any section)
+        if ((distEx as any).sectionId === newSectionId) return distEx; // already correct
+        return { ...distEx, sectionId: newSectionId };
+      });
+
+      onDistributionChange(updatedDistribution);
+    }
+
     toast({
       title: "Changes saved",
       description: "Workout session updated successfully",
     });
-    
+
     onClose();
   };
 
