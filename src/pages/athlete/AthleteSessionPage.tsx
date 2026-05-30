@@ -9,6 +9,16 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { useAthleteApp, AthleteScheduleEntry, ExerciseSummary } from '@/hooks/useAthleteApp';
@@ -269,7 +279,8 @@ function SetTable({ exercise, loggedValues, completedSets, onLogValue, onComplet
   const setCount = getSetCount(exercise);
   const columns = getParamColumns(exercise);
   const doneArr = completedSets[exercise.id] ?? [];
-  const allDone = doneArr.length >= setCount;
+  const allDone = doneArr.length >= setCount &&
+    Array.from({ length: setCount }, (_, i) => i).every(i => doneArr.includes(i));
 
   return (
     <div className="overflow-x-auto rounded-lg border bg-background">
@@ -282,17 +293,16 @@ function SetTable({ exercise, loggedValues, completedSets, onLogValue, onComplet
                 {col}
               </th>
             ))}
-            {/* Mark-all header button */}
+            {/* Mark-all / unmark-all header button — always tappable */}
             <th className="w-10 py-2 text-center">
               <button
-                onClick={() => !allDone && onMarkAll(exercise.id)}
-                disabled={allDone}
-                title="Mark all sets done"
+                onClick={() => onMarkAll(exercise.id)}
+                title={allDone ? 'Unmark all sets' : 'Mark all sets done'}
                 className={cn(
-                  'w-8 h-8 rounded-full flex items-center justify-center mx-auto transition-all text-xs font-bold',
+                  'w-8 h-8 rounded-full flex items-center justify-center mx-auto transition-all text-xs font-bold active:scale-95',
                   allDone
-                    ? 'bg-primary/20 text-primary cursor-default'
-                    : 'border-2 border-dashed border-border hover:border-primary hover:bg-primary/10 active:scale-95 text-muted-foreground',
+                    ? 'bg-primary/20 text-primary hover:bg-red-50 hover:text-red-400'
+                    : 'border-2 border-dashed border-border hover:border-primary hover:bg-primary/10 text-muted-foreground',
                 )}
               >
                 ✓✓
@@ -335,14 +345,15 @@ function SetTable({ exercise, loggedValues, completedSets, onLogValue, onComplet
                     </td>
                   );
                 })}
+                {/* Tick button — tapping a done set un-ticks it (misclick recovery) */}
                 <td className="py-1.5 pr-2 text-center">
                   <button
-                    onClick={() => !isDone && onCompleteSet(exercise.id, setIdx)}
+                    onClick={() => onCompleteSet(exercise.id, setIdx)}
                     className={cn(
-                      'w-8 h-8 rounded-full flex items-center justify-center mx-auto transition-all',
+                      'w-8 h-8 rounded-full flex items-center justify-center mx-auto transition-all active:scale-95',
                       isDone
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'border-2 border-border hover:border-primary hover:bg-primary/10 active:scale-95',
+                        ? 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/80'
+                        : 'border-2 border-border hover:border-primary hover:bg-primary/10',
                     )}
                   >
                     <Check className="h-3.5 w-3.5" />
@@ -383,6 +394,8 @@ export default function AthleteSessionPage() {
   // completedSets: exerciseId -> number[] of completed set indices
   const [completedSets, setCompletedSets] = useState<Record<string, number[]>>({});
   const [borgSheetOpen, setBorgSheetOpen] = useState(false);
+  // Shown when the athlete tries to finish with incomplete sets
+  const [incompleteWarning, setIncompleteWarning] = useState<'section' | 'workout' | null>(null);
 
   // Workout elapsed timer — counts up from the moment the athlete starts the first section
   const workoutStartTimeRef = useRef<number | null>(null);
@@ -495,7 +508,12 @@ export default function AthleteSessionPage() {
 
   function handleCompleteSet(exerciseId: string, setIdx: number) {
     const doneArr = completedSets[exerciseId] ?? [];
-    if (doneArr.includes(setIdx)) return; // already marked
+
+    // Allow un-ticking a set (misclick recovery)
+    if (doneArr.includes(setIdx)) {
+      setCompletedSets(prev => ({ ...prev, [exerciseId]: (prev[exerciseId] ?? []).filter(i => i !== setIdx) }));
+      return;
+    }
 
     // Find the exercise in the current section (not exerciseIdx-dependent)
     const ex = currentSection?.exercises.find(e => e.id === exerciseId);
@@ -503,9 +521,7 @@ export default function AthleteSessionPage() {
 
     autoFillPlanned(ex, setIdx);
 
-    const setCount = getSetCount(ex);
     const newDoneArr = [...doneArr, setIdx];
-
     const newCS = { ...completedSets, [exerciseId]: newDoneArr };
     setCompletedSets(newCS);
 
@@ -524,14 +540,20 @@ export default function AthleteSessionPage() {
     }
   }
 
-  /** Mark every remaining set for an exercise as done in one tap. */
+  /** Mark every remaining set for an exercise as done in one tap.
+   *  If all sets are already done, un-marks all (toggle). */
   function handleMarkAll(exerciseId: string) {
     const ex = currentSection?.exercises.find(e => e.id === exerciseId);
     if (!ex) return;
     const setCount = getSetCount(ex);
     const doneArr = completedSets[exerciseId] ?? [];
     const undone = Array.from({ length: setCount }, (_, i) => i).filter(i => !doneArr.includes(i));
-    if (undone.length === 0) return;
+
+    // Toggle off — all sets already done, so un-mark all
+    if (undone.length === 0) {
+      setCompletedSets(prev => ({ ...prev, [exerciseId]: [] }));
+      return;
+    }
 
     undone.forEach(setIdx => autoFillPlanned(ex, setIdx));
 
@@ -825,7 +847,7 @@ export default function AthleteSessionPage() {
               </CardContent>
             </Card>
             <Button className="w-full mt-2" size="lg" onClick={handleNextSection}>
-              Start {nextSection?.name}
+              Start next section
             </Button>
           </div>
         ) : (
@@ -1010,14 +1032,17 @@ export default function AthleteSessionPage() {
           </div>
         </ScrollArea>
 
-        {/* Bottom action bar — always shows the finish action */}
+        {/* Bottom action bar — shows finish action; warns if sets are missing */}
         <div className="px-4 py-4 border-t bg-background shrink-0">
           {isLastSection ? (
             <Button
               className="w-full"
               size="lg"
               variant={sectionComplete ? 'default' : 'outline'}
-              onClick={() => { setPhase('done'); setBorgSheetOpen(true); }}
+              onClick={() => {
+                if (!sectionComplete) { setIncompleteWarning('workout'); return; }
+                setPhase('done'); setBorgSheetOpen(true);
+              }}
             >
               <Check className="h-4 w-4 mr-2" />
               Finish Workout
@@ -1027,7 +1052,10 @@ export default function AthleteSessionPage() {
               className="w-full"
               size="lg"
               variant={sectionComplete ? 'default' : 'outline'}
-              onClick={() => setPhase('sectionDone')}
+              onClick={() => {
+                if (!sectionComplete) { setIncompleteWarning('section'); return; }
+                setPhase('sectionDone');
+              }}
             >
               <Check className="h-4 w-4 mr-2" />
               Finish Section
@@ -1048,6 +1076,36 @@ export default function AthleteSessionPage() {
             onSaved={handleSaved}
           />
         )}
+
+        {/* Incomplete sets warning */}
+        <AlertDialog
+          open={incompleteWarning !== null}
+          onOpenChange={o => { if (!o) setIncompleteWarning(null); }}
+        >
+          <AlertDialogContent className="sm:max-w-[360px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {incompleteWarning === 'workout' ? 'Finish workout?' : 'Finish section?'}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Not all sets are completed yet. Finish anyway?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Go back</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  const warn = incompleteWarning;
+                  setIncompleteWarning(null);
+                  if (warn === 'workout') { setPhase('done'); setBorgSheetOpen(true); }
+                  else { setPhase('sectionDone'); }
+                }}
+              >
+                Finish anyway
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     );
   }
