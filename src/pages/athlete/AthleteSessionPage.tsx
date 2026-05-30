@@ -724,7 +724,14 @@ export default function AthleteSessionPage() {
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
           <button
-            onClick={() => isFirst ? setPhase('overview') : setPhase('sectionDone')}
+            onClick={() => {
+              if (isFirst) {
+                setPhase('overview');
+              } else {
+                setSectionIdx(i => i - 1);
+                setPhase('sectionDone');
+              }
+            }}
             className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors"
           >
             <ChevronLeft className="h-5 w-5" />
@@ -822,39 +829,53 @@ export default function AthleteSessionPage() {
     const nextSection = sections[sectionIdx + 1];
 
     return (
-      <div className="flex flex-col h-screen bg-background items-center justify-center gap-6 px-6 max-w-[480px] mx-auto">
-        <CheckCircle2 className="h-16 w-16 text-green-500" />
-        <div className="text-center">
-          <p className="text-2xl font-bold">Section Complete!</p>
-          <p className="text-muted-foreground mt-1">{doneSection?.name}</p>
+      <div className="flex flex-col h-screen bg-background max-w-[480px] mx-auto">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
+          <button
+            onClick={() => setPhase('active')}
+            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <h1 className="flex-1 text-center font-semibold text-base truncate pr-8">{session.name}</h1>
         </div>
-        <p className="text-sm text-muted-foreground">
-          {doneSection?.exercises.length} exercise{doneSection?.exercises.length !== 1 ? 's' : ''} done
-        </p>
 
-        {!isLast ? (
-          <div className="flex flex-col items-center gap-2 w-full max-w-xs">
-            <p className="text-xs text-muted-foreground">Up next</p>
-            <Card className="w-full">
-              <CardContent className="flex items-center gap-3 p-3">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
-                  {sectionIdx + 2}
-                </div>
-                <div>
-                  <p className="font-medium text-sm">{nextSection?.name}</p>
-                  <p className="text-xs text-muted-foreground">{nextSection?.exercises.length} exercises</p>
-                </div>
-              </CardContent>
-            </Card>
-            <Button className="w-full mt-2" size="lg" onClick={handleNextSection}>
-              Start next section
-            </Button>
+        {/* Centered content */}
+        <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6">
+          <CheckCircle2 className="h-16 w-16 text-green-500" />
+          <div className="text-center">
+            <p className="text-2xl font-bold">Section Complete!</p>
+            <p className="text-muted-foreground mt-1">{doneSection?.name}</p>
           </div>
-        ) : (
-          <Button className="w-full max-w-xs" size="lg" onClick={() => { setPhase('done'); setBorgSheetOpen(true); }}>
-            Finish Workout
-          </Button>
-        )}
+          <p className="text-sm text-muted-foreground">
+            {doneSection?.exercises.length} exercise{doneSection?.exercises.length !== 1 ? 's' : ''} done
+          </p>
+
+          {!isLast ? (
+            <div className="flex flex-col items-center gap-2 w-full max-w-xs">
+              <p className="text-xs text-muted-foreground">Up next</p>
+              <Card className="w-full">
+                <CardContent className="flex items-center gap-3 p-3">
+                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
+                    {sectionIdx + 2}
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">{nextSection?.name}</p>
+                    <p className="text-xs text-muted-foreground">{nextSection?.exercises.length} exercises</p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Button className="w-full mt-2" size="lg" onClick={handleNextSection}>
+                Start next section
+              </Button>
+            </div>
+          ) : (
+            <Button className="w-full max-w-xs" size="lg" onClick={() => { setPhase('done'); setBorgSheetOpen(true); }}>
+              Finish Workout
+            </Button>
+          )}
+        </div>
       </div>
     );
   }
@@ -875,7 +896,7 @@ export default function AthleteSessionPage() {
         {/* Header */}
         <div className="flex items-center gap-2 px-4 py-3 border-b shrink-0">
           <button
-            onClick={() => setPhase('overview')}
+            onClick={() => setPhase('sectionIntro')}
             className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors shrink-0"
           >
             <ChevronLeft className="h-5 w-5" />
