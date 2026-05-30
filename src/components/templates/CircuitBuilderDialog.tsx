@@ -432,9 +432,9 @@ export function CircuitBuilderDialog({
                         </div>
 
                         {/* Line 2: Sets (always) + toggleable Reps / Time / Distance */}
-                        <div className="flex items-center gap-2 flex-wrap pl-7">
-                          {/* Sets — always visible */}
-                          <div className="flex items-center gap-1 shrink-0">
+                        <div className="flex items-start gap-3 pl-7">
+                          {/* Sets — always visible, label above input */}
+                          <div className="flex flex-col items-center gap-1 shrink-0">
                             <span className="text-xs text-muted-foreground">Sets</span>
                             <Input
                               value={ex.sets}
@@ -443,11 +443,11 @@ export function CircuitBuilderDialog({
                             />
                           </div>
 
-                          {/* Toggleable params */}
+                          {/* Toggleable params — chip label on top, input below when enabled */}
                           {([
-                            { key: 'reps',     label: 'Reps', unit: undefined   },
-                            { key: 'time',     label: 'Time', unit: 's'         },
-                            { key: 'distance', label: 'Dist', unit: 'm'         },
+                            { key: 'reps',     label: 'Reps', unit: undefined },
+                            { key: 'time',     label: 'Time', unit: 's'       },
+                            { key: 'distance', label: 'Dist', unit: 'm'       },
                           ] as { key: 'reps' | 'time' | 'distance'; label: string; unit?: string }[]).map(({ key, label, unit }) => {
                             const on = enabledParams.includes(key);
                             const fieldValue =
@@ -455,7 +455,7 @@ export function CircuitBuilderDialog({
                               key === 'time' ? (ex.time ?? '') :
                               (ex.distance ?? '');
                             return (
-                              <div key={key} className="flex items-center gap-1 shrink-0">
+                              <div key={key} className="flex flex-col items-center gap-1 shrink-0">
                                 <button
                                   type="button"
                                   onClick={() => handleToggleParam(index, key)}
@@ -469,7 +469,7 @@ export function CircuitBuilderDialog({
                                   {label}
                                 </button>
                                 {on && (
-                                  <>
+                                  <div className="flex items-center gap-0.5">
                                     <Input
                                       value={fieldValue}
                                       onChange={(e) => handleFieldChange(index, key, e.target.value)}
@@ -478,7 +478,7 @@ export function CircuitBuilderDialog({
                                     {unit && (
                                       <span className="text-xs text-muted-foreground">{unit}</span>
                                     )}
-                                  </>
+                                  </div>
                                 )}
                               </div>
                             );
