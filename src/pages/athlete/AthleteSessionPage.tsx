@@ -295,7 +295,7 @@ function CircuitCard({ exercise, completedSets, onCompleteRound }: CircuitCardPr
     .find(i => !completedRoundsList.includes(i));
   const allDone = completedRoundsList.length >= rounds;
 
-  const [exListOpen, setExListOpen] = useState(false);
+  const [exListOpen, setExListOpen] = useState(true);
   const circuitExercises = (exercise.circuitExercises ?? [])
     .slice()
     .sort((a, b) => a.order - b.order);
