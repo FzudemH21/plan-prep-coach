@@ -287,9 +287,10 @@ interface CircuitCardProps {
   exercise: ExerciseSummary;
   completedSets: Record<string, number[]>;
   onCompleteRound: (exId: string, roundIdx: number) => void;
+  onShowDetail?: (target: ExerciseDetailTarget) => void;
 }
 
-function CircuitCard({ exercise, completedSets, onCompleteRound }: CircuitCardProps) {
+function CircuitCard({ exercise, completedSets, onCompleteRound, onShowDetail }: CircuitCardProps) {
   const rounds = Math.max(1, Number(exercise.circuitRounds ?? 3));
   const completedRoundsList = completedSets[exercise.id] ?? [];
   const nextRoundIdx = Array.from({ length: rounds }, (_, i) => i)
@@ -339,10 +340,21 @@ function CircuitCard({ exercise, completedSets, onCompleteRound }: CircuitCardPr
             <div className="border-t divide-y divide-border/30 bg-muted/10">
               {circuitExercises.map((cex, i) => {
                 const paramStr = formatCircuitExerciseParams(cex);
+                const hasDetail = !!(cex.exerciseVideoUrl || cex.exerciseDescription);
                 return (
                   <div key={cex.id} className="flex items-center gap-2 px-3 py-2 text-xs">
                     <span className="text-muted-foreground w-4 shrink-0 text-right">{i + 1}.</span>
-                    <span className="flex-1 min-w-0 truncate">{cex.exerciseName}</span>
+                    {hasDetail && onShowDetail ? (
+                      <button
+                        onClick={() => onShowDetail({ name: cex.exerciseName, videoUrl: cex.exerciseVideoUrl, description: cex.exerciseDescription })}
+                        className="flex items-center gap-1 flex-1 min-w-0 text-left hover:underline active:opacity-60 transition-opacity"
+                      >
+                        <span className="truncate">{cex.exerciseName}</span>
+                        <Info className="h-3 w-3 text-muted-foreground shrink-0 ml-0.5" />
+                      </button>
+                    ) : (
+                      <span className="flex-1 min-w-0 truncate">{cex.exerciseName}</span>
+                    )}
                     {paramStr && (
                       <span className="text-muted-foreground shrink-0">{paramStr}</span>
                     )}
@@ -1289,6 +1301,7 @@ export default function AthleteSessionPage() {
                         exercise={ex}
                         completedSets={completedSets}
                         onCompleteRound={handleCompleteSet}
+                        onShowDetail={setDetailTarget}
                       />
                     ) : (
                       <SetTable

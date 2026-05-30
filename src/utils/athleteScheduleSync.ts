@@ -22,12 +22,18 @@ interface TrainingDay {
 // Shared interface — also re-exported from useAthleteApp.ts (keep in sync)
 export interface CircuitExerciseSummary {
   id: string;
+  /** Library exercise ID — used to look up video/description at sync time. */
+  exerciseId?: string;
   exerciseName: string;
   reps: string;
   time?: string;
   distance?: string;
   enabledParams?: string[];
   order: number;
+  /** Video URL snapshotted from the library at sync time. */
+  exerciseVideoUrl?: string;
+  /** Description snapshotted from the library at sync time. */
+  exerciseDescription?: string;
 }
 
 export interface ExerciseSummary {
@@ -451,7 +457,14 @@ export async function syncAthleteSchedule(
               circuitRestBetweenRounds: ex.isCircuit ? (ex.circuitRestBetweenRounds as string | undefined) : undefined,
               circuitRestBetweenExercises: ex.isCircuit ? (ex.circuitRestBetweenExercises as string | undefined) : undefined,
               circuitComments: ex.isCircuit ? (ex.circuitComments as string | undefined) : undefined,
-              circuitExercises: ex.isCircuit ? (ex.circuitExercises as CircuitExerciseSummary[] | undefined) : undefined,
+              circuitExercises: ex.isCircuit
+                ? ((ex.circuitExercises as (CircuitExerciseSummary & { exerciseId?: string })[] | undefined)
+                    ?.map(cex => ({
+                      ...cex,
+                      exerciseVideoUrl: cex.exerciseId ? exerciseDetails.get(cex.exerciseId)?.videoUrl : undefined,
+                      exerciseDescription: cex.exerciseId ? exerciseDetails.get(cex.exerciseId)?.description : undefined,
+                    })))
+                : undefined,
               methodKey: ex.methodId,
               plannedSets,
               plannedParams,

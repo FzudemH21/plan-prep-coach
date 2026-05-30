@@ -19,12 +19,18 @@ export interface AthleteConnection {
 
 export interface CircuitExerciseSummary {
   id: string;
+  /** Library exercise ID — used to look up video/description at sync time. */
+  exerciseId?: string;
   exerciseName: string;
   reps: string;
   time?: string;
   distance?: string;
   enabledParams?: string[];
   order: number;
+  /** Video URL snapshotted from the library at sync time. */
+  exerciseVideoUrl?: string;
+  /** Description snapshotted from the library at sync time. */
+  exerciseDescription?: string;
 }
 
 export interface ExerciseSummary {
