@@ -312,6 +312,13 @@ function CircuitCard({ exercise, completedSets, onCompleteRound }: CircuitCardPr
         {restBetweenExercises > 0 && `${restBetweenExercises}s between exercises`}
       </p>
 
+      {/* Coach comments */}
+      {exercise.circuitComments && (
+        <p className="text-xs text-muted-foreground/80 italic leading-relaxed">
+          {exercise.circuitComments}
+        </p>
+      )}
+
       {/* Collapsible exercise list */}
       {circuitExercises.length > 0 && (
         <div className="rounded-lg border overflow-hidden">

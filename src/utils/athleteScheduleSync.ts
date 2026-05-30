@@ -45,6 +45,7 @@ export interface ExerciseSummary {
   circuitRounds?: string;
   circuitRestBetweenRounds?: string;
   circuitRestBetweenExercises?: string;
+  circuitComments?: string;
   circuitExercises?: CircuitExerciseSummary[];
   // Planned values from the periodization table
   methodKey?: string;
@@ -375,6 +376,7 @@ export async function syncAthleteSchedule(
               circuitRounds: ex.isCircuit ? (ex.circuitRounds as string | undefined) : undefined,
               circuitRestBetweenRounds: ex.isCircuit ? (ex.circuitRestBetweenRounds as string | undefined) : undefined,
               circuitRestBetweenExercises: ex.isCircuit ? (ex.circuitRestBetweenExercises as string | undefined) : undefined,
+              circuitComments: ex.isCircuit ? (ex.circuitComments as string | undefined) : undefined,
               circuitExercises: ex.isCircuit ? (ex.circuitExercises as CircuitExerciseSummary[] | undefined) : undefined,
               methodKey: ex.methodId,
               plannedSets,

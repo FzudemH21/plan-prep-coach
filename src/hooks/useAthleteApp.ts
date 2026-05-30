@@ -42,6 +42,7 @@ export interface ExerciseSummary {
   circuitRounds?: string;
   circuitRestBetweenRounds?: string;
   circuitRestBetweenExercises?: string;
+  circuitComments?: string;
   circuitExercises?: CircuitExerciseSummary[];
   // Planned values synced from coach periodization table
   methodKey?: string;
