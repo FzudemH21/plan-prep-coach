@@ -396,6 +396,8 @@ export default function AthleteSessionPage() {
   const [borgSheetOpen, setBorgSheetOpen] = useState(false);
   // Shown when the athlete tries to finish with incomplete sets
   const [incompleteWarning, setIncompleteWarning] = useState<'section' | 'workout' | null>(null);
+  // Shown when the athlete tries to leave the session page after the workout has started
+  const [abandonWarning, setAbandonWarning] = useState(false);
 
   // Workout elapsed timer — counts up from the moment the athlete starts the first section
   const workoutStartTimeRef = useRef<number | null>(null);
@@ -622,7 +624,13 @@ export default function AthleteSessionPage() {
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => {
+              if (workoutStartTimeRef.current !== null) {
+                setAbandonWarning(true);
+              } else {
+                navigate(-1);
+              }
+            }}
             className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors"
           >
             <ChevronLeft className="h-5 w-5" />
@@ -708,6 +716,27 @@ export default function AthleteSessionPage() {
             </div>
           </>
         )}
+
+        {/* Abandon workout confirmation */}
+        <AlertDialog open={abandonWarning} onOpenChange={o => { if (!o) setAbandonWarning(false); }}>
+          <AlertDialogContent className="sm:max-w-[360px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Abandon workout?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Your progress will be lost.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Keep going</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => { setAbandonWarning(false); navigate(-1); }}
+              >
+                Abandon
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     );
   }
