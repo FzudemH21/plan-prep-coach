@@ -1610,6 +1610,34 @@ export function WorkoutSessionSheet({
               : s
           )
         );
+
+        // ── Also register circuit entries in allExerciseDistribution so they are
+        // persisted when the session is saved (normal exercises get this via
+        // onDistributionChange inside handleMethodSelected, but circuits skip that
+        // path and were previously lost on close/reopen).
+        if (onDistributionChange && allExerciseDistribution) {
+          const circuitDistributionEntries: ExerciseDistribution[] = circuitWorkoutExercises.map(cex => ({
+            id: cex.id,
+            exerciseId: cex.exerciseId,
+            exerciseName: cex.exerciseName,
+            methodId: cex.methodId,
+            categoryName: cex.categoryName,
+            dayDate,
+            sessionIndex,
+            order: cex.order,
+            sectionId: currentSectionId,
+            isCircuit: true,
+            circuitId: (cex as any).circuitId,
+            circuitLibraryId: (cex as any).circuitLibraryId,
+            circuitExercises: (cex as any).circuitExercises,
+            circuitRestBetweenRounds: (cex as any).circuitRestBetweenRounds,
+            circuitRestBetweenExercises: (cex as any).circuitRestBetweenExercises,
+            circuitComments: (cex as any).circuitComments,
+            parameterSource: 'toolbox' as const,
+          }));
+          onDistributionChange([...allExerciseDistribution, ...circuitDistributionEntries]);
+        }
+
         toast({ title: `Circuit${circuitSelections.length > 1 ? 's' : ''} added` });
       }
     }
