@@ -520,10 +520,19 @@ interface LibraryExerciseRow {
   id: string;
   videoUrl?: string;
   description?: string;
+  data?: Record<string, unknown>;
+}
+
+interface LibraryColumnRow {
+  id: string;
+  role?: string;
 }
 
 interface LibraryDataShape {
-  libraries?: Array<{ exercises?: LibraryExerciseRow[] }>;
+  libraries?: Array<{
+    columns?: LibraryColumnRow[];
+    exercises?: LibraryExerciseRow[];
+  }>;
 }
 
 function ExerciseDetailSheet({ target, coachUserId, onClose }: ExerciseDetailSheetProps) {
@@ -553,8 +562,27 @@ function ExerciseDetailSheet({ target, coachUserId, onClose }: ExerciseDetailShe
           for (const lib of libData.libraries) {
             const ex = lib.exercises?.find(e => e.id === target.exerciseLibraryId);
             if (ex) {
-              setVideoUrl(ex.videoUrl ?? null);
-              setDescription(ex.description ?? null);
+              // Primary: top-level fields (set by the detail modal)
+              let foundVideo: string | null = ex.videoUrl ?? null;
+              let foundDesc: string | null = ex.description ?? null;
+
+              // Fallback: inline cell edits store values in exercise.data[columnId]
+              // where columnId is the UUID of the column with role 'video'/'description'
+              if ((!foundVideo || !foundDesc) && lib.columns) {
+                const videoCol = lib.columns.find(c => c.role === 'video');
+                const descCol = lib.columns.find(c => c.role === 'description');
+                if (!foundVideo && videoCol) {
+                  const v = ex.data?.[videoCol.id];
+                  if (typeof v === 'string' && v) foundVideo = v;
+                }
+                if (!foundDesc && descCol) {
+                  const d = ex.data?.[descCol.id];
+                  if (typeof d === 'string' && d) foundDesc = d;
+                }
+              }
+
+              setVideoUrl(foundVideo);
+              setDescription(foundDesc);
               break;
             }
           }
