@@ -15,7 +15,7 @@ import type { CircuitExercise } from '@/contexts/CustomLibrariesContext';
 function formatCircuitExerciseParams(sub: CircuitExercise): string {
   const enabled = sub.enabledParams ?? ['reps'];
   const parts: string[] = [];
-  if (enabled.includes('reps') && sub.reps) parts.push(sub.reps);
+  if (enabled.includes('reps') && sub.reps) parts.push(`${sub.reps}×`);
   if (enabled.includes('time') && sub.time) parts.push(`${sub.time}s`);
   if (enabled.includes('distance') && sub.distance) parts.push(`${sub.distance}m`);
   return parts.length > 0 ? parts.join(' · ') : '—';
