@@ -82,6 +82,7 @@ export interface AthleteCalendarEvent {
   title: string;
   notes?: string;
   targetValue?: string;
+  unit?: string;
 }
 
 export interface AthleteScheduleEntry {

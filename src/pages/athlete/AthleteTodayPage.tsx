@@ -101,7 +101,7 @@ function TestCard({ ev }: { ev: AthleteCalendarEvent }) {
           <p className="font-medium text-sm text-amber-900">{ev.title}</p>
           {ev.targetValue && (
             <p className="text-xs text-amber-700 mt-0.5">
-              <span className="font-medium">Goal:</span> {ev.targetValue}
+              <span className="font-medium">Goal:</span> {ev.targetValue}{ev.unit ? ` ${ev.unit}` : ''}
             </p>
           )}
           {ev.notes && (

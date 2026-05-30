@@ -165,6 +165,9 @@ async function buildExerciseDetailMap(userId: string): Promise<ExerciseDetailMap
   return map;
 }
 
+/** CalendarEvent enriched with the parameter unit, resolved at call time. */
+export type SyncCalendarEvent = CalendarEvent & { unit?: string };
+
 export async function syncAthleteSchedule(
   connectionId: string,
   assignment: AthleteCalendarAssignment,
@@ -176,7 +179,7 @@ export async function syncAthleteSchedule(
   toolboxEntries?: ToolboxEntry[],
   supersets?: SupersetMapping,
   sessionIntensities?: Record<string, string>,
-  calendarEvents?: CalendarEvent[],
+  calendarEvents?: SyncCalendarEvent[],
 ): Promise<void> {
   if (!connectionId || trainingDays.length === 0) return;
 
@@ -413,7 +416,7 @@ export async function syncAthleteSchedule(
   }
 
   // Build events-by-date lookup
-  const eventsByDate = new Map<string, Array<{ id: string; type: string; title: string; notes?: string; targetValue?: string }>>();
+  const eventsByDate = new Map<string, Array<{ id: string; type: string; title: string; notes?: string; targetValue?: string; unit?: string }>>();
   for (const ev of calendarEvents ?? []) {
     if (!eventsByDate.has(ev.date)) eventsByDate.set(ev.date, []);
     eventsByDate.get(ev.date)!.push({
@@ -422,6 +425,7 @@ export async function syncAthleteSchedule(
       title: ev.title,
       notes: ev.notes,
       targetValue: ev.targetValue,
+      unit: ev.unit,
     });
   }
 

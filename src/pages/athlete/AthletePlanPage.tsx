@@ -162,7 +162,7 @@ function DaySection({
                 </p>
                 {ev.type === 'test' && ev.targetValue && (
                   <p className="text-amber-700 mt-0.5">
-                    <span className="font-medium">Goal:</span> {ev.targetValue}
+                    <span className="font-medium">Goal:</span> {ev.targetValue}{ev.unit ? ` ${ev.unit}` : ''}
                   </p>
                 )}
                 {ev.notes && (
