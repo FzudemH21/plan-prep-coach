@@ -996,7 +996,7 @@ export default function AthleteSessionPage() {
                       {isOpen && (
                         <div className="border-t divide-y divide-border/50">
                           {sec.exercises.map((ex, i) => (
-                            <React.Fragment key={ex.id}>
+                            <div key={ex.id}>
                               <div className="flex items-center gap-3 px-4 py-2.5">
                                 <span className="text-xs text-muted-foreground w-4 shrink-0 text-right tabular-nums">
                                   {i + 1}
@@ -1046,7 +1046,7 @@ export default function AthleteSessionPage() {
                                     })}
                                 </div>
                               )}
-                            </React.Fragment>
+                            </div>
                           ))}
                         </div>
                       )}
