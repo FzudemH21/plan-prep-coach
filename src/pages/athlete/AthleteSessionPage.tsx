@@ -627,6 +627,25 @@ export default function AthleteSessionPage() {
     });
   }
 
+  /** Returns true when all superset siblings have also completed setIdx.
+   *  Non-superset exercises always return true (no siblings to wait for).
+   *  Siblings whose own set count is ≤ setIdx are treated as done for this round. */
+  function isSupersetRoundComplete(
+    exerciseId: string,
+    setIdx: number,
+    newCS: Record<string, number[]>,
+    section: SectionData,
+  ): boolean {
+    const ex = section.exercises.find(e => e.id === exerciseId);
+    if (!ex?.supersetId) return true;
+    return section.exercises
+      .filter(e => e.supersetId === ex.supersetId && e.id !== exerciseId)
+      .every(sib => {
+        if (setIdx >= getSetCount(sib)) return true; // sibling has no set at this index
+        return (newCS[sib.id] ?? []).includes(setIdx);
+      });
+  }
+
   /** Returns true when every exercise in the given section has all its sets ticked,
    *  given a (possibly speculative) completedSets map. */
   function isSectionComplete(
@@ -670,7 +689,12 @@ export default function AthleteSessionPage() {
         startRest(restSecs, () => { setSectionIdx(i => i + 1); setPhase('sectionIntro'); });
       }
     } else {
-      // Between sets or exercises — brief rest, then return to the section view
+      // Mid-superset: all siblings haven't completed this set yet — skip rest entirely
+      if (!isSupersetRoundComplete(exerciseId, setIdx, newCS, currentSection!)) {
+        setPhase('active');
+        return;
+      }
+      // Between rounds (or standalone set) — fire the rest timer
       startRest(restSecs, () => setPhase('active'));
     }
   }
