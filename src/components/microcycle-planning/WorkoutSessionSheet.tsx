@@ -290,6 +290,13 @@ export function WorkoutSessionSheet({
                       }
                     } catch {}
                   }
+                  // Fallback: adhocPlannedParams on the exercise itself (preserved across copy-paste)
+                  if (Object.keys(savedParamsA).length === 0) {
+                    const adhoc = (ex as any).adhocPlannedParams;
+                    if (adhoc && typeof adhoc === 'object' && Object.keys(adhoc).length > 0) {
+                      savedParamsA = adhoc as Record<string, string | number>;
+                    }
+                  }
                   const savedSetCountA = savedParamsA[setParamName];
                   const setCount = (savedSetCountA !== undefined && savedSetCountA !== '' && !isNaN(Number(savedSetCountA)))
                     ? Number(savedSetCountA)
@@ -589,6 +596,13 @@ export function WorkoutSessionSheet({
               if (savedEx?.parameters) savedParamsB = savedEx.parameters as Record<string, string | number>;
             }
           } catch {}
+        }
+        // Fallback: adhocPlannedParams on the exercise itself (preserved across copy-paste)
+        if (Object.keys(savedParamsB).length === 0) {
+          const adhoc = (ex as any).adhocPlannedParams;
+          if (adhoc && typeof adhoc === 'object' && Object.keys(adhoc).length > 0) {
+            savedParamsB = adhoc as Record<string, string | number>;
+          }
         }
         const savedSetCountB = savedParamsB[setParamName];
         const setCount = (savedSetCountB !== undefined && savedSetCountB !== '' && !isNaN(Number(savedSetCountB)))
