@@ -346,25 +346,27 @@ function CircuitCard({ exercise, completedSets, onCompleteRound }: CircuitCardPr
         </div>
       )}
 
-      {/* Round chips */}
+      {/* Round chips — tap a completed round to un-tick it */}
       <div className="flex gap-2">
         {Array.from({ length: rounds }, (_, i) => {
           const done = completedRoundsList.includes(i);
           const isNext = i === nextRoundIdx;
           return (
-            <div
+            <button
               key={i}
+              onClick={() => done ? onCompleteRound(exercise.id, i) : undefined}
+              disabled={!done}
               className={cn(
-                'flex-1 rounded-lg border py-2.5 text-center text-xs font-semibold transition-colors',
+                'flex-1 rounded-lg border py-2.5 text-center text-xs font-semibold transition-all',
                 done
-                  ? 'bg-primary text-primary-foreground border-primary'
+                  ? 'bg-primary text-primary-foreground border-primary active:scale-95 active:opacity-80'
                   : isNext
-                    ? 'border-primary/60 text-primary bg-primary/5'
-                    : 'border-border text-muted-foreground bg-muted/20',
+                    ? 'border-primary/60 text-primary bg-primary/5 cursor-default'
+                    : 'border-border text-muted-foreground bg-muted/20 cursor-default',
               )}
             >
               {done ? '✓' : `Round ${i + 1}`}
-            </div>
+            </button>
           );
         })}
       </div>
