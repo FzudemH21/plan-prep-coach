@@ -93,10 +93,12 @@ Claude Chat (browser) is my sparring partner for planning, discussion, and promp
 | Priority | Feature | Status |
 |----------|---------|--------|
 | P2 | Photo/video in messages | ⬜ Open |
-| P2 | Exercise video playback in session (link to exercise database video) | ⬜ Open |
+| P2 | Exercise video playback in session (link to exercise database video) | ✅ Done — ⓘ icon + tappable exercise name opens a centered dialog with YouTube thumbnail (tappable → opens video) and description. Video URL + description snapshotted into athlete_schedule at plan-assignment time. |
+| P2 | **Session copy bug — parameter + visibility data** — When copying a session in the athlete calendar (coach web app), parameter values and visible parameters are not copied correctly: for program-assigned exercises, planned param values copy but visibleParams does not; for manually added (ad-hoc) exercises, neither plannedParams nor visibleParams copy. Root is in the copy logic in WorkoutSessionSheet / AthleteCalendarView — the copy must deep-clone adhocPlannedParams, adhocVisibleParams, and the parameterVisibility localStorage key for the target date/session. Fix before session copy is considered reliable. | ⬜ Open |
 | P2 | In-session exercise swap (alternative exercise dropdown) | ⬜ Open |
 | P2 | Tests & events visible in Plan tab calendar (synced from plan assignment) | ⬜ Open |
 | P2 | Progress photos in profile | ⬜ Open |
+| P3 | **Daily check-in** — shown once per day on first app open. Two sections: (1) Short wellbeing questionnaire (sleep quality, energy, mood, soreness — each on a simple 1–5 scale); (2) Adapted OSTRC-H questionnaire (Oslo Sports Trauma Research Centre Health questionnaire, overuse injury screening — 4 standardised questions per body region the athlete flags as relevant). Results stored in Supabase per athlete per day. Coach sees trends in athlete profile. Mid-future — implement after core session logging is stable. | ⬜ Open |
 | P3 | Language selection on first open (German / English minimum) | ⬜ Open |
 | P3 | Push notifications (session reminders, coach messages) | ⬜ Open |
 

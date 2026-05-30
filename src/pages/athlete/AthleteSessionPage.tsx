@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -514,6 +515,12 @@ interface ExerciseDetailSheetProps {
   onClose: () => void;
 }
 
+/** Ensure the URL has a protocol so browsers don't treat it as a relative path. */
+function normalizeUrl(url: string): string {
+  if (!url) return url;
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
+
 function getYouTubeVideoId(url: string): string | null {
   const m = url.match(
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
@@ -521,22 +528,20 @@ function getYouTubeVideoId(url: string): string | null {
   return m ? m[1] : null;
 }
 
-/** Reads video URL and description directly from the pre-embedded schedule data — no Supabase call needed. */
+/** Reads video URL and description from the pre-embedded schedule data — no Supabase call. */
 function ExerciseDetailSheet({ target, onClose }: ExerciseDetailSheetProps) {
-  const videoId = target?.videoUrl ? getYouTubeVideoId(target.videoUrl) : null;
+  const safeUrl      = target?.videoUrl ? normalizeUrl(target.videoUrl) : null;
+  const videoId      = safeUrl ? getYouTubeVideoId(safeUrl) : null;
   const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
-  const hasContent = !!(target?.videoUrl || target?.description);
+  const hasContent   = !!(safeUrl || target?.description);
 
   return (
-    <Sheet open={target !== null} onOpenChange={o => { if (!o) onClose(); }}>
-      <SheetContent
-        side="bottom"
-        className="rounded-t-2xl max-h-[85vh] overflow-y-auto p-0 sm:w-[480px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:rounded-2xl"
-      >
-        <div className="px-5 pt-4 pb-8 space-y-4">
-          <SheetHeader>
-            <SheetTitle className="text-left">{target?.name ?? 'Exercise'}</SheetTitle>
-          </SheetHeader>
+    <Dialog open={target !== null} onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] rounded-2xl max-h-[85vh] overflow-y-auto p-0 gap-0">
+        <div className="px-5 pt-5 pb-7 space-y-4">
+          <DialogHeader>
+            <DialogTitle className="text-left">{target?.name ?? 'Exercise'}</DialogTitle>
+          </DialogHeader>
 
           {!hasContent && (
             <p className="text-sm text-muted-foreground text-center py-6">
@@ -546,17 +551,17 @@ function ExerciseDetailSheet({ target, onClose }: ExerciseDetailSheetProps) {
 
           {hasContent && (
             <>
-              {/* YouTube thumbnail → opens video */}
-              {thumbnailUrl && target?.videoUrl && (
+              {/* YouTube thumbnail → opens video in new tab */}
+              {thumbnailUrl && safeUrl && (
                 <a
-                  href={target.videoUrl}
+                  href={safeUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="block rounded-xl overflow-hidden relative group"
                 >
                   <img
                     src={thumbnailUrl}
-                    alt={`${target.name} video`}
+                    alt={`${target!.name} video`}
                     className="w-full object-cover aspect-video bg-muted"
                   />
                   <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-active:bg-black/30 transition-colors">
@@ -569,14 +574,17 @@ function ExerciseDetailSheet({ target, onClose }: ExerciseDetailSheetProps) {
                 </a>
               )}
 
-              {/* Non-YouTube video URL — plain link */}
-              {target?.videoUrl && !thumbnailUrl && (
+              {/* Non-YouTube URL — styled button link */}
+              {safeUrl && !thumbnailUrl && (
                 <a
-                  href={target.videoUrl}
+                  href={safeUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-sm text-primary underline underline-offset-2 py-1"
+                  className="flex items-center justify-center gap-2 w-full rounded-xl border py-2.5 text-sm font-medium text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors"
                 >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
                   Watch video
                 </a>
               )}
@@ -589,8 +597,8 @@ function ExerciseDetailSheet({ target, onClose }: ExerciseDetailSheetProps) {
             </>
           )}
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
 
