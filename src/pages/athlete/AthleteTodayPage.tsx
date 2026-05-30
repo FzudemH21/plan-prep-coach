@@ -58,14 +58,14 @@ function TrainingEntry({ entry }: { entry: AthleteScheduleEntry }) {
                       {session.exerciseCount} exercise{session.exerciseCount !== 1 ? 's' : ''}
                       {session.duration ? ` · ~${session.duration} min` : ''}
                     </p>
+                    {session.intensity && (
+                      <div className="mt-1.5">
+                        <IntensityBadge intensity={session.intensity} />
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {session.intensity && (
-                    <div className={cn('w-2.5 h-2.5 rounded-full', getDotColor(session.intensity))} />
-                  )}
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
               </CardContent>
             </Card>
           ))

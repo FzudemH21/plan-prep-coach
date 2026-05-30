@@ -4,7 +4,7 @@ import { Dumbbell, ChevronRight, ChevronLeft } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAthleteApp, AthleteScheduleEntry } from '@/hooks/useAthleteApp';
-import { IntensityBadge, getDotColor } from '@/components/athlete-app/IntensityBadge';
+import { IntensityBadge } from '@/components/athlete-app/IntensityBadge';
 import { cn } from '@/lib/utils';
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
@@ -84,14 +84,14 @@ function SessionCard({
               {session.exerciseCount} exercise{session.exerciseCount !== 1 ? 's' : ''}
               {session.duration ? ` · ~${session.duration} min` : ''}
             </p>
+            {session.intensity && (
+              <div className="mt-1.5">
+                <IntensityBadge intensity={session.intensity} />
+              </div>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {session.intensity && (
-            <div className={cn('w-2.5 h-2.5 rounded-full', getDotColor(session.intensity))} />
-          )}
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-        </div>
+        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
       </CardContent>
     </Card>
   );
@@ -134,9 +134,6 @@ function DaySection({
             </span>
           )}
         </div>
-        {entry?.intensity && (
-          <div className={cn('w-2.5 h-2.5 rounded-full shrink-0 ml-2', getDotColor(entry.intensity))} />
-        )}
       </div>
 
       {/* Intensity badge */}
