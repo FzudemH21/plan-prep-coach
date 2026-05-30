@@ -9,6 +9,7 @@ export interface ExerciseSelection {
   circuitId?: string;
   circuitLibraryId?: string;
   circuitExercises?: import('@/contexts/CustomLibrariesContext').CircuitExercise[];
+  circuitRounds?: string;
   circuitRestBetweenRounds?: string;
   circuitRestBetweenExercises?: string;
   circuitComments?: string;
@@ -108,6 +109,7 @@ export interface ExerciseDistribution {
   circuitId?: string;
   circuitLibraryId?: string;
   circuitExercises?: import('@/contexts/CustomLibrariesContext').CircuitExercise[];
+  circuitRounds?: string;
   circuitRestBetweenRounds?: string;
   circuitRestBetweenExercises?: string;
   circuitComments?: string;

@@ -10,6 +10,16 @@ import { GripVertical, MoreVertical, Link2, Copy, Trash2, Plus, StickyNote, Calc
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { WorkoutExercise } from '@/types/workout';
+import type { CircuitExercise } from '@/contexts/CustomLibrariesContext';
+
+function formatCircuitExerciseParams(sub: CircuitExercise): string {
+  const enabled = sub.enabledParams ?? ['reps'];
+  const parts: string[] = [];
+  if (enabled.includes('reps') && sub.reps) parts.push(sub.reps);
+  if (enabled.includes('time') && sub.time) parts.push(`${sub.time}s`);
+  if (enabled.includes('distance') && sub.distance) parts.push(`${sub.distance}m`);
+  return parts.length > 0 ? parts.join(' · ') : '—';
+}
 import { ParameterInputField } from './ParameterInputField';
 import { getParametersForMethod } from '@/data/methodParameters';
 import { ParameterVisibilityPopover, ParameterVisibilityOverrides, isParameterVisible } from './ParameterVisibilityPopover';
@@ -140,9 +150,13 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
               </DropdownMenu>
             </div>
 
-            {/* Rest info */}
+            {/* Circuit info: rounds + rest */}
             {!isCollapsed && (
               <p className="text-xs text-muted-foreground">
+                <span className="font-medium">
+                  {exercise.circuitRounds ?? '3'} rounds
+                </span>
+                &nbsp;·&nbsp;
                 Rest between rounds:{' '}
                 <span className="font-medium">
                   {exercise.circuitRestBetweenRounds ? `${exercise.circuitRestBetweenRounds}s` : '—'}
@@ -173,7 +187,7 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                     >
                       {sub.exerciseName}
                     </button>
-                    <span className="text-muted-foreground shrink-0">{sub.sets}×{sub.reps}</span>
+                    <span className="text-muted-foreground shrink-0">{formatCircuitExerciseParams(sub)}</span>
                   </div>
                 ))}
               </div>

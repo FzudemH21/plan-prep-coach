@@ -27,6 +27,7 @@ export interface WorkoutExercise {
   circuitLibraryId?: string;
   /** Snapshot of circuit exercises at the time of adding to session */
   circuitExercises?: import('@/contexts/CustomLibrariesContext').CircuitExercise[];
+  circuitRounds?: string;
   circuitRestBetweenRounds?: string;
   circuitRestBetweenExercises?: string;
   circuitComments?: string;

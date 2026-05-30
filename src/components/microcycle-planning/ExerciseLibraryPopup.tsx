@@ -438,6 +438,7 @@ export function ExerciseLibraryPopup({
                                 circuitId: circuit.id,
                                 circuitLibraryId: lib.id,
                                 circuitExercises: [...circuit.exercises],
+                                circuitRounds: circuit.rounds,
                                 circuitRestBetweenRounds: circuit.restBetweenRounds,
                                 circuitRestBetweenExercises: circuit.restBetweenExercises,
                                 circuitComments: circuit.comments,
