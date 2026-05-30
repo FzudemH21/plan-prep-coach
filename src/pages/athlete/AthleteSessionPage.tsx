@@ -606,9 +606,12 @@ function ExerciseDetailSheet({ target, onClose }: ExerciseDetailSheetProps) {
               )}
 
               {target?.description && (
-                <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">
-                  {target.description}
-                </p>
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Description</p>
+                  <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">
+                    {target.description}
+                  </p>
+                </div>
               )}
             </>
           )}
