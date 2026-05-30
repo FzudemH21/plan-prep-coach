@@ -515,23 +515,39 @@ interface ExerciseDetailSheetProps {
   onClose: () => void;
 }
 
-/** Ensure the URL has a protocol so browsers don't treat it as a relative path. */
+/** Ensure a non-YouTube URL has a protocol so browsers don't treat it as relative. */
 function normalizeUrl(url: string): string {
   if (!url) return url;
   return /^https?:\/\//i.test(url) ? url : `https://${url}`;
 }
 
-function getYouTubeVideoId(url: string): string | null {
-  const m = url.match(
+/**
+ * Extract YouTube video ID from any of:
+ *  • Full URL:   https://www.youtube.com/watch?v=VIDEO_ID
+ *  • Short URL:  https://youtu.be/VIDEO_ID
+ *  • Embed URL:  https://youtube.com/embed/VIDEO_ID
+ *  • Bare ID:    VIDEO_ID  (exactly 11 alphanumeric / - / _ chars, no slashes)
+ */
+function getYouTubeVideoId(raw: string): string | null {
+  const s = raw.trim();
+  // Full / protocol-less URL patterns
+  const m = s.match(
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
   );
-  return m ? m[1] : null;
+  if (m) return m[1];
+  // Bare video ID — exactly 11 chars, no path separators or spaces
+  if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
+  return null;
 }
 
 /** Reads video URL and description from the pre-embedded schedule data — no Supabase call. */
 function ExerciseDetailSheet({ target, onClose }: ExerciseDetailSheetProps) {
-  const safeUrl      = target?.videoUrl ? normalizeUrl(target.videoUrl) : null;
-  const videoId      = safeUrl ? getYouTubeVideoId(safeUrl) : null;
+  const rawUrl   = target?.videoUrl ?? null;
+  const videoId  = rawUrl ? getYouTubeVideoId(rawUrl) : null;
+  // Build a guaranteed-valid URL: YouTube canonical form or normalised arbitrary URL
+  const safeUrl  = videoId
+    ? `https://www.youtube.com/watch?v=${videoId}`
+    : (rawUrl ? normalizeUrl(rawUrl) : null);
   const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
   const hasContent   = !!(safeUrl || target?.description);
 
