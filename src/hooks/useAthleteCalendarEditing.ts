@@ -675,7 +675,8 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         };
       } else {
         // Create new day entry if it doesn't exist
-        const parsedDate = new Date(destDayDate);
+        // Parse with noon local time to avoid UTC midnight → previous-day shift
+        const parsedDate = new Date(destDayDate + 'T12:00:00');
         updated.push({
           date: destDayDate,
           dayOfWeek: parsedDate.getDay(),
@@ -696,7 +697,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     
     toast({ 
       title: "Session moved", 
-      description: `Moved to ${new Date(destDayDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` 
+      description: `Moved to ${new Date(destDayDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
     });
   }, [exerciseDistribution, sessionSections, supersets, daySplitStates, trainingDays, dailyIntensityData, sessionIntensities, toast]);
 
