@@ -1332,7 +1332,7 @@ export default function AthleteSessionPage() {
                     </div>
                     {group.members.map(({ ex, n }, mi) => (
                       <div key={ex.id}>
-                        {renderExerciseCard(ex, n, group.label)}
+                        {renderExerciseCard(ex, n, `${group.label}${mi + 1}`)}
                         {mi < group.members.length - 1 && (
                           <div className="mx-4 border-t border-dashed border-primary/20" />
                         )}
