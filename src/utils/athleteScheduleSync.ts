@@ -20,6 +20,16 @@ interface TrainingDay {
 }
 
 // Shared interface — also re-exported from useAthleteApp.ts (keep in sync)
+export interface CircuitExerciseSummary {
+  id: string;
+  exerciseName: string;
+  reps: string;
+  time?: string;
+  distance?: string;
+  enabledParams?: string[];
+  order: number;
+}
+
 export interface ExerciseSummary {
   id: string;
   name: string;
@@ -31,6 +41,11 @@ export interface ExerciseSummary {
   notes?: string;
   isCircuit?: boolean;
   supersetId?: string;       // shared key for all exercises in the same superset group
+  // Circuit-specific fields — populated when isCircuit is true
+  circuitRounds?: string;
+  circuitRestBetweenRounds?: string;
+  circuitRestBetweenExercises?: string;
+  circuitExercises?: CircuitExerciseSummary[];
   // Planned values from the periodization table
   methodKey?: string;
   plannedSets?: number;
@@ -356,6 +371,11 @@ export async function syncAthleteSchedule(
               notes: ex.notes,
               isCircuit: ex.isCircuit,
               supersetId,
+              // Circuit-specific fields
+              circuitRounds: ex.isCircuit ? (ex.circuitRounds as string | undefined) : undefined,
+              circuitRestBetweenRounds: ex.isCircuit ? (ex.circuitRestBetweenRounds as string | undefined) : undefined,
+              circuitRestBetweenExercises: ex.isCircuit ? (ex.circuitRestBetweenExercises as string | undefined) : undefined,
+              circuitExercises: ex.isCircuit ? (ex.circuitExercises as CircuitExerciseSummary[] | undefined) : undefined,
               methodKey: ex.methodId,
               plannedSets,
               plannedParams,

@@ -17,6 +17,16 @@ export interface AthleteConnection {
   profileData: AthleteProfileData;
 }
 
+export interface CircuitExerciseSummary {
+  id: string;
+  exerciseName: string;
+  reps: string;
+  time?: string;
+  distance?: string;
+  enabledParams?: string[];
+  order: number;
+}
+
 export interface ExerciseSummary {
   id: string;
   name: string;
@@ -28,6 +38,11 @@ export interface ExerciseSummary {
   notes?: string;
   isCircuit?: boolean;
   supersetId?: string;   // shared key for all exercises in the same superset group
+  // Circuit-specific fields — populated when isCircuit is true
+  circuitRounds?: string;
+  circuitRestBetweenRounds?: string;
+  circuitRestBetweenExercises?: string;
+  circuitExercises?: CircuitExerciseSummary[];
   // Planned values synced from coach periodization table
   methodKey?: string;
   plannedSets?: number;

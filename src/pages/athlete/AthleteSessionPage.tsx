@@ -61,6 +61,7 @@ function groupIntoSections(exercises: ExerciseSummary[]): SectionData[] {
 }
 
 function getSetCount(ex: ExerciseSummary): number {
+  if (ex.isCircuit) return Math.max(1, Number(ex.circuitRounds ?? 3));
   return ex.plannedSets && ex.plannedSets > 0 ? ex.plannedSets : 3;
 }
 
@@ -123,8 +124,12 @@ function getPlannedValue(ex: ExerciseSummary, paramName: string, setIdx: number)
 }
 
 /** Resolve rest duration in seconds for an exercise.
- *  Priority: explicit restParamName from toolbox → regex heuristic → 90 s default. */
+ *  Circuits use circuitRestBetweenRounds; regular exercises use planned params. */
 function getRestSeconds(ex: ExerciseSummary): number {
+  if (ex.isCircuit) {
+    const secs = Number(ex.circuitRestBetweenRounds ?? 60);
+    return secs > 0 ? secs : 60;
+  }
   if (!ex.plannedParams) return 90;
 
   function parseRestValue(key: string): number | null {
@@ -261,6 +266,124 @@ function CompletionSheet({
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+// ── Circuit helpers ───────────────────────────────────────────────────────────
+
+function formatCircuitExerciseParams(cex: {
+  reps: string; time?: string; distance?: string; enabledParams?: string[];
+}): string {
+  const enabled = cex.enabledParams ?? ['reps'];
+  const parts: string[] = [];
+  if (enabled.includes('reps') && cex.reps) parts.push(`${cex.reps}×`);
+  if (enabled.includes('time') && cex.time) parts.push(`${cex.time}s`);
+  if (enabled.includes('distance') && cex.distance) parts.push(`${cex.distance}m`);
+  return parts.join(' · ');
+}
+
+interface CircuitCardProps {
+  exercise: ExerciseSummary;
+  completedSets: Record<string, number[]>;
+  onCompleteRound: (exId: string, roundIdx: number) => void;
+}
+
+function CircuitCard({ exercise, completedSets, onCompleteRound }: CircuitCardProps) {
+  const rounds = Math.max(1, Number(exercise.circuitRounds ?? 3));
+  const completedRoundsList = completedSets[exercise.id] ?? [];
+  const nextRoundIdx = Array.from({ length: rounds }, (_, i) => i)
+    .find(i => !completedRoundsList.includes(i));
+  const allDone = completedRoundsList.length >= rounds;
+
+  const [exListOpen, setExListOpen] = useState(false);
+  const circuitExercises = (exercise.circuitExercises ?? [])
+    .slice()
+    .sort((a, b) => a.order - b.order);
+
+  const restBetweenRounds = Number(exercise.circuitRestBetweenRounds ?? 0);
+  const restBetweenExercises = Number(exercise.circuitRestBetweenExercises ?? 0);
+
+  return (
+    <div className="space-y-3">
+      {/* Info line */}
+      <p className="text-xs text-muted-foreground">
+        {restBetweenRounds > 0 && `${restBetweenRounds}s rest between rounds`}
+        {restBetweenRounds > 0 && restBetweenExercises > 0 && ' · '}
+        {restBetweenExercises > 0 && `${restBetweenExercises}s between exercises`}
+      </p>
+
+      {/* Collapsible exercise list */}
+      {circuitExercises.length > 0 && (
+        <div className="rounded-lg border overflow-hidden">
+          <button
+            className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium hover:bg-muted/40 active:bg-muted/60 transition-colors"
+            onClick={() => setExListOpen(o => !o)}
+          >
+            <span className="text-muted-foreground">
+              {circuitExercises.length} exercise{circuitExercises.length !== 1 ? 's' : ''}
+            </span>
+            <ChevronDown className={cn(
+              'h-3.5 w-3.5 text-muted-foreground transition-transform duration-200',
+              exListOpen && 'rotate-180'
+            )} />
+          </button>
+          {exListOpen && (
+            <div className="border-t divide-y divide-border/30 bg-muted/10">
+              {circuitExercises.map((cex, i) => {
+                const paramStr = formatCircuitExerciseParams(cex);
+                return (
+                  <div key={cex.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+                    <span className="text-muted-foreground w-4 shrink-0 text-right">{i + 1}.</span>
+                    <span className="flex-1 min-w-0 truncate">{cex.exerciseName}</span>
+                    {paramStr && (
+                      <span className="text-muted-foreground shrink-0">{paramStr}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Round chips */}
+      <div className="flex gap-2">
+        {Array.from({ length: rounds }, (_, i) => {
+          const done = completedRoundsList.includes(i);
+          const isNext = i === nextRoundIdx;
+          return (
+            <div
+              key={i}
+              className={cn(
+                'flex-1 rounded-lg border py-2.5 text-center text-xs font-semibold transition-colors',
+                done
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : isNext
+                    ? 'border-primary/60 text-primary bg-primary/5'
+                    : 'border-border text-muted-foreground bg-muted/20',
+              )}
+            >
+              {done ? '✓' : `Round ${i + 1}`}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Complete round / all done state */}
+      {allDone ? (
+        <div className="flex items-center justify-center gap-2 py-1.5 text-sm text-primary font-medium">
+          <Check className="h-4 w-4" />
+          All rounds complete
+        </div>
+      ) : nextRoundIdx !== undefined && (
+        <button
+          onClick={() => onCompleteRound(exercise.id, nextRoundIdx)}
+          className="w-full rounded-xl border-2 border-primary bg-primary/5 hover:bg-primary/10 active:scale-[0.98] text-primary font-semibold text-sm py-3 transition-all"
+        >
+          Complete Round {nextRoundIdx + 1}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -603,13 +726,25 @@ export default function AthleteSessionPage() {
   }
 
   // Build sets_logged payload for Borg sheet
-  const setsLoggedPayload = Object.entries(loggedValues).map(([exId, sets]) => {
-    const ex = session.exercises.find(e => e.id === exId);
-    return {
-      exerciseName: ex?.name ?? exId,
-      sets: Object.entries(sets).map(([idx, vals]) => ({ setNumber: Number(idx) + 1, values: vals })),
-    };
-  });
+  const setsLoggedPayload = [
+    // Regular exercises — per-set logged values
+    ...Object.entries(loggedValues).map(([exId, sets]) => {
+      const ex = session.exercises.find(e => e.id === exId);
+      return {
+        exerciseName: ex?.name ?? exId,
+        sets: Object.entries(sets).map(([idx, vals]) => ({ setNumber: Number(idx) + 1, values: vals })),
+      };
+    }),
+    // Circuit exercises — log how many rounds were completed
+    ...session.exercises
+      .filter(ex => ex.isCircuit && (completedSets[ex.id] ?? []).length > 0)
+      .map(ex => ({
+        exerciseName: ex.name,
+        isCircuit: true,
+        roundsCompleted: (completedSets[ex.id] ?? []).length,
+        totalRounds: Math.max(1, Number(ex.circuitRounds ?? 3)),
+      })),
+  ];
 
   // ── Screen: Overview ───────────────────────────────────────────────────────
 
@@ -687,12 +822,19 @@ export default function AthleteSessionPage() {
                               <span className="text-xs text-muted-foreground w-4 shrink-0 text-right tabular-nums">
                                 {i + 1}
                               </span>
-                              <span className="text-sm flex-1">{ex.name}</span>
-                              {ex.plannedSets && (
+                              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                {ex.isCircuit && <RefreshCw className="h-3 w-3 text-muted-foreground shrink-0" />}
+                                <span className="text-sm truncate">{ex.name}</span>
+                              </div>
+                              {ex.isCircuit ? (
+                                <span className="text-xs text-muted-foreground shrink-0">
+                                  {ex.circuitRounds ?? 3} rounds
+                                </span>
+                              ) : ex.plannedSets ? (
                                 <span className="text-xs text-muted-foreground shrink-0">
                                   {ex.plannedSets} sets
                                 </span>
-                              )}
+                              ) : null}
                             </div>
                           ))}
                         </div>
@@ -964,14 +1106,22 @@ export default function AthleteSessionPage() {
                         {ex.notes && <p className="text-xs text-muted-foreground mt-0.5">{ex.notes}</p>}
                       </div>
                     </div>
-                    <SetTable
-                      exercise={ex}
-                      loggedValues={loggedValues}
-                      completedSets={completedSets}
-                      onLogValue={handleLogValue}
-                      onCompleteSet={handleCompleteSet}
-                      onMarkAll={handleMarkAll}
-                    />
+                    {ex.isCircuit ? (
+                      <CircuitCard
+                        exercise={ex}
+                        completedSets={completedSets}
+                        onCompleteRound={handleCompleteSet}
+                      />
+                    ) : (
+                      <SetTable
+                        exercise={ex}
+                        loggedValues={loggedValues}
+                        completedSets={completedSets}
+                        onLogValue={handleLogValue}
+                        onCompleteSet={handleCompleteSet}
+                        onMarkAll={handleMarkAll}
+                      />
+                    )}
                   </div>
                 );
               };
