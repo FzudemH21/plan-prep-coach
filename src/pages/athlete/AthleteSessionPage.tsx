@@ -503,9 +503,14 @@ function SetTable({ exercise, loggedValues, completedSets, onLogValue, onComplet
 
 // ── Exercise Detail Sheet ─────────────────────────────────────────────────────
 
+interface ExerciseDetailTarget {
+  name: string;
+  videoUrl?: string;
+  description?: string;
+}
+
 interface ExerciseDetailSheetProps {
-  target: { exerciseLibraryId: string; name: string } | null;
-  coachUserId: string | undefined;
+  target: ExerciseDetailTarget | null;
   onClose: () => void;
 }
 
@@ -516,88 +521,11 @@ function getYouTubeVideoId(url: string): string | null {
   return m ? m[1] : null;
 }
 
-interface LibraryExerciseRow {
-  id: string;
-  videoUrl?: string;
-  description?: string;
-  data?: Record<string, unknown>;
-}
-
-interface LibraryColumnRow {
-  id: string;
-  role?: string;
-}
-
-interface LibraryDataShape {
-  libraries?: Array<{
-    columns?: LibraryColumnRow[];
-    exercises?: LibraryExerciseRow[];
-  }>;
-}
-
-function ExerciseDetailSheet({ target, coachUserId, onClose }: ExerciseDetailSheetProps) {
-  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [description, setDescription] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!target || !coachUserId) return;
-    let cancelled = false;
-    setStatus('loading');
-    setVideoUrl(null);
-    setDescription(null);
-
-    (async () => {
-      try {
-        const { data: row } = await supabase
-          .from('custom_libraries')
-          .select('data')
-          .eq('user_id', coachUserId)
-          .maybeSingle();
-
-        if (cancelled) return;
-
-        const libData = row?.data as LibraryDataShape | null;
-        if (libData?.libraries) {
-          for (const lib of libData.libraries) {
-            const ex = lib.exercises?.find(e => e.id === target.exerciseLibraryId);
-            if (ex) {
-              // Primary: top-level fields (set by the detail modal)
-              let foundVideo: string | null = ex.videoUrl ?? null;
-              let foundDesc: string | null = ex.description ?? null;
-
-              // Fallback: inline cell edits store values in exercise.data[columnId]
-              // where columnId is the UUID of the column with role 'video'/'description'
-              if ((!foundVideo || !foundDesc) && lib.columns) {
-                const videoCol = lib.columns.find(c => c.role === 'video');
-                const descCol = lib.columns.find(c => c.role === 'description');
-                if (!foundVideo && videoCol) {
-                  const v = ex.data?.[videoCol.id];
-                  if (typeof v === 'string' && v) foundVideo = v;
-                }
-                if (!foundDesc && descCol) {
-                  const d = ex.data?.[descCol.id];
-                  if (typeof d === 'string' && d) foundDesc = d;
-                }
-              }
-
-              setVideoUrl(foundVideo);
-              setDescription(foundDesc);
-              break;
-            }
-          }
-        }
-        setStatus('done');
-      } catch {
-        if (!cancelled) setStatus('error');
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [target?.exerciseLibraryId, coachUserId]);
-
-  const videoId = videoUrl ? getYouTubeVideoId(videoUrl) : null;
+/** Reads video URL and description directly from the pre-embedded schedule data — no Supabase call needed. */
+function ExerciseDetailSheet({ target, onClose }: ExerciseDetailSheetProps) {
+  const videoId = target?.videoUrl ? getYouTubeVideoId(target.videoUrl) : null;
   const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
+  const hasContent = !!(target?.videoUrl || target?.description);
 
   return (
     <Sheet open={target !== null} onOpenChange={o => { if (!o) onClose(); }}>
@@ -610,30 +538,25 @@ function ExerciseDetailSheet({ target, coachUserId, onClose }: ExerciseDetailShe
             <SheetTitle className="text-left">{target?.name ?? 'Exercise'}</SheetTitle>
           </SheetHeader>
 
-          {status === 'loading' && (
-            <div className="flex items-center justify-center py-10">
-              <div className="h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            </div>
-          )}
-
-          {status === 'done' && !videoUrl && !description && (
+          {!hasContent && (
             <p className="text-sm text-muted-foreground text-center py-6">
               No details available for this exercise.
             </p>
           )}
 
-          {status === 'done' && (videoUrl || description) && (
+          {hasContent && (
             <>
-              {thumbnailUrl && videoUrl && (
+              {/* YouTube thumbnail → opens video */}
+              {thumbnailUrl && target?.videoUrl && (
                 <a
-                  href={videoUrl}
+                  href={target.videoUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="block rounded-xl overflow-hidden relative group"
                 >
                   <img
                     src={thumbnailUrl}
-                    alt={`${target?.name ?? 'Exercise'} video`}
+                    alt={`${target.name} video`}
                     className="w-full object-cover aspect-video bg-muted"
                   />
                   <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-active:bg-black/30 transition-colors">
@@ -646,9 +569,10 @@ function ExerciseDetailSheet({ target, coachUserId, onClose }: ExerciseDetailShe
                 </a>
               )}
 
-              {videoUrl && !thumbnailUrl && (
+              {/* Non-YouTube video URL — plain link */}
+              {target?.videoUrl && !thumbnailUrl && (
                 <a
-                  href={videoUrl}
+                  href={target.videoUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1.5 text-sm text-primary underline underline-offset-2 py-1"
@@ -657,18 +581,12 @@ function ExerciseDetailSheet({ target, coachUserId, onClose }: ExerciseDetailShe
                 </a>
               )}
 
-              {description && (
+              {target?.description && (
                 <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">
-                  {description}
+                  {target.description}
                 </p>
               )}
             </>
-          )}
-
-          {status === 'error' && (
-            <p className="text-sm text-destructive text-center py-6">
-              Failed to load exercise details.
-            </p>
           )}
         </div>
       </SheetContent>
@@ -708,7 +626,7 @@ export default function AthleteSessionPage() {
   const [abandonWarning, setAbandonWarning] = useState(false);
 
   // Exercise detail sheet — tapping a name or ⓘ opens it
-  const [detailTarget, setDetailTarget] = useState<{ exerciseLibraryId: string; name: string } | null>(null);
+  const [detailTarget, setDetailTarget] = useState<ExerciseDetailTarget | null>(null);
 
   // Workout elapsed timer — counts up from the moment the athlete starts the first section
   const workoutStartTimeRef = useRef<number | null>(null);
@@ -1311,9 +1229,9 @@ export default function AthleteSessionPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           {ex.isCircuit && <RefreshCw className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
-                          {ex.exerciseLibraryId && !ex.isCircuit ? (
+                          {(ex.exerciseVideoUrl || ex.exerciseDescription) && !ex.isCircuit ? (
                             <button
-                              onClick={() => setDetailTarget({ exerciseLibraryId: ex.exerciseLibraryId!, name: ex.name })}
+                              onClick={() => setDetailTarget({ name: ex.name, videoUrl: ex.exerciseVideoUrl, description: ex.exerciseDescription })}
                               className={cn(
                                 'font-semibold text-base leading-snug text-left hover:underline active:opacity-60 transition-opacity',
                                 exComplete && 'text-muted-foreground',
@@ -1326,9 +1244,9 @@ export default function AthleteSessionPage() {
                               {ex.name}
                             </h3>
                           )}
-                          {ex.exerciseLibraryId && !ex.isCircuit && (
+                          {(ex.exerciseVideoUrl || ex.exerciseDescription) && !ex.isCircuit && (
                             <button
-                              onClick={() => setDetailTarget({ exerciseLibraryId: ex.exerciseLibraryId!, name: ex.name })}
+                              onClick={() => setDetailTarget({ name: ex.name, videoUrl: ex.exerciseVideoUrl, description: ex.exerciseDescription })}
                               className="shrink-0 text-muted-foreground hover:text-foreground active:opacity-60 transition-colors ml-0.5"
                               aria-label="View exercise details"
                             >
@@ -1484,7 +1402,6 @@ export default function AthleteSessionPage() {
         {/* Exercise detail sheet */}
         <ExerciseDetailSheet
           target={detailTarget}
-          coachUserId={connection?.coachUserId}
           onClose={() => setDetailTarget(null)}
         />
       </div>

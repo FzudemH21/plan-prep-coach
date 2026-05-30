@@ -41,9 +41,12 @@ export interface ExerciseSummary {
   notes?: string;
   isCircuit?: boolean;
   supersetId?: string;       // shared key for all exercises in the same superset group
-  /** Library exercise ID — used by athlete app to fetch video/description on demand.
-   *  Undefined for circuits (which have no single exercise detail). */
+  /** Library exercise ID — kept for reference. */
   exerciseLibraryId?: string;
+  /** Video URL snapshotted from the library at sync time. */
+  exerciseVideoUrl?: string;
+  /** Description snapshotted from the library at sync time. */
+  exerciseDescription?: string;
   // Circuit-specific fields — populated when isCircuit is true
   circuitRounds?: string;
   circuitRestBetweenRounds?: string;
@@ -99,6 +102,61 @@ type ParamValues = Record<string, Record<number, Record<string, Record<number, R
 // SupersetMapping mirrors the type in microcycle-planning.ts (avoided circular import)
 type SupersetMapping = Record<string, Record<number, Record<string, Record<string, string[]>>>>;
 
+// ── Library exercise detail lookup ───────────────────────────────────────────
+
+type ExerciseDetailMap = Map<string, { videoUrl?: string; description?: string }>;
+
+async function buildExerciseDetailMap(userId: string): Promise<ExerciseDetailMap> {
+  const map: ExerciseDetailMap = new Map();
+  try {
+    const { data: libRow } = await supabase
+      .from('custom_libraries')
+      .select('data')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!libRow?.data) return map;
+
+    const libData = libRow.data as {
+      libraries?: Array<{
+        columns?: Array<{ id: string; role?: string }>;
+        exercises?: Array<{
+          id: string;
+          videoUrl?: string;
+          description?: string;
+          data?: Record<string, unknown>;
+        }>;
+      }>;
+    };
+
+    for (const lib of libData.libraries ?? []) {
+      const videoCol = lib.columns?.find(c => c.role === 'video');
+      const descCol  = lib.columns?.find(c => c.role === 'description');
+
+      for (const ex of lib.exercises ?? []) {
+        // Primary: top-level fields (set by detail modal)
+        let videoUrl    = ex.videoUrl   ?? undefined;
+        let description = ex.description ?? undefined;
+
+        // Fallback: inline cell edit stores value in exercise.data[columnId]
+        if (!videoUrl && videoCol) {
+          const v = ex.data?.[videoCol.id];
+          if (typeof v === 'string' && v) videoUrl = v;
+        }
+        if (!description && descCol) {
+          const d = ex.data?.[descCol.id];
+          if (typeof d === 'string' && d) description = d;
+        }
+
+        if (videoUrl || description) map.set(ex.id, { videoUrl, description });
+      }
+    }
+  } catch {
+    // ignore — exercise detail is optional enrichment
+  }
+  return map;
+}
+
 export async function syncAthleteSchedule(
   connectionId: string,
   assignment: AthleteCalendarAssignment,
@@ -113,6 +171,13 @@ export async function syncAthleteSchedule(
   if (!connectionId || trainingDays.length === 0) return;
 
   console.log(`[syncAthleteSchedule] ▶ start | connectionId=${connectionId} | trainingDays=${trainingDays.length} | exercises=${exercises.length} | paramKeys=${Object.keys(paramValues ?? {}).length}`);
+
+  // Fetch exercise video/description from the coach's library (coach is the authenticated user here)
+  const { data: { user: coachUser } } = await supabase.auth.getUser();
+  const exerciseDetails = coachUser
+    ? await buildExerciseDetailMap(coachUser.id)
+    : new Map<string, { videoUrl?: string; description?: string }>();
+  console.log(`[syncAthleteSchedule] exercise detail map: ${exerciseDetails.size} entries`);
 
   // Build a lookup: date → mesocycle/microcycle name + ids
   const mesoByDate = new Map<string, {
@@ -375,8 +440,10 @@ export async function syncAthleteSchedule(
               notes: ex.notes,
               isCircuit: ex.isCircuit,
               supersetId,
-              // Library ID for on-demand detail fetch in athlete app (undefined for circuits)
+              // Library ID + snapshotted detail (undefined for circuits)
               exerciseLibraryId: ex.isCircuit ? undefined : ex.exerciseId,
+              exerciseVideoUrl: ex.isCircuit ? undefined : exerciseDetails.get(ex.exerciseId)?.videoUrl,
+              exerciseDescription: ex.isCircuit ? undefined : exerciseDetails.get(ex.exerciseId)?.description,
               // Circuit-specific fields
               circuitRounds: ex.isCircuit ? (ex.circuitRounds as string | undefined) : undefined,
               circuitRestBetweenRounds: ex.isCircuit ? (ex.circuitRestBetweenRounds as string | undefined) : undefined,
