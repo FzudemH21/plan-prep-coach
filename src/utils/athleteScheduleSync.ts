@@ -41,6 +41,9 @@ export interface ExerciseSummary {
   notes?: string;
   isCircuit?: boolean;
   supersetId?: string;       // shared key for all exercises in the same superset group
+  /** Library exercise ID — used by athlete app to fetch video/description on demand.
+   *  Undefined for circuits (which have no single exercise detail). */
+  exerciseLibraryId?: string;
   // Circuit-specific fields — populated when isCircuit is true
   circuitRounds?: string;
   circuitRestBetweenRounds?: string;
@@ -372,6 +375,8 @@ export async function syncAthleteSchedule(
               notes: ex.notes,
               isCircuit: ex.isCircuit,
               supersetId,
+              // Library ID for on-demand detail fetch in athlete app (undefined for circuits)
+              exerciseLibraryId: ex.isCircuit ? undefined : ex.exerciseId,
               // Circuit-specific fields
               circuitRounds: ex.isCircuit ? (ex.circuitRounds as string | undefined) : undefined,
               circuitRestBetweenRounds: ex.isCircuit ? (ex.circuitRestBetweenRounds as string | undefined) : undefined,

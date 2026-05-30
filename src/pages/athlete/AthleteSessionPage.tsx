@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronDown, Check, Dumbbell, RefreshCw,
-  CheckCircle2, Timer,
+  CheckCircle2, Timer, Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -501,6 +501,153 @@ function SetTable({ exercise, loggedValues, completedSets, onLogValue, onComplet
   );
 }
 
+// ── Exercise Detail Sheet ─────────────────────────────────────────────────────
+
+interface ExerciseDetailSheetProps {
+  target: { exerciseLibraryId: string; name: string } | null;
+  coachUserId: string | undefined;
+  onClose: () => void;
+}
+
+function getYouTubeVideoId(url: string): string | null {
+  const m = url.match(
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+  );
+  return m ? m[1] : null;
+}
+
+interface LibraryExerciseRow {
+  id: string;
+  videoUrl?: string;
+  description?: string;
+}
+
+interface LibraryDataShape {
+  libraries?: Array<{ exercises?: LibraryExerciseRow[] }>;
+}
+
+function ExerciseDetailSheet({ target, coachUserId, onClose }: ExerciseDetailSheetProps) {
+  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [description, setDescription] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!target || !coachUserId) return;
+    let cancelled = false;
+    setStatus('loading');
+    setVideoUrl(null);
+    setDescription(null);
+
+    (async () => {
+      try {
+        const { data: row } = await supabase
+          .from('custom_libraries')
+          .select('data')
+          .eq('user_id', coachUserId)
+          .maybeSingle();
+
+        if (cancelled) return;
+
+        const libData = row?.data as LibraryDataShape | null;
+        if (libData?.libraries) {
+          for (const lib of libData.libraries) {
+            const ex = lib.exercises?.find(e => e.id === target.exerciseLibraryId);
+            if (ex) {
+              setVideoUrl(ex.videoUrl ?? null);
+              setDescription(ex.description ?? null);
+              break;
+            }
+          }
+        }
+        setStatus('done');
+      } catch {
+        if (!cancelled) setStatus('error');
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [target?.exerciseLibraryId, coachUserId]);
+
+  const videoId = videoUrl ? getYouTubeVideoId(videoUrl) : null;
+  const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
+
+  return (
+    <Sheet open={target !== null} onOpenChange={o => { if (!o) onClose(); }}>
+      <SheetContent
+        side="bottom"
+        className="rounded-t-2xl max-h-[85vh] overflow-y-auto p-0 sm:w-[480px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:rounded-2xl"
+      >
+        <div className="px-5 pt-4 pb-8 space-y-4">
+          <SheetHeader>
+            <SheetTitle className="text-left">{target?.name ?? 'Exercise'}</SheetTitle>
+          </SheetHeader>
+
+          {status === 'loading' && (
+            <div className="flex items-center justify-center py-10">
+              <div className="h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+            </div>
+          )}
+
+          {status === 'done' && !videoUrl && !description && (
+            <p className="text-sm text-muted-foreground text-center py-6">
+              No details available for this exercise.
+            </p>
+          )}
+
+          {status === 'done' && (videoUrl || description) && (
+            <>
+              {thumbnailUrl && videoUrl && (
+                <a
+                  href={videoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block rounded-xl overflow-hidden relative group"
+                >
+                  <img
+                    src={thumbnailUrl}
+                    alt={`${target?.name ?? 'Exercise'} video`}
+                    className="w-full object-cover aspect-video bg-muted"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-active:bg-black/30 transition-colors">
+                    <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+                      <svg className="w-5 h-5 text-red-600 ml-0.5" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </div>
+                  </div>
+                </a>
+              )}
+
+              {videoUrl && !thumbnailUrl && (
+                <a
+                  href={videoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-sm text-primary underline underline-offset-2 py-1"
+                >
+                  Watch video
+                </a>
+              )}
+
+              {description && (
+                <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">
+                  {description}
+                </p>
+              )}
+            </>
+          )}
+
+          {status === 'error' && (
+            <p className="text-sm text-destructive text-center py-6">
+              Failed to load exercise details.
+            </p>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 interface LocationState {
@@ -531,6 +678,9 @@ export default function AthleteSessionPage() {
   const [incompleteWarning, setIncompleteWarning] = useState<'section' | 'workout' | null>(null);
   // Shown when the athlete tries to leave the session page after the workout has started
   const [abandonWarning, setAbandonWarning] = useState(false);
+
+  // Exercise detail sheet — tapping a name or ⓘ opens it
+  const [detailTarget, setDetailTarget] = useState<{ exerciseLibraryId: string; name: string } | null>(null);
 
   // Workout elapsed timer — counts up from the moment the athlete starts the first section
   const workoutStartTimeRef = useRef<number | null>(null);
@@ -1131,11 +1281,32 @@ export default function AthleteSessionPage() {
                         {exComplete ? <Check className="h-4 w-4" /> : (supersetLabel ? supersetLabel : displayN)}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           {ex.isCircuit && <RefreshCw className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
-                          <h3 className={cn('font-semibold text-base leading-snug', exComplete && 'text-muted-foreground')}>
-                            {ex.name}
-                          </h3>
+                          {ex.exerciseLibraryId && !ex.isCircuit ? (
+                            <button
+                              onClick={() => setDetailTarget({ exerciseLibraryId: ex.exerciseLibraryId!, name: ex.name })}
+                              className={cn(
+                                'font-semibold text-base leading-snug text-left hover:underline active:opacity-60 transition-opacity',
+                                exComplete && 'text-muted-foreground',
+                              )}
+                            >
+                              {ex.name}
+                            </button>
+                          ) : (
+                            <h3 className={cn('font-semibold text-base leading-snug', exComplete && 'text-muted-foreground')}>
+                              {ex.name}
+                            </h3>
+                          )}
+                          {ex.exerciseLibraryId && !ex.isCircuit && (
+                            <button
+                              onClick={() => setDetailTarget({ exerciseLibraryId: ex.exerciseLibraryId!, name: ex.name })}
+                              className="shrink-0 text-muted-foreground hover:text-foreground active:opacity-60 transition-colors ml-0.5"
+                              aria-label="View exercise details"
+                            >
+                              <Info className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
                         {ex.notes && <p className="text-xs text-muted-foreground mt-0.5">{ex.notes}</p>}
                       </div>
@@ -1281,6 +1452,13 @@ export default function AthleteSessionPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Exercise detail sheet */}
+        <ExerciseDetailSheet
+          target={detailTarget}
+          coachUserId={connection?.coachUserId}
+          onClose={() => setDetailTarget(null)}
+        />
       </div>
     );
   }

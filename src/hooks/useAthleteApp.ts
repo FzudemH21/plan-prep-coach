@@ -38,6 +38,8 @@ export interface ExerciseSummary {
   notes?: string;
   isCircuit?: boolean;
   supersetId?: string;   // shared key for all exercises in the same superset group
+  /** Library exercise ID — used to fetch video/description on demand. Undefined for circuits. */
+  exerciseLibraryId?: string;
   // Circuit-specific fields — populated when isCircuit is true
   circuitRounds?: string;
   circuitRestBetweenRounds?: string;
