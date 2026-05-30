@@ -69,6 +69,7 @@ export interface SessionSummary {
   methodCount: number;
   duration?: number;
   notes?: string;
+  intensity?: string;   // session-level planned intensity
   exercises: ExerciseSummary[];
 }
 
@@ -167,6 +168,7 @@ export async function syncAthleteSchedule(
   sessionSections?: SessionSectionEntry[],
   toolboxEntries?: ToolboxEntry[],
   supersets?: SupersetMapping,
+  sessionIntensities?: Record<string, string>,
 ): Promise<void> {
   if (!connectionId || trainingDays.length === 0) return;
 
@@ -481,6 +483,7 @@ export async function syncAthleteSchedule(
           exerciseCount: exercisesForSession.length,
           methodCount: 0,
           notes: sessionNotes,
+          intensity: sessionIntensities?.[`${td.date}-${i}`] ?? undefined,
           exercises: exercisesForSession,
         };
       });

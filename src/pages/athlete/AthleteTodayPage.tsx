@@ -60,7 +60,12 @@ function TrainingEntry({ entry }: { entry: AthleteScheduleEntry }) {
                     </p>
                   </div>
                 </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                <div className="flex items-center gap-2 shrink-0">
+                  {session.intensity && (
+                    <div className={cn('w-2.5 h-2.5 rounded-full', getDotColor(session.intensity))} />
+                  )}
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </div>
               </CardContent>
             </Card>
           ))

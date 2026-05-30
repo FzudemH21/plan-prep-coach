@@ -66,6 +66,7 @@ export interface SessionSummary {
   exerciseCount: number;
   duration?: number;
   notes?: string;
+  intensity?: string;   // session-level planned intensity
   exercises: ExerciseSummary[];
 }
 

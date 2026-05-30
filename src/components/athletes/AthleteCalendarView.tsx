@@ -181,6 +181,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
       editing.sessionSections,
       toolboxData?.entries,
       editing.supersets,
+      editing.sessionIntensities,
     ).catch(e => {
       console.error('[autoSync] ✗ sync failed:', e);
       // Show a toast once per mount so the coach knows something is wrong
@@ -260,6 +261,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
       editing.sessionSections,
       toolboxData?.entries,
       editing.supersets,
+      editing.sessionIntensities,
     ).catch(e => console.error('[loadSync] ✗ sync failed:', e));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAssignmentId, editing.isInitializing, editing.trainingDays.length, connectionsLoading]);
@@ -1328,6 +1330,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 filteredSections,
                 toolboxData?.entries,
                 filteredSupersets,
+                undefined, // sessionIntensities not available at assign time
               ).catch(e => console.error('[ASSIGN] ✗ athlete schedule sync (merge) failed:', e));
             } else {
               console.warn('[ASSIGN] merge: no connection found for athlete', athlete.id,
@@ -1381,6 +1384,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                 dataToSave.sessionSections,
                 toolboxData?.entries,
                 dataToSave.supersets,
+                undefined, // sessionIntensities not available at assign time
               ).catch(e => console.error('[ASSIGN] ✗ athlete schedule sync failed:', e));
             } else {
               console.warn('[ASSIGN] create: no connection found for athlete', athlete.id,

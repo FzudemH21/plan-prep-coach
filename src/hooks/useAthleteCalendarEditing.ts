@@ -434,6 +434,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     let newDaySplitStates: Record<string, number>;
     let newTrainingDays: TrainingDay[];
     let newDailyIntensityData: typeof dailyIntensityData;
+    let newSessionIntensities: typeof sessionIntensities;
 
     if (currentSessions <= 1) {
       // Last session — clear the day and set intensity to 'off'
@@ -450,6 +451,10 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       newDailyIntensityData = dailyIntensityData.map(di =>
         di.date === dayDate ? { ...di, intensity: 'off' } : di
       );
+      // Remove all session intensities for the cleared day
+      newSessionIntensities = Object.fromEntries(
+        Object.entries(sessionIntensities).filter(([k]) => !k.startsWith(`${dayDate}-`))
+      ) as typeof sessionIntensities;
     } else {
       // Remove the target session; shift indices of later sessions down by 1
       newExercises = exerciseDistribution
@@ -468,8 +473,29 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         );
       newSupersetsVal = supersets;   // supersets not affected for mid-session deletes
       newDaySplitStates = { ...daySplitStates, [dayDate]: currentSessions - 1 };
-      newTrainingDays = trainingDays;
+      // Fix: update the session count and remove the deleted session name
+      newTrainingDays = trainingDays.map(day => {
+        if (day.date !== dayDate) return day;
+        const sessionNames = [...(day.sessionNames ?? [])];
+        sessionNames.splice(sessionIndex, 1);
+        return { ...day, sessions: currentSessions - 1, sessionNames };
+      });
       newDailyIntensityData = dailyIntensityData;
+      // Shift session intensities: remove deleted, decrement indices above it
+      newSessionIntensities = {} as typeof sessionIntensities;
+      for (const [key, val] of Object.entries(sessionIntensities)) {
+        if (!key.startsWith(`${dayDate}-`)) {
+          (newSessionIntensities as Record<string, typeof val>)[key] = val;
+          continue;
+        }
+        const idx = parseInt(key.slice(dayDate.length + 1));
+        if (isNaN(idx) || idx === sessionIndex) continue; // skip deleted
+        if (idx > sessionIndex) {
+          (newSessionIntensities as Record<string, typeof val>)[`${dayDate}-${idx - 1}`] = val;
+        } else {
+          (newSessionIntensities as Record<string, typeof val>)[key] = val;
+        }
+      }
     }
 
     // Apply React state
@@ -479,6 +505,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     setDaySplitStates(newDaySplitStates);
     setTrainingDays(newTrainingDays);
     setDailyIntensityData(newDailyIntensityData);
+    setSessionIntensities(newSessionIntensities);
 
     // IMMEDIATE localStorage write (bypass debounce) — prevents stale data on page refresh
     if (selectedAssignmentId) {
@@ -491,7 +518,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         dailyIntensity: newDailyIntensityData,
         trainingDays: newTrainingDays,
         daySplitStates: newDaySplitStates,
-        sessionIntensities,
+        sessionIntensities: newSessionIntensities,
         testEventDays,
         lastModified: new Date().toISOString(),
       };
@@ -504,7 +531,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         dailyIntensity: newDailyIntensityData,
         trainingDays: newTrainingDays,
         daySplitStates: newDaySplitStates,
-        sessionIntensities,
+        sessionIntensities: newSessionIntensities,
         testEventDays,
       });
       setLastSavedAt(new Date().toISOString());
@@ -866,6 +893,18 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       return [...updated, { date: targetDate, intensity }].sort((a, b) => a.date.localeCompare(b.date));
     });
     
+    // Copy parameterVisibility localStorage key from source to target so visible params are preserved
+    try {
+      if (copiedSession.sourceMesocycleId) {
+        const srcKey = `workoutSessions_${copiedSession.sourceMesocycleId}_${copiedSession.sourceDate}_${copiedSession.sessionIndex}`;
+        const storedVis = localStorage.getItem(srcKey);
+        if (storedVis) {
+          const tgtKey = `workoutSessions_${copiedSession.sourceMesocycleId}_${targetDate}_${newSessionIndex}`;
+          localStorage.setItem(tgtKey, storedVis);
+        }
+      }
+    } catch { /* ignore */ }
+
     toast({ title: "Session pasted", description: `${copiedSession.exercises.length} exercise(s) pasted` });
     setCopiedSession(null);
   }, [copiedSession, exerciseDistribution, daySplitStates, toast]);
