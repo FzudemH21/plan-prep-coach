@@ -353,32 +353,23 @@ function CircuitCard({ exercise, completedSets, onCompleteRound }: CircuitCardPr
         </div>
       )}
 
-      {/* Round chips — tap a completed round to un-tick it */}
-      <div className="flex gap-2">
-        {Array.from({ length: rounds }, (_, i) => {
-          const done = completedRoundsList.includes(i);
-          const isNext = i === nextRoundIdx;
-          return (
-            <button
-              key={i}
-              onClick={() => done ? onCompleteRound(exercise.id, i) : undefined}
-              disabled={!done}
-              className={cn(
-                'flex-1 rounded-lg border py-2.5 text-center text-xs font-semibold transition-all',
-                done
-                  ? 'bg-primary text-primary-foreground border-primary active:scale-95 active:opacity-80'
-                  : isNext
-                    ? 'border-primary/60 text-primary bg-primary/5 cursor-default'
-                    : 'border-border text-muted-foreground bg-muted/20 cursor-default',
-              )}
-            >
-              {done ? '✓' : `Round ${i + 1}`}
-            </button>
-          );
-        })}
+      {/* Progress bar */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">Rounds</span>
+          <span className="font-semibold tabular-nums">
+            {completedRoundsList.length} / {rounds}
+          </span>
+        </div>
+        <div className="h-2 rounded-full bg-muted overflow-hidden">
+          <div
+            className="h-full rounded-full bg-primary transition-all duration-300"
+            style={{ width: `${(completedRoundsList.length / rounds) * 100}%` }}
+          />
+        </div>
       </div>
 
-      {/* Complete round / all done state */}
+      {/* Complete round CTA / all-done state */}
       {allDone ? (
         <div className="flex items-center justify-center gap-2 py-1.5 text-sm text-primary font-medium">
           <Check className="h-4 w-4" />
@@ -390,6 +381,16 @@ function CircuitCard({ exercise, completedSets, onCompleteRound }: CircuitCardPr
           className="w-full rounded-xl border-2 border-primary bg-primary/5 hover:bg-primary/10 active:scale-[0.98] text-primary font-semibold text-sm py-3 transition-all"
         >
           Complete Round {nextRoundIdx + 1}
+        </button>
+      )}
+
+      {/* Undo last round — visible whenever ≥1 round is done */}
+      {completedRoundsList.length > 0 && (
+        <button
+          onClick={() => onCompleteRound(exercise.id, Math.max(...completedRoundsList))}
+          className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors text-center py-0.5"
+        >
+          Undo last round
         </button>
       )}
     </div>
