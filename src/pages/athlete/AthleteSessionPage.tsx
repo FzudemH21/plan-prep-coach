@@ -1015,29 +1015,18 @@ export default function AthleteSessionPage() {
                                   </span>
                                 ) : null}
                               </div>
-                              {/* Circuit sub-exercises — tappable when details exist */}
+                              {/* Circuit sub-exercises — read-only in overview */}
                               {ex.isCircuit && (ex.circuitExercises ?? []).length > 0 && (
                                 <div className="bg-muted/20">
                                   {(ex.circuitExercises ?? [])
                                     .slice()
                                     .sort((a, b) => a.order - b.order)
                                     .map((cex, ci) => {
-                                      const hasDetail = !!(cex.exerciseVideoUrl || cex.exerciseDescription);
                                       const paramStr = formatCircuitExerciseParams(cex);
                                       return (
                                         <div key={cex.id} className="flex items-center gap-2 pl-10 pr-4 py-2 text-xs border-t border-border/20">
                                           <span className="text-muted-foreground w-4 shrink-0 text-right">{ci + 1}.</span>
-                                          {hasDetail ? (
-                                            <button
-                                              onClick={() => setDetailTarget({ name: cex.exerciseName, videoUrl: cex.exerciseVideoUrl, description: cex.exerciseDescription })}
-                                              className="flex items-center gap-1 flex-1 min-w-0 text-left hover:underline active:opacity-60 transition-opacity"
-                                            >
-                                              <span className="truncate">{cex.exerciseName}</span>
-                                              <Info className="h-3 w-3 text-muted-foreground shrink-0 ml-0.5" />
-                                            </button>
-                                          ) : (
-                                            <span className="flex-1 min-w-0 truncate text-muted-foreground">{cex.exerciseName}</span>
-                                          )}
+                                          <span className="flex-1 min-w-0 truncate text-muted-foreground">{cex.exerciseName}</span>
                                           {paramStr && (
                                             <span className="text-muted-foreground shrink-0">{paramStr}</span>
                                           )}
