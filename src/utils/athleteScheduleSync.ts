@@ -413,10 +413,16 @@ export async function syncAthleteSchedule(
   }
 
   // Build events-by-date lookup
-  const eventsByDate = new Map<string, Array<{ id: string; type: string; title: string; notes?: string }>>();
+  const eventsByDate = new Map<string, Array<{ id: string; type: string; title: string; notes?: string; targetValue?: string }>>();
   for (const ev of calendarEvents ?? []) {
     if (!eventsByDate.has(ev.date)) eventsByDate.set(ev.date, []);
-    eventsByDate.get(ev.date)!.push({ id: ev.id, type: ev.type, title: ev.title, notes: ev.notes });
+    eventsByDate.get(ev.date)!.push({
+      id: ev.id,
+      type: ev.type,
+      title: ev.title,
+      notes: ev.notes,
+      targetValue: ev.targetValue,
+    });
   }
 
   // Build rows — one per training day that has sessions

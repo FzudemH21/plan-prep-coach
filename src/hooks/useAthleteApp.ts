@@ -81,6 +81,7 @@ export interface AthleteCalendarEvent {
   type: 'test' | 'event';
   title: string;
   notes?: string;
+  targetValue?: string;
 }
 
 export interface AthleteScheduleEntry {
