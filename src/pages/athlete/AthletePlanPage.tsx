@@ -139,28 +139,9 @@ function DaySection({
       {/* Intensity badge */}
       {entry?.intensity && <IntensityBadge intensity={entry.intensity} />}
 
-      {/* Sessions or rest */}
-      {hasSessions ? (
-        <div className="space-y-1.5">
-          {entry!.sessions.map((session, idx) => (
-            <SessionCard
-              key={session.id}
-              session={session}
-              entry={entry!}
-              index={idx}
-              isPast={isPast}
-            />
-          ))}
-        </div>
-      ) : (
-        <p className={cn('text-xs', isPast ? 'text-muted-foreground/50' : 'text-muted-foreground')}>
-          Rest day
-        </p>
-      )}
-
-      {/* Tests & events */}
+      {/* Tests & events — above sessions */}
       {(entry?.events ?? []).length > 0 && (
-        <div className="space-y-1.5 pt-0.5">
+        <div className="space-y-1.5">
           {entry!.events.map((ev: AthleteCalendarEvent) => (
             <div
               key={ev.id}
@@ -179,6 +160,11 @@ function DaySection({
                 <p className={cn('font-medium', ev.type === 'test' ? 'text-amber-800' : 'text-blue-800')}>
                   {ev.title}
                 </p>
+                {ev.type === 'test' && ev.targetValue && (
+                  <p className="text-amber-700 mt-0.5">
+                    <span className="font-medium">Goal:</span> {ev.targetValue}
+                  </p>
+                )}
                 {ev.notes && (
                   <p className="text-muted-foreground mt-0.5 leading-relaxed">{ev.notes}</p>
                 )}
@@ -186,6 +172,25 @@ function DaySection({
             </div>
           ))}
         </div>
+      )}
+
+      {/* Sessions or rest */}
+      {hasSessions ? (
+        <div className="space-y-1.5">
+          {entry!.sessions.map((session, idx) => (
+            <SessionCard
+              key={session.id}
+              session={session}
+              entry={entry!}
+              index={idx}
+              isPast={isPast}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className={cn('text-xs', isPast ? 'text-muted-foreground/50' : 'text-muted-foreground')}>
+          Rest day
+        </p>
       )}
     </div>
   );

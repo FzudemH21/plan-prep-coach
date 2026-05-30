@@ -145,6 +145,22 @@ function TodaySchedule({ entry }: { entry: AthleteScheduleEntry | null }) {
       {/* Day-level intensity */}
       {entry?.intensity && <IntensityBadge intensity={entry.intensity} />}
 
+      {/* Tests — above sessions */}
+      {tests.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground">Tests</p>
+          {tests.map(ev => <TestCard key={ev.id} ev={ev} />)}
+        </div>
+      )}
+
+      {/* Events — above sessions */}
+      {events.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground">Events</p>
+          {events.map(ev => <EventCard key={ev.id} ev={ev} />)}
+        </div>
+      )}
+
       {/* Sessions */}
       {hasSessions ? (
         <div className="space-y-2">
@@ -154,22 +170,6 @@ function TodaySchedule({ entry }: { entry: AthleteScheduleEntry | null }) {
         </div>
       ) : (
         <RestDay />
-      )}
-
-      {/* Tests */}
-      {tests.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-muted-foreground">Tests</p>
-          {tests.map(ev => <TestCard key={ev.id} ev={ev} />)}
-        </div>
-      )}
-
-      {/* Events */}
-      {events.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-muted-foreground">Events</p>
-          {events.map(ev => <EventCard key={ev.id} ev={ev} />)}
-        </div>
       )}
     </div>
   );
