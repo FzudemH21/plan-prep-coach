@@ -36,6 +36,8 @@ export interface Circuit {
   id: string;
   name: string;
   exercises: CircuitExercise[];
+  /** Number of rounds (e.g. "3") */
+  rounds?: string;
   /** Numeric seconds, stored as string (e.g. "60") */
   restBetweenRounds: string;
   /** Numeric seconds, stored as string (e.g. "15") */

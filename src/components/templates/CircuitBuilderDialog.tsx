@@ -75,6 +75,7 @@ export function CircuitBuilderDialog({
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState('');
+  const [rounds, setRounds] = useState('3');
   const [restBetweenRounds, setRestBetweenRounds] = useState('60');
   const [restBetweenExercises, setRestBetweenExercises] = useState('15');
   const [comments, setComments] = useState('');
@@ -96,12 +97,14 @@ export function CircuitBuilderDialog({
     if (!isOpen) return;
     if (circuit) {
       setName(circuit.name);
+      setRounds(circuit.rounds ?? '3');
       setRestBetweenRounds(stripS(circuit.restBetweenRounds));
       setRestBetweenExercises(stripS(circuit.restBetweenExercises));
       setComments(circuit.comments ?? '');
       setExercises([...circuit.exercises].sort((a, b) => a.order - b.order));
     } else {
       setName('');
+      setRounds('3');
       setRestBetweenRounds('60');
       setRestBetweenExercises('15');
       setComments('');
@@ -116,6 +119,7 @@ export function CircuitBuilderDialog({
   const buildPayload = () => ({
     name: name.trim(),
     exercises,
+    rounds: rounds || '3',
     restBetweenRounds: restBetweenRounds || '0',
     restBetweenExercises: restBetweenExercises || '0',
     comments: comments.trim() || undefined,
@@ -340,8 +344,19 @@ export function CircuitBuilderDialog({
               />
             </div>
 
-            {/* Rest settings */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Circuit settings */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <Label>Rounds</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={rounds}
+                  onChange={(e) => setRounds(e.target.value)}
+                  placeholder="3"
+                  className="text-center"
+                />
+              </div>
               <div className="space-y-1.5">
                 <Label>Rest Between Rounds</Label>
                 <div className="flex items-center gap-1.5">
@@ -431,18 +446,8 @@ export function CircuitBuilderDialog({
                           </Button>
                         </div>
 
-                        {/* Line 2: Sets (always) + toggleable Reps / Time / Distance */}
+                        {/* Line 2: toggleable Reps / Time / Distance */}
                         <div className="flex items-start gap-3 pl-7">
-                          {/* Sets — always visible, label above input */}
-                          <div className="flex flex-col items-center gap-1 shrink-0">
-                            <span className="text-xs text-muted-foreground">Sets</span>
-                            <Input
-                              value={ex.sets}
-                              onChange={(e) => handleFieldChange(index, 'sets', e.target.value)}
-                              className="w-12 h-7 text-xs text-center px-1"
-                            />
-                          </div>
-
                           {/* Toggleable params — chip label on top, input below when enabled */}
                           {([
                             { key: 'reps',     label: 'Reps', unit: undefined },
