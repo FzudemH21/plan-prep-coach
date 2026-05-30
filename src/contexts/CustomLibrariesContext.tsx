@@ -23,6 +23,12 @@ export interface CircuitExercise {
   libraryId: string;
   sets: string;
   reps: string;
+  /** Duration in seconds (e.g. "30") */
+  time?: string;
+  /** Distance (e.g. "100") */
+  distance?: string;
+  /** Which params are toggled on — defaults to ['reps'] when absent */
+  enabledParams?: string[];
   order: number;
 }
 

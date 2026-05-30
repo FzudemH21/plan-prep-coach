@@ -30,6 +30,7 @@ import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import type { Circuit, CircuitExercise } from '@/contexts/CustomLibrariesContext';
 import { ExerciseLibraryPopup } from '@/components/microcycle-planning/ExerciseLibraryPopup';
 import type { ExerciseSelection } from '@/types/microcycle-planning';
+import { cn } from '@/lib/utils';
 
 interface CircuitBuilderDialogProps {
   isOpen: boolean;
@@ -143,6 +144,9 @@ export function CircuitBuilderDialog({
       libraryId: sel.library,
       sets: '3',
       reps: '10',
+      time: '',
+      distance: '',
+      enabledParams: ['reps'],
       order: baseOrder + i,
     }));
     setExercises(prev => [...prev, ...newExercises]);
@@ -173,9 +177,22 @@ export function CircuitBuilderDialog({
     );
   };
 
-  const handleFieldChange = (index: number, field: 'sets' | 'reps', value: string) => {
+  const handleFieldChange = (index: number, field: 'sets' | 'reps' | 'time' | 'distance', value: string) => {
     setExercises(prev =>
       prev.map((e, i) => (i === index ? { ...e, [field]: value } : e))
+    );
+  };
+
+  const handleToggleParam = (index: number, param: string) => {
+    setExercises(prev =>
+      prev.map((e, i) => {
+        if (i !== index) return e;
+        const current = e.enabledParams ?? ['reps'];
+        const next = current.includes(param)
+          ? current.filter(p => p !== param)
+          : [...current, param];
+        return { ...e, enabledParams: next };
+      })
     );
   };
 
@@ -382,50 +399,94 @@ export function CircuitBuilderDialog({
                 </div>
               ) : (
                 <div className="space-y-1.5">
-                  {exercises.map((ex, index) => (
-                    <div
-                      key={ex.id}
-                      className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-muted/30"
-                    >
-                      <span className="w-5 text-center text-xs font-semibold text-muted-foreground shrink-0">
-                        {index + 1}
-                      </span>
-                      <span className="flex-1 text-sm font-medium truncate min-w-0">
-                        {ex.exerciseName}
-                      </span>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-xs text-muted-foreground">Sets</span>
-                        <Input
-                          value={ex.sets}
-                          onChange={(e) => handleFieldChange(index, 'sets', e.target.value)}
-                          className="w-14 h-7 text-xs text-center px-1"
-                        />
+                  {exercises.map((ex, index) => {
+                    const enabledParams = ex.enabledParams ?? ['reps'];
+                    return (
+                      <div
+                        key={ex.id}
+                        className="px-3 py-2 border rounded-lg bg-muted/30 space-y-2"
+                      >
+                        {/* Line 1: number, name, reorder, delete */}
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 text-center text-xs font-semibold text-muted-foreground shrink-0">
+                            {index + 1}
+                          </span>
+                          <span className="flex-1 text-sm font-medium truncate min-w-0">
+                            {ex.exerciseName}
+                          </span>
+                          <div className="flex flex-col gap-0.5 shrink-0">
+                            <Button variant="ghost" size="sm" className="h-5 w-5 p-0"
+                              disabled={index === 0} onClick={() => handleMoveUp(index)}>
+                              <ChevronUp className="h-3 w-3" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-5 w-5 p-0"
+                              disabled={index === exercises.length - 1} onClick={() => handleMoveDown(index)}>
+                              <ChevronDown className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          <Button variant="ghost" size="sm"
+                            className="h-7 w-7 p-0 text-destructive hover:text-destructive shrink-0"
+                            onClick={() => handleRemove(index)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+
+                        {/* Line 2: Sets (always) + toggleable Reps / Time / Distance */}
+                        <div className="flex items-center gap-2 flex-wrap pl-7">
+                          {/* Sets — always visible */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className="text-xs text-muted-foreground">Sets</span>
+                            <Input
+                              value={ex.sets}
+                              onChange={(e) => handleFieldChange(index, 'sets', e.target.value)}
+                              className="w-12 h-7 text-xs text-center px-1"
+                            />
+                          </div>
+
+                          {/* Toggleable params */}
+                          {([
+                            { key: 'reps',     label: 'Reps', unit: undefined   },
+                            { key: 'time',     label: 'Time', unit: 's'         },
+                            { key: 'distance', label: 'Dist', unit: 'm'         },
+                          ] as { key: 'reps' | 'time' | 'distance'; label: string; unit?: string }[]).map(({ key, label, unit }) => {
+                            const on = enabledParams.includes(key);
+                            const fieldValue =
+                              key === 'reps' ? ex.reps :
+                              key === 'time' ? (ex.time ?? '') :
+                              (ex.distance ?? '');
+                            return (
+                              <div key={key} className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleParam(index, key)}
+                                  className={cn(
+                                    'text-xs px-2 py-0.5 rounded-full border transition-colors',
+                                    on
+                                      ? 'bg-primary text-primary-foreground border-primary'
+                                      : 'bg-transparent text-muted-foreground border-muted-foreground/40 hover:border-muted-foreground/70'
+                                  )}
+                                >
+                                  {label}
+                                </button>
+                                {on && (
+                                  <>
+                                    <Input
+                                      value={fieldValue}
+                                      onChange={(e) => handleFieldChange(index, key, e.target.value)}
+                                      className="w-12 h-7 text-xs text-center px-1"
+                                    />
+                                    {unit && (
+                                      <span className="text-xs text-muted-foreground">{unit}</span>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-xs text-muted-foreground">Reps</span>
-                        <Input
-                          value={ex.reps}
-                          onChange={(e) => handleFieldChange(index, 'reps', e.target.value)}
-                          className="w-14 h-7 text-xs text-center px-1"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-0.5 shrink-0">
-                        <Button variant="ghost" size="sm" className="h-5 w-5 p-0"
-                          disabled={index === 0} onClick={() => handleMoveUp(index)}>
-                          <ChevronUp className="h-3 w-3" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-5 w-5 p-0"
-                          disabled={index === exercises.length - 1} onClick={() => handleMoveDown(index)}>
-                          <ChevronDown className="h-3 w-3" />
-                        </Button>
-                      </div>
-                      <Button variant="ghost" size="sm"
-                        className="h-7 w-7 p-0 text-destructive hover:text-destructive shrink-0"
-                        onClick={() => handleRemove(index)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
