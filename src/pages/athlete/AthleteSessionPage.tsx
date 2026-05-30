@@ -5,7 +5,7 @@ import {
   CheckCircle2, Timer,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -26,7 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type Phase = 'overview' | 'sectionIntro' | 'active' | 'rest' | 'sectionDone' | 'done';
+type Phase = 'overview' | 'sectionIntro' | 'active' | 'rest' | 'done';
 
 interface SectionData {
   id: string;
@@ -420,7 +420,7 @@ export default function AthleteSessionPage() {
   // ── Workout elapsed timer ──────────────────────────────────────────────────
 
   useEffect(() => {
-    const TICKING: Phase[] = ['sectionIntro', 'active', 'rest', 'sectionDone'];
+    const TICKING: Phase[] = ['sectionIntro', 'active', 'rest'];
     if (!TICKING.includes(phase) || workoutStartTimeRef.current === null) return;
     const id = setInterval(() => {
       setWorkoutElapsed(Math.floor((Date.now() - workoutStartTimeRef.current!) / 1000));
@@ -534,7 +534,7 @@ export default function AthleteSessionPage() {
       if (isLastSection) {
         startRest(restSecs, () => { setPhase('done'); setBorgSheetOpen(true); });
       } else {
-        startRest(restSecs, () => setPhase('sectionDone'));
+        startRest(restSecs, () => { setSectionIdx(i => i + 1); setPhase('sectionIntro'); });
       }
     } else {
       // Between sets or exercises — brief rest, then return to the section view
@@ -570,15 +570,10 @@ export default function AthleteSessionPage() {
       if (isLastSection) {
         startRest(restSecs, () => { setPhase('done'); setBorgSheetOpen(true); });
       } else {
-        startRest(restSecs, () => setPhase('sectionDone'));
+        startRest(restSecs, () => { setSectionIdx(i => i + 1); setPhase('sectionIntro'); });
       }
     }
     // If section not yet complete, just update completed sets — no rest needed
-  }
-
-  function handleNextSection() {
-    setSectionIdx(i => i + 1);
-    setPhase('sectionIntro');
   }
 
   function handleSaved() {
@@ -758,7 +753,7 @@ export default function AthleteSessionPage() {
                 setPhase('overview');
               } else {
                 setSectionIdx(i => i - 1);
-                setPhase('sectionDone');
+                setPhase('active');
               }
             }}
             className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors"
@@ -846,65 +841,6 @@ export default function AthleteSessionPage() {
         >
           Skip rest
         </button>
-      </div>
-    );
-  }
-
-  // ── Screen: Section done ───────────────────────────────────────────────────
-
-  if (phase === 'sectionDone') {
-    const doneSection = sections[sectionIdx];
-    const isLast = sectionIdx === sections.length - 1;
-    const nextSection = sections[sectionIdx + 1];
-
-    return (
-      <div className="flex flex-col h-screen bg-background max-w-[480px] mx-auto">
-        {/* Header */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
-          <button
-            onClick={() => setPhase('active')}
-            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <h1 className="flex-1 text-center font-semibold text-base truncate pr-8">{session.name}</h1>
-        </div>
-
-        {/* Centered content */}
-        <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6">
-          <CheckCircle2 className="h-16 w-16 text-green-500" />
-          <div className="text-center">
-            <p className="text-2xl font-bold">Section Complete!</p>
-            <p className="text-muted-foreground mt-1">{doneSection?.name}</p>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {doneSection?.exercises.length} exercise{doneSection?.exercises.length !== 1 ? 's' : ''} done
-          </p>
-
-          {!isLast ? (
-            <div className="flex flex-col items-center gap-2 w-full max-w-xs">
-              <p className="text-xs text-muted-foreground">Up next</p>
-              <Card className="w-full">
-                <CardContent className="flex items-center gap-3 p-3">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
-                    {sectionIdx + 2}
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">{nextSection?.name}</p>
-                    <p className="text-xs text-muted-foreground">{nextSection?.exercises.length} exercises</p>
-                  </div>
-                </CardContent>
-              </Card>
-              <Button className="w-full mt-2" size="lg" onClick={handleNextSection}>
-                Start next section
-              </Button>
-            </div>
-          ) : (
-            <Button className="w-full max-w-xs" size="lg" onClick={() => { setPhase('done'); setBorgSheetOpen(true); }}>
-              Finish Workout
-            </Button>
-          )}
-        </div>
       </div>
     );
   }
@@ -1104,7 +1040,8 @@ export default function AthleteSessionPage() {
               variant={sectionComplete ? 'default' : 'outline'}
               onClick={() => {
                 if (!sectionComplete) { setIncompleteWarning('section'); return; }
-                setPhase('sectionDone');
+                setSectionIdx(i => i + 1);
+                setPhase('sectionIntro');
               }}
             >
               <Check className="h-4 w-4 mr-2" />
@@ -1147,8 +1084,12 @@ export default function AthleteSessionPage() {
                 onClick={() => {
                   const warn = incompleteWarning;
                   setIncompleteWarning(null);
-                  if (warn === 'workout') { setPhase('done'); setBorgSheetOpen(true); }
-                  else { setPhase('sectionDone'); }
+                  if (warn === 'workout') {
+                    setPhase('done'); setBorgSheetOpen(true);
+                  } else {
+                    setSectionIdx(i => i + 1);
+                    setPhase('sectionIntro');
+                  }
                 }}
               >
                 Finish anyway
