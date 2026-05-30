@@ -237,16 +237,19 @@ export function CircuitBuilderDialog({
       return;
     }
 
-    // Library-view edit mode — check for name conflicts too
-    const existingEdit = findNameConflict(libraryId!);
-    if (existingEdit) {
-      const lib = libraries.find(l => l.id === libraryId);
-      setConflictInfo({
-        targetLibraryId: libraryId!,
-        targetLibraryName: lib?.name ?? 'this library',
-        existingCircuit: existingEdit,
-      });
-      return;
+    // Library-view edit mode — only check for name conflicts if the name changed
+    const nameChanged = name.trim().toLowerCase() !== circuit.name.trim().toLowerCase();
+    if (nameChanged) {
+      const existingEdit = findNameConflict(libraryId!);
+      if (existingEdit) {
+        const lib = libraries.find(l => l.id === libraryId);
+        setConflictInfo({
+          targetLibraryId: libraryId!,
+          targetLibraryName: lib?.name ?? 'this library',
+          existingCircuit: existingEdit,
+        });
+        return;
+      }
     }
     updateCircuitInLibrary(libraryId!, circuit.id, payload);
     onClose();
