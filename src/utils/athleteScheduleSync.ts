@@ -151,9 +151,6 @@ export async function syncAthleteSchedule(
   // Build superset lookup: exerciseId → supersetGroupId
   // SupersetMapping shape: { dayDate: { sessionIndex: { sectionId: { supersetId: exerciseId[] } } } }
   const supersetLookup = new Map<string, string>();
-  console.log('[syncAthleteSchedule] supersets param:', supersets
-    ? `${Object.keys(supersets).length} date(s): ${Object.keys(supersets).join(', ')}`
-    : 'undefined/null');
   if (supersets) {
     for (const [dayDate, bySession] of Object.entries(supersets)) {
       for (const [sessionIdxStr, bySection] of Object.entries(bySession)) {
@@ -168,8 +165,6 @@ export async function syncAthleteSchedule(
       }
     }
   }
-  console.log('[syncAthleteSchedule] supersetLookup size:', supersetLookup.size,
-    supersetLookup.size > 0 ? `| sample keys: ${Array.from(supersetLookup.keys()).slice(0, 3).join(', ')}` : '');
 
   // Build toolbox visible-params lookup: "category - subCategory" → string[]
   // Also build rest-param lookup: "category - subCategory" → restParamName

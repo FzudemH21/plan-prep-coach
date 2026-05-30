@@ -101,12 +101,15 @@ export function useAthleteApp() {
         };
         setConnection(conn);
 
-        // Load schedule (90-day window around today)
-        const today = new Date();
-        const from = new Date(today); from.setDate(today.getDate() - 7);
-        const to = new Date(today); to.setDate(today.getDate() + 90);
-        const fromStr = from.toISOString().slice(0, 10);
-        const toStr = to.toISOString().slice(0, 10);
+        // Load schedule (90-day window around today) — use local date strings so the
+        // window edges align with the same calendar day the athlete app displays.
+        const todayLocal = new Date();
+        const fromLocal = new Date(todayLocal); fromLocal.setDate(todayLocal.getDate() - 7);
+        const toLocal = new Date(todayLocal); toLocal.setDate(todayLocal.getDate() + 90);
+        const localStr = (d: Date) =>
+          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const fromStr = localStr(fromLocal);
+        const toStr = localStr(toLocal);
         console.log(`[useAthleteApp] querying athlete_schedule | connectionId=${conn.id} | from=${fromStr} to=${toStr}`);
 
         const { data: schedData, error: schedErr } = await supabase
@@ -152,12 +155,14 @@ export function useAthleteApp() {
   }, [connection]);
 
   const getTodayEntry = (): AthleteScheduleEntry | null => {
-    const today = new Date().toISOString().slice(0, 10);
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     return schedule.find(e => e.date === today) ?? null;
   };
 
   const getUpcomingDays = (n = 7): AthleteScheduleEntry[] => {
-    const today = new Date().toISOString().slice(0, 10);
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     return schedule.filter(e => e.date >= today).slice(0, n);
   };
 

@@ -97,7 +97,8 @@ function addDays(dateStr: string, n: number): string {
 }
 
 function UpcomingStrip({ schedule }: { schedule: AthleteScheduleEntry[] }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const _d = new Date();
+  const today = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, '0')}-${String(_d.getDate()).padStart(2, '0')}`;
 
   // Build a map for quick lookup
   const scheduleMap = new Map(schedule.map(e => [e.date, e]));
