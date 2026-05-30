@@ -33,15 +33,8 @@ function TrainingEntry({ entry }: { entry: AthleteScheduleEntry }) {
 
   return (
     <div className="space-y-4">
-      {/* Intensity + context */}
-      <div className="flex flex-col gap-2">
-        <IntensityBadge intensity={entry.intensity} />
-        {(entry.mesocycleName || entry.programName) && (
-          <p className="text-sm text-muted-foreground">
-            {[entry.mesocycleName, entry.programName].filter(Boolean).join(' · ')}
-          </p>
-        )}
-      </div>
+      {/* Intensity */}
+      <IntensityBadge intensity={entry.intensity} />
 
       {/* Session cards */}
       <div className="space-y-2">
