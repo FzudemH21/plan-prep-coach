@@ -193,9 +193,10 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         });
       }
     });
-  // Only re-run when a save actually completes — not on every state change
+  // Re-run when a save completes OR when connections finish loading (so a save
+  // that was deferred due to "connections still loading" gets retried automatically).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing.lastSavedAt]);
+  }, [editing.lastSavedAt, connectionsLoading]);
 
   // Re-sync to athlete_schedule once per assignment when data finishes loading.
   // This ensures stale Supabase records (written before a code fix) are refreshed
