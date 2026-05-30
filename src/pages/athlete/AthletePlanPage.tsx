@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Dumbbell, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Dumbbell, ChevronRight, ChevronLeft, Activity, CalendarDays } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useAthleteApp, AthleteScheduleEntry } from '@/hooks/useAthleteApp';
+import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent } from '@/hooks/useAthleteApp';
 import { IntensityBadge } from '@/components/athlete-app/IntensityBadge';
 import { cn } from '@/lib/utils';
 
@@ -156,6 +156,36 @@ function DaySection({
         <p className={cn('text-xs', isPast ? 'text-muted-foreground/50' : 'text-muted-foreground')}>
           Rest day
         </p>
+      )}
+
+      {/* Tests & events */}
+      {(entry?.events ?? []).length > 0 && (
+        <div className="space-y-1.5 pt-0.5">
+          {entry!.events.map((ev: AthleteCalendarEvent) => (
+            <div
+              key={ev.id}
+              className={cn(
+                'flex items-start gap-2 rounded-lg px-2.5 py-2 border text-xs',
+                isPast ? 'opacity-50' : '',
+                ev.type === 'test'
+                  ? 'border-amber-200 bg-amber-50/60'
+                  : 'border-blue-200 bg-blue-50/60',
+              )}
+            >
+              {ev.type === 'test'
+                ? <Activity className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+                : <CalendarDays className="h-3.5 w-3.5 text-blue-600 shrink-0 mt-0.5" />}
+              <div className="min-w-0">
+                <p className={cn('font-medium', ev.type === 'test' ? 'text-amber-800' : 'text-blue-800')}>
+                  {ev.title}
+                </p>
+                {ev.notes && (
+                  <p className="text-muted-foreground mt-0.5 leading-relaxed">{ev.notes}</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

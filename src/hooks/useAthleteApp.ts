@@ -76,11 +76,19 @@ export interface SessionSummary {
   exercises: ExerciseSummary[];
 }
 
+export interface AthleteCalendarEvent {
+  id: string;
+  type: 'test' | 'event';
+  title: string;
+  notes?: string;
+}
+
 export interface AthleteScheduleEntry {
   id: string;
   date: string;          // yyyy-MM-dd
   intensity: string | null;
   sessions: SessionSummary[];
+  events: AthleteCalendarEvent[];
   programName: string | null;
   mesocycleName: string | null;
   microcycleName: string | null;
@@ -159,6 +167,7 @@ export function useAthleteApp() {
           date: row.date as string,
           intensity: row.intensity as string | null,
           sessions: (row.sessions as SessionSummary[]) || [],
+          events: (row.events as AthleteCalendarEvent[]) || [],
           programName: row.program_name as string | null,
           mesocycleName: row.mesocycle_name as string | null,
           microcycleName: row.microcycle_name as string | null,

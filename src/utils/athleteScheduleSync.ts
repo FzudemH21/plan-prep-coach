@@ -8,6 +8,7 @@
 import { supabase } from '@/lib/supabase';
 import { AthleteCalendarAssignment } from '@/types/athlete';
 import type { ToolboxEntry } from '@/types/toolbox';
+import type { CalendarEvent } from '@/hooks/useCalendarEvents';
 
 interface TrainingDay {
   date: string;
@@ -175,6 +176,7 @@ export async function syncAthleteSchedule(
   toolboxEntries?: ToolboxEntry[],
   supersets?: SupersetMapping,
   sessionIntensities?: Record<string, string>,
+  calendarEvents?: CalendarEvent[],
 ): Promise<void> {
   if (!connectionId || trainingDays.length === 0) return;
 
@@ -410,7 +412,15 @@ export async function syncAthleteSchedule(
     };
   }
 
+  // Build events-by-date lookup
+  const eventsByDate = new Map<string, Array<{ id: string; type: string; title: string; notes?: string }>>();
+  for (const ev of calendarEvents ?? []) {
+    if (!eventsByDate.has(ev.date)) eventsByDate.set(ev.date, []);
+    eventsByDate.get(ev.date)!.push({ id: ev.id, type: ev.type, title: ev.title, notes: ev.notes });
+  }
+
   // Build rows — one per training day that has sessions
+  const trainingDayDates = new Set(trainingDays.map(td => td.date));
   const rows = trainingDays
     .filter(td => td.isTrainingDay && td.sessions > 0)
     .map(td => {
@@ -507,15 +517,36 @@ export async function syncAthleteSchedule(
         date: td.date,
         intensity: td.intensity ?? null,
         sessions,
+        events: eventsByDate.get(td.date) ?? [],
         program_name: programName,
         mesocycle_name: meta?.mesoName ?? null,
         microcycle_name: meta?.microName ?? null,
       };
     });
 
-  // Delete all dates covered by trainingDays first so cleared days are removed.
+  // Append event-only rows for dates that have events but no training session row.
+  // This ensures tests/events on rest days are visible in the athlete app.
+  for (const [evDate, evList] of eventsByDate) {
+    if (trainingDayDates.has(evDate)) continue; // already included above
+    const meta = mesoByDate.get(evDate);
+    rows.push({
+      athlete_connection_id: connectionId,
+      date: evDate,
+      intensity: null,
+      sessions: [],
+      events: evList,
+      program_name: programName,
+      mesocycle_name: meta?.mesoName ?? null,
+      microcycle_name: meta?.microName ?? null,
+    });
+  }
+
+  // Delete all dates covered by trainingDays OR calendarEvents first so cleared days are removed.
   // This must happen even when rows is empty (full calendar clear case).
-  const allDates = trainingDays.map(td => td.date);
+  const allDates = [
+    ...trainingDays.map(td => td.date),
+    ...[...eventsByDate.keys()].filter(d => !trainingDayDates.has(d)),
+  ];
   console.log(`[syncAthleteSchedule] plan: DELETE ${allDates.length} dates → UPSERT ${rows.length} training-day rows`);
   const DEL_BATCH = 200;
   for (let i = 0; i < allDates.length; i += DEL_BATCH) {

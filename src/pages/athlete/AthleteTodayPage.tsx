@@ -1,6 +1,6 @@
-import { BedDouble, Dumbbell, ChevronRight } from 'lucide-react';
+import { BedDouble, Dumbbell, ChevronRight, Activity, CalendarDays } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { useAthleteApp, AthleteScheduleEntry } from '@/hooks/useAthleteApp';
+import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent } from '@/hooks/useAthleteApp';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { IntensityBadge, getDotColor } from '@/components/athlete-app/IntensityBadge';
@@ -89,6 +89,38 @@ function RestDay() {
   );
 }
 
+function EventsList({ events }: { events: AthleteCalendarEvent[] }) {
+  if (events.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        Today's Schedule
+      </p>
+      {events.map(ev => (
+        <Card key={ev.id} className={cn(
+          'border',
+          ev.type === 'test' ? 'border-amber-200 bg-amber-50/60' : 'border-blue-200 bg-blue-50/60'
+        )}>
+          <CardContent className="flex items-start gap-3 p-3">
+            <div className={cn(
+              'w-8 h-8 rounded-md flex items-center justify-center shrink-0 mt-0.5',
+              ev.type === 'test' ? 'bg-amber-100' : 'bg-blue-100'
+            )}>
+              {ev.type === 'test'
+                ? <Activity className="h-4 w-4 text-amber-600" />
+                : <CalendarDays className="h-4 w-4 text-blue-600" />}
+            </div>
+            <div className="min-w-0">
+              <p className="font-medium text-sm">{ev.title}</p>
+              {ev.notes && <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{ev.notes}</p>}
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 function addDays(dateStr: string, n: number): string {
   const d = new Date(dateStr + 'T12:00:00');
   return new Date(d.getTime() + n * 86400000).toISOString().slice(0, 10);
@@ -161,8 +193,13 @@ export default function AthleteTodayPage() {
         <p className="text-sm text-muted-foreground mt-0.5">{formatDate(new Date())}</p>
       </div>
 
-      {/* Today */}
-      {todayEntry ? <TrainingEntry entry={todayEntry} /> : <RestDay />}
+      {/* Today — sessions */}
+      {(todayEntry?.sessions.length ?? 0) > 0
+        ? <TrainingEntry entry={todayEntry!} />
+        : <RestDay />}
+
+      {/* Today — tests & events */}
+      {todayEntry && <EventsList events={todayEntry.events} />}
 
       {/* Upcoming strip */}
       <UpcomingStrip schedule={schedule} />
