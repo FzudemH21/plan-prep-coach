@@ -591,6 +591,15 @@ function ExerciseDetailSheet({ target, onClose }: ExerciseDetailSheetProps) {
                     src={thumbnailUrl}
                     alt={`${target!.name} video`}
                     className="w-full object-cover aspect-video bg-muted"
+                    onError={e => {
+                      // hqdefault can be a black placeholder for some videos — fall back progressively
+                      const img = e.currentTarget;
+                      if (img.src.includes('hqdefault')) {
+                        img.src = img.src.replace('hqdefault', 'mqdefault');
+                      } else if (img.src.includes('mqdefault')) {
+                        img.src = img.src.replace('mqdefault', 'sddefault');
+                      }
+                    }}
                   />
                   <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-active:bg-black/30 transition-colors">
                     <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
@@ -987,24 +996,57 @@ export default function AthleteSessionPage() {
                       {isOpen && (
                         <div className="border-t divide-y divide-border/50">
                           {sec.exercises.map((ex, i) => (
-                            <div key={ex.id} className="flex items-center gap-3 px-4 py-2.5">
-                              <span className="text-xs text-muted-foreground w-4 shrink-0 text-right tabular-nums">
-                                {i + 1}
-                              </span>
-                              <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                                {ex.isCircuit && <RefreshCw className="h-3 w-3 text-muted-foreground shrink-0" />}
-                                <span className="text-sm truncate">{ex.name}</span>
+                            <React.Fragment key={ex.id}>
+                              <div className="flex items-center gap-3 px-4 py-2.5">
+                                <span className="text-xs text-muted-foreground w-4 shrink-0 text-right tabular-nums">
+                                  {i + 1}
+                                </span>
+                                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                  {ex.isCircuit && <RefreshCw className="h-3 w-3 text-muted-foreground shrink-0" />}
+                                  <span className="text-sm truncate">{ex.name}</span>
+                                </div>
+                                {ex.isCircuit ? (
+                                  <span className="text-xs text-muted-foreground shrink-0">
+                                    {ex.circuitRounds ?? 3} rounds
+                                  </span>
+                                ) : ex.plannedSets ? (
+                                  <span className="text-xs text-muted-foreground shrink-0">
+                                    {ex.plannedSets} sets
+                                  </span>
+                                ) : null}
                               </div>
-                              {ex.isCircuit ? (
-                                <span className="text-xs text-muted-foreground shrink-0">
-                                  {ex.circuitRounds ?? 3} rounds
-                                </span>
-                              ) : ex.plannedSets ? (
-                                <span className="text-xs text-muted-foreground shrink-0">
-                                  {ex.plannedSets} sets
-                                </span>
-                              ) : null}
-                            </div>
+                              {/* Circuit sub-exercises — tappable when details exist */}
+                              {ex.isCircuit && (ex.circuitExercises ?? []).length > 0 && (
+                                <div className="bg-muted/20">
+                                  {(ex.circuitExercises ?? [])
+                                    .slice()
+                                    .sort((a, b) => a.order - b.order)
+                                    .map((cex, ci) => {
+                                      const hasDetail = !!(cex.exerciseVideoUrl || cex.exerciseDescription);
+                                      const paramStr = formatCircuitExerciseParams(cex);
+                                      return (
+                                        <div key={cex.id} className="flex items-center gap-2 pl-10 pr-4 py-2 text-xs border-t border-border/20">
+                                          <span className="text-muted-foreground w-4 shrink-0 text-right">{ci + 1}.</span>
+                                          {hasDetail ? (
+                                            <button
+                                              onClick={() => setDetailTarget({ name: cex.exerciseName, videoUrl: cex.exerciseVideoUrl, description: cex.exerciseDescription })}
+                                              className="flex items-center gap-1 flex-1 min-w-0 text-left hover:underline active:opacity-60 transition-opacity"
+                                            >
+                                              <span className="truncate">{cex.exerciseName}</span>
+                                              <Info className="h-3 w-3 text-muted-foreground shrink-0 ml-0.5" />
+                                            </button>
+                                          ) : (
+                                            <span className="flex-1 min-w-0 truncate text-muted-foreground">{cex.exerciseName}</span>
+                                          )}
+                                          {paramStr && (
+                                            <span className="text-muted-foreground shrink-0">{paramStr}</span>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                </div>
+                              )}
+                            </React.Fragment>
                           ))}
                         </div>
                       )}
@@ -1043,6 +1085,12 @@ export default function AthleteSessionPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Exercise detail sheet — available in overview so circuit exercises can be tapped */}
+        <ExerciseDetailSheet
+          target={detailTarget}
+          onClose={() => setDetailTarget(null)}
+        />
       </div>
     );
   }
