@@ -522,8 +522,12 @@ export async function syncAthleteSchedule(
           }
         } catch { /* ignore */ }
 
+        // Include assignment ID prefix so sessions from different plan assignments
+        // on the same date never share the same ID — prevents completed-session
+        // logs from bleeding through to new sessions on the same day.
+        const assignmentPrefix = assignment.id.replace(/-/g, '').slice(0, 8);
         return {
-          id: `${td.date}-${i}`,
+          id: `${assignmentPrefix}-${td.date}-${i}`,
           name: td.sessionNames?.[i] ?? `Session ${i + 1}`,
           order: i,
           exerciseCount: exercisesForSession.length,

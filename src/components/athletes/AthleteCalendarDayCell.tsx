@@ -409,8 +409,8 @@ export function AthleteCalendarDayCell({
                 )}
               >
                 {day.sessions.map((session, idx) => {
-                  // Look up log: session_id in athlete_session_logs = "${date}-${sessionIndex}"
-                  const sessionLog = sessionLogs?.get(`${day.dateString}-${session.sessionIndex}`);
+                  // Look up log by session.id (athlete_schedule session id = session_id in logs)
+                  const sessionLog = sessionLogs?.get(session.id);
                   const isCompleted = !!sessionLog?.completed_at;
                   const isInProgress = !!sessionLog?.started_at && !sessionLog?.completed_at;
                   const isLocked = isCompleted || isInProgress;
