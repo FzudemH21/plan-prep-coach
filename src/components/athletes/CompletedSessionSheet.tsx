@@ -36,11 +36,23 @@ export interface RegularExerciseLog {
   sets: SetEntry[];
 }
 
+export interface CircuitExerciseItemLog {
+  exerciseName: string;
+  reps: string;
+  time?: string;
+  distance?: string;
+  enabledParams?: string[];
+}
+
 export interface CircuitExerciseLog {
   exerciseName: string;
   isCircuit: true;
   roundsCompleted: number;
   totalRounds: number;
+  circuitRestBetweenRounds?: string;
+  circuitRestBetweenExercises?: string;
+  circuitComments?: string;
+  circuitExercises?: CircuitExerciseItemLog[];
   // Session structure metadata (new logs only)
   sectionId?: string;
   sectionName?: string;
@@ -103,17 +115,67 @@ function StatCard({
 function ExerciseLogCard({ entry }: { entry: SetLogEntry }) {
   if (entry.isCircuit) {
     const skipped = entry.roundsCompleted === 0;
+    const restRounds = entry.circuitRestBetweenRounds ? Number(entry.circuitRestBetweenRounds) : null;
+    const restExercises = entry.circuitRestBetweenExercises ? Number(entry.circuitRestBetweenExercises) : null;
+    const exercises = entry.circuitExercises ?? [];
+
     return (
       <div className="rounded-md border overflow-hidden">
+        {/* Header */}
         <div className="px-3 py-2 bg-muted/30 border-b flex items-center gap-2">
           <Badge variant="outline" className="text-xs shrink-0">Circuit</Badge>
           <span className="text-sm font-medium">{entry.exerciseName}</span>
         </div>
-        <div className={`px-3 py-2 text-sm ${skipped ? 'text-muted-foreground/50 line-through' : 'text-muted-foreground'}`}>
+
+        {/* Rounds completed */}
+        <div className={`px-3 py-2 text-sm border-b ${skipped ? 'text-muted-foreground/50 line-through' : 'text-muted-foreground'}`}>
           {skipped
             ? `0 / ${entry.totalRounds} rounds — skipped`
             : `${entry.roundsCompleted} / ${entry.totalRounds} rounds completed`}
         </div>
+
+        {/* Circuit config */}
+        {(restRounds !== null || restExercises !== null || entry.circuitComments) && (
+          <div className="px-3 py-2 border-b space-y-1">
+            {restRounds !== null && restRounds > 0 && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <RefreshCw className="h-3 w-3 shrink-0" />
+                <span>Rest between rounds: <span className="font-medium text-foreground">{formatDuration(restRounds)}</span></span>
+              </div>
+            )}
+            {restExercises !== null && restExercises > 0 && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <RefreshCw className="h-3 w-3 shrink-0" />
+                <span>Rest between exercises: <span className="font-medium text-foreground">{formatDuration(restExercises)}</span></span>
+              </div>
+            )}
+            {entry.circuitComments && (
+              <p className="text-xs text-muted-foreground italic">{entry.circuitComments}</p>
+            )}
+          </div>
+        )}
+
+        {/* Exercise list */}
+        {exercises.length > 0 && (
+          <div className="divide-y divide-border/40">
+            {exercises.map((cex, i) => {
+              const params: string[] = [];
+              if (cex.enabledParams?.includes('Reps') && cex.reps) params.push(`${cex.reps} reps`);
+              if (cex.enabledParams?.includes('Time') && cex.time) params.push(`${cex.time}s`);
+              if (cex.enabledParams?.includes('Distance') && cex.distance) params.push(`${cex.distance}m`);
+              // fallback: show reps if no enabledParams
+              if (params.length === 0 && cex.reps) params.push(`${cex.reps} reps`);
+              return (
+                <div key={i} className="px-3 py-1.5 flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium">{cex.exerciseName}</span>
+                  {params.length > 0 && (
+                    <span className="text-xs text-muted-foreground shrink-0">{params.join(' · ')}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   }
