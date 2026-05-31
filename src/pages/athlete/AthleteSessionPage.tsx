@@ -914,6 +914,19 @@ export default function AthleteSessionPage() {
   // Real-time completion check: hook data first (updates after refetch), nav-state snapshot as fallback
   const currentLog = getSessionLog(entry.date, session.id) ?? state.log ?? null;
 
+  // Lookup map for completed-session review (exerciseName → logged data)
+  type LoggedEx = {
+    exerciseName: string;
+    sets?: Array<{ setNumber: number; values: Record<string, string> }>;
+    isCircuit?: boolean;
+    roundsCompleted?: number;
+    totalRounds?: number;
+  };
+  const logMap = new Map<string, LoggedEx>();
+  if (currentLog) {
+    (currentLog.setsLogged as LoggedEx[]).forEach(e => logMap.set(e.exerciseName, e));
+  }
+
   // Build sets_logged payload for Borg sheet
   const setsLoggedPayload = [
     // Regular exercises — per-set logged values
@@ -1034,6 +1047,16 @@ export default function AthleteSessionPage() {
                                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
                                   {ex.isCircuit && <RefreshCw className="h-3 w-3 text-muted-foreground shrink-0" />}
                                   <span className="text-sm truncate">{ex.name}</span>
+                                  {/* ⓘ button — available in overview for video/description */}
+                                  {(ex.exerciseVideoUrl || ex.exerciseDescription) && !ex.isCircuit && (
+                                    <button
+                                      onClick={() => setDetailTarget({ name: ex.name, videoUrl: ex.exerciseVideoUrl, description: ex.exerciseDescription })}
+                                      className="shrink-0 text-muted-foreground hover:text-foreground active:opacity-60 transition-colors"
+                                      aria-label="View exercise details"
+                                    >
+                                      <Info className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
                                 </div>
                                 {ex.isCircuit ? (
                                   <span className="text-xs text-muted-foreground shrink-0">
@@ -1045,6 +1068,7 @@ export default function AthleteSessionPage() {
                                   </span>
                                 ) : null}
                               </div>
+
                               {/* Circuit sub-exercises — read-only in overview */}
                               {ex.isCircuit && (ex.circuitExercises ?? []).length > 0 && (
                                 <div className="bg-muted/20">
@@ -1065,6 +1089,47 @@ export default function AthleteSessionPage() {
                                     })}
                                 </div>
                               )}
+
+                              {/* Logged results — shown in completed session overview */}
+                              {currentLog && (() => {
+                                const logged = logMap.get(ex.name);
+                                if (!logged) return null;
+                                if (logged.isCircuit) {
+                                  return (
+                                    <p className="px-4 pb-2.5 text-xs font-medium text-green-700">
+                                      {logged.roundsCompleted} / {logged.totalRounds} rounds completed
+                                    </p>
+                                  );
+                                }
+                                const sets = logged.sets ?? [];
+                                if (sets.length === 0) return null;
+                                const paramNames = Array.from(new Set(sets.flatMap(s => Object.keys(s.values))));
+                                if (paramNames.length === 0) return null;
+                                return (
+                                  <div className="px-4 pb-3 overflow-x-auto">
+                                    <table className="text-xs w-full">
+                                      <thead>
+                                        <tr className="text-muted-foreground">
+                                          <th className="text-left font-normal pb-1 pr-4 w-5">#</th>
+                                          {paramNames.map(p => (
+                                            <th key={p} className="text-left font-normal pb-1 pr-4">{p}</th>
+                                          ))}
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {sets.map(s => (
+                                          <tr key={s.setNumber} className="border-t border-border/20">
+                                            <td className="pr-4 py-1 text-muted-foreground">{s.setNumber}</td>
+                                            {paramNames.map(p => (
+                                              <td key={p} className="pr-4 py-1 font-medium">{s.values[p] ?? '—'}</td>
+                                            ))}
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           ))}
                         </div>
