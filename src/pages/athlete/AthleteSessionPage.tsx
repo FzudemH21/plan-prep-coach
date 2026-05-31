@@ -1148,7 +1148,7 @@ export default function AthleteSessionPage() {
                                   <span className="text-sm truncate">{ex.name}</span>
                                   {ex.eachSide && (
                                     <span className="shrink-0 inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 leading-none">
-                                      Each side
+                                      Perform on each side
                                     </span>
                                   )}
                                   {/* ⓘ button — available in overview for video/description */}
@@ -1553,7 +1553,7 @@ export default function AthleteSessionPage() {
                         </div>
                         {ex.eachSide && (
                           <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 mt-1 w-fit">
-                            Each side
+                            Perform on each side
                           </span>
                         )}
                         {ex.notes && <p className="text-xs text-muted-foreground mt-0.5">{ex.notes}</p>}
