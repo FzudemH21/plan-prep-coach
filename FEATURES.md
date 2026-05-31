@@ -15,8 +15,6 @@ Claude Chat (browser) is my sparring partner for planning, discussion, and promp
 | Priority | Feature | Status |
 |---|---|---|
 | 🔴 Now | **Athlete Profile — Analysis tab** — time-window driven training analysis dashboard. Tab alongside Profile / Performance / Calendar / Documents. (1) Date range selector with quick presets. (2) Internal load panel — weekly sRPE bar chart; planned vs. actual RPE per session. (3) Training stimulus panel — coach selects logged parameters, assigns aggregation (Sum / Mean / Range), computes per-week values. (4) Adherence panel — sessions completed vs. planned. (5) Performance markers — test results on timeline. (6) Time-window notes. | 🚧 In Progress — Tab ✅, date range selector ✅, granularity toggle ✅, internal load panel ✅, adherence stat ✅. Remaining: training stimulus panel, performance markers, time-window notes. |
-| 🟡 Soon | **"Each side" indicator in athlete session** — exercises with the "Each side" flag show a clear badge in the athlete's session logging view so the athlete knows to perform the exercise unilaterally. | ✅ Done — "Perform on each side" badge shown in both overview and active workout screens. |
-| 🟡 Soon | **Circuit details in CompletedSessionSheet** — coach session review shows full circuit details: rounds, rest between rounds, rest between exercises, exercise list with reps/time/distance. | ✅ Done |
 | 🟡 Soon | **Session copy bug — parameter + visibility data** — copying a session in the athlete calendar does not correctly copy visibleParams and adhocPlannedParams. | ⬜ Open |
 | 🟡 Soon | **Athlete load chart** — weekly sRPE bar chart in the athlete's Profile tab. | ⬜ Open |
 | 🟡 Soon | **Planned vs. actual RPE / load comparison** — per-session and per-week comparison of planned intensity vs. actual RPE in athlete Profile tab and coach Analysis tab. | ⬜ Open |
@@ -157,3 +155,5 @@ These features extend the existing Athlete Profile page in the coach web app.
 | Rest parameter in coach views + athlete rest timer | Editable rest column in coach grids, rest timer reads per-set and plain-key formats |
 | Tests & events visible in Plan tab | Events column in athlete_schedule, test and event cards in Today and Plan tabs |
 | Session completion bleed-through fix | Session IDs now include full assignment ID prefix — new sessions on a day with completed sessions no longer inherit old completion state |
+| "Each side" indicator in athlete session | "Perform on each side" badge shown in both overview and active workout screens |
+| Circuit details in CompletedSessionSheet | Rounds completed, rest between rounds, rest between exercises, coach comments, exercise list with reps/time/distance |
