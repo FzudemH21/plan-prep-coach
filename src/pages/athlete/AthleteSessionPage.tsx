@@ -84,6 +84,10 @@ function getParamColumns(ex: ExerciseSummary): string[] {
     return ['Reps'];
   }
 
+  // Strip rest parameters — rest drives the timer, not a log column for the athlete
+  const REST_RE = /rest|pause|recovery/i;
+  candidates = candidates.filter(p => p !== ex.restParamName && !REST_RE.test(p));
+
   // Filter to only columns that have at least one non-empty planned value.
   // Supports two storage formats:
   //   • Per-set keys: "Reps_set1", "Reps_set2", … (ad-hoc/toolbox exercises)

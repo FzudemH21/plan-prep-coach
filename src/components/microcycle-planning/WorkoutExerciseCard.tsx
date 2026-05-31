@@ -223,6 +223,7 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
             ? String(exercise.parameters[`${name}_unit`]) 
             : undefined,
           isSetParameter: toolboxEntry?.isSetParameter || /^sets?$/i.test(name) || /ground contacts/i.test(name),
+          isRestParameter: toolboxEntry?.isRestParameter || /rest|pause|recovery/i.test(name),
           isFrequencyParameter: toolboxEntry?.isFrequencyParameter || false,
           defaultValue: undefined,
           showInGridByDefault: toolboxEntry?.showInGridByDefault ?? true,
@@ -239,16 +240,16 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
     }));
   })();
 
-  // Find the set parameter
-  const setParam = methodParams.find(p => p.isSetParameter);
-  const setCount = setParam 
+  // Find the set parameter (exclude rest params — rest is not a set-count driver)
+  const setParam = methodParams.find(p => p.isSetParameter && !p.isRestParameter);
+  const setCount = setParam
     ? Number(exercise.parameters[setParam.name] || 3) // Default to 3 sets
     : 0;
 
   // Separate set parameter from other parameters
-  // EXCLUDE: set parameters, frequency parameters (structural - never shown in grid or as badges)
-  const displayableParams = methodParams.filter(p => 
-    !p.isSetParameter && !p.isFrequencyParameter
+  // EXCLUDE: true set parameters (but NOT rest params), frequency parameters
+  const displayableParams = methodParams.filter(p =>
+    (!p.isSetParameter || p.isRestParameter) && !p.isFrequencyParameter
   );
   
   // Split into visible and hidden params based on visibility

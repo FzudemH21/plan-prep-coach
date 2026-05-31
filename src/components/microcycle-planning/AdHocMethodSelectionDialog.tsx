@@ -118,10 +118,11 @@ export function AdHocMethodSelectionDialog({
       type: entry.parameterType,
       options: entry.options,
       isSetParameter: entry.isSetParameter || false,
+      isRestParameter: entry.isRestParameter || /rest|pause|recovery/i.test(entry.parameterName),
       isFrequencyParameter: entry.isFrequencyParameter || false,
       showInGridByDefault: entry.showInGridByDefault ?? false,
-      unit: entry.parameterType === 'quantitative' && entry.options.length > 0 
-        ? entry.options[0] 
+      unit: entry.parameterType === 'quantitative' && entry.options.length > 0
+        ? entry.options[0]
         : undefined
     }));
   }, [selectedMethodId, allMethods]);
@@ -131,11 +132,11 @@ export function AdHocMethodSelectionDialog({
     if (selectedMethodParams.length > 0) {
       const initial: Record<string, boolean> = {};
       selectedMethodParams.forEach(p => {
-        // Set parameter is ALWAYS visible
-        if (p.isSetParameter) {
+        if (p.isSetParameter && !p.isRestParameter) {
+          // True set params (not rest) are always visible
           initial[p.name] = true;
         } else if (!p.isFrequencyParameter) {
-          // Non-frequency params use their default visibility
+          // Rest params + regular params use their default visibility
           initial[p.name] = p.showInGridByDefault;
         }
         // Frequency parameters are excluded entirely
@@ -175,7 +176,7 @@ export function AdHocMethodSelectionDialog({
     selectedMethodParams.forEach(p => {
       if (p.isFrequencyParameter) return; // Skip frequency
       
-      if (p.isSetParameter) {
+      if (p.isSetParameter && !p.isRestParameter) {
         params[p.name] = 3; // Default 3 sets
       } else {
         params[p.name] = ''; // Empty value for user to fill
@@ -345,8 +346,8 @@ export function AdHocMethodSelectionDialog({
                             key={param.id}
                             className={cn(
                               "flex items-center gap-3 p-2 rounded-md border",
-                              param.isSetParameter 
-                                ? "bg-primary/5 border-primary/20" 
+                              (param.isSetParameter && !param.isRestParameter)
+                                ? "bg-primary/5 border-primary/20"
                                 : "hover:bg-accent/50"
                             )}
                           >
@@ -354,13 +355,13 @@ export function AdHocMethodSelectionDialog({
                               id={`param-${param.id}`}
                               checked={paramVisibility[param.name] ?? param.showInGridByDefault}
                               onCheckedChange={() => toggleParamVisibility(param.name)}
-                              disabled={param.isSetParameter}
+                              disabled={param.isSetParameter && !param.isRestParameter}
                             />
-                            <Label 
-                              htmlFor={`param-${param.id}`} 
+                            <Label
+                              htmlFor={`param-${param.id}`}
                               className={cn(
                                 "flex-1 cursor-pointer text-sm",
-                                param.isSetParameter && "font-medium"
+                                (param.isSetParameter && !param.isRestParameter) && "font-medium"
                               )}
                             >
                               {param.name}
@@ -368,7 +369,7 @@ export function AdHocMethodSelectionDialog({
                                 <span className="text-muted-foreground ml-1">[{param.unit}]</span>
                               )}
                             </Label>
-                            {param.isSetParameter && (
+                            {param.isSetParameter && !param.isRestParameter && (
                               <Badge variant="secondary" className="text-xs">Required</Badge>
                             )}
                           </div>
