@@ -14,8 +14,11 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Play, Video, ExternalLink, Link2, X, Pencil } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Play, Video, ExternalLink, Link2, X, Pencil, Plus, ChevronsUpDown, Check, TrendingUp, TrendingDown } from 'lucide-react';
 import { useCustomLibraries, CustomLibrary, CustomExercise, LibraryColumn } from '@/contexts/CustomLibrariesContext';
+import { useExerciseProgressions, ProgressionDirection } from '@/hooks/useExerciseProgressions';
 import { cn } from '@/lib/utils';
 
 interface ExerciseDetailDialogProps {
@@ -110,6 +113,66 @@ export function ExerciseDetailDialog({
   const [localData, setLocalData] = useState<Record<string, any>>({});
   const [showVideoEmbed, setShowVideoEmbed] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+
+  // Progressions & Regressions
+  const { progressions, add: addProgression, remove: removeProgression } = useExerciseProgressions(
+    mode !== 'create' ? exerciseId : null
+  );
+  const [addingDirection, setAddingDirection] = useState<ProgressionDirection | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerSearch, setPickerSearch] = useState('');
+  const [pickerExerciseId, setPickerExerciseId] = useState('');
+  const [pickerExerciseName, setPickerExerciseName] = useState('');
+  const [pickerLevel, setPickerLevel] = useState(1);
+  const [pickerNotes, setPickerNotes] = useState('');
+  const [pickerSaving, setPickerSaving] = useState(false);
+
+  // Flat list of all exercises across all libraries for the picker
+  const allExercises = React.useMemo(() =>
+    libraries.flatMap(lib => lib.exercises.map(ex => ({
+      id: ex.id,
+      name: ex.data?.name as string ?? ex.id,
+      libraryName: lib.name,
+    }))).sort((a, b) => a.name.localeCompare(b.name)),
+  [libraries]);
+
+  // Resolve exercise names for loaded progressions
+  const progressionsWithNames = React.useMemo(() =>
+    progressions.map(p => ({
+      ...p,
+      toExerciseName: allExercises.find(e => e.id === p.toExerciseId)?.name ?? p.toExerciseId,
+    })),
+  [progressions, allExercises]);
+
+  const regressions = progressionsWithNames
+    .filter(p => p.direction === 'regression')
+    .sort((a, b) => b.level - a.level);  // highest level at top (furthest from current)
+  const progs = progressionsWithNames
+    .filter(p => p.direction === 'progression')
+    .sort((a, b) => a.level - b.level);  // lowest level at top (closest to current)
+
+  function resetPicker() {
+    setPickerExerciseId('');
+    setPickerExerciseName('');
+    setPickerLevel(1);
+    setPickerNotes('');
+    setPickerSearch('');
+    setPickerOpen(false);
+    setAddingDirection(null);
+  }
+
+  async function handleAddProgression() {
+    if (!pickerExerciseId || !addingDirection) return;
+    setPickerSaving(true);
+    await addProgression({
+      toExerciseId: pickerExerciseId,
+      direction: addingDirection,
+      level: pickerLevel,
+      notes: pickerNotes,
+    });
+    setPickerSaving(false);
+    resetPicker();
+  }
 
   // Find exercise in libraries if not provided
   const foundExercise = React.useMemo(() => {
@@ -558,6 +621,204 @@ export function ExerciseDetailDialog({
                       </p>
                     ) : (
                       <p className="text-sm text-muted-foreground italic">No description</p>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Progressions & Regressions — always shown in view/edit mode (not create) */}
+              {mode !== 'create' && (
+                <>
+                  <Separator />
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold">Progressions &amp; Regressions</h3>
+
+                    {/* Chain display */}
+                    <div className="space-y-1">
+                      {/* Regressions (easier) */}
+                      {regressions.map(p => (
+                        <div key={p.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 bg-muted/40 text-sm group">
+                          <TrendingDown className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                          <span className="text-xs font-medium text-blue-600 dark:text-blue-400 w-24 shrink-0">
+                            Regression {p.level}
+                          </span>
+                          <span className="flex-1 font-medium truncate">{p.toExerciseName}</span>
+                          {p.notes && (
+                            <span className="text-xs text-muted-foreground italic truncate max-w-[140px]">{p.notes}</span>
+                          )}
+                          {(mode === 'edit') && (
+                            <button
+                              onClick={() => removeProgression(p.id)}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-muted-foreground hover:text-destructive shrink-0"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+
+                      {/* Current exercise (centre) */}
+                      <div className="flex items-center gap-2 rounded-md px-2 py-2 bg-primary/10 border border-primary/30 text-sm">
+                        <div className="h-3.5 w-3.5 rounded-full bg-primary shrink-0" />
+                        <span className="font-semibold flex-1 truncate">{exerciseName}</span>
+                        <span className="text-xs text-muted-foreground">current</span>
+                      </div>
+
+                      {/* Progressions (harder) */}
+                      {progs.map(p => (
+                        <div key={p.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 bg-muted/40 text-sm group">
+                          <TrendingUp className="h-3.5 w-3.5 text-orange-500 shrink-0" />
+                          <span className="text-xs font-medium text-orange-600 dark:text-orange-400 w-24 shrink-0">
+                            Progression {p.level}
+                          </span>
+                          <span className="flex-1 font-medium truncate">{p.toExerciseName}</span>
+                          {p.notes && (
+                            <span className="text-xs text-muted-foreground italic truncate max-w-[140px]">{p.notes}</span>
+                          )}
+                          {(mode === 'edit') && (
+                            <button
+                              onClick={() => removeProgression(p.id)}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-muted-foreground hover:text-destructive shrink-0"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+
+                      {regressions.length === 0 && progs.length === 0 && (
+                        <p className="text-xs text-muted-foreground italic px-2">No progressions or regressions defined yet.</p>
+                      )}
+                    </div>
+
+                    {/* Add form — only in edit mode */}
+                    {mode === 'edit' && (
+                      <div className="space-y-2">
+                        {addingDirection === null ? (
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50 dark:border-blue-800 dark:hover:bg-blue-950"
+                              onClick={() => setAddingDirection('regression')}
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              Add Regression
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1.5 text-orange-600 border-orange-200 hover:bg-orange-50 dark:border-orange-800 dark:hover:bg-orange-950"
+                              onClick={() => setAddingDirection('progression')}
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              Add Progression
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="rounded-md border p-3 space-y-3 bg-muted/20">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              Add {addingDirection === 'regression' ? 'Regression' : 'Progression'}
+                            </p>
+
+                            {/* Exercise picker */}
+                            <div className="space-y-1">
+                              <Label className="text-xs">Exercise</Label>
+                              <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    className="w-full justify-between font-normal h-9 text-sm"
+                                  >
+                                    {pickerExerciseName || 'Select exercise…'}
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[320px] p-0 z-[200]" align="start">
+                                  <Command>
+                                    <CommandInput
+                                      placeholder="Search exercises…"
+                                      value={pickerSearch}
+                                      onValueChange={setPickerSearch}
+                                    />
+                                    <CommandList className="max-h-[200px]">
+                                      <CommandEmpty>No exercises found.</CommandEmpty>
+                                      <CommandGroup>
+                                        {allExercises
+                                          .filter(e =>
+                                            e.id !== exerciseId &&
+                                            !progressions.some(p => p.toExerciseId === e.id) &&
+                                            e.name.toLowerCase().includes(pickerSearch.toLowerCase())
+                                          )
+                                          .map(e => (
+                                            <CommandItem
+                                              key={e.id}
+                                              value={e.name}
+                                              onSelect={() => {
+                                                setPickerExerciseId(e.id);
+                                                setPickerExerciseName(e.name);
+                                                setPickerOpen(false);
+                                                setPickerSearch('');
+                                              }}
+                                            >
+                                              <Check className={cn('mr-2 h-4 w-4', pickerExerciseId === e.id ? 'opacity-100' : 'opacity-0')} />
+                                              <div>
+                                                <div className="text-sm">{e.name}</div>
+                                                <div className="text-xs text-muted-foreground">{e.libraryName}</div>
+                                              </div>
+                                            </CommandItem>
+                                          ))
+                                        }
+                                      </CommandGroup>
+                                    </CommandList>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
+                            </div>
+
+                            {/* Level */}
+                            <div className="space-y-1">
+                              <Label className="text-xs">Level (steps away)</Label>
+                              <Select
+                                value={String(pickerLevel)}
+                                onValueChange={v => setPickerLevel(Number(v))}
+                              >
+                                <SelectTrigger className="h-9">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {[1, 2, 3, 4, 5].map(n => (
+                                    <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {/* Notes */}
+                            <div className="space-y-1">
+                              <Label className="text-xs">Note <span className="text-muted-foreground">(optional)</span></Label>
+                              <Input
+                                value={pickerNotes}
+                                onChange={e => setPickerNotes(e.target.value)}
+                                placeholder="e.g. use when athlete lacks hip mobility"
+                                className="h-9 text-sm"
+                              />
+                            </div>
+
+                            <div className="flex gap-2 justify-end">
+                              <Button variant="outline" size="sm" onClick={resetPicker}>Cancel</Button>
+                              <Button
+                                size="sm"
+                                disabled={!pickerExerciseId || pickerSaving}
+                                onClick={handleAddProgression}
+                              >
+                                {pickerSaving ? 'Saving…' : 'Add'}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 </>
