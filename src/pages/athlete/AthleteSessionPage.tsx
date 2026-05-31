@@ -194,12 +194,13 @@ interface CompletionSheetProps {
   date: string;
   sessionId: string;
   sessionName: string;
+  durationSeconds: number;
   setsLogged: unknown[];
   onSaved: () => void;
 }
 
 function CompletionSheet({
-  open, onClose, connectionId, date, sessionId, sessionName, setsLogged, onSaved,
+  open, onClose, connectionId, date, sessionId, sessionName, durationSeconds, setsLogged, onSaved,
 }: CompletionSheetProps) {
   const [borgRating, setBorgRating] = useState<number | null>(null);
   const [comment, setComment] = useState('');
@@ -215,6 +216,7 @@ function CompletionSheet({
       session_name: sessionName,
       completed_at: new Date().toISOString(),
       borg_rating: borgRating,
+      duration_seconds: durationSeconds > 0 ? durationSeconds : null,
       comment: comment.trim() || null,
       sets_logged: setsLogged,
     });
@@ -987,7 +989,13 @@ export default function AthleteSessionPage() {
                       <p className="text-sm font-semibold text-green-800">Session Completed</p>
                       <p className="text-xs text-green-700 mt-0.5">
                         {formatCompletedAt(currentLog.completedAt)}
+                        {currentLog.durationSeconds
+                          ? ` · ${Math.round(currentLog.durationSeconds / 60)} min`
+                          : ''}
                         {currentLog.borgRating !== null ? ` · RPE ${currentLog.borgRating}` : ''}
+                        {currentLog.borgRating !== null && currentLog.durationSeconds
+                          ? ` · Load: ${currentLog.borgRating * Math.round(currentLog.durationSeconds / 60)} AU`
+                          : ''}
                       </p>
                       {currentLog.comment && (
                         <p className="text-xs text-muted-foreground mt-1 italic leading-relaxed">
@@ -1538,6 +1546,7 @@ export default function AthleteSessionPage() {
             date={entry.date}
             sessionId={session.id}
             sessionName={session.name}
+            durationSeconds={workoutElapsed}
             setsLogged={setsLoggedPayload}
             onSaved={handleSaved}
           />

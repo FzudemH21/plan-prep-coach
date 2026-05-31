@@ -103,6 +103,7 @@ export interface SessionLog {
   sessionName: string;
   completedAt: string;   // ISO timestamp
   borgRating: number | null;
+  durationSeconds: number | null;
   comment: string | null;
   setsLogged: unknown[];
 }
@@ -190,7 +191,7 @@ export function useAthleteApp() {
         // Load session logs (non-fatal — schedule stays usable if this fails)
         const { data: logsData } = await supabase
           .from('athlete_session_logs')
-          .select('id, date, session_id, session_name, completed_at, borg_rating, comment, sets_logged')
+          .select('id, date, session_id, session_name, completed_at, borg_rating, duration_seconds, comment, sets_logged')
           .eq('athlete_connection_id', conn.id)
           .gte('date', fromStr)
           .lte('date', toStr);
@@ -201,6 +202,7 @@ export function useAthleteApp() {
           sessionName: row.session_name as string,
           completedAt: row.completed_at as string,
           borgRating: row.borg_rating as number | null,
+          durationSeconds: row.duration_seconds as number | null,
           comment: row.comment as string | null,
           setsLogged: (row.sets_logged as unknown[]) || [],
         })));
@@ -222,7 +224,7 @@ export function useAthleteApp() {
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const { data } = await supabase
       .from('athlete_session_logs')
-      .select('id, date, session_id, session_name, completed_at, borg_rating, comment, sets_logged')
+      .select('id, date, session_id, session_name, completed_at, borg_rating, duration_seconds, comment, sets_logged')
       .eq('athlete_connection_id', connection.id)
       .gte('date', localStr(fromLocal))
       .lte('date', localStr(toLocal));
@@ -233,6 +235,7 @@ export function useAthleteApp() {
       sessionName: row.session_name as string,
       completedAt: row.completed_at as string,
       borgRating: row.borg_rating as number | null,
+      durationSeconds: row.duration_seconds as number | null,
       comment: row.comment as string | null,
       setsLogged: (row.sets_logged as unknown[]) || [],
     })));
