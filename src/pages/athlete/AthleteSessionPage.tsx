@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
-import { useAthleteApp, AthleteScheduleEntry, ExerciseSummary } from '@/hooks/useAthleteApp';
+import { useAthleteApp, AthleteScheduleEntry, ExerciseSummary, SessionLog } from '@/hooks/useAthleteApp';
 import { useToast } from '@/hooks/use-toast';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -172,6 +172,12 @@ function formatTime(s: number): string {
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00');
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function formatCompletedAt(isoStr: string): string {
+  const d = new Date(isoStr);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+    ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
 // ── Borg CR10 completion sheet ────────────────────────────────────────────────
@@ -647,12 +653,13 @@ function ExerciseDetailSheet({ target, onClose }: ExerciseDetailSheetProps) {
 interface LocationState {
   entry: AthleteScheduleEntry;
   sessionIdx: number;
+  log?: SessionLog | null;
 }
 
 export default function AthleteSessionPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { connection } = useAthleteApp();
+  const { connection, getSessionLog, refetchLogs } = useAthleteApp();
 
   const state = location.state as LocationState | null;
 
@@ -879,6 +886,7 @@ export default function AthleteSessionPage() {
 
   function handleSaved() {
     setBorgSheetOpen(false);
+    refetchLogs().catch(console.error);
     navigate(-1);
   }
 
@@ -902,6 +910,9 @@ export default function AthleteSessionPage() {
       </div>
     );
   }
+
+  // Real-time completion check: hook data first (updates after refetch), nav-state snapshot as fallback
+  const currentLog = getSessionLog(entry.date, session.id) ?? state.log ?? null;
 
   // Build sets_logged payload for Borg sheet
   const setsLoggedPayload = [
@@ -955,6 +966,25 @@ export default function AthleteSessionPage() {
           <>
             <ScrollArea className="flex-1">
               <div className="px-4 py-4 space-y-3">
+                {/* Completed banner */}
+                {currentLog && (
+                  <div className="rounded-xl bg-green-50 border border-green-200 p-3 flex items-start gap-3">
+                    <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-green-800">Session Completed</p>
+                      <p className="text-xs text-green-700 mt-0.5">
+                        {formatCompletedAt(currentLog.completedAt)}
+                        {currentLog.borgRating !== null ? ` · RPE ${currentLog.borgRating}` : ''}
+                      </p>
+                      {currentLog.comment && (
+                        <p className="text-xs text-muted-foreground mt-1 italic leading-relaxed">
+                          "{currentLog.comment}"
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Session notes */}
                 {session.notes && (
                   <p className="text-sm text-muted-foreground leading-relaxed pb-1">
@@ -1047,9 +1077,15 @@ export default function AthleteSessionPage() {
 
             {/* Start CTA */}
             <div className="px-4 py-4 border-t bg-background shrink-0">
-              <Button className="w-full" size="lg" onClick={() => setPhase('sectionIntro')}>
-                Next
-              </Button>
+              {currentLog ? (
+                <Button className="w-full" size="lg" variant="outline" onClick={() => navigate(-1)}>
+                  Close
+                </Button>
+              ) : (
+                <Button className="w-full" size="lg" onClick={() => setPhase('sectionIntro')}>
+                  Start Workout
+                </Button>
+              )}
             </div>
           </>
         )}

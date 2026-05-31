@@ -1,6 +1,6 @@
-import { BedDouble, Dumbbell, ChevronRight, Activity, CalendarDays } from 'lucide-react';
+import { BedDouble, Dumbbell, ChevronRight, Activity, CalendarDays, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent } from '@/hooks/useAthleteApp';
+import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent, SessionLog } from '@/hooks/useAthleteApp';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { IntensityBadge, getDotColor } from '@/components/athlete-app/IntensityBadge';
@@ -41,21 +41,31 @@ function SessionCard({
   session,
   entry,
   index,
+  log,
 }: {
   session: AthleteScheduleEntry['sessions'][0];
   entry: AthleteScheduleEntry;
   index: number;
+  log?: SessionLog | null;
 }) {
   const navigate = useNavigate();
   return (
     <Card
-      className="cursor-pointer hover:bg-muted/60 active:scale-[0.98] transition-all"
-      onClick={() => navigate('/athlete/session', { state: { entry, sessionIdx: index } })}
+      className={cn(
+        'cursor-pointer active:scale-[0.98] transition-all',
+        log ? 'border-green-200 bg-green-50/50 hover:bg-green-50/80' : 'hover:bg-muted/60'
+      )}
+      onClick={() => navigate('/athlete/session', { state: { entry, sessionIdx: index, log } })}
     >
       <CardContent className="flex items-center justify-between p-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-            <Dumbbell className="h-4 w-4 text-primary" />
+          <div className={cn(
+            'w-9 h-9 rounded-lg flex items-center justify-center shrink-0',
+            log ? 'bg-green-100' : 'bg-primary/10'
+          )}>
+            {log
+              ? <CheckCircle2 className="h-4 w-4 text-green-600" />
+              : <Dumbbell className="h-4 w-4 text-primary" />}
           </div>
           <div>
             <p className="font-medium text-sm">{session.name}</p>
@@ -63,11 +73,15 @@ function SessionCard({
               {session.exerciseCount} exercise{session.exerciseCount !== 1 ? 's' : ''}
               {session.duration ? ` · ~${session.duration} min` : ''}
             </p>
-            {session.intensity && (
+            {log ? (
+              <p className="text-xs font-medium text-green-700 mt-0.5">
+                Completed{log.borgRating !== null ? ` · RPE ${log.borgRating}` : ''}
+              </p>
+            ) : session.intensity ? (
               <div className="mt-1.5">
                 <IntensityBadge intensity={session.intensity} />
               </div>
-            )}
+            ) : null}
           </div>
         </div>
         <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -131,7 +145,13 @@ function EventCard({ ev }: { ev: AthleteCalendarEvent }) {
   );
 }
 
-function TodaySchedule({ entry }: { entry: AthleteScheduleEntry | null }) {
+function TodaySchedule({
+  entry,
+  getSessionLog,
+}: {
+  entry: AthleteScheduleEntry | null;
+  getSessionLog: (date: string, sessionId: string) => SessionLog | null;
+}) {
   const hasSessions = (entry?.sessions.length ?? 0) > 0;
   const tests  = (entry?.events ?? []).filter(e => e.type === 'test');
   const events = (entry?.events ?? []).filter(e => e.type === 'event');
@@ -165,7 +185,13 @@ function TodaySchedule({ entry }: { entry: AthleteScheduleEntry | null }) {
       {hasSessions ? (
         <div className="space-y-2">
           {entry!.sessions.map((session, index) => (
-            <SessionCard key={session.id} session={session} entry={entry!} index={index} />
+            <SessionCard
+              key={session.id}
+              session={session}
+              entry={entry!}
+              index={index}
+              log={getSessionLog(entry!.date, session.id)}
+            />
           ))}
         </div>
       ) : (
@@ -205,7 +231,7 @@ function UpcomingStrip({ schedule }: { schedule: AthleteScheduleEntry[] }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function AthleteTodayPage() {
-  const { connection, schedule, loading, error, getTodayEntry } = useAthleteApp();
+  const { connection, schedule, loading, error, getTodayEntry, getSessionLog } = useAthleteApp();
 
   if (loading) {
     return (
@@ -236,7 +262,7 @@ export default function AthleteTodayPage() {
       </div>
 
       {/* Today's schedule — always rendered (shows Rest Day if no sessions/events) */}
-      <TodaySchedule entry={todayEntry} />
+      <TodaySchedule entry={todayEntry} getSessionLog={getSessionLog} />
 
       {/* Upcoming strip */}
       <UpcomingStrip schedule={schedule} />

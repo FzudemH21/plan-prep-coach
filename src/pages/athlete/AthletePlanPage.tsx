@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Dumbbell, ChevronRight, ChevronLeft, Activity, CalendarDays } from 'lucide-react';
+import { Dumbbell, ChevronRight, ChevronLeft, Activity, CalendarDays, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent } from '@/hooks/useAthleteApp';
+import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent, SessionLog } from '@/hooks/useAthleteApp';
 import { IntensityBadge } from '@/components/athlete-app/IntensityBadge';
 import { cn } from '@/lib/utils';
 
@@ -58,25 +58,36 @@ function SessionCard({
   entry,
   index,
   isPast,
+  log,
 }: {
   session: AthleteScheduleEntry['sessions'][0];
   entry: AthleteScheduleEntry;
   index: number;
   isPast: boolean;
+  log?: SessionLog | null;
 }) {
   const navigate = useNavigate();
   return (
     <Card
       className={cn(
         'cursor-pointer transition-all active:scale-[0.98]',
-        isPast ? 'opacity-50' : 'hover:bg-muted/60'
+        log
+          ? 'border-green-200 bg-green-50/50 hover:bg-green-50/80'
+          : isPast
+            ? 'opacity-50 hover:bg-muted/60'
+            : 'hover:bg-muted/60'
       )}
-      onClick={() => navigate('/athlete/session', { state: { entry, sessionIdx: index } })}
+      onClick={() => navigate('/athlete/session', { state: { entry, sessionIdx: index, log } })}
     >
       <CardContent className="flex items-center justify-between p-3">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
-            <Dumbbell className="h-3.5 w-3.5 text-primary" />
+          <div className={cn(
+            'w-8 h-8 rounded-md flex items-center justify-center shrink-0',
+            log ? 'bg-green-100' : 'bg-primary/10'
+          )}>
+            {log
+              ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+              : <Dumbbell className="h-3.5 w-3.5 text-primary" />}
           </div>
           <div>
             <p className="font-medium text-sm">{session.name}</p>
@@ -84,11 +95,15 @@ function SessionCard({
               {session.exerciseCount} exercise{session.exerciseCount !== 1 ? 's' : ''}
               {session.duration ? ` · ~${session.duration} min` : ''}
             </p>
-            {session.intensity && (
+            {log ? (
+              <p className="text-xs font-medium text-green-700 mt-0.5">
+                Completed{log.borgRating !== null ? ` · RPE ${log.borgRating}` : ''}
+              </p>
+            ) : session.intensity ? (
               <div className="mt-1.5">
                 <IntensityBadge intensity={session.intensity} />
               </div>
-            )}
+            ) : null}
           </div>
         </div>
         <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -101,10 +116,12 @@ function DaySection({
   dateStr,
   entry,
   isToday,
+  getSessionLog,
 }: {
   dateStr: string;
   entry: AthleteScheduleEntry | null;
   isToday: boolean;
+  getSessionLog: (date: string, sessionId: string) => SessionLog | null;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const isPast = dateStr < today;
@@ -184,6 +201,7 @@ function DaySection({
               entry={entry!}
               index={idx}
               isPast={isPast}
+              log={getSessionLog(dateStr, session.id)}
             />
           ))}
         </div>
@@ -199,7 +217,7 @@ function DaySection({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function AthletePlanPage() {
-  const { connection, schedule, loading, error } = useAthleteApp();
+  const { connection, schedule, loading, error, getSessionLog } = useAthleteApp();
 
   const today = new Date().toISOString().slice(0, 10);
   const currentWeekMonday = getMondayOf(today);
@@ -299,6 +317,7 @@ export default function AthletePlanPage() {
               dateStr={dateStr}
               entry={scheduleMap.get(dateStr) ?? null}
               isToday={dateStr === today}
+              getSessionLog={getSessionLog}
             />
           ))}
         </div>

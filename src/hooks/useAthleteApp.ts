@@ -96,10 +96,22 @@ export interface AthleteScheduleEntry {
   microcycleName: string | null;
 }
 
+export interface SessionLog {
+  id: string;
+  date: string;          // yyyy-MM-dd
+  sessionId: string;
+  sessionName: string;
+  completedAt: string;   // ISO timestamp
+  borgRating: number | null;
+  comment: string | null;
+  setsLogged: unknown[];
+}
+
 export function useAthleteApp() {
   const { user, loading: authLoading } = useAuth();
   const [connection, setConnection] = useState<AthleteConnection | null>(null);
   const [schedule, setSchedule] = useState<AthleteScheduleEntry[]>([]);
+  const [sessionLogs, setSessionLogs] = useState<SessionLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -174,6 +186,24 @@ export function useAthleteApp() {
           mesocycleName: row.mesocycle_name as string | null,
           microcycleName: row.microcycle_name as string | null,
         })));
+
+        // Load session logs (non-fatal — schedule stays usable if this fails)
+        const { data: logsData } = await supabase
+          .from('athlete_session_logs')
+          .select('id, date, session_id, session_name, completed_at, borg_rating, comment, sets_logged')
+          .eq('athlete_connection_id', conn.id)
+          .gte('date', fromStr)
+          .lte('date', toStr);
+        setSessionLogs((logsData ?? []).map((row: Record<string, unknown>) => ({
+          id: row.id as string,
+          date: row.date as string,
+          sessionId: row.session_id as string,
+          sessionName: row.session_name as string,
+          completedAt: row.completed_at as string,
+          borgRating: row.borg_rating as number | null,
+          comment: row.comment as string | null,
+          setsLogged: (row.sets_logged as unknown[]) || [],
+        })));
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load athlete data');
       } finally {
@@ -182,6 +212,35 @@ export function useAthleteApp() {
     }
     load();
   }, [user, authLoading, isAthlete]);
+
+  const refetchLogs = useCallback(async () => {
+    if (!connection) return;
+    const todayLocal = new Date();
+    const fromLocal = new Date(todayLocal); fromLocal.setDate(todayLocal.getDate() - 7);
+    const toLocal   = new Date(todayLocal); toLocal.setDate(todayLocal.getDate() + 90);
+    const localStr  = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const { data } = await supabase
+      .from('athlete_session_logs')
+      .select('id, date, session_id, session_name, completed_at, borg_rating, comment, sets_logged')
+      .eq('athlete_connection_id', connection.id)
+      .gte('date', localStr(fromLocal))
+      .lte('date', localStr(toLocal));
+    setSessionLogs((data ?? []).map((row: Record<string, unknown>) => ({
+      id: row.id as string,
+      date: row.date as string,
+      sessionId: row.session_id as string,
+      sessionName: row.session_name as string,
+      completedAt: row.completed_at as string,
+      borgRating: row.borg_rating as number | null,
+      comment: row.comment as string | null,
+      setsLogged: (row.sets_logged as unknown[]) || [],
+    })));
+  }, [connection]);
+
+  const getSessionLog = useCallback((date: string, sessionId: string): SessionLog | null =>
+    sessionLogs.find(l => l.date === date && l.sessionId === sessionId) ?? null,
+  [sessionLogs]);
 
   const updateProfile = useCallback(async (patch: AthleteProfileData) => {
     if (!connection) return;
@@ -206,5 +265,5 @@ export function useAthleteApp() {
     return schedule.filter(e => e.date >= today).slice(0, n);
   };
 
-  return { connection, schedule, loading, error, isAthlete, getTodayEntry, getUpcomingDays, updateProfile };
+  return { connection, schedule, sessionLogs, loading, error, isAthlete, getTodayEntry, getUpcomingDays, updateProfile, getSessionLog, refetchLogs };
 }
