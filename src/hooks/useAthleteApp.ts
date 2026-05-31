@@ -62,6 +62,8 @@ export interface ExerciseSummary {
   plannedParams?: Record<string, string | number>;
   visibleParams?: string[];
   restParamName?: string;
+  /** True when the coach ticked "Each side" — athlete performs on each side separately */
+  eachSide?: boolean;
 }
 
 export interface SessionSummary {

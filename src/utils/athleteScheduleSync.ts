@@ -66,6 +66,8 @@ export interface ExerciseSummary {
   plannedParams?: Record<string, string | number>;  // flat planned params (Reps_set1, etc.)
   visibleParams?: string[];  // param names the coach marked showInAthleteApp
   restParamName?: string;    // name of the rest/pause parameter for this exercise's method
+  /** True when the coach ticked "Each side" — athlete performs the exercise on each side separately */
+  eachSide?: boolean;
 }
 
 export interface SessionSummary {
@@ -500,6 +502,7 @@ export async function syncAthleteSchedule(
               plannedParams,
               visibleParams,
               restParamName,
+              eachSide: ex.eachSide ?? false,
             };
           });
 

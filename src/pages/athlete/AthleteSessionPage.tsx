@@ -1146,6 +1146,11 @@ export default function AthleteSessionPage() {
                                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
                                   {ex.isCircuit && <RefreshCw className="h-3 w-3 text-muted-foreground shrink-0" />}
                                   <span className="text-sm truncate">{ex.name}</span>
+                                  {ex.eachSide && (
+                                    <span className="shrink-0 inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 leading-none">
+                                      Each side
+                                    </span>
+                                  )}
                                   {/* ⓘ button — available in overview for video/description */}
                                   {(ex.exerciseVideoUrl || ex.exerciseDescription) && !ex.isCircuit && (
                                     <button
@@ -1546,6 +1551,11 @@ export default function AthleteSessionPage() {
                             </button>
                           )}
                         </div>
+                        {ex.eachSide && (
+                          <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 mt-1 w-fit">
+                            Each side
+                          </span>
+                        )}
                         {ex.notes && <p className="text-xs text-muted-foreground mt-0.5">{ex.notes}</p>}
                       </div>
                     </div>
