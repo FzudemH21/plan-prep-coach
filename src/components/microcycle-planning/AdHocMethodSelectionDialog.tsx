@@ -119,7 +119,7 @@ export function AdHocMethodSelectionDialog({
       options: entry.options,
       isSetParameter: entry.isSetParameter || false,
       isFrequencyParameter: entry.isFrequencyParameter || false,
-      showInGridByDefault: entry.showInGridByDefault ?? true,
+      showInGridByDefault: entry.showInGridByDefault ?? false,
       unit: entry.parameterType === 'quantitative' && entry.options.length > 0 
         ? entry.options[0] 
         : undefined
