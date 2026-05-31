@@ -49,6 +49,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { AthleteCalendarWeekRow } from './AthleteCalendarWeekRow';
 import { AthleteCalendarDay, AthleteCalendarSession } from './AthleteCalendarDayCell';
 import { WorkoutSessionSheet } from '@/components/microcycle-planning/WorkoutSessionSheet';
+import { CompletedSessionSheet, CoachSessionLog } from './CompletedSessionSheet';
 import { MasterPlannerGrid } from '@/components/microcycle-planning/MasterPlannerGrid';
 import { WizardAIAssistant, FocusedSessionContext, ApplySuggestion } from '@/components/wizard/WizardAIAssistant';
 import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
@@ -78,6 +79,11 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     sessionIndex: number;
     assignmentId: string;
   } | null>(null);
+
+  // Completed session logs — keyed by session_id = "${date}-${sessionIndex}"
+  const [sessionLogs, setSessionLogs] = useState<Map<string, CoachSessionLog>>(new Map());
+  const [completedSheetOpen, setCompletedSheetOpen] = useState(false);
+  const [selectedCompletedLog, setSelectedCompletedLog] = useState<CoachSessionLog | null>(null);
   
   // Master planner state
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number>(1); // 1=Monday
@@ -387,6 +393,16 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   // Wrapper: clear day in editing state AND patch assignmentDataCache so non-selected
   // assignment rendering (cache path) immediately reflects the cleared state.
   const handleClearDay = useCallback((dayDate: string) => {
+    // Block clearing if any session on this day has been completed by the athlete
+    const hasCompleted = Array.from(sessionLogs.keys()).some(key => key.startsWith(`${dayDate}-`));
+    if (hasCompleted) {
+      toast({
+        title: 'Cannot clear day',
+        description: 'This day contains completed sessions and cannot be cleared.',
+        variant: 'destructive',
+      });
+      return;
+    }
     editing.handleClearDay(dayDate);
     if (!selectedAssignmentId) return;
     setAssignmentDataCache(prev => {
@@ -411,8 +427,6 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
 
   // Wrapper: clear week in editing state AND patch assignmentDataCache.
   const handleClearWeek = useCallback((weekStartDate: string) => {
-    editing.handleClearWeek(weekStartDate);
-    if (!selectedAssignmentId) return;
     const [cy, cm, cd] = weekStartDate.split('-').map(Number);
     const startDateVal = new Date(cy, cm - 1, cd);
     const weekDates: string[] = [];
@@ -421,27 +435,49 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
       d.setDate(d.getDate() + i);
       weekDates.push(format(d, 'yyyy-MM-dd'));
     }
+
+    // Separate days: completed (locked) vs clearable
+    const completedDates = new Set(
+      weekDates.filter(date => Array.from(sessionLogs.keys()).some(key => key.startsWith(`${date}-`)))
+    );
+    const clearableDates = weekDates.filter(date => !completedDates.has(date));
+
+    if (completedDates.size > 0) {
+      toast({
+        title: completedDates.size === weekDates.length ? 'Cannot clear week' : 'Week partially cleared',
+        description: completedDates.size === weekDates.length
+          ? 'All days in this week have completed sessions and cannot be cleared.'
+          : `${completedDates.size} day(s) with completed sessions were skipped.`,
+        variant: completedDates.size === weekDates.length ? 'destructive' : 'default',
+      });
+      if (completedDates.size === weekDates.length) return;
+    }
+
+    // Only clear days that have no completed sessions
+    clearableDates.forEach(date => editing.handleClearDay(date));
+
+    if (!selectedAssignmentId) return;
     setAssignmentDataCache(prev => {
       const current = prev[selectedAssignmentId];
       if (!current) return prev;
       const clearedSplitStates = { ...(current.daySplitStates || {}) };
-      weekDates.forEach(date => { clearedSplitStates[date] = 0; });
+      clearableDates.forEach(date => { clearedSplitStates[date] = 0; });
       return {
         ...prev,
         [selectedAssignmentId]: {
           ...current,
           daySplitStates: clearedSplitStates,
           trainingDays: (current.trainingDays || []).map((d: any) =>
-            weekDates.includes(d.date)
+            clearableDates.includes(d.date)
               ? { ...d, sessions: 0, sessionNames: [], testNames: [], eventNames: [], isTestDay: false, isEventDay: false }
               : d
           ),
-          exerciseDistribution: (current.exerciseDistribution || []).filter((ex: any) => !weekDates.includes(ex.dayDate)),
-          sessionSections: (current.sessionSections || []).filter((s: any) => !weekDates.includes(s.dayDate)),
+          exerciseDistribution: (current.exerciseDistribution || []).filter((ex: any) => !clearableDates.includes(ex.dayDate)),
+          sessionSections: (current.sessionSections || []).filter((s: any) => !clearableDates.includes(s.dayDate)),
         },
       };
     });
-  }, [editing.handleClearWeek, selectedAssignmentId]);
+  }, [editing.handleClearDay, selectedAssignmentId, sessionLogs, toast]);
 
   // Build mesocycle from assignment for MasterPlannerGrid
   const currentMesocycleFromAssignment = useMemo(() => {
@@ -474,6 +510,42 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
 
   // Shared calendar grid date range calculation
   const { dateRange: calendarDateRange } = useCalendarGrid(currentDate, viewMode);
+
+  // Query athlete_session_logs for the visible date range whenever the connection or
+  // visible window changes. Keyed by session_id = "${date}-${sessionIndex}".
+  useEffect(() => {
+    const connection = getConnectionForAthlete(athlete.id);
+    if (!connection || calendarDateRange.length === 0) return;
+    let cancelled = false;
+
+    const from = format(calendarDateRange[0], 'yyyy-MM-dd');
+    const to   = format(calendarDateRange[calendarDateRange.length - 1], 'yyyy-MM-dd');
+
+    supabase
+      .from('athlete_session_logs')
+      .select('id, date, session_id, session_name, started_at, borg_rating, duration_seconds, completed_at, comment, sets_logged')
+      .eq('athlete_connection_id', connection.id)
+      .not('started_at', 'is', null)
+      .gte('date', from)
+      .lte('date', to)
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        const map = new Map<string, CoachSessionLog>();
+        for (const row of data) {
+          if (row.session_id) {
+            map.set(row.session_id as string, row as CoachSessionLog);
+          }
+        }
+        setSessionLogs(map);
+      });
+
+    return () => { cancelled = true; };
+  }, [athlete.id, getConnectionForAthlete, calendarDateRange]);
+
+  const handleCompletedSessionClick = useCallback((log: CoachSessionLog) => {
+    setSelectedCompletedLog(log);
+    setCompletedSheetOpen(true);
+  }, []);
 
   // Calculate calendar days based on view mode (for calendar view)
   // IMPORTANT: For the currently selected assignment, read from live editing state
@@ -1766,6 +1838,8 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                       )}
                       onAddCalendarEvent={addCalendarEvent}
                       onDeleteCalendarEvent={deleteCalendarEvent}
+                      sessionLogs={sessionLogs}
+                      onCompletedSessionClick={handleCompletedSessionClick}
                     />
                   ))}
                 </div>
@@ -1775,6 +1849,13 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         </CardContent>
       </Card>
 
+
+      {/* Completed Session Sheet */}
+      <CompletedSessionSheet
+        log={selectedCompletedLog}
+        open={completedSheetOpen}
+        onClose={() => { setCompletedSheetOpen(false); setSelectedCompletedLog(null); }}
+      />
 
       {/* Plan Review Dialog */}
       {reviewAssignment && (

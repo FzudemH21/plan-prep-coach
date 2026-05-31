@@ -101,7 +101,8 @@ export interface SessionLog {
   date: string;          // yyyy-MM-dd
   sessionId: string;
   sessionName: string;
-  completedAt: string;   // ISO timestamp
+  startedAt: string | null;   // ISO timestamp — set when athlete taps "Start Workout"
+  completedAt: string | null; // ISO timestamp — set when athlete finishes and saves
   borgRating: number | null;
   durationSeconds: number | null;
   comment: string | null;
@@ -191,7 +192,7 @@ export function useAthleteApp() {
         // Load session logs (non-fatal — schedule stays usable if this fails)
         const { data: logsData } = await supabase
           .from('athlete_session_logs')
-          .select('id, date, session_id, session_name, completed_at, borg_rating, duration_seconds, comment, sets_logged')
+          .select('id, date, session_id, session_name, started_at, completed_at, borg_rating, duration_seconds, comment, sets_logged')
           .eq('athlete_connection_id', conn.id)
           .gte('date', fromStr)
           .lte('date', toStr);
@@ -200,7 +201,8 @@ export function useAthleteApp() {
           date: row.date as string,
           sessionId: row.session_id as string,
           sessionName: row.session_name as string,
-          completedAt: row.completed_at as string,
+          startedAt: row.started_at as string | null,
+          completedAt: row.completed_at as string | null,
           borgRating: row.borg_rating as number | null,
           durationSeconds: row.duration_seconds as number | null,
           comment: row.comment as string | null,
@@ -224,7 +226,7 @@ export function useAthleteApp() {
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const { data } = await supabase
       .from('athlete_session_logs')
-      .select('id, date, session_id, session_name, completed_at, borg_rating, duration_seconds, comment, sets_logged')
+      .select('id, date, session_id, session_name, started_at, completed_at, borg_rating, duration_seconds, comment, sets_logged')
       .eq('athlete_connection_id', connection.id)
       .gte('date', localStr(fromLocal))
       .lte('date', localStr(toLocal));
@@ -241,8 +243,10 @@ export function useAthleteApp() {
     })));
   }, [connection]);
 
+  // Only return a log that has been completed — in-progress rows must not
+  // hide the "Start Workout" button or be treated as finished in the athlete app.
   const getSessionLog = useCallback((date: string, sessionId: string): SessionLog | null =>
-    sessionLogs.find(l => l.date === date && l.sessionId === sessionId) ?? null,
+    sessionLogs.find(l => l.date === date && l.sessionId === sessionId && !!l.completedAt) ?? null,
   [sessionLogs]);
 
   const updateProfile = useCallback(async (patch: AthleteProfileData) => {

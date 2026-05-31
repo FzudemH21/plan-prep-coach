@@ -12,6 +12,7 @@ import {
 import { ExerciseDistribution, SessionSection } from '@/types/microcycle-planning';
 import { IntensityLevel } from '@/types/training';
 import { AthletePerformanceParameter } from '@/types/athlete';
+import { CoachSessionLog } from './CompletedSessionSheet';
 
 interface CopiedWeekInfo {
   exercises: ExerciseDistribution[];
@@ -66,6 +67,9 @@ interface AthleteCalendarWeekRowProps {
   // Parent-owned event callbacks forwarded to each DayCell
   onAddCalendarEvent?: (athleteId: string, event: Omit<import('@/hooks/useCalendarEvents').CalendarEvent, 'id'>) => void;
   onDeleteCalendarEvent?: (athleteId: string, eventId: string) => void;
+  // Completed session logs forwarded to each DayCell
+  sessionLogs?: Map<string, CoachSessionLog>;
+  onCompletedSessionClick?: (log: CoachSessionLog) => void;
 }
 
 export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow({
@@ -93,6 +97,8 @@ export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow
   athletePerformanceParameters,
   onAddCalendarEvent,
   onDeleteCalendarEvent,
+  sessionLogs,
+  onCompletedSessionClick,
 }: AthleteCalendarWeekRowProps) {
   const weekStartDate = format(week[0].date, 'yyyy-MM-dd');
   const hasExercisesInWeek = week.some(day => day.sessions.length > 0);
@@ -175,6 +181,8 @@ export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow
             athletePerformanceParameters={athletePerformanceParameters}
             onAddCalendarEvent={onAddCalendarEvent}
             onDeleteCalendarEvent={onDeleteCalendarEvent}
+            sessionLogs={sessionLogs}
+            onCompletedSessionClick={onCompletedSessionClick}
           />
         ))}
       </div>

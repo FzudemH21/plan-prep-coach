@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabelFull, migrateLegacyIntensity } from '@/utils/intensityScale';
-import { Dumbbell, Trophy, Calendar, Plus, MoreVertical, Trash2, CalendarPlus, Copy, ClipboardPaste, Settings, GripVertical } from 'lucide-react';
+import { Dumbbell, Trophy, Calendar, Plus, MoreVertical, Trash2, CalendarPlus, Copy, ClipboardPaste, Settings, GripVertical, CheckCircle2, PlayCircle } from 'lucide-react';
 import { IntensityLevel } from '@/types/training';
 import {
   DropdownMenu,
@@ -25,6 +25,7 @@ import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { ExerciseDistribution } from '@/types/microcycle-planning';
 import { AthletePerformanceParameter } from '@/types/athlete';
+import { CoachSessionLog } from './CompletedSessionSheet';
 
 export interface AthleteCalendarSession {
   id: string;
@@ -88,6 +89,9 @@ interface AthleteCalendarDayCellProps {
   // authoritative hook instance, not the DayCell's own stale store.
   onAddCalendarEvent?: (athleteId: string, event: Omit<import('@/hooks/useCalendarEvents').CalendarEvent, 'id'>) => void;
   onDeleteCalendarEvent?: (athleteId: string, eventId: string) => void;
+  // Completed session logs — keyed by "${date}-${sessionIndex}" = session_id
+  sessionLogs?: Map<string, CoachSessionLog>;
+  onCompletedSessionClick?: (log: CoachSessionLog) => void;
 }
 
 export function AthleteCalendarDayCell({
@@ -110,6 +114,8 @@ export function AthleteCalendarDayCell({
   athletePerformanceParameters,
   onAddCalendarEvent,
   onDeleteCalendarEvent,
+  sessionLogs,
+  onCompletedSessionClick,
 }: AthleteCalendarDayCellProps) {
   const [testEventDialogOpen, setTestEventDialogOpen] = useState(false);
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
@@ -402,11 +408,23 @@ export function AthleteCalendarDayCell({
                   droppableSnapshot.isDraggingOver && "bg-primary/5 rounded-md p-2 border-2 border-dashed border-primary/30"
                 )}
               >
-                {day.sessions.map((session, idx) => (
+                {day.sessions.map((session, idx) => {
+                  // Look up log: session_id in athlete_session_logs = "${date}-${sessionIndex}"
+                  const sessionLog = sessionLogs?.get(`${day.dateString}-${session.sessionIndex}`);
+                  const isCompleted = !!sessionLog?.completed_at;
+                  const isInProgress = !!sessionLog?.started_at && !sessionLog?.completed_at;
+                  const isLocked = isCompleted || isInProgress;
+                  const completedLog = isCompleted ? sessionLog! : null;
+                  const sRPE = completedLog?.borg_rating && completedLog?.duration_seconds
+                    ? completedLog.borg_rating * Math.round(completedLog.duration_seconds / 60)
+                    : null;
+
+                  return (
                   <Draggable
                     key={session.id}
                     draggableId={session.id}
                     index={idx}
+                    isDragDisabled={isLocked}
                   >
                   {(draggableProvided, draggableSnapshot) => {
                     return (
@@ -416,14 +434,23 @@ export function AthleteCalendarDayCell({
                           style={draggableProvided.draggableProps.style}
                           onClick={(e) => {
                             e.stopPropagation();
-                            // Suppress clicks right after drag ends (using ref for synchronous check)
-                            // Increased to 500ms for more reliable suppression on slower devices/trackpads
                             const dragEndTime = lastDragEndRef?.current ?? 0;
                             if (Date.now() - dragEndTime < 500) return;
-                            onSessionClick?.(day.dateString, session.sessionIndex, session.assignmentId || day.assignmentId || '');
+                            if (isCompleted && completedLog && onCompletedSessionClick) {
+                              onCompletedSessionClick(completedLog);
+                            } else if (isInProgress) {
+                              // In-progress: no sheet to open yet — click is a no-op
+                            } else {
+                              onSessionClick?.(day.dateString, session.sessionIndex, session.assignmentId || day.assignmentId || '');
+                            }
                           }}
                           className={cn(
-                            "p-2 rounded-md bg-primary/10 border border-primary/20 transition-all cursor-pointer hover:bg-primary/15 overflow-hidden",
+                            "p-2 rounded-md border transition-all cursor-pointer overflow-hidden",
+                            isCompleted
+                              ? "bg-green-500/10 border-green-500/30 hover:bg-green-500/15"
+                              : isInProgress
+                              ? "bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/15"
+                              : "bg-primary/10 border-primary/20 hover:bg-primary/15",
                             draggableSnapshot.isDragging && "shadow-lg ring-2 ring-primary opacity-90"
                           )}
                         >
@@ -433,9 +460,19 @@ export function AthleteCalendarDayCell({
                               <div {...draggableProvided.dragHandleProps} className="cursor-grab active:cursor-grabbing shrink-0">
                                 <GripVertical className="h-3 w-3 text-muted-foreground hover:text-primary" />
                               </div>
-                              <Dumbbell className="h-3 w-3 text-primary shrink-0" />
+                              {isCompleted
+                                ? <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
+                                : isInProgress
+                                ? <PlayCircle className="h-3 w-3 text-amber-500 shrink-0" />
+                                : <Dumbbell className="h-3 w-3 text-primary shrink-0" />
+                              }
                               <span
-                                className="text-xs font-medium text-primary truncate min-w-0 flex-1"
+                                className={cn(
+                                  "text-xs font-medium truncate min-w-0 flex-1",
+                                  isCompleted ? "text-green-700 dark:text-green-400"
+                                  : isInProgress ? "text-amber-700 dark:text-amber-400"
+                                  : "text-primary"
+                                )}
                                 title={session.sessionName}
                               >
                                 {session.sessionName}
@@ -471,7 +508,7 @@ export function AthleteCalendarDayCell({
                                       Copy session
                                     </DropdownMenuItem>
                                   )}
-                                  {onDeleteSession && (
+                                  {onDeleteSession && !isLocked && (
                                     <DropdownMenuItem
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -487,11 +524,42 @@ export function AthleteCalendarDayCell({
                               </DropdownMenu>
                             </div>
                           </div>
+
+                          {/* Completion summary line */}
+                          {isCompleted && completedLog && (
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                              {completedLog.borg_rating !== null && (
+                                <span className="text-[10px] text-green-600 dark:text-green-400 tabular-nums">
+                                  RPE {completedLog.borg_rating}
+                                </span>
+                              )}
+                              {completedLog.duration_seconds && (
+                                <span className="text-[10px] text-muted-foreground tabular-nums">
+                                  {Math.round(completedLog.duration_seconds / 60)}min
+                                </span>
+                              )}
+                              {sRPE !== null && (
+                                <span className="text-[10px] text-muted-foreground tabular-nums">
+                                  {sRPE} AU
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* In-progress indicator */}
+                          {isInProgress && (
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <span className="text-[10px] text-amber-600 dark:text-amber-400 animate-pulse">
+                                In progress…
+                              </span>
+                            </div>
+                          )}
                         </div>
                       );
                     }}
                   </Draggable>
-                ))}
+                  );
+                })}
                 {droppableProvided.placeholder}
             
                 {/* Paste Day Button (below existing sessions) */}

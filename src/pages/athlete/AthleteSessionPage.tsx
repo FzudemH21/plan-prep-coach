@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronDown, Check, Dumbbell, RefreshCw,
-  CheckCircle2, Timer, Info,
+  CheckCircle2, Timer, Info, Plus, Minus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -216,10 +216,13 @@ interface CompletionSheetProps {
   durationSeconds: number;
   setsLogged: unknown[];
   onSaved: () => void;
+  /** ID of the in-progress row created when "Start Workout" was tapped.
+   *  When present, we UPDATE that row instead of INSERTing a new one. */
+  sessionLogId?: string | null;
 }
 
 function CompletionSheet({
-  open, onClose, connectionId, date, sessionId, sessionName, durationSeconds, setsLogged, onSaved,
+  open, onClose, connectionId, date, sessionId, sessionName, durationSeconds, setsLogged, onSaved, sessionLogId,
 }: CompletionSheetProps) {
   const [borgRating, setBorgRating] = useState<number | null>(null);
   const [comment, setComment] = useState('');
@@ -228,17 +231,32 @@ function CompletionSheet({
 
   async function handleSave() {
     setSaving(true);
-    const { error } = await supabase.from('athlete_session_logs').insert({
-      athlete_connection_id: connectionId,
-      date,
-      session_id: sessionId,
-      session_name: sessionName,
+    const completionPayload = {
       completed_at: new Date().toISOString(),
       borg_rating: borgRating,
       duration_seconds: durationSeconds > 0 ? durationSeconds : null,
       comment: comment.trim() || null,
       sets_logged: setsLogged,
-    });
+    };
+
+    let error;
+    if (sessionLogId) {
+      // Update the in-progress row that was created on "Start Workout"
+      ({ error } = await supabase
+        .from('athlete_session_logs')
+        .update(completionPayload)
+        .eq('id', sessionLogId));
+    } else {
+      // Fallback: insert a fresh row (no in-progress row was created)
+      ({ error } = await supabase.from('athlete_session_logs').insert({
+        athlete_connection_id: connectionId,
+        date,
+        session_id: sessionId,
+        session_name: sessionName,
+        ...completionPayload,
+      }));
+    }
+
     setSaving(false);
     if (error) {
       toast({ title: 'Error saving session', description: error.message, variant: 'destructive' });
@@ -441,6 +459,7 @@ function CircuitCard({ exercise, completedSets, onCompleteRound, onShowDetail }:
 
 interface SetTableProps {
   exercise: ExerciseSummary;
+  setCount: number;
   loggedValues: Record<string, Record<number, Record<string, string>>>;
   completedSets: Record<string, number[]>;
   onLogValue: (exId: string, setIdx: number, paramName: string, val: string) => void;
@@ -448,8 +467,7 @@ interface SetTableProps {
   onMarkAll: (exId: string) => void;
 }
 
-function SetTable({ exercise, loggedValues, completedSets, onLogValue, onCompleteSet, onMarkAll }: SetTableProps) {
-  const setCount = getSetCount(exercise);
+function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue, onCompleteSet, onMarkAll }: SetTableProps) {
   const columns = getParamColumns(exercise);
   const doneArr = completedSets[exercise.id] ?? [];
   const allDone = doneArr.length >= setCount &&
@@ -696,6 +714,10 @@ export default function AthleteSessionPage() {
   // completedSets: exerciseId -> number[] of completed set indices
   const [completedSets, setCompletedSets] = useState<Record<string, number[]>>({});
   const [borgSheetOpen, setBorgSheetOpen] = useState(false);
+  // ID of the athlete_session_logs row created when "Start Workout" is tapped
+  const [sessionLogId, setSessionLogId] = useState<string | null>(null);
+  // Per-exercise set count overrides: exId → actual set count (athlete can add/remove sets)
+  const [setCountOverrides, setSetCountOverrides] = useState<Record<string, number>>({});
   // Shown when the athlete tries to finish with incomplete sets
   const [incompleteWarning, setIncompleteWarning] = useState<'section' | 'workout' | null>(null);
   // Shown when the athlete tries to leave the session page after the workout has started
@@ -823,9 +845,10 @@ export default function AthleteSessionPage() {
   function isSectionComplete(
     section: SectionData,
     cs: Record<string, number[]>,
+  overrides?: Record<string, number>,
   ): boolean {
     return section.exercises.every(ex => {
-      const sc = getSetCount(ex);
+      const sc = overrides?.[ex.id] ?? getSetCount(ex);
       const done = cs[ex.id] ?? [];
       return done.length >= sc &&
         Array.from({ length: sc }, (_, i) => i).every(i => done.includes(i));
@@ -876,7 +899,7 @@ export default function AthleteSessionPage() {
   function handleMarkAll(exerciseId: string) {
     const ex = currentSection?.exercises.find(e => e.id === exerciseId);
     if (!ex) return;
-    const setCount = getSetCount(ex);
+    const setCount = setCountOverrides[exerciseId] ?? getSetCount(ex);
     const doneArr = completedSets[exerciseId] ?? [];
     const undone = Array.from({ length: setCount }, (_, i) => i).filter(i => !doneArr.includes(i));
 
@@ -948,26 +971,75 @@ export default function AthleteSessionPage() {
     (currentLog.setsLogged as LoggedEx[]).forEach(e => logMap.set(e.exerciseName, e));
   }
 
-  // Build sets_logged payload for Borg sheet
-  const setsLoggedPayload = [
-    // Regular exercises — per-set logged values
-    ...Object.entries(loggedValues).map(([exId, sets]) => {
-      const ex = session.exercises.find(e => e.id === exId);
+  // Add / remove a set for a specific exercise
+  function handleAddSet(exId: string) {
+    const ex = session.exercises.find(e => e.id === exId);
+    if (!ex) return;
+    setSetCountOverrides(prev => ({ ...prev, [exId]: (prev[exId] ?? getSetCount(ex)) + 1 }));
+  }
+
+  function handleRemoveSet(exId: string) {
+    const ex = session.exercises.find(e => e.id === exId);
+    if (!ex) return;
+    const current = setCountOverrides[exId] ?? getSetCount(ex);
+    const next = Math.max(1, current - 1);
+    const removedIdx = current - 1;
+    // Clear logged values and completion flag for the removed set
+    setLoggedValues(prev => {
+      const copy = { ...(prev[exId] ?? {}) };
+      delete copy[removedIdx];
+      return { ...prev, [exId]: copy };
+    });
+    setCompletedSets(prev => ({
+      ...prev,
+      [exId]: (prev[exId] ?? []).filter(i => i !== removedIdx),
+    }));
+    setSetCountOverrides(prev => ({ ...prev, [exId]: next }));
+  }
+
+  // Build sets_logged payload — includes ALL exercises (with section/superset structure)
+  // so the coach can see the full session, including skipped exercises.
+  const setsLoggedPayload = session.exercises.map(ex => {
+    if (ex.isCircuit) {
       return {
-        exerciseName: ex?.name ?? exId,
-        sets: Object.entries(sets).map(([idx, vals]) => ({ setNumber: Number(idx) + 1, values: vals })),
-      };
-    }),
-    // Circuit exercises — log how many rounds were completed
-    ...session.exercises
-      .filter(ex => ex.isCircuit && (completedSets[ex.id] ?? []).length > 0)
-      .map(ex => ({
         exerciseName: ex.name,
-        isCircuit: true,
+        isCircuit: true as const,
         roundsCompleted: (completedSets[ex.id] ?? []).length,
         totalRounds: Math.max(1, Number(ex.circuitRounds ?? 3)),
+        sectionId: ex.sectionId,
+        sectionName: ex.sectionName,
+        sectionOrder: ex.sectionOrder ?? 0,
+        supersetId: ex.supersetId,
+        exerciseOrder: ex.order,
+      };
+    }
+    const plannedSetCount = getSetCount(ex);
+    const actualSetCount = setCountOverrides[ex.id] ?? plannedSetCount;
+    const exCompleted = completedSets[ex.id] ?? [];
+    const exLogged = loggedValues[ex.id] ?? {};
+    // Convert plannedParams to string values for storage
+    const plannedParamsStr: Record<string, string> = {};
+    if (ex.plannedParams) {
+      for (const [k, v] of Object.entries(ex.plannedParams)) {
+        plannedParamsStr[k] = String(v);
+      }
+    }
+    return {
+      exerciseName: ex.name,
+      plannedSets: plannedSetCount,
+      plannedParams: Object.keys(plannedParamsStr).length > 0 ? plannedParamsStr : undefined,
+      sectionId: ex.sectionId,
+      sectionName: ex.sectionName,
+      sectionOrder: ex.sectionOrder ?? 0,
+      supersetId: ex.supersetId,
+      exerciseOrder: ex.order,
+      sets: Array.from({ length: actualSetCount }, (_, setIdx) => ({
+        setNumber: setIdx + 1,
+        values: exLogged[setIdx] ?? {},
+        completed: exCompleted.includes(setIdx),
       })),
-  ];
+    };
+  });
 
   // ── Screen: Overview ───────────────────────────────────────────────────────
 
@@ -1007,7 +1079,7 @@ export default function AthleteSessionPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-green-800">Session Completed</p>
                       <p className="text-xs text-green-700 mt-0.5">
-                        {formatCompletedAt(currentLog.completedAt)}
+                        {currentLog.completedAt ? formatCompletedAt(currentLog.completedAt) : ''}
                         {currentLog.durationSeconds
                           ? ` · ${Math.round(currentLog.durationSeconds / 60)} min`
                           : ''}
@@ -1174,7 +1246,23 @@ export default function AthleteSessionPage() {
                   Close
                 </Button>
               ) : (
-                <Button className="w-full" size="lg" onClick={() => setPhase('sectionIntro')}>
+                <Button className="w-full" size="lg" onClick={async () => {
+                  setPhase('sectionIntro');
+                  if (connection) {
+                    const { data } = await supabase
+                      .from('athlete_session_logs')
+                      .insert({
+                        athlete_connection_id: connection.id,
+                        date: entry.date,
+                        session_id: session.id,
+                        session_name: session.name,
+                        started_at: new Date().toISOString(),
+                      })
+                      .select('id')
+                      .single();
+                    if (data) setSessionLogId(data.id);
+                  }
+                }}>
                   Start Workout
                 </Button>
               )}
@@ -1328,8 +1416,8 @@ export default function AthleteSessionPage() {
     const sectionExercises = currentSection?.exercises ?? [];
     const doneCounts = sectionExercises.map(ex => (completedSets[ex.id] ?? []).length);
     const totalSetsDone = doneCounts.reduce((a, b) => a + b, 0);
-    const totalSetsPlanned = sectionExercises.reduce((a, ex) => a + getSetCount(ex), 0);
-    const sectionComplete = isSectionComplete(currentSection!, completedSets);
+    const totalSetsPlanned = sectionExercises.reduce((a, ex) => a + (setCountOverrides[ex.id] ?? getSetCount(ex)), 0);
+    const sectionComplete = isSectionComplete(currentSection!, completedSets, setCountOverrides);
     const isLastSection = sectionIdx === sections.length - 1;
 
     return (
@@ -1417,7 +1505,7 @@ export default function AthleteSessionPage() {
               // ── Render groups ───────────────────────────────────────────────
               const renderExerciseCard = (ex: ExerciseSummary, displayN: number, supersetLabel?: string) => {
                 const exDone = completedSets[ex.id] ?? [];
-                const exSetCount = getSetCount(ex);
+                const exSetCount = setCountOverrides[ex.id] ?? getSetCount(ex);
                 const exComplete = exDone.length >= exSetCount &&
                   Array.from({ length: exSetCount }, (_, i) => i).every(i => exDone.includes(i));
 
@@ -1469,14 +1557,35 @@ export default function AthleteSessionPage() {
                         onShowDetail={setDetailTarget}
                       />
                     ) : (
-                      <SetTable
-                        exercise={ex}
-                        loggedValues={loggedValues}
-                        completedSets={completedSets}
-                        onLogValue={handleLogValue}
-                        onCompleteSet={handleCompleteSet}
-                        onMarkAll={handleMarkAll}
-                      />
+                      <>
+                        <SetTable
+                          exercise={ex}
+                          setCount={exSetCount}
+                          loggedValues={loggedValues}
+                          completedSets={completedSets}
+                          onLogValue={handleLogValue}
+                          onCompleteSet={handleCompleteSet}
+                          onMarkAll={handleMarkAll}
+                        />
+                        {/* Add / remove set buttons */}
+                        <div className="flex items-center justify-between px-1 pt-1">
+                          <button
+                            onClick={() => handleRemoveSet(ex.id)}
+                            disabled={exSetCount <= 1}
+                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive disabled:opacity-30 disabled:cursor-not-allowed transition-colors active:opacity-60"
+                          >
+                            <Minus className="h-3 w-3" />
+                            Remove set
+                          </button>
+                          <button
+                            onClick={() => handleAddSet(ex.id)}
+                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors active:opacity-60"
+                          >
+                            <Plus className="h-3 w-3" />
+                            Add set
+                          </button>
+                        </div>
+                      </>
                     )}
                   </div>
                 );
@@ -1487,7 +1596,7 @@ export default function AthleteSessionPage() {
                   return (
                     <div key={group.ex.id} className={cn(
                       'rounded-xl border transition-colors',
-                      (completedSets[group.ex.id] ?? []).length >= getSetCount(group.ex) ? 'border-primary/20' : 'border-border',
+                      (completedSets[group.ex.id] ?? []).length >= (setCountOverrides[group.ex.id] ?? getSetCount(group.ex)) ? 'border-primary/20' : 'border-border',
                     )}>
                       {renderExerciseCard(group.ex, group.n)}
                     </div>
@@ -1495,7 +1604,7 @@ export default function AthleteSessionPage() {
                 }
                 // Superset group — connected card with dividers
                 const allDone = group.members.every(({ ex }) => {
-                  const sc = getSetCount(ex);
+                  const sc = setCountOverrides[ex.id] ?? getSetCount(ex);
                   const done = completedSets[ex.id] ?? [];
                   return done.length >= sc && Array.from({ length: sc }, (_, i) => i).every(i => done.includes(i));
                 });
@@ -1568,6 +1677,7 @@ export default function AthleteSessionPage() {
             durationSeconds={workoutElapsed}
             setsLogged={setsLoggedPayload}
             onSaved={handleSaved}
+            sessionLogId={sessionLogId}
           />
         )}
 
