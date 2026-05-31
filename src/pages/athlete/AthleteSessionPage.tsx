@@ -1006,7 +1006,7 @@ export default function AthleteSessionPage() {
                           : ''}
                         {currentLog.borgRating !== null ? ` · RPE ${currentLog.borgRating}` : ''}
                         {currentLog.borgRating !== null && currentLog.durationSeconds
-                          ? ` · Load: ${currentLog.borgRating * Math.round(currentLog.durationSeconds / 60)} AU`
+                          ? ` · sRPE: ${currentLog.borgRating * Math.round(currentLog.durationSeconds / 60)} AU`
                           : ''}
                       </p>
                       {currentLog.comment && (
