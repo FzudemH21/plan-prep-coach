@@ -61,38 +61,25 @@ Macrocycle
 
 ## Intensity Scale
 
-> **Planned refactor:** The 8-level scale will be replaced by **Borg CR10 (0–10, 11 levels)** throughout the entire app. Until the refactor is implemented, the 8-level scale below remains active. Do not introduce new code using the 8-level scale — flag it for migration instead.
+**Current: Borg CR10 (0–10, 11 levels) — migration complete.**
 
-**Current (8-level, being phased out):**
-
-| Value | Display |
-|-------|---------|
-| `off` | Off |
-| `deload` | Deload |
-| `easy` | Easy |
-| `easy-moderate` | Easy-Moderate |
-| `moderate` | Moderate |
-| `moderate-hard` | Moderate-Hard |
-| `hard` | Hard |
-| `extremely-hard` | Extremely Hard |
-
-**Target (Borg CR10, 11 levels):**
+The old 8-level string scale (`off` → `extremely-hard`) has been fully replaced. `IntensityLevel` is now aliased to `BorgLevel = "0" | "1" | ... | "10"` (string numerics). Single source of truth: `src/utils/intensityScale.ts`. Do not introduce any new code using the old string labels.
 
 | Value | Display |
 |-------|---------|
-| `0` | 0 – Rest |
-| `1` | 1 – Very Easy |
-| `2` | 2 – Easy |
-| `3` | 3 – Moderate |
-| `4` | 4 – Somewhat Hard |
-| `5` | 5 – Hard |
-| `6` | 6 – Hard+ |
-| `7` | 7 – Very Hard |
-| `8` | 8 – Very Hard+ |
-| `9` | 9 – Extremely Hard |
-| `10` | 10 – Maximal |
+| `"0"` | 0 – Rest |
+| `"1"` | 1 – Very, Very Easy |
+| `"2"` | 2 – Easy |
+| `"3"` | 3 – Moderate |
+| `"4"` | 4 – Somewhat Hard |
+| `"5"` | 5 – Hard |
+| `"6"` | 6 – Hard+ |
+| `"7"` | 7 – Very Hard |
+| `"8"` | 8 – Very Hard+ |
+| `"9"` | 9 – Extremely Hard |
+| `"10"` | 10 – Maximal |
 
-Applied at: mesocycle level, microcycle level, daily level, and session level. Used identically by coach (planned) and athlete (self-reported) — enabling direct planned vs. actual comparison.
+Applied at: mesocycle level, microcycle level, daily level, and session level. Used identically by coach (planned) and athlete (self-reported) — enabling direct planned vs. actual comparison. Legacy values in storage are auto-migrated via `migrateLegacyIntensity()` in `intensityScale.ts`.
 
 ---
 
@@ -231,16 +218,8 @@ Applied at: mesocycle level, microcycle level, daily level, and session level. U
 ### Workflow
 - **Planning & prompts:** Claude Chat (browser)
 - **Implementation:** Claude Code (desktop app, Code tab)
-- **Version control:** GitHub, branch/PR workflow
-- External collaborator has GitHub Collaborator access
-- No direct pushes to `main` — always via Pull Request
-- Felix reviews and merges all PRs
-
-### For the External Collaborator
-- Work in own feature branches (e.g. `feature/rag-supabase`)
-- Open Pull Requests for review before merging
-- Has access to Supabase project (Settings → Team)
-- Current task: RAG via Supabase Vector DB (Supabase Auth + Cloud Storage already set up)
+- **Version control:** GitHub — Felix works solo, pushes directly to `main`
+- No external collaborator — all work is done by Felix + Claude Code
 
 ---
 
@@ -265,18 +244,21 @@ Applied at: mesocycle level, microcycle level, daily level, and session level. U
 ### Git / Local Sync (Critical!)
 - Local files in `C:\Users\Hanik\plan-prep-coach` and `main` branch on GitHub must always stay in sync
 - Before starting any new work: `git pull` to ensure local is up to date
-- After finishing any work: commit and push all changes so nothing is left only locally
+- After finishing any work: commit and push all changes so nothing is left only locally — `git add <files> && git commit && git push origin main`
 - Never leave large amounts of uncommitted work sitting in the main directory — commit in logical chunks regularly
-- Claude Code works in a worktree (`.claude/worktrees/<branch>/`). Changes are ONLY visible in the browser if the dev server runs from that worktree directory. The user's dev server runs from `C:\Users\Hanik\plan-prep-coach` (main project dir) → changes are only visible AFTER the PR is merged to `main` and the dev server is restarted
-- **After merging a PR, always run `cd C:\Users\Hanik\plan-prep-coach && git pull` immediately so the user's dev server gets the latest code — never leave this for the user to do.** Then tell the user to **restart the dev server** (`Ctrl+C` → `npm run dev`) and reload http://localhost:8080. A hard-reload alone (`Ctrl+Shift+R`) is NOT sufficient — Vite's file watcher does not reliably detect files written by `git pull`, so the server must be restarted to guarantee the new code is compiled and served. If they can't verify at that URL, the task is not done
-- **Always merge the PR yourself using `gh pr merge <number> --merge` immediately after creating it — never leave it for the user to merge.**
+- Claude Code works in a worktree (`.claude/worktrees/<branch>/`). Changes are ONLY visible in the browser if the dev server runs from that worktree directory. The user's dev server runs from `C:\Users\Hanik\plan-prep-coach` (main project dir) → **after pushing, always run `git pull` in the main dir and tell the user to restart the dev server** (`Ctrl+C` → `npm run dev`) and reload http://localhost:8080. A hard-reload alone (`Ctrl+Shift+R`) is NOT sufficient.
 - **Before every large sync commit (stash → pull → stash pop), always check the diff for accidental removals** — especially imports and component renders that were intentionally added in earlier commits. A sync commit must never silently delete features
 
 ### UI/UX Principles
 - All UI text must be in English (labels, buttons, placeholders, hints, tab names, error messages)
 - Drag & drop wherever possible
-- Intensity labels consistent throughout the entire app (always use the 8-level scale above)
+- Intensity labels consistent throughout the entire app (always use Borg CR10 — `"0"`–`"10"` string numerics via `intensityScale.ts`)
 - Desktop-first for coach view, mobile-first for athlete view (future)
+
+### FEATURES.md (Critical!)
+- **Whenever a feature from FEATURES.md is implemented — fully or partially — update its status row immediately.** Mark it ✅ Done (with a brief description of what was built) or ✅ Partial / 🚧 In Progress if only part of it is done. Never leave a completed feature marked ⬜ Open.
+- This applies to every implementation session, including incremental additions to existing features.
+- FEATURES.md and CLAUDE.md are the single source of truth — keep them accurate at all times.
 
 ### Code Quality
 - TypeScript strict mode — no `any` types
