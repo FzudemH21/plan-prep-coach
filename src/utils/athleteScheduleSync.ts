@@ -273,16 +273,20 @@ export async function syncAthleteSchedule(
       const key = entry.subCategory
         ? `${entry.category} - ${entry.subCategory}`
         : entry.category;
-      // Track rest parameter name for this method key
-      if (entry.isRestParameter) {
+      // Track rest parameter name for this method key.
+      // Use the explicit flag first; fall back to name heuristic for legacy toolbox entries
+      // where isRestParameter was not set (e.g. tagged only as isSetParameter before the fix).
+      const REST_NAME = /rest|pause|recovery/i;
+      if (entry.isRestParameter || REST_NAME.test(entry.parameterName)) {
         toolboxRestMap.set(key, entry.parameterName);
       }
       // Include all params that are shown in the grid by default (per toolbox config).
-      // Qualitative params (e.g. Intensity expressed as "75-80% 1RM") and rest params
-      // (e.g. "Inter-Set Rest Duration") are intentionally kept here — the coach app
+      // Qualitative params and rest params are intentionally kept here — the coach app
       // shows them in the session grid and the athlete app should match.
-      // Frequency and Set params are structural (not per-set columns) so always excluded.
-      if (!entry.showInGridByDefault || entry.isFrequencyParameter || entry.isSetParameter) continue;
+      // Frequency and true set-count params are structural so always excluded.
+      // Rest params are excluded from athlete column display inside getParamColumns instead.
+      if (!entry.showInGridByDefault || entry.isFrequencyParameter) continue;
+      if (entry.isSetParameter && !entry.isRestParameter && !REST_NAME.test(entry.parameterName)) continue;
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key)!.push(entry.parameterName);
     }

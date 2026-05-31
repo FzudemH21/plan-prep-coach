@@ -599,7 +599,14 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                           <TableCell key={param.name}>
                             <ParameterInputField
                               parameter={param}
-                              value={exercise.parameters[`${param.name}_set${setIndex + 1}`] ?? param.defaultValue ?? ''}
+                              value={
+                                // Per-set key (ad-hoc) takes priority; fall back to plain key
+                                // for periodization exercises (values stored as flat "Rest: 90").
+                                (exercise.parameters[`${param.name}_set${setIndex + 1}`] as string | number | undefined)
+                                  ?? exercise.parameters[param.name]
+                                  ?? param.defaultValue
+                                  ?? ''
+                              }
                               unit={exercise.parameters[`${param.name}_unit`] as string}
                               onValueChange={(value) => onParameterChange(`${param.name}_set${setIndex + 1}`, value)}
                               onUnitChange={(unit) => onUnitChange(param.name, unit)}
