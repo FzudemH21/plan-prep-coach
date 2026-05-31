@@ -138,15 +138,22 @@ function getRestSeconds(ex: ExerciseSummary): number {
   if (!ex.plannedParams) return 90;
 
   function parseRestValue(key: string): number | null {
-    // Try plain key first; fall back to per-set keys (ad-hoc exercises store values as
-    // "Rest_set1", "Rest_set2", … while the plain "Rest" key stays empty).
-    let raw: string | number | undefined = ex.plannedParams![key];
-    if (raw === undefined || raw === '') {
-      for (let i = 1; i <= 20; i++) {
-        const sv = ex.plannedParams![`${key}_set${i}`];
-        if (sv !== undefined && sv !== '') { raw = sv; break; }
+    // Per-set keys take priority over the plain key so that training-calendar overrides
+    // (stored as Rest_set1, Rest_set2, …) win over the periodization-table baseline.
+    // Also handles ad-hoc exercises where the plain key is always ''.
+    for (let i = 1; i <= 20; i++) {
+      const sv = ex.plannedParams![`${key}_set${i}`];
+      if (sv === undefined) break;   // no more set keys — stop scanning
+      if (sv === '') continue;       // empty slot — try next
+      const n = Number(sv);
+      if (!isNaN(n) && n > 0) {
+        const unitKey = ex.plannedParams![`${key}_unit`];
+        if (/min/i.test(String(unitKey)) || n <= 15) return n * 60;
+        return n;
       }
     }
+    // Plain key fallback: periodization-table baseline for exercises without per-set overrides.
+    const raw = ex.plannedParams![key];
     if (raw === undefined || raw === '') return null;
     const n = Number(raw);
     if (isNaN(n) || n <= 0) return null;

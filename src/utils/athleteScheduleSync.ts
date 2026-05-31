@@ -351,12 +351,18 @@ export async function syncAthleteSchedule(
     // Mirror WorkoutSessionSheet's fallback chain:
     // 1. Try category-qualified key (for split methods stored as "Method::Category")
     // 2. Fall back to base method key (for unsplit methods)
-    // Both at session index 0 (the periodization table default).
+    // Priority: session-specific index first (training-calendar overrides written by
+    // handleSaveParameters), then session 0 (periodization-table baseline shared across sessions).
     const methodKeyFull = (ex.categoryName && ex.categoryName !== 'Uncategorized' && ex.categoryName !== '')
       ? `${methodKeyBase}::${ex.categoryName}`
       : methodKeyBase;
 
+    const sessionIdx = ex.sessionIndex ?? 0;
+
     const storedParams: Record<string, string | number> =
+      (paramValues?.[mesocycleId]?.[microcycleIndex]?.[methodKeyFull]?.[sessionIdx] as Record<string, string | number>) ||
+      (paramValues?.[mesocycleId]?.[microcycleIndex]?.[methodKeyBase]?.[sessionIdx] as Record<string, string | number>) ||
+      // Fall back to session 0 (periodization-table baseline) if no session-specific data yet
       (paramValues?.[mesocycleId]?.[microcycleIndex]?.[methodKeyFull]?.[0] as Record<string, string | number>) ||
       (paramValues?.[mesocycleId]?.[microcycleIndex]?.[methodKeyBase]?.[0] as Record<string, string | number>) ||
       {};
