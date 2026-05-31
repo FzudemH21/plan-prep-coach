@@ -633,20 +633,31 @@ export function ExerciseDetailDialog({
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold">Progressions &amp; Regressions</h3>
 
-                    {/* Chain display */}
+                    {/* Chain display + inline add buttons */}
                     <div className="space-y-1">
-                      {/* Regressions (easier) */}
-                      {regressions.map(p => (
+                      {/* Add Progression button (above current) */}
+                      {mode === 'edit' && addingDirection !== 'progression' && (
+                        <button
+                          onClick={() => setAddingDirection('progression')}
+                          className="w-full flex items-center gap-1.5 px-2 py-1 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                        >
+                          <Plus className="h-3 w-3" />
+                          Add Progression
+                        </button>
+                      )}
+
+                      {/* Progressions (harder) — above current */}
+                      {progs.map(p => (
                         <div key={p.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 bg-muted/40 text-sm group">
-                          <TrendingDown className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                          <span className="text-xs font-medium text-blue-600 dark:text-blue-400 w-24 shrink-0">
-                            Regression {p.level}
+                          <TrendingUp className="h-3.5 w-3.5 text-orange-500 shrink-0" />
+                          <span className="text-xs font-medium text-orange-600 dark:text-orange-400 w-24 shrink-0">
+                            Progression {p.level}
                           </span>
                           <span className="flex-1 font-medium truncate">{p.toExerciseName}</span>
                           {p.notes && (
                             <span className="text-xs text-muted-foreground italic truncate max-w-[140px]">{p.notes}</span>
                           )}
-                          {(mode === 'edit') && (
+                          {mode === 'edit' && (
                             <button
                               onClick={() => removeProgression(p.id)}
                               className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-muted-foreground hover:text-destructive shrink-0"
@@ -664,18 +675,18 @@ export function ExerciseDetailDialog({
                         <span className="text-xs text-muted-foreground">current</span>
                       </div>
 
-                      {/* Progressions (harder) */}
-                      {progs.map(p => (
+                      {/* Regressions (easier) — below current */}
+                      {regressions.map(p => (
                         <div key={p.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 bg-muted/40 text-sm group">
-                          <TrendingUp className="h-3.5 w-3.5 text-orange-500 shrink-0" />
-                          <span className="text-xs font-medium text-orange-600 dark:text-orange-400 w-24 shrink-0">
-                            Progression {p.level}
+                          <TrendingDown className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                          <span className="text-xs font-medium text-blue-600 dark:text-blue-400 w-24 shrink-0">
+                            Regression {p.level}
                           </span>
                           <span className="flex-1 font-medium truncate">{p.toExerciseName}</span>
                           {p.notes && (
                             <span className="text-xs text-muted-foreground italic truncate max-w-[140px]">{p.notes}</span>
                           )}
-                          {(mode === 'edit') && (
+                          {mode === 'edit' && (
                             <button
                               onClick={() => removeProgression(p.id)}
                               className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-muted-foreground hover:text-destructive shrink-0"
@@ -686,7 +697,18 @@ export function ExerciseDetailDialog({
                         </div>
                       ))}
 
-                      {regressions.length === 0 && progs.length === 0 && (
+                      {/* Add Regression button (below current) */}
+                      {mode === 'edit' && addingDirection !== 'regression' && (
+                        <button
+                          onClick={() => setAddingDirection('regression')}
+                          className="w-full flex items-center gap-1.5 px-2 py-1 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                        >
+                          <Plus className="h-3 w-3" />
+                          Add Regression
+                        </button>
+                      )}
+
+                      {regressions.length === 0 && progs.length === 0 && mode !== 'edit' && (
                         <p className="text-xs text-muted-foreground italic px-2">No progressions or regressions defined yet.</p>
                       )}
                     </div>
@@ -694,28 +716,7 @@ export function ExerciseDetailDialog({
                     {/* Add form — only in edit mode */}
                     {mode === 'edit' && (
                       <div className="space-y-2">
-                        {addingDirection === null ? (
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50 dark:border-blue-800 dark:hover:bg-blue-950"
-                              onClick={() => setAddingDirection('regression')}
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                              Add Regression
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-1.5 text-orange-600 border-orange-200 hover:bg-orange-50 dark:border-orange-800 dark:hover:bg-orange-950"
-                              onClick={() => setAddingDirection('progression')}
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                              Add Progression
-                            </Button>
-                          </div>
-                        ) : (
+                        {addingDirection !== null && (
                           <div className="rounded-md border p-3 space-y-3 bg-muted/20">
                             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                               Add {addingDirection === 'regression' ? 'Regression' : 'Progression'}
