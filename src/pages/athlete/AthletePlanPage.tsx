@@ -100,6 +100,9 @@ function SessionCard({
                 Completed
                 {log.durationSeconds ? ` · ${Math.round(log.durationSeconds / 60)} min` : ''}
                 {log.borgRating !== null ? ` · RPE ${log.borgRating}` : ''}
+                {log.borgRating !== null && log.durationSeconds
+                  ? ` · Load: ${log.borgRating * Math.round(log.durationSeconds / 60)} AU`
+                  : ''}
               </p>
             ) : session.intensity ? (
               <div className="mt-1.5">
