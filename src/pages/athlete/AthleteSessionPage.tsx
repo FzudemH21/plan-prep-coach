@@ -138,9 +138,17 @@ function getRestSeconds(ex: ExerciseSummary): number {
   if (!ex.plannedParams) return 90;
 
   function parseRestValue(key: string): number | null {
-    const val = ex.plannedParams![key];
-    if (val === undefined || val === '') return null;
-    const n = Number(val);
+    // Try plain key first; fall back to per-set keys (ad-hoc exercises store values as
+    // "Rest_set1", "Rest_set2", … while the plain "Rest" key stays empty).
+    let raw: string | number | undefined = ex.plannedParams![key];
+    if (raw === undefined || raw === '') {
+      for (let i = 1; i <= 20; i++) {
+        const sv = ex.plannedParams![`${key}_set${i}`];
+        if (sv !== undefined && sv !== '') { raw = sv; break; }
+      }
+    }
+    if (raw === undefined || raw === '') return null;
+    const n = Number(raw);
     if (isNaN(n) || n <= 0) return null;
     const unitKey = ex.plannedParams![`${key}_unit`];
     if (/min/i.test(String(unitKey)) || n <= 15) return n * 60;

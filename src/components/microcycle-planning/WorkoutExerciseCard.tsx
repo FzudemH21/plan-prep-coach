@@ -562,8 +562,12 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                           ? `${param.name} [${unit}]`
                           : param.name;
                         
+                        // Rest parameters are always in seconds — lock the unit label
+                        const displayHeader = param.isRestParameter
+                          ? `${param.name} [s]`
+                          : headerText;
                         return (
-                          <TableHead key={param.name}>{headerText}</TableHead>
+                          <TableHead key={param.name}>{displayHeader}</TableHead>
                         );
                       })}
                       {/* Auto-calculated Weight column */}
