@@ -327,7 +327,8 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
   if (!open) wasOpen.current = false;
 
   // ── Auto-advance wellness ──────────────────────────────────────────────────
-  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const advanceTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const returnToConfirm   = useRef(false); // set when editing from confirm screen
 
   function selectWellness(val: number) {
     const key = WELLNESS_ITEMS[wellnessIdx].key;
@@ -335,7 +336,10 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
 
     if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
     advanceTimerRef.current = setTimeout(() => {
-      if (wellnessIdx < WELLNESS_ITEMS.length - 1) {
+      if (returnToConfirm.current) {
+        returnToConfirm.current = false;
+        setStep('wellness_confirm');
+      } else if (wellnessIdx < WELLNESS_ITEMS.length - 1) {
         setWellnessIdx((i) => i + 1);
       } else {
         setStep('wellness_confirm');
@@ -400,17 +404,24 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
     if (ok) setStep('done');
   }
 
-  // ── Progress ───────────────────────────────────────────────────────────────
+  // ── Progress — fixed positions so bar never moves backward ───────────────
+
+  const STEP_PROGRESS: Record<Step, number> = {
+    wellness:           0.05,
+    wellness_confirm:   0.40,
+    health_q:           0.50,
+    body_map:           0.65,
+    illness_symptoms:   0.80,
+    illness_nrs:        0.90,
+    done:               1.00,
+  };
 
   function progressValue(): number {
-    const steps: Step[] = [
-      'wellness', 'wellness_confirm', 'health_q',
-      ...(hasPain    ? ['body_map' as Step]          : []),
-      ...(hasIllness ? ['illness_symptoms' as Step, 'illness_nrs' as Step] : []),
-      'done',
-    ];
-    const idx = steps.indexOf(step);
-    return idx < 0 ? 0 : idx / (steps.length - 1);
+    // Within the wellness step, interpolate between 0.05 and 0.38
+    if (step === 'wellness') {
+      return 0.05 + (wellnessIdx / WELLNESS_ITEMS.length) * 0.33;
+    }
+    return STEP_PROGRESS[step] ?? 0;
   }
 
   // ── Render helpers ─────────────────────────────────────────────────────────
@@ -505,7 +516,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
               return (
                 <button
                   key={item.key}
-                  onClick={() => { setWellnessIdx(idx); setStep('wellness'); }}
+                  onClick={() => { returnToConfirm.current = true; setWellnessIdx(idx); setStep('wellness'); }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-border bg-background hover:border-primary/30 transition-all active:scale-[0.98] text-left"
                 >
                   <div className="flex-1 min-w-0">

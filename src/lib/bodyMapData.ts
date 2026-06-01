@@ -114,10 +114,13 @@ export const FRONT_REGIONS: SvgRegion[] = [
   // Hand/fingers
   { uid:'f8a',  areaId:8,  side:'R', x:19,  y:163, w:28, h:32 },
   { uid:'f8b',  areaId:8,  side:'L', x:140, y:161, w:32, h:33 },
-  // Chest/ribs — midline (spans across)
-  { uid:'f9a',  areaId:9,  x:67,  y:71,  w:53, h:23 },
-  { uid:'f9b',  areaId:9,  x:67,  y:95,  w:13, h:20 },
-  { uid:'f9c',  areaId:9,  x:110, y:95,  w:12, h:20 },
+  // Chest/ribs — split L/R at midline (~x=96)
+  // Upper chest / pec: R = athlete's right (lower x), L = athlete's left (higher x)
+  { uid:'f9a',  areaId:9,  side:'R', x:67,  y:71,  w:29, h:23 },
+  { uid:'f9d',  areaId:9,  side:'L', x:96,  y:71,  w:24, h:23 },
+  // Lower ribs
+  { uid:'f9b',  areaId:9,  side:'R', x:67,  y:95,  w:13, h:20 },
+  { uid:'f9c',  areaId:9,  side:'L', x:110, y:95,  w:12, h:20 },
   // Abdomen — midline
   { uid:'f10a', areaId:10, x:80,  y:96,  w:28, h:42 },
   { uid:'f10b', areaId:10, x:110, y:117, w:13, h:18 },
