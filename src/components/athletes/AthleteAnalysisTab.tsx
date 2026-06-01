@@ -77,9 +77,22 @@ interface SessionLog {
   sets_logged: unknown;
 }
 
+interface ScheduleSessionExercise {
+  name?: string;
+  methodKey?: string;
+  order?: number;
+}
+
+interface ScheduleSession {
+  id?: string;
+  name?: string;
+  intensity?: string;
+  exercises?: ScheduleSessionExercise[];
+}
+
 interface ScheduleRow {
   date: string;
-  sessions: Array<{ id?: string; name?: string; intensity?: string }> | null;
+  sessions: ScheduleSession[] | null;
   intensity: string | null;
 }
 
@@ -496,26 +509,62 @@ export function AthleteAnalysisTab({
   const [pickerAgg, setPickerAgg]         = useState<AggregationMode>('sum');
   const [pickerPerfId, setPickerPerfId]   = useState('');
 
+  // ── Fallback: (date, sessionIdx, exerciseName) → methodKey from schedule ──
+  // Used for historical logs that predate the methodId field in sets_logged.
+  const scheduleMethodLookup = useMemo(() => {
+    // key: `${date}|${sessionIdx}|${exerciseName}` → methodKey
+    const map = new Map<string, string>();
+    for (const row of schedule) {
+      if (!row.sessions) continue;
+      row.sessions.forEach((sess, idx) => {
+        for (const ex of sess.exercises ?? []) {
+          if (!ex.name || !ex.methodKey) continue;
+          map.set(`${row.date}|${idx}|${ex.name}`, ex.methodKey);
+        }
+      });
+    }
+    return map;
+  }, [schedule]);
+
+  /** Resolve methodId for a log entry, falling back to schedule lookup. */
+  function resolveMethodId(
+    entry: ExerciseLogEntry,
+    logDate: string,
+    sessionIdx: number,
+  ): string | undefined {
+    if (entry.methodId) return entry.methodId;
+    const name = entry.exerciseName;
+    if (!name) return undefined;
+    return scheduleMethodLookup.get(`${logDate}|${sessionIdx}|${name}`);
+  }
+
   // ── Discover available method/param combos from loaded logs ───────────────
   const discoveredTrainingParams = useMemo(() => {
     // methodId → Set<paramName>
     const map = new Map<string, Set<string>>();
     for (const log of logs) {
       if (!log.completed_at) continue;
+      // Infer session index from session_id suffix (format: assignmentId-date-idx)
+      const sessionIdx = log.session_id
+        ? parseInt(log.session_id.split('-').pop() ?? '0', 10) || 0
+        : 0;
       const entries = parseExerciseEntries(log.sets_logged);
       for (const entry of entries) {
-        if (!entry.methodId || entry.isCircuit) continue;
-        if (!map.has(entry.methodId)) map.set(entry.methodId, new Set());
+        if (entry.isCircuit) continue;
+        const methodId = resolveMethodId(entry, log.date, sessionIdx);
+        if (!methodId) continue;
+        if (!map.has(methodId)) map.set(methodId, new Set());
         for (const set of entry.sets ?? []) {
           if (!set.completed) continue;
           for (const paramName of Object.keys(set.values)) {
-            map.get(entry.methodId)!.add(paramName);
+            map.get(methodId)!.add(paramName);
           }
         }
       }
     }
     return map;
-  }, [logs]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [logs, scheduleMethodLookup]);
 
   // ── Compute stimulus chart data ───────────────────────────────────────────
   const stimulusChartData = useMemo(() => {
@@ -535,9 +584,14 @@ export function AthleteAnalysisTab({
         if (series.type === 'training') {
           const allValues: number[] = [];
           for (const log of inBucket) {
+            const sessionIdx = log.session_id
+              ? parseInt(log.session_id.split('-').pop() ?? '0', 10) || 0
+              : 0;
             const entries = parseExerciseEntries(log.sets_logged);
             for (const entry of entries) {
-              if (entry.methodId !== series.methodId || entry.isCircuit) continue;
+              if (entry.isCircuit) continue;
+              const methodId = resolveMethodId(entry, log.date, sessionIdx);
+              if (methodId !== series.methodId) continue;
               for (const set of entry.sets ?? []) {
                 if (!set.completed) continue;
                 const raw = set.values[series.paramName];
