@@ -14,13 +14,14 @@ Claude Chat (browser) is my sparring partner for planning, discussion, and promp
 
 | Priority | Feature | Status |
 |---|---|---|
-| 🔴 Now | **Athlete Profile — Analysis tab** — time-window driven training analysis dashboard. Tab alongside Profile / Performance / Calendar / Documents. (1) Date range selector with quick presets. (2) Internal load panel — weekly sRPE bar chart; planned vs. actual RPE per session. (3) Training stimulus panel — coach selects logged parameters, assigns aggregation (Sum / Mean / Range), computes per-week values. (4) Adherence panel — sessions completed vs. planned. (5) Performance markers — test results on timeline. (6) Time-window notes. | 🚧 In Progress — Tab ✅, date range selector ✅, granularity toggle ✅, internal load panel ✅, adherence stat ✅. Remaining: training stimulus panel, performance markers, time-window notes. |
-| 🟡 Soon | **Planned vs. actual RPE / load comparison** — per-session and per-week comparison of planned intensity vs. actual RPE in athlete Profile tab and coach Analysis tab. | ⬜ Open |
+| 🔴 Now | **Athlete Profile — Analysis tab** — time-window driven training analysis dashboard. (1) Date range selector ✅, granularity toggle ✅. (2) Internal load panel — sRPE bar chart ✅, planned vs. actual RPE ✅. (3) Adherence stat ✅. (4) Stimulus Overview — small-multiples per-method mini charts ✅, performance outcomes row ✅, Sum/Mean/Max/Raw aggregation ✅. (5) Training Stimulus focused chart ✅. **Remaining:** SD-based individual load baseline + alerting (replaces ACWR — flag weeks >1.5 SD above athlete's rolling mean), trend lines on performance parameters (linear regression + slope annotation), lagged correlation analysis (training variable vs. performance outcome at lag 0–4 weeks), AI pattern interpreter (narrates what it sees in the time-series data). | 🚧 In Progress |
+| 🟡 Soon | **Planned vs. actual RPE / load comparison** — per-session and per-week comparison of planned intensity vs. actual RPE in athlete Profile tab and coach Analysis tab. | ✅ Done — planned vs. actual sRPE shown in internal load panel |
 | 🟡 Soon | **Wire Athlete Profile → Athlete App: Settings** — settings configured by coach (units, visibility range, feature toggles, allow exercise swap) flow to athlete app in real time. UI exists on both sides, wiring incomplete. | 🚧 In Progress — Settings tab UI built, athlete app reads some settings; full real-time sync not yet wired |
 | 🟠 Later | **Wire Athlete Profile → Athlete App: Metrics sync** — body metrics and performance values entered by coach appear in athlete app; values logged by athlete auto-update coach profile. | ⬜ Open |
 | 🟠 Later | **Exercise parameter tracking in athlete profile** — parse `athlete_session_logs.sets_logged` and display per-exercise history in Performance tab → Exercise Metrics. | ⬜ Open |
 | 🟠 Later | **Exercise comments & coach feedback** — athlete can leave a comment on any exercise during or after a session (form notes, questions, video links). Coach sees these in the session review (CompletedSessionSheet) and can reply inline. Athlete gets a notification when coach replies. Coach gets a notification in the coach app when athlete posts a comment. Supports text + video upload (Phase 2). | ⬜ Open |
-| 🟠 Later | AI Coaching Dialog in Analysis tab — AI reflects on selected time window, suggests next-block adjustments. | ⬜ Open |
+| 🟠 Later | **AI Coaching Dialog in Analysis tab** — AI reflects on selected time window, narrates patterns in training load + performance data (lagged correlations, supercompensation signals, anomalies), suggests next-block adjustments. Receives full time-series data for the window. | ⬜ Open |
+| 🟠 Later | **Squad / Group dashboard** — for each athlete in a group: current-week load vs. personal SD baseline (traffic light), last session logged, compliance rate, flagged alerts. Groups already exist in athlete DB; this is the monitoring view on top. | ⬜ Open |
 | 🟠 Later | Goal Management + test notifications | ⬜ Open |
 | 🔵 Future | **Invite flow** — coach sends invite link → athlete onboarding (language, name, birthday, photo) | ⬜ Open |
 | 🔵 Future | **Messages** — text chat between coach and athlete, timestamps, read receipts | ⬜ Open |
@@ -31,7 +32,7 @@ Claude Chat (browser) is my sparring partner for planning, discussion, and promp
 | 🔵 Future | Language selection on first open (German / English) | ⬜ Open |
 | 🔵 Future | Push notifications (session reminders, coach messages) | ⬜ Open |
 | 🔵 Future | Athlete Management System (standalone area: profiles, progress tracking, communication, wearable data, AI analysis) | ⬜ Open |
-| 🔵 Future | Wearable & app integrations (Oura, Whoop, Apple Fitness, VBT) | ⬜ Open |
+| 🔵 Future | **External data integrations** — GPS platforms (Catapult, STATSports), force plate systems (VALD), HRV apps (HRV4Training, Garmin), wearables (Oura, Whoop, Apple Fitness), VBT devices. Data ingested per session/day and surfaced in Analysis tab alongside internally logged load. | ⬜ Open |
 | 🔵 Future | SaaS & monetization (login, packages, Stripe) | ⬜ Open |
 | 🔵 Future | **Pre-publish security hardening** — replace `dangerouslyAllowBrowser`, move API key to Edge Function, rate limiting, full RLS audit | ⬜ Open |
 | 🔵 Future | Booking system (athletes book with coach) + coach calendar | ⬜ Open |
