@@ -52,39 +52,76 @@ export function useExerciseProgressions(exerciseId: string | null) {
     notes: string;
   }) => {
     if (!exerciseId || !user) return;
+    const reverseDirection: ProgressionDirection =
+      params.direction === 'progression' ? 'regression' : 'progression';
+
+    // Insert both directions in one call
     const { data, error } = await supabase
       .from('exercise_progressions')
-      .insert({
-        coach_user_id: user.id,
-        from_exercise_id: exerciseId,
-        to_exercise_id: params.toExerciseId,
-        direction: params.direction,
-        level: params.level,
-        notes: params.notes || null,
-      })
-      .select()
-      .single();
+      .insert([
+        {
+          coach_user_id: user.id,
+          from_exercise_id: exerciseId,
+          to_exercise_id: params.toExerciseId,
+          direction: params.direction,
+          level: params.level,
+          notes: params.notes || null,
+        },
+        {
+          coach_user_id: user.id,
+          from_exercise_id: params.toExerciseId,
+          to_exercise_id: exerciseId,
+          direction: reverseDirection,
+          level: params.level,
+          notes: params.notes || null,
+        },
+      ])
+      .select();
     if (!error && data) {
-      setProgressions(prev => [...prev, {
-        id: data.id as string,
-        fromExerciseId: data.from_exercise_id as string,
-        toExerciseId: data.to_exercise_id as string,
-        toExerciseName: '',
-        direction: data.direction as ProgressionDirection,
-        level: data.level as number,
-        notes: data.notes as string | null,
-      }].sort((a, b) => a.direction.localeCompare(b.direction) || a.level - b.level));
+      // Only surface the forward entry (from this exercise's perspective)
+      const forward = data.find(
+        (r: Record<string, unknown>) =>
+          r.from_exercise_id === exerciseId && r.to_exercise_id === params.toExerciseId
+      );
+      if (forward) {
+        setProgressions(prev => [...prev, {
+          id: forward.id as string,
+          fromExerciseId: forward.from_exercise_id as string,
+          toExerciseId: forward.to_exercise_id as string,
+          toExerciseName: '',
+          direction: forward.direction as ProgressionDirection,
+          level: forward.level as number,
+          notes: forward.notes as string | null,
+        }].sort((a, b) => a.direction.localeCompare(b.direction) || a.level - b.level));
+      }
     }
     return error;
   }, [exerciseId, user]);
 
   const remove = useCallback(async (id: string) => {
+    // Find the entry so we can also delete its reverse
+    const entry = await supabase
+      .from('exercise_progressions')
+      .select('*')
+      .eq('id', id)
+      .single();
+
     const { error } = await supabase
       .from('exercise_progressions')
       .delete()
       .eq('id', id);
+
     if (!error) {
       setProgressions(prev => prev.filter(p => p.id !== id));
+      // Delete reverse entry (from_exercise_id and to_exercise_id swapped)
+      if (entry.data) {
+        await supabase
+          .from('exercise_progressions')
+          .delete()
+          .eq('coach_user_id', entry.data.coach_user_id)
+          .eq('from_exercise_id', entry.data.to_exercise_id)
+          .eq('to_exercise_id', entry.data.from_exercise_id);
+      }
     }
     return error;
   }, []);
