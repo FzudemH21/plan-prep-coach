@@ -104,7 +104,7 @@ interface DateRange {
 type Preset = '1W' | '4W' | '3M' | 'Custom';
 type Granularity = 'day' | 'week' | 'month' | 'year';
 type CalendarPhase = 'start' | 'end';
-type AggregationMode = 'sum' | 'mean' | 'max';
+type AggregationMode = 'sum' | 'mean' | 'max' | 'none';
 
 interface TrainingSeries {
   id: string;
@@ -358,7 +358,7 @@ function CalendarRangePicker({ from, to, onChange, onClear }: CalendarRangePicke
 
 function seriesLabel(s: ChartSeries): string {
   if (s.type === 'performance') return s.paramName + (s.unit ? ` (${s.unit})` : '');
-  const agg = s.aggregation === 'sum' ? 'Σ' : s.aggregation === 'mean' ? 'Ø' : 'max';
+  const agg = s.aggregation === 'sum' ? 'Σ' : s.aggregation === 'mean' ? 'Ø' : s.aggregation === 'max' ? 'max' : 'raw';
   return `${stripMethodSuffix(s.methodLabel)} — ${s.paramName} [${agg}]`;
 }
 
@@ -406,7 +406,7 @@ interface MiniMethodPanelProps {
 
 function MiniMethodPanel({ panel, data, bucketLabelMap, showXAxis, onRemove }: MiniMethodPanelProps) {
   const paramLabel = panel.unit ? `${panel.paramName} (${panel.unit})` : panel.paramName;
-  const aggLabel = panel.aggregation === 'sum' ? 'Σ' : panel.aggregation === 'mean' ? 'Ø' : 'max';
+  const aggLabel = panel.aggregation === 'sum' ? 'Σ' : panel.aggregation === 'mean' ? 'Ø' : panel.aggregation === 'max' ? 'max' : 'raw';
   return (
     <div className="relative group border-b last:border-b-0">
       {/* Row label */}
@@ -426,28 +426,61 @@ function MiniMethodPanel({ panel, data, bucketLabelMap, showXAxis, onRemove }: M
         <X className="h-3 w-3" />
       </button>
       <ResponsiveContainer width="100%" height={showXAxis ? 72 : 60}>
-        <BarChart data={data} margin={{ top: 18, right: 8, left: 0, bottom: showXAxis ? 2 : 0 }}>
-          {showXAxis && (
-            <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" tickLine={false} axisLine={false} />
-          )}
-          <YAxis
-            tick={{ fontSize: 9 }}
-            width={38}
-            tickCount={3}
-            tickFormatter={(v: number) => Number.isInteger(v) ? String(v) : v.toFixed(1)}
-            axisLine={false}
-            tickLine={false}
-          />
-          <Tooltip
-            formatter={(v: number) => [
-              Number.isInteger(v) ? v : v.toFixed(1),
-              `${paramLabel} [${aggLabel}]`,
-            ]}
-            labelFormatter={(l: string) => bucketLabelMap.get(l) ?? l}
-            contentStyle={{ fontSize: 11 }}
-          />
-          <Bar dataKey="value" fill={panel.color} radius={[2, 2, 0, 0]} maxBarSize={32} />
-        </BarChart>
+        {panel.aggregation === 'none' ? (
+          <ComposedChart data={data} margin={{ top: 18, right: 8, left: 0, bottom: showXAxis ? 2 : 0 }}>
+            {showXAxis && (
+              <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" tickLine={false} axisLine={false} />
+            )}
+            <YAxis
+              tick={{ fontSize: 9 }}
+              width={38}
+              tickCount={3}
+              tickFormatter={(v: number) => Number.isInteger(v) ? String(v) : v.toFixed(1)}
+              axisLine={false}
+              tickLine={false}
+            />
+            <Tooltip
+              formatter={(v: number) => [
+                Number.isInteger(v) ? v : v.toFixed(1),
+                `${paramLabel} [raw]`,
+              ]}
+              labelFormatter={(l: string) => bucketLabelMap.get(l) ?? l}
+              contentStyle={{ fontSize: 11 }}
+            />
+            <Line
+              dataKey="value"
+              stroke={panel.color}
+              strokeWidth={1.5}
+              dot={{ fill: panel.color, r: 3, strokeWidth: 0 }}
+              activeDot={{ r: 5 }}
+              connectNulls={false}
+              type="monotone"
+            />
+          </ComposedChart>
+        ) : (
+          <BarChart data={data} margin={{ top: 18, right: 8, left: 0, bottom: showXAxis ? 2 : 0 }}>
+            {showXAxis && (
+              <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" tickLine={false} axisLine={false} />
+            )}
+            <YAxis
+              tick={{ fontSize: 9 }}
+              width={38}
+              tickCount={3}
+              tickFormatter={(v: number) => Number.isInteger(v) ? String(v) : v.toFixed(1)}
+              axisLine={false}
+              tickLine={false}
+            />
+            <Tooltip
+              formatter={(v: number) => [
+                Number.isInteger(v) ? v : v.toFixed(1),
+                `${paramLabel} [${aggLabel}]`,
+              ]}
+              labelFormatter={(l: string) => bucketLabelMap.get(l) ?? l}
+              contentStyle={{ fontSize: 11 }}
+            />
+            <Bar dataKey="value" fill={panel.color} radius={[2, 2, 0, 0]} maxBarSize={32} />
+          </BarChart>
+        )}
       </ResponsiveContainer>
     </div>
   );
@@ -749,7 +782,7 @@ export function AthleteAnalysisTab({
           }
           if (allValues.length === 0) {
             point[series.id] = null;
-          } else if (series.aggregation === 'sum') {
+          } else if (series.aggregation === 'sum' || series.aggregation === 'none') {
             point[series.id] = allValues.reduce((a, b) => a + b, 0);
           } else if (series.aggregation === 'mean') {
             point[series.id] = Math.round((allValues.reduce((a, b) => a + b, 0) / allValues.length) * 10) / 10;
@@ -819,8 +852,14 @@ export function AthleteAnalysisTab({
   const overviewPanelData = useMemo(() => {
     const result = new Map<string, Array<{ label: string; value: number | null }>>();
     for (const panel of overviewPanels) {
-      const points = buckets.map((bucketStart) => {
-        const end = bucketEnd(bucketStart, granularity);
+      // 'none' → always use day-level buckets for raw day-by-day values
+      const panelGranularity: Granularity = panel.aggregation === 'none' ? 'day' : granularity;
+      const panelBuckets = panel.aggregation === 'none'
+        ? bucketsInRange(range.from, range.to, 'day')
+        : buckets;
+
+      const points = panelBuckets.map((bucketStart) => {
+        const end = bucketEnd(bucketStart, panelGranularity);
         const inBucket = completedLogs.filter((l) =>
           isWithinInterval(parseISO(l.date), { start: bucketStart, end })
         );
@@ -844,11 +883,14 @@ export function AthleteAnalysisTab({
         }
         let value: number | null = null;
         if (allValues.length > 0) {
-          if (panel.aggregation === 'sum') value = allValues.reduce((a, b) => a + b, 0);
-          else if (panel.aggregation === 'mean') value = Math.round((allValues.reduce((a, b) => a + b, 0) / allValues.length) * 10) / 10;
-          else value = Math.max(...allValues);
+          if (panel.aggregation === 'sum' || panel.aggregation === 'none')
+            value = allValues.reduce((a, b) => a + b, 0);
+          else if (panel.aggregation === 'mean')
+            value = Math.round((allValues.reduce((a, b) => a + b, 0) / allValues.length) * 10) / 10;
+          else
+            value = Math.max(...allValues);
         }
-        return { label: bucketLabel(bucketStart, granularity), value };
+        return { label: bucketLabel(bucketStart, panelGranularity), value };
       });
       result.set(panel.id, points);
     }
@@ -1262,7 +1304,7 @@ export function AthleteAnalysisTab({
                         wrapperStyle={{ fontSize: 11 }}
                       />
                       {stimulusSeries.map((s) =>
-                        s.type === 'training' ? (
+                        s.type === 'training' && s.aggregation !== 'none' ? (
                           <Bar
                             key={s.id}
                             dataKey={s.id}
@@ -1270,6 +1312,19 @@ export function AthleteAnalysisTab({
                             fill={s.color}
                             radius={[3, 3, 0, 0]}
                             maxBarSize={40}
+                            name={s.id}
+                          />
+                        ) : s.type === 'training' ? (
+                          <Line
+                            key={s.id}
+                            dataKey={s.id}
+                            yAxisId="left"
+                            stroke={s.color}
+                            strokeWidth={2}
+                            dot={{ fill: s.color, r: 4, strokeWidth: 0 }}
+                            activeDot={{ r: 6 }}
+                            connectNulls={false}
+                            type="monotone"
                             name={s.id}
                           />
                         ) : (
@@ -1341,14 +1396,17 @@ export function AthleteAnalysisTab({
                 {ovPickerParam && (
                   <div className="space-y-1.5">
                     <Label className="text-xs">Aggregation per {granularity}</Label>
-                    <div className="flex gap-2">
-                      {(['sum', 'mean', 'max'] as AggregationMode[]).map((a) => (
+                    <div className="flex gap-2 flex-wrap">
+                      {(['sum', 'mean', 'max', 'none'] as AggregationMode[]).map((a) => (
                         <Button key={a} size="sm" variant={ovPickerAgg === a ? 'default' : 'outline'}
                           className="flex-1 capitalize" onClick={() => setOvPickerAgg(a)}>
-                          {a === 'sum' ? 'Sum Σ' : a === 'mean' ? 'Mean Ø' : 'Max'}
+                          {a === 'sum' ? 'Sum Σ' : a === 'mean' ? 'Mean Ø' : a === 'max' ? 'Max' : 'Raw'}
                         </Button>
                       ))}
                     </div>
+                    {ovPickerAgg === 'none' && (
+                      <p className="text-xs text-muted-foreground">Shows day-by-day totals as a line — ignores the granularity setting above.</p>
+                    )}
                   </div>
                 )}
               </>
@@ -1467,8 +1525,8 @@ export function AthleteAnalysisTab({
                 {pickerParam && (
                   <div className="space-y-1.5">
                     <Label className="text-xs">Aggregation per {granularity}</Label>
-                    <div className="flex gap-2">
-                      {(['sum', 'mean', 'max'] as AggregationMode[]).map((a) => (
+                    <div className="flex gap-2 flex-wrap">
+                      {(['sum', 'mean', 'max', 'none'] as AggregationMode[]).map((a) => (
                         <Button
                           key={a}
                           size="sm"
@@ -1476,7 +1534,7 @@ export function AthleteAnalysisTab({
                           className="flex-1 capitalize"
                           onClick={() => setPickerAgg(a)}
                         >
-                          {a === 'sum' ? 'Sum Σ' : a === 'mean' ? 'Mean Ø' : 'Max'}
+                          {a === 'sum' ? 'Sum Σ' : a === 'mean' ? 'Mean Ø' : a === 'max' ? 'Max' : 'Raw'}
                         </Button>
                       ))}
                     </div>
@@ -1485,7 +1543,9 @@ export function AthleteAnalysisTab({
                         ? `Total ${pickerParam} across all sets & exercises for this method per ${granularity}.`
                         : pickerAgg === 'mean'
                         ? `Average ${pickerParam} per set for this method per ${granularity}.`
-                        : `Highest ${pickerParam} value recorded in a single set per ${granularity}.`}
+                        : pickerAgg === 'max'
+                        ? `Highest ${pickerParam} value recorded in a single set per ${granularity}.`
+                        : `Day-by-day totals shown as a line — raw values, ignores the granularity setting.`}
                     </p>
                   </div>
                 )}
