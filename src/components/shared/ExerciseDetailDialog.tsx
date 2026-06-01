@@ -16,9 +16,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Play, Video, ExternalLink, Link2, X, Pencil, Plus, ChevronsUpDown, Check, TrendingUp, TrendingDown } from 'lucide-react';
+import { Play, Video, ExternalLink, Link2, X, Pencil, Plus, ChevronsUpDown, Check, TrendingUp, TrendingDown, GripVertical } from 'lucide-react';
 import { useCustomLibraries, CustomLibrary, CustomExercise, LibraryColumn } from '@/contexts/CustomLibrariesContext';
-import { useExerciseProgressions, ProgressionDirection } from '@/hooks/useExerciseProgressions';
+import { useExerciseProgressions, ProgressionDirection, ExerciseProgression } from '@/hooks/useExerciseProgressions';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
 
 interface ExerciseDetailDialogProps {
@@ -115,9 +116,30 @@ export function ExerciseDetailDialog({
   const [isEditing, setIsEditing] = useState(false);
 
   // Progressions & Regressions
-  const { progressions, add: addProgression, remove: removeProgression } = useExerciseProgressions(
+  const { progressions, add: addProgression, remove: removeProgression, updateLevels } = useExerciseProgressions(
     mode !== 'create' ? exerciseId : null
   );
+
+  // progs visual order: descending (furthest at top, closest at bottom)
+  // regressions visual order: ascending (closest at top, furthest at bottom)
+  function handleDragEnd(result: DropResult) {
+    if (!result.destination || result.destination.index === result.source.index) return;
+    const { droppableId, index: destIdx } = result.destination;
+    const srcIdx = result.source.index;
+
+    if (droppableId === 'progressions-list') {
+      const reordered = [...progs]; // descending visual order
+      const [moved] = reordered.splice(srcIdx, 1);
+      reordered.splice(destIdx, 0, moved);
+      // closest-first = reverse of descending visual order
+      updateLevels([...reordered].reverse());
+    } else if (droppableId === 'regressions-list') {
+      const reordered = [...regressions]; // ascending visual order = closest-first
+      const [moved] = reordered.splice(srcIdx, 1);
+      reordered.splice(destIdx, 0, moved);
+      updateLevels(reordered);
+    }
+  }
   const [addingDirection, setAddingDirection] = useState<ProgressionDirection | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState('');
@@ -634,6 +656,7 @@ export function ExerciseDetailDialog({
                     <h3 className="text-sm font-semibold">Progressions &amp; Regressions</h3>
 
                     {/* Chain display + inline add buttons */}
+                    <DragDropContext onDragEnd={handleDragEnd}>
                     <div className="space-y-1">
                       {/* Add Progression button (above current) */}
                       {mode === 'edit' && addingDirection !== 'progression' && (
@@ -646,27 +669,50 @@ export function ExerciseDetailDialog({
                         </button>
                       )}
 
-                      {/* Progressions (harder) — above current */}
-                      {progs.map(p => (
-                        <div key={p.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 bg-muted/40 text-sm group">
-                          <TrendingUp className="h-3.5 w-3.5 text-orange-500 shrink-0" />
-                          <span className="text-xs font-medium text-orange-600 dark:text-orange-400 w-24 shrink-0">
-                            Progression {p.level}
-                          </span>
-                          <span className="flex-1 font-medium truncate">{p.toExerciseName}</span>
-                          {p.notes && (
-                            <span className="text-xs text-muted-foreground italic truncate max-w-[140px]">{p.notes}</span>
-                          )}
-                          {mode === 'edit' && (
-                            <button
-                              onClick={() => removeProgression(p.id)}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-muted-foreground hover:text-destructive shrink-0"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
+                      {/* Progressions (harder) — above current, draggable in edit mode */}
+                      <Droppable droppableId="progressions-list" isDropDisabled={mode !== 'edit'}>
+                        {(provided) => (
+                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
+                            {progs.map((p, idx) => (
+                              <Draggable key={p.id} draggableId={p.id} index={idx} isDragDisabled={mode !== 'edit'}>
+                                {(drag, snapshot) => (
+                                  <div
+                                    ref={drag.innerRef}
+                                    {...drag.draggableProps}
+                                    className={cn(
+                                      'flex items-center gap-2 rounded-md px-2 py-1.5 bg-muted/40 text-sm group',
+                                      snapshot.isDragging && 'shadow-md ring-1 ring-primary/30 bg-background'
+                                    )}
+                                  >
+                                    {mode === 'edit' && (
+                                      <span {...drag.dragHandleProps} className="text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing shrink-0">
+                                        <GripVertical className="h-3.5 w-3.5" />
+                                      </span>
+                                    )}
+                                    <TrendingUp className="h-3.5 w-3.5 text-orange-500 shrink-0" />
+                                    <span className="text-xs font-medium text-orange-600 dark:text-orange-400 w-24 shrink-0">
+                                      Progression {p.level}
+                                    </span>
+                                    <span className="flex-1 font-medium truncate">{p.toExerciseName}</span>
+                                    {p.notes && (
+                                      <span className="text-xs text-muted-foreground italic truncate max-w-[140px]">{p.notes}</span>
+                                    )}
+                                    {mode === 'edit' && (
+                                      <button
+                                        onClick={() => removeProgression(p.id)}
+                                        className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-muted-foreground hover:text-destructive shrink-0"
+                                      >
+                                        <X className="h-3.5 w-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </Draggable>
+                            ))}
+                            {provided.placeholder}
+                          </div>
+                        )}
+                      </Droppable>
 
                       {/* Current exercise (centre) */}
                       <div className="flex items-center gap-2 rounded-md px-2 py-2 bg-primary/10 border border-primary/30 text-sm">
@@ -675,27 +721,50 @@ export function ExerciseDetailDialog({
                         <span className="text-xs text-muted-foreground">current</span>
                       </div>
 
-                      {/* Regressions (easier) — below current */}
-                      {regressions.map(p => (
-                        <div key={p.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 bg-muted/40 text-sm group">
-                          <TrendingDown className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                          <span className="text-xs font-medium text-blue-600 dark:text-blue-400 w-24 shrink-0">
-                            Regression {p.level}
-                          </span>
-                          <span className="flex-1 font-medium truncate">{p.toExerciseName}</span>
-                          {p.notes && (
-                            <span className="text-xs text-muted-foreground italic truncate max-w-[140px]">{p.notes}</span>
-                          )}
-                          {mode === 'edit' && (
-                            <button
-                              onClick={() => removeProgression(p.id)}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-muted-foreground hover:text-destructive shrink-0"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
+                      {/* Regressions (easier) — below current, draggable in edit mode */}
+                      <Droppable droppableId="regressions-list" isDropDisabled={mode !== 'edit'}>
+                        {(provided) => (
+                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
+                            {regressions.map((p, idx) => (
+                              <Draggable key={p.id} draggableId={p.id} index={idx} isDragDisabled={mode !== 'edit'}>
+                                {(drag, snapshot) => (
+                                  <div
+                                    ref={drag.innerRef}
+                                    {...drag.draggableProps}
+                                    className={cn(
+                                      'flex items-center gap-2 rounded-md px-2 py-1.5 bg-muted/40 text-sm group',
+                                      snapshot.isDragging && 'shadow-md ring-1 ring-primary/30 bg-background'
+                                    )}
+                                  >
+                                    {mode === 'edit' && (
+                                      <span {...drag.dragHandleProps} className="text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing shrink-0">
+                                        <GripVertical className="h-3.5 w-3.5" />
+                                      </span>
+                                    )}
+                                    <TrendingDown className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                    <span className="text-xs font-medium text-blue-600 dark:text-blue-400 w-24 shrink-0">
+                                      Regression {p.level}
+                                    </span>
+                                    <span className="flex-1 font-medium truncate">{p.toExerciseName}</span>
+                                    {p.notes && (
+                                      <span className="text-xs text-muted-foreground italic truncate max-w-[140px]">{p.notes}</span>
+                                    )}
+                                    {mode === 'edit' && (
+                                      <button
+                                        onClick={() => removeProgression(p.id)}
+                                        className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-muted-foreground hover:text-destructive shrink-0"
+                                      >
+                                        <X className="h-3.5 w-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </Draggable>
+                            ))}
+                            {provided.placeholder}
+                          </div>
+                        )}
+                      </Droppable>
 
                       {/* Add Regression button (below current) */}
                       {mode === 'edit' && addingDirection !== 'regression' && (
@@ -712,6 +781,7 @@ export function ExerciseDetailDialog({
                         <p className="text-xs text-muted-foreground italic px-2">No progressions or regressions defined yet.</p>
                       )}
                     </div>
+                    </DragDropContext>
 
                     {/* Add form — only in edit mode */}
                     {mode === 'edit' && (

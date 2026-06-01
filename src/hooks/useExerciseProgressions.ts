@@ -89,5 +89,26 @@ export function useExerciseProgressions(exerciseId: string | null) {
     return error;
   }, []);
 
-  return { progressions, loading, add, remove, refetch: fetch };
+  // Reorder one direction's list and persist new level numbers.
+  // `ordered` is the new ordered array (already reordered by the caller).
+  // Level is assigned by position: index 0 = level 1 (closest), etc.
+  // For progressions the visual list is reversed (level 1 at bottom), but
+  // the caller passes the array in closest-first order regardless.
+  const updateLevels = useCallback(async (ordered: ExerciseProgression[]) => {
+    const updates = ordered.map((p, i) => ({ ...p, level: i + 1 }));
+    // Optimistic update
+    setProgressions(prev => {
+      const ids = new Set(updates.map(u => u.id));
+      return [
+        ...prev.filter(p => !ids.has(p.id)),
+        ...updates,
+      ].sort((a, b) => a.direction.localeCompare(b.direction) || a.level - b.level);
+    });
+    // Persist
+    await Promise.all(updates.map(u =>
+      supabase.from('exercise_progressions').update({ level: u.level }).eq('id', u.id)
+    ));
+  }, []);
+
+  return { progressions, loading, add, remove, updateLevels, refetch: fetch };
 }
