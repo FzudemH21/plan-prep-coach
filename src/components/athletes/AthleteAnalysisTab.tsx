@@ -127,11 +127,32 @@ interface PerformanceSeries {
 
 type ChartSeries = TrainingSeries | PerformanceSeries;
 
+// ── Overview (small-multiples) types ──────────────────────────────────────────
+
+interface OverviewMethodPanel {
+  id: string;
+  methodId: string;
+  methodLabel: string;
+  paramName: string;
+  aggregation: AggregationMode;
+  unit?: string;
+  color: string;
+}
+
+interface OverviewPerfSeries {
+  id: string;
+  athleticismParameterId: string;
+  paramName: string;
+  unit?: string;
+  color: string;
+}
+
 // Raw exercise entry shape inside sets_logged JSONB
 interface ExerciseLogEntry {
   exerciseName?: string;
   methodId?: string;
   isCircuit?: boolean;
+  plannedParams?: Record<string, string>;
   sets?: Array<{
     setNumber: number;
     values: Record<string, string>;
@@ -369,6 +390,131 @@ function CustomTooltip({ active, payload, label, bucketLabelMap, seriesMap }: Cu
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ── Overview sub-components ───────────────────────────────────────────────────
+
+interface MiniMethodPanelProps {
+  panel: OverviewMethodPanel;
+  data: Array<{ label: string; value: number | null }>;
+  bucketLabelMap: Map<string, string>;
+  showXAxis: boolean;
+  onRemove: () => void;
+}
+
+function MiniMethodPanel({ panel, data, bucketLabelMap, showXAxis, onRemove }: MiniMethodPanelProps) {
+  const paramLabel = panel.unit ? `${panel.paramName} (${panel.unit})` : panel.paramName;
+  const aggLabel = panel.aggregation === 'sum' ? 'Σ' : panel.aggregation === 'mean' ? 'Ø' : 'max';
+  return (
+    <div className="relative group border-b last:border-b-0">
+      {/* Row label */}
+      <div className="absolute left-10 top-1 z-10 flex items-center gap-1.5 pointer-events-none">
+        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: panel.color }} />
+        <span className="text-[10px] font-semibold text-foreground/80 leading-none truncate max-w-[180px]">
+          {stripMethodSuffix(panel.methodLabel)}
+        </span>
+        <span className="text-[9px] text-muted-foreground/70 leading-none">
+          {paramLabel} · {aggLabel}
+        </span>
+      </div>
+      <button
+        onClick={onRemove}
+        className="absolute right-1 top-1 z-10 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity p-0.5 rounded"
+      >
+        <X className="h-3 w-3" />
+      </button>
+      <ResponsiveContainer width="100%" height={showXAxis ? 72 : 60}>
+        <BarChart data={data} margin={{ top: 18, right: 8, left: 0, bottom: showXAxis ? 2 : 0 }}>
+          {showXAxis && (
+            <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" tickLine={false} axisLine={false} />
+          )}
+          <YAxis
+            tick={{ fontSize: 9 }}
+            width={38}
+            tickCount={3}
+            tickFormatter={(v: number) => Number.isInteger(v) ? String(v) : v.toFixed(1)}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Tooltip
+            formatter={(v: number) => [
+              Number.isInteger(v) ? v : v.toFixed(1),
+              `${paramLabel} [${aggLabel}]`,
+            ]}
+            labelFormatter={(l: string) => bucketLabelMap.get(l) ?? l}
+            contentStyle={{ fontSize: 11 }}
+          />
+          <Bar dataKey="value" fill={panel.color} radius={[2, 2, 0, 0]} maxBarSize={32} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+interface OverviewPerfPanelProps {
+  series: OverviewPerfSeries[];
+  data: Array<Record<string, number | null | string>>;
+  bucketLabelMap: Map<string, string>;
+  onRemoveSeries: (id: string) => void;
+}
+
+function OverviewPerfPanel({ series, data, bucketLabelMap, onRemoveSeries }: OverviewPerfPanelProps) {
+  return (
+    <div className="relative pt-1">
+      {/* Labels row */}
+      <div className="flex flex-wrap items-center gap-2 px-2 pb-1">
+        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+          Outcomes
+        </span>
+        {series.map((s) => (
+          <span key={s.id} className="flex items-center gap-1 text-[10px]" style={{ color: s.color }}>
+            <span className="w-2 h-2 rounded-full" style={{ background: s.color }} />
+            {s.paramName}{s.unit ? ` (${s.unit})` : ''}
+            <button
+              onClick={() => onRemoveSeries(s.id)}
+              className="opacity-50 hover:opacity-100 transition-opacity ml-0.5"
+            >
+              <X className="h-2.5 w-2.5" />
+            </button>
+          </span>
+        ))}
+      </div>
+      <ResponsiveContainer width="100%" height={90}>
+        <ComposedChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
+          <XAxis dataKey="label" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+          <YAxis
+            tick={{ fontSize: 9 }}
+            width={38}
+            tickCount={3}
+            tickFormatter={(v: number) => Number.isInteger(v) ? String(v) : v.toFixed(1)}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Tooltip
+            formatter={(v: number, _name: string, entry: { dataKey?: string }) => {
+              const s = series.find((x) => x.id === entry.dataKey);
+              return [Number.isInteger(v) ? v : v.toFixed(1), s ? `${s.paramName}${s.unit ? ` (${s.unit})` : ''}` : ''];
+            }}
+            labelFormatter={(l: string) => bucketLabelMap.get(l) ?? l}
+            contentStyle={{ fontSize: 11 }}
+          />
+          {series.map((s) => (
+            <Line
+              key={s.id}
+              dataKey={s.id}
+              stroke={s.color}
+              strokeWidth={2}
+              dot={{ fill: s.color, r: 3, strokeWidth: 0 }}
+              activeDot={{ r: 5 }}
+              connectNulls={false}
+              type="monotone"
+            />
+          ))}
+        </ComposedChart>
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -636,6 +782,142 @@ export function AthleteAnalysisTab({
 
   const hasPerformanceSeries = stimulusSeries.some((s) => s.type === 'performance');
 
+  // ── Overview (small-multiples) state ─────────────────────────────────────
+
+  const [overviewPanels, setOverviewPanels] = useState<OverviewMethodPanel[]>(() => {
+    try { return JSON.parse(localStorage.getItem(`ov_panels_${athleteId}`) ?? '[]'); } catch { return []; }
+  });
+  const [overviewPerf, setOverviewPerf] = useState<OverviewPerfSeries[]>(() => {
+    try { return JSON.parse(localStorage.getItem(`ov_perf_${athleteId}`) ?? '[]'); } catch { return []; }
+  });
+
+  useEffect(() => { localStorage.setItem(`ov_panels_${athleteId}`, JSON.stringify(overviewPanels)); }, [overviewPanels, athleteId]);
+  useEffect(() => { localStorage.setItem(`ov_perf_${athleteId}`, JSON.stringify(overviewPerf)); }, [overviewPerf, athleteId]);
+
+  // Overview picker state
+  const [ovPickerOpen, setOvPickerOpen]     = useState(false);
+  const [ovPickerMode, setOvPickerMode]     = useState<'method' | 'performance'>('method');
+  const [ovPickerMethod, setOvPickerMethod] = useState('');
+  const [ovPickerParam, setOvPickerParam]   = useState('');
+  const [ovPickerAgg, setOvPickerAgg]       = useState<AggregationMode>('sum');
+  const [ovPickerPerfId, setOvPickerPerfId] = useState('');
+
+  /** Resolve first known unit for (methodId, paramName) from loaded logs' plannedParams */
+  function resolveParamUnit(methodId: string, paramName: string): string | undefined {
+    for (const log of completedLogs) {
+      const entries = parseExerciseEntries(log.sets_logged);
+      for (const entry of entries) {
+        if (entry.methodId !== methodId) continue;
+        const unit = entry.plannedParams?.[`${paramName}_unit`];
+        if (unit) return unit;
+      }
+    }
+    return undefined;
+  }
+
+  // Overview panel chart data: panelId → [{label, value}]
+  const overviewPanelData = useMemo(() => {
+    const result = new Map<string, Array<{ label: string; value: number | null }>>();
+    for (const panel of overviewPanels) {
+      const points = buckets.map((bucketStart) => {
+        const end = bucketEnd(bucketStart, granularity);
+        const inBucket = completedLogs.filter((l) =>
+          isWithinInterval(parseISO(l.date), { start: bucketStart, end })
+        );
+        const allValues: number[] = [];
+        for (const log of inBucket) {
+          const sessionIdx = log.session_id
+            ? parseInt(log.session_id.split('-').pop() ?? '0', 10) || 0 : 0;
+          const entries = parseExerciseEntries(log.sets_logged);
+          for (const entry of entries) {
+            if (entry.isCircuit) continue;
+            const methodId = resolveMethodId(entry, log.date, sessionIdx);
+            if (methodId !== panel.methodId) continue;
+            for (const set of entry.sets ?? []) {
+              if (!set.completed) continue;
+              const raw = set.values[panel.paramName];
+              if (raw === undefined) continue;
+              const num = parseFloat(raw);
+              if (!isNaN(num)) allValues.push(num);
+            }
+          }
+        }
+        let value: number | null = null;
+        if (allValues.length > 0) {
+          if (panel.aggregation === 'sum') value = allValues.reduce((a, b) => a + b, 0);
+          else if (panel.aggregation === 'mean') value = Math.round((allValues.reduce((a, b) => a + b, 0) / allValues.length) * 10) / 10;
+          else value = Math.max(...allValues);
+        }
+        return { label: bucketLabel(bucketStart, granularity), value };
+      });
+      result.set(panel.id, points);
+    }
+    return result;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overviewPanels, buckets, completedLogs, granularity, logs, scheduleMethodLookup]);
+
+  // Overview performance data: [{label, [seriesId]: value}]
+  const overviewPerfData = useMemo(() => {
+    if (overviewPerf.length === 0) return [];
+    return buckets.map((bucketStart) => {
+      const end = bucketEnd(bucketStart, granularity);
+      const point: Record<string, number | null | string> = { label: bucketLabel(bucketStart, granularity) };
+      for (const s of overviewPerf) {
+        const perfParam = performanceParameters.find((p) => p.athleticismParameterId === s.athleticismParameterId);
+        if (!perfParam) { point[s.id] = null; continue; }
+        const endYMD = toYMD(end);
+        const before = perfParam.values.filter((v) => v.recordedAt <= endYMD);
+        if (before.length === 0) { point[s.id] = null; continue; }
+        const latest = [...before].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0];
+        const num = parseFloat(latest.value);
+        point[s.id] = isNaN(num) ? null : num;
+      }
+      return point;
+    });
+  }, [overviewPerf, buckets, granularity, performanceParameters]);
+
+  function addOverviewPanel() {
+    if (!ovPickerMethod || !ovPickerParam) return;
+    if (overviewPanels.some((p) => p.methodId === ovPickerMethod && p.paramName === ovPickerParam && p.aggregation === ovPickerAgg)) return;
+    const usedColors = new Set([...overviewPanels.map((p) => p.color), ...overviewPerf.map((s) => s.color)]);
+    const color = SERIES_COLORS.find((c) => !usedColors.has(c)) ?? SERIES_COLORS[overviewPanels.length % SERIES_COLORS.length];
+    const unit = resolveParamUnit(ovPickerMethod, ovPickerParam);
+    setOverviewPanels((prev) => [...prev, {
+      id: `ov_${Date.now()}`,
+      methodId: ovPickerMethod,
+      methodLabel: ovPickerMethod,
+      paramName: ovPickerParam,
+      aggregation: ovPickerAgg,
+      unit,
+      color,
+    }]);
+    setOvPickerOpen(false);
+  }
+
+  function addOverviewPerf() {
+    if (!ovPickerPerfId) return;
+    if (overviewPerf.some((s) => s.athleticismParameterId === ovPickerPerfId)) return;
+    const usedColors = new Set([...overviewPanels.map((p) => p.color), ...overviewPerf.map((s) => s.color)]);
+    const color = SERIES_COLORS.find((c) => !usedColors.has(c)) ?? SERIES_COLORS[overviewPerf.length % SERIES_COLORS.length];
+    const def = parametersV2.find((p) => p.id === ovPickerPerfId);
+    setOverviewPerf((prev) => [...prev, {
+      id: `ov_p_${Date.now()}`,
+      athleticismParameterId: ovPickerPerfId,
+      paramName: def?.name ?? ovPickerPerfId,
+      unit: def?.unit,
+      color,
+    }]);
+    setOvPickerOpen(false);
+  }
+
+  const ovPickerParams = ovPickerMethod
+    ? Array.from(discoveredTrainingParams.get(ovPickerMethod) ?? []).sort()
+    : [];
+
+  const canAddOverview = ovPickerMode === 'method'
+    ? !!ovPickerMethod && !!ovPickerParam
+    : !!ovPickerPerfId;
+
   // ── Series picker helpers ─────────────────────────────────────────────────
 
   function openPicker() {
@@ -836,7 +1118,59 @@ export function AthleteAnalysisTab({
               </CardContent>
             </Card>
 
-            {/* ── Panel 3 — Training Stimulus ── */}
+            {/* ── Panel 3 — Stimulus Overview (small multiples) ── */}
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-base">Stimulus Overview</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      One panel per method — shared time axis — with performance outcomes below.
+                    </p>
+                  </div>
+                  <div className="flex gap-1.5 shrink-0">
+                    <Button size="sm" variant="outline" className="gap-1 h-7 text-xs px-2"
+                      onClick={() => { setOvPickerMode('method'); setOvPickerMethod(''); setOvPickerParam(''); setOvPickerAgg('sum'); setOvPickerOpen(true); }}>
+                      <Plus className="h-3 w-3" /> Method
+                    </Button>
+                    <Button size="sm" variant="outline" className="gap-1 h-7 text-xs px-2"
+                      onClick={() => { setOvPickerMode('performance'); setOvPickerPerfId(''); setOvPickerOpen(true); }}>
+                      <Plus className="h-3 w-3" /> Outcome
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="px-2 pb-2">
+                {overviewPanels.length === 0 && overviewPerf.length === 0 ? (
+                  <EmptyState label='Add method panels and performance outcomes to build the overview.' />
+                ) : (
+                  <div className="border rounded-md overflow-hidden">
+                    {overviewPanels.map((panel, idx) => (
+                      <MiniMethodPanel
+                        key={panel.id}
+                        panel={panel}
+                        data={overviewPanelData.get(panel.id) ?? []}
+                        bucketLabelMap={bucketLabelMap}
+                        showXAxis={idx === overviewPanels.length - 1 && overviewPerf.length === 0}
+                        onRemove={() => setOverviewPanels((prev) => prev.filter((p) => p.id !== panel.id))}
+                      />
+                    ))}
+                    {overviewPerf.length > 0 && (
+                      <div className="border-t">
+                        <OverviewPerfPanel
+                          series={overviewPerf}
+                          data={overviewPerfData}
+                          bucketLabelMap={bucketLabelMap}
+                          onRemoveSeries={(id) => setOverviewPerf((prev) => prev.filter((s) => s.id !== id))}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* ── Panel 4 — Training Stimulus (focused single chart) ── */}
             <Card>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between gap-3">
@@ -961,6 +1295,95 @@ export function AthleteAnalysisTab({
           </>
         )}
       </div>
+
+      {/* ── Overview picker dialog ── */}
+      <Dialog open={ovPickerOpen} onOpenChange={(o) => !o && setOvPickerOpen(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {ovPickerMode === 'method' ? 'Add Method Panel' : 'Add Performance Outcome'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            {ovPickerMode === 'method' && (
+              <>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Method</Label>
+                  {discoveredTrainingParams.size === 0 ? (
+                    <p className="text-xs text-muted-foreground py-2 text-center">
+                      No logged sessions with method data found in this period.
+                    </p>
+                  ) : (
+                    <Select value={ovPickerMethod} onValueChange={(v) => { setOvPickerMethod(v); setOvPickerParam(''); }}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select method…" /></SelectTrigger>
+                      <SelectContent>
+                        {Array.from(discoveredTrainingParams.keys()).sort().map((m) => (
+                          <SelectItem key={m} value={m}>
+                            {stripMethodSuffix(m)}
+                            {m.includes('::') && <span className="text-muted-foreground ml-1 text-xs">({m.split('::')[1]})</span>}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                {ovPickerMethod && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Parameter to display</Label>
+                    <Select value={ovPickerParam} onValueChange={setOvPickerParam}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select parameter…" /></SelectTrigger>
+                      <SelectContent>
+                        {ovPickerParams.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {ovPickerParam && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Aggregation per {granularity}</Label>
+                    <div className="flex gap-2">
+                      {(['sum', 'mean', 'max'] as AggregationMode[]).map((a) => (
+                        <Button key={a} size="sm" variant={ovPickerAgg === a ? 'default' : 'outline'}
+                          className="flex-1 capitalize" onClick={() => setOvPickerAgg(a)}>
+                          {a === 'sum' ? 'Sum Σ' : a === 'mean' ? 'Mean Ø' : 'Max'}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+            {ovPickerMode === 'performance' && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Performance Parameter</Label>
+                {availablePerfParams.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-2 text-center">
+                    No performance parameters tracked for this athlete yet.
+                  </p>
+                ) : (
+                  <Select value={ovPickerPerfId} onValueChange={setOvPickerPerfId}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select parameter…" /></SelectTrigger>
+                    <SelectContent>
+                      {availablePerfParams.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}{p.unit ? ` (${p.unit})` : ''}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOvPickerOpen(false)}>Cancel</Button>
+            <Button
+              onClick={ovPickerMode === 'method' ? addOverviewPanel : addOverviewPerf}
+              disabled={!canAddOverview}
+            >
+              {ovPickerMode === 'method' ? 'Add Panel' : 'Add Outcome'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Series picker dialog ── */}
       <Dialog open={pickerOpen} onOpenChange={(o) => !o && setPickerOpen(false)}>
