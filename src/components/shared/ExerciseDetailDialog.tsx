@@ -146,10 +146,10 @@ export function ExerciseDetailDialog({
 
   const regressions = progressionsWithNames
     .filter(p => p.direction === 'regression')
-    .sort((a, b) => b.level - a.level);  // highest level at top (furthest from current)
+    .sort((a, b) => a.level - b.level);  // level 1 closest to current (at top of regressions)
   const progs = progressionsWithNames
     .filter(p => p.direction === 'progression')
-    .sort((a, b) => a.level - b.level);  // lowest level at top (closest to current)
+    .sort((a, b) => b.level - a.level);  // level 1 closest to current (at bottom of progressions)
 
   function resetPicker() {
     setPickerExerciseId('');
@@ -781,19 +781,13 @@ export function ExerciseDetailDialog({
                             {/* Level */}
                             <div className="space-y-1">
                               <Label className="text-xs">Level (steps away)</Label>
-                              <Select
-                                value={String(pickerLevel)}
-                                onValueChange={v => setPickerLevel(Number(v))}
-                              >
-                                <SelectTrigger className="h-9">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {[1, 2, 3, 4, 5].map(n => (
-                                    <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <Input
+                                type="number"
+                                min={1}
+                                value={pickerLevel}
+                                onChange={e => setPickerLevel(Math.max(1, parseInt(e.target.value) || 1))}
+                                className="h-9 w-24"
+                              />
                             </div>
 
                             {/* Notes */}
