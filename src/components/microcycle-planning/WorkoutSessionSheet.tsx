@@ -2144,14 +2144,35 @@ export function WorkoutSessionSheet({
       .eq('coach_user_id', user.id)
       .order('direction').order('level');
 
-    setChainPickerEntries((data ?? []).map((r: Record<string, unknown>) => ({
-      id: r.id as string,
-      toExerciseId: r.to_exercise_id as string,
-      toExerciseName: (r.to_exercise_name as string) || '',
-      direction: r.direction as 'progression' | 'regression',
-      level: r.level as number,
-      notes: r.notes as string | null,
-    })));
+    // Build a name map from the already-loaded libraries context
+    const nameMap = new Map<string, string>();
+    for (const lib of libraries) {
+      const nameColId = lib.columns?.[0]?.id ?? 'exercise';
+      for (const ex of lib.exercises ?? []) {
+        const n = (ex.data?.[nameColId] ?? ex.data?.['name'] ?? '') as string;
+        if (n) nameMap.set(ex.id, n);
+      }
+    }
+
+    const entries: ChainPickerEntry[] = (data ?? []).map((r: Record<string, unknown>) => {
+      const toExId = r.to_exercise_id as string;
+      const storedName = (r.to_exercise_name as string) || '';
+      const resolvedName = storedName || nameMap.get(toExId) || '';
+      // Back-fill in DB if name was missing
+      if (!storedName && resolvedName && user) {
+        supabase.from('exercise_progressions').update({ to_exercise_name: resolvedName }).eq('id', r.id as string);
+      }
+      return {
+        id: r.id as string,
+        toExerciseId: toExId,
+        toExerciseName: resolvedName,
+        direction: r.direction as 'progression' | 'regression',
+        level: r.level as number,
+        notes: r.notes as string | null,
+      };
+    });
+
+    setChainPickerEntries(entries);
     setChainPickerLoading(false);
   };
 
@@ -3219,99 +3240,113 @@ export function WorkoutSessionSheet({
         />
       )}
 
-      {/* Progression / Regression chain picker — shown before the full library popup */}
-      <Dialog
-        open={!!chainPickerTarget}
-        onOpenChange={o => { if (!o) { setChainPickerTarget(null); setChainPickerEntries([]); } }}
-      >
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Change Exercise</DialogTitle>
-            <DialogDescription>
-              Replace <span className="font-medium text-foreground">{chainPickerTarget?.exerciseName}</span> for this session only.
-            </DialogDescription>
-          </DialogHeader>
+      {/* Progression / Regression chain picker — custom overlay so it stacks above the sheet */}
+      {chainPickerTarget && (
+        <>
+          {/* Backdrop — z-[200] sits above the sheet content (z-[110]) */}
+          <div
+            className="fixed inset-0 z-[200] bg-black/60"
+            onClick={() => { setChainPickerTarget(null); setChainPickerEntries([]); }}
+          />
+          {/* Panel */}
+          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[210] w-full max-w-sm bg-background rounded-lg border shadow-xl flex flex-col max-h-[80vh]">
+            {/* Header */}
+            <div className="px-5 pt-5 pb-3 border-b flex items-start justify-between gap-3 shrink-0">
+              <div>
+                <p className="text-base font-semibold leading-snug">Change Exercise</p>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Replace <span className="font-medium text-foreground">{chainPickerTarget.exerciseName}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => { setChainPickerTarget(null); setChainPickerEntries([]); }}
+                className="shrink-0 rounded-sm opacity-70 hover:opacity-100 transition-opacity mt-0.5"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
 
-          <div className="space-y-1.5 py-1">
-            {chainPickerLoading ? (
-              <p className="text-sm text-muted-foreground text-center py-4">Loading…</p>
-            ) : (() => {
-              const progs = chainPickerEntries.filter(e => e.direction === 'progression').sort((a, b) => b.level - a.level);
-              const regs  = chainPickerEntries.filter(e => e.direction === 'regression').sort((a, b) => a.level - b.level);
-              const renderEntry = (entry: ChainPickerEntry) => (
-                <button
-                  key={entry.id}
-                  onClick={() => {
-                    if (!chainPickerTarget) return;
-                    handleChangeExercise(chainPickerTarget.exId, {
-                      exerciseId: entry.toExerciseId,
-                      exerciseName: entry.toExerciseName,
-                      libraryId: '',
-                    });
-                    setChainPickerTarget(null);
-                    setChainPickerEntries([]);
-                  }}
-                  className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-left hover:bg-muted/70 active:bg-muted transition-colors border border-transparent hover:border-border"
-                >
-                  {entry.direction === 'progression'
-                    ? <TrendingUp className="h-4 w-4 text-orange-500 shrink-0" />
-                    : <TrendingDown className="h-4 w-4 text-blue-500 shrink-0" />}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{entry.toExerciseName || '—'}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {entry.direction === 'progression' ? 'Progression' : 'Regression'} {entry.level}
-                      {entry.notes ? ` · ${entry.notes}` : ''}
-                    </p>
-                  </div>
-                </button>
-              );
-
-              if (progs.length === 0 && regs.length === 0) {
-                return <p className="text-sm text-muted-foreground text-center py-3">No progressions or regressions defined.</p>;
-              }
-
-              return (
-                <>
-                  {progs.length > 0 && (
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Harder</p>
-                      {progs.map(renderEntry)}
+            {/* Chain list */}
+            <div className="overflow-y-auto flex-1 px-4 py-3 space-y-1.5">
+              {chainPickerLoading ? (
+                <p className="text-sm text-muted-foreground text-center py-4">Loading…</p>
+              ) : (() => {
+                const progs = chainPickerEntries.filter(e => e.direction === 'progression').sort((a, b) => b.level - a.level);
+                const regs  = chainPickerEntries.filter(e => e.direction === 'regression').sort((a, b) => a.level - b.level);
+                const renderEntry = (entry: ChainPickerEntry) => (
+                  <button
+                    key={entry.id}
+                    onClick={() => {
+                      handleChangeExercise(chainPickerTarget.exId, {
+                        exerciseId: entry.toExerciseId,
+                        exerciseName: entry.toExerciseName,
+                        libraryId: '',
+                      });
+                      setChainPickerTarget(null);
+                      setChainPickerEntries([]);
+                    }}
+                    className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-left hover:bg-muted/70 active:bg-muted transition-colors border border-transparent hover:border-border"
+                  >
+                    {entry.direction === 'progression'
+                      ? <TrendingUp className="h-4 w-4 text-orange-500 shrink-0" />
+                      : <TrendingDown className="h-4 w-4 text-blue-500 shrink-0" />}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{entry.toExerciseName || '—'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {entry.direction === 'progression' ? 'Progression' : 'Regression'} {entry.level}
+                        {entry.notes ? ` · ${entry.notes}` : ''}
+                      </p>
                     </div>
-                  )}
-                  <div className="flex items-center gap-2.5 rounded-lg px-3 py-2 bg-muted/40 border border-border/60">
-                    <div className="h-4 w-4 rounded-full bg-primary shrink-0" />
-                    <p className="text-sm font-medium flex-1 truncate">{chainPickerTarget?.exerciseName}</p>
-                    <span className="text-xs text-muted-foreground">current</span>
-                  </div>
-                  {regs.length > 0 && (
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Easier</p>
-                      {regs.map(renderEntry)}
-                    </div>
-                  )}
-                </>
-              );
-            })()}
-          </div>
+                  </button>
+                );
 
-          <div className="pt-1 border-t">
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => {
-                if (!chainPickerTarget) return;
-                setChangeExerciseTarget(chainPickerTarget.exId);
-                setChainPickerTarget(null);
-                setChainPickerEntries([]);
-                setIsLibraryOpen(true);
-              }}
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Browse library…
-            </Button>
+                if (progs.length === 0 && regs.length === 0) {
+                  return <p className="text-sm text-muted-foreground text-center py-4">No progressions or regressions defined.</p>;
+                }
+
+                return (
+                  <>
+                    {progs.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Harder</p>
+                        {progs.map(renderEntry)}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2.5 rounded-lg px-3 py-2 bg-muted/40 border border-border/60">
+                      <div className="h-4 w-4 rounded-full bg-primary shrink-0" />
+                      <p className="text-sm font-medium flex-1 truncate">{chainPickerTarget.exerciseName}</p>
+                      <span className="text-xs text-muted-foreground">current</span>
+                    </div>
+                    {regs.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Easier</p>
+                        {regs.map(renderEntry)}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Browse library fallback */}
+            <div className="px-4 pb-4 pt-3 border-t shrink-0">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setChangeExerciseTarget(chainPickerTarget.exId);
+                  setChainPickerTarget(null);
+                  setChainPickerEntries([]);
+                  setIsLibraryOpen(true);
+                }}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Browse library…
+              </Button>
+            </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </>
+      )}
 
       {/* Circuit edit dialog — opens CircuitBuilderDialog pre-filled with current session circuit data */}
       {circuitDetailExercise && (
