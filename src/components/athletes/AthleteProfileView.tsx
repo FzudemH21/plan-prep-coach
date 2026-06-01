@@ -31,7 +31,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Save, Trash2, X, Calendar, User, Mic, MicOff, Clock, Files, TrendingUp, Settings } from 'lucide-react';
+import { Plus, Save, Trash2, X, Calendar, User, Mic, MicOff, Clock, Files, TrendingUp, Settings, BarChart2 } from 'lucide-react';
 import { useSpeechInput } from '@/hooks/useSpeechInput';
 import {
   Athlete,
@@ -47,7 +47,9 @@ import { AthleteCalendarView } from './AthleteCalendarView';
 import { AthleteDocumentsTab } from './AthleteDocumentsTab';
 import { AthletePerformanceTab } from './AthletePerformanceTab';
 import { AthleteSettingsTab } from './AthleteSettingsTab';
+import { AthleteAnalysisTab } from './AthleteAnalysisTab';
 import { useAthletes } from '@/hooks/useAthletes';
+import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 
 // ── Sport tag input ───────────────────────────────────────────────────────────
 
@@ -127,6 +129,8 @@ export function AthleteProfileView({
   );
   const { isListening: isListeningNote, toggle: toggleNoteMic, isSupported: noteMicSupported } =
     useSpeechInput(handleVoiceNoteResult);
+
+  const { data: parametersData } = useParametersDataV2();
 
   // Derive all notes (newest-first), migrating legacy `notes` string if needed
   const allNotes = useMemo<AthleteNote[]>(() => {
@@ -230,6 +234,10 @@ export function AthleteProfileView({
           <TabsTrigger value="documents" className="gap-2">
             <Files className="h-4 w-4" />
             Documents
+          </TabsTrigger>
+          <TabsTrigger value="analysis" className="gap-2">
+            <BarChart2 className="h-4 w-4" />
+            Analysis
           </TabsTrigger>
           <TabsTrigger value="settings" className="gap-2">
             <Settings className="h-4 w-4" />
@@ -623,6 +631,15 @@ export function AthleteProfileView({
           <ScrollArea className="h-full">
             <AthleteDocumentsTab athleteId={athlete.id} />
           </ScrollArea>
+        </TabsContent>
+
+        <TabsContent value="analysis" className="flex-1 mt-0 min-h-0">
+          <AthleteAnalysisTab
+            athleteId={athlete.id}
+            connectionId=""
+            performanceParameters={athleteData.athletePerformanceParameters.filter(p => p.athleteId === athlete.id)}
+            parametersV2={parametersData.parameters}
+          />
         </TabsContent>
 
         <TabsContent value="settings" className="flex-1 mt-0 min-h-0">
