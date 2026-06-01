@@ -742,20 +742,54 @@ export default function AthleteSessionPage() {
     setSwapChainLoading(true);
     setSwapSelectedEntry(null);
     setSwapReason('');
-    const { data } = await supabase
+
+    const { data: progData } = await supabase
       .from('exercise_progressions')
       .select('id, to_exercise_id, to_exercise_name, direction, level, notes')
       .eq('from_exercise_id', ex.exerciseLibraryId)
       .eq('coach_user_id', connection.coachUserId)
       .order('direction').order('level');
-    setSwapChain((data ?? []).map((r: Record<string, unknown>) => ({
+
+    const entries: ChainEntry[] = (progData ?? []).map((r: Record<string, unknown>) => ({
       id: r.id as string,
       toExerciseId: r.to_exercise_id as string,
       toExerciseName: (r.to_exercise_name as string) || '',
       direction: r.direction as 'progression' | 'regression',
       level: r.level as number,
       notes: r.notes as string | null,
-    })));
+    }));
+
+    // Back-fill missing names from coach's exercise library
+    const needsName = entries.filter(e => !e.toExerciseName);
+    if (needsName.length > 0) {
+      const { data: libRow } = await supabase
+        .from('custom_libraries')
+        .select('data')
+        .eq('user_id', connection.coachUserId)
+        .single();
+      if (libRow?.data) {
+        type RawLib = { id: string; columns: Array<{ id: string }>; exercises: Array<{ id: string; data: Record<string, unknown> }> };
+        const libs = (libRow.data as { libraries?: RawLib[] }).libraries ?? [];
+        const nameMap = new Map<string, string>();
+        for (const lib of libs) {
+          const nameColId = lib.columns?.[0]?.id ?? 'exercise';
+          for (const exc of lib.exercises ?? []) {
+            const n = (exc.data?.[nameColId] ?? exc.data?.['name'] ?? '') as string;
+            if (n) nameMap.set(exc.id, n);
+          }
+        }
+        for (const entry of needsName) {
+          const resolved = nameMap.get(entry.toExerciseId);
+          if (resolved) {
+            entry.toExerciseName = resolved;
+            // Back-fill in DB so future loads are instant
+            supabase.from('exercise_progressions').update({ to_exercise_name: resolved }).eq('id', entry.id);
+          }
+        }
+      }
+    }
+
+    setSwapChain(entries);
     setSwapChainLoading(false);
   }
 
