@@ -158,11 +158,23 @@ export function ExerciseDetailDialog({
     }))).sort((a, b) => a.name.localeCompare(b.name)),
   [libraries]);
 
+  // Silently back-fill missing to_exercise_name values in the DB for older entries
+  React.useEffect(() => {
+    const toFix = progressions.filter(p => !p.toExerciseName);
+    if (toFix.length === 0) return;
+    import('@/lib/supabase').then(({ supabase }) => {
+      toFix.forEach(p => {
+        const name = allExercises.find(e => e.id === p.toExerciseId)?.name;
+        if (name) supabase.from('exercise_progressions').update({ to_exercise_name: name }).eq('id', p.id);
+      });
+    });
+  }, [progressions, allExercises]);
+
   // Resolve exercise names for loaded progressions
   const progressionsWithNames = React.useMemo(() =>
     progressions.map(p => ({
       ...p,
-      toExerciseName: allExercises.find(e => e.id === p.toExerciseId)?.name ?? p.toExerciseId,
+      toExerciseName: allExercises.find(e => e.id === p.toExerciseId)?.name ?? p.toExerciseName ?? p.toExerciseId,
     })),
   [progressions, allExercises]);
 

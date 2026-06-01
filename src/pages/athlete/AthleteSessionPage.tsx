@@ -1817,25 +1817,22 @@ export default function AthleteSessionPage() {
           onClose={() => setDetailTarget(null)}
         />
 
-        {/* ── Swap sheet ───────────────────────────────────────────────────── */}
-        <Sheet open={!!swapSheetEx} onOpenChange={o => { if (!o) { setSwapSheetEx(null); setSwapSelectedEntry(null); setSwapReason(''); } }}>
-          <SheetContent
-            side="bottom"
-            className="sm:w-[480px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2 rounded-t-2xl max-h-[80vh] flex flex-col p-0"
-          >
-            <SheetHeader className="px-5 pt-5 pb-3 border-b shrink-0">
-              <SheetTitle className="text-base text-left">Adjust exercise</SheetTitle>
-              <p className="text-xs text-muted-foreground text-left">
-                Select a progression or regression to replace <span className="font-medium">{swapSheetEx?.name}</span> for this session only.
+        {/* ── Swap dialog (centered) ────────────────────────────────────────── */}
+        <Dialog open={!!swapSheetEx} onOpenChange={o => { if (!o) { setSwapSheetEx(null); setSwapSelectedEntry(null); setSwapReason(''); } }}>
+          <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2 rounded-2xl max-h-[85vh] flex flex-col p-0 gap-0">
+            <DialogHeader className="px-5 pt-5 pb-3 border-b shrink-0">
+              <DialogTitle className="text-base text-left">Adjust exercise</DialogTitle>
+              <p className="text-xs text-muted-foreground text-left mt-0.5">
+                Replace <span className="font-medium">{swapSheetEx?.name}</span> for this session only.
               </p>
-            </SheetHeader>
+            </DialogHeader>
 
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-1.5">
               {swapChainLoading ? (
                 <p className="text-sm text-muted-foreground text-center py-6">Loading…</p>
               ) : swapChain.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-6">
-                  No progressions or regressions defined for this exercise yet.
+                  No progressions or regressions defined for this exercise.
                 </p>
               ) : (() => {
                 const chainProgs = swapChain.filter(e => e.direction === 'progression').sort((a, b) => b.level - a.level);
@@ -1858,7 +1855,7 @@ export default function AthleteSessionPage() {
                         : <TrendingDown className="h-4 w-4 text-blue-500 shrink-0" />
                       }
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold truncate">{entry.toExerciseName || entry.toExerciseId}</p>
+                        <p className="text-sm font-semibold truncate">{entry.toExerciseName || '—'}</p>
                         <p className="text-xs text-muted-foreground">
                           {entry.direction === 'progression' ? 'Progression' : 'Regression'} {entry.level}
                           {entry.notes ? ` · ${entry.notes}` : ''}
@@ -1876,7 +1873,6 @@ export default function AthleteSessionPage() {
                         {chainProgs.map(renderEntry)}
                       </div>
                     )}
-                    {/* Current */}
                     <div className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 bg-primary/10 border border-primary/30">
                       <div className="h-4 w-4 rounded-full bg-primary shrink-0" />
                       <p className="text-sm font-semibold flex-1">{swapSheetEx?.name}</p>
@@ -1893,7 +1889,6 @@ export default function AthleteSessionPage() {
               })()}
             </div>
 
-            {/* Reason + confirm — shown after selecting an entry */}
             {swapSelectedEntry && (
               <div className="px-5 pb-6 pt-3 border-t space-y-3 shrink-0">
                 <div className="space-y-1.5">
@@ -1906,12 +1901,12 @@ export default function AthleteSessionPage() {
                   />
                 </div>
                 <Button className="w-full" onClick={applySwap}>
-                  Swap for {swapSelectedEntry.toExerciseName || swapSelectedEntry.toExerciseId}
+                  Swap for {swapSelectedEntry.toExerciseName || '—'}
                 </Button>
               </div>
             )}
-          </SheetContent>
-        </Sheet>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
