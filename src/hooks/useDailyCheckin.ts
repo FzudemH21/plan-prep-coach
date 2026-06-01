@@ -5,9 +5,9 @@ import { useAuth } from '@/hooks/useAuth';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface PainArea {
-  areaId: number;
-  areaLabel: string;
-  severity: number; // NRS 0–10
+  regionKey: string;  // e.g. "5-L", "5-R", "16-R", "1"
+  areaLabel: string;  // e.g. "Left Elbow", "Right Knee", "Head / Face"
+  severity: number;   // NRS 0–10
 }
 
 export interface DailyCheckin {
