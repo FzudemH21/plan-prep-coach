@@ -1210,6 +1210,7 @@ export function TrainingCalendarView({
         }}
         onSelectExercises={handleExercisesSelectedFromLibrary}
         selectedExerciseIds={[]}
+        singleSelect={true}
         onExerciseCreated={(exercise) => {
           // When a new exercise is created in the popup, directly add it to the selection flow
           setSelectedExercisesForMethod([exercise]);

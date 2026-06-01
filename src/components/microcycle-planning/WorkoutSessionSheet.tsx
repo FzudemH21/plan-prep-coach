@@ -3117,7 +3117,7 @@ export function WorkoutSessionSheet({
         onSelectExercises={handleExercisesSelected}
         selectedExerciseIds={[]}
         onExerciseCreated={handleExerciseCreated}
-        singleSelect={!!changeExerciseTarget}
+        singleSelect={true}
       />
 
       {/* Method Selection Dialog - conditionally render ad-hoc or regular */}

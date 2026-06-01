@@ -599,6 +599,7 @@ export function CircuitBuilderDialog({
         onClose={() => setIsPickerOpen(false)}
         onSelectExercises={handleExercisesSelected}
         selectedExerciseIds={[]}
+        singleSelect={true}
         onExerciseCreated={(ex) => handleExercisesSelected([ex])}
       />
     </>
