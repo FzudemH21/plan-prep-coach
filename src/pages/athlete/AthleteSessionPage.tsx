@@ -479,11 +479,14 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
         <thead>
           <tr className="border-b bg-muted/30">
             <th className="text-center py-2 px-2 text-xs text-muted-foreground font-semibold w-8">#</th>
-            {columns.map(col => (
-              <th key={col} className="text-center py-2 px-2 text-xs text-muted-foreground font-semibold">
-                {col}
-              </th>
-            ))}
+            {columns.map(col => {
+              const unit = exercise.plannedParams?.[`${col}_unit`] as string | undefined;
+              return (
+                <th key={col} className="text-center py-2 px-2 text-xs text-muted-foreground font-semibold">
+                  {unit ? `${col} (${unit})` : col}
+                </th>
+              );
+            })}
             {/* Mark-all / unmark-all header button — always tappable */}
             <th className="w-10 py-2 text-center">
               <button
@@ -1308,9 +1311,14 @@ export default function AthleteSessionPage() {
                                       <thead>
                                         <tr className="text-muted-foreground">
                                           <th className="text-left font-normal pb-1 pr-4 w-5">#</th>
-                                          {paramNames.map(p => (
-                                            <th key={p} className="text-left font-normal pb-1 pr-4">{p}</th>
-                                          ))}
+                                          {paramNames.map(p => {
+                                            const unit = ex.plannedParams?.[`${p}_unit`] as string | undefined;
+                                            return (
+                                              <th key={p} className="text-left font-normal pb-1 pr-4">
+                                                {unit ? `${p} (${unit})` : p}
+                                              </th>
+                                            );
+                                          })}
                                         </tr>
                                       </thead>
                                       <tbody>

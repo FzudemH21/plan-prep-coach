@@ -238,9 +238,14 @@ function ExerciseLogCard({ entry }: { entry: SetLogEntry }) {
             <thead>
               <tr className="border-b text-muted-foreground">
                 <th className="text-left px-3 py-1.5 font-medium w-12">Set</th>
-                {paramNames.map((p) => (
-                  <th key={p} className="text-right px-3 py-1.5 font-medium">{p}</th>
-                ))}
+                {paramNames.map((p) => {
+                  const unit = entry.plannedParams?.[`${p}_unit`];
+                  return (
+                    <th key={p} className="text-right px-3 py-1.5 font-medium">
+                      {unit ? `${p} (${unit})` : p}
+                    </th>
+                  );
+                })}
                 {/* When no param values were logged, show a Status column */}
                 {paramNames.length === 0 && (
                   <th className="text-right px-3 py-1.5 font-medium">Status</th>
