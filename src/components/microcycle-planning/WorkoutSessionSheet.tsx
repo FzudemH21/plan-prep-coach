@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, Save, PanelRightClose, PanelRight, Pencil, MessageSquare, ChevronDown, X, Trophy, Calendar as CalendarIcon, Bot } from 'lucide-react';
+import { Plus, Save, PanelRightClose, PanelRight, Pencil, MessageSquare, ChevronDown, X, Trophy, Calendar as CalendarIcon, Bot, TrendingUp, TrendingDown, Check, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { WorkoutSection, WorkoutExercise, WorkoutSession, SupersetMapping } from '@/types/workout';
 import { IntensityLevel } from '@/types/training';
@@ -27,6 +27,8 @@ import { ExerciseDetailDialog } from '@/components/shared/ExerciseDetailDialog';
 import { CircuitBuilderDialog } from '@/components/templates/CircuitBuilderDialog';
 import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import type { Circuit } from '@/contexts/CustomLibrariesContext';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { format, parseISO } from 'date-fns';
 import { getParametersForMethod } from '@/data/methodParameters';
@@ -167,6 +169,7 @@ export function WorkoutSessionSheet({
   forceParamRefresh,
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const { libraries, updateExerciseInLibrary } = useCustomLibraries();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
@@ -200,6 +203,12 @@ export function WorkoutSessionSheet({
 
   // Change exercise library popup state
   const [changeExerciseTarget, setChangeExerciseTarget] = useState<string | null>(null);
+
+  // Progression/regression chain picker state
+  interface ChainPickerEntry { id: string; toExerciseId: string; toExerciseName: string; direction: 'progression' | 'regression'; level: number; notes: string | null; }
+  const [chainPickerTarget, setChainPickerTarget] = useState<{ exId: string; exerciseId: string; exerciseName: string } | null>(null);
+  const [chainPickerEntries, setChainPickerEntries] = useState<ChainPickerEntry[]>([]);
+  const [chainPickerLoading, setChainPickerLoading] = useState(false);
 
   // Parameter visibility overrides (loaded from localStorage, saved on save)
   const [parameterVisibilityOverrides, setParameterVisibilityOverrides] = useState<ParameterVisibilityOverrides>(() => {
@@ -2113,9 +2122,37 @@ export function WorkoutSessionSheet({
   };
 
   // Handler to open the full library popup for changing an exercise
-  const handleOpenChangeLibrary = (exerciseId: string) => {
-    setChangeExerciseTarget(exerciseId);
-    setIsLibraryOpen(true);
+  const handleOpenChangeLibrary = async (exerciseId: string) => {
+    if (!user) { setChangeExerciseTarget(exerciseId); setIsLibraryOpen(true); return; }
+
+    // Find the WorkoutExercise to get the library exercise ID
+    let targetEx: WorkoutExercise | undefined;
+    for (const sec of workoutSections) {
+      targetEx = sec.exercises.find(e => e.id === exerciseId);
+      if (targetEx) break;
+    }
+    if (!targetEx?.exerciseId) { setChangeExerciseTarget(exerciseId); setIsLibraryOpen(true); return; }
+
+    setChainPickerLoading(true);
+    setChainPickerTarget({ exId: exerciseId, exerciseId: targetEx.exerciseId, exerciseName: targetEx.exerciseName });
+    setChainPickerEntries([]);
+
+    const { data } = await supabase
+      .from('exercise_progressions')
+      .select('id, to_exercise_id, to_exercise_name, direction, level, notes')
+      .eq('from_exercise_id', targetEx.exerciseId)
+      .eq('coach_user_id', user.id)
+      .order('direction').order('level');
+
+    setChainPickerEntries((data ?? []).map((r: Record<string, unknown>) => ({
+      id: r.id as string,
+      toExerciseId: r.to_exercise_id as string,
+      toExerciseName: (r.to_exercise_name as string) || '',
+      direction: r.direction as 'progression' | 'regression',
+      level: r.level as number,
+      notes: r.notes as string | null,
+    })));
+    setChainPickerLoading(false);
   };
 
   const handleExerciseNotesChange = (exerciseId: string, notes: string) => {
@@ -3181,6 +3218,100 @@ export function WorkoutSessionSheet({
           mode="edit"
         />
       )}
+
+      {/* Progression / Regression chain picker — shown before the full library popup */}
+      <Dialog
+        open={!!chainPickerTarget}
+        onOpenChange={o => { if (!o) { setChainPickerTarget(null); setChainPickerEntries([]); } }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Change Exercise</DialogTitle>
+            <DialogDescription>
+              Replace <span className="font-medium text-foreground">{chainPickerTarget?.exerciseName}</span> for this session only.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-1.5 py-1">
+            {chainPickerLoading ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Loading…</p>
+            ) : (() => {
+              const progs = chainPickerEntries.filter(e => e.direction === 'progression').sort((a, b) => b.level - a.level);
+              const regs  = chainPickerEntries.filter(e => e.direction === 'regression').sort((a, b) => a.level - b.level);
+              const renderEntry = (entry: ChainPickerEntry) => (
+                <button
+                  key={entry.id}
+                  onClick={() => {
+                    if (!chainPickerTarget) return;
+                    handleChangeExercise(chainPickerTarget.exId, {
+                      exerciseId: entry.toExerciseId,
+                      exerciseName: entry.toExerciseName,
+                      libraryId: '',
+                    });
+                    setChainPickerTarget(null);
+                    setChainPickerEntries([]);
+                  }}
+                  className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-left hover:bg-muted/70 active:bg-muted transition-colors border border-transparent hover:border-border"
+                >
+                  {entry.direction === 'progression'
+                    ? <TrendingUp className="h-4 w-4 text-orange-500 shrink-0" />
+                    : <TrendingDown className="h-4 w-4 text-blue-500 shrink-0" />}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{entry.toExerciseName || '—'}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {entry.direction === 'progression' ? 'Progression' : 'Regression'} {entry.level}
+                      {entry.notes ? ` · ${entry.notes}` : ''}
+                    </p>
+                  </div>
+                </button>
+              );
+
+              if (progs.length === 0 && regs.length === 0) {
+                return <p className="text-sm text-muted-foreground text-center py-3">No progressions or regressions defined.</p>;
+              }
+
+              return (
+                <>
+                  {progs.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Harder</p>
+                      {progs.map(renderEntry)}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2.5 rounded-lg px-3 py-2 bg-muted/40 border border-border/60">
+                    <div className="h-4 w-4 rounded-full bg-primary shrink-0" />
+                    <p className="text-sm font-medium flex-1 truncate">{chainPickerTarget?.exerciseName}</p>
+                    <span className="text-xs text-muted-foreground">current</span>
+                  </div>
+                  {regs.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Easier</p>
+                      {regs.map(renderEntry)}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+
+          <div className="pt-1 border-t">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                if (!chainPickerTarget) return;
+                setChangeExerciseTarget(chainPickerTarget.exId);
+                setChainPickerTarget(null);
+                setChainPickerEntries([]);
+                setIsLibraryOpen(true);
+              }}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Browse library…
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Circuit edit dialog — opens CircuitBuilderDialog pre-filled with current session circuit data */}
       {circuitDetailExercise && (
