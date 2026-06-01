@@ -1,9 +1,12 @@
+import { useState, useEffect } from 'react';
 import { BedDouble, Dumbbell, ChevronRight, Activity, CalendarDays, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent, SessionLog } from '@/hooks/useAthleteApp';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { IntensityBadge, getDotColor } from '@/components/athlete-app/IntensityBadge';
+import { DailyCheckinSheet } from '@/components/athlete-app/DailyCheckinSheet';
+import { useDailyCheckin } from '@/hooks/useDailyCheckin';
 
 // ── Date / greeting helpers ───────────────────────────────────────────────────
 
@@ -237,6 +240,18 @@ function UpcomingStrip({ schedule }: { schedule: AthleteScheduleEntry[] }) {
 
 export default function AthleteTodayPage() {
   const { connection, schedule, loading, error, getTodayEntry, getSessionLog } = useAthleteApp();
+  const athleteId = connection?.athleteLocalId ?? null;
+  const { todayCheckin, saveCheckin } = useDailyCheckin(athleteId);
+  const [checkinOpen, setCheckinOpen] = useState(false);
+
+  // Open check-in sheet once per day if not yet completed
+  useEffect(() => {
+    if (!loading && todayCheckin === null) {
+      // Small delay so the Today tab renders first
+      const t = setTimeout(() => setCheckinOpen(true), 600);
+      return () => clearTimeout(t);
+    }
+  }, [loading, todayCheckin]);
 
   if (loading) {
     return (
@@ -257,20 +272,29 @@ export default function AthleteTodayPage() {
   const todayEntry = getTodayEntry();
 
   return (
-    <div className="p-4 space-y-6">
-      {/* Greeting */}
-      <div>
-        <h1 className="text-2xl font-bold">
-          {getGreeting()}{connection ? `, ${connection.athleteName.split(' ')[0]}` : ''}!
-        </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">{formatDate(new Date())}</p>
+    <>
+      <DailyCheckinSheet
+        open={checkinOpen}
+        onClose={() => setCheckinOpen(false)}
+        onSave={saveCheckin}
+        athleteName={connection?.athleteName}
+      />
+
+      <div className="p-4 space-y-6">
+        {/* Greeting */}
+        <div>
+          <h1 className="text-2xl font-bold">
+            {getGreeting()}{connection ? `, ${connection.athleteName.split(' ')[0]}` : ''}!
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{formatDate(new Date())}</p>
+        </div>
+
+        {/* Today's schedule — always rendered (shows Rest Day if no sessions/events) */}
+        <TodaySchedule entry={todayEntry} getSessionLog={getSessionLog} />
+
+        {/* Upcoming strip */}
+        <UpcomingStrip schedule={schedule} />
       </div>
-
-      {/* Today's schedule — always rendered (shows Rest Day if no sessions/events) */}
-      <TodaySchedule entry={todayEntry} getSessionLog={getSessionLog} />
-
-      {/* Upcoming strip */}
-      <UpcomingStrip schedule={schedule} />
-    </div>
+    </>
   );
 }
