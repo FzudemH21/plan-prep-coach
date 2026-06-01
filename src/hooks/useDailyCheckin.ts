@@ -10,14 +10,11 @@ export interface PainArea {
   severity: number; // NRS 0–10
 }
 
-export type IllnessSeverity = 'mild' | 'moderate' | 'severe';
-export type IllnessType = 'cold_flu' | 'stomach' | 'fever' | 'other';
-
 export interface DailyCheckin {
   id: string;
   athleteId: string;
   date: string; // yyyy-MM-dd
-  // McLean 5-item (1–5)
+  // McLean 5-item (1–5, higher = better)
   wellnessFatigue: number | null;
   wellnessSleep: number | null;
   wellnessSoreness: number | null;
@@ -26,11 +23,11 @@ export interface DailyCheckin {
   // Pain
   hasPain: boolean;
   painAreas: PainArea[];
-  // Illness
+  // Illness — OSTRC-H symptom checklist
   hasIllness: boolean;
-  illnessType: IllnessType | null;
-  illnessTypeOther: string | null;
-  illnessSeverity: IllnessSeverity | null;
+  illnessSymptoms: string[];    // array of symptom IDs
+  illnessSymptomOther: string;  // free text for 'other'
+  illnessNrs: number | null;    // overall illness severity NRS 0–10
   createdAt: string;
 }
 
@@ -44,12 +41,12 @@ export interface DailyCheckinInput {
   hasPain: boolean;
   painAreas: PainArea[];
   hasIllness: boolean;
-  illnessType: IllnessType | null;
-  illnessTypeOther: string | null;
-  illnessSeverity: IllnessSeverity | null;
+  illnessSymptoms: string[];
+  illnessSymptomOther: string;
+  illnessNrs: number | null;
 }
 
-// ── DB row shape ──────────────────────────────────────────────────────────────
+// ── DB row ────────────────────────────────────────────────────────────────────
 
 interface DbRow {
   id: string;
@@ -63,9 +60,9 @@ interface DbRow {
   has_pain: boolean;
   pain_areas: PainArea[];
   has_illness: boolean;
-  illness_type: IllnessType | null;
-  illness_type_other: string | null;
-  illness_severity: IllnessSeverity | null;
+  illness_symptoms: string[];
+  illness_symptom_other: string;
+  illness_nrs: number | null;
   created_at: string;
 }
 
@@ -82,9 +79,9 @@ function fromDb(row: DbRow): DailyCheckin {
     hasPain: row.has_pain,
     painAreas: row.pain_areas ?? [],
     hasIllness: row.has_illness,
-    illnessType: row.illness_type,
-    illnessTypeOther: row.illness_type_other,
-    illnessSeverity: row.illness_severity,
+    illnessSymptoms: row.illness_symptoms ?? [],
+    illnessSymptomOther: row.illness_symptom_other ?? '',
+    illnessNrs: row.illness_nrs,
     createdAt: row.created_at,
   };
 }
@@ -94,7 +91,6 @@ function fromDb(row: DbRow): DailyCheckin {
 export function useDailyCheckin(athleteId: string | null) {
   const { user } = useAuth();
   const [todayCheckin, setTodayCheckin] = useState<DailyCheckin | null | undefined>(undefined);
-  // undefined = not yet loaded, null = loaded but none exists
   const [recentCheckins, setRecentCheckins] = useState<DailyCheckin[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -104,7 +100,6 @@ export function useDailyCheckin(athleteId: string | null) {
     if (!athleteId) { setLoading(false); return; }
     setLoading(true);
     try {
-      // Today's check-in
       const { data: todayRow } = await supabase
         .from('athlete_daily_checkins')
         .select('*')
@@ -114,7 +109,6 @@ export function useDailyCheckin(athleteId: string | null) {
 
       setTodayCheckin(todayRow ? fromDb(todayRow as DbRow) : null);
 
-      // Last 90 days for the analysis tab
       const ninetyDaysAgo = new Date();
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
       const { data: recent } = await supabase
@@ -145,9 +139,9 @@ export function useDailyCheckin(athleteId: string | null) {
       has_pain: input.hasPain,
       pain_areas: input.painAreas,
       has_illness: input.hasIllness,
-      illness_type: input.illnessType,
-      illness_type_other: input.illnessTypeOther,
-      illness_severity: input.illnessSeverity,
+      illness_symptoms: input.illnessSymptoms,
+      illness_symptom_other: input.illnessSymptomOther,
+      illness_nrs: input.illnessNrs,
     };
     const { data, error } = await supabase
       .from('athlete_daily_checkins')
