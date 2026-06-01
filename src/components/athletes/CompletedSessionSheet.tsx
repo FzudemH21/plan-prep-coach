@@ -232,8 +232,6 @@ function ExerciseLogCard({ entry }: { entry: SetLogEntry }) {
 
       {noSetsAtAll ? (
         <p className="px-3 py-2 text-xs text-muted-foreground italic">No sets logged.</p>
-      ) : paramNames.length === 0 && !allSetsSkipped ? (
-        <p className="px-3 py-2 text-xs text-muted-foreground">No set-by-set data logged.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
@@ -243,6 +241,10 @@ function ExerciseLogCard({ entry }: { entry: SetLogEntry }) {
                 {paramNames.map((p) => (
                   <th key={p} className="text-right px-3 py-1.5 font-medium">{p}</th>
                 ))}
+                {/* When no param values were logged, show a Status column */}
+                {paramNames.length === 0 && (
+                  <th className="text-right px-3 py-1.5 font-medium">Status</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -282,9 +284,18 @@ function ExerciseLogCard({ entry }: { entry: SetLogEntry }) {
                         key={p}
                         className={`text-right px-3 py-1.5 tabular-nums ${skipped ? 'text-red-400 dark:text-red-500 line-through' : ''}`}
                       >
-                        {skipped ? (set.values[p] || '—') : (set.values[p] || '—')}
+                        {set.values[p] || '—'}
                       </td>
                     ))}
+                    {/* Status column when no params were logged */}
+                    {paramNames.length === 0 && (
+                      <td className="text-right px-3 py-1.5">
+                        {skipped
+                          ? <span className="text-red-400 dark:text-red-500">Skipped</span>
+                          : <span className="text-green-600 dark:text-green-400">✓ Done</span>
+                        }
+                      </td>
+                    )}
                   </tr>
                 );
               })}
