@@ -29,16 +29,18 @@ interface ExerciseLibraryPopupProps {
   onSelectExercises: (exercises: ExerciseSelection[]) => void;
   selectedExerciseIds: string[];
   onExerciseCreated: (exercise: ExerciseSelection) => void;
-  singleSelect?: boolean; // When true, allows only one exercise selection (for change exercise mode)
+  singleSelect?: boolean; // When true, radio-style single selection with explicit confirm
+  title?: string; // Override the dialog title
 }
 
-export function ExerciseLibraryPopup({ 
-  isOpen, 
-  onClose, 
-  onSelectExercises, 
+export function ExerciseLibraryPopup({
+  isOpen,
+  onClose,
+  onSelectExercises,
   selectedExerciseIds,
   onExerciseCreated,
   singleSelect = false,
+  title,
 }: ExerciseLibraryPopupProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<string>('');
@@ -239,30 +241,15 @@ export function ExerciseLibraryPopup({
 
   const handleItemSelect = (exerciseId: string, isSelected: boolean) => {
     if (singleSelect) {
-      // In single-select mode, directly select and confirm
-      const exercise = filteredAndSortedExercises.find(ex => ex.id === exerciseId);
-      if (!exercise) return;
-      
-      // Get exercise name from appropriate field based on library
-      let exerciseName = 'Unknown Exercise';
-      const library = allLibraries[activeTab];
-      if (library && library.columns && library.columns.length > 0) {
-        const firstColumn = library.columns[0];
-        exerciseName = exercise[firstColumn.key] || 'Unknown Exercise';
+      // Radio behavior: tick one replaces the previous selection
+      if (isSelected) {
+        setSelectedItems(new Set([exerciseId]));
       } else {
-        exerciseName = exercise.name || 'Unknown Exercise';
+        setSelectedItems(new Set());
       }
-
-      onSelectExercises([{
-        id: `${exercise.library}-${exerciseId}-${Date.now()}`,
-        exerciseId: exerciseId,
-        exerciseName: exerciseName,
-        library: exercise.library
-      }]);
-      handleClose();
       return;
     }
-    
+
     // Multi-select mode
     const newSelected = new Set(selectedItems);
     if (isSelected) {
@@ -274,18 +261,18 @@ export function ExerciseLibraryPopup({
   };
 
   const handleConfirm = () => {
+    // Search across ALL library data, not just the active tab,
+    // so selections survive a tab switch before confirming.
+    const allExercises = Object.values(libraryData).flat();
+
     const selectedExercises: ExerciseSelection[] = Array.from(selectedItems).map(id => {
-      const exercise = filteredAndSortedExercises.find(ex => ex.id === id);
+      const exercise = allExercises.find(ex => ex.id === id);
       if (!exercise) throw new Error('Exercise not found');
 
-      // Get exercise name from appropriate field based on library
+      const library = allLibraries[exercise.library];
       let exerciseName = 'Unknown Exercise';
-      
-      // Get exercise name from first column or common name field
-      const library = allLibraries[activeTab];
       if (library && library.columns && library.columns.length > 0) {
-        const firstColumn = library.columns[0];
-        exerciseName = exercise[firstColumn.key] || 'Unknown Exercise';
+        exerciseName = exercise[library.columns[0].key] || 'Unknown Exercise';
       } else {
         exerciseName = exercise.name || 'Unknown Exercise';
       }
@@ -293,8 +280,8 @@ export function ExerciseLibraryPopup({
       return {
         id: `${exercise.library}-${id}-${Date.now()}`,
         exerciseId: id,
-        exerciseName: exerciseName,
-        library: exercise.library
+        exerciseName,
+        library: exercise.library,
       };
     });
 
@@ -353,7 +340,7 @@ export function ExerciseLibraryPopup({
           )}
         >
           <DialogHeader>
-            <DialogTitle>{singleSelect ? 'Change Exercise' : 'Select Exercises'}</DialogTitle>
+            <DialogTitle>{title ?? (singleSelect ? 'Select Exercise' : 'Select Exercises')}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 flex flex-col overflow-hidden">
@@ -607,14 +594,14 @@ export function ExerciseLibraryPopup({
             <Button variant="outline" onClick={handleClose}>
               Cancel
             </Button>
-            {!singleSelect && (
-              <Button 
-                onClick={handleConfirm}
-                disabled={selectedItems.size === 0}
-              >
-                Add Selected ({selectedItems.size})
-              </Button>
-            )}
+            <Button
+              onClick={handleConfirm}
+              disabled={selectedItems.size === 0}
+            >
+              {singleSelect
+                ? 'Select Exercise'
+                : `Add Exercises${selectedItems.size > 0 ? ` (${selectedItems.size})` : ''}`}
+            </Button>
           </DialogFooter>
 
           {/* Close button */}

@@ -14,11 +14,10 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Play, Video, ExternalLink, Link2, X, Pencil, Plus, ChevronsUpDown, Check, TrendingUp, TrendingDown, GripVertical } from 'lucide-react';
+import { Play, Video, ExternalLink, Link2, X, Pencil, Plus, TrendingUp, TrendingDown, GripVertical } from 'lucide-react';
 import { useCustomLibraries, CustomLibrary, CustomExercise, LibraryColumn } from '@/contexts/CustomLibrariesContext';
 import { useExerciseProgressions, ProgressionDirection, ExerciseProgression } from '@/hooks/useExerciseProgressions';
+import { ExerciseLibraryPopup } from '@/components/microcycle-planning/ExerciseLibraryPopup';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
 
@@ -141,19 +140,18 @@ export function ExerciseDetailDialog({
     }
   }
   const [addingDirection, setAddingDirection] = useState<ProgressionDirection | null>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerSearch, setPickerSearch] = useState('');
+  const [pickerLibraryOpen, setPickerLibraryOpen] = useState(false);
   const [pickerExerciseId, setPickerExerciseId] = useState('');
   const [pickerExerciseName, setPickerExerciseName] = useState('');
   const [pickerLevel, setPickerLevel] = useState(1);
   const [pickerNotes, setPickerNotes] = useState('');
   const [pickerSaving, setPickerSaving] = useState(false);
 
-  // Flat list of all exercises across all libraries for the picker
+  // Flat list of all exercises for back-fill resolution only
   const allExercises = React.useMemo(() =>
     libraries.flatMap(lib => lib.exercises.map(ex => ({
       id: ex.id,
-      name: ex.data?.name as string ?? ex.id,
+      name: (ex.data?.[lib.columns?.[0]?.id] ?? ex.data?.['name'] ?? ex.id) as string,
       libraryName: lib.name,
     }))).sort((a, b) => a.name.localeCompare(b.name)),
   [libraries]);
@@ -190,8 +188,7 @@ export function ExerciseDetailDialog({
     setPickerExerciseName('');
     setPickerLevel(1);
     setPickerNotes('');
-    setPickerSearch('');
-    setPickerOpen(false);
+    setPickerLibraryOpen(false);
     setAddingDirection(null);
   }
 
@@ -806,60 +803,17 @@ export function ExerciseDetailDialog({
                               Add {addingDirection === 'regression' ? 'Regression' : 'Progression'}
                             </p>
 
-                            {/* Exercise picker */}
+                            {/* Exercise picker — opens full library popup */}
                             <div className="space-y-1">
                               <Label className="text-xs">Exercise</Label>
-                              <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-                                <PopoverTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    role="combobox"
-                                    className="w-full justify-between font-normal h-9 text-sm"
-                                  >
-                                    {pickerExerciseName || 'Select exercise…'}
-                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-[320px] p-0 z-[200]" align="start">
-                                  <Command>
-                                    <CommandInput
-                                      placeholder="Search exercises…"
-                                      value={pickerSearch}
-                                      onValueChange={setPickerSearch}
-                                    />
-                                    <CommandList className="max-h-[200px]">
-                                      <CommandEmpty>No exercises found.</CommandEmpty>
-                                      <CommandGroup>
-                                        {allExercises
-                                          .filter(e =>
-                                            e.id !== exerciseId &&
-                                            !progressions.some(p => p.toExerciseId === e.id) &&
-                                            e.name.toLowerCase().includes(pickerSearch.toLowerCase())
-                                          )
-                                          .map(e => (
-                                            <CommandItem
-                                              key={e.id}
-                                              value={e.name}
-                                              onSelect={() => {
-                                                setPickerExerciseId(e.id);
-                                                setPickerExerciseName(e.name);
-                                                setPickerOpen(false);
-                                                setPickerSearch('');
-                                              }}
-                                            >
-                                              <Check className={cn('mr-2 h-4 w-4', pickerExerciseId === e.id ? 'opacity-100' : 'opacity-0')} />
-                                              <div>
-                                                <div className="text-sm">{e.name}</div>
-                                                <div className="text-xs text-muted-foreground">{e.libraryName}</div>
-                                              </div>
-                                            </CommandItem>
-                                          ))
-                                        }
-                                      </CommandGroup>
-                                    </CommandList>
-                                  </Command>
-                                </PopoverContent>
-                              </Popover>
+                              <Button
+                                variant="outline"
+                                className="w-full justify-between font-normal h-9 text-sm"
+                                onClick={() => setPickerLibraryOpen(true)}
+                              >
+                                {pickerExerciseName || 'Browse exercises…'}
+                                <Plus className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
                             </div>
 
                             {/* Level */}
@@ -921,6 +875,29 @@ export function ExerciseDetailDialog({
           </DialogFooter>
         </DialogPrimitive.Content>
       </DialogPortal>
+
+      {/* Exercise library popup for picking progression/regression target */}
+      <ExerciseLibraryPopup
+        isOpen={pickerLibraryOpen}
+        onClose={() => setPickerLibraryOpen(false)}
+        singleSelect
+        title={addingDirection === 'progression' ? 'Select Progression Exercise' : addingDirection === 'regression' ? 'Select Regression Exercise' : 'Select Exercise'}
+        selectedExerciseIds={[
+          exerciseId,
+          ...progressions.map(p => p.toExerciseId),
+        ]}
+        onSelectExercises={([sel]) => {
+          if (!sel) return;
+          setPickerExerciseId(sel.exerciseId);
+          setPickerExerciseName(sel.exerciseName);
+          setPickerLibraryOpen(false);
+        }}
+        onExerciseCreated={(ex) => {
+          setPickerExerciseId(ex.exerciseId);
+          setPickerExerciseName(ex.exerciseName);
+          setPickerLibraryOpen(false);
+        }}
+      />
     </Dialog>
   );
 }
