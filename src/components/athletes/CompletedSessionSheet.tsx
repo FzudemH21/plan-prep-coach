@@ -27,6 +27,10 @@ export interface RegularExerciseLog {
   plannedSets?: number;
   /** Coach-prescribed values per param — used to show crossed-out planned values on removed/skipped rows */
   plannedParams?: Record<string, string>;
+  /** Set when athlete swapped this exercise in-session */
+  swappedFrom?: string;
+  swapDirection?: 'progression' | 'regression';
+  swapReason?: string;
   // Session structure metadata (new logs only)
   sectionId?: string;
   sectionName?: string;
@@ -200,14 +204,29 @@ function ExerciseLogCard({ entry }: { entry: SetLogEntry }) {
   return (
     <div className="rounded-md border overflow-hidden">
       {/* Exercise header */}
-      <div className="px-3 py-2 bg-muted/30 border-b flex items-center justify-between gap-2">
-        <span className={`text-sm font-medium ${allSetsSkipped || noSetsAtAll ? 'text-muted-foreground' : ''}`}>
-          {entry.exerciseName}
-        </span>
-        {(allSetsSkipped || noSetsAtAll) && (
-          <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
-            Not done
+      <div className="px-3 py-2 bg-muted/30 border-b space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className={`text-sm font-medium ${allSetsSkipped || noSetsAtAll ? 'text-muted-foreground' : ''}`}>
+            {entry.exerciseName}
           </span>
+          {(allSetsSkipped || noSetsAtAll) && (
+            <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
+              Not done
+            </span>
+          )}
+        </div>
+        {entry.swappedFrom && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 leading-none">
+              {entry.swapDirection === 'regression' ? '↓ Regression' : '↑ Progression'}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Swapped from <span className="font-medium text-foreground">{entry.swappedFrom}</span>
+            </span>
+            {entry.swapReason && (
+              <span className="text-xs text-muted-foreground italic">· "{entry.swapReason}"</span>
+            )}
+          </div>
         )}
       </div>
 

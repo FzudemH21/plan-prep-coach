@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronDown, Check, Dumbbell, RefreshCw,
-  CheckCircle2, Timer, Info, Plus, Minus,
+  CheckCircle2, Timer, Info, Plus, Minus, ArrowUpDown, TrendingUp, TrendingDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -726,6 +726,56 @@ export default function AthleteSessionPage() {
   // Exercise detail sheet — tapping a name or ⓘ opens it
   const [detailTarget, setDetailTarget] = useState<ExerciseDetailTarget | null>(null);
 
+  // ── Exercise swap ──────────────────────────────────────────────────────────
+  interface ChainEntry { id: string; toExerciseId: string; toExerciseName: string; direction: 'progression' | 'regression'; level: number; notes: string | null; }
+  interface SwapRecord { replacementName: string; originalName: string; direction: 'progression' | 'regression'; level: number; reason: string; }
+  const [swappedExercises, setSwappedExercises] = useState<Record<string, SwapRecord>>({});
+  const [swapSheetEx, setSwapSheetEx] = useState<ExerciseSummary | null>(null);
+  const [swapChain, setSwapChain] = useState<ChainEntry[]>([]);
+  const [swapChainLoading, setSwapChainLoading] = useState(false);
+  const [swapSelectedEntry, setSwapSelectedEntry] = useState<ChainEntry | null>(null);
+  const [swapReason, setSwapReason] = useState('');
+
+  async function openSwapSheet(ex: ExerciseSummary) {
+    if (!connection || !ex.exerciseLibraryId) return;
+    setSwapSheetEx(ex);
+    setSwapChainLoading(true);
+    setSwapSelectedEntry(null);
+    setSwapReason('');
+    const { data } = await supabase
+      .from('exercise_progressions')
+      .select('id, to_exercise_id, to_exercise_name, direction, level, notes')
+      .eq('from_exercise_id', ex.exerciseLibraryId)
+      .eq('coach_user_id', connection.coachUserId)
+      .order('direction').order('level');
+    setSwapChain((data ?? []).map((r: Record<string, unknown>) => ({
+      id: r.id as string,
+      toExerciseId: r.to_exercise_id as string,
+      toExerciseName: (r.to_exercise_name as string) || '',
+      direction: r.direction as 'progression' | 'regression',
+      level: r.level as number,
+      notes: r.notes as string | null,
+    })));
+    setSwapChainLoading(false);
+  }
+
+  function applySwap() {
+    if (!swapSheetEx || !swapSelectedEntry) return;
+    setSwappedExercises(prev => ({
+      ...prev,
+      [swapSheetEx.id]: {
+        replacementName: swapSelectedEntry.toExerciseName,
+        originalName: swapSheetEx.name,
+        direction: swapSelectedEntry.direction,
+        level: swapSelectedEntry.level,
+        reason: swapReason.trim(),
+      },
+    }));
+    setSwapSheetEx(null);
+    setSwapSelectedEntry(null);
+    setSwapReason('');
+  }
+
   // Workout elapsed timer — counts up from the moment the athlete starts the first section
   const workoutStartTimeRef = useRef<number | null>(null);
   const [workoutElapsed, setWorkoutElapsed] = useState(0);
@@ -1028,8 +1078,12 @@ export default function AthleteSessionPage() {
         plannedParamsStr[k] = String(v);
       }
     }
+    const swap = swappedExercises[ex.id];
     return {
-      exerciseName: ex.name,
+      exerciseName: swap ? swap.replacementName : ex.name,
+      swappedFrom: swap ? swap.originalName : undefined,
+      swapDirection: swap ? swap.direction : undefined,
+      swapReason: swap?.reason || undefined,
       plannedSets: plannedSetCount,
       plannedParams: Object.keys(plannedParamsStr).length > 0 ? plannedParamsStr : undefined,
       sectionId: ex.sectionId,
@@ -1528,6 +1582,7 @@ export default function AthleteSessionPage() {
                         {exComplete ? <Check className="h-4 w-4" /> : (supersetLabel ? supersetLabel : displayN)}
                       </div>
                       <div className="flex-1 min-w-0">
+                        {/* Exercise name row */}
                         <div className="flex items-center gap-1.5">
                           {ex.isCircuit && <RefreshCw className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
                           {(ex.exerciseVideoUrl || ex.exerciseDescription) && !ex.isCircuit ? (
@@ -1538,11 +1593,11 @@ export default function AthleteSessionPage() {
                                 exComplete && 'text-muted-foreground',
                               )}
                             >
-                              {ex.name}
+                              {swappedExercises[ex.id]?.replacementName ?? ex.name}
                             </button>
                           ) : (
                             <h3 className={cn('font-semibold text-base leading-snug', exComplete && 'text-muted-foreground')}>
-                              {ex.name}
+                              {swappedExercises[ex.id]?.replacementName ?? ex.name}
                             </h3>
                           )}
                           {(ex.exerciseVideoUrl || ex.exerciseDescription) && !ex.isCircuit && (
@@ -1555,12 +1610,39 @@ export default function AthleteSessionPage() {
                             </button>
                           )}
                         </div>
+                        {/* Swap badge */}
+                        {swappedExercises[ex.id] && (
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 leading-none">
+                              {swappedExercises[ex.id].direction === 'regression' ? '↓ Regression' : '↑ Progression'}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              instead of {swappedExercises[ex.id].originalName}
+                            </span>
+                            <button
+                              onClick={() => setSwappedExercises(prev => { const n = { ...prev }; delete n[ex.id]; return n; })}
+                              className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
+                            >
+                              Undo
+                            </button>
+                          </div>
+                        )}
                         {ex.eachSide && (
                           <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 mt-1 w-fit">
                             Perform on each side
                           </span>
                         )}
                         {ex.notes && <p className="text-xs text-muted-foreground mt-0.5">{ex.notes}</p>}
+                        {/* Adjust button — only for exercises with a library ID and no active swap */}
+                        {!ex.isCircuit && ex.exerciseLibraryId && !swappedExercises[ex.id] && (
+                          <button
+                            onClick={() => openSwapSheet(ex)}
+                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mt-1 active:opacity-60"
+                          >
+                            <ArrowUpDown className="h-3 w-3" />
+                            Adjust exercise
+                          </button>
+                        )}
                       </div>
                     </div>
                     {ex.isCircuit ? (
@@ -1734,6 +1816,102 @@ export default function AthleteSessionPage() {
           target={detailTarget}
           onClose={() => setDetailTarget(null)}
         />
+
+        {/* ── Swap sheet ───────────────────────────────────────────────────── */}
+        <Sheet open={!!swapSheetEx} onOpenChange={o => { if (!o) { setSwapSheetEx(null); setSwapSelectedEntry(null); setSwapReason(''); } }}>
+          <SheetContent
+            side="bottom"
+            className="sm:w-[480px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2 rounded-t-2xl max-h-[80vh] flex flex-col p-0"
+          >
+            <SheetHeader className="px-5 pt-5 pb-3 border-b shrink-0">
+              <SheetTitle className="text-base text-left">Adjust exercise</SheetTitle>
+              <p className="text-xs text-muted-foreground text-left">
+                Select a progression or regression to replace <span className="font-medium">{swapSheetEx?.name}</span> for this session only.
+              </p>
+            </SheetHeader>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-1.5">
+              {swapChainLoading ? (
+                <p className="text-sm text-muted-foreground text-center py-6">Loading…</p>
+              ) : swapChain.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">
+                  No progressions or regressions defined for this exercise yet.
+                </p>
+              ) : (() => {
+                const chainProgs = swapChain.filter(e => e.direction === 'progression').sort((a, b) => b.level - a.level);
+                const chainRegs = swapChain.filter(e => e.direction === 'regression').sort((a, b) => a.level - b.level);
+                const renderEntry = (entry: ChainEntry) => {
+                  const isSelected = swapSelectedEntry?.id === entry.id;
+                  return (
+                    <button
+                      key={entry.id}
+                      onClick={() => setSwapSelectedEntry(isSelected ? null : entry)}
+                      className={cn(
+                        'w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-colors',
+                        isSelected
+                          ? 'bg-primary/10 border border-primary/40'
+                          : 'bg-muted/40 hover:bg-muted/70 active:bg-muted border border-transparent'
+                      )}
+                    >
+                      {entry.direction === 'progression'
+                        ? <TrendingUp className="h-4 w-4 text-orange-500 shrink-0" />
+                        : <TrendingDown className="h-4 w-4 text-blue-500 shrink-0" />
+                      }
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate">{entry.toExerciseName || entry.toExerciseId}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {entry.direction === 'progression' ? 'Progression' : 'Regression'} {entry.level}
+                          {entry.notes ? ` · ${entry.notes}` : ''}
+                        </p>
+                      </div>
+                      {isSelected && <Check className="h-4 w-4 text-primary shrink-0" />}
+                    </button>
+                  );
+                };
+                return (
+                  <>
+                    {chainProgs.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Harder</p>
+                        {chainProgs.map(renderEntry)}
+                      </div>
+                    )}
+                    {/* Current */}
+                    <div className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 bg-primary/10 border border-primary/30">
+                      <div className="h-4 w-4 rounded-full bg-primary shrink-0" />
+                      <p className="text-sm font-semibold flex-1">{swapSheetEx?.name}</p>
+                      <span className="text-xs text-muted-foreground">current</span>
+                    </div>
+                    {chainRegs.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Easier</p>
+                        {chainRegs.map(renderEntry)}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Reason + confirm — shown after selecting an entry */}
+            {swapSelectedEntry && (
+              <div className="px-5 pb-6 pt-3 border-t space-y-3 shrink-0">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Why are you adapting? <span className="font-normal">(optional)</span></label>
+                  <Textarea
+                    value={swapReason}
+                    onChange={e => setSwapReason(e.target.value)}
+                    placeholder="e.g. knee pain, no equipment available…"
+                    className="resize-none text-sm min-h-[60px]"
+                  />
+                </div>
+                <Button className="w-full" onClick={applySwap}>
+                  Swap for {swapSelectedEntry.toExerciseName || swapSelectedEntry.toExerciseId}
+                </Button>
+              </div>
+            )}
+          </SheetContent>
+        </Sheet>
       </div>
     );
   }

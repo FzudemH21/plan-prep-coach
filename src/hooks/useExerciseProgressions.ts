@@ -34,7 +34,7 @@ export function useExerciseProgressions(exerciseId: string | null) {
         id: row.id as string,
         fromExerciseId: row.from_exercise_id as string,
         toExerciseId: row.to_exercise_id as string,
-        toExerciseName: '',   // caller resolves from library
+        toExerciseName: (row.to_exercise_name as string) || '',
         direction: row.direction as ProgressionDirection,
         level: row.level as number,
         notes: row.notes as string | null,
@@ -47,6 +47,8 @@ export function useExerciseProgressions(exerciseId: string | null) {
 
   const add = useCallback(async (params: {
     toExerciseId: string;
+    toExerciseName: string;   // name of the exercise being linked
+    fromExerciseName: string; // name of the current exercise (for the reverse entry)
     direction: ProgressionDirection;
     level: number;
     notes: string;
@@ -55,7 +57,7 @@ export function useExerciseProgressions(exerciseId: string | null) {
     const reverseDirection: ProgressionDirection =
       params.direction === 'progression' ? 'regression' : 'progression';
 
-    // Insert both directions in one call
+    // Insert both directions in one call, storing names so athletes can read them
     const { data, error } = await supabase
       .from('exercise_progressions')
       .insert([
@@ -63,6 +65,7 @@ export function useExerciseProgressions(exerciseId: string | null) {
           coach_user_id: user.id,
           from_exercise_id: exerciseId,
           to_exercise_id: params.toExerciseId,
+          to_exercise_name: params.toExerciseName,
           direction: params.direction,
           level: params.level,
           notes: params.notes || null,
@@ -71,6 +74,7 @@ export function useExerciseProgressions(exerciseId: string | null) {
           coach_user_id: user.id,
           from_exercise_id: params.toExerciseId,
           to_exercise_id: exerciseId,
+          to_exercise_name: params.fromExerciseName,
           direction: reverseDirection,
           level: params.level,
           notes: params.notes || null,
@@ -78,7 +82,6 @@ export function useExerciseProgressions(exerciseId: string | null) {
       ])
       .select();
     if (!error && data) {
-      // Only surface the forward entry (from this exercise's perspective)
       const forward = data.find(
         (r: Record<string, unknown>) =>
           r.from_exercise_id === exerciseId && r.to_exercise_id === params.toExerciseId
@@ -88,7 +91,7 @@ export function useExerciseProgressions(exerciseId: string | null) {
           id: forward.id as string,
           fromExerciseId: forward.from_exercise_id as string,
           toExerciseId: forward.to_exercise_id as string,
-          toExerciseName: '',
+          toExerciseName: (forward.to_exercise_name as string) || params.toExerciseName,
           direction: forward.direction as ProgressionDirection,
           level: forward.level as number,
           notes: forward.notes as string | null,

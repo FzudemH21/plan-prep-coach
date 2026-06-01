@@ -188,6 +188,8 @@ export function ExerciseDetailDialog({
     setPickerSaving(true);
     await addProgression({
       toExerciseId: pickerExerciseId,
+      toExerciseName: pickerExerciseName,
+      fromExerciseName: exerciseName,
       direction: addingDirection,
       level: pickerLevel,
       notes: pickerNotes,
