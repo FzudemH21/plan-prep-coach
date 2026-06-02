@@ -280,6 +280,8 @@ function ExerciseDetail({
   onConfigureTags: () => void;
 }) {
   const [timeRange, setTimeRange] = useState<'all' | '3m' | '6m' | '1y'>('all');
+  // 'e1rm' or any base param name
+  const [chartMetric, setChartMetric] = useState<string>('e1rm');
 
   const filteredSessions = useMemo(() => {
     if (timeRange === 'all') return sessions;
@@ -301,12 +303,33 @@ function ExerciseDetail({
     return allParamNames.filter(p => seen.has(p));
   }, [sessions, allParamNames]);
 
+  // Numeric param names (have at least one parseable value across all sessions)
+  const numericParamNames = useMemo(() => {
+    return activeParamNames.filter(p =>
+      sessions.some(s => s.sets.some(set => !isNaN(parseFloat(set.values[p] ?? ''))))
+    );
+  }, [activeParamNames, sessions]);
+
   const chartData = useMemo(() => {
-    if (!tags) return [];
+    if (chartMetric === 'e1rm') {
+      if (!tags) return [];
+      return filteredSessions
+        .filter(s => s.e1rm !== null)
+        .map(s => ({ label: formatShortDate(s.date), value: parseFloat((s.e1rm as number).toFixed(1)) }));
+    }
+    // Single param: max completed-set value per session
     return filteredSessions
-      .filter(s => s.e1rm !== null)
-      .map(s => ({ label: formatShortDate(s.date), e1rm: parseFloat((s.e1rm as number).toFixed(1)) }));
-  }, [filteredSessions, tags]);
+      .map(s => {
+        let max: number | null = null;
+        for (const set of s.sets) {
+          if (!set.completed) continue;
+          const v = parseFloat(set.values[chartMetric] ?? '');
+          if (!isNaN(v) && (max === null || v > max)) max = v;
+        }
+        return max !== null ? { label: formatShortDate(s.date), value: max } : null;
+      })
+      .filter((d): d is { label: string; value: number } => d !== null);
+  }, [filteredSessions, chartMetric, tags]);
 
   const latestE1RM = useMemo(() => {
     if (!tags) return null;
@@ -315,6 +338,10 @@ function ExerciseDetail({
   }, [sessions, tags]);
 
   const weightUnit = tags?.weightParam ? (paramUnits[tags.weightParam] ?? '') : '';
+  const activeMetricUnit = chartMetric === 'e1rm' ? weightUnit : (paramUnits[chartMetric] ?? '');
+  const activeMetricLabel = chartMetric === 'e1rm'
+    ? `est. 1RM${weightUnit ? ` (${weightUnit})` : ''}`
+    : `${chartMetric}${activeMetricUnit ? ` (${activeMetricUnit})` : ''}`;
 
   return (
     <ScrollArea className="flex-1">
@@ -346,102 +373,137 @@ function ExerciseDetail({
           </div>
         </div>
 
-        {/* e1RM chart */}
-        {tags && chartData.length >= 2 ? (
-          <div className="space-y-2">
-            {latestE1RM !== null && (
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-3xl font-bold tabular-nums">{latestE1RM.toFixed(1)}</span>
-                <span className="text-muted-foreground text-sm">{weightUnit} est. 1RM</span>
+        {/* Chart — metric selector + area chart */}
+        <div className="space-y-2">
+          {/* Metric selector */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Select value={chartMetric} onValueChange={setChartMetric}>
+              <SelectTrigger className="h-7 text-xs w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {tags && (
+                  <SelectItem value="e1rm">
+                    est. 1RM{weightUnit ? ` (${weightUnit})` : ''}
+                  </SelectItem>
+                )}
+                {numericParamNames.map(p => (
+                  <SelectItem key={p} value={p}>
+                    {p}{paramUnits[p] ? ` (${paramUnits[p]})` : ''} — max / session
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {(['all', '3m', '6m', '1y'] as const).map(r => (
+              <Button
+                key={r}
+                variant={timeRange === r ? 'default' : 'ghost'}
+                size="sm"
+                className="h-7 text-xs px-2.5"
+                onClick={() => setTimeRange(r)}
+              >
+                {r === 'all' ? 'All' : r.toUpperCase()}
+              </Button>
+            ))}
+          </div>
+
+          {/* Latest value */}
+          {chartMetric === 'e1rm' && latestE1RM !== null && (
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-bold tabular-nums">{latestE1RM.toFixed(1)}</span>
+              <span className="text-muted-foreground text-sm">{weightUnit} est. 1RM</span>
+            </div>
+          )}
+          {chartMetric !== 'e1rm' && chartData.length > 0 && (
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-bold tabular-nums">
+                {chartData[chartData.length - 1].value.toFixed(1)}
+              </span>
+              <span className="text-muted-foreground text-sm">{activeMetricLabel}</span>
+            </div>
+          )}
+
+          {/* Chart or empty state */}
+          {chartData.length >= 2 ? (
+            <>
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="metricGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%"  stopColor="hsl(var(--primary))" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                      axisLine={false}
+                      tickLine={false}
+                      domain={['auto', 'auto']}
+                      label={activeMetricUnit ? {
+                        value: activeMetricUnit,
+                        angle: -90,
+                        position: 'insideLeft',
+                        offset: 12,
+                        style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))' },
+                      } : undefined}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--popover))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                      }}
+                      formatter={(v: number) => [
+                        `${v.toFixed(1)}${activeMetricUnit ? ` ${activeMetricUnit}` : ''}`,
+                        activeMetricLabel,
+                      ]}
+                      labelStyle={{ color: 'hsl(var(--muted-foreground))' }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="value"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      fill="url(#metricGrad)"
+                      dot={{ r: 3, fill: 'hsl(var(--primary))' }}
+                      activeDot={{ r: 5 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
-            )}
-            <div className="flex items-center gap-1">
-              {(['all', '3m', '6m', '1y'] as const).map(r => (
-                <Button
-                  key={r}
-                  variant={timeRange === r ? 'default' : 'ghost'}
-                  size="sm"
-                  className="h-7 text-xs px-2.5"
-                  onClick={() => setTimeRange(r)}
-                >
-                  {r === 'all' ? 'All' : r.toUpperCase()}
-                </Button>
-              ))}
+              {chartMetric === 'e1rm' && tags && (
+                <p className="text-[10px] text-muted-foreground text-right">
+                  Epley: weight × (1 + (reps{tags.rirParam ? ' + RIR' : ''}) / 30) · best set per session
+                </p>
+              )}
+            </>
+          ) : (
+            <div className="h-32 flex items-center justify-center border rounded-lg bg-muted/20">
+              <p className="text-sm text-muted-foreground text-center px-4">
+                {chartMetric === 'e1rm' && !tags
+                  ? 'Configure 1RM estimation to chart strength progress.'
+                  : 'Log at least 2 sessions to see the chart.'}
+              </p>
             </div>
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="e1rmGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="hsl(var(--primary))" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                    axisLine={false}
-                    tickLine={false}
-                    domain={['auto', 'auto']}
-                    label={weightUnit ? {
-                      value: weightUnit,
-                      angle: -90,
-                      position: 'insideLeft',
-                      offset: 12,
-                      style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))' },
-                    } : undefined}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--popover))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '6px',
-                      fontSize: '12px',
-                    }}
-                    formatter={(v: number) => [`${v.toFixed(1)}${weightUnit ? ` ${weightUnit}` : ''}`, 'est. 1RM']}
-                    labelStyle={{ color: 'hsl(var(--muted-foreground))' }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="e1rm"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth={2}
-                    fill="url(#e1rmGrad)"
-                    dot={{ r: 3, fill: 'hsl(var(--primary))' }}
-                    activeDot={{ r: 5 }}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-            <p className="text-[10px] text-muted-foreground text-right">
-              Epley: weight × (1 + (reps{tags.rirParam ? ' + RIR' : ''}) / 30) · best set per session
-            </p>
-          </div>
-        ) : tags && chartData.length < 2 ? (
-          <div className="h-32 flex items-center justify-center border rounded-lg bg-muted/20">
-            <p className="text-sm text-muted-foreground">
-              {chartData.length === 0
-                ? 'No completed sets with weight + reps logged yet.'
-                : 'Log at least 2 sessions to see the chart.'}
-            </p>
-          </div>
-        ) : !tags ? (
-          <div className="border border-dashed rounded-lg p-5 text-center space-y-2">
-            <Trophy className="h-7 w-7 mx-auto text-muted-foreground opacity-40" />
-            <p className="text-sm text-muted-foreground">
-              Tag which parameters are weight and reps to unlock the estimated 1RM chart.
-            </p>
-            <Button size="sm" variant="outline" className="text-xs" onClick={onConfigureTags}>
+          )}
+
+          {/* Prompt to configure 1RM if not yet done */}
+          {!tags && chartMetric === 'e1rm' && (
+            <Button size="sm" variant="outline" className="text-xs w-full" onClick={onConfigureTags}>
+              <Trophy className="h-3.5 w-3.5 mr-1.5 text-amber-500" />
               Configure 1RM estimation
             </Button>
-          </div>
-        ) : null}
+          )}
+        </div>
 
         {/* Session history */}
         <div className="space-y-3">
