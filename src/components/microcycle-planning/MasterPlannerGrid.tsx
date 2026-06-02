@@ -8,7 +8,7 @@ import { ToolboxDatabase } from '@/types/toolbox';
 import { ExerciseDistribution, SessionSection, SupersetMapping } from '@/types/microcycle-planning';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { AthletePerformanceParameter } from '@/types/athlete';
+import { AthletePerformanceParameter, BiometricDefinition, AthleteBiometric } from '@/types/athlete';
 
 interface TrainingDay {
   date: string;
@@ -119,6 +119,8 @@ interface MasterPlannerGridProps {
   // Athlete context for baseline value auto-fill
   selectedAthleteId?: string;
   athletePerformanceParameters?: AthletePerformanceParameter[];
+  biometricDefinitions?: BiometricDefinition[];
+  athleteBiometrics?: AthleteBiometric[];
   weeksToDisplay?: number;
   onWeeksToDisplayChange?: (n: number) => void;
 }
@@ -175,6 +177,8 @@ export function MasterPlannerGrid({
   onExerciseChange,
   selectedAthleteId,
   athletePerformanceParameters,
+  biometricDefinitions,
+  athleteBiometrics,
   weeksToDisplay: weeksToDisplayProp,
   onWeeksToDisplayChange,
 }: MasterPlannerGridProps) {
@@ -309,6 +313,8 @@ export function MasterPlannerGrid({
               onExerciseChange={onExerciseChange}
               selectedAthleteId={selectedAthleteId}
               athletePerformanceParameters={athletePerformanceParameters}
+              biometricDefinitions={biometricDefinitions}
+              athleteBiometrics={athleteBiometrics}
             />
           ))}
         </div>

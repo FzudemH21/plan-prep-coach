@@ -188,6 +188,9 @@ interface MasterPlannerColumnProps {
   // Athlete context for baseline value auto-fill
   selectedAthleteId?: string;
   athletePerformanceParameters?: AthletePerformanceParameter[];
+  // Body Metrics
+  biometricDefinitions?: import('@/types/athlete').BiometricDefinition[];
+  athleteBiometrics?: import('@/types/athlete').AthleteBiometric[];
 }
 
 // Helper to format parameter names nicely
@@ -507,6 +510,8 @@ export function MasterPlannerColumn({
   onExerciseChange,
   selectedAthleteId,
   athletePerformanceParameters,
+  biometricDefinitions,
+  athleteBiometrics,
 }: MasterPlannerColumnProps) {
   const [dayIntensityPopoverOpen, setDayIntensityPopoverOpen] = useState(false);
   const [sessionIntensityPopovers, setSessionIntensityPopovers] = useState<Record<number, boolean>>({});
@@ -1939,6 +1944,8 @@ export function MasterPlannerColumn({
         }}
         selectedAthleteId={selectedAthleteId}
         athletePerformanceParameters={athletePerformanceParameters}
+        biometricDefinitions={biometricDefinitions}
+        athleteBiometrics={athleteBiometrics}
       />
       
       {/* Exercise Library Popup for changing exercise via three-dot menu */}

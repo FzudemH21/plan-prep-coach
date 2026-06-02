@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { TrainingDayCell } from './TrainingDayCell';
-import { AthletePerformanceParameter } from '@/types/athlete';
+import { AthletePerformanceParameter, BiometricDefinition, AthleteBiometric } from '@/types/athlete';
 
 interface ExerciseDistribution {
   exerciseId: string;
@@ -66,6 +66,8 @@ interface WeekRowProps {
   // Athlete context for baseline value auto-fill
   selectedAthleteId?: string;
   athletePerformanceParameters?: AthletePerformanceParameter[];
+  biometricDefinitions?: BiometricDefinition[];
+  athleteBiometrics?: AthleteBiometric[];
   // Microcycle label to display next to the week date (e.g. "Microcycle 1")
   microcycleLabel?: string;
 }
@@ -99,6 +101,8 @@ export function WeekRow({
   onAddSession,
   selectedAthleteId,
   athletePerformanceParameters,
+  biometricDefinitions,
+  athleteBiometrics,
 }: WeekRowProps) {
   const [isWeekHovering, setIsWeekHovering] = useState(false);
   const weekStartDate = week[0]?.dateString;
@@ -183,6 +187,8 @@ export function WeekRow({
             onAddSession={onAddSession}
             selectedAthleteId={selectedAthleteId}
             athletePerformanceParameters={athletePerformanceParameters}
+            biometricDefinitions={biometricDefinitions}
+            athleteBiometrics={athleteBiometrics}
           />
         ))}
       </div>

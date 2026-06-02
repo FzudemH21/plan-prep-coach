@@ -77,7 +77,7 @@ export default function MicrocyclePlanningPage() {
   const [daySplitStates, setDaySplitStates] = useState<Record<string, number>>({});
   const [splitStates, setSplitStates] = useState<Record<string, boolean>>({});
   const { data: toolboxData } = useToolboxData();
-  const { athletes, athletePerformanceParameters } = useAthletes();
+  const { athletes, athletePerformanceParameters, biometricDefinitions, athleteBiometrics } = useAthletes();
   const { saveCurrentSession } = useTrainingPrograms();
   const { retrieve: ragRetrieve } = useRAGRetrieval();
   const [ragContext, setRagContext] = useState('');
@@ -104,6 +104,12 @@ export default function MicrocyclePlanningPage() {
     if (!selectedAthleteId) return [];
     return athletePerformanceParameters.filter(pp => pp.athleteId === selectedAthleteId);
   }, [athletePerformanceParameters, selectedAthleteId]);
+
+  // Filter athlete biometrics for the selected athlete
+  const selectedAthleteBiometrics = useMemo(() => {
+    if (!selectedAthleteId) return [];
+    return athleteBiometrics.filter(ab => ab.athleteId === selectedAthleteId);
+  }, [athleteBiometrics, selectedAthleteId]);
   // RAG retrieval — refresh when selected methods or mesocycles change
   useEffect(() => {
     const methodNames = (macrocycleData?.selectedMethods ?? []).join(', ');
@@ -4881,6 +4887,8 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
               daySplitStates={daySplitStates}
               selectedAthleteId={selectedAthleteId}
               athletePerformanceParameters={selectedAthletePerformanceParameters}
+              biometricDefinitions={biometricDefinitions}
+              athleteBiometrics={selectedAthleteBiometrics}
               onDeleteTestEvent={handleDeleteTestEvent}
               onOpenAIAssistant={(ctx) => { setFocusedSessionCtx(ctx); setAiOpenTrigger(c => c + 1); }}
               forceParamRefresh={paramRefreshTrigger}

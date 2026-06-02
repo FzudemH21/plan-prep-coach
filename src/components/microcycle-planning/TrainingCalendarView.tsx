@@ -23,7 +23,7 @@ import { MethodSelectionDialog } from './MethodSelectionDialog';
 import { ExerciseDetailDialog } from '@/components/shared/ExerciseDetailDialog';
 import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import { toggleSuperset, cleanupSupersetsOnExerciseDelete } from '@/utils/supersetUtils';
-import { AthletePerformanceParameter } from '@/types/athlete';
+import { AthletePerformanceParameter, BiometricDefinition, AthleteBiometric } from '@/types/athlete';
 import { FocusedSessionContext } from '@/components/wizard/WizardAIAssistant';
 
 // Local interface for internal use - compatible with WeekRow, TrainingDayCell etc.
@@ -99,6 +99,8 @@ interface TrainingCalendarViewProps {
   // Athlete context for baseline value auto-fill
   selectedAthleteId?: string;
   athletePerformanceParameters?: AthletePerformanceParameter[];
+  biometricDefinitions?: BiometricDefinition[];
+  athleteBiometrics?: AthleteBiometric[];
   // Callback to open the AI assistant from within the session dialog
   onOpenAIAssistant?: (ctx: FocusedSessionContext) => void;
   // Increment to force a full rebuild of exercise parameters from updated parameterValues
@@ -167,6 +169,8 @@ export function TrainingCalendarView({
   daySplitStates,
   selectedAthleteId,
   athletePerformanceParameters,
+  biometricDefinitions,
+  athleteBiometrics,
   onOpenAIAssistant,
   forceParamRefresh,
 }: TrainingCalendarViewProps) {
@@ -1044,6 +1048,8 @@ export function TrainingCalendarView({
               }}
               selectedAthleteId={selectedAthleteId}
               athletePerformanceParameters={athletePerformanceParameters}
+              biometricDefinitions={biometricDefinitions}
+              athleteBiometrics={athleteBiometrics}
             />
           ) : (
             /* Calendar View */
@@ -1133,6 +1139,8 @@ export function TrainingCalendarView({
                     onAddSession={onAddSession}
                     selectedAthleteId={selectedAthleteId}
                     athletePerformanceParameters={athletePerformanceParameters}
+                    biometricDefinitions={biometricDefinitions}
+                    athleteBiometrics={athleteBiometrics}
                   />
                   );
                 })}

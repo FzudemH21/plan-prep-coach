@@ -22,7 +22,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { ParameterV2 } from '@/types/parametersV2';
 import { ToolboxEntry } from '@/types/toolbox';
 import { AddParameterDialogV2 } from '@/components/goals/AddParameterDialogV2';
-import { AthletePerformanceParameter } from '@/types/athlete';
+import { AthletePerformanceParameter, BiometricDefinition, AthleteBiometric } from '@/types/athlete';
 import {
   Command,
   CommandEmpty,
@@ -71,6 +71,9 @@ interface CombinedTestEventDialogProps {
   // New props for baseline auto-population
   selectedAthleteId?: string;
   athletePerformanceParameters?: AthletePerformanceParameter[];
+  // Body Metrics
+  biometricDefinitions?: BiometricDefinition[];
+  athleteBiometrics?: AthleteBiometric[];
 }
 
 export function CombinedTestEventDialog({
@@ -89,6 +92,8 @@ export function CombinedTestEventDialog({
   onAddParameter,
   selectedAthleteId,
   athletePerformanceParameters = [],
+  biometricDefinitions = [],
+  athleteBiometrics = [],
 }: CombinedTestEventDialogProps) {
   const [type, setType] = useState<'test' | 'event'>('test');
   const [mode, setMode] = useState<'select' | 'create'>('select');
@@ -133,22 +138,48 @@ export function CombinedTestEventDialog({
 
   const categoryOrder = ['strength', 'speed', 'power', 'endurance', 'mobility', 'technique', 'body_composition', 'other'];
 
+  const isBioId = (id: string) => id.startsWith('bio:');
+  const bioDefId = (id: string) => id.slice(4);
+
   const handleParameterSelect = (param: ParameterV2) => {
     setNewName(param.name);
     setSelectedParameterUnit(param.unit || '');
     setParameterDropdownOpen(false);
-    
+
     // Auto-fill baseline value from athlete's data
     if (selectedAthleteId && athletePerformanceParameters.length > 0) {
       const athleteParam = athletePerformanceParameters.find(
         pp => pp.athleticismParameterId === param.id
       );
       if (athleteParam && athleteParam.values.length > 0) {
-        // Get latest value (sorted by recordedAt)
         const sortedValues = [...athleteParam.values].sort(
           (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
         );
         setBaselineValue(sortedValues[0].value);
+      } else {
+        setBaselineValue('');
+      }
+    } else {
+      setBaselineValue('');
+    }
+  };
+
+  const handleBiometricSelect = (defId: string) => {
+    const def = biometricDefinitions.find(d => d.id === defId);
+    if (!def) return;
+    setNewName(def.name);
+    setSelectedParameterUnit(def.unit || '');
+    setParameterDropdownOpen(false);
+    // Auto-fill baseline from athlete biometrics
+    if (selectedAthleteId) {
+      const bio = athleteBiometrics.find(
+        ab => ab.athleteId === selectedAthleteId && ab.biometricDefinitionId === defId
+      );
+      if (bio && bio.values.length > 0) {
+        const sorted = [...bio.values].sort(
+          (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+        );
+        setBaselineValue(sorted[0].value);
       } else {
         setBaselineValue('');
       }
@@ -231,11 +262,15 @@ export function CombinedTestEventDialog({
               <div className="space-y-2">
                 {scheduledTestNames.map((testName, idx) => {
                   const testData = existingTests.find(t => t.testMethod === testName);
-                  // Resolve unit from parameters database
-                  const linkedParam = testData?.parameterLinkedId 
-                    ? allParameters.find(p => p.id === testData.parameterLinkedId)
+                  // Resolve unit from parameters database or biometric definitions
+                  const linkedParamId = testData?.parameterLinkedId;
+                  const linkedParam = linkedParamId && !isBioId(linkedParamId)
+                    ? allParameters.find(p => p.id === linkedParamId)
                     : null;
-                  const displayUnit = linkedParam?.unit || testData?.unit || '';
+                  const linkedBioDef = linkedParamId && isBioId(linkedParamId)
+                    ? biometricDefinitions.find(d => d.id === bioDefId(linkedParamId))
+                    : null;
+                  const displayUnit = linkedParam?.unit || linkedBioDef?.unit || testData?.unit || '';
                   
                   return (
                     <Collapsible key={`test-${idx}`}>
@@ -571,6 +606,30 @@ export function CombinedTestEventDialog({
                               </CommandGroup>
                             ))}
                         </CommandList>
+                          {/* Body Metrics group */}
+                          {biometricDefinitions.length > 0 && (
+                            <CommandGroup heading="Body Metrics">
+                              {biometricDefinitions.map((def) => (
+                                <CommandItem
+                                  key={`bio:${def.id}`}
+                                  value={def.name}
+                                  onSelect={() => handleBiometricSelect(def.id)}
+                                  className="cursor-pointer"
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      newName === def.name ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {def.name}
+                                  {def.unit && (
+                                    <span className="text-muted-foreground ml-1">({def.unit})</span>
+                                  )}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          )}
                         {/* Create New Parameter option */}
                         {onAddParameter && (
                           <div className="border-t p-2">
