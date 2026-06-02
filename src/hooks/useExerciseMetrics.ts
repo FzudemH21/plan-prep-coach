@@ -147,14 +147,21 @@ export function useExerciseMetrics(connectionId: string | null) {
         if (!ex.sets?.length) continue;
         const entry = map.get(ex.exerciseName) ?? { dates: [], paramNames: new Set() };
         entry.dates.push(log.date);
+        // Helper: strip storage suffixes to get the base column-header name.
+        // Keys like "Weight_set1", "Weight_unit", "Weight_set1_unit" are internal
+        // storage artefacts — the real param name is "Weight".
+        const baseKey = (k: string) => k.replace(/_set\d+/g, '').replace(/_unit$/, '');
+        const isMetaKey = (k: string) => k.endsWith('_unit') || /_set\d+/.test(k);
+
         for (const set of ex.sets) {
-          for (const k of Object.keys(set.values ?? {})) entry.paramNames.add(k);
+          for (const k of Object.keys(set.values ?? {})) {
+            if (!isMetaKey(k)) entry.paramNames.add(k);
+          }
         }
         if (ex.plannedParams) {
           for (const k of Object.keys(ex.plannedParams)) {
-            // plannedParams stores per-set values as "ParamName_set1", "ParamName_set2" etc.
-            // Strip the suffix to get the column header (base param name).
-            entry.paramNames.add(k.replace(/_set\d+$/, ''));
+            const base = baseKey(k);
+            if (base) entry.paramNames.add(base);
           }
         }
         map.set(ex.exerciseName, entry);
