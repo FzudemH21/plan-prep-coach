@@ -23,6 +23,7 @@ import AthleteDatabase from "./pages/AthleteDatabase";
 import NotFound from "./pages/NotFound";
 import OnboardingPage from "./pages/OnboardingPage";
 import CoachProfilePage from "./pages/CoachProfilePage";
+import CoachMessagesPage from "./pages/CoachMessagesPage";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import AthleteLoginPage from "./pages/athlete/AthleteLoginPage";
@@ -132,6 +133,7 @@ const App = () => (
                         <Route path="/templates/exercise-libraries" element={<ExerciseLibrariesPage />} />
                         <Route path="/templates/program-templates" element={<ProgramTemplatesPage />} />
                         <Route path="/coach-profile" element={<CoachProfilePage />} />
+                        <Route path="/messages" element={<CoachMessagesPage />} />
                         <Route path="/analytics" element={<div className="text-center py-12">Analytics coming soon...</div>} />
                         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                         <Route path="*" element={<NotFound />} />

@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bot, Settings, Menu, FlaskConical, Trash2 } from "lucide-react";
+import { Bot, Settings, Menu, FlaskConical, Trash2, Bell, MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { loadSeedData, loadDemoPlan2026, loadStrengthPlan, loadExerciseLibrarySeedData } from "@/utils/seedData";
 import { clearAllAppCache } from "@/utils/clearCache";
@@ -18,6 +18,10 @@ import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useCustomLibraries } from "@/contexts/CustomLibrariesContext";
 import type { CustomLibrary } from "@/contexts/CustomLibrariesContext";
 import type { TrainingProgram } from "@/hooks/useTrainingPrograms";
+import { useAthleteConnections } from "@/hooks/useAthleteConnections";
+import { useUnreadCounts } from "@/hooks/useChat";
+import { useMemo } from "react";
+import { format, parseISO } from "date-fns";
 
 interface AppLayoutProps {
   children?: React.ReactNode;
@@ -30,6 +34,10 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { toast } = useToast();
   const { mergeSeedPrograms } = useTrainingPrograms();
   const { mergeSeedLibraries } = useCustomLibraries();
+
+  const { connections } = useAthleteConnections();
+  const connectionIds = useMemo(() => connections.map((c) => c.id), [connections]);
+  const { totalUnread } = useUnreadCounts(connectionIds, 'coach');
 
   const handleLoadSeedData = async () => {
     try {
@@ -81,6 +89,22 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
 
           <div className="flex items-center space-x-2">
+              {/* Notification bell */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="relative h-9 w-9 p-0"
+                onClick={() => navigate('/messages')}
+                aria-label="Messages"
+              >
+                <MessageCircle className="h-4 w-4" />
+                {totalUnread > 0 && (
+                  <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-[10px] text-white flex items-center justify-center font-medium">
+                    {totalUnread > 9 ? '9+' : totalUnread}
+                  </span>
+                )}
+              </Button>
+
               <Button
                 variant={showAIAgent ? "default" : "outline"}
                 size="sm"

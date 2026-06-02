@@ -31,7 +31,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Save, Trash2, X, Calendar, User, Mic, MicOff, Clock, Files, TrendingUp, Settings, BarChart2, Activity } from 'lucide-react';
+import { Plus, Save, Trash2, X, Calendar, User, Mic, MicOff, Clock, Files, TrendingUp, Settings, BarChart2, Activity, MessageCircle, Send, Loader2 } from 'lucide-react';
 import { useSpeechInput } from '@/hooks/useSpeechInput';
 import {
   Athlete,
@@ -51,6 +51,11 @@ import { AthleteAnalysisTab } from './AthleteAnalysisTab';
 import { AthleteMonitoringTab } from './AthleteMonitoringTab';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
+import { useAthleteConnections } from '@/hooks/useAthleteConnections';
+import { useChat } from '@/hooks/useChat';
+import { useAuth } from '@/hooks/useAuth';
+import { parseISO, isToday, isYesterday } from 'date-fns';
+import { useRef } from 'react';
 
 // ── Sport tag input ───────────────────────────────────────────────────────────
 
@@ -119,6 +124,18 @@ export function AthleteProfileView({
   const [isEditing, setIsEditing] = useState(isNewAthlete);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editedAthlete, setEditedAthlete] = useState<Partial<Athlete>>({});
+
+  // Chat
+  const { connections } = useAthleteConnections();
+  const { user: authUser } = useAuth();
+  const athleteConnection = connections.find((c) => c.athleteLocalId === athlete.id);
+  const { messages: chatMessages, loading: chatLoading, sendMessage: chatSend, markRead: chatMarkRead, unreadCount: chatUnread } = useChat({
+    connectionId: athleteConnection?.id ?? null,
+    callerRole: 'coach',
+  });
+  const [chatDraft, setChatDraft] = useState('');
+  const [chatSending, setChatSending] = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
 
   // Notes state
   const [newNoteText, setNewNoteText] = useState('');
@@ -243,6 +260,15 @@ export function AthleteProfileView({
           <TabsTrigger value="analysis" className="gap-2">
             <BarChart2 className="h-4 w-4" />
             Analysis
+          </TabsTrigger>
+          <TabsTrigger value="chat" className="gap-2 relative">
+            <MessageCircle className="h-4 w-4" />
+            Chat
+            {chatUnread > 0 && (
+              <span className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] text-white font-medium">
+                {chatUnread}
+              </span>
+            )}
           </TabsTrigger>
           <TabsTrigger value="settings" className="gap-2">
             <Settings className="h-4 w-4" />
@@ -649,6 +675,82 @@ export function AthleteProfileView({
             performanceParameters={athleteData.athletePerformanceParameters.filter(p => p.athleteId === athlete.id)}
             parametersV2={parametersData.parameters}
           />
+        </TabsContent>
+
+        <TabsContent value="chat" className="flex-1 mt-0 min-h-0 flex flex-col" onFocus={() => chatMarkRead()}>
+          {!athleteConnection ? (
+            <div className="flex flex-col items-center justify-center h-full py-12 text-center px-4">
+              <MessageCircle className="h-8 w-8 text-muted-foreground mb-3" />
+              <p className="text-sm font-medium mb-1">Not connected</p>
+              <p className="text-xs text-muted-foreground">This athlete hasn't connected to the app yet. Share their invite code so they can join.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col h-full min-h-0">
+              <ScrollArea className="flex-1 px-4 py-2">
+                {chatLoading && (
+                  <div className="flex justify-center py-6">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                )}
+                {!chatLoading && chatMessages.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <MessageCircle className="h-7 w-7 text-muted-foreground mb-2" />
+                    <p className="text-sm text-muted-foreground">No messages yet. Start the conversation!</p>
+                  </div>
+                )}
+                <div className="space-y-1 py-2">
+                  {chatMessages.map((msg) => {
+                    const isOwn = msg.senderRole === 'coach';
+                    return (
+                      <div key={msg.id} className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
+                        {msg.messageType === 'exercise_comment' && msg.reference && (
+                          <div className={`text-xs px-2 py-0.5 rounded-full mb-0.5 max-w-[80%] ${isOwn ? 'bg-primary/10 text-primary' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}>
+                            📎 {[msg.reference.exerciseName, msg.reference.sectionName, msg.reference.sessionName, msg.reference.date ? format(parseISO(msg.reference.date + 'T12:00:00'), 'd MMM yyyy') : undefined].filter(Boolean).join(' · ')}
+                          </div>
+                        )}
+                        <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm break-words ${isOwn ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-muted text-foreground rounded-bl-sm'}`}>
+                          {msg.content}
+                        </div>
+                        <span className="text-[10px] text-muted-foreground mt-0.5 px-1">
+                          {format(parseISO(msg.createdAt), isToday(parseISO(msg.createdAt)) ? 'HH:mm' : 'dd MMM, HH:mm')}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div ref={chatBottomRef} />
+              </ScrollArea>
+              <div className="shrink-0 border-t px-4 py-3 flex items-end gap-2">
+                <Textarea
+                  value={chatDraft}
+                  onChange={(e) => setChatDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (!chatDraft.trim() || chatSending) return;
+                      setChatSending(true);
+                      chatSend(chatDraft).then(() => setChatDraft('')).finally(() => setChatSending(false));
+                    }
+                  }}
+                  placeholder={`Message ${athlete.firstName ?? athlete.id}…`}
+                  rows={1}
+                  className="flex-1 resize-none min-h-[40px] max-h-[120px] text-sm py-2"
+                />
+                <Button
+                  size="icon"
+                  onClick={() => {
+                    if (!chatDraft.trim() || chatSending) return;
+                    setChatSending(true);
+                    chatSend(chatDraft).then(() => setChatDraft('')).finally(() => setChatSending(false));
+                  }}
+                  disabled={!chatDraft.trim() || chatSending}
+                  className="h-10 w-10 shrink-0"
+                >
+                  {chatSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="settings" className="flex-1 mt-0 min-h-0">

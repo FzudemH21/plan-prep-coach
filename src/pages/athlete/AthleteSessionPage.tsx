@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronDown, Check, Dumbbell, RefreshCw,
   CheckCircle2, Timer, Info, Plus, Minus, ArrowUpDown, TrendingUp, TrendingDown,
+  MessageSquare, Send, Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -23,6 +24,7 @@ import {
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { useAthleteApp, AthleteScheduleEntry, ExerciseSummary, SessionLog } from '@/hooks/useAthleteApp';
+import { useChat } from '@/hooks/useChat';
 import { useToast } from '@/hooks/use-toast';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -729,6 +731,18 @@ export default function AthleteSessionPage() {
   // Exercise detail sheet — tapping a name or ⓘ opens it
   const [detailTarget, setDetailTarget] = useState<ExerciseDetailTarget | null>(null);
 
+  // Chat — exercise/section comment sheet
+  const { sendMessage: chatSend } = useChat({
+    connectionId: connection?.id ?? null,
+    callerRole: 'athlete',
+  });
+  const [commentTarget, setCommentTarget] = useState<{
+    exerciseName?: string;
+    sectionName?: string;
+  } | null>(null);
+  const [commentText, setCommentText] = useState('');
+  const [commentSending, setCommentSending] = useState(false);
+
   // ── Exercise swap ──────────────────────────────────────────────────────────
   interface ChainEntry { id: string; toExerciseId: string; toExerciseName: string; direction: 'progression' | 'regression'; level: number; notes: string | null; }
   interface SwapRecord { replacementName: string; originalName: string; direction: 'progression' | 'regression'; level: number; reason: string; }
@@ -1257,6 +1271,17 @@ export default function AthleteSessionPage() {
                                       <Info className="h-3.5 w-3.5" />
                                     </button>
                                   )}
+                                  {/* Comment button */}
+                                  <button
+                                    onClick={() => {
+                                      setCommentTarget({ exerciseName: ex.name, sectionName: sec.name });
+                                      setCommentText('');
+                                    }}
+                                    className="shrink-0 text-muted-foreground hover:text-foreground active:opacity-60 transition-colors"
+                                    aria-label="Add comment"
+                                  >
+                                    <MessageSquare className="h-3.5 w-3.5" />
+                                  </button>
                                 </div>
                                 {ex.isCircuit ? (
                                   <span className="text-xs text-muted-foreground shrink-0">
@@ -1411,6 +1436,61 @@ export default function AthleteSessionPage() {
           target={detailTarget}
           onClose={() => setDetailTarget(null)}
         />
+
+        {/* Exercise/Section comment sheet */}
+        <Sheet open={!!commentTarget} onOpenChange={(o) => { if (!o) setCommentTarget(null); }}>
+          <SheetContent
+            side="bottom"
+            className="sm:w-[480px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2 rounded-t-2xl"
+          >
+            <SheetHeader className="mb-3">
+              <SheetTitle className="text-base">Add Comment</SheetTitle>
+              {commentTarget && (
+                <p className="text-xs text-muted-foreground">
+                  📎 {[commentTarget.exerciseName, commentTarget.sectionName, session.name, entry.date ? new Date(entry.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : undefined].filter(Boolean).join(' · ')}
+                </p>
+              )}
+            </SheetHeader>
+            <div className="flex items-end gap-2">
+              <Textarea
+                autoFocus
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                placeholder="Write your comment…"
+                rows={3}
+                className="flex-1 resize-none text-sm"
+              />
+              <Button
+                size="icon"
+                className="h-10 w-10 shrink-0"
+                disabled={!commentText.trim() || commentSending}
+                onClick={async () => {
+                  if (!commentText.trim() || commentSending || !commentTarget) return;
+                  setCommentSending(true);
+                  try {
+                    await chatSend(commentText, {
+                      messageType: 'exercise_comment',
+                      reference: {
+                        exerciseName: commentTarget.exerciseName,
+                        sectionName: commentTarget.sectionName,
+                        sessionName: session.name,
+                        date: entry.date,
+                      },
+                    });
+                    setCommentTarget(null);
+                    setCommentText('');
+                  } catch {
+                    // silent
+                  } finally {
+                    setCommentSending(false);
+                  }
+                }}
+              >
+                {commentSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </Button>
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
     );
   }

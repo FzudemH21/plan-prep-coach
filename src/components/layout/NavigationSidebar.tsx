@@ -22,8 +22,12 @@ import {
   Wrench,
   Library,
   UserCircle,
-  LogOut
+  LogOut,
+  MessageCircle,
 } from "lucide-react";
+import { useAthleteConnections } from "@/hooks/useAthleteConnections";
+import { useUnreadCounts } from "@/hooks/useChat";
+import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -63,6 +67,10 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
     templates: true,
     exerciseLibraries: false,
   });
+
+  const { connections } = useAthleteConnections();
+  const connectionIds = useMemo(() => connections.map((c) => c.id), [connections]);
+  const { totalUnread } = useUnreadCounts(connectionIds, 'coach');
 
   const createSlug = (name: string): string => {
     return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
@@ -280,6 +288,24 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
           >
             <UserCircle className="h-4 w-4 mr-2" />
             Coach-Profil
+          </Button>
+
+          {/* Chat - standalone */}
+          <Button
+            variant="ghost"
+            className={cn(
+              "w-full justify-start h-10",
+              isActive("/messages") && "bg-accent text-accent-foreground font-medium"
+            )}
+            onClick={() => handleNavigate("/messages")}
+          >
+            <MessageCircle className="h-4 w-4 mr-2" />
+            Chat
+            {totalUnread > 0 && (
+              <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] text-white font-medium">
+                {totalUnread > 9 ? '9+' : totalUnread}
+              </span>
+            )}
           </Button>
 
           {/* Analytics - standalone */}
