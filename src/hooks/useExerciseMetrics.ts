@@ -103,6 +103,16 @@ export function useExerciseMetrics(connectionId: string | null) {
     } catch { return {}; }
   });
 
+  // Re-load from localStorage once user resolves (covers the case where auth
+  // was still null when the hook first mounted, so the initializer returned {}).
+  useEffect(() => {
+    if (!tagsKey) return;
+    try {
+      const raw = localStorage.getItem(tagsKey);
+      if (raw) setParamTagsState(JSON.parse(raw));
+    } catch {}
+  }, [tagsKey]);
+
   const setParamTags = useCallback((exerciseName: string, tags: ParamTags | null) => {
     setParamTagsState(prev => {
       const next = { ...prev };
