@@ -328,6 +328,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
   const [illnessNrs, setIllnessNrs]           = useState(0);
 
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
 
   // ── Reset on open ──────────────────────────────────────────────────────────
   const wasOpen = useRef(false);
@@ -346,6 +347,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
     setIllnessOther('');
     setIllnessNrs(0);
     setSaving(false);
+    setSaveError(false);
   }
   if (!open) wasOpen.current = false;
 
@@ -427,7 +429,12 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
     };
     const ok = await onSave(input);
     setSaving(false);
-    if (ok) setStep('done');
+    if (ok) {
+      setSaveError(false);
+      setStep('done');
+    } else {
+      setSaveError(true);
+    }
   }
 
   // ── Progress — fixed positions so bar never moves backward ───────────────
@@ -618,13 +625,18 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
               </div>
             </div>
           </div>
-          <div className="shrink-0 flex gap-3 pt-4">
+          {saveError && (
+            <p className="text-xs text-destructive text-center pb-1">
+              Something went wrong — please try again.
+            </p>
+          )}
+          <div className="shrink-0 flex gap-3 pt-2">
             <Button variant="outline" className="flex-1" onClick={() => setStep('wellness_confirm')}>
               <ChevronLeft className="h-4 w-4 mr-1" /> Back
             </Button>
             <Button
               className="flex-1"
-              disabled={!canContinue}
+              disabled={!canContinue || saving}
               onClick={() => {
                 if (hasPain) setStep('body_map');
                 else if (hasIllness) setStep('illness_symptoms');
@@ -705,13 +717,18 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
               </div>
             )}
           </div>
-          <div className="shrink-0 flex gap-3 pt-4">
+          {saveError && (
+            <p className="text-xs text-destructive text-center pb-1">
+              Something went wrong — please try again.
+            </p>
+          )}
+          <div className="shrink-0 flex gap-3 pt-2">
             <Button variant="outline" className="flex-1" onClick={() => setStep('health_q')}>
               <ChevronLeft className="h-4 w-4 mr-1" /> Back
             </Button>
             <Button
               className="flex-1"
-              disabled={painDots.size === 0 || !!pendingKey}
+              disabled={painDots.size === 0 || !!pendingKey || saving}
               onClick={() => {
                 if (hasIllness) setStep('illness_symptoms');
                 else doSave();
@@ -800,7 +817,12 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
           <div className="flex-1 overflow-y-auto py-4">
             <NrsStrip value={illnessNrs} onChange={setIllnessNrs} label="Illness severity" />
           </div>
-          <div className="shrink-0 flex gap-3 pt-4">
+          {saveError && (
+            <p className="text-xs text-destructive text-center pb-2">
+              Something went wrong — please try again.
+            </p>
+          )}
+          <div className="shrink-0 flex gap-3 pt-2">
             <Button variant="outline" className="flex-1" onClick={() => setStep('illness_symptoms')}>
               <ChevronLeft className="h-4 w-4 mr-1" /> Back
             </Button>
