@@ -25,7 +25,7 @@ Claude Chat (browser) is my sparring partner for planning, discussion, and promp
 | 🟠 Later | Goal Management + test notifications | ⬜ Open |
 | 🔵 Future | **Invite flow** — coach sends invite link → athlete onboarding (language, name, birthday, photo) | ⬜ Open |
 | 🔵 Future | **Messages** — text chat between coach and athlete, timestamps, read receipts | ⬜ Open |
-| 🔵 Future | **Daily check-in** — wellbeing questionnaire (sleep, energy, mood, soreness) + OSTRC-H injury screening, stored per day, visible to coach | ⬜ Open |
+| 🟠 Later | **Daily check-in — coach visibility** — check-in data (wellness trend, body map pain dots, illness flags) surfaced in coach Analysis tab and squad dashboard | ⬜ Open |
 | 🔵 Future | **Athlete load chart** — weekly sRPE bar chart in athlete Profile tab | ⬜ Open |
 | 🔵 Future | Progress photos in athlete profile | ⬜ Open |
 | 🔵 Future | Photo/video in messages | ⬜ Open |
@@ -161,3 +161,4 @@ These features extend the existing Athlete Profile page in the coach web app.
 | Single-select enforcement in ExerciseLibraryPopup | singleSelect prop enforces radio behavior (ticking a second exercise deselects the first) with explicit confirm button everywhere except wizard exercise selection (EnhancedExerciseDistribution / ExerciseSelectionCell). CircuitBuilderDialog retains multi-select. |
 | In-session exercise swap (athlete app) | "⇅ Adjust" button on exercise card opens progression/regression chain bottom sheet; athlete picks substitute, optionally adds reason, exercise replaced for that session only. Swap logged in athlete_session_logs, visible to coach in CompletedSessionSheet. |
 | Athlete Profile — Settings tab | Per-athlete coach controls: units (kg/lb, km/miles), workout visibility range, feature toggles (Training, Log Activities, Messages, Performance Metrics), allow exercise swap toggle. UI built on coach side. |
+| Daily check-in (athlete app) | McLean 5-item wellness (auto-advance + confirm screen), body map pain selection with inline NRS rating (dot markers, severity colours), OSTRC-H illness symptom checklist (26 items) + overall NRS. Single centered Dialog — no re-animation between steps. Stored in `athlete_daily_checkins` (Supabase). Coach can enable/disable per athlete via Daily Monitoring toggle in Settings tab. |
