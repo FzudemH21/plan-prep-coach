@@ -188,11 +188,13 @@ function BodyMap({
   painDots,
   pendingKey,
   pendingDot,
+  pendingNrs,
   onSelect,
 }: {
   painDots: Map<string, PainDot>;
   pendingKey: string | null;
   pendingDot: { cx: number; cy: number } | null;
+  pendingNrs: number;
   onSelect: (regionKey: string, cx: number, cy: number) => void;
 }) {
   const [side, setSide] = useState<BodySide>('front');
@@ -262,17 +264,17 @@ function BodyMap({
               </g>
             ))}
 
-            {/* Pending dot (pulsing ring) */}
+            {/* Pending dot — coloured by current NRS selection */}
             {pendingKey && pendingDot && (
               <g style={{ pointerEvents: 'none' }}>
                 <circle cx={pendingDot.cx} cy={pendingDot.cy} r={9}
-                  fill="rgba(99,102,241,0.15)"
-                  stroke="rgba(99,102,241,0.8)"
+                  fill={nrsSeverityColor(pendingNrs)}
+                  stroke={nrsSeverityStroke(pendingNrs)}
                   strokeWidth={1.5}
                   strokeDasharray="3 2"
                 />
                 <circle cx={pendingDot.cx} cy={pendingDot.cy} r={4}
-                  fill="rgba(99,102,241,0.8)"
+                  fill={nrsSeverityStroke(pendingNrs)}
                 />
               </g>
             )}
@@ -654,6 +656,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
               painDots={painDots}
               pendingKey={pendingKey}
               pendingDot={pendingDot}
+              pendingNrs={pendingNrs}
               onSelect={handleMapSelect}
             />
 
