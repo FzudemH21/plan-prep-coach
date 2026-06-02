@@ -1389,7 +1389,16 @@ export default function AthleteSessionPage() {
               <AlertDialogCancel>Keep going</AlertDialogCancel>
               <AlertDialogAction
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={() => { setAbandonWarning(false); navigate(-1); }}
+                onClick={async () => {
+                  setAbandonWarning(false);
+                  if (sessionLogId) {
+                    await supabase
+                      .from('athlete_session_logs')
+                      .delete()
+                      .eq('id', sessionLogId);
+                  }
+                  navigate(-1);
+                }}
               >
                 Abandon
               </AlertDialogAction>
