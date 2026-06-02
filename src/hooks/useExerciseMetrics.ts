@@ -151,7 +151,11 @@ export function useExerciseMetrics(connectionId: string | null) {
           for (const k of Object.keys(set.values ?? {})) entry.paramNames.add(k);
         }
         if (ex.plannedParams) {
-          for (const k of Object.keys(ex.plannedParams)) entry.paramNames.add(k);
+          for (const k of Object.keys(ex.plannedParams)) {
+            // plannedParams stores per-set values as "ParamName_set1", "ParamName_set2" etc.
+            // Strip the suffix to get the column header (base param name).
+            entry.paramNames.add(k.replace(/_set\d+$/, ''));
+          }
         }
         map.set(ex.exerciseName, entry);
       }
