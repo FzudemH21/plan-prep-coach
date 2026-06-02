@@ -31,7 +31,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Save, Trash2, X, Calendar, User, Mic, MicOff, Clock, Files, TrendingUp, Settings, BarChart2 } from 'lucide-react';
+import { Plus, Save, Trash2, X, Calendar, User, Mic, MicOff, Clock, Files, TrendingUp, Settings, BarChart2, Activity } from 'lucide-react';
 import { useSpeechInput } from '@/hooks/useSpeechInput';
 import {
   Athlete,
@@ -48,6 +48,7 @@ import { AthleteDocumentsTab } from './AthleteDocumentsTab';
 import { AthletePerformanceTab } from './AthletePerformanceTab';
 import { AthleteSettingsTab } from './AthleteSettingsTab';
 import { AthleteAnalysisTab } from './AthleteAnalysisTab';
+import { AthleteMonitoringTab } from './AthleteMonitoringTab';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 
@@ -217,11 +218,15 @@ export function AthleteProfileView({
 
   return (
     <div className="h-full flex flex-col">
-      <Tabs defaultValue="profile" className="flex-1 flex flex-col">
+      <Tabs defaultValue="monitoring" className="flex-1 flex flex-col">
         <TabsList className="mx-1 mt-1 w-fit">
           <TabsTrigger value="profile" className="gap-2">
             <User className="h-4 w-4" />
             Profile
+          </TabsTrigger>
+          <TabsTrigger value="monitoring" className="gap-2">
+            <Activity className="h-4 w-4" />
+            Monitoring
           </TabsTrigger>
           <TabsTrigger value="performance" className="gap-2">
             <TrendingUp className="h-4 w-4" />
@@ -617,6 +622,10 @@ export function AthleteProfileView({
         </AlertDialog>
             </div>
           </ScrollArea>
+        </TabsContent>
+
+        <TabsContent value="monitoring" className="flex-1 mt-0 min-h-0">
+          <AthleteMonitoringTab athlete={athlete} />
         </TabsContent>
 
         <TabsContent value="performance" className="flex-1 mt-0 min-h-0">
