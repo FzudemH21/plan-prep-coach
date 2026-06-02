@@ -46,6 +46,7 @@ function TagDialog({
   open,
   exerciseName,
   paramNames,
+  paramUnits,
   current,
   onSave,
   onClear,
@@ -54,6 +55,7 @@ function TagDialog({
   open: boolean;
   exerciseName: string;
   paramNames: string[];
+  paramUnits: Record<string, string>;
   current: ParamTags | null;
   onSave: (tags: ParamTags) => void;
   onClear: () => void;
@@ -63,6 +65,8 @@ function TagDialog({
   const [weightParam, setWeightParam] = useState(current?.weightParam ?? '');
   const [repsParam,   setRepsParam]   = useState(current?.repsParam ?? '');
   const [rirParam,    setRirParam]    = useState(current?.rirParam ?? NONE);
+
+  const label = (p: string) => paramUnits[p] ? `${p} (${paramUnits[p]})` : p;
 
   const canSave = weightParam && repsParam && weightParam !== repsParam;
 
@@ -84,7 +88,7 @@ function TagDialog({
               <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
               <SelectContent>
                 {paramNames.map(p => (
-                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                  <SelectItem key={p} value={p}>{label(p)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -96,7 +100,7 @@ function TagDialog({
               <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
               <SelectContent>
                 {paramNames.filter(p => p !== weightParam).map(p => (
-                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                  <SelectItem key={p} value={p}>{label(p)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -112,7 +116,7 @@ function TagDialog({
               <SelectContent>
                 <SelectItem value={NONE}>None</SelectItem>
                 {paramNames.filter(p => p !== weightParam && p !== repsParam).map(p => (
-                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                  <SelectItem key={p} value={p}>{label(p)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -593,6 +597,7 @@ export function ExerciseMetricsTab({ athlete }: Props) {
           open={tagDialogOpen}
           exerciseName={selectedName}
           paramNames={selectedExercise?.allParamNames ?? []}
+          paramUnits={selectedExercise?.allParamUnits ?? {}}
           current={tags}
           onSave={t => setParamTags(selectedName, t)}
           onClear={() => setParamTags(selectedName, null)}

@@ -50,8 +50,9 @@ export interface ExerciseSession {
 export interface ExerciseEntry {
   name: string;
   sessionCount: number;
-  lastDate: string;       // yyyy-MM-dd
-  allParamNames: string[]; // union of all param names seen across all sets
+  lastDate: string;        // yyyy-MM-dd
+  allParamNames: string[]; // union of all base param names seen across all sets
+  allParamUnits: Record<string, string>; // base param name → unit string (if any)
 }
 
 // Param role tags — stored per exercise in localStorage
@@ -149,40 +150,55 @@ export function useExerciseMetrics(connectionId: string | null) {
 
   // ── Derived — exercise list ────────────────────────────────────────────────
 
+  // Helpers for param key normalisation
+  const baseKey = (k: string) => k.replace(/_set\d+/g, '').replace(/_unit$/, '');
+  const isUnitKey = (k: string) => {
+    // e.g. "Weight_unit", "Weight_set1_unit" → unit key for "Weight"
+    return /_unit$/.test(k);
+  };
+  const isMetaKey = (k: string) => k.endsWith('_unit') || /_set\d+/.test(k);
+
   const exercises = useMemo<ExerciseEntry[]>(() => {
-    const map = new Map<string, { dates: string[]; paramNames: Set<string> }>();
+    const map = new Map<string, { dates: string[]; paramNames: Set<string>; paramUnits: Record<string, string> }>();
     for (const log of rawLogs) {
       for (const ex of log.sets_logged ?? []) {
         if (ex.isCircuit || !ex.exerciseName) continue;
         if (!ex.sets?.length) continue;
-        const entry = map.get(ex.exerciseName) ?? { dates: [], paramNames: new Set() };
+        const entry = map.get(ex.exerciseName) ?? { dates: [], paramNames: new Set(), paramUnits: {} };
         entry.dates.push(log.date);
-        // Helper: strip storage suffixes to get the base column-header name.
-        // Keys like "Weight_set1", "Weight_unit", "Weight_set1_unit" are internal
-        // storage artefacts — the real param name is "Weight".
-        const baseKey = (k: string) => k.replace(/_set\d+/g, '').replace(/_unit$/, '');
-        const isMetaKey = (k: string) => k.endsWith('_unit') || /_set\d+/.test(k);
 
         for (const set of ex.sets) {
-          for (const k of Object.keys(set.values ?? {})) {
-            if (!isMetaKey(k)) entry.paramNames.add(k);
+          for (const [k, v] of Object.entries(set.values ?? {})) {
+            if (isUnitKey(k)) {
+              // e.g. k = "Weight_unit", v = "kg" → paramUnits["Weight"] = "kg"
+              const base = baseKey(k);
+              if (base && v) entry.paramUnits[base] = v;
+            } else if (!isMetaKey(k)) {
+              entry.paramNames.add(k);
+            }
           }
         }
         if (ex.plannedParams) {
-          for (const k of Object.keys(ex.plannedParams)) {
-            const base = baseKey(k);
-            if (base) entry.paramNames.add(base);
+          for (const [k, v] of Object.entries(ex.plannedParams)) {
+            if (isUnitKey(k)) {
+              const base = baseKey(k);
+              if (base && v) entry.paramUnits[base] = v;
+            } else {
+              const base = baseKey(k);
+              if (base) entry.paramNames.add(base);
+            }
           }
         }
         map.set(ex.exerciseName, entry);
       }
     }
     return Array.from(map.entries())
-      .map(([name, { dates, paramNames }]) => ({
+      .map(([name, { dates, paramNames, paramUnits }]) => ({
         name,
         sessionCount: dates.length,
         lastDate: dates.sort().reverse()[0],
         allParamNames: Array.from(paramNames).sort(),
+        allParamUnits: paramUnits,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [rawLogs]);
