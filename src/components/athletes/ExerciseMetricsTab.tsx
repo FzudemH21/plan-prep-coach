@@ -267,12 +267,14 @@ function SessionHistoryBlock({
 function ExerciseDetail({
   exerciseName,
   allParamNames,
+  paramUnits,
   sessions,
   tags,
   onConfigureTags,
 }: {
   exerciseName: string;
   allParamNames: string[];
+  paramUnits: Record<string, string>;
   sessions: ExerciseSession[];
   tags: ParamTags | null;
   onConfigureTags: () => void;
@@ -317,7 +319,7 @@ function ExerciseDetail({
     return sessionsWithE1RM.length ? sessionsWithE1RM[sessionsWithE1RM.length - 1].e1rm : null;
   }, [sessions, tags]);
 
-  const weightUnit = tags?.weightParam.match(/\(([^)]+)\)/)?.[1] ?? '';
+  const weightUnit = tags?.weightParam ? (paramUnits[tags.weightParam] ?? '') : '';
 
   return (
     <ScrollArea className="flex-1">
@@ -392,6 +394,13 @@ function ExerciseDetail({
                     axisLine={false}
                     tickLine={false}
                     domain={['auto', 'auto']}
+                    label={weightUnit ? {
+                      value: weightUnit,
+                      angle: -90,
+                      position: 'insideLeft',
+                      offset: 12,
+                      style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))' },
+                    } : undefined}
                   />
                   <Tooltip
                     contentStyle={{
@@ -585,6 +594,7 @@ export function ExerciseMetricsTab({ athlete }: Props) {
         <ExerciseDetail
           exerciseName={selectedExercise.name}
           allParamNames={selectedExercise.allParamNames}
+          paramUnits={selectedExercise.allParamUnits}
           sessions={history}
           tags={tags}
           onConfigureTags={() => setTagDialogOpen(true)}
