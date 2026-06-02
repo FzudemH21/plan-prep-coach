@@ -542,8 +542,7 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
     { key: 'exercise'    as TopTab, label: 'Exercise Metrics', icon: <Dumbbell   className="h-3.5 w-3.5" /> },
   ];
 
-  // ── Shared tab strip (rendered at the top of the left panel for bio/perf,
-  //    or as a standalone top bar for the exercise tab) ──────────────────────
+  // ── Shared tab strip (spans full width above all panels) ────────────────
   const tabStrip = (
     <div className="flex border-b shrink-0">
       {TABS.map(({ key, label, icon }) => (
@@ -564,23 +563,19 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
     </div>
   );
 
-  // ── Exercise tab: full-width layout ──────────────────────────────────────
-  if (topTab === 'exercise') {
-    return (
-      <div className="flex flex-col flex-1 min-h-0">
-        {tabStrip}
-        <ExerciseMetricsTab athlete={athlete} />
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-1 min-h-0">
+    <div className="flex flex-col flex-1 min-h-0">
+      {tabStrip}
+
+      {/* ── Exercise tab: full-width ──────────────────────────────────── */}
+      {topTab === 'exercise' && <ExerciseMetricsTab athlete={athlete} />}
+
+      {/* ── Bio + Performance tabs: left list + right detail ─────────── */}
+      {topTab !== 'exercise' && (
+      <div className="flex flex-1 min-h-0">
 
       {/* ── Left panel ────────────────────────────────────────────────────── */}
       <div className="w-80 shrink-0 border-r flex flex-col">
-
-        {tabStrip}
 
         {/* Search + Add */}
         <div className="p-3 border-b flex items-center gap-2 shrink-0">
@@ -665,6 +660,9 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
 
       {/* ── Right panel ───────────────────────────────────────────────────── */}
       {rightPanel}
+
+      </div>
+      )}
 
       {/* ── Add Biometric Dialog ─────────────────────────────────────────── */}
       <Dialog open={showAddBiometric} onOpenChange={setShowAddBiometric}>

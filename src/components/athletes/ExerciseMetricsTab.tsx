@@ -59,9 +59,10 @@ function TagDialog({
   onClear: () => void;
   onClose: () => void;
 }) {
+  const NONE = '__none__';
   const [weightParam, setWeightParam] = useState(current?.weightParam ?? '');
   const [repsParam,   setRepsParam]   = useState(current?.repsParam ?? '');
-  const [rirParam,    setRirParam]    = useState(current?.rirParam ?? '');
+  const [rirParam,    setRirParam]    = useState(current?.rirParam ?? NONE);
 
   const canSave = weightParam && repsParam && weightParam !== repsParam;
 
@@ -109,7 +110,7 @@ function TagDialog({
             <Select value={rirParam} onValueChange={setRirParam}>
               <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">None</SelectItem>
+                <SelectItem value={NONE}>None</SelectItem>
                 {paramNames.filter(p => p !== weightParam && p !== repsParam).map(p => (
                   <SelectItem key={p} value={p}>{p}</SelectItem>
                 ))}
@@ -132,7 +133,7 @@ function TagDialog({
           <Button
             disabled={!canSave}
             onClick={() => {
-              onSave({ weightParam, repsParam, rirParam: rirParam || undefined });
+              onSave({ weightParam, repsParam, rirParam: (rirParam && rirParam !== NONE) ? rirParam : undefined });
               onClose();
             }}
           >
