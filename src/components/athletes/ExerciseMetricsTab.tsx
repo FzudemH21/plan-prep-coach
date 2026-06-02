@@ -282,6 +282,8 @@ function ExerciseDetail({
   const [timeRange, setTimeRange] = useState<'all' | '3m' | '6m' | '1y'>('all');
   // 'e1rm' or any base param name
   const [chartMetric, setChartMetric] = useState<string>('e1rm');
+  type Aggregation = 'max' | 'min' | 'avg' | 'sum';
+  const [aggregation, setAggregation] = useState<Aggregation>('max');
 
   const filteredSessions = useMemo(() => {
     if (timeRange === 'all') return sessions;
@@ -317,19 +319,25 @@ function ExerciseDetail({
         .filter(s => s.e1rm !== null)
         .map(s => ({ label: formatShortDate(s.date), value: parseFloat((s.e1rm as number).toFixed(1)) }));
     }
-    // Single param: max completed-set value per session
+    // Single param: aggregate completed-set values per session
     return filteredSessions
       .map(s => {
-        let max: number | null = null;
+        const vals: number[] = [];
         for (const set of s.sets) {
           if (!set.completed) continue;
           const v = parseFloat(set.values[chartMetric] ?? '');
-          if (!isNaN(v) && (max === null || v > max)) max = v;
+          if (!isNaN(v)) vals.push(v);
         }
-        return max !== null ? { label: formatShortDate(s.date), value: max } : null;
+        if (vals.length === 0) return null;
+        let agg: number;
+        if (aggregation === 'max') agg = Math.max(...vals);
+        else if (aggregation === 'min') agg = Math.min(...vals);
+        else if (aggregation === 'sum') agg = vals.reduce((a, b) => a + b, 0);
+        else agg = vals.reduce((a, b) => a + b, 0) / vals.length; // avg
+        return { label: formatShortDate(s.date), value: parseFloat(agg.toFixed(2)) };
       })
       .filter((d): d is { label: string; value: number } => d !== null);
-  }, [filteredSessions, chartMetric, tags]);
+  }, [filteredSessions, chartMetric, aggregation, tags]);
 
   const latestE1RM = useMemo(() => {
     if (!tags) return null;
@@ -339,9 +347,10 @@ function ExerciseDetail({
 
   const weightUnit = tags?.weightParam ? (paramUnits[tags.weightParam] ?? '') : '';
   const activeMetricUnit = chartMetric === 'e1rm' ? weightUnit : (paramUnits[chartMetric] ?? '');
+  const aggLabel: Record<string, string> = { max: 'Max', min: 'Min', avg: 'Avg', sum: 'Sum' };
   const activeMetricLabel = chartMetric === 'e1rm'
     ? `est. 1RM${weightUnit ? ` (${weightUnit})` : ''}`
-    : `${chartMetric}${activeMetricUnit ? ` (${activeMetricUnit})` : ''}`;
+    : `${aggLabel[aggregation]} ${chartMetric}${activeMetricUnit ? ` (${activeMetricUnit})` : ''}`;
 
   return (
     <ScrollArea className="flex-1">
@@ -377,7 +386,7 @@ function ExerciseDetail({
         <div className="space-y-2">
           {/* Metric selector */}
           <div className="flex items-center gap-2 flex-wrap">
-            <Select value={chartMetric} onValueChange={setChartMetric}>
+            <Select value={chartMetric} onValueChange={v => { setChartMetric(v); if (v === 'e1rm') setAggregation('max'); }}>
               <SelectTrigger className="h-7 text-xs w-48">
                 <SelectValue />
               </SelectTrigger>
@@ -389,11 +398,27 @@ function ExerciseDetail({
                 )}
                 {numericParamNames.map(p => (
                   <SelectItem key={p} value={p}>
-                    {p}{paramUnits[p] ? ` (${paramUnits[p]})` : ''} — max / session
+                    {p}{paramUnits[p] ? ` (${paramUnits[p]})` : ''}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+
+            {/* Aggregation picker — only for raw params */}
+            {chartMetric !== 'e1rm' && (
+              <Select value={aggregation} onValueChange={v => setAggregation(v as Aggregation)}>
+                <SelectTrigger className="h-7 text-xs w-24">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="max">Max</SelectItem>
+                  <SelectItem value="min">Min</SelectItem>
+                  <SelectItem value="avg">Average</SelectItem>
+                  <SelectItem value="sum">Sum</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+
             {(['all', '3m', '6m', '1y'] as const).map(r => (
               <Button
                 key={r}
