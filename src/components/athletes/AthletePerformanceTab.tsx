@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { ExerciseMetricsTab } from '@/components/athletes/ExerciseMetricsTab';
 import { format, subDays, parseISO } from 'date-fns';
 import {
   AreaChart,
@@ -541,52 +542,65 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
     { key: 'exercise'    as TopTab, label: 'Exercise Metrics', icon: <Dumbbell   className="h-3.5 w-3.5" /> },
   ];
 
+  // ── Shared tab strip (rendered at the top of the left panel for bio/perf,
+  //    or as a standalone top bar for the exercise tab) ──────────────────────
+  const tabStrip = (
+    <div className="flex border-b shrink-0">
+      {TABS.map(({ key, label, icon }) => (
+        <button
+          key={key}
+          onClick={() => { setTopTab(key); setSearch(''); }}
+          className={cn(
+            'flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px',
+            topTab === key
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40'
+          )}
+        >
+          {icon}
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  // ── Exercise tab: full-width layout ──────────────────────────────────────
+  if (topTab === 'exercise') {
+    return (
+      <div className="flex flex-col flex-1 min-h-0">
+        {tabStrip}
+        <ExerciseMetricsTab athlete={athlete} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-1 min-h-0">
 
       {/* ── Left panel ────────────────────────────────────────────────────── */}
       <div className="w-80 shrink-0 border-r flex flex-col">
 
-        {/* Tab strip inside the left panel */}
-        <div className="flex border-b shrink-0">
-          {TABS.map(({ key, label, icon }) => (
-            <button
-              key={key}
-              onClick={() => { setTopTab(key); setSearch(''); }}
-              className={cn(
-                'flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px',
-                topTab === key
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40'
-              )}
-            >
-              {icon}
-              {label}
-            </button>
-          ))}
-        </div>
+        {tabStrip}
 
-        {/* Search + Add (bio & performance only) */}
-        {topTab !== 'exercise' && (
-          <div className="p-3 border-b flex items-center gap-2 shrink-0">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <Input
-                placeholder={topTab === 'bio' ? 'Search metrics…' : 'Search parameters…'}
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="pl-8 h-8 text-sm"
-              />
-            </div>
-            <Button
-              variant="outline" size="sm" className="h-8 gap-1 shrink-0 text-xs"
-              onClick={() => topTab === 'bio' ? setShowAddBiometric(true) : setShowAddPerformance(true)}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add
-            </Button>
+        {/* Search + Add */}
+        <div className="p-3 border-b flex items-center gap-2 shrink-0">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder={topTab === 'bio' ? 'Search metrics…' : 'Search parameters…'}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-8 h-8 text-sm"
+            />
           </div>
-        )}
+          <Button
+            variant="outline" size="sm" className="h-8 gap-1 shrink-0 text-xs"
+            onClick={() => topTab === 'bio' ? setShowAddBiometric(true) : setShowAddPerformance(true)}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add
+          </Button>
+        </div>
 
         {/* List area */}
         {topTab === 'bio' && (
@@ -647,31 +661,10 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
             )}
           </ScrollArea>
         )}
-
-        {topTab === 'exercise' && (
-          <div className="flex-1 flex items-center justify-center p-4">
-            <p className="text-xs text-muted-foreground text-center leading-relaxed">
-              Exercise data will appear here once the athlete app integration is live.
-            </p>
-          </div>
-        )}
       </div>
 
       {/* ── Right panel ───────────────────────────────────────────────────── */}
-      {topTab !== 'exercise' ? rightPanel : (
-        <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
-          <div className="rounded-full bg-muted/50 p-5">
-            <Dumbbell className="h-10 w-10 text-muted-foreground opacity-40" />
-          </div>
-          <div className="max-w-xs space-y-2">
-            <h3 className="font-semibold text-base">Exercise Metrics</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Whenever an athlete logs a workout in the athlete app — sets, reps, weight, tempo — the data will automatically sync and appear here.
-            </p>
-          </div>
-          <Badge variant="secondary" className="text-xs">Coming soon</Badge>
-        </div>
-      )}
+      {rightPanel}
 
       {/* ── Add Biometric Dialog ─────────────────────────────────────────── */}
       <Dialog open={showAddBiometric} onOpenChange={setShowAddBiometric}>
