@@ -14,6 +14,7 @@ export interface AthleteConnection {
   inviteCode: string;
   connectedAt: string | null;
   weeksAhead: number;
+  monitoringEnabled: boolean;
   profileData: AthleteProfileData;
 }
 
@@ -152,6 +153,7 @@ export function useAthleteApp() {
           inviteCode: connData.invite_code,
           connectedAt: connData.connected_at,
           weeksAhead: connData.weeks_ahead ?? 4,
+          monitoringEnabled: connData.monitoring_enabled ?? true,
           profileData: (connData.profile_data as AthleteProfileData) ?? {},
         };
         setConnection(conn);

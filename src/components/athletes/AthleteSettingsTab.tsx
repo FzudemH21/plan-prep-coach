@@ -32,6 +32,7 @@ import {
   Check,
   Link2,
   UserX,
+  Activity,
 } from 'lucide-react';
 import { Athlete, AthleteSettings, DEFAULT_ATHLETE_SETTINGS } from '@/types/athlete';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
@@ -358,6 +359,51 @@ function AppAccountCard({ athlete }: { athlete: Athlete }) {
   );
 }
 
+// ── Monitoring card ───────────────────────────────────────────────────────────
+
+function MonitoringCard({ athlete }: { athlete: Athlete }) {
+  const { getConnectionForAthlete, updateMonitoringEnabled } = useAthleteConnections();
+  const connection = getConnectionForAthlete(athlete.id);
+  const [saving, setSaving] = useState(false);
+
+  if (!connection) return null;
+
+  const handleToggle = async (enabled: boolean) => {
+    setSaving(true);
+    try {
+      await updateMonitoringEnabled(connection.id, enabled);
+    } catch (e) {
+      console.error('Failed to update monitoring', e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          <Activity className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-base">Daily Monitoring</CardTitle>
+        </div>
+        <CardDescription>
+          When enabled, the athlete is prompted with a daily check-in on first app open each day:
+          wellness (McLean 5-item), pain location &amp; severity (body map + NRS), and illness symptoms (OSTRC-H).
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="divide-y border rounded-lg">
+        <FeatureToggle
+          label="Daily check-in"
+          description="Athlete sees the wellness + pain/illness questionnaire each morning"
+          checked={connection.monitoringEnabled}
+          onCheckedChange={handleToggle}
+        />
+        {saving && <p className="text-xs text-muted-foreground px-1 py-2">Saving…</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 interface AthleteSettingsTabProps {
@@ -557,6 +603,9 @@ export function AthleteSettingsTab({ athlete, onUpdateAthlete }: AthleteSettings
             </div>
           </CardContent>
         </Card>
+
+        {/* Monitoring */}
+        <MonitoringCard athlete={athlete} />
 
         {/* Workout Customization */}
         <Card>

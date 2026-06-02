@@ -31,6 +31,7 @@ export interface AthleteConnection {
   connectedAt: string | null;
   createdAt: string;
   weeksAhead: number;
+  monitoringEnabled: boolean;
   profileData: AthleteProfileData;
 }
 
@@ -46,6 +47,7 @@ function rowToConnection(row: Record<string, unknown>): AthleteConnection {
     connectedAt: (row.connected_at as string) ?? null,
     createdAt: row.created_at as string,
     weeksAhead: (row.weeks_ahead as number) ?? 4,
+    monitoringEnabled: (row.monitoring_enabled as boolean) ?? true,
     profileData: (row.profile_data as AthleteProfileData) ?? {},
   };
 }
@@ -123,6 +125,18 @@ export function useAthleteConnections() {
     );
   }, []);
 
+  /** Enable or disable daily monitoring (check-in) for an athlete. */
+  const updateMonitoringEnabled = useCallback(async (connectionId: string, enabled: boolean) => {
+    const { error } = await supabase
+      .from('athlete_connections')
+      .update({ monitoring_enabled: enabled })
+      .eq('id', connectionId);
+    if (error) throw error;
+    setConnections(prev =>
+      prev.map(c => c.id === connectionId ? { ...c, monitoringEnabled: enabled } : c)
+    );
+  }, []);
+
   /** Delete a connection (revoke athlete app access). */
   const revokeConnection = useCallback(async (connectionId: string) => {
     const { error } = await supabase
@@ -147,6 +161,7 @@ export function useAthleteConnections() {
     syncProfileToConnection,
     revokeConnection,
     updateWeeksAhead,
+    updateMonitoringEnabled,
     getConnectionForAthlete,
     reload: load,
   };

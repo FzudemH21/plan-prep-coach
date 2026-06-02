@@ -244,14 +244,13 @@ export default function AthleteTodayPage() {
   const { todayCheckin, saveCheckin } = useDailyCheckin(athleteId);
   const [checkinOpen, setCheckinOpen] = useState(false);
 
-  // Open check-in sheet once per day if not yet completed
+  // Open check-in sheet once per day if not yet completed and monitoring is enabled
   useEffect(() => {
-    if (!loading && todayCheckin === null) {
-      // Small delay so the Today tab renders first
+    if (!loading && todayCheckin === null && connection?.monitoringEnabled !== false) {
       const t = setTimeout(() => setCheckinOpen(true), 600);
       return () => clearTimeout(t);
     }
-  }, [loading, todayCheckin]);
+  }, [loading, todayCheckin, connection?.monitoringEnabled]);
 
   if (loading) {
     return (
