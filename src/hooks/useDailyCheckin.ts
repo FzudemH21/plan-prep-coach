@@ -50,7 +50,7 @@ export interface DailyCheckinInput {
 
 interface DbRow {
   id: string;
-  athlete_id: string;
+  athlete_connection_id: string;
   date: string;
   wellness_fatigue: number | null;
   wellness_sleep: number | null;
@@ -69,7 +69,7 @@ interface DbRow {
 function fromDb(row: DbRow): DailyCheckin {
   return {
     id: row.id,
-    athleteId: row.athlete_id,
+    athleteId: row.athlete_connection_id,
     date: row.date,
     wellnessFatigue: row.wellness_fatigue,
     wellnessSleep: row.wellness_sleep,
@@ -88,7 +88,8 @@ function fromDb(row: DbRow): DailyCheckin {
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
-export function useDailyCheckin(athleteId: string | null) {
+export function useDailyCheckin(connectionId: string | null) {
+  const athleteId = connectionId; // alias for internal use
   const { user } = useAuth();
   const [todayCheckin, setTodayCheckin] = useState<DailyCheckin | null | undefined>(undefined);
   const [recentCheckins, setRecentCheckins] = useState<DailyCheckin[]>([]);
@@ -103,7 +104,7 @@ export function useDailyCheckin(athleteId: string | null) {
       const { data: todayRow } = await supabase
         .from('athlete_daily_checkins')
         .select('*')
-        .eq('athlete_id', athleteId)
+        .eq('athlete_connection_id', athleteId)
         .eq('date', today)
         .maybeSingle();
 
@@ -114,7 +115,7 @@ export function useDailyCheckin(athleteId: string | null) {
       const { data: recent } = await supabase
         .from('athlete_daily_checkins')
         .select('*')
-        .eq('athlete_id', athleteId)
+        .eq('athlete_connection_id', athleteId)
         .gte('date', ninetyDaysAgo.toISOString().slice(0, 10))
         .order('date', { ascending: false });
 
@@ -129,7 +130,7 @@ export function useDailyCheckin(athleteId: string | null) {
   const saveCheckin = useCallback(async (input: DailyCheckinInput): Promise<boolean> => {
     if (!athleteId || !user) return false;
     const payload = {
-      athlete_id: athleteId,
+      athlete_connection_id: athleteId,
       date: input.date,
       wellness_fatigue: input.wellnessFatigue,
       wellness_sleep: input.wellnessSleep,
@@ -145,7 +146,7 @@ export function useDailyCheckin(athleteId: string | null) {
     };
     const { data, error } = await supabase
       .from('athlete_daily_checkins')
-      .upsert(payload, { onConflict: 'athlete_id,date' })
+      .upsert(payload, { onConflict: 'athlete_connection_id,date' })
       .select()
       .single();
     if (error) { console.error('saveCheckin:', error); return false; }

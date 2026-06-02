@@ -240,8 +240,8 @@ function UpcomingStrip({ schedule }: { schedule: AthleteScheduleEntry[] }) {
 
 export default function AthleteTodayPage() {
   const { connection, schedule, loading, error, getTodayEntry, getSessionLog } = useAthleteApp();
-  const athleteId = connection?.athleteLocalId ?? null;
-  const { todayCheckin, saveCheckin } = useDailyCheckin(athleteId);
+  const connectionId = connection?.id ?? null;
+  const { todayCheckin, saveCheckin } = useDailyCheckin(connectionId);
   const [checkinOpen, setCheckinOpen] = useState(false);
 
   // Open check-in sheet once per day if not yet completed and monitoring is enabled

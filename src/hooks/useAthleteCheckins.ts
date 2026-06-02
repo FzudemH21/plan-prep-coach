@@ -86,7 +86,7 @@ export function useAthleteCheckins(athleteId: string | null, days = 90) {
     const { data, error } = await supabase
       .from('athlete_daily_checkins')
       .select('*')
-      .eq('athlete_id', athleteId)
+      .eq('athlete_connection_id', athleteId)
       .gte('date', from.toISOString().slice(0, 10))
       .order('date', { ascending: false });
     if (!error && data) setCheckins(data.map(r => fromRow(r as Record<string, unknown>)));

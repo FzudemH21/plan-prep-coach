@@ -1,9 +1,10 @@
 -- Daily check-in table
 -- McLean 5-item wellness + body map pain areas (NRS) + OSTRC-H illness symptoms
+-- Links via athlete_connections.id (no separate athletes table exists)
 
 create table if not exists public.athlete_daily_checkins (
   id                    uuid primary key default gen_random_uuid(),
-  athlete_id            uuid not null references public.athletes(id) on delete cascade,
+  athlete_connection_id uuid not null references public.athlete_connections(id) on delete cascade,
   date                  date not null,
 
   -- McLean 5-item wellbeing (1–5, higher = better)
@@ -16,18 +17,17 @@ create table if not exists public.athlete_daily_checkins (
   -- Pain (body map, NRS 0–10 per area)
   has_pain              boolean not null default false,
   pain_areas            jsonb   not null default '[]'::jsonb,
-  -- [{areaId: number, areaLabel: string, severity: number}]
+  -- [{regionKey: string, areaLabel: string, severity: number}]
 
   -- Illness (OSTRC-H symptom checklist + single NRS)
   has_illness           boolean not null default false,
   illness_symptoms      jsonb   not null default '[]'::jsonb,
-  -- array of symptom IDs (strings)
   illness_symptom_other text    not null default '',
   illness_nrs           smallint check (illness_nrs between 0 and 10),
 
   created_at            timestamptz not null default now(),
 
-  unique (athlete_id, date)
+  unique (athlete_connection_id, date)
 );
 
 -- RLS
@@ -37,13 +37,13 @@ alter table public.athlete_daily_checkins enable row level security;
 create policy "athlete_daily_checkins_athlete_rw" on public.athlete_daily_checkins
   for all
   using (
-    athlete_id in (
-      select id from public.athletes where auth_user_id = auth.uid()
+    athlete_connection_id in (
+      select id from public.athlete_connections where athlete_auth_user_id = auth.uid()
     )
   )
   with check (
-    athlete_id in (
-      select id from public.athletes where auth_user_id = auth.uid()
+    athlete_connection_id in (
+      select id from public.athlete_connections where athlete_auth_user_id = auth.uid()
     )
   );
 
@@ -51,10 +51,10 @@ create policy "athlete_daily_checkins_athlete_rw" on public.athlete_daily_checki
 create policy "athlete_daily_checkins_coach_read" on public.athlete_daily_checkins
   for select
   using (
-    athlete_id in (
-      select id from public.athletes where coach_user_id = auth.uid()
+    athlete_connection_id in (
+      select id from public.athlete_connections where coach_user_id = auth.uid()
     )
   );
 
-create index if not exists athlete_daily_checkins_athlete_date
-  on public.athlete_daily_checkins (athlete_id, date desc);
+create index if not exists athlete_daily_checkins_connection_date
+  on public.athlete_daily_checkins (athlete_connection_id, date desc);

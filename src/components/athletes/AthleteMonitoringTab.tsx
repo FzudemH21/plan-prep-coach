@@ -1,12 +1,16 @@
 import { useState, useMemo } from 'react';
+import { format, isWithinInterval } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronUp, AlertTriangle, Smile, Activity } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, AlertTriangle, Smile, Activity, CalendarDays, CalendarIcon, X } from 'lucide-react';
 import {
   LineChart, Line, ResponsiveContainer, XAxis, YAxis,
-  Tooltip, ReferenceLine, CartesianGrid,
+  Tooltip, ReferenceLine, ReferenceArea, CartesianGrid,
 } from 'recharts';
 import {
   FRONT_REGIONS, BACK_REGIONS,
@@ -224,8 +228,8 @@ function BodyMapReadOnly({ painAreas }: { painAreas: AthleteCheckin['painAreas']
     imgSrc, viewBox, viewDots,
   }: { imgSrc: string; viewBox: string; viewDots: PainDotInfo[] }) {
     return (
-      <div className="relative" style={{ width: '100%' }}>
-        <img src={imgSrc} alt="" style={{ width: '100%', height: 'auto', display: 'block' }} />
+      <div className="relative" style={{ width: '100%', height: '340px' }}>
+        <img src={imgSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
         <svg
           style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
           viewBox={viewBox}
@@ -264,21 +268,140 @@ function BodyMapReadOnly({ painAreas }: { painAreas: AthleteCheckin['painAreas']
 
 // ── Wellness trend chart ──────────────────────────────────────────────────────
 
-function ZScoreChart({ checkins, stats }: { checkins: AthleteCheckin[]; stats: WellnessStats | null }) {
+// ── Calendar range picker ─────────────────────────────────────────────────────
+
+type CalendarPhase = 'start' | 'end';
+
+interface CalendarRangePickerProps {
+  from: Date | null;
+  to: Date | null;
+  onChange: (from: Date, to: Date) => void;
+  onClear: () => void;
+}
+
+function CalendarRangePicker({ from, to, onChange, onClear }: CalendarRangePickerProps) {
+  const [open, setOpen] = useState(false);
+  const [phase, setPhase] = useState<CalendarPhase>('start');
+  const [draft, setDraft] = useState<{ from: Date | null; to: Date | null }>({ from, to });
+
+  const handleOpenChange = (o: boolean) => {
+    if (o) { setDraft({ from, to }); setPhase('start'); }
+    setOpen(o);
+  };
+
+  const handleSelect = (date: Date | undefined) => {
+    if (!date) return;
+    if (phase === 'start' || !draft.from) {
+      setDraft({ from: date, to: date });
+      setPhase('end');
+      return;
+    }
+    if (date >= draft.from) {
+      onChange(draft.from, date);
+      setOpen(false);
+      setPhase('start');
+    } else {
+      setDraft({ from: date, to: date });
+      setPhase('end');
+    }
+  };
+
+  const triggerLabel = from && to
+    ? `${format(from, 'MMM d, yyyy')} – ${format(to, 'MMM d, yyyy')}`
+    : 'Select date range…';
+
+  const isDraft = (d: Date) => {
+    if (!draft.from) return false;
+    if (!draft.to) return d.getTime() === draft.from.getTime();
+    return isWithinInterval(d, { start: draft.from, end: draft.to });
+  };
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-2 h-7 text-xs font-normal">
+          <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground" />
+          {triggerLabel}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-3" align="end">
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground px-1">
+            {phase === 'start' ? 'Click to set start date' : 'Click to set end date'}
+          </p>
+          <Calendar
+            mode="single"
+            selected={draft.from ?? undefined}
+            onSelect={handleSelect}
+            modifiers={{
+              start:  (d) => !!draft.from && d.getTime() === draft.from.getTime(),
+              end:    (d) => !!draft.to   && d.getTime() === draft.to.getTime(),
+              middle: (d) => {
+                if (!draft.from || !draft.to) return false;
+                return d > draft.from && d < draft.to;
+              },
+              inRange: isDraft,
+            }}
+            modifiersStyles={{
+              start:  { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))', fontWeight: 'bold', borderRadius: '4px' },
+              end:    { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))', fontWeight: 'bold', borderRadius: '4px' },
+              middle: { backgroundColor: 'hsl(var(--muted))', color: 'hsl(var(--foreground))' },
+            }}
+            className="rounded-md pointer-events-auto"
+          />
+          {(from || to) && (
+            <div className="flex justify-end pt-1">
+              <Button variant="ghost" size="sm"
+                className="h-7 text-xs text-muted-foreground hover:text-destructive"
+                onClick={() => { onClear(); setOpen(false); }}>
+                <X className="h-3 w-3 mr-1" /> Clear
+              </Button>
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ── Trend helpers ─────────────────────────────────────────────────────────────
+
+function movingAverage(values: (number | null)[], window: number): (number | null)[] {
+  return values.map((_, i) => {
+    if (i < window - 1) return null; // need full window before computing
+    const slice = values.slice(i - window + 1, i + 1).filter((v): v is number => v !== null);
+    if (slice.length < window) return null; // skip if any nulls in the window
+    return parseFloat((slice.reduce((a, b) => a + b, 0) / slice.length).toFixed(2));
+  });
+}
+
+// ── Chart ─────────────────────────────────────────────────────────────────────
+
+function ZScoreChart({ checkins, stats, maWindow = 7 }: {
+  checkins: AthleteCheckin[];
+  stats: WellnessStats | null;
+  maWindow?: number;
+}) {
   const data = useMemo(() => {
     const sorted = [...checkins].reverse(); // oldest → newest
-    return sorted.map(c => {
+    const zValues = sorted.map(c => {
       const comp = wellnessComposite(c);
-      const z    = (comp !== null && stats) ? zScore(comp, stats) : null;
-      const d    = new Date(c.date + 'T12:00:00');
+      return (comp !== null && stats) ? zScore(comp, stats) : null;
+    });
+    const maValues = movingAverage(zValues, maWindow);
+
+    return sorted.map((c, i) => {
+      const comp = wellnessComposite(c);
+      const d = new Date(c.date + 'T12:00:00');
       return {
         date: c.date,
         label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        z: z !== null ? parseFloat(z.toFixed(2)) : null,
+        z:    zValues[i] !== null ? parseFloat((zValues[i] as number).toFixed(2)) : null,
+        ma:   maValues[i],
         composite: comp !== null ? parseFloat(comp.toFixed(2)) : null,
       };
     });
-  }, [checkins, stats]);
+  }, [checkins, stats, maWindow]);
 
   if (data.length < 2) {
     return (
@@ -298,19 +421,22 @@ function ZScoreChart({ checkins, stats }: { checkins: AthleteCheckin[]; stats: W
   };
 
   const CustomTooltip = ({ active, payload, label }: {
-    active?: boolean; payload?: { value: number; payload: { composite: number | null; z: number | null } }[]; label?: string
+    active?: boolean;
+    payload?: { dataKey: string; value: number; payload: { composite: number | null; z: number | null; ma: number | null } }[];
+    label?: string;
   }) => {
     if (!active || !payload?.length) return null;
-    const { composite, z } = payload[0].payload;
+    const p = payload[0].payload;
     return (
       <div className="bg-background border border-border rounded-lg shadow-lg px-3 py-2 text-xs space-y-1">
         <p className="font-semibold">{label}</p>
-        {composite !== null && <p>Wellness: <span className="font-medium">{composite.toFixed(1)} / 5</span></p>}
-        {z !== null && (
-          <p className={cn('font-semibold', zColor(z))}>
-            z = {z >= 0 ? '+' : ''}{z.toFixed(2)} — {zLabel(z)}
+        {p.composite !== null && <p>Wellness: <span className="font-medium">{p.composite.toFixed(1)} / 5</span></p>}
+        {p.z !== null && (
+          <p className={cn('font-semibold', zColor(p.z))}>
+            z = {p.z >= 0 ? '+' : ''}{p.z.toFixed(2)} — {zLabel(p.z)}
           </p>
         )}
+        {p.ma !== null && <p className="text-slate-400">{maWindow}d MA: {p.ma >= 0 ? '+' : ''}{p.ma.toFixed(2)}</p>}
       </div>
     );
   };
@@ -343,19 +469,17 @@ function ZScoreChart({ checkins, stats }: { checkins: AthleteCheckin[]; stats: W
           axisLine={false}
           tickLine={false}
         />
-        <ReferenceLine y={0}  stroke="#94a3b8" strokeWidth={1} strokeDasharray="4 2" />
-        <ReferenceLine y={1}  stroke="#16a34a" strokeWidth={1} strokeDasharray="2 3" opacity={0.5} />
-        <ReferenceLine y={-1} stroke="#f97316" strokeWidth={1} strokeDasharray="2 3" opacity={0.5} />
+        <ReferenceArea y1={-1} y2={1} fill="#6366f1" fillOpacity={0.06} />
+        <ReferenceLine y={0} stroke="#94a3b8" strokeWidth={1} strokeDasharray="4 2" />
         <Tooltip content={<CustomTooltip />} />
-        <Line
-          type="monotone"
-          dataKey="z"
-          stroke="#6366f1"
-          strokeWidth={2}
-          dot={<CustomDot />}
-          activeDot={{ r: 5, fill: '#6366f1' }}
-          connectNulls={false}
-        />
+        {/* Raw z-scores */}
+        <Line type="monotone" dataKey="z" stroke="#6366f1" strokeWidth={1.5}
+          dot={<CustomDot />} activeDot={{ r: 5, fill: '#6366f1' }} connectNulls={false} opacity={0.5} />
+        {/* Moving average — only renders once enough data points exist */}
+        {data.length >= maWindow && (
+          <Line type="monotone" dataKey="ma" stroke="#6366f1" strokeWidth={2.5}
+            dot={false} activeDot={false} connectNulls={false} />
+        )}
       </LineChart>
     </ResponsiveContainer>
   );
@@ -380,26 +504,46 @@ interface Props { athlete: Athlete }
 export function AthleteMonitoringTab({ athlete }: Props) {
   const { getConnectionForAthlete } = useAthleteConnections();
   const connection = getConnectionForAthlete(athlete.id);
-  const athleteId  = connection?.athleteLocalId ?? null;
+  const athleteId  = connection?.id ?? null;
 
   const { checkins, loading } = useAthleteCheckins(athleteId);
   const [wellnessExpanded, setWellnessExpanded] = useState(false);
-  const [chartDays, setChartDays] = useState<7 | 14 | 28 | 90>(28);
+  const [rangeFrom, setRangeFrom] = useState<Date | null>(null);
+  const [rangeTo,   setRangeTo]   = useState<Date | null>(null);
+  const [selectedIdx, setSelectedIdx] = useState(0); // 0 = latest, checkins is newest-first
 
   // Stats over full history
   const stats = useMemo(() => computeWellnessStats(checkins), [checkins]);
 
-  // Latest check-in
-  const latest = checkins[0] ?? null;
-  const latestComposite = latest ? wellnessComposite(latest) : null;
+  // Selected check-in (navigable)
+  const selected = checkins[selectedIdx] ?? checkins[0] ?? null;
+  const selectedComposite = selected ? wellnessComposite(selected) : null;
+
+  // Keep selectedIdx in bounds when checkins reload
+  const safeIdx = Math.min(selectedIdx, Math.max(0, checkins.length - 1));
+
+  function goNewer() { setSelectedIdx(i => Math.max(0, i - 1)); }
+  function goOlder() { setSelectedIdx(i => Math.min(checkins.length - 1, i + 1)); }
+
+  function formatCheckinDate(date: string): string {
+    const today     = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    if (date === today)     return 'Today';
+    if (date === yesterday) return 'Yesterday';
+    return new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  }
 
   // Chart data (filtered to selected window)
   const chartCheckins = useMemo(() => {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - chartDays);
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
-    return checkins.filter(c => c.date >= cutoffStr);
-  }, [checkins, chartDays]);
+    if (!rangeFrom || !rangeTo) return checkins; // no filter = all data
+    const fromStr = rangeFrom.toISOString().slice(0, 10);
+    const toStr   = rangeTo.toISOString().slice(0, 10);
+    return checkins.filter(c => c.date >= fromStr && c.date <= toStr);
+  }, [checkins, rangeFrom, rangeTo]);
+
+  const chartDaysSpan = rangeFrom && rangeTo
+    ? Math.round((rangeTo.getTime() - rangeFrom.getTime()) / 86400000) + 1
+    : null;
 
   // ── No app account ──
   if (!connection) {
@@ -437,7 +581,7 @@ export function AthleteMonitoringTab({ athlete }: Props) {
   }
 
   // ── No data yet ──
-  if (!latest) {
+  if (!selected) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground py-20">
         <Smile className="h-10 w-10 opacity-30" />
@@ -451,141 +595,217 @@ export function AthleteMonitoringTab({ athlete }: Props) {
 
   return (
     <ScrollArea className="h-full">
-      <div className="p-4 space-y-4 max-w-2xl">
+      <div className="p-4 space-y-4">
 
-        {/* ── Latest check-in card ── */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Latest Check-in</CardTitle>
-              <div className="flex items-center gap-2">
-                {latest.hasIllness && (
-                  <Badge variant="outline" className="text-xs gap-1 border-orange-300 text-orange-700 bg-orange-50">
-                    <AlertTriangle className="h-3 w-3" /> Illness
-                  </Badge>
-                )}
-                {latest.hasPain && (
-                  <Badge variant="outline" className="text-xs gap-1 border-red-300 text-red-700 bg-red-50">
-                    <AlertTriangle className="h-3 w-3" /> Pain
-                  </Badge>
-                )}
-                <span className="text-xs text-muted-foreground">{checkinDateLabel(latest.date)}</span>
+        {/* ── 2×2 grid: [Wellness score | Illness] / [Wellness chart | Pain] ── */}
+        <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr', gridTemplateRows: 'auto auto' }}>
+
+          {/* [0,0] Wellness score */}
+          <Card className="flex flex-col">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Wellness</CardTitle>
+                {/* Date navigator */}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={goNewer}
+                    disabled={safeIdx === 0}
+                    className="p-1 rounded hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-muted transition-colors text-xs text-muted-foreground">
+                        <CalendarDays className="h-3.5 w-3.5" />
+                        {formatCheckinDate(selected.date)}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-48 p-1" align="end">
+                      <div className="max-h-60 overflow-y-auto space-y-0.5">
+                        {checkins.map((c, i) => (
+                          <button
+                            key={c.id}
+                            onClick={() => setSelectedIdx(i)}
+                            className={cn(
+                              'w-full text-left text-xs px-2 py-1.5 rounded transition-colors',
+                              i === safeIdx
+                                ? 'bg-primary text-primary-foreground'
+                                : 'hover:bg-muted text-muted-foreground'
+                            )}
+                          >
+                            {formatCheckinDate(c.date)}
+                          </button>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  <button
+                    onClick={goOlder}
+                    disabled={safeIdx === checkins.length - 1}
+                    className="p-1 rounded hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-5">
-
-            {/* Wellness composite */}
-            {latestComposite !== null && (
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                  Wellness
-                </p>
+            </CardHeader>
+            <CardContent className="flex-1">
+              {selectedComposite !== null ? (
                 <CompositeScore
-                  composite={latestComposite}
+                  composite={selectedComposite}
                   stats={stats}
                   expanded={wellnessExpanded}
                   onToggle={() => setWellnessExpanded(v => !v)}
-                  checkin={latest}
+                  checkin={selected}
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">No wellness data.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* [0,1] Illness */}
+          {selected.hasIllness ? (
+            <Card className="flex flex-col">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-orange-500" />
+                  Illness
+                  {selected.illnessNrs !== null && (
+                    <span className="text-sm font-normal text-orange-600 ml-1">· {selected.illnessNrs}/10</span>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1">
+                {selected.illnessSymptoms.length > 0 || selected.illnessSymptomOther ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {selected.illnessSymptoms.map(id => (
+                      <span key={id}
+                        className="text-xs px-2 py-1 rounded-full bg-orange-50 border border-orange-200 text-orange-800 capitalize">
+                        {id.replace(/_/g, ' ')}
+                      </span>
+                    ))}
+                    {selected.illnessSymptomOther && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-orange-50 border border-orange-200 text-orange-800">
+                        {selected.illnessSymptomOther}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Illness reported, no symptoms specified.</p>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-dashed flex flex-col">
+              <CardContent className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+                No illness reported
+              </CardContent>
+            </Card>
+          )}
+
+          {/* [1,0] Wellness trend chart */}
+          <Card className="flex flex-col">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="text-base shrink-0">Wellness Trend</CardTitle>
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  {/* Quick range buttons */}
+                  <div className="flex rounded-md border overflow-hidden text-xs">
+                    {([7, 14, 28, 90] as const).map(d => {
+                      const to   = new Date();
+                      const from = new Date();
+                      from.setDate(from.getDate() - d + 1);
+                      const active = rangeFrom && rangeTo &&
+                        rangeTo.toDateString() === to.toDateString() &&
+                        chartDaysSpan === d;
+                      return (
+                        <button
+                          key={d}
+                          onClick={() => { setRangeFrom(from); setRangeTo(to); }}
+                          className={cn(
+                            'px-2.5 py-1 transition-colors border-l first:border-l-0',
+                            active
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-background text-muted-foreground hover:bg-muted'
+                          )}
+                        >
+                          {d}d
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* Custom range picker */}
+                  <CalendarRangePicker
+                    from={rangeFrom}
+                    to={rangeTo}
+                    onChange={(f, t) => { setRangeFrom(f); setRangeTo(t); }}
+                    onClear={() => { setRangeFrom(null); setRangeTo(null); }}
+                  />
+                </div>
+              </div>
+              {stats && (
+                <p className="text-xs text-muted-foreground">
+                  z-score vs. personal baseline (mean {stats.mean.toFixed(1)}, SD {stats.sd.toFixed(2)}, n={stats.n})
+                </p>
+              )}
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col">
+              <div className="flex-1 min-h-0">
+                <ZScoreChart
+                  checkins={chartCheckins}
+                  stats={stats}
+                  maWindow={chartDaysSpan !== null && chartDaysSpan <= 7 ? 3 : 7}
                 />
               </div>
-            )}
-
-            {/* Pain */}
-            {latest.hasPain && latest.painAreas.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                  Pain Areas
-                </p>
-                <div className="flex gap-4">
-                  {/* Body map */}
-                  <div className="w-48 shrink-0">
-                    <BodyMapReadOnly painAreas={latest.painAreas} />
-                  </div>
-                  {/* List */}
-                  <div className="flex-1 space-y-1.5 self-center">
-                    {latest.painAreas.map((area, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <div
-                          className="w-2.5 h-2.5 rounded-full shrink-0"
-                          style={{ background: nrsSeverityStroke(area.severity) }}
-                        />
-                        <span className="text-sm flex-1">{area.areaLabel}</span>
-                        <span className="text-xs font-semibold tabular-nums text-muted-foreground">
-                          {area.severity}/10
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Illness */}
-            {latest.hasIllness && latest.illnessSymptoms.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                  Illness
-                  {latest.illnessNrs !== null && (
-                    <span className="ml-2 text-orange-600">· NRS {latest.illnessNrs}/10</span>
-                  )}
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {latest.illnessSymptoms.map(id => (
-                    <span
-                      key={id}
-                      className="text-xs px-2 py-0.5 rounded-full bg-orange-50 border border-orange-200 text-orange-800 capitalize"
-                    >
-                      {id.replace(/_/g, ' ')}
-                    </span>
-                  ))}
-                  {latest.illnessSymptomOther && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-orange-50 border border-orange-200 text-orange-800">
-                      {latest.illnessSymptomOther}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* ── Wellness z-score trend ── */}
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Wellness Trend</CardTitle>
-              <div className="flex rounded-md border overflow-hidden text-xs">
-                {([7, 14, 28, 90] as const).map(d => (
-                  <button
-                    key={d}
-                    onClick={() => setChartDays(d)}
-                    className={cn(
-                      'px-2.5 py-1 transition-colors border-l first:border-l-0',
-                      chartDays === d
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-background text-muted-foreground hover:bg-muted'
-                    )}
-                  >
-                    {d}d
-                  </button>
-                ))}
-              </div>
-            </div>
-            {stats && (
-              <p className="text-xs text-muted-foreground">
-                z-score vs. personal baseline (mean {stats.mean.toFixed(1)}, SD {stats.sd.toFixed(2)}, n={stats.n})
+              <p className="text-[10px] text-muted-foreground mt-1 text-right">
+                Shaded band = ±1 SD (normal range)
               </p>
-            )}
-          </CardHeader>
-          <CardContent>
-            <ZScoreChart checkins={chartCheckins} stats={stats} />
-            <div className="flex items-center gap-4 mt-2 text-[10px] text-muted-foreground justify-end">
-              <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-green-500 inline-block" /> Above avg (+1 SD)</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-orange-400 inline-block" /> Below avg (−1 SD)</span>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          {/* [1,1] Pain */}
+          {selected.hasPain ? (
+            <Card className="flex flex-col">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                  Pain
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1 space-y-3">
+                {selected.painAreas.length > 0 ? (
+                  <>
+                    <BodyMapReadOnly painAreas={selected.painAreas} />
+                    <div className="space-y-1.5">
+                      {selected.painAreas.map((area, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0"
+                            style={{ background: nrsSeverityStroke(area.severity) }} />
+                          <span className="text-sm flex-1 truncate">{area.areaLabel}</span>
+                          <span className="text-sm font-semibold tabular-nums shrink-0"
+                            style={{ color: nrsSeverityStroke(area.severity) }}>
+                            {area.severity}/10
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Pain reported, no areas specified.</p>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-dashed flex flex-col">
+              <CardContent className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+                No pain reported
+              </CardContent>
+            </Card>
+          )}
+
+        </div>
 
         {/* ── Recent history ── */}
         {checkins.length > 1 && (
