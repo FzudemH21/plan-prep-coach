@@ -15,6 +15,7 @@ export interface AthleteConnection {
   connectedAt: string | null;
   weeksAhead: number;
   monitoringEnabled: boolean;
+  allowRearrangeWorkouts: boolean;
   profileData: AthleteProfileData;
 }
 
@@ -154,6 +155,7 @@ export function useAthleteApp() {
           connectedAt: connData.connected_at,
           weeksAhead: connData.weeks_ahead ?? 4,
           monitoringEnabled: connData.monitoring_enabled ?? true,
+          allowRearrangeWorkouts: connData.allow_rearrange_workouts ?? false,
           profileData: (connData.profile_data as AthleteProfileData) ?? {},
         };
         setConnection(conn);
@@ -276,5 +278,68 @@ export function useAthleteApp() {
     return schedule.filter(e => e.date >= today).slice(0, n);
   };
 
-  return { connection, schedule, sessionLogs, loading, error, isAthlete, getTodayEntry, getUpcomingDays, updateProfile, getSessionLog, refetchLogs };
+  /** Move a session from one date to another within the athlete's schedule. */
+  const moveSession = useCallback(async (sessionId: string, fromDate: string, toDate: string) => {
+    if (!connection || fromDate === toDate) return;
+
+    // Find the session object in local state first
+    const fromEntry = schedule.find(e => e.date === fromDate);
+    const session = fromEntry?.sessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    // Fetch current DB rows for both dates
+    const { data: rows } = await supabase
+      .from('athlete_schedule')
+      .select('id, date, sessions')
+      .eq('athlete_connection_id', connection.id)
+      .in('date', [fromDate, toDate]);
+
+    const fromRow = (rows ?? []).find((r: Record<string, unknown>) => r.date === fromDate);
+    const toRow   = (rows ?? []).find((r: Record<string, unknown>) => r.date === toDate);
+
+    // Remove session from source
+    const newFromSessions = ((fromRow?.sessions as SessionSummary[]) ?? [])
+      .filter((s: SessionSummary) => s.id !== sessionId)
+      .map((s: SessionSummary, i: number) => ({ ...s, order: i }));
+
+    // Add session to target (re-order)
+    const existingToSessions = (toRow?.sessions as SessionSummary[]) ?? [];
+    const newToSessions = [...existingToSessions, { ...session, order: existingToSessions.length }];
+
+    // Update source row
+    await supabase
+      .from('athlete_schedule')
+      .update({ sessions: newFromSessions })
+      .eq('id', fromRow?.id)
+      .eq('athlete_connection_id', connection.id);
+
+    // Upsert target row (may not exist yet for that date)
+    if (toRow) {
+      await supabase
+        .from('athlete_schedule')
+        .update({ sessions: newToSessions })
+        .eq('id', toRow.id)
+        .eq('athlete_connection_id', connection.id);
+    } else {
+      await supabase
+        .from('athlete_schedule')
+        .insert({ athlete_connection_id: connection.id, date: toDate, sessions: newToSessions });
+    }
+
+    // Update local state optimistically
+    setSchedule(prev => {
+      const next = prev.map(e => {
+        if (e.date === fromDate) return { ...e, sessions: newFromSessions };
+        if (e.date === toDate)   return { ...e, sessions: newToSessions };
+        return e;
+      });
+      // If toDate had no row yet, add it
+      if (!prev.find(e => e.date === toDate)) {
+        next.push({ id: toDate, date: toDate, intensity: null, sessions: newToSessions, events: [], programName: null, mesocycleName: null, microcycleName: null });
+      }
+      return next.sort((a, b) => a.date.localeCompare(b.date));
+    });
+  }, [connection, schedule]);
+
+  return { connection, schedule, sessionLogs, loading, error, isAthlete, getTodayEntry, getUpcomingDays, updateProfile, getSessionLog, refetchLogs, moveSession };
 }

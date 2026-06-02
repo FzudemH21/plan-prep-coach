@@ -32,6 +32,7 @@ export interface AthleteConnection {
   createdAt: string;
   weeksAhead: number;
   monitoringEnabled: boolean;
+  allowRearrangeWorkouts: boolean;
   profileData: AthleteProfileData;
 }
 
@@ -48,6 +49,7 @@ function rowToConnection(row: Record<string, unknown>): AthleteConnection {
     createdAt: row.created_at as string,
     weeksAhead: (row.weeks_ahead as number) ?? 4,
     monitoringEnabled: (row.monitoring_enabled as boolean) ?? true,
+    allowRearrangeWorkouts: (row.allow_rearrange_workouts as boolean) ?? false,
     profileData: (row.profile_data as AthleteProfileData) ?? {},
   };
 }
@@ -137,6 +139,18 @@ export function useAthleteConnections() {
     );
   }, []);
 
+  /** Enable or disable session rearranging for an athlete. */
+  const updateAllowRearrangeWorkouts = useCallback(async (connectionId: string, enabled: boolean) => {
+    const { error } = await supabase
+      .from('athlete_connections')
+      .update({ allow_rearrange_workouts: enabled })
+      .eq('id', connectionId);
+    if (error) throw error;
+    setConnections(prev =>
+      prev.map(c => c.id === connectionId ? { ...c, allowRearrangeWorkouts: enabled } : c)
+    );
+  }, []);
+
   /** Delete a connection (revoke athlete app access). */
   const revokeConnection = useCallback(async (connectionId: string) => {
     const { error } = await supabase
@@ -162,6 +176,7 @@ export function useAthleteConnections() {
     revokeConnection,
     updateWeeksAhead,
     updateMonitoringEnabled,
+    updateAllowRearrangeWorkouts,
     getConnectionForAthlete,
     reload: load,
   };

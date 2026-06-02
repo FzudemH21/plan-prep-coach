@@ -26,6 +26,7 @@ import {
   Globe,
   LayoutGrid,
   CalendarRange,
+  CalendarDays,
   Dumbbell,
   Smartphone,
   Copy,
@@ -361,6 +362,48 @@ function AppAccountCard({ athlete }: { athlete: Athlete }) {
 
 // ── Monitoring card ───────────────────────────────────────────────────────────
 
+function RearrangeWorkoutsCard({ athlete }: { athlete: Athlete }) {
+  const { getConnectionForAthlete, updateAllowRearrangeWorkouts } = useAthleteConnections();
+  const connection = getConnectionForAthlete(athlete.id);
+  const [saving, setSaving] = useState(false);
+
+  if (!connection) return null;
+
+  const handleToggle = async (enabled: boolean) => {
+    setSaving(true);
+    try {
+      await updateAllowRearrangeWorkouts(connection.id, enabled);
+    } catch (e) {
+      console.error('Failed to update rearrange workouts', e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          <CalendarDays className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-base">Session Rearranging</CardTitle>
+        </div>
+        <CardDescription>
+          Allow the athlete to move sessions between days in the Plan tab of the athlete app.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="divide-y border rounded-lg">
+        <FeatureToggle
+          label="Allow rearranging workouts"
+          description="Athlete can drag sessions to a different day within the visible week"
+          checked={connection.allowRearrangeWorkouts}
+          onCheckedChange={handleToggle}
+        />
+        {saving && <p className="text-xs text-muted-foreground px-1 py-2">Saving…</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
 function MonitoringCard({ athlete }: { athlete: Athlete }) {
   const { getConnectionForAthlete, updateMonitoringEnabled } = useAthleteConnections();
   const connection = getConnectionForAthlete(athlete.id);
@@ -593,16 +636,11 @@ export function AthleteSettingsTab({ athlete, onUpdateAthlete }: AthleteSettings
               <Label>Weeks visible in advance</Label>
               <WeeksAheadSelect athlete={athlete} />
             </div>
-            <div className="divide-y border rounded-lg">
-              <FeatureToggle
-                label="Allow athlete to rearrange workouts"
-                description="Grant flexibility to move sessions within the visible range"
-                checked={settings.athleteApp.allowRearrangeWorkouts}
-                onCheckedChange={v => updateAthleteApp({ allowRearrangeWorkouts: v })}
-              />
-            </div>
           </CardContent>
         </Card>
+
+        {/* Session rearranging */}
+        <RearrangeWorkoutsCard athlete={athlete} />
 
         {/* Monitoring */}
         <MonitoringCard athlete={athlete} />

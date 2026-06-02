@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Dumbbell, ChevronRight, ChevronLeft, Activity, CalendarDays, CheckCircle2 } from 'lucide-react';
+import { Dumbbell, ChevronRight, ChevronLeft, Activity, CalendarDays, CheckCircle2, GripVertical, X } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent, SessionLog } from '@/hooks/useAthleteApp';
+import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent, SessionLog, SessionSummary } from '@/hooks/useAthleteApp';
 import { IntensityBadge } from '@/components/athlete-app/IntensityBadge';
 import { cn } from '@/lib/utils';
 
@@ -59,28 +60,48 @@ function SessionCard({
   index,
   isPast,
   log,
+  canMove,
+  isMoving,
+  onMoveStart,
 }: {
   session: AthleteScheduleEntry['sessions'][0];
   entry: AthleteScheduleEntry;
   index: number;
   isPast: boolean;
   log?: SessionLog | null;
+  canMove?: boolean;
+  isMoving?: boolean;
+  onMoveStart?: () => void;
 }) {
   const navigate = useNavigate();
   return (
     <Card
       className={cn(
-        'cursor-pointer transition-all active:scale-[0.98]',
+        'transition-all',
+        isMoving ? 'ring-2 ring-primary border-primary' : '',
         log
-          ? 'border-green-200 bg-green-50/50 hover:bg-green-50/80'
+          ? 'border-green-200 bg-green-50/50'
           : isPast
-            ? 'opacity-50 hover:bg-muted/60'
-            : 'hover:bg-muted/60'
+            ? 'opacity-50'
+            : ''
       )}
-      onClick={() => navigate('/athlete/session', { state: { entry, sessionIdx: index, log } })}
     >
       <CardContent className="flex items-center justify-between p-3">
-        <div className="flex items-center gap-3">
+        {/* Move handle */}
+        {canMove && !log && (
+          <button
+            className="mr-2 p-1 -ml-1 touch-manipulation text-muted-foreground active:text-primary"
+            onClick={e => { e.stopPropagation(); onMoveStart?.(); }}
+            aria-label="Move session"
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+        )}
+
+        <div
+          className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer active:opacity-80"
+          onClick={() => !isMoving && navigate('/athlete/session', { state: { entry, sessionIdx: index, log } })}
+        >
           <div className={cn(
             'w-8 h-8 rounded-md flex items-center justify-center shrink-0',
             log ? 'bg-green-100' : 'bg-primary/10'
@@ -89,8 +110,8 @@ function SessionCard({
               ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
               : <Dumbbell className="h-3.5 w-3.5 text-primary" />}
           </div>
-          <div>
-            <p className="font-medium text-sm">{session.name}</p>
+          <div className="min-w-0">
+            <p className="font-medium text-sm truncate">{session.name}</p>
             <p className="text-xs text-muted-foreground">
               {session.exerciseCount} exercise{session.exerciseCount !== 1 ? 's' : ''}
               {session.duration ? ` · ~${session.duration} min` : ''}
@@ -111,7 +132,7 @@ function SessionCard({
             ) : null}
           </div>
         </div>
-        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+        {!canMove && <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
       </CardContent>
     </Card>
   );
@@ -122,22 +143,33 @@ function DaySection({
   entry,
   isToday,
   getSessionLog,
+  canMove,
+  movingSession,
+  onMoveStart,
+  onMoveTo,
 }: {
   dateStr: string;
   entry: AthleteScheduleEntry | null;
   isToday: boolean;
   getSessionLog: (date: string, sessionId: string) => SessionLog | null;
+  canMove?: boolean;
+  movingSession?: { sessionId: string; fromDate: string } | null;
+  onMoveStart?: (sessionId: string, fromDate: string) => void;
+  onMoveTo?: (toDate: string) => void;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const isPast = dateStr < today;
   const { weekday, dateLabel } = formatDayHeader(dateStr);
   const hasSessions = (entry?.sessions.length ?? 0) > 0;
+  const isSourceDay = movingSession?.fromDate === dateStr;
+  const isMoveMode = !!movingSession;
 
   return (
     <div
       className={cn(
         'rounded-xl p-3 space-y-2',
-        isToday && 'bg-primary/5 ring-1 ring-primary/20'
+        isToday && !isMoveMode && 'bg-primary/5 ring-1 ring-primary/20',
+        isSourceDay && 'ring-2 ring-primary/40 bg-primary/5',
       )}
     >
       {/* Day header */}
@@ -150,19 +182,29 @@ function DaySection({
             {weekday}
           </span>
           <span className="text-xs text-muted-foreground">{dateLabel}</span>
-          {isToday && (
+          {isToday && !isMoveMode && (
             <span className="text-xs font-medium text-primary bg-primary/10 rounded-full px-2 py-0.5">
               Today
             </span>
           )}
         </div>
+
+        {/* "Move here" button */}
+        {isMoveMode && !isSourceDay && (
+          <button
+            onClick={() => onMoveTo?.(dateStr)}
+            className="text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 active:bg-primary/30 rounded-full px-3 py-1 transition-colors"
+          >
+            Move here
+          </button>
+        )}
       </div>
 
       {/* Intensity badge */}
-      {entry?.intensity && <IntensityBadge intensity={entry.intensity} />}
+      {entry?.intensity && !isMoveMode && <IntensityBadge intensity={entry.intensity} />}
 
       {/* Tests & events — above sessions */}
-      {(entry?.events ?? []).length > 0 && (
+      {!isMoveMode && (entry?.events ?? []).length > 0 && (
         <div className="space-y-1.5">
           {entry!.events.map((ev: AthleteCalendarEvent) => (
             <div
@@ -207,13 +249,18 @@ function DaySection({
               index={idx}
               isPast={isPast}
               log={getSessionLog(dateStr, session.id)}
+              canMove={canMove}
+              isMoving={movingSession?.sessionId === session.id && movingSession?.fromDate === dateStr}
+              onMoveStart={() => onMoveStart?.(session.id, dateStr)}
             />
           ))}
         </div>
       ) : (
-        <p className={cn('text-xs', isPast ? 'text-muted-foreground/50' : 'text-muted-foreground')}>
-          Rest day
-        </p>
+        !isMoveMode && (
+          <p className={cn('text-xs', isPast ? 'text-muted-foreground/50' : 'text-muted-foreground')}>
+            Rest day
+          </p>
+        )
       )}
     </div>
   );
@@ -222,7 +269,7 @@ function DaySection({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function AthletePlanPage() {
-  const { connection, schedule, loading, error, getSessionLog } = useAthleteApp();
+  const { connection, schedule, loading, error, getSessionLog, moveSession } = useAthleteApp();
 
   const today = new Date().toISOString().slice(0, 10);
   const currentWeekMonday = getMondayOf(today);
@@ -238,6 +285,19 @@ export default function AthletePlanPage() {
   }, [schedule, currentWeekMonday]);
 
   const [selectedWeek, setSelectedWeek] = useState<string>(currentWeekMonday);
+  const [movingSession, setMovingSession] = useState<{ sessionId: string; fromDate: string } | null>(null);
+  const canMove = connection?.allowRearrangeWorkouts ?? false;
+
+  const handleMoveStart = (sessionId: string, fromDate: string) => {
+    setMovingSession({ sessionId, fromDate });
+  };
+
+  const handleMoveTo = async (toDate: string) => {
+    if (!movingSession) return;
+    const { sessionId, fromDate } = movingSession;
+    setMovingSession(null);
+    await moveSession(sessionId, fromDate, toDate);
+  };
 
   // Keep selectedWeek clamped if weeksAhead changes
   const clampedWeek = selectedWeek > maxWeekMonday ? maxWeekMonday : selectedWeek;
@@ -313,6 +373,19 @@ export default function AthletePlanPage() {
         </button>
       </div>
 
+      {/* Move mode banner */}
+      {movingSession && (
+        <div className="flex items-center justify-between px-4 py-2.5 bg-primary/10 border-b shrink-0">
+          <p className="text-sm font-medium text-primary">Tap a day to move the session there</p>
+          <button
+            onClick={() => setMovingSession(null)}
+            className="p-1 rounded-full hover:bg-primary/20 active:bg-primary/30 text-primary"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Day list */}
       <ScrollArea className="flex-1 px-4">
         <div className="space-y-2 py-3 pb-4">
@@ -323,6 +396,10 @@ export default function AthletePlanPage() {
               entry={scheduleMap.get(dateStr) ?? null}
               isToday={dateStr === today}
               getSessionLog={getSessionLog}
+              canMove={canMove}
+              movingSession={movingSession}
+              onMoveStart={handleMoveStart}
+              onMoveTo={handleMoveTo}
             />
           ))}
         </div>
