@@ -140,6 +140,22 @@ export function useChat({ connectionId, callerRole }: UseChatOptions) {
     ) => {
       if (!connectionId || !user || !content.trim()) return;
 
+      // Optimistic update — show message immediately while DB write is in flight
+      const optimisticId = `optimistic-${Date.now()}`;
+      const optimisticMsg: ChatMessage = {
+        id: optimisticId,
+        connectionId,
+        senderRole: callerRole,
+        senderAuthUserId: user.id,
+        content: content.trim(),
+        messageType: opts?.messageType ?? 'text',
+        reference: opts?.reference,
+        readByCoachAt: null,
+        readByAthleteAt: null,
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, optimisticMsg]);
+
       const row = {
         connection_id: connectionId,
         sender_role: callerRole,
@@ -149,10 +165,25 @@ export function useChat({ connectionId, callerRole }: UseChatOptions) {
         reference: opts?.reference ?? null,
       };
 
-      const { error } = await supabase.from('chat_messages').insert(row);
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .insert(row)
+        .select()
+        .single();
+
       if (error) {
         console.error('[useChat] send error', error);
+        // Remove optimistic message on failure
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
         throw error;
+      }
+
+      // Replace optimistic message with the real one from DB
+      if (data) {
+        const realMsg = rowToMessage(data as Record<string, unknown>);
+        setMessages((prev) =>
+          prev.map((m) => (m.id === optimisticId ? realMsg : m))
+        );
       }
     },
     [connectionId, user, callerRole]

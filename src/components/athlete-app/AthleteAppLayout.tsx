@@ -1,8 +1,10 @@
+import { useEffect, useState, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Home, Calendar, MessageCircle, User, Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAthleteApp } from '@/hooks/useAthleteApp';
-import { useChat } from '@/hooks/useChat';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,23 +20,73 @@ const NAV_PATHS = [
   { label: 'Profile', icon: User, path: '/athlete/profile' },
 ];
 
+interface UnreadPreview {
+  id: string;
+  content: string;
+  createdAt: string;
+}
+
+/** Lightweight hook — polls for unread messages without a Realtime channel.
+ *  Avoids channel conflict with the full useChat used in AthleteMessagesPage. */
+function useAthleteUnread(connectionId: string | null) {
+  const { user } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [previews, setPreviews] = useState<UnreadPreview[]>([]);
+
+  const load = useCallback(async () => {
+    if (!connectionId || !user) return;
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('id, content, created_at')
+      .eq('connection_id', connectionId)
+      .eq('sender_role', 'coach')
+      .is('read_by_athlete_at', null)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (error) return; // table may not exist yet — fail silently
+    const rows = data ?? [];
+    setUnreadCount(rows.length);
+    setPreviews(
+      rows.slice(0, 5).map((r) => ({
+        id: r.id as string,
+        content: r.content as string,
+        createdAt: r.created_at as string,
+      }))
+    );
+  }, [connectionId, user]);
+
+  useEffect(() => {
+    load();
+    const timer = setInterval(load, 15_000);
+    return () => clearInterval(timer);
+  }, [load]);
+
+  const markRead = useCallback(async () => {
+    if (!connectionId || !user) return;
+    await supabase
+      .from('chat_messages')
+      .update({ read_by_athlete_at: new Date().toISOString() })
+      .eq('connection_id', connectionId)
+      .eq('sender_role', 'coach')
+      .is('read_by_athlete_at', null);
+    setUnreadCount(0);
+    setPreviews([]);
+  }, [connectionId, user]);
+
+  return { unreadCount, previews, markRead, reload: load };
+}
+
 export function AthleteAppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { connection, loading } = useAthleteApp();
 
-  const { messages, unreadCount, markRead } = useChat({
-    connectionId: connection?.id ?? null,
-    callerRole: 'athlete',
-  });
-
-  // Unread messages for the notification bell dropdown
-  const unreadMessages = messages.filter(
-    (m) => m.senderRole === 'coach' && !m.readByAthleteAt
-  ).slice(-5).reverse();
+  const { unreadCount, previews, markRead } = useAthleteUnread(
+    connection?.id ?? null
+  );
 
   const handleBellClick = () => {
-    // Mark read and navigate to messages
     markRead();
     navigate('/athlete/messages');
   };
@@ -71,19 +123,21 @@ export function AthleteAppLayout() {
               align="end"
               className="w-72 sm:w-[320px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2"
             >
-              {unreadMessages.length === 0 ? (
+              {previews.length === 0 ? (
                 <div className="px-3 py-4 text-center text-sm text-muted-foreground">
                   No new notifications
                 </div>
               ) : (
-                unreadMessages.map((msg) => (
+                previews.map((msg) => (
                   <DropdownMenuItem
                     key={msg.id}
                     onClick={handleBellClick}
                     className="flex flex-col items-start gap-0.5 py-2"
                   >
                     <span className="text-xs font-medium">Coach</span>
-                    <span className="text-xs text-muted-foreground line-clamp-2">{msg.content}</span>
+                    <span className="text-xs text-muted-foreground line-clamp-2">
+                      {msg.content}
+                    </span>
                     <span className="text-[10px] text-muted-foreground">
                       {format(parseISO(msg.createdAt), 'HH:mm')}
                     </span>
@@ -104,8 +158,11 @@ export function AthleteAppLayout() {
       <nav className="shrink-0 border-t bg-background/95 backdrop-blur-sm">
         <div className="flex items-stretch">
           {NAV_PATHS.map(({ label, icon: Icon, path }) => {
-            const isActive = location.pathname === path || location.pathname.startsWith(path + '/');
-            const showBadge = path === '/athlete/messages' && unreadCount > 0;
+            const isActive =
+              location.pathname === path ||
+              location.pathname.startsWith(path + '/');
+            const showBadge =
+              path === '/athlete/messages' && unreadCount > 0;
             return (
               <button
                 key={path}
@@ -118,7 +175,9 @@ export function AthleteAppLayout() {
                 )}
               >
                 <div className="relative">
-                  <Icon className={cn('h-5 w-5', isActive && 'stroke-[2.5]')} />
+                  <Icon
+                    className={cn('h-5 w-5', isActive && 'stroke-[2.5]')}
+                  />
                   {showBadge && (
                     <span className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-destructive text-[9px] text-white flex items-center justify-center font-medium">
                       {unreadCount > 9 ? '9+' : unreadCount}
