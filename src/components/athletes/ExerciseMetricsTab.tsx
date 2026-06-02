@@ -290,17 +290,6 @@ function ExerciseDetail({
     return sessions.filter(s => s.date >= cutoffStr);
   }, [sessions, timeRange]);
 
-  const chartData = useMemo(() => {
-    if (!tags) return [];
-    return filteredSessions
-      .filter(s => s.e1rm !== null)
-      .map(s => ({
-        date: s.date,
-        label: formatShortDate(s.date),
-        e1rm: parseFloat((s.e1rm as number).toFixed(1)),
-      }));
-  }, [filteredSessions, tags]);
-
   // Param names that actually appear in logged sets (not just planned)
   const activeParamNames = useMemo(() => {
     const seen = new Set<string>();
@@ -309,9 +298,15 @@ function ExerciseDetail({
         for (const k of Object.keys(set.values)) seen.add(k);
       }
     }
-    // Maintain stable order: allParamNames filtered to what's been logged
     return allParamNames.filter(p => seen.has(p));
   }, [sessions, allParamNames]);
+
+  const chartData = useMemo(() => {
+    if (!tags) return [];
+    return filteredSessions
+      .filter(s => s.e1rm !== null)
+      .map(s => ({ label: formatShortDate(s.date), e1rm: parseFloat((s.e1rm as number).toFixed(1)) }));
+  }, [filteredSessions, tags]);
 
   const latestE1RM = useMemo(() => {
     if (!tags) return null;
@@ -457,7 +452,7 @@ function ExerciseDetail({
               session={session}
               paramNames={activeParamNames}
               tags={tags}
-              defaultOpen={i === 0}
+              defaultOpen={true}
             />
           ))}
         </div>
