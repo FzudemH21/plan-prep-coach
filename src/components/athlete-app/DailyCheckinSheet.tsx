@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { ChevronRight, ChevronLeft, CheckCircle2, X, Plus } from 'lucide-react';
+import { ChevronRight, ChevronLeft, CheckCircle2, X } from 'lucide-react';
 import {
   FRONT_REGIONS,
   BACK_REGIONS,
@@ -181,14 +181,19 @@ function ProgressBar({ value }: { value: number }) {
 
 type BodySide = 'front' | 'back';
 
+// Dot positions stored alongside NRS: regionKey → { nrs, cx, cy }
+export interface PainDot { nrs: number; cx: number; cy: number }
+
 function BodyMap({
-  painMap,
+  painDots,
   pendingKey,
+  pendingDot,
   onSelect,
 }: {
-  painMap: Map<string, number>;
+  painDots: Map<string, PainDot>;
   pendingKey: string | null;
-  onSelect: (regionKey: string) => void;
+  pendingDot: { cx: number; cy: number } | null;
+  onSelect: (regionKey: string, cx: number, cy: number) => void;
 }) {
   const [side, setSide] = useState<BodySide>('front');
   const regions = side === 'front' ? FRONT_REGIONS : BACK_REGIONS;
@@ -226,37 +231,51 @@ function BodyMap({
             viewBox={viewBox}
             preserveAspectRatio="xMidYMid meet"
           >
+            {/* Invisible hit-area rects */}
             {regions.map((r) => {
               const key = svgRegionKey(r);
-              const nrs = painMap.get(key) ?? 0;
-              const isConfirmed = painMap.has(key);
-              const isPending   = key === pendingKey;
               return (
                 <rect
                   key={r.uid}
                   x={r.x} y={r.y} width={r.w} height={r.h}
                   rx={3}
-                  fill={
-                    isPending
-                      ? 'rgba(99,102,241,0.45)'
-                      : isConfirmed
-                      ? nrsSeverityColor(nrs)
-                      : 'rgba(70,130,200,0)'
-                  }
-                  stroke={
-                    isPending
-                      ? 'rgba(99,102,241,0.9)'
-                      : isConfirmed
-                      ? nrsSeverityStroke(nrs)
-                      : 'rgba(70,130,200,0)'
-                  }
-                  strokeWidth={isPending || isConfirmed ? 1.5 : 0.5}
-                  style={{ cursor: 'pointer', transition: 'fill 0.1s' }}
-                  className="hover:fill-[rgba(70,130,200,0.2)]"
-                  onClick={() => onSelect(key)}
+                  fill="rgba(0,0,0,0)"
+                  stroke="rgba(0,0,0,0)"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => onSelect(key, r.x + r.w / 2, r.y + r.h / 2)}
                 />
               );
             })}
+
+            {/* Confirmed dots */}
+            {Array.from(painDots.entries()).map(([key, dot]) => (
+              <g key={key} style={{ pointerEvents: 'none' }}>
+                <circle cx={dot.cx} cy={dot.cy} r={7}
+                  fill={nrsSeverityColor(dot.nrs) || 'rgba(234,179,8,0.55)'}
+                  stroke={nrsSeverityStroke(dot.nrs) || 'rgba(180,130,0,0.8)'}
+                  strokeWidth={1.5}
+                />
+                <text x={dot.cx} y={dot.cy + 4} textAnchor="middle"
+                  fontSize="7" fontWeight="bold" fill="white">
+                  {dot.nrs}
+                </text>
+              </g>
+            ))}
+
+            {/* Pending dot (pulsing ring) */}
+            {pendingKey && pendingDot && (
+              <g style={{ pointerEvents: 'none' }}>
+                <circle cx={pendingDot.cx} cy={pendingDot.cy} r={9}
+                  fill="rgba(99,102,241,0.15)"
+                  stroke="rgba(99,102,241,0.8)"
+                  strokeWidth={1.5}
+                  strokeDasharray="3 2"
+                />
+                <circle cx={pendingDot.cx} cy={pendingDot.cy} r={4}
+                  fill="rgba(99,102,241,0.8)"
+                />
+              </g>
+            )}
           </svg>
         </div>
       </div>
@@ -295,10 +314,11 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
   const [hasPain, setHasPain]         = useState<boolean | null>(null);
   const [hasIllness, setHasIllness]   = useState<boolean | null>(null);
 
-  // painMap: regionKey → NRS value (only confirmed areas)
-  const [painMap, setPainMap]         = useState<Map<string, number>>(new Map());
-  // pending: area selected on map but not yet confirmed with NRS
+  // painDots: regionKey → { nrs, cx, cy } — confirmed areas
+  const [painDots, setPainDots]       = useState<Map<string, PainDot>>(new Map());
+  // pending: area selected on map but not yet rated
   const [pendingKey, setPendingKey]   = useState<string | null>(null);
+  const [pendingDot, setPendingDot]   = useState<{ cx: number; cy: number } | null>(null);
   const [pendingNrs, setPendingNrs]   = useState(5);
 
   const [illnessSymptoms, setIllnessSymptoms] = useState<Set<string>>(new Set());
@@ -316,8 +336,9 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
     setWellness({ fatigue: null, sleep: null, soreness: null, stress: null, mood: null });
     setHasPain(null);
     setHasIllness(null);
-    setPainMap(new Map());
+    setPainDots(new Map());
     setPendingKey(null);
+    setPendingDot(null);
     setPendingNrs(5);
     setIllnessSymptoms(new Set());
     setIllnessOther('');
@@ -353,27 +374,30 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
 
   // ── Body map handlers ──────────────────────────────────────────────────────
 
-  function handleMapSelect(regionKey: string) {
+  function handleMapSelect(regionKey: string, cx: number, cy: number) {
     // If already confirmed, remove it (deselect)
-    if (painMap.has(regionKey)) {
-      setPainMap((prev) => { const n = new Map(prev); n.delete(regionKey); return n; });
-      if (pendingKey === regionKey) setPendingKey(null);
+    if (painDots.has(regionKey)) {
+      setPainDots((prev) => { const n = new Map(prev); n.delete(regionKey); return n; });
+      if (pendingKey === regionKey) { setPendingKey(null); setPendingDot(null); }
       return;
     }
     // Set as pending for inline NRS rating
     setPendingKey(regionKey);
+    setPendingDot({ cx, cy });
     setPendingNrs(5);
   }
 
   function confirmPending() {
-    if (!pendingKey) return;
-    setPainMap((prev) => { const n = new Map(prev); n.set(pendingKey, pendingNrs); return n; });
+    if (!pendingKey || !pendingDot) return;
+    setPainDots((prev) => { const n = new Map(prev); n.set(pendingKey, { nrs: pendingNrs, ...pendingDot }); return n; });
     setPendingKey(null);
+    setPendingDot(null);
     setPendingNrs(5);
   }
 
   function cancelPending() {
     setPendingKey(null);
+    setPendingDot(null);
     setPendingNrs(5);
   }
 
@@ -388,11 +412,11 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
       wellnessSoreness: wellness.soreness,
       wellnessStress:   wellness.stress,
       wellnessMood:     wellness.mood,
-      hasPain: hasPain === true && painMap.size > 0,
-      painAreas: Array.from(painMap.entries()).map(([regionKey, severity]) => ({
+      hasPain: hasPain === true && painDots.size > 0,
+      painAreas: Array.from(painDots.entries()).map(([regionKey, dot]) => ({
         regionKey,
         areaLabel: getRegionKeyLabel(regionKey),
-        severity,
+        severity: dot.nrs,
       })),
       hasIllness: hasIllness === true,
       illnessSymptoms: Array.from(illnessSymptoms),
@@ -627,8 +651,9 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
           />
           <div className="flex-1 overflow-y-auto space-y-3">
             <BodyMap
-              painMap={painMap}
+              painDots={painDots}
               pendingKey={pendingKey}
+              pendingDot={pendingDot}
               onSelect={handleMapSelect}
             />
 
@@ -651,32 +676,29 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
             )}
 
             {/* Confirmed areas list */}
-            {painMap.size > 0 && !pendingKey && (
+            {painDots.size > 0 && !pendingKey && (
               <div className="space-y-1.5">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Confirmed ({painMap.size})
+                  Confirmed ({painDots.size})
                 </p>
-                {Array.from(painMap.entries()).map(([key, nrs]) => (
+                {Array.from(painDots.entries()).map(([key, dot]) => (
                   <div
                     key={key}
                     className="flex items-center gap-2 rounded-lg px-3 py-2"
-                    style={{ background: nrsSeverityColor(nrs) || 'rgba(0,0,0,0.04)' }}
+                    style={{ background: nrsSeverityColor(dot.nrs) || 'rgba(0,0,0,0.04)' }}
                   >
                     <div className="w-2 h-2 rounded-full shrink-0"
-                      style={{ background: nrsSeverityStroke(nrs) }} />
+                      style={{ background: nrsSeverityStroke(dot.nrs) }} />
                     <span className="text-sm flex-1 font-medium">{getRegionKeyLabel(key)}</span>
-                    <span className="text-xs font-semibold mr-1 opacity-80">{nrs}/10</span>
-                    <button onClick={() => setPainMap((p) => { const n = new Map(p); n.delete(key); return n; })}>
+                    <span className="text-xs font-semibold mr-1 opacity-80">{dot.nrs}/10</span>
+                    <button onClick={() => setPainDots((p) => { const n = new Map(p); n.delete(key); return n; })}>
                       <X className="h-3.5 w-3.5 text-foreground/60 hover:text-destructive" />
                     </button>
                   </div>
                 ))}
-                <button
-                  className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-muted-foreground border border-dashed border-border rounded-lg hover:border-primary/40 transition-colors"
-                  onClick={() => {/* just keep map visible */}}
-                >
-                  <Plus className="h-3.5 w-3.5" /> Tap map to add more
-                </button>
+                <p className="text-center text-xs text-muted-foreground py-1">
+                  Tap the map to add more areas
+                </p>
               </div>
             )}
           </div>
@@ -686,7 +708,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
             </Button>
             <Button
               className="flex-1"
-              disabled={painMap.size === 0 || !!pendingKey}
+              disabled={painDots.size === 0 || !!pendingKey}
               onClick={() => {
                 if (hasIllness) setStep('illness_symptoms');
                 else doSave();
