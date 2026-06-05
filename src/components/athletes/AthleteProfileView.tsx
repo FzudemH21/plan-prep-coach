@@ -688,7 +688,12 @@ export function AthleteProfileView({
         </TabsContent>
 
         <TabsContent value="calendar" className="flex-1 mt-0 px-1">
-          <AthleteCalendarView athlete={athlete} initialDate={calendarJumpDate} autoOpenSession={calendarAutoOpenSession} />
+          <AthleteCalendarView
+            athlete={athlete}
+            initialDate={calendarJumpDate}
+            autoOpenSession={calendarAutoOpenSession}
+            onAutoOpenHandled={() => setCalendarAutoOpenSession(undefined)}
+          />
         </TabsContent>
 
         <TabsContent value="documents" className="flex-1 mt-0">

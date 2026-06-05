@@ -62,12 +62,29 @@ import { cn } from '@/lib/utils';
 
 interface AthleteCalendarViewProps {
   athlete: Athlete;
+  /** If supplied, the calendar will jump to show this date's week on mount / when the value changes. */
+  initialDate?: string; // yyyy-MM-dd
+  /** If supplied, the calendar will auto-open the session sheet for the given date + sessionName. */
+  autoOpenSession?: { date: string; sessionName?: string };
+  /** Called once after autoOpenSession has been consumed, so the parent can clear it. */
+  onAutoOpenHandled?: () => void;
 }
 
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
-  const [currentDate, setCurrentDate] = useState(new Date());
+export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onAutoOpenHandled }: AthleteCalendarViewProps) {
+  const [currentDate, setCurrentDate] = useState(() =>
+    initialDate ? new Date(initialDate + 'T12:00:00') : new Date()
+  );
+
+  // Jump whenever the caller changes initialDate (e.g. coach clicked a chat reference)
+  useEffect(() => {
+    if (initialDate) setCurrentDate(new Date(initialDate + 'T12:00:00'));
+  }, [initialDate]);
+
+  // Track which autoOpenSession we've already handled so we don't re-open on re-renders
+  const autoOpenHandledRef = useRef<string | null>(null);
+
   const [viewMode, setViewMode] = useState<ViewMode>('4week');
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -80,8 +97,13 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     assignmentId: string;
   } | null>(null);
 
+  // Live athlete_schedule data — reflects any session rearrangements the athlete made.
+  // Keyed by date string, value is the sessions array from the Supabase row.
+  const [liveScheduleMap, setLiveScheduleMap] = useState<Map<string, { id: string; sessionName: string; exerciseCount: number; intensity: string | null }[]>>(new Map());
+
   // Completed session logs — keyed by session_id = "${date}-${sessionIndex}"
   const [sessionLogs, setSessionLogs] = useState<Map<string, CoachSessionLog>>(new Map());
+  const [sessionLogsLoaded, setSessionLogsLoaded] = useState(false);
   const [completedSheetOpen, setCompletedSheetOpen] = useState(false);
   const [selectedCompletedLog, setSelectedCompletedLog] = useState<CoachSessionLog | null>(null);
   
@@ -156,7 +178,80 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
   const assignments = useMemo(() => {
     return athleteData.getAthleteCalendarAssignments(athlete.id);
   }, [athleteData, athlete.id]);
-  
+
+  // Auto-open a specific session when `autoOpenSession` prop is set (e.g. coach clicked reference chip)
+  useEffect(() => {
+    if (!autoOpenSession) return;
+    const key = `${autoOpenSession.date}::${autoOpenSession.sessionName ?? ''}`;
+    if (autoOpenHandledRef.current === key) return;
+    if (assignments.length === 0) return; // wait for assignments to load
+    if (!sessionLogsLoaded) return; // wait for session logs so we can decide which sheet to open
+
+    const { date, sessionName } = autoOpenSession;
+
+    // Find the assignment that covers this date
+    const assignment = assignments.find((a) => date >= a.startDate && date <= a.endDate);
+    if (!assignment) return;
+
+    // Find session index: prefer live schedule map, fall back to 0
+    let sessionIndex = 0;
+    const liveSessions = liveScheduleMap.get(date);
+    if (liveSessions && sessionName) {
+      const idx = liveSessions.findIndex((s) => s.sessionName === sessionName);
+      if (idx >= 0) sessionIndex = idx;
+    }
+
+    autoOpenHandledRef.current = key;
+    onAutoOpenHandled?.();
+    setSelectedAssignmentId(assignment.id);
+
+    // Prefer the completed session log if it exists (athlete has logged this session)
+    // session_id format = "${assignment.id}-${date}-${sessionIndex}" (matches athleteScheduleSync)
+    const logKey = `${assignment.id}-${date}-${sessionIndex}`;
+    const completedLog = sessionLogs.get(logKey);
+    if (completedLog) {
+      setSelectedCompletedLog(completedLog);
+      setCompletedSheetOpen(true);
+    } else {
+      setSelectedSessionInfo({ dayDate: date, sessionIndex, assignmentId: assignment.id });
+      setSessionSheetOpen(true);
+    }
+  }, [autoOpenSession, assignments, liveScheduleMap, sessionLogs, sessionLogsLoaded, onAutoOpenHandled]);
+
+  // Load live athlete_schedule from Supabase to reflect any session rearrangements.
+  // Re-fetches whenever the athlete changes or connections finish loading.
+  useEffect(() => {
+    const connection = getConnectionForAthlete(athlete.id);
+    if (!connection || connectionsLoading) return;
+
+    const todayLocal = new Date();
+    const fromLocal = new Date(todayLocal); fromLocal.setDate(todayLocal.getDate() - 30);
+    const toLocal   = new Date(todayLocal); toLocal.setDate(todayLocal.getDate() + 120);
+    const localStr  = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    supabase
+      .from('athlete_schedule')
+      .select('date, sessions, intensity')
+      .eq('athlete_connection_id', connection.id)
+      .gte('date', localStr(fromLocal))
+      .lte('date', localStr(toLocal))
+      .then(({ data }) => {
+        if (!data) return;
+        const map = new Map<string, { id: string; sessionName: string; exerciseCount: number; intensity: string | null }[]>();
+        data.forEach((row: Record<string, unknown>) => {
+          const sessions = (row.sessions as Array<{ id: string; name: string; exerciseCount: number; intensity?: string }>) ?? [];
+          map.set(row.date as string, sessions.map(s => ({
+            id: s.id,
+            sessionName: s.name,
+            exerciseCount: s.exerciseCount ?? 0,
+            intensity: s.intensity ?? null,
+          })));
+        });
+        setLiveScheduleMap(map);
+      });
+  }, [athlete.id, connectionsLoading, getConnectionForAthlete]);
+
   // RAG retrieval — re-query when athlete changes
   useEffect(() => {
     const sports = [...(athlete.sports ?? []), ...(!athlete.sports && athlete.sport ? [athlete.sport] : [])];
@@ -284,6 +379,80 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
     ).catch(e => console.error('[loadSync] ✗ sync failed:', e));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAssignmentId, editing.isInitializing, editing.trainingDays.length, connectionsLoading]);
+
+  // Wrappers that save the event AND immediately patch the athlete_schedule row so
+  // the athlete app sees the new test/event without a full plan re-sync.
+  const handleAddCalendarEvent = useCallback(async (
+    athleteId: string,
+    eventPayload: Omit<import('@/hooks/useCalendarEvents').CalendarEvent, 'id'>,
+  ) => {
+    const newEvent = await addCalendarEvent(athleteId, eventPayload);
+    const connection = getConnectionForAthlete(athlete.id);
+    if (!connection) return;
+
+    const { data: row } = await supabase
+      .from('athlete_schedule')
+      .select('id, events')
+      .eq('athlete_connection_id', connection.id)
+      .eq('date', eventPayload.date)
+      .maybeSingle();
+
+    const newEntry = {
+      id: newEvent.id,
+      type: newEvent.type,
+      title: newEvent.title,
+      notes: newEvent.notes ?? undefined,
+      targetValue: newEvent.targetValue ?? undefined,
+      unit: newEvent.unit ?? undefined,
+      parameterId: newEvent.parameterId ?? undefined,
+    };
+
+    if (row) {
+      const existing = (row.events as unknown[]) ?? [];
+      await supabase
+        .from('athlete_schedule')
+        .update({ events: [...existing, newEntry] })
+        .eq('id', row.id)
+        .eq('athlete_connection_id', connection.id);
+    } else {
+      // Rest day with no existing row — create one
+      await supabase
+        .from('athlete_schedule')
+        .insert({
+          athlete_connection_id: connection.id,
+          date: eventPayload.date,
+          sessions: [],
+          events: [newEntry],
+        });
+    }
+  }, [addCalendarEvent, getConnectionForAthlete, athlete.id]);
+
+  const handleDeleteCalendarEvent = useCallback(async (athleteId: string, eventId: string) => {
+    // Find the event to get its date before deleting
+    const allEvents = getEventsForAthlete(athleteId);
+    const ev = allEvents.find(e => e.id === eventId);
+    await deleteCalendarEvent(athleteId, eventId);
+
+    if (!ev) return;
+    const connection = getConnectionForAthlete(athlete.id);
+    if (!connection) return;
+
+    const { data: row } = await supabase
+      .from('athlete_schedule')
+      .select('id, events')
+      .eq('athlete_connection_id', connection.id)
+      .eq('date', ev.date)
+      .maybeSingle();
+
+    if (row) {
+      const updated = ((row.events as Array<{ id: string }>) ?? []).filter(e => e.id !== eventId);
+      await supabase
+        .from('athlete_schedule')
+        .update({ events: updated })
+        .eq('id', row.id)
+        .eq('athlete_connection_id', connection.id);
+    }
+  }, [deleteCalendarEvent, getConnectionForAthlete, getEventsForAthlete, athlete.id]);
 
   // Athlete-specific AI context
   const athleteAIContext = useAthleteAIContext({
@@ -537,6 +706,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
           }
         }
         setSessionLogs(map);
+        setSessionLogsLoaded(true);
       });
 
     return () => { cancelled = true; };
@@ -758,6 +928,23 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         }
       }
 
+      // Override sessions with live athlete_schedule data so the coach sees
+      // any rearrangements the athlete made in the athlete app.
+      const liveEntries = liveScheduleMap.get(dateString);
+      if (liveEntries !== undefined) {
+        sessions.length = 0;
+        liveEntries.forEach((s, idx) => {
+          sessions.push({
+            id: s.id,
+            sessionIndex: idx,
+            sessionName: s.sessionName,
+            exerciseCount: s.exerciseCount,
+            intensity: (s.intensity ?? dayIntensityForSquare) as IntensityLevel,
+            assignmentId: assignmentId ?? '',
+          });
+        });
+      }
+
       return {
         date,
         dateString,
@@ -769,7 +956,7 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
         calendarEvents: getEventsForDate(athlete.id, dateString),
       };
     });
-  }, [calendarDateRange, viewMode, assignments, assignmentDataCache, selectedAssignmentId, editing.exerciseDistribution, editing.daySplitStates, editing.trainingDays, editing.dailyIntensityData, editing.sessionIntensities, getEventsForDate, athlete.id]);
+  }, [calendarDateRange, viewMode, assignments, assignmentDataCache, selectedAssignmentId, editing.exerciseDistribution, editing.daySplitStates, editing.trainingDays, editing.dailyIntensityData, editing.sessionIntensities, getEventsForDate, athlete.id, liveScheduleMap]);
 
   // Group days into weeks
   const weeks = useMemo(() => groupDaysIntoWeeks(calendarDays), [calendarDays]);
@@ -1836,8 +2023,9 @@ export function AthleteCalendarView({ athlete }: AthleteCalendarViewProps) {
                       athletePerformanceParameters={athleteData.athletePerformanceParameters.filter(
                         p => p.athleteId === athlete.id
                       )}
-                      onAddCalendarEvent={addCalendarEvent}
-                      onDeleteCalendarEvent={deleteCalendarEvent}
+                      athleteBiometrics={athleteData.getAthleteBiometrics(athlete.id)}
+                      onAddCalendarEvent={handleAddCalendarEvent}
+                      onDeleteCalendarEvent={handleDeleteCalendarEvent}
                       sessionLogs={sessionLogs}
                       onCompletedSessionClick={handleCompletedSessionClick}
                     />
