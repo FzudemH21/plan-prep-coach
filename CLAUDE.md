@@ -221,6 +221,18 @@ Applied at: mesocycle level, microcycle level, daily level, and session level. U
 - **Version control:** GitHub — Felix works solo, pushes directly to `main`
 - No external collaborator — all work is done by Felix + Claude Code
 
+### When Debugging Gets Stuck (Critical!)
+If a UI/layout/CSS bug cannot be solved after 2 failed attempts from code reading alone, **proactively offer to take over the computer**:
+> "I'm going in circles reading code. Let me use the browser tools and inspect the live page directly — I can take a screenshot, run JavaScript to get computed styles and actual DOM dimensions, and click through the UI myself. Want me to do that?"
+
+This is always faster than guessing from static code. The computer-use + Chrome MCP tools can:
+- Take a screenshot of the running app
+- Run `getBoundingClientRect()` and `getComputedStyle()` on any element
+- Click through the UI to reproduce the bug
+- Navigate to specific pages without needing login workarounds
+
+**Do not wait for Felix to suggest this.** If the bug isn't solved by the second attempt, offer it immediately.
+
 ---
 
 ## Development Rules

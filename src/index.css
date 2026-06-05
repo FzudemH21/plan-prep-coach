@@ -169,6 +169,11 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html, body {
+    overflow: hidden;
+    height: 100%;
+  }
+
   body {
     @apply bg-background text-foreground overflow-x-hidden;
   }
@@ -211,6 +216,11 @@ All colors MUST be HSL.
   .bg-intensity-8-light  { background-color: hsl(var(--intensity-8)  / 0.12); }
   .bg-intensity-9-light  { background-color: hsl(var(--intensity-9)  / 0.12); }
   .bg-intensity-10-light { background-color: hsl(var(--intensity-10) / 0.12); }
+}
+
+/* Radix TabsContent: [hidden] must win over Tailwind's flex/block display classes */
+[role="tabpanel"][hidden] {
+  display: none !important;
 }
 
 /* Ensure DnD drag handles remain interactive */

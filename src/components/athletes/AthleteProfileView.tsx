@@ -55,7 +55,7 @@ import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { useChat } from '@/hooks/useChat';
 import { useAuth } from '@/hooks/useAuth';
 import { parseISO, isToday, isYesterday } from 'date-fns';
-import { useRef } from 'react';
+import { useRef, useLayoutEffect } from 'react';
 
 // ── Sport tag input ───────────────────────────────────────────────────────────
 
@@ -109,6 +109,12 @@ interface AthleteProfileViewProps {
   isNewAthlete?: boolean;
   onCancelNew?: () => void;
   onSaveNew?: () => void;
+  /** Open the profile on a specific tab immediately (e.g. 'calendar'). */
+  defaultTab?: string;
+  /** Jump the calendar to this date's week immediately (yyyy-MM-dd). */
+  defaultCalendarDate?: string;
+  /** Auto-open a specific session by name when navigating to the calendar tab. */
+  defaultCalendarSessionName?: string;
 }
 
 export function AthleteProfileView({
@@ -120,10 +126,33 @@ export function AthleteProfileView({
   isNewAthlete = false,
   onCancelNew,
   onSaveNew,
+  defaultTab,
+  defaultCalendarDate,
+  defaultCalendarSessionName,
 }: AthleteProfileViewProps) {
   const [isEditing, setIsEditing] = useState(isNewAthlete);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editedAthlete, setEditedAthlete] = useState<Partial<Athlete>>({});
+
+  // Controlled tab state — Radix unmounts inactive panels so flex-1 layout is unaffected
+  const [activeTab, setActiveTab] = useState(defaultTab ?? 'monitoring');
+  const settingsScrollRef = useRef<HTMLDivElement>(null);
+  const prevActiveTabRef = useRef(activeTab);
+  useLayoutEffect(() => {
+    const entering = activeTab === 'settings' && prevActiveTabRef.current !== 'settings';
+    prevActiveTabRef.current = activeTab;
+    if (entering && settingsScrollRef.current) {
+      // Find the actual scroll viewport inside the ScrollArea
+      const viewport = settingsScrollRef.current.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
+      if (viewport) viewport.scrollTop = 0;
+    }
+  }, [activeTab]);
+  // Calendar jump target — set when coach clicks a chat reference chip
+  const [calendarJumpDate, setCalendarJumpDate] = useState<string | undefined>(defaultCalendarDate);
+  // Auto-open session target — set when navigating from a reference chip
+  const [calendarAutoOpenSession, setCalendarAutoOpenSession] = useState<{ date: string; sessionName?: string } | undefined>(
+    defaultCalendarDate ? { date: defaultCalendarDate, sessionName: defaultCalendarSessionName } : undefined
+  );
 
   // Chat
   const { connections } = useAthleteConnections();
@@ -235,7 +264,7 @@ export function AthleteProfileView({
 
   return (
     <div className="h-full flex flex-col">
-      <Tabs defaultValue="monitoring" className="flex-1 flex flex-col">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col">
         <TabsList className="mx-1 mt-1 w-fit">
           <TabsTrigger value="profile" className="gap-2">
             <User className="h-4 w-4" />
@@ -659,7 +688,7 @@ export function AthleteProfileView({
         </TabsContent>
 
         <TabsContent value="calendar" className="flex-1 mt-0 px-1">
-          <AthleteCalendarView athlete={athlete} />
+          <AthleteCalendarView athlete={athlete} initialDate={calendarJumpDate} autoOpenSession={calendarAutoOpenSession} />
         </TabsContent>
 
         <TabsContent value="documents" className="flex-1 mt-0">
@@ -704,9 +733,18 @@ export function AthleteProfileView({
                     return (
                       <div key={msg.id} className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
                         {msg.messageType === 'exercise_comment' && msg.reference && (
-                          <div className={`text-xs px-2 py-0.5 rounded-full mb-0.5 max-w-[80%] ${isOwn ? 'bg-primary/10 text-primary' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}>
+                          <button
+                            onClick={() => {
+                              if (msg.reference?.date) {
+                                setCalendarJumpDate(msg.reference.date);
+                                setCalendarAutoOpenSession({ date: msg.reference.date, sessionName: msg.reference.sessionName });
+                              }
+                              setActiveTab('calendar');
+                            }}
+                            className={`text-xs px-2 py-0.5 rounded-full mb-0.5 max-w-[80%] text-left hover:opacity-80 active:opacity-60 transition-opacity underline-offset-2 hover:underline ${isOwn ? 'bg-primary/10 text-primary' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}
+                          >
                             📎 {[msg.reference.exerciseName, msg.reference.sectionName, msg.reference.sessionName, msg.reference.date ? format(parseISO(msg.reference.date + 'T12:00:00'), 'd MMM yyyy') : undefined].filter(Boolean).join(' · ')}
-                          </div>
+                          </button>
                         )}
                         <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm break-words ${isOwn ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-muted text-foreground rounded-bl-sm'}`}>
                           {msg.content}
@@ -753,8 +791,10 @@ export function AthleteProfileView({
           )}
         </TabsContent>
 
-        <TabsContent value="settings" className="flex-1 mt-0 min-h-0">
-          <AthleteSettingsTab athlete={athlete} onUpdateAthlete={onUpdateAthlete} />
+        <TabsContent value="settings" tabIndex={-1} className="flex-1 mt-0 min-h-0" ref={settingsScrollRef}>
+          <ScrollArea className="h-full">
+            <AthleteSettingsTab athlete={athlete} onUpdateAthlete={onUpdateAthlete} />
+          </ScrollArea>
         </TabsContent>
       </Tabs>
     </div>
