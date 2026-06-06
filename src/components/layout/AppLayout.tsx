@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bot, Settings, Menu, FlaskConical, Trash2, Bell, MessageCircle } from "lucide-react";
+import { Settings, Menu, FlaskConical, Trash2, Bell, MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { loadSeedData, loadDemoPlan2026, loadStrengthPlan, loadExerciseLibrarySeedData } from "@/utils/seedData";
 import { clearAllAppCache } from "@/utils/clearCache";
@@ -28,7 +28,6 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const [showAIAgent, setShowAIAgent] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -105,16 +104,6 @@ export function AppLayout({ children }: AppLayoutProps) {
                 )}
               </Button>
 
-              <Button
-                variant={showAIAgent ? "default" : "outline"}
-                size="sm"
-                onClick={() => setShowAIAgent(!showAIAgent)}
-              >
-                <Bot className="h-4 w-4 mr-2" />
-                AI Agent
-              </Button>
-              
-
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -139,36 +128,6 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Main Content Area */}
       <div className="flex flex-1 min-h-0">
-        {/* AI Agent Sidebar */}
-        {showAIAgent && (
-          <aside className="w-80 border-r bg-card p-4">
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <Bot className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold">S&C AI Agent</h3>
-              </div>
-              <div className="text-sm text-muted-foreground">
-                I'm here to help you make evidence-informed decisions about your training programming.
-                Ask me about goal setting, exercise selection, periodization, or any other strength & conditioning topic.
-              </div>
-              <div className="border-t pt-4">
-                <p className="text-xs text-muted-foreground mb-2">Quick suggestions:</p>
-                <div className="space-y-1">
-                  <Button variant="ghost" size="sm" className="w-full justify-start text-xs">
-                    Help me set appropriate sub-goals
-                  </Button>
-                  <Button variant="ghost" size="sm" className="w-full justify-start text-xs">
-                    Suggest training methods for sprint speed
-                  </Button>
-                  <Button variant="ghost" size="sm" className="w-full justify-start text-xs">
-                    Review my periodization plan
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </aside>
-        )}
-
         {/* Main Content */}
         <main className="flex-1 overflow-hidden p-4 sm:p-6 lg:p-8 max-w-none min-w-0">
           {children || <Outlet />}
