@@ -26,6 +26,7 @@ export interface AthleteCheckin {
   illnessSymptoms: string[];
   illnessSymptomOther: string;
   illnessNrs: number | null;
+  notes: string | null;
   createdAt: string;
 }
 
@@ -44,6 +45,7 @@ function fromRow(r: Record<string, unknown>): AthleteCheckin {
     illnessSymptoms:  (r.illness_symptoms  as string[]) ?? [],
     illnessSymptomOther: (r.illness_symptom_other as string) ?? '',
     illnessNrs:       (r.illness_nrs as number) ?? null,
+    notes:            (r.notes as string | null) ?? null,
     createdAt:        r.created_at as string,
   };
 }

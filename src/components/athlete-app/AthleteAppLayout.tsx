@@ -5,7 +5,6 @@ import { cn } from '@/lib/utils';
 import { useAthleteApp } from '@/hooks/useAthleteApp';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
-import { useAthleteSettings } from '@/hooks/useAthleteSettings';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -83,7 +82,7 @@ export function AthleteAppLayout() {
   const location = useLocation();
   const { connection, loading } = useAthleteApp();
 
-  const { chatEnabled } = useAthleteSettings();
+  const chatEnabled = connection?.chatEnabled ?? true;
 
   const { unreadCount, previews, markRead } = useAthleteUnread(
     chatEnabled ? (connection?.id ?? null) : null

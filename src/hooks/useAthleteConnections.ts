@@ -21,6 +21,8 @@ export interface AthleteProfileData {
   dailyActivityLevel?: string | null;
   /** Monitoring check-in config — stored here to keep athlete app access without extra columns */
   monitoringConfig?: MonitoringConfig | null;
+  /** Whether the Messages tab is visible in the athlete app (default true) */
+  chatEnabled?: boolean;
 }
 
 export interface AthleteConnection {
@@ -37,6 +39,7 @@ export interface AthleteConnection {
   monitoringEnabled: boolean;
   monitoringConfig: MonitoringConfig | null;
   allowRearrangeWorkouts: boolean;
+  chatEnabled: boolean;
   profileData: AthleteProfileData;
 }
 
@@ -56,6 +59,7 @@ function rowToConnection(row: Record<string, unknown>): AthleteConnection {
     monitoringEnabled: (row.monitoring_enabled as boolean) ?? true,
     monitoringConfig: profileData.monitoringConfig ?? null,
     allowRearrangeWorkouts: (row.allow_rearrange_workouts as boolean) ?? false,
+    chatEnabled: profileData.chatEnabled ?? true,
     profileData,
   };
 }
@@ -163,6 +167,23 @@ export function useAthleteConnections() {
     );
   }, [connections]);
 
+  /** Enable or disable the Messages tab for an athlete. Stored in profile_data. */
+  const updateChatEnabled = useCallback(async (connectionId: string, enabled: boolean) => {
+    const conn = connections.find(c => c.id === connectionId);
+    if (!conn) return;
+    const newProfileData: AthleteProfileData = { ...conn.profileData, chatEnabled: enabled };
+    const { error } = await supabase
+      .from('athlete_connections')
+      .update({ profile_data: newProfileData })
+      .eq('id', connectionId);
+    if (error) throw error;
+    setConnections(prev =>
+      prev.map(c => c.id === connectionId
+        ? { ...c, chatEnabled: enabled, profileData: newProfileData }
+        : c)
+    );
+  }, [connections]);
+
   /** Enable or disable session rearranging for an athlete. */
   const updateAllowRearrangeWorkouts = useCallback(async (connectionId: string, enabled: boolean) => {
     const { error } = await supabase
@@ -201,6 +222,7 @@ export function useAthleteConnections() {
     updateWeeksAhead,
     updateMonitoringEnabled,
     updateMonitoringConfig,
+    updateChatEnabled,
     updateAllowRearrangeWorkouts,
     getConnectionForAthlete,
     reload: load,

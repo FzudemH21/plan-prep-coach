@@ -111,8 +111,10 @@ export interface ScaleAnchor {
 }
 
 export interface CustomMetricBlockConfig {
-  /** ParameterV2 id — values are saved as athlete_test_results entries */
+  /** ID — ParameterV2.id for 'performance', BiometricDefinition.id for 'biometric' */
   parameterId: string;
+  /** Which database this metric lives in */
+  parameterSource: 'biometric' | 'performance';
   /** Cached display name */
   parameterName: string;
   /** Cached unit (e.g. "bpm", "kg") or null */

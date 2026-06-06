@@ -16,6 +16,7 @@ export interface AthleteConnection {
   weeksAhead: number;
   monitoringEnabled: boolean;
   allowRearrangeWorkouts: boolean;
+  chatEnabled: boolean;
   profileData: AthleteProfileData;
 }
 
@@ -157,6 +158,7 @@ export function useAthleteApp() {
           weeksAhead: connData.weeks_ahead ?? 4,
           monitoringEnabled: connData.monitoring_enabled ?? true,
           allowRearrangeWorkouts: connData.allow_rearrange_workouts ?? false,
+          chatEnabled: ((connData.profile_data as AthleteProfileData)?.chatEnabled) ?? true,
           profileData: (connData.profile_data as AthleteProfileData) ?? {},
         };
         setConnection(conn);

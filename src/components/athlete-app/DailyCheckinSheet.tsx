@@ -916,39 +916,41 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
         const min = cfg.scaleMin ?? 0;
         const max = cfg.scaleMax ?? 10;
         const count = max - min + 1;
-        const minAnchor = cfg.scaleAnchors?.find(a => a.value === min)?.label;
-        const maxAnchor = cfg.scaleAnchors?.find(a => a.value === max)?.label;
         return (
           <>
-            <Header title={questionLabel} subtitle={`Rate from ${min} to ${max}${unitSuffix}`} />
-            <div className="flex-1 overflow-y-auto space-y-3">
-              {(minAnchor || maxAnchor) && (
-                <div className="flex justify-between text-[11px] text-muted-foreground px-0.5">
-                  <span>{minAnchor ?? min}</span>
-                  <span>{maxAnchor ?? max}</span>
-                </div>
-              )}
-              <div className="flex gap-0.5 flex-wrap">
-                {Array.from({ length: count }, (_, i) => min + i).map((n) => (
+            <Header title={questionLabel} subtitle={`${max} = highest · ${min} = lowest${unitSuffix}`} />
+            <div className="flex-1 overflow-y-auto space-y-1.5">
+              {Array.from({ length: count }, (_, i) => max - i).map((n) => {
+                const anchor = cfg.scaleAnchors?.find(a => a.value === n)?.label;
+                const isSelected = currentVal === n;
+                return (
                   <button
                     key={n}
                     onClick={() => setCustomMetricValues(prev => ({ ...prev, [blockId]: n }))}
                     className={cn(
-                      'flex-1 min-w-[2rem] h-10 rounded text-xs font-bold border transition-all active:scale-95',
-                      currentVal === n
+                      'w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all active:scale-[0.98]',
+                      isSelected
                         ? 'bg-primary border-primary text-primary-foreground'
-                        : 'bg-background border-border text-muted-foreground hover:border-primary/40',
+                        : 'border-border bg-background hover:border-primary/30'
                     )}
                   >
-                    {n}
+                    <span className={cn(
+                      'w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-bold shrink-0',
+                      isSelected ? 'border-white/60 text-white' : 'border-border text-muted-foreground'
+                    )}>
+                      {n}
+                    </span>
+                    {anchor && (
+                      <span className={cn(
+                        'text-sm font-medium leading-snug',
+                        isSelected ? 'text-white' : 'text-foreground'
+                      )}>
+                        {anchor}
+                      </span>
+                    )}
                   </button>
-                ))}
-              </div>
-              {currentVal !== null && (
-                <p className="text-center text-sm font-medium text-muted-foreground">
-                  Selected: {currentVal}{unitSuffix}
-                </p>
-              )}
+                );
+              })}
             </div>
             <div className="shrink-0 flex gap-3 pt-4">
               <Button variant="outline" className="flex-1" onClick={goBack}>
@@ -966,12 +968,12 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
       return (
         <>
           <Header title={questionLabel} subtitle={`Enter today's value${unitSuffix}`} />
-          <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center gap-4 py-4">
-            <div className="flex items-center gap-3 w-full max-w-[200px]">
+          <div className="flex-1 overflow-y-auto flex flex-col justify-center py-4">
+            <div className="flex items-center gap-2 w-full">
               <input
                 type="number"
                 inputMode="decimal"
-                className="flex-1 h-14 text-2xl font-bold text-center rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="min-w-0 flex-1 h-11 text-base font-semibold text-center rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
                 placeholder="–"
                 value={currentVal ?? ''}
                 onChange={e => {
@@ -980,7 +982,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
                 }}
               />
               {cfg.parameterUnit && (
-                <span className="text-muted-foreground text-sm font-medium">{cfg.parameterUnit}</span>
+                <span className="text-muted-foreground text-sm font-medium shrink-0">{cfg.parameterUnit}</span>
               )}
             </div>
           </div>

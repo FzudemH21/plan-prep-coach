@@ -25,12 +25,8 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import {
-  Scale,
-  Globe,
-  LayoutGrid,
   CalendarRange,
   CalendarDays,
-  Dumbbell,
   Smartphone,
   Copy,
   Check,
@@ -43,11 +39,13 @@ import {
   Info,
   ChevronRight,
   ChevronLeft,
+  Pencil,
+  BookmarkPlus,
+  BookOpen,
+  MessageCircle,
 } from 'lucide-react';
 import {
   Athlete,
-  AthleteSettings,
-  DEFAULT_ATHLETE_SETTINGS,
   MonitoringConfig,
   MonitoringBlock,
   DEFAULT_MONITORING_CONFIG,
@@ -55,65 +53,37 @@ import {
 import type { CustomMetricBlockConfig } from '@/types/athlete';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
+import { useAthletes } from '@/hooks/useAthletes';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Monitoring templates (localStorage) ──────────────────────────────────────
 
-function mergeSettings(existing?: AthleteSettings): AthleteSettings {
-  if (!existing) return DEFAULT_ATHLETE_SETTINGS;
-  return {
-    units: { ...DEFAULT_ATHLETE_SETTINGS.units, ...existing.units },
-    timezone: existing.timezone ?? DEFAULT_ATHLETE_SETTINGS.timezone,
-    dateFormat: existing.dateFormat ?? DEFAULT_ATHLETE_SETTINGS.dateFormat,
-    features: { ...DEFAULT_ATHLETE_SETTINGS.features, ...existing.features },
-    athleteApp: { ...DEFAULT_ATHLETE_SETTINGS.athleteApp, ...existing.athleteApp },
-  };
+interface MonitoringTemplate {
+  id: string;
+  name: string;
+  blocks: MonitoringBlock[];
+  createdAt: string;
+}
+
+const TEMPLATE_KEY = 'monitoring_templates_v1';
+
+function loadTemplates(): MonitoringTemplate[] {
+  try {
+    const raw = localStorage.getItem(TEMPLATE_KEY);
+    return raw ? (JSON.parse(raw) as MonitoringTemplate[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistTemplates(templates: MonitoringTemplate[]) {
+  try {
+    localStorage.setItem(TEMPLATE_KEY, JSON.stringify(templates));
+  } catch {
+    // quota or private mode — ignore
+  }
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
-
-function UnitToggle({
-  label,
-  metricLabel,
-  imperialLabel,
-  value,
-  onChange,
-}: {
-  label: string;
-  metricLabel: string;
-  imperialLabel: string;
-  value: 'metric' | 'imperial';
-  onChange: (v: 'metric' | 'imperial') => void;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <div className="flex rounded-md border overflow-hidden w-fit">
-        <button
-          onClick={() => onChange('metric')}
-          className={cn(
-            'px-3 py-1.5 text-sm transition-colors',
-            value === 'metric'
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-background hover:bg-muted'
-          )}
-        >
-          {metricLabel}
-        </button>
-        <button
-          onClick={() => onChange('imperial')}
-          className={cn(
-            'px-3 py-1.5 text-sm transition-colors border-l',
-            value === 'imperial'
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-background hover:bg-muted'
-          )}
-        >
-          {imperialLabel}
-        </button>
-      </div>
-    </div>
-  );
-}
 
 function FeatureToggle({
   label,
@@ -131,17 +101,15 @@ function FeatureToggle({
   return (
     <div className={cn('flex items-start justify-between gap-4 py-2', indent && 'pl-6')}>
       <div className="space-y-0.5">
-        <Label className={cn('text-sm', indent && 'text-sm font-normal')}>{label}</Label>
-        {description && (
-          <p className="text-xs text-muted-foreground">{description}</p>
-        )}
+        <Label className={cn('text-sm', indent && 'font-normal')}>{label}</Label>
+        {description && <p className="text-xs text-muted-foreground">{description}</p>}
       </div>
       <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>
   );
 }
 
-// ── Weeks-ahead selector (Supabase-backed) ───────────────────────────────────
+// ── Weeks-ahead selector (Supabase-backed) ────────────────────────────────────
 
 function WeeksAheadSelect({ athlete }: { athlete: Athlete }) {
   const { getConnectionForAthlete, updateWeeksAhead } = useAthleteConnections();
@@ -378,7 +346,7 @@ function AppAccountCard({ athlete }: { athlete: Athlete }) {
   );
 }
 
-// ── Monitoring card ───────────────────────────────────────────────────────────
+// ── Session Rearranging Card ──────────────────────────────────────────────────
 
 function RearrangeWorkoutsCard({ athlete }: { athlete: Athlete }) {
   const { getConnectionForAthlete, updateAllowRearrangeWorkouts } = useAthleteConnections();
@@ -422,16 +390,64 @@ function RearrangeWorkoutsCard({ athlete }: { athlete: Athlete }) {
   );
 }
 
-function MonitoringCard({ athlete }: { athlete: Athlete }) {
-  const { getConnectionForAthlete, updateMonitoringEnabled, updateMonitoringConfig } = useAthleteConnections();
-  const { data: paramDb } = useParametersDataV2();
+// ── Messages Card ─────────────────────────────────────────────────────────────
+
+function MessagesCard({ athlete }: { athlete: Athlete }) {
+  const { getConnectionForAthlete, updateChatEnabled } = useAthleteConnections();
   const connection = getConnectionForAthlete(athlete.id);
   const [saving, setSaving] = useState(false);
 
-  // Add-block dialog state
+  if (!connection) return null;
+
+  const handleToggle = async (enabled: boolean) => {
+    setSaving(true);
+    try {
+      await updateChatEnabled(connection.id, enabled);
+    } catch (e) {
+      console.error('Failed to update chat enabled', e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          <MessageCircle className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-base">Messages</CardTitle>
+        </div>
+        <CardDescription>
+          Control whether this athlete can use the Messages tab in the app.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="divide-y border rounded-lg">
+        <FeatureToggle
+          label="Enable Messages tab"
+          description="When disabled, the Messages tab is hidden in the athlete app"
+          checked={connection.chatEnabled}
+          onCheckedChange={handleToggle}
+        />
+        {saving && <p className="text-xs text-muted-foreground px-1 py-2">Saving…</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Monitoring Card ───────────────────────────────────────────────────────────
+
+function MonitoringCard({ athlete }: { athlete: Athlete }) {
+  const { getConnectionForAthlete, updateMonitoringEnabled, updateMonitoringConfig } = useAthleteConnections();
+  const { data: paramDb, addParameter } = useParametersDataV2();
+  const athleteData = useAthletes();
+  const connection = getConnectionForAthlete(athlete.id);
+  const [saving, setSaving] = useState(false);
+
+  // ── Add / edit block dialog ───────────────────────────────────────────────
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [addStep, setAddStep] = useState<'pick_param' | 'configure'>('pick_param');
-  const [selectedParam, setSelectedParam] = useState<{ id: string; name: string; unit?: string } | null>(null);
+  const [editingBlock, setEditingBlock] = useState<MonitoringBlock | null>(null);
+  const [addStep, setAddStep] = useState<'pick_param' | 'create_new' | 'configure'>('pick_param');
+  const [selectedParam, setSelectedParam] = useState<{ id: string; name: string; unit?: string; source: 'biometric' | 'performance' } | null>(null);
   const [inputType, setInputType] = useState<'number' | 'scale'>('number');
   const [scaleMin, setScaleMin] = useState(0);
   const [scaleMax, setScaleMax] = useState(10);
@@ -439,6 +455,17 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
   const [scaleMaxLabel, setScaleMaxLabel] = useState('');
   const [customLabel, setCustomLabel] = useState('');
   const [paramSearch, setParamSearch] = useState('');
+  // Create-new state
+  const [createSource, setCreateSource] = useState<'biometric' | 'performance'>('biometric');
+  const [newName, setNewName] = useState('');
+  const [newUnit, setNewUnit] = useState('');
+  const [creating, setCreating] = useState(false);
+
+  // ── Templates ─────────────────────────────────────────────────────────────
+  const [templates, setTemplates] = useState<MonitoringTemplate[]>(loadTemplates);
+  const [showSaveTemplateDialog, setShowSaveTemplateDialog] = useState(false);
+  const [showLoadTemplateDialog, setShowLoadTemplateDialog] = useState(false);
+  const [templateName, setTemplateName] = useState('');
 
   const config: MonitoringConfig = useMemo(
     () => connection?.profileData?.monitoringConfig ?? DEFAULT_MONITORING_CONFIG,
@@ -446,6 +473,8 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
   );
 
   if (!connection) return null;
+
+  // ── Config helpers ────────────────────────────────────────────────────────
 
   const saveConfig = async (newConfig: MonitoringConfig) => {
     setSaving(true);
@@ -485,63 +514,161 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
     saveConfig({ blocks: config.blocks.filter(b => b.id !== blockId) });
   };
 
+  // ── Add / edit dialog helpers ─────────────────────────────────────────────
+
   const closeAddDialog = () => {
     setShowAddDialog(false);
+    setEditingBlock(null);
     setAddStep('pick_param');
     setSelectedParam(null);
     setInputType('number');
-    setScaleMin(0);
-    setScaleMax(10);
-    setScaleMinLabel('');
-    setScaleMaxLabel('');
-    setCustomLabel('');
-    setParamSearch('');
+    setScaleMin(0); setScaleMax(10);
+    setScaleMinLabel(''); setScaleMaxLabel('');
+    setCustomLabel(''); setParamSearch('');
+    setNewName(''); setNewUnit(''); setCreating(false);
+    setCreateSource('biometric');
   };
 
-  const handleAddBlock = () => {
+  const openEditDialog = (block: MonitoringBlock) => {
+    if (!block.config) return;
+    const cfg = block.config;
+    setEditingBlock(block);
+    setSelectedParam({
+      id: cfg.parameterId,
+      name: cfg.parameterName,
+      unit: cfg.parameterUnit ?? undefined,
+      source: cfg.parameterSource,
+    });
+    setInputType(cfg.inputType);
+    setScaleMin(cfg.scaleMin ?? 0);
+    setScaleMax(cfg.scaleMax ?? 10);
+    const minAnchor = cfg.scaleAnchors?.find(a => a.value === (cfg.scaleMin ?? 0));
+    const maxAnchor = cfg.scaleAnchors?.find(a => a.value === (cfg.scaleMax ?? 10));
+    setScaleMinLabel(minAnchor?.label ?? '');
+    setScaleMaxLabel(maxAnchor?.label ?? '');
+    setCustomLabel(cfg.label ?? '');
+    setAddStep('configure');
+    setShowAddDialog(true);
+  };
+
+  const handleSaveBlock = () => {
     if (!selectedParam) return;
     const blockConfig: CustomMetricBlockConfig = {
       parameterId: selectedParam.id,
+      parameterSource: selectedParam.source,
       parameterName: selectedParam.name,
       parameterUnit: selectedParam.unit ?? null,
       inputType,
       label: customLabel.trim() || undefined,
       ...(inputType === 'scale' ? {
-        scaleMin,
-        scaleMax,
+        scaleMin, scaleMax,
         scaleAnchors: [
           ...(scaleMinLabel.trim() ? [{ value: scaleMin, label: scaleMinLabel.trim() }] : []),
           ...(scaleMaxLabel.trim() ? [{ value: scaleMax, label: scaleMaxLabel.trim() }] : []),
         ],
       } : {}),
     };
-    const newBlock: MonitoringBlock = {
-      id: String(Date.now()), // step name in DailyCheckinSheet = `custom_${id}`
-      type: 'custom_metric',
-      enabled: true,
-      config: blockConfig,
-    };
-    saveConfig({ blocks: [...config.blocks, newBlock] });
+
+    if (editingBlock) {
+      saveConfig({ blocks: config.blocks.map(b => b.id === editingBlock.id ? { ...b, config: blockConfig } : b) });
+    } else {
+      const newBlock: MonitoringBlock = {
+        id: String(Date.now()),
+        type: 'custom_metric',
+        enabled: true,
+        config: blockConfig,
+      };
+      saveConfig({ blocks: [...config.blocks, newBlock] });
+    }
     closeAddDialog();
   };
 
-  const filteredParams = (paramDb?.parameters ?? []).filter(p =>
-    p.name.toLowerCase().includes(paramSearch.toLowerCase())
-  );
+  const handleCreateNew = async () => {
+    if (!newName.trim()) return;
+    setCreating(true);
+    try {
+      let id: string;
+      if (createSource === 'biometric') {
+        const created = await athleteData.createBiometricDefinition({
+          name: newName.trim(),
+          type: 'quantitative',
+          unit: newUnit.trim() || null,
+        });
+        id = created.id;
+      } else {
+        const created = await addParameter({ name: newName.trim(), unit: newUnit.trim() || undefined });
+        id = created.id;
+      }
+      setSelectedParam({ id, name: newName.trim(), unit: newUnit.trim() || undefined, source: createSource });
+      setAddStep('configure');
+    } catch (e) {
+      console.error('Failed to create parameter', e);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // ── Template helpers ──────────────────────────────────────────────────────
+
+  const handleSaveTemplate = () => {
+    if (!templateName.trim()) return;
+    const newTemplate: MonitoringTemplate = {
+      id: String(Date.now()),
+      name: templateName.trim(),
+      blocks: config.blocks,
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [...templates, newTemplate];
+    setTemplates(updated);
+    persistTemplates(updated);
+    setShowSaveTemplateDialog(false);
+    setTemplateName('');
+  };
+
+  const handleDeleteTemplate = (id: string) => {
+    const updated = templates.filter(t => t.id !== id);
+    setTemplates(updated);
+    persistTemplates(updated);
+  };
+
+  const handleApplyTemplate = (template: MonitoringTemplate) => {
+    // Re-assign IDs for custom_metric blocks to avoid collisions; keep wellbeing/ostrc IDs fixed
+    const blocks = template.blocks.map(b =>
+      b.id === 'wellbeing' || b.id === 'ostrc'
+        ? b
+        : { ...b, id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}` }
+    );
+    saveConfig({ blocks });
+    setShowLoadTemplateDialog(false);
+  };
+
+  // ── Labels ────────────────────────────────────────────────────────────────
 
   const blockLabel = (block: MonitoringBlock): string => {
     if (block.type === 'wellbeing') return 'Wellbeing Questionnaire';
     if (block.type === 'ostrc') return 'OSTRC-H / Body Map';
-    return block.config?.parameterName ?? 'Custom Metric';
+    return block.config?.label || block.config?.parameterName || 'Custom Metric';
   };
 
   const blockSubLabel = (block: MonitoringBlock): string => {
     if (block.type === 'wellbeing') return 'McLean 5-item scale';
     if (block.type === 'ostrc') return 'Pain & illness screening';
+    const src = block.config?.parameterSource === 'biometric' ? 'Body metric' : 'Performance';
     const it = block.config?.inputType === 'scale' ? 'Scale' : 'Number';
     const unit = block.config?.parameterUnit ? ` · ${block.config.parameterUnit}` : '';
-    return `${it}${unit}`;
+    return `${src} · ${it}${unit}`;
   };
+
+  // ── Search ────────────────────────────────────────────────────────────────
+
+  const query = paramSearch.toLowerCase();
+  const biometricMatches = athleteData.biometricDefinitions.filter(b =>
+    b.type === 'quantitative' && b.name.toLowerCase().includes(query)
+  );
+  const performanceMatches = (paramDb?.parameters ?? []).filter(p =>
+    p.name.toLowerCase().includes(query)
+  );
+  const hasAny = biometricMatches.length > 0 || performanceMatches.length > 0;
 
   return (
     <>
@@ -567,11 +694,10 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
             {saving && <p className="text-xs text-muted-foreground px-3 py-2">Saving…</p>}
           </div>
 
-          {/* Block list — only visible when master toggle is on */}
+          {/* Block list */}
           {connection.monitoringEnabled && (
             <div className="space-y-3">
               <p className="text-sm font-medium">Check-in Blocks</p>
-
               <DragDropContext onDragEnd={handleDragEnd}>
                 <Droppable droppableId="monitoring-blocks">
                   {(provided) => (
@@ -587,36 +713,37 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
                                 snapshot.isDragging && 'shadow-md ring-1 ring-primary/20',
                               )}
                             >
-                              <div
-                                {...drag.dragHandleProps}
-                                className="text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing shrink-0"
-                              >
+                              <div {...drag.dragHandleProps} className="text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing shrink-0">
                                 <GripVertical className="h-4 w-4" />
                               </div>
-
                               <div className="flex-1 min-w-0">
                                 <p className={cn('text-sm font-medium truncate', !block.enabled && 'text-muted-foreground')}>
                                   {blockLabel(block)}
                                 </p>
-                                <p className="text-xs text-muted-foreground truncate">
-                                  {blockSubLabel(block)}
-                                </p>
+                                <p className="text-xs text-muted-foreground truncate">{blockSubLabel(block)}</p>
                               </div>
-
                               <Switch
                                 checked={block.enabled}
                                 onCheckedChange={v => handleBlockToggle(block.id, v)}
                                 className="shrink-0"
                               />
-
                               {block.type === 'custom_metric' && (
-                                <button
-                                  onClick={() => handleRemoveBlock(block.id)}
-                                  className="shrink-0 ml-1 text-muted-foreground/50 hover:text-destructive transition-colors"
-                                  title="Remove block"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
+                                <div className="flex items-center gap-1 shrink-0 ml-1">
+                                  <button
+                                    onClick={() => openEditDialog(block)}
+                                    className="text-muted-foreground/50 hover:text-foreground transition-colors"
+                                    title="Edit"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleRemoveBlock(block.id)}
+                                    className="text-muted-foreground/50 hover:text-destructive transition-colors"
+                                    title="Remove"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
                               )}
                             </div>
                           )}
@@ -628,80 +755,168 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
                 </Droppable>
               </DragDropContext>
 
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full gap-1.5"
-                onClick={() => setShowAddDialog(true)}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add Metric Block
-              </Button>
+              {/* Action buttons */}
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 gap-1.5"
+                  onClick={() => setShowAddDialog(true)}
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add Metric Block
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => setShowLoadTemplateDialog(true)}
+                  title="Apply a saved template"
+                >
+                  <BookOpen className="h-3.5 w-3.5" /> Load Template
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => { setTemplateName(''); setShowSaveTemplateDialog(true); }}
+                  title="Save current blocks as a template"
+                >
+                  <BookmarkPlus className="h-3.5 w-3.5" /> Save as Template
+                </Button>
+              </div>
 
               <div className="flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground">
                 <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                <span>
-                  A free-text notes field is always shown at the end of every check-in, regardless of which blocks are active.
-                </span>
+                <span>A free-text notes field is always shown at the end of every check-in.</span>
               </div>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* ── Add metric block dialog ───────────────────────────────────────── */}
+      {/* ── Add / Edit metric block dialog ──────────────────────────────────── */}
       <Dialog open={showAddDialog} onOpenChange={open => { if (!open) closeAddDialog(); }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent className="max-w-md max-h-[85vh] flex flex-col">
+          <DialogHeader className="shrink-0">
             <DialogTitle>
-              {addStep === 'pick_param' ? 'Add Metric Block' : `Configure: ${selectedParam?.name}`}
+              {editingBlock
+                ? `Edit: ${blockLabel(editingBlock)}`
+                : addStep === 'pick_param'
+                  ? 'Add Metric Block'
+                  : addStep === 'create_new'
+                    ? 'Create New Metric'
+                    : `Configure: ${selectedParam?.name}`}
             </DialogTitle>
             <DialogDescription>
-              {addStep === 'pick_param'
-                ? 'Choose a performance parameter from your database.'
-                : 'Set the input type and an optional label for this metric.'}
+              {editingBlock
+                ? 'Update the input type or question label for this block.'
+                : addStep === 'pick_param'
+                  ? 'Choose a body metric or performance parameter — or create a new one.'
+                  : addStep === 'create_new'
+                    ? 'The new metric will be added to your database automatically.'
+                    : 'Set the input type and an optional question label.'}
             </DialogDescription>
           </DialogHeader>
 
-          {addStep === 'pick_param' && (
-            <div className="space-y-3 py-1">
+          {/* ── Pick param (new only) ── */}
+          {!editingBlock && addStep === 'pick_param' && (
+            <div className="flex flex-col gap-3 min-h-0 flex-1 py-1">
               <Input
-                placeholder="Search parameters…"
+                placeholder="Search metrics and parameters…"
                 value={paramSearch}
                 onChange={e => setParamSearch(e.target.value)}
                 autoFocus
               />
-              <ScrollArea className="h-56 border rounded-lg">
-                {filteredParams.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-10">
-                    {paramDb?.parameters.length === 0
-                      ? 'No parameters yet. Add them in the Parameter Database first.'
-                      : 'No matches found.'}
+              <ScrollArea className="flex-1 border rounded-lg min-h-0">
+                {!hasAny ? (
+                  <p className="text-sm text-muted-foreground text-center py-8 px-4">
+                    {paramSearch ? 'No matches found.' : 'Your databases are empty. Create a new metric below.'}
                   </p>
                 ) : (
-                  <div className="divide-y">
-                    {filteredParams.map(p => (
-                      <button
-                        key={p.id}
-                        onClick={() => { setSelectedParam(p); setAddStep('configure'); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/60 text-left transition-colors"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{p.name}</p>
-                          {p.unit && <p className="text-xs text-muted-foreground">{p.unit}</p>}
-                        </div>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                      </button>
-                    ))}
+                  <div>
+                    {biometricMatches.length > 0 && (
+                      <>
+                        <p className="px-4 py-2 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide sticky top-0 bg-background border-b">
+                          Body Metrics
+                        </p>
+                        {biometricMatches.map(b => (
+                          <button
+                            key={b.id}
+                            onClick={() => { setSelectedParam({ id: b.id, name: b.name, unit: b.unit ?? undefined, source: 'biometric' }); setAddStep('configure'); }}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/60 text-left transition-colors border-b last:border-b-0"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{b.name}</p>
+                              {b.unit && <p className="text-xs text-muted-foreground">{b.unit}</p>}
+                            </div>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                          </button>
+                        ))}
+                      </>
+                    )}
+                    {performanceMatches.length > 0 && (
+                      <>
+                        <p className="px-4 py-2 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide sticky top-0 bg-background border-b">
+                          Performance Parameters
+                        </p>
+                        {performanceMatches.map(p => (
+                          <button
+                            key={p.id}
+                            onClick={() => { setSelectedParam({ id: p.id, name: p.name, unit: p.unit, source: 'performance' }); setAddStep('configure'); }}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/60 text-left transition-colors border-b last:border-b-0"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{p.name}</p>
+                              {p.unit && <p className="text-xs text-muted-foreground">{p.unit}</p>}
+                            </div>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                          </button>
+                        ))}
+                      </>
+                    )}
                   </div>
                 )}
               </ScrollArea>
+              <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setAddStep('create_new')}>
+                <Plus className="h-3.5 w-3.5" /> Create New Metric
+              </Button>
             </div>
           )}
 
-          {addStep === 'configure' && selectedParam && (
+          {/* ── Create new (new only) ── */}
+          {!editingBlock && addStep === 'create_new' && (
             <div className="space-y-4 py-1">
-              {/* Input type toggle */}
+              <div className="space-y-1.5">
+                <Label>Add to database</Label>
+                <div className="flex rounded-md border overflow-hidden w-fit">
+                  <button
+                    onClick={() => setCreateSource('biometric')}
+                    className={cn('px-4 py-2 text-sm transition-colors', createSource === 'biometric' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted')}
+                  >
+                    Body Metrics
+                  </button>
+                  <button
+                    onClick={() => setCreateSource('performance')}
+                    className={cn('px-4 py-2 text-sm transition-colors border-l', createSource === 'performance' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted')}
+                  >
+                    Performance Parameters
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Name</Label>
+                <Input placeholder="e.g. Resting Heart Rate" value={newName} onChange={e => setNewName(e.target.value)} autoFocus />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Unit <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input placeholder="e.g. bpm, kg, %" value={newUnit} onChange={e => setNewUnit(e.target.value)} />
+              </div>
+            </div>
+          )}
+
+          {/* ── Configure (add & edit) ── */}
+          {addStep === 'configure' && selectedParam && (
+            <div className="space-y-4 py-1 overflow-y-auto">
               <div className="space-y-1.5">
                 <Label>Input type</Label>
                 <div className="flex rounded-md border overflow-hidden w-fit">
@@ -719,8 +934,6 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
                   </button>
                 </div>
               </div>
-
-              {/* Scale config */}
               {inputType === 'scale' && (
                 <div className="rounded-lg bg-muted/30 p-3 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
@@ -735,42 +948,124 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <Label className="text-xs">Label for {scaleMin} (optional)</Label>
+                      <Label className="text-xs">Label for {scaleMin} (opt.)</Label>
                       <Input placeholder="e.g. None" value={scaleMinLabel} onChange={e => setScaleMinLabel(e.target.value)} className="h-8" />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">Label for {scaleMax} (optional)</Label>
+                      <Label className="text-xs">Label for {scaleMax} (opt.)</Label>
                       <Input placeholder="e.g. Severe" value={scaleMaxLabel} onChange={e => setScaleMaxLabel(e.target.value)} className="h-8" />
                     </div>
                   </div>
                 </div>
               )}
-
-              {/* Custom label */}
               <div className="space-y-1.5">
-                <Label className="text-xs">Question label (optional)</Label>
+                <Label className="text-xs">Question label <span className="font-normal text-muted-foreground">(optional)</span></Label>
                 <Input
                   placeholder={`e.g. What is your ${selectedParam.name.toLowerCase()} today?`}
                   value={customLabel}
                   onChange={e => setCustomLabel(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">Shown as the heading in the check-in. Defaults to the parameter name.</p>
+                <p className="text-xs text-muted-foreground">Shown as heading in the check-in. Defaults to the parameter name.</p>
               </div>
             </div>
           )}
 
-          <DialogFooter>
-            {addStep === 'configure' && (
+          <DialogFooter className="shrink-0 pt-2">
+            {/* Back button — shown for new blocks only, not when editing */}
+            {!editingBlock && addStep !== 'pick_param' && (
               <Button variant="outline" onClick={() => setAddStep('pick_param')}>
                 <ChevronLeft className="h-4 w-4 mr-1" /> Back
               </Button>
             )}
             <Button variant="outline" onClick={closeAddDialog}>Cancel</Button>
-            {addStep === 'configure' && (
-              <Button onClick={handleAddBlock} disabled={!selectedParam}>
-                Add Block
+            {!editingBlock && addStep === 'create_new' && (
+              <Button onClick={handleCreateNew} disabled={!newName.trim() || creating}>
+                {creating ? 'Creating…' : 'Create & Configure'}
               </Button>
             )}
+            {addStep === 'configure' && (
+              <Button onClick={handleSaveBlock} disabled={!selectedParam}>
+                {editingBlock ? 'Update Block' : 'Add Block'}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Save as Template dialog ──────────────────────────────────────────── */}
+      <Dialog open={showSaveTemplateDialog} onOpenChange={setShowSaveTemplateDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Save as Template</DialogTitle>
+            <DialogDescription>
+              Save your current check-in block configuration as a reusable template.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 space-y-2">
+            <Label>Template name</Label>
+            <Input
+              placeholder="e.g. Standard Monitoring, Tendon Protocol…"
+              value={templateName}
+              onChange={e => setTemplateName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && templateName.trim()) handleSaveTemplate(); }}
+              autoFocus
+            />
+            <p className="text-xs text-muted-foreground">
+              {config.blocks.length} block{config.blocks.length !== 1 ? 's' : ''} will be saved.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSaveTemplateDialog(false)}>Cancel</Button>
+            <Button onClick={handleSaveTemplate} disabled={!templateName.trim()}>
+              <BookmarkPlus className="h-3.5 w-3.5 mr-1.5" /> Save Template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Load Template dialog ─────────────────────────────────────────────── */}
+      <Dialog open={showLoadTemplateDialog} onOpenChange={setShowLoadTemplateDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Monitoring Templates</DialogTitle>
+            <DialogDescription>
+              Applying a template replaces all current check-in blocks.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-1 min-h-[100px]">
+            {templates.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 gap-2 text-muted-foreground">
+                <BookOpen className="h-8 w-8 opacity-30" />
+                <p className="text-sm">No templates saved yet.</p>
+                <p className="text-xs">Save your current setup as a template to reuse it across athletes.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {templates.map(t => (
+                  <div key={t.id} className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{t.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {t.blocks.length} block{t.blocks.length !== 1 ? 's' : ''} · {new Date(t.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => handleApplyTemplate(t)}>
+                      Apply
+                    </Button>
+                    <button
+                      onClick={() => handleDeleteTemplate(t.id)}
+                      className="text-muted-foreground/50 hover:text-destructive transition-colors"
+                      title="Delete template"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowLoadTemplateDialog(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -785,222 +1080,38 @@ interface AthleteSettingsTabProps {
   onUpdateAthlete: (updates: Partial<Omit<Athlete, 'id' | 'createdAt'>>) => void;
 }
 
-export function AthleteSettingsTab({ athlete, onUpdateAthlete }: AthleteSettingsTabProps) {
-  const settings = useMemo(() => mergeSettings(athlete.settings), [athlete.settings]);
-
-  const update = (patch: Partial<AthleteSettings>) => {
-    onUpdateAthlete({ settings: { ...settings, ...patch } });
-  };
-
-  const updateUnits = (patch: Partial<AthleteSettings['units']>) =>
-    update({ units: { ...settings.units, ...patch } });
-
-  const updateFeatures = (patch: Partial<AthleteSettings['features']>) =>
-    update({ features: { ...settings.features, ...patch } });
-
-  const updateAthleteApp = (patch: Partial<AthleteSettings['athleteApp']>) =>
-    update({ athleteApp: { ...settings.athleteApp, ...patch } });
-
-  const TIMEZONES = [
-    'Europe/Berlin', 'Europe/London', 'Europe/Paris', 'Europe/Madrid',
-    'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
-    'America/Sao_Paulo', 'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Dubai',
-    'Australia/Sydney', 'Pacific/Auckland',
-  ];
-
+export function AthleteSettingsTab({ athlete }: AthleteSettingsTabProps) {
   return (
     <div className="p-4 space-y-4 max-w-2xl" style={{ overflowAnchor: 'none' }}>
 
-        {/* App Account */}
-        <AppAccountCard athlete={athlete} />
+      {/* App Account */}
+      <AppAccountCard athlete={athlete} />
 
-        {/* Units */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <Scale className="h-4 w-4 text-muted-foreground" />
-              <CardTitle className="text-base">Units</CardTitle>
-            </div>
-            <CardDescription>Measurement units used for this athlete's data.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid sm:grid-cols-3 gap-4">
-              <UnitToggle
-                label="Weight"
-                metricLabel="kg"
-                imperialLabel="lb"
-                value={settings.units.weight}
-                onChange={v => updateUnits({ weight: v })}
-              />
-              <UnitToggle
-                label="Distance"
-                metricLabel="km"
-                imperialLabel="miles"
-                value={settings.units.distance}
-                onChange={v => updateUnits({ distance: v })}
-              />
-              <UnitToggle
-                label="Length / Height"
-                metricLabel="cm"
-                imperialLabel="inch"
-                value={settings.units.length}
-                onChange={v => updateUnits({ length: v })}
-              />
-            </div>
-          </CardContent>
-        </Card>
+      {/* Calendar Access */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <CalendarRange className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-base">Calendar Access</CardTitle>
+          </div>
+          <CardDescription>
+            Choose how many weeks ahead the athlete can see in their app.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Label>Weeks visible in advance</Label>
+          <WeeksAheadSelect athlete={athlete} />
+        </CardContent>
+      </Card>
 
-        {/* Timezone & Date Format */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <Globe className="h-4 w-4 text-muted-foreground" />
-              <CardTitle className="text-base">Timezone & Date Format</CardTitle>
-            </div>
-            <CardDescription>Controls how dates and times are displayed for this athlete.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Timezone</Label>
-              <Select value={settings.timezone} onValueChange={v => update({ timezone: v })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIMEZONES.map(tz => (
-                    <SelectItem key={tz} value={tz}>{tz.replace('_', ' ')}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Date Format</Label>
-              <Select
-                value={settings.dateFormat}
-                onValueChange={v => update({ dateFormat: v as AthleteSettings['dateFormat'] })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="DD/MM/YYYY">DD/MM/YYYY</SelectItem>
-                  <SelectItem value="MM/DD/YYYY">MM/DD/YYYY</SelectItem>
-                  <SelectItem value="YYYY-MM-DD">YYYY-MM-DD</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Session Rearranging */}
+      <RearrangeWorkoutsCard athlete={athlete} />
 
-        {/* Athlete App Features */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <LayoutGrid className="h-4 w-4 text-muted-foreground" />
-              <CardTitle className="text-base">Athlete App Features</CardTitle>
-            </div>
-            <CardDescription>
-              Enable or disable features for this athlete's mobile app experience.
-              Disabled features will not be visible in the athlete app.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="divide-y">
-            <FeatureToggle
-              label="Training"
-              description="View assigned sessions and track training progress"
-              checked={settings.features.training}
-              onCheckedChange={v => updateFeatures({ training: v })}
-            />
-            {settings.features.training && (
-              <>
-                <FeatureToggle
-                  label="Allow workout comments"
-                  checked={settings.features.workoutComments}
-                  onCheckedChange={v => updateFeatures({ workoutComments: v })}
-                  indent
-                />
-                <FeatureToggle
-                  label="Show rest day message"
-                  checked={settings.features.restDayMessage}
-                  onCheckedChange={v => updateFeatures({ restDayMessage: v })}
-                  indent
-                />
-              </>
-            )}
-            <FeatureToggle
-              label="Log Activities"
-              description="Let the athlete add extra workouts or unassigned activities"
-              checked={settings.features.logActivities}
-              onCheckedChange={v => updateFeatures({ logActivities: v })}
-            />
-            {settings.features.logActivities && (
-              <FeatureToggle
-                label="Allow activity comments"
-                checked={settings.features.activityComments}
-                onCheckedChange={v => updateFeatures({ activityComments: v })}
-                indent
-              />
-            )}
-            <FeatureToggle
-              label="Body Metrics"
-              description="Let the athlete log anthropometric and biometric data"
-              checked={settings.features.bodyMetrics}
-              onCheckedChange={v => updateFeatures({ bodyMetrics: v })}
-            />
-          </CardContent>
-        </Card>
+      {/* Messages */}
+      <MessagesCard athlete={athlete} />
 
-        {/* Calendar Access */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <CalendarRange className="h-4 w-4 text-muted-foreground" />
-              <CardTitle className="text-base">Calendar Access</CardTitle>
-            </div>
-            <CardDescription>
-              Choose how many weeks ahead the athlete can see in their app.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Weeks visible in advance</Label>
-              <WeeksAheadSelect athlete={athlete} />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Session rearranging */}
-        <RearrangeWorkoutsCard athlete={athlete} />
-
-        {/* Monitoring */}
-        <MonitoringCard athlete={athlete} />
-
-        {/* Workout Customization */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <Dumbbell className="h-4 w-4 text-muted-foreground" />
-              <CardTitle className="text-base">Workout Customization</CardTitle>
-            </div>
-            <CardDescription>
-              Control how much the athlete can modify their own workouts.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="divide-y border rounded-lg">
-            <FeatureToggle
-              label="Allow athlete to create workouts"
-              description="Athlete can create additional sessions with exercises from your library"
-              checked={settings.athleteApp.allowCreateWorkouts}
-              onCheckedChange={v => updateAthleteApp({ allowCreateWorkouts: v })}
-            />
-            <FeatureToggle
-              label="Allow athlete to add or replace exercises"
-              description="Athlete can swap exercises assigned in sessions with alternatives from your library"
-              checked={settings.athleteApp.allowAddExercises}
-              onCheckedChange={v => updateAthleteApp({ allowAddExercises: v })}
-            />
-          </CardContent>
-        </Card>
+      {/* Daily Monitoring */}
+      <MonitoringCard athlete={athlete} />
 
     </div>
   );

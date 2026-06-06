@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { format, isWithinInterval } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, AlertTriangle, Smile, Activity, CalendarDays, CalendarIcon, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, AlertTriangle, Smile, Activity, CalendarDays, CalendarIcon, X, MessageSquare, CheckCircle } from 'lucide-react';
 import {
   LineChart, Line, ResponsiveContainer, XAxis, YAxis,
   Tooltip, ReferenceLine, ReferenceArea, CartesianGrid,
@@ -26,7 +26,8 @@ import {
   type WellnessStats,
 } from '@/hooks/useAthleteCheckins';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
-import { Athlete } from '@/types/athlete';
+import { Athlete, MonitoringBlock, DEFAULT_MONITORING_CONFIG } from '@/types/athlete';
+import { supabase } from '@/lib/supabase';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -497,6 +498,179 @@ function checkinDateLabel(date: string): string {
   return `${diff} days ago`;
 }
 
+// ── Custom metric card ────────────────────────────────────────────────────────
+
+type BlockWithConfig = MonitoringBlock & { config: NonNullable<MonitoringBlock['config']> };
+
+function CustomMetricCard({
+  block,
+  connectionId,
+}: {
+  block: BlockWithConfig;
+  connectionId: string;
+}) {
+  const cfg = block.config;
+  const [data, setData] = useState<{ date: string; value: number }[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
+  const [rangeKey, setRangeKey] = useState<7 | 14 | 28 | 90>(28);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoadingData(true);
+      const from = new Date();
+      from.setDate(from.getDate() - rangeKey);
+      const { data: rows, error } = await supabase
+        .from('athlete_test_results')
+        .select('value, recorded_at')
+        .eq('athlete_connection_id', connectionId)
+        .eq('parameter_id', cfg.parameterId)
+        .gte('recorded_at', from.toISOString())
+        .order('recorded_at', { ascending: true });
+
+      if (cancelled) return;
+      if (!error && rows) {
+        // Group by date, keep last value per day
+        const byDate = new Map<string, number>();
+        for (const r of rows) {
+          const date = (r.recorded_at as string).slice(0, 10);
+          const val = parseFloat(r.value as string);
+          if (!isNaN(val)) byDate.set(date, val);
+        }
+        setData(
+          Array.from(byDate.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([date, value]) => ({ date, value }))
+        );
+      }
+      setLoadingData(false);
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [connectionId, cfg.parameterId, rangeKey]);
+
+  const currentEntry = data.length > 0 ? data[data.length - 1] : null;
+  const unit = cfg.parameterUnit ?? '';
+  const isScale = cfg.inputType === 'scale';
+  const yMin = isScale ? (cfg.scaleMin ?? 0) : undefined;
+  const yMax = isScale ? (cfg.scaleMax ?? 10) : undefined;
+
+  const MetricTooltip = ({ active, payload, label }: {
+    active?: boolean;
+    payload?: { value: number }[];
+    label?: string;
+  }) => {
+    if (!active || !payload?.length) return null;
+    return (
+      <div className="bg-background border border-border rounded-lg shadow-lg px-3 py-2 text-xs space-y-0.5">
+        <p className="font-semibold">
+          {label ? new Date(label + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
+        </p>
+        <p>
+          {cfg.parameterName}:{' '}
+          <span className="font-medium">{payload[0].value}{unit ? ` ${unit}` : ''}</span>
+        </p>
+      </div>
+    );
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <CardTitle className="text-base">{cfg.parameterName}</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              {isScale
+                ? `Scale · ${cfg.scaleMin ?? 0}–${cfg.scaleMax ?? 10}`
+                : unit ? `Unit: ${unit}` : 'Numeric'}
+            </p>
+          </div>
+          <div className="flex rounded-md border overflow-hidden text-xs shrink-0">
+            {([7, 14, 28, 90] as const).map(d => (
+              <button
+                key={d}
+                onClick={() => setRangeKey(d)}
+                className={cn(
+                  'px-2.5 py-1 transition-colors border-l first:border-l-0',
+                  rangeKey === d
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background text-muted-foreground hover:bg-muted'
+                )}
+              >
+                {d}d
+              </button>
+            ))}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {loadingData ? (
+          <p className="text-xs text-muted-foreground text-center py-4">Loading…</p>
+        ) : data.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-4">No data yet.</p>
+        ) : (
+          <div className="flex items-start gap-6">
+            {/* Current value */}
+            <div className="shrink-0 text-center min-w-[4rem]">
+              <p className="text-4xl font-bold tabular-nums">{currentEntry!.value}</p>
+              {unit && <p className="text-xs text-muted-foreground mt-0.5">{unit}</p>}
+              <p className="text-[10px] text-muted-foreground mt-1">
+                {new Date(currentEntry!.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              </p>
+            </div>
+            {/* Trend chart */}
+            <div className="flex-1 min-w-0">
+              {data.length < 2 ? (
+                <p className="text-xs text-muted-foreground py-8 text-center">
+                  Chart appears after 2+ entries.
+                </p>
+              ) : (
+                <ResponsiveContainer width="100%" height={120}>
+                  <LineChart data={data} margin={{ top: 4, right: 8, left: -28, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={v => {
+                        const d = new Date(v + 'T12:00:00');
+                        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                      }}
+                      tick={{ fontSize: 10, fill: '#94a3b8' }}
+                      axisLine={false}
+                      tickLine={false}
+                      interval="preserveStartEnd"
+                    />
+                    <YAxis
+                      domain={
+                        yMin !== undefined && yMax !== undefined
+                          ? [yMin, yMax]
+                          : ['auto', 'auto']
+                      }
+                      tick={{ fontSize: 10, fill: '#94a3b8' }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip content={<MetricTooltip />} />
+                    <Line
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#6366f1"
+                      strokeWidth={2}
+                      dot={{ r: 3, fill: '#6366f1', stroke: 'white', strokeWidth: 1 }}
+                      activeDot={{ r: 5 }}
+                      connectNulls={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 interface Props { athlete: Athlete }
@@ -514,6 +688,14 @@ export function AthleteMonitoringTab({ athlete }: Props) {
 
   // Stats over full history
   const stats = useMemo(() => computeWellnessStats(checkins), [checkins]);
+
+  // Enabled custom metric blocks (from coach-configured monitoring config)
+  const enabledCustomBlocks = useMemo((): BlockWithConfig[] => {
+    const config = connection?.profileData?.monitoringConfig ?? DEFAULT_MONITORING_CONFIG;
+    return (config.blocks ?? []).filter(
+      (b): b is BlockWithConfig => b.type === 'custom_metric' && b.enabled && !!b.config
+    );
+  }, [connection]);
 
   // Selected check-in (navigable)
   const selected = checkins[selectedIdx] ?? checkins[0] ?? null;
@@ -608,8 +790,8 @@ export function AthleteMonitoringTab({ athlete }: Props) {
                 {/* Date navigator */}
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={goNewer}
-                    disabled={safeIdx === 0}
+                    onClick={goOlder}
+                    disabled={safeIdx === checkins.length - 1}
                     className="p-1 rounded hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronLeft className="h-4 w-4" />
@@ -641,8 +823,8 @@ export function AthleteMonitoringTab({ athlete }: Props) {
                     </PopoverContent>
                   </Popover>
                   <button
-                    onClick={goOlder}
-                    disabled={safeIdx === checkins.length - 1}
+                    onClick={goNewer}
+                    disabled={safeIdx === 0}
                     className="p-1 rounded hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronRight className="h-4 w-4" />
@@ -651,17 +833,27 @@ export function AthleteMonitoringTab({ athlete }: Props) {
               </div>
             </CardHeader>
             <CardContent className="flex-1">
-              {selectedComposite !== null ? (
-                <CompositeScore
-                  composite={selectedComposite}
-                  stats={stats}
-                  expanded={wellnessExpanded}
-                  onToggle={() => setWellnessExpanded(v => !v)}
-                  checkin={selected}
-                />
-              ) : (
-                <p className="text-sm text-muted-foreground">No wellness data.</p>
-              )}
+              <div className="flex gap-4">
+                <div className="flex-1 min-w-0">
+                  {selectedComposite !== null ? (
+                    <CompositeScore
+                      composite={selectedComposite}
+                      stats={stats}
+                      expanded={wellnessExpanded}
+                      onToggle={() => setWellnessExpanded(v => !v)}
+                      checkin={selected}
+                    />
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No wellness data.</p>
+                  )}
+                </div>
+                {selected.notes && (
+                  <div className="shrink-0 w-36 border-l pl-3 flex items-start gap-1.5">
+                    <MessageSquare className="h-3 w-3 text-muted-foreground mt-0.5 shrink-0" />
+                    <p className="text-xs text-muted-foreground italic leading-snug">{selected.notes}</p>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -698,9 +890,19 @@ export function AthleteMonitoringTab({ athlete }: Props) {
               </CardContent>
             </Card>
           ) : (
-            <Card className="border-dashed flex flex-col">
-              <CardContent className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-                No illness reported
+            <Card className="flex flex-col">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  Illness
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1 flex flex-col items-center justify-center gap-2 py-4">
+                <div className="w-12 h-12 rounded-full bg-green-50 border border-green-100 flex items-center justify-center">
+                  <CheckCircle className="h-6 w-6 text-green-500" />
+                </div>
+                <p className="text-sm font-semibold text-green-700">No illness reported</p>
+                <p className="text-xs text-muted-foreground text-center">Athlete is feeling well &amp; healthy</p>
               </CardContent>
             </Card>
           )}
@@ -765,47 +967,55 @@ export function AthleteMonitoringTab({ athlete }: Props) {
             </CardContent>
           </Card>
 
-          {/* [1,1] Pain */}
-          {selected.hasPain ? (
-            <Card className="flex flex-col">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-red-500" />
-                  Pain
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex-1 space-y-3">
-                {selected.painAreas.length > 0 ? (
-                  <>
-                    <BodyMapReadOnly painAreas={selected.painAreas} />
-                    <div className="space-y-1.5">
-                      {selected.painAreas.map((area, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <div className="w-2.5 h-2.5 rounded-full shrink-0"
-                            style={{ background: nrsSeverityStroke(area.severity) }} />
-                          <span className="text-sm flex-1 truncate">{area.areaLabel}</span>
-                          <span className="text-sm font-semibold tabular-nums shrink-0"
-                            style={{ color: nrsSeverityStroke(area.severity) }}>
-                            {area.severity}/10
-                          </span>
-                        </div>
-                      ))}
+          {/* [1,1] Pain — body map always visible */}
+          <Card className="flex flex-col">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                {selected.hasPain
+                  ? <AlertTriangle className="h-4 w-4 text-red-500" />
+                  : <CheckCircle className="h-4 w-4 text-green-500" />
+                }
+                Pain
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 space-y-3">
+              {/* Status banner */}
+              {!selected.hasPain && (
+                <div className="flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-3 py-2">
+                  <CheckCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                  <p className="text-xs font-medium text-green-700">No pain reported — body is feeling great!</p>
+                </div>
+              )}
+              {/* Body map — always shown; dots appear only when pain is reported */}
+              <BodyMapReadOnly painAreas={selected.hasPain ? selected.painAreas : []} />
+              {/* Pain area list */}
+              {selected.hasPain && selected.painAreas.length > 0 && (
+                <div className="space-y-1.5">
+                  {selected.painAreas.map((area, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ background: nrsSeverityStroke(area.severity) }} />
+                      <span className="text-sm flex-1 truncate">{area.areaLabel}</span>
+                      <span className="text-sm font-semibold tabular-nums shrink-0"
+                        style={{ color: nrsSeverityStroke(area.severity) }}>
+                        {area.severity}/10
+                      </span>
                     </div>
-                  </>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Pain reported, no areas specified.</p>
-                )}
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="border-dashed flex flex-col">
-              <CardContent className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-                No pain reported
-              </CardContent>
-            </Card>
-          )}
+                  ))}
+                </div>
+              )}
+              {selected.hasPain && selected.painAreas.length === 0 && (
+                <p className="text-sm text-muted-foreground">Pain reported, no areas specified.</p>
+              )}
+            </CardContent>
+          </Card>
 
         </div>
+
+        {/* ── Custom metric cards ── */}
+        {enabledCustomBlocks.map(block => (
+          <CustomMetricCard key={block.id} block={block} connectionId={athleteId!} />
+        ))}
 
         {/* ── Recent history ── */}
         {checkins.length > 1 && (
@@ -819,33 +1029,42 @@ export function AthleteMonitoringTab({ athlete }: Props) {
                   const comp = wellnessComposite(c);
                   const z    = (comp !== null && stats) ? zScore(comp, stats) : null;
                   return (
-                    <div key={c.id} className="flex items-center gap-3 py-1.5 border-b last:border-0">
-                      <span className="text-xs text-muted-foreground w-20 shrink-0">
-                        {new Date(c.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                      </span>
-                      {comp !== null && (
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <ScoreDots value={Math.round(comp)} />
-                          <span className="text-xs font-medium tabular-nums">{comp.toFixed(1)}</span>
-                          {z !== null && (
-                            <span className={cn('text-xs font-medium tabular-nums', zColor(z))}>
-                              {z >= 0 ? '+' : ''}{z.toFixed(1)}σ
+                    <div key={c.id} className="py-1.5 border-b last:border-0">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-muted-foreground w-20 shrink-0">
+                          {new Date(c.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                        </span>
+                        {comp !== null && (
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <ScoreDots value={Math.round(comp)} />
+                            <span className="text-xs font-medium tabular-nums">{comp.toFixed(1)}</span>
+                            {z !== null && (
+                              <span className={cn('text-xs font-medium tabular-nums', zColor(z))}>
+                                {z >= 0 ? '+' : ''}{z.toFixed(1)}σ
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {comp === null && <div className="flex-1" />}
+                        <div className="flex gap-1.5 shrink-0">
+                          {c.hasPain && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-50 border border-red-200 text-red-700 font-medium">
+                              Pain
+                            </span>
+                          )}
+                          {c.hasIllness && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-50 border border-orange-200 text-orange-700 font-medium">
+                              Ill
                             </span>
                           )}
                         </div>
-                      )}
-                      <div className="flex gap-1.5 shrink-0">
-                        {c.hasPain && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-50 border border-red-200 text-red-700 font-medium">
-                            Pain
-                          </span>
-                        )}
-                        {c.hasIllness && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-50 border border-orange-200 text-orange-700 font-medium">
-                            Ill
-                          </span>
-                        )}
                       </div>
+                      {c.notes && (
+                        <div className="flex gap-3 mt-0.5">
+                          <span className="w-20 shrink-0" />
+                          <p className="text-xs text-muted-foreground italic leading-snug flex-1">"{c.notes}"</p>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
@@ -19,7 +19,26 @@ interface NavState {
 
 export default function AthleteDatabase() {
   const location = useLocation();
+  const navigate = useNavigate();
   const navState = (location.state as NavState) ?? {};
+
+  // Clear one-time session-reference state so revisiting /athletes doesn't
+  // re-trigger the auto-open on every subsequent mount.
+  useEffect(() => {
+    if (navState.defaultCalendarDate || navState.defaultCalendarSessionName || navState.defaultTab) {
+      navigate('.', {
+        replace: true,
+        state: {
+          ...navState,
+          defaultCalendarDate: undefined,
+          defaultCalendarSessionName: undefined,
+          defaultTab: undefined,
+        },
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const athleteData = useAthletes();
   const { deleteEventsForAthlete } = useCalendarEvents();
   const { connections, loading: connectionsLoading, getConnectionForAthlete, syncProfileToConnection } = useAthleteConnections();

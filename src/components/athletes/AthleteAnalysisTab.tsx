@@ -17,7 +17,6 @@ import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import {
   Popover,
   PopoverContent,
@@ -38,8 +37,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { CalendarIcon, X, Plus, Trash2 } from 'lucide-react';
+import { CalendarIcon, X, Plus, Bot, Send, Sparkles, ChevronDown } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
+import { sendMessage } from '@/utils/anthropicApi';
 import { supabase } from '@/lib/supabase';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import {
@@ -58,6 +60,44 @@ import type { AthletePerformanceParameter } from '@/types/athlete';
 import type { ParameterV2 } from '@/types/parametersV2';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
+
+// ── AI Analysis system prompt ─────────────────────────────────────────────────
+
+const ANALYSIS_SYSTEM_PROMPT = `You are an expert sports scientist embedded in Plan Prep Coach, a professional training analysis dashboard used by coaches and sports scientists.
+
+## Role
+Interpret individual athlete training data, identify patterns across data sources, flag concerns, and suggest evidence-based adjustments for upcoming training blocks.
+
+## Data definitions
+- sRPE (session RPE) = Borg CR10 rating (0–10) × session duration in minutes → internal training load in Arbitrary Units (AU)
+- Planned sRPE = planned session intensity × actual session duration (same time denominator, enables direct comparison)
+- Adherence = sessions completed / sessions planned
+- Performance parameters = objective test results (e.g. 1RM, sprint time, jump height, VO2max)
+- Wellness = 5-item McLean composite (fatigue, sleep, soreness, stress, mood; each 1–10, higher = better wellbeing)
+- Pain = Numeric Rating Scale (NRS 0–10); body area and side also recorded
+- Illness = OSTRC-H questionnaire; NRS severity also recorded
+- Training method panels = aggregated exercise load (e.g. total sets) per training method over time
+
+## Analysis principles
+1. Cross-source interpretation: look for relationships between load, performance, wellness, and pain — not just trends within a single metric
+2. Temporal sequencing: performance adaptations to load typically lag 2–4 weeks; wellness responses to overload appear within days
+3. Distinguish intentional from unplanned: load variation may reflect deliberate periodization (deload weeks, intensification blocks) — do not flag planned low-load periods as problems
+4. Specificity: cite actual dates and values when making observations; generic statements add no value
+5. Data gaps: explicitly note when data is absent or too sparse to draw conclusions; never speculate beyond what the data shows
+6. Audience: coaches and sports scientists — assume professional literacy, skip basic explanations
+
+## What to avoid
+- Injury diagnoses or medical predictions of any kind
+- Generic lifestyle advice ("sleep more", "reduce stress")
+- Assuming causation from single data points
+- Mentioning ACWR — it is not used in this system and is scientifically contested
+- Over-interpreting noise in sparse datasets
+
+## Response format
+Initial full analysis: use labeled sections — **Load Pattern**, **Adherence**, **Training Stimulus** (if data available), **Performance Trajectory** (if data available), **Wellness & Monitoring** (if data available), **Key Observations**, **Suggested Focus**. Keep each section to 2–4 sentences unless a finding genuinely warrants more. Total response should be thorough but not padded.
+Follow-up questions: conversational and direct. No section headers unless specifically helpful.`.trim();
+
+// ── Series colours ────────────────────────────────────────────────────────────
 
 const SERIES_COLORS = [
   '#6366f1', '#f59e0b', '#10b981', '#ef4444',
@@ -101,31 +141,10 @@ interface DateRange {
   to: string;
 }
 
-type Preset = '1W' | '4W' | '3M' | 'Custom';
+type Preset = '7d' | '28d' | '3M' | 'custom';
 type Granularity = 'day' | 'week' | 'month' | 'year';
 type CalendarPhase = 'start' | 'end';
 type AggregationMode = 'sum' | 'mean' | 'max' | 'none';
-
-interface TrainingSeries {
-  id: string;
-  type: 'training';
-  methodId: string;
-  methodLabel: string;
-  paramName: string;
-  aggregation: AggregationMode;
-  color: string;
-}
-
-interface PerformanceSeries {
-  id: string;
-  type: 'performance';
-  athleticismParameterId: string;
-  paramName: string;
-  unit?: string;
-  color: string;
-}
-
-type ChartSeries = TrainingSeries | PerformanceSeries;
 
 // ── Overview (small-multiples) types ──────────────────────────────────────────
 
@@ -166,7 +185,13 @@ function toYMD(d: Date): string {
   return format(d, 'yyyy-MM-dd');
 }
 
-/** Strip ::category suffix from split-method keys for display. */
+/** Format a number for display: strips trailing zeros but keeps up to 2 decimal places. */
+function fmtNum(v: number): string {
+  if (Number.isInteger(v)) return String(v);
+  // toFixed(2) then drop trailing zeros: 10.7 → "10.7", 10.70 → "10.7", 10.00 → "10"
+  return parseFloat(v.toFixed(2)).toString();
+}
+
 function stripMethodSuffix(methodId: string): string {
   return methodId.includes('::') ? methodId.split('::')[0] : methodId;
 }
@@ -193,21 +218,17 @@ function bucketsInRange(from: string, to: string, granularity: Granularity): Dat
   const fromDate = parseISO(from);
   const toDate = parseISO(to);
   const buckets: Date[] = [];
-
   if (granularity === 'day') return eachDayOfInterval({ start: fromDate, end: toDate });
-
   if (granularity === 'week') {
     let cur = startOfWeek(fromDate, { weekStartsOn: 1 });
     while (cur <= toDate) { buckets.push(cur); cur = addWeeks(cur, 1); }
     return buckets;
   }
-
   if (granularity === 'month') {
     let cur = startOfMonth(fromDate);
     while (cur <= toDate) { buckets.push(cur); cur = addMonths(cur, 1); }
     return buckets;
   }
-
   let cur = startOfYear(fromDate);
   while (cur <= toDate) { buckets.push(cur); cur = addYears(cur, 1); }
   return buckets;
@@ -354,46 +375,6 @@ function CalendarRangePicker({ from, to, onChange, onClear }: CalendarRangePicke
   );
 }
 
-// ── Series label helper ───────────────────────────────────────────────────────
-
-function seriesLabel(s: ChartSeries): string {
-  if (s.type === 'performance') return s.paramName + (s.unit ? ` (${s.unit})` : '');
-  const agg = s.aggregation === 'sum' ? 'Σ' : s.aggregation === 'mean' ? 'Ø' : s.aggregation === 'max' ? 'max' : 'raw';
-  return `${stripMethodSuffix(s.methodLabel)} — ${s.paramName} [${agg}]`;
-}
-
-// ── Custom tooltip ────────────────────────────────────────────────────────────
-
-interface CustomTooltipProps {
-  active?: boolean;
-  payload?: Array<{ dataKey: string; value: number | null; color: string; name: string }>;
-  label?: string;
-  bucketLabelMap: Map<string, string>;
-  seriesMap: Map<string, ChartSeries>;
-}
-
-function CustomTooltip({ active, payload, label, bucketLabelMap, seriesMap }: CustomTooltipProps) {
-  if (!active || !payload?.length || !label) return null;
-  return (
-    <div className="rounded-md border bg-background shadow-md text-xs p-2 space-y-1 min-w-[160px]">
-      <p className="font-medium text-foreground pb-1 border-b">{bucketLabelMap.get(label) ?? label}</p>
-      {payload.map((p) => {
-        if (p.value == null) return null;
-        const s = seriesMap.get(p.dataKey);
-        return (
-          <div key={p.dataKey} className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: p.color }} />
-            <span className="text-muted-foreground truncate flex-1">{s ? seriesLabel(s) : p.name}</span>
-            <span className="font-medium ml-2">
-              {typeof p.value === 'number' ? (Number.isInteger(p.value) ? p.value : p.value.toFixed(1)) : p.value}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── Overview sub-components ───────────────────────────────────────────────────
 
 interface MiniMethodPanelProps {
@@ -406,81 +387,54 @@ interface MiniMethodPanelProps {
 
 function MiniMethodPanel({ panel, data, bucketLabelMap, showXAxis, onRemove }: MiniMethodPanelProps) {
   const paramLabel = panel.unit ? `${panel.paramName} (${panel.unit})` : panel.paramName;
-  const aggLabel = panel.aggregation === 'sum' ? 'Σ' : panel.aggregation === 'mean' ? 'Ø' : panel.aggregation === 'max' ? 'max' : 'raw';
   return (
-    <div className="relative group border-b last:border-b-0">
-      {/* Row label */}
-      <div className="absolute left-10 top-1 z-10 flex items-center gap-1.5 pointer-events-none">
-        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: panel.color }} />
-        <span className="text-[10px] font-semibold text-foreground/80 leading-none truncate max-w-[180px]">
+    <div className="group border-b last:border-b-0">
+      {/* Label row — own div so chart gets full height */}
+      <div className="flex items-center gap-2 px-3 pt-2.5 pb-0.5">
+        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: panel.color }} />
+        <span className="text-[11px] font-semibold text-foreground/80 leading-none truncate flex-1">
           {stripMethodSuffix(panel.methodLabel)}
+          <span className="text-[10px] font-normal text-muted-foreground/70 ml-1.5">
+            {paramLabel}
+          </span>
         </span>
-        <span className="text-[9px] text-muted-foreground/70 leading-none">
-          {paramLabel} · {aggLabel}
-        </span>
+        <button
+          onClick={onRemove}
+          className="opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity p-0.5 rounded shrink-0"
+        >
+          <X className="h-3 w-3" />
+        </button>
       </div>
-      <button
-        onClick={onRemove}
-        className="absolute right-1 top-1 z-10 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity p-0.5 rounded"
-      >
-        <X className="h-3 w-3" />
-      </button>
-      <ResponsiveContainer width="100%" height={showXAxis ? 72 : 60}>
-        {panel.aggregation === 'none' ? (
-          <ComposedChart data={data} margin={{ top: 18, right: 8, left: 0, bottom: showXAxis ? 2 : 0 }}>
-            {showXAxis && (
-              <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" tickLine={false} axisLine={false} />
-            )}
-            <YAxis
-              tick={{ fontSize: 9 }}
-              width={38}
-              tickCount={3}
-              tickFormatter={(v: number) => Number.isInteger(v) ? String(v) : v.toFixed(1)}
-              axisLine={false}
-              tickLine={false}
-            />
-            <Tooltip
-              formatter={(v: number) => [
-                Number.isInteger(v) ? v : v.toFixed(1),
-                `${paramLabel} [raw]`,
-              ]}
-              labelFormatter={(l: string) => bucketLabelMap.get(l) ?? l}
-              contentStyle={{ fontSize: 11 }}
-            />
-            <Line
-              dataKey="value"
-              stroke={panel.color}
-              strokeWidth={1.5}
-              dot={{ fill: panel.color, r: 3, strokeWidth: 0 }}
-              activeDot={{ r: 5 }}
-              connectNulls={false}
-              type="monotone"
-            />
-          </ComposedChart>
-        ) : (
-          <BarChart data={data} margin={{ top: 18, right: 8, left: 0, bottom: showXAxis ? 2 : 0 }}>
-            {showXAxis && (
-              <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" tickLine={false} axisLine={false} />
-            )}
-            <YAxis
-              tick={{ fontSize: 9 }}
-              width={38}
-              tickCount={3}
-              tickFormatter={(v: number) => Number.isInteger(v) ? String(v) : v.toFixed(1)}
-              axisLine={false}
-              tickLine={false}
-            />
-            <Tooltip
-              formatter={(v: number) => [
-                Number.isInteger(v) ? v : v.toFixed(1),
-                `${paramLabel} [${aggLabel}]`,
-              ]}
-              labelFormatter={(l: string) => bucketLabelMap.get(l) ?? l}
-              contentStyle={{ fontSize: 11 }}
-            />
-            <Bar dataKey="value" fill={panel.color} radius={[2, 2, 0, 0]} maxBarSize={32} />
-          </BarChart>
-        )}
+      <ResponsiveContainer width="100%" height={showXAxis ? 120 : 100}>
+        <ComposedChart data={data} margin={{ top: 6, right: 12, left: 0, bottom: showXAxis ? 4 : 8 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.11)" />
+          {showXAxis && (
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8' }} interval="preserveStartEnd" tickLine={false} axisLine={false} />
+          )}
+          <YAxis
+            tick={{ fontSize: 10, fill: '#94a3b8' }}
+            width={38}
+            tickCount={4}
+            domain={['auto', 'auto']}
+            tickFormatter={fmtNum}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Tooltip
+            formatter={(v: number) => [fmtNum(v), paramLabel]}
+            labelFormatter={(l: string) => bucketLabelMap.get(l) ?? l}
+            contentStyle={{ fontSize: 11, borderRadius: 8 }}
+          />
+          <Line
+            dataKey="value"
+            stroke={panel.color}
+            strokeWidth={2}
+            dot={{ fill: panel.color, r: 3.5, strokeWidth: 0 }}
+            activeDot={{ r: 5, strokeWidth: 0 }}
+            connectNulls={true}
+            type="monotone"
+          />
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );
@@ -496,7 +450,6 @@ interface OverviewPerfPanelProps {
 function OverviewPerfPanel({ series, data, bucketLabelMap, onRemoveSeries }: OverviewPerfPanelProps) {
   return (
     <div className="relative pt-1">
-      {/* Labels row */}
       <div className="flex flex-wrap items-center gap-2 px-2 pb-1">
         <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
           Outcomes
@@ -514,22 +467,23 @@ function OverviewPerfPanel({ series, data, bucketLabelMap, onRemoveSeries }: Ove
           </span>
         ))}
       </div>
-      <ResponsiveContainer width="100%" height={90}>
-        <ComposedChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
-          <XAxis dataKey="label" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+      <ResponsiveContainer width="100%" height={160}>
+        <ComposedChart data={data} margin={{ top: 6, right: 12, left: 0, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.11)" />
+          <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
           <YAxis
             tick={{ fontSize: 9 }}
             width={38}
-            tickCount={3}
-            tickFormatter={(v: number) => Number.isInteger(v) ? String(v) : v.toFixed(1)}
+            tickCount={4}
+            domain={['auto', 'auto']}
+            tickFormatter={fmtNum}
             axisLine={false}
             tickLine={false}
           />
           <Tooltip
             formatter={(v: number, _name: string, entry: { dataKey?: string }) => {
               const s = series.find((x) => x.id === entry.dataKey);
-              return [Number.isInteger(v) ? v : v.toFixed(1), s ? `${s.paramName}${s.unit ? ` (${s.unit})` : ''}` : ''];
+              return [fmtNum(v), s ? `${s.paramName}${s.unit ? ` (${s.unit})` : ''}` : ''];
             }}
             labelFormatter={(l: string) => bucketLabelMap.get(l) ?? l}
             contentStyle={{ fontSize: 11 }}
@@ -540,9 +494,9 @@ function OverviewPerfPanel({ series, data, bucketLabelMap, onRemoveSeries }: Ove
               dataKey={s.id}
               stroke={s.color}
               strokeWidth={2}
-              dot={{ fill: s.color, r: 3, strokeWidth: 0 }}
-              activeDot={{ r: 5 }}
-              connectNulls={false}
+              dot={{ fill: s.color, r: 4, strokeWidth: 0 }}
+              activeDot={{ r: 6 }}
+              connectNulls={true}
               type="monotone"
             />
           ))}
@@ -570,72 +524,132 @@ export function AthleteAnalysisTab({
   const { getConnectionForAthlete } = useAthleteConnections();
   const resolvedConnectionId = connectionIdProp || getConnectionForAthlete(athleteId)?.id || null;
 
+  // ── Self-reported test results (from athlete app → Supabase) ──────────────
+  // Keyed by athleticismParameterId → ParameterValue[], mirroring AthletePerformanceTab.
+  const [selfReportedMap, setSelfReportedMap] = useState<Map<string, import('@/types/athlete').ParameterValue[]>>(new Map());
+  useEffect(() => {
+    if (!resolvedConnectionId) return;
+    supabase
+      .from('athlete_test_results')
+      .select('id, parameter_id, value, recorded_at, note')
+      .eq('athlete_connection_id', resolvedConnectionId)
+      .then(({ data }) => {
+        if (!data) return;
+        const map = new Map<string, import('@/types/athlete').ParameterValue[]>();
+        for (const row of data as Array<{ id: string; parameter_id: string; value: string; recorded_at: string; note: string | null }>) {
+          const existing = map.get(row.parameter_id) ?? [];
+          existing.push({ id: row.id, value: row.value, recordedAt: row.recorded_at, selfReported: true, note: row.note ?? undefined });
+          map.set(row.parameter_id, existing);
+        }
+        setSelfReportedMap(map);
+      });
+  }, [resolvedConnectionId]);
+
   // ── Controls ───────────────────────────────────────────────────────────────
   const today = new Date();
   const todayYMD = toYMD(today);
 
-  const [preset, setPreset] = useState<Preset>('4W');
-  const [customFrom, setCustomFrom] = useState<Date | null>(subWeeks(today, 4));
-  const [customTo,   setCustomTo]   = useState<Date | null>(today);
-  const [granularity, setGranularity] = useState<Granularity>('week');
+  // Internal Load section controls
+  const [loadPreset, setLoadPreset] = useState<Preset>('28d');
+  const [loadCustomFrom, setLoadCustomFrom] = useState<Date | null>(subWeeks(today, 4));
+  const [loadCustomTo,   setLoadCustomTo]   = useState<Date | null>(today);
+  const [loadGranularity, setLoadGranularity] = useState<Granularity>('day');
   const [showPlannedLoad, setShowPlannedLoad] = useState(false);
 
-  const activeRange = useCallback((): DateRange => {
+  // Stimulus & Performance section controls (independent)
+  const [ovPreset, setOvPreset] = useState<Preset>('28d');
+  const [ovCustomFrom, setOvCustomFrom] = useState<Date | null>(subWeeks(today, 4));
+  const [ovCustomTo,   setOvCustomTo]   = useState<Date | null>(today);
+  const [ovGranularity, setOvGranularity] = useState<Granularity>('day');
+
+  const loadRange = useCallback((): DateRange => {
     const now = new Date();
-    if (preset === '1W') return { from: toYMD(subWeeks(now, 1)), to: todayYMD };
-    if (preset === '4W') return { from: toYMD(subWeeks(now, 4)), to: todayYMD };
-    if (preset === '3M') return { from: toYMD(subMonths(now, 3)), to: todayYMD };
+    if (loadPreset === '7d')  return { from: toYMD(subWeeks(now, 1)),  to: todayYMD };
+    if (loadPreset === '28d') return { from: toYMD(subWeeks(now, 4)),  to: todayYMD };
+    if (loadPreset === '3M')  return { from: toYMD(subMonths(now, 3)), to: todayYMD };
     return {
-      from: customFrom ? toYMD(customFrom) : toYMD(subWeeks(now, 4)),
-      to:   customTo   ? toYMD(customTo)   : todayYMD,
+      from: loadCustomFrom ? toYMD(loadCustomFrom) : toYMD(subWeeks(now, 4)),
+      to:   loadCustomTo   ? toYMD(loadCustomTo)   : todayYMD,
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preset, customFrom, customTo]);
+  }, [loadPreset, loadCustomFrom, loadCustomTo]);
 
-  // ── Query state ────────────────────────────────────────────────────────────
-  const [logs,     setLogs]     = useState<SessionLog[]>([]);
-  const [schedule, setSchedule] = useState<ScheduleRow[]>([]);
-  const [loading,  setLoading]  = useState(false);
+  const ovRange = useCallback((): DateRange => {
+    const now = new Date();
+    if (ovPreset === '7d')  return { from: toYMD(subWeeks(now, 1)),  to: todayYMD };
+    if (ovPreset === '28d') return { from: toYMD(subWeeks(now, 4)),  to: todayYMD };
+    if (ovPreset === '3M')  return { from: toYMD(subMonths(now, 3)), to: todayYMD };
+    return {
+      from: ovCustomFrom ? toYMD(ovCustomFrom) : toYMD(subWeeks(now, 4)),
+      to:   ovCustomTo   ? toYMD(ovCustomTo)   : todayYMD,
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ovPreset, ovCustomFrom, ovCustomTo]);
+
+  // ── Query state — Load section ─────────────────────────────────────────────
+  const [loadLogs,    setLoadLogs]    = useState<SessionLog[]>([]);
+  const [schedule,    setSchedule]    = useState<ScheduleRow[]>([]);
+  const [loadLoading, setLoadLoading] = useState(false);
 
   useEffect(() => {
     if (!resolvedConnectionId) return;
-    const range = activeRange();
+    const r = loadRange();
     let cancelled = false;
-
-    async function fetchData() {
-      setLoading(true);
+    async function fetchLoad() {
+      setLoadLoading(true);
       const [logsResult, scheduleResult] = await Promise.all([
         supabase
           .from('athlete_session_logs')
           .select('id, date, session_id, session_name, borg_rating, duration_seconds, completed_at, sets_logged')
           .eq('athlete_connection_id', resolvedConnectionId)
-          .gte('date', range.from)
-          .lte('date', range.to),
+          .gte('date', r.from).lte('date', r.to),
         supabase
           .from('athlete_schedule')
           .select('date, sessions, intensity')
           .eq('athlete_connection_id', resolvedConnectionId)
-          .gte('date', range.from)
-          .lte('date', range.to),
+          .gte('date', r.from).lte('date', r.to),
       ]);
       if (!cancelled) {
-        setLogs((logsResult.data ?? []) as SessionLog[]);
+        setLoadLogs((logsResult.data ?? []) as SessionLog[]);
         setSchedule((scheduleResult.data ?? []) as ScheduleRow[]);
-        setLoading(false);
+        setLoadLoading(false);
       }
     }
-
-    fetchData();
+    fetchLoad();
     return () => { cancelled = true; };
-  }, [resolvedConnectionId, activeRange]);
+  }, [resolvedConnectionId, loadRange]);
 
-  // ── Derived — completed sessions only ─────────────────────────────────────
-  const completedLogs = logs.filter((l) => l.completed_at !== null);
+  // ── Query state — Stimulus section ────────────────────────────────────────
+  const [ovLogs,    setOvLogs]    = useState<SessionLog[]>([]);
+  const [ovLoading, setOvLoading] = useState(false);
 
-  const range = activeRange();
-  const buckets = bucketsInRange(range.from, range.to, granularity);
-  const bucketLabelMap = new Map<string, string>(
-    buckets.map((b) => [bucketLabel(b, granularity), bucketTooltipLabel(b, granularity)])
+  useEffect(() => {
+    if (!resolvedConnectionId) return;
+    const r = ovRange();
+    let cancelled = false;
+    async function fetchOv() {
+      setOvLoading(true);
+      const { data } = await supabase
+        .from('athlete_session_logs')
+        .select('id, date, session_id, session_name, borg_rating, duration_seconds, completed_at, sets_logged')
+        .eq('athlete_connection_id', resolvedConnectionId)
+        .gte('date', r.from).lte('date', r.to);
+      if (!cancelled) {
+        setOvLogs((data ?? []) as SessionLog[]);
+        setOvLoading(false);
+      }
+    }
+    fetchOv();
+    return () => { cancelled = true; };
+  }, [resolvedConnectionId, ovRange]);
+
+  // ── Derived — Load section ─────────────────────────────────────────────────
+  const completedLoadLogs = loadLogs.filter((l) => l.completed_at !== null);
+
+  const lRange = loadRange();
+  const loadBuckets = bucketsInRange(lRange.from, lRange.to, loadGranularity);
+  const loadBucketLabelMap = new Map<string, string>(
+    loadBuckets.map((b) => [bucketLabel(b, loadGranularity), bucketTooltipLabel(b, loadGranularity)])
   );
 
   const scheduleByDate = new Map<string, ScheduleRow>(schedule.map((r) => [r.date, r]));
@@ -650,9 +664,9 @@ export function AthleteAnalysisTab({
     return schedRow.intensity;
   }
 
-  const loadData = buckets.map((bucketStart) => {
-    const end = bucketEnd(bucketStart, granularity);
-    const inBucket = completedLogs.filter((l) =>
+  const loadData = loadBuckets.map((bucketStart) => {
+    const end = bucketEnd(bucketStart, loadGranularity);
+    const inBucket = completedLoadLogs.filter((l) =>
       isWithinInterval(parseISO(l.date), { start: bucketStart, end })
     );
     const au_actual  = inBucket.reduce((s, l) => s + computeSRPE(l), 0);
@@ -660,38 +674,35 @@ export function AthleteAnalysisTab({
       const p = computePlannedSRPE(l, getPlannedIntensity(l));
       return s + (p ?? 0);
     }, 0);
-    return { label: bucketLabel(bucketStart, granularity), au_actual, au_planned };
+    return { label: bucketLabel(bucketStart, loadGranularity), au_actual, au_planned };
+  });
+
+  // 14-day (daily) or 2-bucket (weekly) moving average of actual sRPE load
+  const maWindow = loadGranularity === 'day' ? 14 : 2;
+  const loadDataWithMA = loadData.map((point, i) => {
+    const start = Math.max(0, i - maWindow + 1);
+    const slice = loadData.slice(start, i + 1);
+    const ma = Math.round(slice.reduce((s, d) => s + d.au_actual, 0) / slice.length);
+    return { ...point, ma };
   });
 
   const plannedCount   = schedule.reduce((s, r) => s + (r.sessions?.length ?? 0), 0);
-  const completedCount = completedLogs.length;
+  const completedCount = completedLoadLogs.length;
   const adherencePct   = plannedCount > 0 ? Math.round((completedCount / plannedCount) * 100) : 0;
-  const isEmpty = completedLogs.length === 0 && schedule.length === 0;
+  const loadIsEmpty = completedLoadLogs.length === 0 && schedule.length === 0;
 
-  // ── Training Stimulus — series state ─────────────────────────────────────
-  const [stimulusSeries, setStimulusSeries] = useState<ChartSeries[]>(() => {
-    try {
-      const saved = localStorage.getItem(`stimulus_series_${athleteId}`);
-      return saved ? (JSON.parse(saved) as ChartSeries[]) : [];
-    } catch { return []; }
-  });
+  // ── Derived — Stimulus section ────────────────────────────────────────────
+  const completedOvLogs = ovLogs.filter((l) => l.completed_at !== null);
 
-  useEffect(() => {
-    localStorage.setItem(`stimulus_series_${athleteId}`, JSON.stringify(stimulusSeries));
-  }, [stimulusSeries, athleteId]);
+  const oRange = ovRange();
+  const ovBuckets = bucketsInRange(oRange.from, oRange.to, ovGranularity);
+  const ovBucketLabelMap = new Map<string, string>(
+    ovBuckets.map((b) => [bucketLabel(b, ovGranularity), bucketTooltipLabel(b, ovGranularity)])
+  );
 
-  // ── Series picker state ───────────────────────────────────────────────────
-  const [pickerOpen, setPickerOpen]       = useState(false);
-  const [pickerType, setPickerType]       = useState<'training' | 'performance'>('training');
-  const [pickerMethod, setPickerMethod]   = useState('');
-  const [pickerParam, setPickerParam]     = useState('');
-  const [pickerAgg, setPickerAgg]         = useState<AggregationMode>('sum');
-  const [pickerPerfId, setPickerPerfId]   = useState('');
-
-  // ── Fallback: (date, sessionIdx, exerciseName) → methodKey from schedule ──
-  // Used for historical logs that predate the methodId field in sets_logged.
+  // ── Schedule method lookup (fallback for older logs) ──────────────────────
+  // Uses the load-section schedule as a hint; good enough for method-key resolution.
   const scheduleMethodLookup = useMemo(() => {
-    // key: `${date}|${sessionIdx}|${exerciseName}` → methodKey
     const map = new Map<string, string>();
     for (const row of schedule) {
       if (!row.sessions) continue;
@@ -705,36 +716,30 @@ export function AthleteAnalysisTab({
     return map;
   }, [schedule]);
 
-  /** Resolve methodId for a log entry, falling back to schedule lookup. */
-  function resolveMethodId(
-    entry: ExerciseLogEntry,
-    logDate: string,
-    sessionIdx: number,
-  ): string | undefined {
+  function resolveMethodId(entry: ExerciseLogEntry, logDate: string, sessionIdx: number): string | undefined {
     if (entry.methodId) return entry.methodId;
     const name = entry.exerciseName;
     if (!name) return undefined;
     return scheduleMethodLookup.get(`${logDate}|${sessionIdx}|${name}`);
   }
 
-  // ── Discover available method/param combos from loaded logs ───────────────
+  // ── Discover available method/param combos (uses ov range logs) ──────────
   const discoveredTrainingParams = useMemo(() => {
-    // methodId → Set<paramName>
     const map = new Map<string, Set<string>>();
-    for (const log of logs) {
+    for (const log of ovLogs) {
       if (!log.completed_at) continue;
-      // Infer session index from session_id suffix (format: assignmentId-date-idx)
       const sessionIdx = log.session_id
-        ? parseInt(log.session_id.split('-').pop() ?? '0', 10) || 0
-        : 0;
+        ? parseInt(log.session_id.split('-').pop() ?? '0', 10) || 0 : 0;
       const entries = parseExerciseEntries(log.sets_logged);
       for (const entry of entries) {
         if (entry.isCircuit) continue;
         const methodId = resolveMethodId(entry, log.date, sessionIdx);
         if (!methodId) continue;
         if (!map.has(methodId)) map.set(methodId, new Set());
-        for (const set of entry.sets ?? []) {
-          if (!set.completed) continue;
+        const completedSets = (entry.sets ?? []).filter(s => s.completed);
+        // "Sets" is a synthetic parameter — count of completed sets per bucket
+        if (completedSets.length > 0) map.get(methodId)!.add('Sets');
+        for (const set of completedSets) {
           for (const paramName of Object.keys(set.values)) {
             map.get(methodId)!.add(paramName);
           }
@@ -743,80 +748,9 @@ export function AthleteAnalysisTab({
     }
     return map;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [logs, scheduleMethodLookup]);
+  }, [ovLogs, scheduleMethodLookup]);
 
-  // ── Compute stimulus chart data ───────────────────────────────────────────
-  const stimulusChartData = useMemo(() => {
-    if (stimulusSeries.length === 0) return [];
-
-    return buckets.map((bucketStart) => {
-      const end = bucketEnd(bucketStart, granularity);
-      const inBucket = completedLogs.filter((l) =>
-        isWithinInterval(parseISO(l.date), { start: bucketStart, end })
-      );
-
-      const point: Record<string, number | null | string> = {
-        label: bucketLabel(bucketStart, granularity),
-      };
-
-      for (const series of stimulusSeries) {
-        if (series.type === 'training') {
-          const allValues: number[] = [];
-          for (const log of inBucket) {
-            const sessionIdx = log.session_id
-              ? parseInt(log.session_id.split('-').pop() ?? '0', 10) || 0
-              : 0;
-            const entries = parseExerciseEntries(log.sets_logged);
-            for (const entry of entries) {
-              if (entry.isCircuit) continue;
-              const methodId = resolveMethodId(entry, log.date, sessionIdx);
-              if (methodId !== series.methodId) continue;
-              for (const set of entry.sets ?? []) {
-                if (!set.completed) continue;
-                const raw = set.values[series.paramName];
-                if (raw === undefined) continue;
-                const num = parseFloat(raw);
-                if (!isNaN(num)) allValues.push(num);
-              }
-            }
-          }
-          if (allValues.length === 0) {
-            point[series.id] = null;
-          } else if (series.aggregation === 'sum' || series.aggregation === 'none') {
-            point[series.id] = allValues.reduce((a, b) => a + b, 0);
-          } else if (series.aggregation === 'mean') {
-            point[series.id] = Math.round((allValues.reduce((a, b) => a + b, 0) / allValues.length) * 10) / 10;
-          } else {
-            point[series.id] = Math.max(...allValues);
-          }
-        } else {
-          // Performance parameter — most recent value recorded up to bucket end
-          const perfParam = performanceParameters.find(
-            (p) => p.athleticismParameterId === series.athleticismParameterId
-          );
-          if (!perfParam) { point[series.id] = null; continue; }
-          const endYMD = toYMD(end);
-          const before = perfParam.values.filter((v) => v.recordedAt <= endYMD);
-          if (before.length === 0) { point[series.id] = null; continue; }
-          const latest = [...before].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0];
-          const num = parseFloat(latest.value);
-          point[series.id] = isNaN(num) ? null : num;
-        }
-      }
-
-      return point;
-    });
-  }, [buckets, completedLogs, stimulusSeries, granularity, performanceParameters, logs]);
-
-  const seriesMap = useMemo(
-    () => new Map(stimulusSeries.map((s) => [s.id, s])),
-    [stimulusSeries]
-  );
-
-  const hasPerformanceSeries = stimulusSeries.some((s) => s.type === 'performance');
-
-  // ── Overview (small-multiples) state ─────────────────────────────────────
-
+  // ── Stimulus & Performance state ──────────────────────────────────────────
   const [overviewPanels, setOverviewPanels] = useState<OverviewMethodPanel[]>(() => {
     try { return JSON.parse(localStorage.getItem(`ov_panels_${athleteId}`) ?? '[]'); } catch { return []; }
   });
@@ -827,17 +761,14 @@ export function AthleteAnalysisTab({
   useEffect(() => { localStorage.setItem(`ov_panels_${athleteId}`, JSON.stringify(overviewPanels)); }, [overviewPanels, athleteId]);
   useEffect(() => { localStorage.setItem(`ov_perf_${athleteId}`, JSON.stringify(overviewPerf)); }, [overviewPerf, athleteId]);
 
-  // Overview picker state
   const [ovPickerOpen, setOvPickerOpen]     = useState(false);
   const [ovPickerMode, setOvPickerMode]     = useState<'method' | 'performance'>('method');
   const [ovPickerMethod, setOvPickerMethod] = useState('');
   const [ovPickerParam, setOvPickerParam]   = useState('');
-  const [ovPickerAgg, setOvPickerAgg]       = useState<AggregationMode>('sum');
   const [ovPickerPerfId, setOvPickerPerfId] = useState('');
 
-  /** Resolve first known unit for (methodId, paramName) from loaded logs' plannedParams */
   function resolveParamUnit(methodId: string, paramName: string): string | undefined {
-    for (const log of completedLogs) {
+    for (const log of completedOvLogs) {
       const entries = parseExerciseEntries(log.sets_logged);
       for (const entry of entries) {
         if (entry.methodId !== methodId) continue;
@@ -848,19 +779,13 @@ export function AthleteAnalysisTab({
     return undefined;
   }
 
-  // Overview panel chart data: panelId → [{label, value}]
+  // Panel chart data (uses ov range)
   const overviewPanelData = useMemo(() => {
     const result = new Map<string, Array<{ label: string; value: number | null }>>();
     for (const panel of overviewPanels) {
-      // 'none' → always use day-level buckets for raw day-by-day values
-      const panelGranularity: Granularity = panel.aggregation === 'none' ? 'day' : granularity;
-      const panelBuckets = panel.aggregation === 'none'
-        ? bucketsInRange(range.from, range.to, 'day')
-        : buckets;
-
-      const points = panelBuckets.map((bucketStart) => {
-        const end = bucketEnd(bucketStart, panelGranularity);
-        const inBucket = completedLogs.filter((l) =>
+      const points = ovBuckets.map((bucketStart) => {
+        const end = bucketEnd(bucketStart, ovGranularity);
+        const inBucket = completedOvLogs.filter((l) =>
           isWithinInterval(parseISO(l.date), { start: bucketStart, end })
         );
         const allValues: number[] = [];
@@ -872,55 +797,64 @@ export function AthleteAnalysisTab({
             if (entry.isCircuit) continue;
             const methodId = resolveMethodId(entry, log.date, sessionIdx);
             if (methodId !== panel.methodId) continue;
-            for (const set of entry.sets ?? []) {
-              if (!set.completed) continue;
-              const raw = set.values[panel.paramName];
-              if (raw === undefined) continue;
-              const num = parseFloat(raw);
-              if (!isNaN(num)) allValues.push(num);
+            if (panel.paramName === 'Sets') {
+              const n = (entry.sets ?? []).filter(s => s.completed).length;
+              if (n > 0) allValues.push(n);
+            } else {
+              for (const set of entry.sets ?? []) {
+                if (!set.completed) continue;
+                const raw = set.values[panel.paramName];
+                if (raw === undefined) continue;
+                const num = parseFloat(raw.replace(',', '.'));
+                if (!isNaN(num)) allValues.push(num);
+              }
             }
           }
         }
         let value: number | null = null;
-        if (allValues.length > 0) {
-          if (panel.aggregation === 'sum' || panel.aggregation === 'none')
-            value = allValues.reduce((a, b) => a + b, 0);
-          else if (panel.aggregation === 'mean')
-            value = Math.round((allValues.reduce((a, b) => a + b, 0) / allValues.length) * 10) / 10;
-          else
-            value = Math.max(...allValues);
-        }
-        return { label: bucketLabel(bucketStart, panelGranularity), value };
+        if (allValues.length > 0)
+          value = allValues.reduce((a, b) => a + b, 0);
+        return { label: bucketLabel(bucketStart, ovGranularity), value };
       });
       result.set(panel.id, points);
     }
     return result;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [overviewPanels, buckets, completedLogs, granularity, logs, scheduleMethodLookup]);
+  }, [overviewPanels, ovBuckets, completedOvLogs, ovGranularity, ovLogs, scheduleMethodLookup]);
 
-  // Overview performance data: [{label, [seriesId]: value}]
+  // Performance outcome data — dot only where a test was recorded within the bucket
   const overviewPerfData = useMemo(() => {
     if (overviewPerf.length === 0) return [];
-    return buckets.map((bucketStart) => {
-      const end = bucketEnd(bucketStart, granularity);
-      const point: Record<string, number | null | string> = { label: bucketLabel(bucketStart, granularity) };
+    return ovBuckets.map((bucketStart) => {
+      const end = bucketEnd(bucketStart, ovGranularity);
+      const point: Record<string, number | null | string> = { label: bucketLabel(bucketStart, ovGranularity) };
       for (const s of overviewPerf) {
         const perfParam = performanceParameters.find((p) => p.athleticismParameterId === s.athleticismParameterId);
-        if (!perfParam) { point[s.id] = null; continue; }
-        const endYMD = toYMD(end);
-        const before = perfParam.values.filter((v) => v.recordedAt <= endYMD);
-        if (before.length === 0) { point[s.id] = null; continue; }
-        const latest = [...before].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0];
-        const num = parseFloat(latest.value);
+        // Merge coach-entered values with self-reported values from athlete app
+        const coachValues = perfParam?.values ?? [];
+        const srValues = selfReportedMap.get(s.athleticismParameterId) ?? [];
+        const coachIds = new Set(coachValues.map((v) => v.id));
+        const allValues = [...coachValues, ...srValues.filter((v) => !coachIds.has(v.id))];
+        if (allValues.length === 0) { point[s.id] = null; continue; }
+        const startYMD = toYMD(bucketStart);
+        const endYMD   = toYMD(end);
+        // Slice to 10 chars so ISO datetimes ("2024-05-15T…") compare correctly against plain dates
+        const inBucket = allValues.filter(
+          (v) => v.recordedAt.slice(0, 10) >= startYMD && v.recordedAt.slice(0, 10) <= endYMD
+        );
+        if (inBucket.length === 0) { point[s.id] = null; continue; }
+        const latest = [...inBucket].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0];
+        // Normalize comma decimal separator (e.g. "10,7" → "10.7") before parsing
+        const num = parseFloat(latest.value.replace(',', '.'));
         point[s.id] = isNaN(num) ? null : num;
       }
       return point;
     });
-  }, [overviewPerf, buckets, granularity, performanceParameters]);
+  }, [overviewPerf, ovBuckets, ovGranularity, performanceParameters, selfReportedMap]);
 
   function addOverviewPanel() {
     if (!ovPickerMethod || !ovPickerParam) return;
-    if (overviewPanels.some((p) => p.methodId === ovPickerMethod && p.paramName === ovPickerParam && p.aggregation === ovPickerAgg)) return;
+    if (overviewPanels.some((p) => p.methodId === ovPickerMethod && p.paramName === ovPickerParam)) return;
     const usedColors = new Set([...overviewPanels.map((p) => p.color), ...overviewPerf.map((s) => s.color)]);
     const color = SERIES_COLORS.find((c) => !usedColors.has(c)) ?? SERIES_COLORS[overviewPanels.length % SERIES_COLORS.length];
     const unit = resolveParamUnit(ovPickerMethod, ovPickerParam);
@@ -929,7 +863,7 @@ export function AthleteAnalysisTab({
       methodId: ovPickerMethod,
       methodLabel: ovPickerMethod,
       paramName: ovPickerParam,
-      aggregation: ovPickerAgg,
+      aggregation: 'sum' as AggregationMode,
       unit,
       color,
     }]);
@@ -960,66 +894,6 @@ export function AthleteAnalysisTab({
     ? !!ovPickerMethod && !!ovPickerParam
     : !!ovPickerPerfId;
 
-  // ── Series picker helpers ─────────────────────────────────────────────────
-
-  function openPicker() {
-    setPickerType('training');
-    setPickerMethod('');
-    setPickerParam('');
-    setPickerAgg('sum');
-    setPickerPerfId('');
-    setPickerOpen(true);
-  }
-
-  const pickerMethodParams = pickerMethod
-    ? Array.from(discoveredTrainingParams.get(pickerMethod) ?? []).sort()
-    : [];
-
-  function addSeries() {
-    const usedColors = new Set(stimulusSeries.map((s) => s.color));
-    const color = SERIES_COLORS.find((c) => !usedColors.has(c)) ?? SERIES_COLORS[stimulusSeries.length % SERIES_COLORS.length];
-
-    if (pickerType === 'training') {
-      if (!pickerMethod || !pickerParam) return;
-      // Prevent duplicate
-      if (stimulusSeries.some(
-        (s) => s.type === 'training' && s.methodId === pickerMethod && s.paramName === pickerParam && s.aggregation === pickerAgg
-      )) return;
-      const newSeries: TrainingSeries = {
-        id: `tr_${Date.now()}`,
-        type: 'training',
-        methodId: pickerMethod,
-        methodLabel: pickerMethod,
-        paramName: pickerParam,
-        aggregation: pickerAgg,
-        color,
-      };
-      setStimulusSeries((prev) => [...prev, newSeries]);
-    } else {
-      if (!pickerPerfId) return;
-      if (stimulusSeries.some((s) => s.type === 'performance' && s.athleticismParameterId === pickerPerfId)) return;
-      const paramDef = parametersV2.find((p) => p.id === pickerPerfId);
-      const newSeries: PerformanceSeries = {
-        id: `perf_${Date.now()}`,
-        type: 'performance',
-        athleticismParameterId: pickerPerfId,
-        paramName: paramDef?.name ?? pickerPerfId,
-        unit: paramDef?.unit,
-        color,
-      };
-      setStimulusSeries((prev) => [...prev, newSeries]);
-    }
-    setPickerOpen(false);
-  }
-
-  function removeSeries(id: string) {
-    setStimulusSeries((prev) => prev.filter((s) => s.id !== id));
-  }
-
-  const canAddSeries = pickerType === 'training'
-    ? !!pickerMethod && !!pickerParam
-    : !!pickerPerfId;
-
   const availablePerfParams = performanceParameters
     .map((pp) => {
       const def = parametersV2.find((p) => p.id === pp.athleticismParameterId);
@@ -1027,47 +901,155 @@ export function AthleteAnalysisTab({
     })
     .filter((p) => p.name);
 
+  // ── AI Analysis Assistant ─────────────────────────────────────────────────
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiMessages, setAiMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string; hidden?: boolean }>>([]);
+  const [aiInput, setAiInput] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiCheckins, setAiCheckins] = useState<Array<Record<string, unknown>>>([]);
+  const [aiCheckinsLoaded, setAiCheckinsLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!aiOpen || aiCheckinsLoaded || !resolvedConnectionId) return;
+    supabase
+      .from('athlete_daily_checkins')
+      .select('date, wellness_fatigue, wellness_sleep, wellness_soreness, wellness_stress, wellness_mood, has_pain, pain_areas, has_illness, illness_nrs, illness_symptoms')
+      .eq('athlete_connection_id', resolvedConnectionId)
+      .order('date', { ascending: true })
+      .then(({ data }) => {
+        setAiCheckins((data ?? []) as Array<Record<string, unknown>>);
+        setAiCheckinsLoaded(true);
+      });
+  }, [aiOpen, aiCheckinsLoaded, resolvedConnectionId]);
+
+  const buildAiContext = () => {
+    const lRange = loadRange();
+    const oRange = ovRange();
+
+    // Load data — only include days with actual activity
+    const loadSummary = loadData
+      .filter(d => d.au_actual > 0 || d.au_planned > 0)
+      .map(d => ({ date: d.label, actualAU: d.au_actual, plannedAU: d.au_planned }));
+
+    // Stimulus — method panels
+    const stimulusData = overviewPanels.map(panel => ({
+      method: stripMethodSuffix(panel.methodId),
+      parameter: panel.paramName,
+      unit: panel.unit,
+      data: (overviewPanelData.get(panel.id) ?? [])
+        .filter(d => d.value !== null)
+        .map(d => ({ date: d.label, value: d.value })),
+    }));
+
+    // Performance — all parameters, not just plotted ones
+    const perfData = performanceParameters
+      .map(pp => {
+        const meta = parametersV2.find(p => p.id === pp.athleticismParameterId);
+        const srVals = selfReportedMap.get(pp.athleticismParameterId) ?? [];
+        const allVals = [
+          ...(pp.values ?? []).map(v => ({
+            date: v.recordedAt.slice(0, 10),
+            value: parseFloat(String(v.value).replace(',', '.')),
+            source: 'coach',
+          })),
+          ...srVals.map(v => ({
+            date: v.recordedAt.slice(0, 10),
+            value: parseFloat(String(v.value).replace(',', '.')),
+            source: 'athlete',
+          })),
+        ].sort((a, b) => a.date.localeCompare(b.date));
+        return { name: meta?.name ?? pp.athleticismParameterId, unit: meta?.unit, values: allVals };
+      })
+      .filter(p => p.values.length > 0);
+
+    // Wellness / monitoring
+    const wellnessData = aiCheckins.map(c => {
+      const items = [
+        c.wellness_fatigue, c.wellness_sleep, c.wellness_soreness,
+        c.wellness_stress, c.wellness_mood,
+      ].filter((v): v is number => typeof v === 'number');
+      const composite = items.length > 0
+        ? +(items.reduce((a, b) => a + b, 0) / items.length).toFixed(1)
+        : null;
+      const painAreas = (c.pain_areas as Array<{ bodyPart?: string; side?: string; nrs?: number }> | null) ?? [];
+      return {
+        date: c.date as string,
+        wellness: composite !== null ? {
+          composite,
+          fatigue: c.wellness_fatigue, sleep: c.wellness_sleep,
+          soreness: c.wellness_soreness, stress: c.wellness_stress, mood: c.wellness_mood,
+        } : null,
+        pain: c.has_pain
+          ? { areas: painAreas.map(a => `${a.bodyPart ?? '?'}${a.side ? ` (${a.side})` : ''} NRS ${a.nrs ?? '?'}`).join(', ') }
+          : null,
+        illness: c.has_illness
+          ? { nrs: c.illness_nrs, symptoms: c.illness_symptoms }
+          : null,
+      };
+    });
+
+    return JSON.stringify({
+      analysisWindow: {
+        internalLoad: { from: lRange.from, to: lRange.to, granularity: loadGranularity },
+        stimulusAndPerformance: { from: oRange.from, to: oRange.to, granularity: ovGranularity },
+      },
+      internalLoad: {
+        note: 'sRPE = Borg CR10 × session duration in minutes (Arbitrary Units)',
+        adherence: { completed: completedCount, planned: plannedCount, pct: `${adherencePct}%` },
+        data: loadSummary,
+      },
+      trainingStimulus: stimulusData.length > 0 ? stimulusData : 'No method panels configured',
+      performanceParameters: perfData.length > 0 ? perfData : 'No performance data recorded',
+      dailyMonitoring: wellnessData.length > 0 ? wellnessData : 'No monitoring data available',
+    }, null, 2);
+  };
+
+  const handleAiAnalyze = async () => {
+    const contextStr = buildAiContext();
+    const userMsg = {
+      role: 'user' as const,
+      content: `Please provide a structured analysis of the following athlete training data:\n\n${contextStr}`,
+      hidden: true,
+    };
+    setAiMessages([userMsg]);
+    setAiLoading(true);
+    try {
+      const reply = await sendMessage(
+        [{ role: 'user', content: userMsg.content }],
+        ANALYSIS_SYSTEM_PROMPT,
+        'claude-sonnet-4-5',
+        4096,
+      );
+      setAiMessages([userMsg, { role: 'assistant', content: reply }]);
+    } catch (e) {
+      console.error('AI analysis failed', e);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleAiSend = async () => {
+    if (!aiInput.trim() || aiLoading) return;
+    const followUp = { role: 'user' as const, content: aiInput.trim() };
+    const next = [...aiMessages, followUp];
+    setAiMessages(next);
+    setAiInput('');
+    setAiLoading(true);
+    try {
+      const apiMsgs = next.map(({ role, content }) => ({ role, content }));
+      const reply = await sendMessage(apiMsgs, ANALYSIS_SYSTEM_PROMPT, 'claude-sonnet-4-5', 4096);
+      setAiMessages([...next, { role: 'assistant', content: reply }]);
+    } catch (e) {
+      console.error('AI send failed', e);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <ScrollArea className="h-full">
       <div className="space-y-6 p-1 pr-4">
-
-        {/* ── Controls row ── */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1">
-            {(['1W', '4W', '3M'] as Preset[]).map((p) => (
-              <Button key={p} size="sm" variant={preset === p ? 'default' : 'outline'} onClick={() => setPreset(p)}>
-                {p}
-              </Button>
-            ))}
-            <Button size="sm" variant={preset === 'Custom' ? 'default' : 'outline'} onClick={() => setPreset('Custom')}>
-              Custom
-            </Button>
-          </div>
-
-          {preset === 'Custom' && (
-            <CalendarRangePicker
-              from={customFrom}
-              to={customTo}
-              onChange={(f, t) => { setCustomFrom(f); setCustomTo(t); }}
-              onClear={() => { setCustomFrom(subWeeks(today, 4)); setCustomTo(today); }}
-            />
-          )}
-
-          <div className="flex items-center gap-1 ml-auto">
-            <span className="text-xs text-muted-foreground mr-1">View by</span>
-            {(['day', 'week', 'month', 'year'] as Granularity[]).map((g) => (
-              <Button
-                key={g} size="sm"
-                variant={granularity === g ? 'secondary' : 'ghost'}
-                className="h-7 px-2 text-xs capitalize"
-                onClick={() => setGranularity(g)}
-              >
-                {g}
-              </Button>
-            ))}
-          </div>
-        </div>
 
         {!resolvedConnectionId && (
           <p className="text-sm text-muted-foreground">
@@ -1075,61 +1057,84 @@ export function AthleteAnalysisTab({
           </p>
         )}
 
-        {resolvedConnectionId && loading && <LoadingState />}
-
-        {resolvedConnectionId && !loading && isEmpty && (
-          <EmptyState label="No completed session data for this period." />
-        )}
-
-        {resolvedConnectionId && !loading && !isEmpty && (
+        {resolvedConnectionId && (
           <>
-            {/* ── Panel 1 — Internal Load ── */}
+            {/* ── Internal Load ── */}
             <Card>
               <CardHeader className="pb-2">
-                <div className="flex items-center justify-between gap-4">
-                  <CardTitle className="text-base capitalize">
-                    Internal Load — sRPE per {granularity}
-                  </CardTitle>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Switch
-                      id="show-planned-load"
-                      checked={showPlannedLoad}
-                      onCheckedChange={setShowPlannedLoad}
-                    />
-                    <Label htmlFor="show-planned-load" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
-                      Show planned
-                    </Label>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-base capitalize">
+                      Internal Load — sRPE per {loadGranularity}
+                    </CardTitle>
+                    {showPlannedLoad && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Planned = planned intensity × actual session duration — same denominator as actual sRPE.
+                      </p>
+                    )}
+                  </div>
+                  {/* Load controls */}
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1">
+                      {(['day', 'week', 'month'] as Granularity[]).map((g) => (
+                        <Button key={g} size="sm"
+                          variant={loadGranularity === g ? 'secondary' : 'ghost'}
+                          className="h-7 px-2 text-xs capitalize"
+                          onClick={() => setLoadGranularity(g)}>{g}</Button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {(['7d', '28d', '3M'] as Preset[]).map((p) => (
+                        <Button key={p} size="sm"
+                          variant={loadPreset === p ? 'default' : 'outline'}
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setLoadPreset(p)}>
+                          {p === '7d' ? '7d' : p === '28d' ? '28d' : '3M'}
+                        </Button>
+                      ))}
+                      <CalendarRangePicker
+                        from={loadPreset === 'custom' ? loadCustomFrom : null}
+                        to={loadPreset === 'custom' ? loadCustomTo : null}
+                        onChange={(f, t) => { setLoadCustomFrom(f); setLoadCustomTo(t); setLoadPreset('custom'); }}
+                        onClear={() => { setLoadPreset('28d'); setLoadCustomFrom(subWeeks(today, 4)); setLoadCustomTo(today); }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch id="show-planned-load" checked={showPlannedLoad} onCheckedChange={setShowPlannedLoad} />
+                      <Label htmlFor="show-planned-load" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">Planned</Label>
+                    </div>
                   </div>
                 </div>
-                {showPlannedLoad && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Planned = planned intensity × actual session duration — same denominator as actual sRPE.
-                  </p>
-                )}
               </CardHeader>
               <CardContent>
-                {loadData.every((b) => b.au_actual === 0) ? (
+                {loadLoading ? <LoadingState /> : loadIsEmpty || loadData.every((b) => b.au_actual === 0) ? (
                   <EmptyState label="No completed sessions with RPE ratings in this period." />
                 ) : (
                   <ResponsiveContainer width="100%" height={240}>
-                    <BarChart data={loadData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                    <ComposedChart data={loadDataWithMA} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                       <XAxis
                         dataKey="label"
                         tick={{ fontSize: 11 }}
-                        interval={granularity === 'day' && buckets.length > 14 ? Math.ceil(buckets.length / 14) - 1 : 0}
+                        interval={loadGranularity === 'day' && loadBuckets.length > 14 ? Math.ceil(loadBuckets.length / 14) - 1 : 0}
                       />
                       <YAxis tick={{ fontSize: 12 }} unit=" AU" width={60} />
                       <Tooltip
                         formatter={(value: number, name: string) => [
-                          `${value} AU`,
-                          name === 'au_actual' ? 'Actual sRPE' : 'Planned sRPE',
+                          `${Math.round(value)} AU`,
+                          name === 'au_actual' ? 'Actual sRPE'
+                            : name === 'au_planned' ? 'Planned sRPE'
+                            : `${maWindow}-day MA`,
                         ]}
-                        labelFormatter={(label: string) => bucketLabelMap.get(label) ?? label}
+                        labelFormatter={(label: string) => loadBucketLabelMap.get(label) ?? label}
                       />
                       {showPlannedLoad && (
                         <Legend
-                          formatter={(value) => value === 'au_actual' ? 'Actual sRPE' : 'Planned sRPE'}
+                          formatter={(value) =>
+                            value === 'au_actual' ? 'Actual sRPE'
+                            : value === 'au_planned' ? 'Planned sRPE'
+                            : `${maWindow}-day MA`
+                          }
                           wrapperStyle={{ fontSize: 12 }}
                         />
                       )}
@@ -1137,13 +1142,24 @@ export function AthleteAnalysisTab({
                       {showPlannedLoad && (
                         <Bar dataKey="au_planned" name="au_planned" fill="hsl(var(--muted-foreground))" opacity={0.5} radius={[3, 3, 0, 0]} />
                       )}
-                    </BarChart>
+                      <Line
+                        dataKey="ma"
+                        name="ma"
+                        type="linear"
+                        stroke="hsl(var(--primary))"
+                        strokeWidth={2}
+                        strokeDasharray="5 3"
+                        strokeOpacity={0.55}
+                        dot={false}
+                        connectNulls
+                      />
+                    </ComposedChart>
                   </ResponsiveContainer>
                 )}
               </CardContent>
             </Card>
 
-            {/* ── Panel 2 — Adherence ── */}
+            {/* ── Adherence ── */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Adherence</CardTitle>
@@ -1160,31 +1176,58 @@ export function AthleteAnalysisTab({
               </CardContent>
             </Card>
 
-            {/* ── Panel 3 — Stimulus Overview (small multiples) ── */}
+            {/* ── Stimulus & Performance ── */}
             <Card>
               <CardHeader className="pb-2">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <CardTitle className="text-base">Stimulus Overview</CardTitle>
+                    <CardTitle className="text-base">Stimulus &amp; Performance</CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      One panel per method — shared time axis — with performance outcomes below.
+                      One line per training parameter — performance outcomes below on a shared time axis.
                     </p>
                   </div>
-                  <div className="flex gap-1.5 shrink-0">
-                    <Button size="sm" variant="outline" className="gap-1 h-7 text-xs px-2"
-                      onClick={() => { setOvPickerMode('method'); setOvPickerMethod(''); setOvPickerParam(''); setOvPickerAgg('sum'); setOvPickerOpen(true); }}>
-                      <Plus className="h-3 w-3" /> Method
-                    </Button>
-                    <Button size="sm" variant="outline" className="gap-1 h-7 text-xs px-2"
-                      onClick={() => { setOvPickerMode('performance'); setOvPickerPerfId(''); setOvPickerOpen(true); }}>
-                      <Plus className="h-3 w-3" /> Outcome
-                    </Button>
+                  {/* Ov controls + add buttons */}
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1">
+                      {(['day', 'week', 'month'] as Granularity[]).map((g) => (
+                        <Button key={g} size="sm"
+                          variant={ovGranularity === g ? 'secondary' : 'ghost'}
+                          className="h-7 px-2 text-xs capitalize"
+                          onClick={() => setOvGranularity(g)}>{g}</Button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {(['7d', '28d', '3M'] as Preset[]).map((p) => (
+                        <Button key={p} size="sm"
+                          variant={ovPreset === p ? 'default' : 'outline'}
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setOvPreset(p)}>
+                          {p === '7d' ? '7d' : p === '28d' ? '28d' : '3M'}
+                        </Button>
+                      ))}
+                      <CalendarRangePicker
+                        from={ovPreset === 'custom' ? ovCustomFrom : null}
+                        to={ovPreset === 'custom' ? ovCustomTo : null}
+                        onChange={(f, t) => { setOvCustomFrom(f); setOvCustomTo(t); setOvPreset('custom'); }}
+                        onClear={() => { setOvPreset('28d'); setOvCustomFrom(subWeeks(today, 4)); setOvCustomTo(today); }}
+                      />
+                    </div>
+                    <div className="flex gap-1.5">
+                      <Button size="sm" variant="outline" className="gap-1 h-7 text-xs px-2"
+                        onClick={() => { setOvPickerMode('method'); setOvPickerMethod(''); setOvPickerParam(''); setOvPickerOpen(true); }}>
+                        <Plus className="h-3 w-3" /> Method
+                      </Button>
+                      <Button size="sm" variant="outline" className="gap-1 h-7 text-xs px-2"
+                        onClick={() => { setOvPickerMode('performance'); setOvPickerPerfId(''); setOvPickerOpen(true); }}>
+                        <Plus className="h-3 w-3" /> Outcome
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="px-2 pb-2">
-                {overviewPanels.length === 0 && overviewPerf.length === 0 ? (
-                  <EmptyState label='Add method panels and performance outcomes to build the overview.' />
+                {ovLoading ? <LoadingState /> : overviewPanels.length === 0 && overviewPerf.length === 0 ? (
+                  <EmptyState label="Add training method parameters and performance outcomes to build the view." />
                 ) : (
                   <div className="border rounded-md overflow-hidden">
                     {overviewPanels.map((panel, idx) => (
@@ -1192,7 +1235,7 @@ export function AthleteAnalysisTab({
                         key={panel.id}
                         panel={panel}
                         data={overviewPanelData.get(panel.id) ?? []}
-                        bucketLabelMap={bucketLabelMap}
+                        bucketLabelMap={ovBucketLabelMap}
                         showXAxis={idx === overviewPanels.length - 1 && overviewPerf.length === 0}
                         onRemove={() => setOverviewPanels((prev) => prev.filter((p) => p.id !== panel.id))}
                       />
@@ -1202,7 +1245,7 @@ export function AthleteAnalysisTab({
                         <OverviewPerfPanel
                           series={overviewPerf}
                           data={overviewPerfData}
-                          bucketLabelMap={bucketLabelMap}
+                          bucketLabelMap={ovBucketLabelMap}
                           onRemoveSeries={(id) => setOverviewPerf((prev) => prev.filter((s) => s.id !== id))}
                         />
                       </div>
@@ -1212,151 +1255,112 @@ export function AthleteAnalysisTab({
               </CardContent>
             </Card>
 
-            {/* ── Panel 4 — Training Stimulus (focused single chart) ── */}
+            {/* ── AI Analysis Assistant ── */}
             <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <CardTitle className="text-base">Training Stimulus</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Overlay training parameters (by method) and performance markers in one chart.
-                    </p>
+              <CardHeader
+                className="pb-2 cursor-pointer select-none"
+                onClick={() => setAiOpen((o) => !o)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Bot className="h-4 w-4 text-primary" />
+                    <CardTitle className="text-base">AI Analysis Assistant</CardTitle>
                   </div>
-                  <Button size="sm" variant="outline" className="shrink-0 gap-1.5" onClick={openPicker}>
-                    <Plus className="h-3.5 w-3.5" />
-                    Add Series
-                  </Button>
+                  <ChevronDown
+                    className={cn(
+                      'h-4 w-4 text-muted-foreground transition-transform',
+                      aiOpen && 'rotate-180'
+                    )}
+                  />
                 </div>
-
-                {/* Active series chips */}
-                {stimulusSeries.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-3">
-                    {stimulusSeries.map((s) => (
-                      <Badge
-                        key={s.id}
-                        variant="outline"
-                        className="gap-1.5 pl-2 pr-1 py-0.5 text-xs font-normal"
-                        style={{ borderColor: s.color, color: s.color }}
-                      >
-                        <span
-                          className="w-2 h-2 rounded-full shrink-0"
-                          style={{ background: s.color }}
-                        />
-                        {seriesLabel(s)}
-                        <button
-                          onClick={() => removeSeries(s.id)}
-                          className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity rounded"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
               </CardHeader>
-
-              <CardContent>
-                {stimulusSeries.length === 0 ? (
-                  <EmptyState label='Click "Add Series" to plot training parameters or performance markers.' />
-                ) : stimulusChartData.every((d) =>
-                    stimulusSeries.every((s) => d[s.id] == null)
-                  ) ? (
-                  <EmptyState label="No data found for the selected series in this period." />
-                ) : (
-                  <ResponsiveContainer width="100%" height={280}>
-                    <ComposedChart data={stimulusChartData} margin={{ top: 4, right: hasPerformanceSeries ? 48 : 8, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                      <XAxis
-                        dataKey="label"
-                        tick={{ fontSize: 11 }}
-                        interval={granularity === 'day' && buckets.length > 14 ? Math.ceil(buckets.length / 14) - 1 : 0}
-                      />
-                      {/* Left axis — training params */}
-                      <YAxis
-                        yAxisId="left"
-                        tick={{ fontSize: 11 }}
-                        width={48}
-                        tickFormatter={(v: number) => Number.isInteger(v) ? String(v) : v.toFixed(1)}
-                      />
-                      {/* Right axis — performance params (only if any) */}
-                      {hasPerformanceSeries && (
-                        <YAxis
-                          yAxisId="right"
-                          orientation="right"
-                          tick={{ fontSize: 11 }}
-                          width={48}
-                          tickFormatter={(v: number) => Number.isInteger(v) ? String(v) : v.toFixed(1)}
+              {aiOpen && (
+                <CardContent className="space-y-3 pt-0">
+                  {aiMessages.filter((m) => !m.hidden).length === 0 ? (
+                    <div className="flex flex-col items-center gap-3 py-4">
+                      <p className="text-sm text-muted-foreground text-center max-w-sm">
+                        Send all athlete data to Claude and get a structured interpretation of load, stimulus, performance, and monitoring patterns.
+                      </p>
+                      <Button
+                        onClick={handleAiAnalyze}
+                        disabled={aiLoading}
+                        className="gap-2"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        {aiLoading ? 'Analyzing…' : 'Analyze all data'}
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+                        {aiMessages
+                          .filter((m) => !m.hidden)
+                          .map((m, i) => (
+                            <div
+                              key={i}
+                              className={cn(
+                                'rounded-lg px-3 py-2 text-sm',
+                                m.role === 'assistant'
+                                  ? 'bg-muted'
+                                  : 'bg-primary/10 ml-8'
+                              )}
+                            >
+                              {m.role === 'assistant' ? (
+                                <p className="whitespace-pre-wrap leading-relaxed">{m.content}</p>
+                              ) : (
+                                <p>{m.content}</p>
+                              )}
+                            </div>
+                          ))}
+                        {aiLoading && (
+                          <div className="bg-muted rounded-lg px-3 py-2 text-sm text-muted-foreground animate-pulse">
+                            Thinking…
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={aiInput}
+                          onChange={(e) => setAiInput(e.target.value)}
+                          placeholder="Ask a follow-up question…"
+                          className="text-sm h-9"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              handleAiSend();
+                            }
+                          }}
                         />
-                      )}
-                      <Tooltip
-                        content={
-                          <CustomTooltip
-                            bucketLabelMap={bucketLabelMap}
-                            seriesMap={seriesMap}
-                          />
-                        }
-                      />
-                      <Legend
-                        formatter={(_value, entry) => {
-                          const s = seriesMap.get(entry.dataKey as string);
-                          return s ? seriesLabel(s) : entry.dataKey;
-                        }}
-                        wrapperStyle={{ fontSize: 11 }}
-                      />
-                      {stimulusSeries.map((s) =>
-                        s.type === 'training' && s.aggregation !== 'none' ? (
-                          <Bar
-                            key={s.id}
-                            dataKey={s.id}
-                            yAxisId="left"
-                            fill={s.color}
-                            radius={[3, 3, 0, 0]}
-                            maxBarSize={40}
-                            name={s.id}
-                          />
-                        ) : s.type === 'training' ? (
-                          <Line
-                            key={s.id}
-                            dataKey={s.id}
-                            yAxisId="left"
-                            stroke={s.color}
-                            strokeWidth={2}
-                            dot={{ fill: s.color, r: 4, strokeWidth: 0 }}
-                            activeDot={{ r: 6 }}
-                            connectNulls={false}
-                            type="monotone"
-                            name={s.id}
-                          />
-                        ) : (
-                          <Line
-                            key={s.id}
-                            dataKey={s.id}
-                            yAxisId="right"
-                            stroke={s.color}
-                            strokeWidth={2}
-                            dot={{ fill: s.color, r: 4, strokeWidth: 0 }}
-                            activeDot={{ r: 6 }}
-                            connectNulls={false}
-                            type="monotone"
-                            name={s.id}
-                          />
-                        )
-                      )}
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                )}
-              </CardContent>
+                        <Button
+                          size="icon"
+                          className="h-9 w-9 shrink-0"
+                          onClick={handleAiSend}
+                          disabled={aiLoading || !aiInput.trim()}
+                        >
+                          <Send className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <button
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => { setAiMessages([]); setAiInput(''); }}
+                      >
+                        Clear conversation
+                      </button>
+                    </>
+                  )}
+                </CardContent>
+              )}
             </Card>
           </>
         )}
       </div>
 
-      {/* ── Overview picker dialog ── */}
+      {/* ── Picker dialog ── */}
       <Dialog open={ovPickerOpen} onOpenChange={(o) => !o && setOvPickerOpen(false)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>
-              {ovPickerMode === 'method' ? 'Add Method Panel' : 'Add Performance Outcome'}
+              {ovPickerMode === 'method' ? 'Add Training Method Panel' : 'Add Performance Outcome'}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-1">
@@ -1393,22 +1397,6 @@ export function AthleteAnalysisTab({
                     </Select>
                   </div>
                 )}
-                {ovPickerParam && (
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Aggregation per {granularity}</Label>
-                    <div className="flex gap-2 flex-wrap">
-                      {(['sum', 'mean', 'max', 'none'] as AggregationMode[]).map((a) => (
-                        <Button key={a} size="sm" variant={ovPickerAgg === a ? 'default' : 'outline'}
-                          className="flex-1 capitalize" onClick={() => setOvPickerAgg(a)}>
-                          {a === 'sum' ? 'Sum Σ' : a === 'mean' ? 'Mean Ø' : a === 'max' ? 'Max' : 'Raw'}
-                        </Button>
-                      ))}
-                    </div>
-                    {ovPickerAgg === 'none' && (
-                      <p className="text-xs text-muted-foreground">Shows day-by-day totals as a line — ignores the granularity setting above.</p>
-                    )}
-                  </div>
-                )}
               </>
             )}
             {ovPickerMode === 'performance' && (
@@ -1439,150 +1427,6 @@ export function AthleteAnalysisTab({
             >
               {ovPickerMode === 'method' ? 'Add Panel' : 'Add Outcome'}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Series picker dialog ── */}
-      <Dialog open={pickerOpen} onOpenChange={(o) => !o && setPickerOpen(false)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Add Series</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 py-1">
-            {/* Type toggle */}
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant={pickerType === 'training' ? 'default' : 'outline'}
-                className="flex-1"
-                onClick={() => { setPickerType('training'); setPickerPerfId(''); }}
-              >
-                Training Parameter
-              </Button>
-              <Button
-                size="sm"
-                variant={pickerType === 'performance' ? 'default' : 'outline'}
-                className="flex-1"
-                onClick={() => { setPickerType('performance'); setPickerMethod(''); setPickerParam(''); }}
-              >
-                Performance Marker
-              </Button>
-            </div>
-
-            {pickerType === 'training' && (
-              <>
-                {/* Method */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Method</Label>
-                  {discoveredTrainingParams.size === 0 ? (
-                    <p className="text-xs text-muted-foreground py-2 text-center">
-                      No logged sessions with method data found in this period.
-                    </p>
-                  ) : (
-                    <Select
-                      value={pickerMethod}
-                      onValueChange={(v) => { setPickerMethod(v); setPickerParam(''); }}
-                    >
-                      <SelectTrigger className="h-9 text-sm">
-                        <SelectValue placeholder="Select method…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from(discoveredTrainingParams.keys()).sort().map((m) => (
-                          <SelectItem key={m} value={m}>
-                            {stripMethodSuffix(m)}
-                            {m.includes('::') && (
-                              <span className="text-muted-foreground ml-1 text-xs">
-                                ({m.split('::')[1]})
-                              </span>
-                            )}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-
-                {/* Parameter */}
-                {pickerMethod && (
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Parameter</Label>
-                    <Select value={pickerParam} onValueChange={setPickerParam}>
-                      <SelectTrigger className="h-9 text-sm">
-                        <SelectValue placeholder="Select parameter…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {pickerMethodParams.map((p) => (
-                          <SelectItem key={p} value={p}>{p}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                {/* Aggregation */}
-                {pickerParam && (
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Aggregation per {granularity}</Label>
-                    <div className="flex gap-2 flex-wrap">
-                      {(['sum', 'mean', 'max', 'none'] as AggregationMode[]).map((a) => (
-                        <Button
-                          key={a}
-                          size="sm"
-                          variant={pickerAgg === a ? 'default' : 'outline'}
-                          className="flex-1 capitalize"
-                          onClick={() => setPickerAgg(a)}
-                        >
-                          {a === 'sum' ? 'Sum Σ' : a === 'mean' ? 'Mean Ø' : a === 'max' ? 'Max' : 'Raw'}
-                        </Button>
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {pickerAgg === 'sum'
-                        ? `Total ${pickerParam} across all sets & exercises for this method per ${granularity}.`
-                        : pickerAgg === 'mean'
-                        ? `Average ${pickerParam} per set for this method per ${granularity}.`
-                        : pickerAgg === 'max'
-                        ? `Highest ${pickerParam} value recorded in a single set per ${granularity}.`
-                        : `Day-by-day totals shown as a line — raw values, ignores the granularity setting.`}
-                    </p>
-                  </div>
-                )}
-              </>
-            )}
-
-            {pickerType === 'performance' && (
-              <div className="space-y-1.5">
-                <Label className="text-xs">Performance Parameter</Label>
-                {availablePerfParams.length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-2 text-center">
-                    No performance parameters tracked for this athlete yet.
-                  </p>
-                ) : (
-                  <Select value={pickerPerfId} onValueChange={setPickerPerfId}>
-                    <SelectTrigger className="h-9 text-sm">
-                      <SelectValue placeholder="Select parameter…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availablePerfParams.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name}{p.unit ? ` (${p.unit})` : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Shows the most recent recorded value per {granularity} — plotted on the right Y-axis.
-                </p>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPickerOpen(false)}>Cancel</Button>
-            <Button onClick={addSeries} disabled={!canAddSeries}>Add Series</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
