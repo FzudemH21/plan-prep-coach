@@ -37,11 +37,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { CalendarIcon, X, Plus, Bot, Send, Sparkles, ChevronDown } from 'lucide-react';
+import { CalendarIcon, X, Plus } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { Input } from '@/components/ui/input';
-import { sendMessage } from '@/utils/anthropicApi';
 import { supabase } from '@/lib/supabase';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import {
@@ -63,79 +60,12 @@ import type { ParameterV2 } from '@/types/parametersV2';
 
 // ── AI Analysis system prompt ─────────────────────────────────────────────────
 
-const ANALYSIS_SYSTEM_PROMPT = `You are an expert sports scientist embedded in Plan Prep Coach, a professional training analysis dashboard used by coaches and sports scientists.
-
-## Role
-Interpret individual athlete training data, identify patterns across data sources, flag concerns, and suggest evidence-based adjustments for upcoming training blocks.
-
-## Data definitions and scales
-- sRPE (session RPE) = Borg CR10 rating (0–10) × session duration in minutes → internal training load in Arbitrary Units (AU)
-- Planned sRPE = planned session intensity × actual session duration (same time denominator, enables direct comparison)
-- Adherence = sessions completed / sessions planned
-- Performance parameters = objective test results (e.g. 1RM, sprint time, jump height, VO2max) — always report with exact value and unit as recorded
-- Wellness = 5-item McLean questionnaire (fatigue, sleep, soreness, stress, mood); each item is scored **1–5** (higher = better); composite is the mean of available items, also on a 1–5 scale. A composite of 3/5 is mid-range, not low. Never interpret these values on a 1–10 or 0–10 scale.
-- Pain = Numeric Rating Scale (NRS 0–10; 0 = no pain, 10 = worst imaginable); body area and side also recorded
-- Illness = OSTRC-H questionnaire; NRS severity (0–10) also recorded
-- Training method panels = aggregated exercise volume (e.g. total sets) or intensity per training method over time
-
-## Analysis principles
-1. Cross-source connections: actively look for relationships across load, wellness, performance, and pain — but only draw a connection when it is consistent with established sports science mechanisms. A load increase followed 1–3 days later by a wellness dip is physiologically plausible; a single high-load day preceding a performance PB the next day is unlikely causal. When a pattern fits a known mechanism, name it and briefly note the evidence basis. When a pattern is ambiguous or could have multiple explanations, say so. Never force a connection to fill the narrative.
-2. Temporal sequencing: performance adaptations to load typically lag 2–4 weeks; acute wellness responses to overload appear within 1–3 days; chronic wellness decline reflects accumulated fatigue over weeks
-3. Distinguish intentional from unplanned: load variation may reflect deliberate periodization (deload weeks, intensification blocks) — do not flag planned low-load periods as problems
-4. Specificity: cite actual dates, values, and their scale when making observations (e.g. "wellness composite dropped from 4.1/5 to 2.8/5 over three consecutive days"); generic statements add no value
-5. Data gaps: explicitly note when data is absent or too sparse to draw conclusions; never speculate beyond what the data shows
-6. Audience: coaches and sports scientists — assume professional literacy, no need for basic explanations
-
-## What to avoid
-- Injury diagnoses or medical predictions of any kind
-- Generic lifestyle advice ("sleep more", "reduce stress")
-- Forcing cross-metric connections that lack a plausible physiological or psychological mechanism
-- Mentioning ACWR — it is not used in this system and is scientifically contested
-- Over-interpreting noise in sparse datasets
-
-## Response format
-Use markdown: **bold** for key values and findings, ## for top-level section headers. Initial full analysis: sections — ## Load Pattern, ## Adherence, ## Training Stimulus (if data available), ## Performance Trajectory (if data available), ## Wellness & Monitoring (if data available), ## Key Observations, ## Suggested Focus. Keep each section to 2–4 sentences unless a finding genuinely warrants more.
-Follow-up questions: conversational and direct. Use **bold** for key terms; avoid section headers unless specifically useful.`.trim();
-
 // ── Series colours ────────────────────────────────────────────────────────────
 
 const SERIES_COLORS = [
   '#6366f1', '#f59e0b', '#10b981', '#ef4444',
   '#8b5cf6', '#06b6d4', '#f97316', '#ec4899',
 ];
-
-// ── Markdown renderer (AI messages only) ──────────────────────────────────────
-
-function renderInline(text: string): React.ReactNode[] {
-  // Handle **bold** and *italic* inline markers
-  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
-  return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**'))
-      return <strong key={i}>{part.slice(2, -2)}</strong>;
-    if (part.startsWith('*') && part.endsWith('*'))
-      return <em key={i}>{part.slice(1, -1)}</em>;
-    return <span key={i}>{part}</span>;
-  });
-}
-
-function MarkdownText({ text }: { text: string }) {
-  const lines = text.split('\n');
-  return (
-    <div className="space-y-0.5">
-      {lines.map((line, i) => {
-        if (line.startsWith('## '))
-          return <p key={i} className="font-semibold text-sm mt-3 mb-0.5">{line.slice(3)}</p>;
-        if (line.startsWith('### '))
-          return <p key={i} className="font-medium text-sm mt-2">{line.slice(4)}</p>;
-        if (line.trim() === '')
-          return <div key={i} className="h-1.5" />;
-        if (line.startsWith('- ') || line.startsWith('• '))
-          return <p key={i} className="pl-3 leading-relaxed">{'• '}{renderInline(line.slice(2))}</p>;
-        return <p key={i} className="leading-relaxed">{renderInline(line)}</p>;
-      })}
-    </div>
-  );
-}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -934,151 +864,6 @@ export function AthleteAnalysisTab({
     })
     .filter((p) => p.name);
 
-  // ── AI Analysis Assistant ─────────────────────────────────────────────────
-  const [aiOpen, setAiOpen] = useState(false);
-  const [aiMessages, setAiMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string; hidden?: boolean }>>([]);
-  const [aiInput, setAiInput] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiCheckins, setAiCheckins] = useState<Array<Record<string, unknown>>>([]);
-  const [aiCheckinsLoaded, setAiCheckinsLoaded] = useState(false);
-
-  useEffect(() => {
-    if (!aiOpen || aiCheckinsLoaded || !resolvedConnectionId) return;
-    supabase
-      .from('athlete_daily_checkins')
-      .select('date, wellness_fatigue, wellness_sleep, wellness_soreness, wellness_stress, wellness_mood, has_pain, pain_areas, has_illness, illness_nrs, illness_symptoms')
-      .eq('athlete_connection_id', resolvedConnectionId)
-      .order('date', { ascending: true })
-      .then(({ data }) => {
-        setAiCheckins((data ?? []) as Array<Record<string, unknown>>);
-        setAiCheckinsLoaded(true);
-      });
-  }, [aiOpen, aiCheckinsLoaded, resolvedConnectionId]);
-
-  const buildAiContext = () => {
-    const lRange = loadRange();
-    const oRange = ovRange();
-
-    // Load data — only include days with actual activity
-    const loadSummary = loadData
-      .filter(d => d.au_actual > 0 || d.au_planned > 0)
-      .map(d => ({ date: d.label, actualAU: d.au_actual, plannedAU: d.au_planned }));
-
-    // Stimulus — method panels
-    const stimulusData = overviewPanels.map(panel => ({
-      method: stripMethodSuffix(panel.methodId),
-      parameter: panel.paramName,
-      unit: panel.unit,
-      data: (overviewPanelData.get(panel.id) ?? [])
-        .filter(d => d.value !== null)
-        .map(d => ({ date: d.label, value: d.value })),
-    }));
-
-    // Performance — all parameters, not just plotted ones
-    const perfData = performanceParameters
-      .map(pp => {
-        const meta = parametersV2.find(p => p.id === pp.athleticismParameterId);
-        const srVals = selfReportedMap.get(pp.athleticismParameterId) ?? [];
-        const allVals = [
-          ...(pp.values ?? []).map(v => ({
-            date: v.recordedAt.slice(0, 10),
-            value: parseFloat(String(v.value).replace(',', '.')),
-            source: 'coach',
-          })),
-          ...srVals.map(v => ({
-            date: v.recordedAt.slice(0, 10),
-            value: parseFloat(String(v.value).replace(',', '.')),
-            source: 'athlete',
-          })),
-        ].sort((a, b) => a.date.localeCompare(b.date));
-        return { name: meta?.name ?? pp.athleticismParameterId, unit: meta?.unit, values: allVals };
-      })
-      .filter(p => p.values.length > 0);
-
-    // Wellness / monitoring
-    const wellnessData = aiCheckins.map(c => {
-      const items = [
-        c.wellness_fatigue, c.wellness_sleep, c.wellness_soreness,
-        c.wellness_stress, c.wellness_mood,
-      ].filter((v): v is number => typeof v === 'number');
-      const composite = items.length > 0
-        ? +(items.reduce((a, b) => a + b, 0) / items.length).toFixed(1)
-        : null;
-      const painAreas = (c.pain_areas as Array<{ bodyPart?: string; side?: string; nrs?: number }> | null) ?? [];
-      return {
-        date: c.date as string,
-        wellness: composite !== null ? {
-          composite,
-          fatigue: c.wellness_fatigue, sleep: c.wellness_sleep,
-          soreness: c.wellness_soreness, stress: c.wellness_stress, mood: c.wellness_mood,
-        } : null,
-        pain: c.has_pain
-          ? { areas: painAreas.map(a => `${a.bodyPart ?? '?'}${a.side ? ` (${a.side})` : ''} NRS ${a.nrs ?? '?'}`).join(', ') }
-          : null,
-        illness: c.has_illness
-          ? { nrs: c.illness_nrs, symptoms: c.illness_symptoms }
-          : null,
-      };
-    });
-
-    return JSON.stringify({
-      analysisWindow: {
-        internalLoad: { from: lRange.from, to: lRange.to, granularity: loadGranularity },
-        stimulusAndPerformance: { from: oRange.from, to: oRange.to, granularity: ovGranularity },
-      },
-      internalLoad: {
-        note: 'sRPE = Borg CR10 × session duration in minutes (Arbitrary Units)',
-        adherence: { completed: completedCount, planned: plannedCount, pct: `${adherencePct}%` },
-        data: loadSummary,
-      },
-      trainingStimulus: stimulusData.length > 0 ? stimulusData : 'No method panels configured',
-      performanceParameters: perfData.length > 0 ? perfData : 'No performance data recorded',
-      dailyMonitoring: wellnessData.length > 0 ? wellnessData : 'No monitoring data available',
-    }, null, 2);
-  };
-
-  const handleAiAnalyze = async () => {
-    const contextStr = buildAiContext();
-    const userMsg = {
-      role: 'user' as const,
-      content: `Please provide a structured analysis of the following athlete training data:\n\n${contextStr}`,
-      hidden: true,
-    };
-    setAiMessages([userMsg]);
-    setAiLoading(true);
-    try {
-      const reply = await sendMessage(
-        [{ role: 'user', content: userMsg.content }],
-        ANALYSIS_SYSTEM_PROMPT,
-        'claude-sonnet-4-5',
-        4096,
-      );
-      setAiMessages([userMsg, { role: 'assistant', content: reply }]);
-    } catch (e) {
-      console.error('AI analysis failed', e);
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  const handleAiSend = async () => {
-    if (!aiInput.trim() || aiLoading) return;
-    const followUp = { role: 'user' as const, content: aiInput.trim() };
-    const next = [...aiMessages, followUp];
-    setAiMessages(next);
-    setAiInput('');
-    setAiLoading(true);
-    try {
-      const apiMsgs = next.map(({ role, content }) => ({ role, content }));
-      const reply = await sendMessage(apiMsgs, ANALYSIS_SYSTEM_PROMPT, 'claude-sonnet-4-5', 4096);
-      setAiMessages([...next, { role: 'assistant', content: reply }]);
-    } catch (e) {
-      console.error('AI send failed', e);
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <ScrollArea className="h-full">
@@ -1288,102 +1073,6 @@ export function AthleteAnalysisTab({
               </CardContent>
             </Card>
 
-            {/* ── AI Analysis Assistant ── */}
-            <Card>
-              <CardHeader
-                className="pb-2 cursor-pointer select-none"
-                onClick={() => setAiOpen((o) => !o)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Bot className="h-4 w-4 text-primary" />
-                    <CardTitle className="text-base">AI Analysis Assistant</CardTitle>
-                  </div>
-                  <ChevronDown
-                    className={cn(
-                      'h-4 w-4 text-muted-foreground transition-transform',
-                      aiOpen && 'rotate-180'
-                    )}
-                  />
-                </div>
-              </CardHeader>
-              {aiOpen && (
-                <CardContent className="space-y-3 pt-0">
-                  {aiMessages.filter((m) => !m.hidden).length === 0 ? (
-                    <div className="flex flex-col items-center gap-3 py-4">
-                      <p className="text-sm text-muted-foreground text-center max-w-sm">
-                        Send all athlete data to Claude and get a structured interpretation of load, stimulus, performance, and monitoring patterns.
-                      </p>
-                      <Button
-                        onClick={handleAiAnalyze}
-                        disabled={aiLoading}
-                        className="gap-2"
-                      >
-                        <Sparkles className="h-4 w-4" />
-                        {aiLoading ? 'Analyzing…' : 'Analyze all data'}
-                      </Button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
-                        {aiMessages
-                          .filter((m) => !m.hidden)
-                          .map((m, i) => (
-                            <div
-                              key={i}
-                              className={cn(
-                                'rounded-lg px-3 py-2 text-sm',
-                                m.role === 'assistant'
-                                  ? 'bg-muted'
-                                  : 'bg-primary/10 ml-8'
-                              )}
-                            >
-                              {m.role === 'assistant' ? (
-                                <MarkdownText text={m.content} />
-                              ) : (
-                                <p>{m.content}</p>
-                              )}
-                            </div>
-                          ))}
-                        {aiLoading && (
-                          <div className="bg-muted rounded-lg px-3 py-2 text-sm text-muted-foreground animate-pulse">
-                            Thinking…
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={aiInput}
-                          onChange={(e) => setAiInput(e.target.value)}
-                          placeholder="Ask a follow-up question…"
-                          className="text-sm h-9"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                              e.preventDefault();
-                              handleAiSend();
-                            }
-                          }}
-                        />
-                        <Button
-                          size="icon"
-                          className="h-9 w-9 shrink-0"
-                          onClick={handleAiSend}
-                          disabled={aiLoading || !aiInput.trim()}
-                        >
-                          <Send className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <button
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                        onClick={() => { setAiMessages([]); setAiInput(''); }}
-                      >
-                        Clear conversation
-                      </button>
-                    </>
-                  )}
-                </CardContent>
-              )}
-            </Card>
           </>
         )}
       </div>

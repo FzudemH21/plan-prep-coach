@@ -49,6 +49,7 @@ import { AthletePerformanceTab } from './AthletePerformanceTab';
 import { AthleteSettingsTab } from './AthleteSettingsTab';
 import { AthleteAnalysisTab } from './AthleteAnalysisTab';
 import { AthleteMonitoringTab } from './AthleteMonitoringTab';
+import { AthleteAnalysisAIDrawer } from './AthleteAnalysisAIDrawer';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
@@ -802,6 +803,13 @@ export function AthleteProfileView({
           </ScrollArea>
         </TabsContent>
       </Tabs>
+
+      {/* AI Analysis Assistant — lives outside tabs so state persists across tab switches */}
+      <AthleteAnalysisAIDrawer
+        athleteId={athlete.id}
+        performanceParameters={athleteData.athletePerformanceParameters.filter(p => p.athleteId === athlete.id)}
+        parametersV2={parametersData.parameters}
+      />
     </div>
   );
 }
