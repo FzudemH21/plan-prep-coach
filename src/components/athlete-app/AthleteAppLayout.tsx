@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { useAthleteApp } from '@/hooks/useAthleteApp';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useAthleteSettings } from '@/hooks/useAthleteSettings';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -82,8 +83,10 @@ export function AthleteAppLayout() {
   const location = useLocation();
   const { connection, loading } = useAthleteApp();
 
+  const { chatEnabled } = useAthleteSettings();
+
   const { unreadCount, previews, markRead } = useAthleteUnread(
-    connection?.id ?? null
+    chatEnabled ? (connection?.id ?? null) : null
   );
 
   const handleBellClick = () => {
@@ -104,8 +107,8 @@ export function AthleteAppLayout() {
               {connection.athleteName}
             </span>
           )}
-          {/* Notification bell */}
-          <DropdownMenu>
+          {/* Notification bell — hidden when chat is disabled */}
+          {chatEnabled && <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 className="relative h-8 w-8 flex items-center justify-center rounded-full hover:bg-accent transition-colors"
@@ -145,7 +148,7 @@ export function AthleteAppLayout() {
                 ))
               )}
             </DropdownMenuContent>
-          </DropdownMenu>
+          </DropdownMenu>}
         </div>
       </div>
 
@@ -157,7 +160,7 @@ export function AthleteAppLayout() {
       {/* Bottom navigation */}
       <nav className="shrink-0 border-t bg-background/95 backdrop-blur-sm">
         <div className="flex items-stretch">
-          {NAV_PATHS.map(({ label, icon: Icon, path }) => {
+          {NAV_PATHS.filter(({ path }) => path !== '/athlete/messages' || chatEnabled).map(({ label, icon: Icon, path }) => {
             const isActive =
               location.pathname === path ||
               location.pathname.startsWith(path + '/');

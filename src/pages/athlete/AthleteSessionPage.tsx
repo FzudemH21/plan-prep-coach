@@ -10,7 +10,8 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { useAthleteSettings } from '@/hooks/useAthleteSettings';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -731,6 +732,9 @@ export default function AthleteSessionPage() {
   // Exercise detail sheet — tapping a name or ⓘ opens it
   const [detailTarget, setDetailTarget] = useState<ExerciseDetailTarget | null>(null);
 
+  // Settings
+  const { chatEnabled } = useAthleteSettings();
+
   // Chat — exercise/section comment sheet
   const { sendMessage: chatSend } = useChat({
     connectionId: connection?.id ?? null,
@@ -1437,21 +1441,18 @@ export default function AthleteSessionPage() {
           onClose={() => setDetailTarget(null)}
         />
 
-        {/* Exercise/Section comment sheet */}
-        <Sheet open={!!commentTarget} onOpenChange={(o) => { if (!o) setCommentTarget(null); }}>
-          <SheetContent
-            side="bottom"
-            className="sm:w-[480px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2 rounded-t-2xl"
-          >
-            <SheetHeader className="mb-3">
-              <SheetTitle className="text-base">Add Comment</SheetTitle>
+        {/* Exercise/Section comment dialog */}
+        <Dialog open={!!commentTarget} onOpenChange={(o) => { if (!o) { setCommentTarget(null); setCommentText(''); } }}>
+          <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-base">Add Comment</DialogTitle>
               {commentTarget && (
-                <p className="text-xs text-muted-foreground">
+                <DialogDescription className="text-xs">
                   📎 {[commentTarget.exerciseName, commentTarget.sectionName, session.name, entry.date ? new Date(entry.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : undefined].filter(Boolean).join(' · ')}
-                </p>
+                </DialogDescription>
               )}
-            </SheetHeader>
-            <div className="flex items-end gap-2">
+            </DialogHeader>
+            <div className="flex items-end gap-2 mt-1">
               <Textarea
                 autoFocus
                 value={commentText}
@@ -1489,8 +1490,8 @@ export default function AthleteSessionPage() {
                 {commentSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             </div>
-          </SheetContent>
-        </Sheet>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
@@ -1741,6 +1742,15 @@ export default function AthleteSessionPage() {
                               <Info className="h-4 w-4" />
                             </button>
                           )}
+                          {chatEnabled && (
+                            <button
+                              onClick={() => setCommentTarget({ exerciseName: swappedExercises[ex.id]?.replacementName ?? ex.name, sectionName: currentSection?.name })}
+                              className="shrink-0 text-muted-foreground hover:text-foreground active:opacity-60 transition-colors ml-0.5"
+                              aria-label="Comment on exercise"
+                            >
+                              <MessageSquare className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
                         {/* Swap badge */}
                         {swappedExercises[ex.id] && (
@@ -1948,6 +1958,58 @@ export default function AthleteSessionPage() {
           target={detailTarget}
           onClose={() => setDetailTarget(null)}
         />
+
+        {/* Exercise/Section comment dialog */}
+        <Dialog open={!!commentTarget} onOpenChange={(o) => { if (!o) { setCommentTarget(null); setCommentText(''); } }}>
+          <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-base">Add Comment</DialogTitle>
+              {commentTarget && (
+                <DialogDescription className="text-xs">
+                  📎 {[commentTarget.exerciseName, commentTarget.sectionName, session.name, entry.date ? new Date(entry.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : undefined].filter(Boolean).join(' · ')}
+                </DialogDescription>
+              )}
+            </DialogHeader>
+            <div className="flex items-end gap-2 mt-1">
+              <Textarea
+                autoFocus
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                placeholder="Write your comment…"
+                rows={3}
+                className="flex-1 resize-none text-sm"
+              />
+              <Button
+                size="icon"
+                className="h-10 w-10 shrink-0"
+                disabled={!commentText.trim() || commentSending}
+                onClick={async () => {
+                  if (!commentText.trim() || commentSending || !commentTarget) return;
+                  setCommentSending(true);
+                  try {
+                    await chatSend(commentText, {
+                      messageType: 'exercise_comment',
+                      reference: {
+                        exerciseName: commentTarget.exerciseName,
+                        sectionName: commentTarget.sectionName,
+                        sessionName: session.name,
+                        date: entry.date,
+                      },
+                    });
+                    setCommentTarget(null);
+                    setCommentText('');
+                  } catch {
+                    // silent
+                  } finally {
+                    setCommentSending(false);
+                  }
+                }}
+              >
+                {commentSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* ── Swap dialog (centered) ────────────────────────────────────────── */}
         <Dialog open={!!swapSheetEx} onOpenChange={o => { if (!o) { setSwapSheetEx(null); setSwapSelectedEntry(null); setSwapReason(''); } }}>

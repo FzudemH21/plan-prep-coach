@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import type { MonitoringConfig } from '@/types/athlete';
 
 export interface AthleteProfileData {
   firstName?: string;
@@ -18,6 +19,8 @@ export interface AthleteProfileData {
   team?: string | null;
   occupation?: string | null;
   dailyActivityLevel?: string | null;
+  /** Monitoring check-in config — stored here to keep athlete app access without extra columns */
+  monitoringConfig?: MonitoringConfig | null;
 }
 
 export interface AthleteConnection {
@@ -32,11 +35,13 @@ export interface AthleteConnection {
   createdAt: string;
   weeksAhead: number;
   monitoringEnabled: boolean;
+  monitoringConfig: MonitoringConfig | null;
   allowRearrangeWorkouts: boolean;
   profileData: AthleteProfileData;
 }
 
 function rowToConnection(row: Record<string, unknown>): AthleteConnection {
+  const profileData = (row.profile_data as AthleteProfileData) ?? {};
   return {
     id: row.id as string,
     coachUserId: row.coach_user_id as string,
@@ -49,8 +54,9 @@ function rowToConnection(row: Record<string, unknown>): AthleteConnection {
     createdAt: row.created_at as string,
     weeksAhead: (row.weeks_ahead as number) ?? 4,
     monitoringEnabled: (row.monitoring_enabled as boolean) ?? true,
+    monitoringConfig: profileData.monitoringConfig ?? null,
     allowRearrangeWorkouts: (row.allow_rearrange_workouts as boolean) ?? false,
-    profileData: (row.profile_data as AthleteProfileData) ?? {},
+    profileData,
   };
 }
 
@@ -139,6 +145,24 @@ export function useAthleteConnections() {
     );
   }, []);
 
+  /** Save the monitoring check-in configuration for an athlete.
+   *  Stored inside profile_data to avoid requiring a schema migration. */
+  const updateMonitoringConfig = useCallback(async (connectionId: string, config: MonitoringConfig | null) => {
+    const conn = connections.find(c => c.id === connectionId);
+    if (!conn) return;
+    const newProfileData: AthleteProfileData = { ...conn.profileData, monitoringConfig: config };
+    const { error } = await supabase
+      .from('athlete_connections')
+      .update({ profile_data: newProfileData })
+      .eq('id', connectionId);
+    if (error) throw error;
+    setConnections(prev =>
+      prev.map(c => c.id === connectionId
+        ? { ...c, monitoringConfig: config, profileData: newProfileData }
+        : c)
+    );
+  }, [connections]);
+
   /** Enable or disable session rearranging for an athlete. */
   const updateAllowRearrangeWorkouts = useCallback(async (connectionId: string, enabled: boolean) => {
     const { error } = await supabase
@@ -176,6 +200,7 @@ export function useAthleteConnections() {
     revokeConnection,
     updateWeeksAhead,
     updateMonitoringEnabled,
+    updateMonitoringConfig,
     updateAllowRearrangeWorkouts,
     getConnectionForAthlete,
     reload: load,

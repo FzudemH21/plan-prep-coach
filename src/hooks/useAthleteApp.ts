@@ -87,6 +87,7 @@ export interface AthleteCalendarEvent {
   notes?: string;
   targetValue?: string;
   unit?: string;
+  parameterId?: string;   // links to ParameterV2 — set on test events so athlete can submit results
 }
 
 export interface AthleteScheduleEntry {
@@ -306,20 +307,20 @@ export function useAthleteApp() {
     const existingToSessions = (toRow?.sessions as SessionSummary[]) ?? [];
     const newToSessions = [...existingToSessions, { ...session, order: existingToSessions.length }];
 
-    // Update source row
+    // Update source row (filter by connection + date, not by id which may be undefined)
     await supabase
       .from('athlete_schedule')
       .update({ sessions: newFromSessions })
-      .eq('id', fromRow?.id)
-      .eq('athlete_connection_id', connection.id);
+      .eq('athlete_connection_id', connection.id)
+      .eq('date', fromDate);
 
     // Upsert target row (may not exist yet for that date)
     if (toRow) {
       await supabase
         .from('athlete_schedule')
         .update({ sessions: newToSessions })
-        .eq('id', toRow.id)
-        .eq('athlete_connection_id', connection.id);
+        .eq('athlete_connection_id', connection.id)
+        .eq('date', toDate);
     } else {
       await supabase
         .from('athlete_schedule')
@@ -341,5 +342,25 @@ export function useAthleteApp() {
     });
   }, [connection, schedule]);
 
-  return { connection, schedule, sessionLogs, loading, error, isAthlete, getTodayEntry, getUpcomingDays, updateProfile, getSessionLog, refetchLogs, moveSession };
+  /** Submit an athlete-entered test result for a performance parameter. */
+  const submitTestResult = useCallback(async (
+    parameterId: string,
+    value: string,
+    recordedAt: string,
+    note?: string,
+  ) => {
+    if (!connection) return;
+    const { error } = await supabase
+      .from('athlete_test_results')
+      .insert({
+        athlete_connection_id: connection.id,
+        parameter_id: parameterId,
+        value,
+        recorded_at: recordedAt,
+        note: note ?? null,
+      });
+    if (error) throw error;
+  }, [connection]);
+
+  return { connection, schedule, sessionLogs, loading, error, isAthlete, getTodayEntry, getUpcomingDays, updateProfile, getSessionLog, refetchLogs, moveSession, submitTestResult };
 }

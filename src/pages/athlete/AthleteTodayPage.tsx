@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react';
-import { BedDouble, Dumbbell, ChevronRight, Activity, CalendarDays, CheckCircle2 } from 'lucide-react';
+import { BedDouble, Dumbbell, ChevronRight, Activity, CalendarDays, CheckCircle2, ClipboardCheck } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Sheet } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent, SessionLog } from '@/hooks/useAthleteApp';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -112,24 +117,35 @@ function RestDay() {
   );
 }
 
-function TestCard({ ev }: { ev: AthleteCalendarEvent }) {
+function TestCard({ ev, onEnterResult }: { ev: AthleteCalendarEvent; onEnterResult?: (ev: AthleteCalendarEvent) => void }) {
   return (
     <Card className="border-amber-200 bg-amber-50/60">
-      <CardContent className="flex items-start gap-3 p-3">
-        <div className="w-8 h-8 rounded-md bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
-          <Activity className="h-4 w-4 text-amber-600" />
+      <CardContent className="p-3">
+        <div className="flex items-start gap-3">
+          <div className="w-8 h-8 rounded-md bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+            <Activity className="h-4 w-4 text-amber-600" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium text-sm text-amber-900">{ev.title}</p>
+            {ev.targetValue && (
+              <p className="text-xs text-amber-700 mt-0.5">
+                <span className="font-medium">Goal:</span> {ev.targetValue}{ev.unit ? ` ${ev.unit}` : ''}
+              </p>
+            )}
+            {ev.notes && (
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{ev.notes}</p>
+            )}
+          </div>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="font-medium text-sm text-amber-900">{ev.title}</p>
-          {ev.targetValue && (
-            <p className="text-xs text-amber-700 mt-0.5">
-              <span className="font-medium">Goal:</span> {ev.targetValue}{ev.unit ? ` ${ev.unit}` : ''}
-            </p>
-          )}
-          {ev.notes && (
-            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{ev.notes}</p>
-          )}
-        </div>
+        {ev.parameterId && onEnterResult && (
+          <button
+            onClick={() => onEnterResult(ev)}
+            className="mt-2.5 w-full flex items-center justify-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 active:bg-amber-300 rounded-md py-1.5 transition-colors"
+          >
+            <ClipboardCheck className="h-3.5 w-3.5" />
+            Enter result
+          </button>
+        )}
       </CardContent>
     </Card>
   );
@@ -156,9 +172,11 @@ function EventCard({ ev }: { ev: AthleteCalendarEvent }) {
 function TodaySchedule({
   entry,
   getSessionLog,
+  onEnterTestResult,
 }: {
   entry: AthleteScheduleEntry | null;
   getSessionLog: (date: string, sessionId: string) => SessionLog | null;
+  onEnterTestResult: (ev: AthleteCalendarEvent) => void;
 }) {
   const hasSessions = (entry?.sessions.length ?? 0) > 0;
   const tests  = (entry?.events ?? []).filter(e => e.type === 'test');
@@ -177,7 +195,7 @@ function TodaySchedule({
       {tests.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground">Tests</p>
-          {tests.map(ev => <TestCard key={ev.id} ev={ev} />)}
+          {tests.map(ev => <TestCard key={ev.id} ev={ev} onEnterResult={onEnterTestResult} />)}
         </div>
       )}
 
@@ -239,10 +257,38 @@ function UpcomingStrip({ schedule }: { schedule: AthleteScheduleEntry[] }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function AthleteTodayPage() {
-  const { connection, schedule, loading, error, getTodayEntry, getSessionLog } = useAthleteApp();
+  const { connection, schedule, loading, error, getTodayEntry, getSessionLog, submitTestResult } = useAthleteApp();
   const connectionId = connection?.id ?? null;
   const { todayCheckin, saveCheckin } = useDailyCheckin(connectionId);
   const [checkinOpen, setCheckinOpen] = useState(false);
+
+  // ── Test result sheet ───────────────────────────────────────────────────────
+  const [testSheetEvent, setTestSheetEvent] = useState<AthleteCalendarEvent | null>(null);
+  const [testValue, setTestValue] = useState('');
+  const [testNote, setTestNote] = useState('');
+  const [testSaving, setTestSaving] = useState(false);
+  const [testSaved, setTestSaved] = useState(false);
+
+  const openTestSheet = (ev: AthleteCalendarEvent) => {
+    setTestSheetEvent(ev);
+    setTestValue('');
+    setTestNote('');
+    setTestSaved(false);
+  };
+
+  const handleSaveTestResult = async () => {
+    if (!testSheetEvent || !testValue.trim() || !testSheetEvent.parameterId) return;
+    setTestSaving(true);
+    try {
+      const recordedAt = new Date().toISOString();
+      await submitTestResult(testSheetEvent.parameterId, testValue.trim(), recordedAt, testNote.trim() || undefined);
+      setTestSaved(true);
+      setTimeout(() => setTestSheetEvent(null), 1200);
+    } finally {
+      setTestSaving(false);
+    }
+  };
+  // ───────────────────────────────────────────────────────────────────────────
 
   // Open check-in sheet once per day if not yet completed and monitoring is enabled
   useEffect(() => {
@@ -277,7 +323,60 @@ export default function AthleteTodayPage() {
         onClose={() => setCheckinOpen(false)}
         onSave={saveCheckin}
         athleteName={connection?.athleteName}
+        monitoringConfig={connection?.profileData?.monitoringConfig ?? undefined}
       />
+
+      {/* Test result dialog */}
+      <Dialog open={!!testSheetEvent} onOpenChange={open => { if (!open) setTestSheetEvent(null); }}>
+        <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base">
+              {testSheetEvent?.title ?? 'Enter result'}
+            </DialogTitle>
+            {testSheetEvent?.targetValue && (
+              <DialogDescription>
+                Goal: {testSheetEvent.targetValue}{testSheetEvent.unit ? ` ${testSheetEvent.unit}` : ''}
+              </DialogDescription>
+            )}
+          </DialogHeader>
+
+          <div className="space-y-4 mt-1">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">
+                Result{testSheetEvent?.unit ? ` (${testSheetEvent.unit})` : ''}
+              </label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                placeholder="Enter value…"
+                value={testValue}
+                onChange={e => setTestValue(e.target.value)}
+                className="text-base h-11"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block text-muted-foreground">
+                Note <span className="font-normal">(optional)</span>
+              </label>
+              <Textarea
+                placeholder="Any context, conditions, remarks…"
+                value={testNote}
+                onChange={e => setTestNote(e.target.value)}
+                rows={2}
+                className="resize-none"
+              />
+            </div>
+            <Button
+              className="w-full h-11"
+              disabled={!testValue.trim() || testSaving || testSaved}
+              onClick={handleSaveTestResult}
+            >
+              {testSaved ? '✓ Saved' : testSaving ? 'Saving…' : 'Save result'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="p-4 space-y-6">
         {/* Greeting */}
@@ -288,8 +387,12 @@ export default function AthleteTodayPage() {
           <p className="text-sm text-muted-foreground mt-0.5">{formatDate(new Date())}</p>
         </div>
 
-        {/* Today's schedule — always rendered (shows Rest Day if no sessions/events) */}
-        <TodaySchedule entry={todayEntry} getSessionLog={getSessionLog} />
+        {/* Today's schedule */}
+        <TodaySchedule
+          entry={todayEntry}
+          getSessionLog={getSessionLog}
+          onEnterTestResult={openTestSheet}
+        />
 
         {/* Upcoming strip */}
         <UpcomingStrip schedule={schedule} />

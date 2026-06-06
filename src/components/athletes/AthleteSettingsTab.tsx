@@ -1,9 +1,13 @@
 import { useMemo, useState } from 'react';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import type { DropResult } from '@hello-pangea/dnd';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -19,7 +23,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import {
   Scale,
@@ -34,9 +37,24 @@ import {
   Link2,
   UserX,
   Activity,
+  GripVertical,
+  Plus,
+  Trash2,
+  Info,
+  ChevronRight,
+  ChevronLeft,
 } from 'lucide-react';
-import { Athlete, AthleteSettings, DEFAULT_ATHLETE_SETTINGS } from '@/types/athlete';
+import {
+  Athlete,
+  AthleteSettings,
+  DEFAULT_ATHLETE_SETTINGS,
+  MonitoringConfig,
+  MonitoringBlock,
+  DEFAULT_MONITORING_CONFIG,
+} from '@/types/athlete';
+import type { CustomMetricBlockConfig } from '@/types/athlete';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
+import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -405,13 +423,42 @@ function RearrangeWorkoutsCard({ athlete }: { athlete: Athlete }) {
 }
 
 function MonitoringCard({ athlete }: { athlete: Athlete }) {
-  const { getConnectionForAthlete, updateMonitoringEnabled } = useAthleteConnections();
+  const { getConnectionForAthlete, updateMonitoringEnabled, updateMonitoringConfig } = useAthleteConnections();
+  const { data: paramDb } = useParametersDataV2();
   const connection = getConnectionForAthlete(athlete.id);
   const [saving, setSaving] = useState(false);
 
+  // Add-block dialog state
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [addStep, setAddStep] = useState<'pick_param' | 'configure'>('pick_param');
+  const [selectedParam, setSelectedParam] = useState<{ id: string; name: string; unit?: string } | null>(null);
+  const [inputType, setInputType] = useState<'number' | 'scale'>('number');
+  const [scaleMin, setScaleMin] = useState(0);
+  const [scaleMax, setScaleMax] = useState(10);
+  const [scaleMinLabel, setScaleMinLabel] = useState('');
+  const [scaleMaxLabel, setScaleMaxLabel] = useState('');
+  const [customLabel, setCustomLabel] = useState('');
+  const [paramSearch, setParamSearch] = useState('');
+
+  const config: MonitoringConfig = useMemo(
+    () => connection?.profileData?.monitoringConfig ?? DEFAULT_MONITORING_CONFIG,
+    [connection?.profileData?.monitoringConfig],
+  );
+
   if (!connection) return null;
 
-  const handleToggle = async (enabled: boolean) => {
+  const saveConfig = async (newConfig: MonitoringConfig) => {
+    setSaving(true);
+    try {
+      await updateMonitoringConfig(connection.id, newConfig);
+    } catch (e) {
+      console.error('Failed to save monitoring config', e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleMasterToggle = async (enabled: boolean) => {
     setSaving(true);
     try {
       await updateMonitoringEnabled(connection.id, enabled);
@@ -422,28 +469,312 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
     }
   };
 
+  const handleBlockToggle = (blockId: string, enabled: boolean) => {
+    saveConfig({ blocks: config.blocks.map(b => b.id === blockId ? { ...b, enabled } : b) });
+  };
+
+  const handleDragEnd = (result: DropResult) => {
+    if (!result.destination) return;
+    const blocks = [...config.blocks];
+    const [moved] = blocks.splice(result.source.index, 1);
+    blocks.splice(result.destination.index, 0, moved);
+    saveConfig({ blocks });
+  };
+
+  const handleRemoveBlock = (blockId: string) => {
+    saveConfig({ blocks: config.blocks.filter(b => b.id !== blockId) });
+  };
+
+  const closeAddDialog = () => {
+    setShowAddDialog(false);
+    setAddStep('pick_param');
+    setSelectedParam(null);
+    setInputType('number');
+    setScaleMin(0);
+    setScaleMax(10);
+    setScaleMinLabel('');
+    setScaleMaxLabel('');
+    setCustomLabel('');
+    setParamSearch('');
+  };
+
+  const handleAddBlock = () => {
+    if (!selectedParam) return;
+    const blockConfig: CustomMetricBlockConfig = {
+      parameterId: selectedParam.id,
+      parameterName: selectedParam.name,
+      parameterUnit: selectedParam.unit ?? null,
+      inputType,
+      label: customLabel.trim() || undefined,
+      ...(inputType === 'scale' ? {
+        scaleMin,
+        scaleMax,
+        scaleAnchors: [
+          ...(scaleMinLabel.trim() ? [{ value: scaleMin, label: scaleMinLabel.trim() }] : []),
+          ...(scaleMaxLabel.trim() ? [{ value: scaleMax, label: scaleMaxLabel.trim() }] : []),
+        ],
+      } : {}),
+    };
+    const newBlock: MonitoringBlock = {
+      id: String(Date.now()), // step name in DailyCheckinSheet = `custom_${id}`
+      type: 'custom_metric',
+      enabled: true,
+      config: blockConfig,
+    };
+    saveConfig({ blocks: [...config.blocks, newBlock] });
+    closeAddDialog();
+  };
+
+  const filteredParams = (paramDb?.parameters ?? []).filter(p =>
+    p.name.toLowerCase().includes(paramSearch.toLowerCase())
+  );
+
+  const blockLabel = (block: MonitoringBlock): string => {
+    if (block.type === 'wellbeing') return 'Wellbeing Questionnaire';
+    if (block.type === 'ostrc') return 'OSTRC-H / Body Map';
+    return block.config?.parameterName ?? 'Custom Metric';
+  };
+
+  const blockSubLabel = (block: MonitoringBlock): string => {
+    if (block.type === 'wellbeing') return 'McLean 5-item scale';
+    if (block.type === 'ostrc') return 'Pain & illness screening';
+    const it = block.config?.inputType === 'scale' ? 'Scale' : 'Number';
+    const unit = block.config?.parameterUnit ? ` · ${block.config.parameterUnit}` : '';
+    return `${it}${unit}`;
+  };
+
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-2">
-          <Activity className="h-4 w-4 text-muted-foreground" />
-          <CardTitle className="text-base">Daily Monitoring</CardTitle>
-        </div>
-        <CardDescription>
-          When enabled, the athlete is prompted with a daily check-in on first app open each day:
-          wellness (McLean 5-item), pain location &amp; severity (body map + NRS), and illness symptoms (OSTRC-H).
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="divide-y border rounded-lg">
-        <FeatureToggle
-          label="Daily check-in"
-          description="Athlete sees the wellness + pain/illness questionnaire each morning"
-          checked={connection.monitoringEnabled}
-          onCheckedChange={handleToggle}
-        />
-        {saving && <p className="text-xs text-muted-foreground px-1 py-2">Saving…</p>}
-      </CardContent>
-    </Card>
+    <>
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Activity className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-base">Daily Monitoring</CardTitle>
+          </div>
+          <CardDescription>
+            Configure which check-in blocks the athlete sees each morning. Drag to reorder.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Master toggle */}
+          <div className="divide-y border rounded-lg">
+            <FeatureToggle
+              label="Daily check-in"
+              description="Athlete is prompted with a check-in on first app open each day"
+              checked={connection.monitoringEnabled}
+              onCheckedChange={handleMasterToggle}
+            />
+            {saving && <p className="text-xs text-muted-foreground px-3 py-2">Saving…</p>}
+          </div>
+
+          {/* Block list — only visible when master toggle is on */}
+          {connection.monitoringEnabled && (
+            <div className="space-y-3">
+              <p className="text-sm font-medium">Check-in Blocks</p>
+
+              <DragDropContext onDragEnd={handleDragEnd}>
+                <Droppable droppableId="monitoring-blocks">
+                  {(provided) => (
+                    <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
+                      {config.blocks.map((block, index) => (
+                        <Draggable key={block.id} draggableId={block.id} index={index}>
+                          {(drag, snapshot) => (
+                            <div
+                              ref={drag.innerRef}
+                              {...drag.draggableProps}
+                              className={cn(
+                                'flex items-center gap-2 rounded-lg border bg-card px-3 py-2.5 transition-shadow',
+                                snapshot.isDragging && 'shadow-md ring-1 ring-primary/20',
+                              )}
+                            >
+                              <div
+                                {...drag.dragHandleProps}
+                                className="text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing shrink-0"
+                              >
+                                <GripVertical className="h-4 w-4" />
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <p className={cn('text-sm font-medium truncate', !block.enabled && 'text-muted-foreground')}>
+                                  {blockLabel(block)}
+                                </p>
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {blockSubLabel(block)}
+                                </p>
+                              </div>
+
+                              <Switch
+                                checked={block.enabled}
+                                onCheckedChange={v => handleBlockToggle(block.id, v)}
+                                className="shrink-0"
+                              />
+
+                              {block.type === 'custom_metric' && (
+                                <button
+                                  onClick={() => handleRemoveBlock(block.id)}
+                                  className="shrink-0 ml-1 text-muted-foreground/50 hover:text-destructive transition-colors"
+                                  title="Remove block"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </DragDropContext>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full gap-1.5"
+                onClick={() => setShowAddDialog(true)}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Metric Block
+              </Button>
+
+              <div className="flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground">
+                <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                <span>
+                  A free-text notes field is always shown at the end of every check-in, regardless of which blocks are active.
+                </span>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Add metric block dialog ───────────────────────────────────────── */}
+      <Dialog open={showAddDialog} onOpenChange={open => { if (!open) closeAddDialog(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {addStep === 'pick_param' ? 'Add Metric Block' : `Configure: ${selectedParam?.name}`}
+            </DialogTitle>
+            <DialogDescription>
+              {addStep === 'pick_param'
+                ? 'Choose a performance parameter from your database.'
+                : 'Set the input type and an optional label for this metric.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {addStep === 'pick_param' && (
+            <div className="space-y-3 py-1">
+              <Input
+                placeholder="Search parameters…"
+                value={paramSearch}
+                onChange={e => setParamSearch(e.target.value)}
+                autoFocus
+              />
+              <ScrollArea className="h-56 border rounded-lg">
+                {filteredParams.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-10">
+                    {paramDb?.parameters.length === 0
+                      ? 'No parameters yet. Add them in the Parameter Database first.'
+                      : 'No matches found.'}
+                  </p>
+                ) : (
+                  <div className="divide-y">
+                    {filteredParams.map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => { setSelectedParam(p); setAddStep('configure'); }}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/60 text-left transition-colors"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{p.name}</p>
+                          {p.unit && <p className="text-xs text-muted-foreground">{p.unit}</p>}
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+            </div>
+          )}
+
+          {addStep === 'configure' && selectedParam && (
+            <div className="space-y-4 py-1">
+              {/* Input type toggle */}
+              <div className="space-y-1.5">
+                <Label>Input type</Label>
+                <div className="flex rounded-md border overflow-hidden w-fit">
+                  <button
+                    onClick={() => setInputType('number')}
+                    className={cn('px-4 py-2 text-sm transition-colors', inputType === 'number' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted')}
+                  >
+                    Number{selectedParam.unit ? ` (${selectedParam.unit})` : ''}
+                  </button>
+                  <button
+                    onClick={() => setInputType('scale')}
+                    className={cn('px-4 py-2 text-sm transition-colors border-l', inputType === 'scale' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted')}
+                  >
+                    Scale
+                  </button>
+                </div>
+              </div>
+
+              {/* Scale config */}
+              {inputType === 'scale' && (
+                <div className="rounded-lg bg-muted/30 p-3 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Min value</Label>
+                      <Input type="number" value={scaleMin} onChange={e => setScaleMin(Number(e.target.value))} className="h-8" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Max value</Label>
+                      <Input type="number" value={scaleMax} onChange={e => setScaleMax(Number(e.target.value))} className="h-8" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Label for {scaleMin} (optional)</Label>
+                      <Input placeholder="e.g. None" value={scaleMinLabel} onChange={e => setScaleMinLabel(e.target.value)} className="h-8" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Label for {scaleMax} (optional)</Label>
+                      <Input placeholder="e.g. Severe" value={scaleMaxLabel} onChange={e => setScaleMaxLabel(e.target.value)} className="h-8" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Custom label */}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Question label (optional)</Label>
+                <Input
+                  placeholder={`e.g. What is your ${selectedParam.name.toLowerCase()} today?`}
+                  value={customLabel}
+                  onChange={e => setCustomLabel(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Shown as the heading in the check-in. Defaults to the parameter name.</p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            {addStep === 'configure' && (
+              <Button variant="outline" onClick={() => setAddStep('pick_param')}>
+                <ChevronLeft className="h-4 w-4 mr-1" /> Back
+              </Button>
+            )}
+            <Button variant="outline" onClick={closeAddDialog}>Cancel</Button>
+            {addStep === 'configure' && (
+              <Button onClick={handleAddBlock} disabled={!selectedParam}>
+                Add Block
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -478,8 +809,7 @@ export function AthleteSettingsTab({ athlete, onUpdateAthlete }: AthleteSettings
   ];
 
   return (
-    <ScrollArea className="h-full">
-      <div className="p-4 space-y-4 max-w-2xl">
+    <div className="p-4 space-y-4 max-w-2xl" style={{ overflowAnchor: 'none' }}>
 
         {/* App Account */}
         <AppAccountCard athlete={athlete} />
@@ -672,7 +1002,6 @@ export function AthleteSettingsTab({ athlete, onUpdateAthlete }: AthleteSettings
           </CardContent>
         </Card>
 
-      </div>
-    </ScrollArea>
+    </div>
   );
 }

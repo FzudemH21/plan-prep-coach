@@ -100,6 +100,52 @@ export const getAthleteDisplayName = (athlete: Athlete): string => {
   return parts.join(' ') || 'Unnamed Athlete';
 };
 
+// ============ MONITORING CONFIG ============
+
+export type MonitoringBlockType = 'wellbeing' | 'ostrc' | 'custom_metric';
+export type CustomMetricInputType = 'number' | 'scale';
+
+export interface ScaleAnchor {
+  value: number;
+  label: string;
+}
+
+export interface CustomMetricBlockConfig {
+  /** ParameterV2 id — values are saved as athlete_test_results entries */
+  parameterId: string;
+  /** Cached display name */
+  parameterName: string;
+  /** Cached unit (e.g. "bpm", "kg") or null */
+  parameterUnit: string | null;
+  /** How the athlete inputs the value */
+  inputType: CustomMetricInputType;
+  /** Optional custom question label shown to athlete */
+  label?: string;
+  // Scale-specific
+  scaleMin?: number;
+  scaleMax?: number;
+  scaleAnchors?: ScaleAnchor[];
+}
+
+export interface MonitoringBlock {
+  id: string;
+  type: MonitoringBlockType;
+  enabled: boolean;
+  /** Only present when type === 'custom_metric' */
+  config?: CustomMetricBlockConfig;
+}
+
+export interface MonitoringConfig {
+  blocks: MonitoringBlock[];
+}
+
+export const DEFAULT_MONITORING_CONFIG: MonitoringConfig = {
+  blocks: [
+    { id: 'wellbeing', type: 'wellbeing', enabled: true },
+    { id: 'ostrc', type: 'ostrc', enabled: true },
+  ],
+};
+
 // ============ BIOMETRICS (Health Metrics) ============
 // For trackable health metrics like Height, Weight, Resting HR, etc.
 
@@ -117,6 +163,10 @@ export interface ParameterValue {
   id: string;
   value: string;
   recordedAt: string;
+  /** True when this value was entered by the athlete themselves in the athlete app. */
+  selfReported?: boolean;
+  /** Optional note left by the athlete when entering a self-reported value. */
+  note?: string;
 }
 
 export interface AthleteBiometric {

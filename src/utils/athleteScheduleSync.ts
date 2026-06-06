@@ -428,7 +428,7 @@ export async function syncAthleteSchedule(
   }
 
   // Build events-by-date lookup
-  const eventsByDate = new Map<string, Array<{ id: string; type: string; title: string; notes?: string; targetValue?: string; unit?: string }>>();
+  const eventsByDate = new Map<string, Array<{ id: string; type: string; title: string; notes?: string; targetValue?: string; unit?: string; parameterId?: string }>>();
   for (const ev of calendarEvents ?? []) {
     if (!eventsByDate.has(ev.date)) eventsByDate.set(ev.date, []);
     eventsByDate.get(ev.date)!.push({
@@ -438,6 +438,7 @@ export async function syncAthleteSchedule(
       notes: ev.notes,
       targetValue: ev.targetValue,
       unit: ev.unit,
+      parameterId: ev.parameterId,
     });
   }
 

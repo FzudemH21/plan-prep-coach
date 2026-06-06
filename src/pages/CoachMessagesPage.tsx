@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { useChat, useUnreadCounts } from '@/hooks/useChat';
 import { useAuth } from '@/hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 
 function formatMessageDate(iso: string): string {
   const d = parseISO(iso);
@@ -29,13 +30,16 @@ function dayLabel(iso: string): string {
 function ThreadView({
   connectionId,
   athleteName,
+  athleteLocalId,
   onBack,
 }: {
   connectionId: string;
   athleteName: string;
+  athleteLocalId: string;
   onBack: () => void;
 }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { messages, loading, sendMessage, markRead } = useChat({
     connectionId,
     callerRole: 'coach',
@@ -121,17 +125,27 @@ function ThreadView({
                 return (
                   <div key={msg.id} className={cn('flex flex-col', isOwn ? 'items-end' : 'items-start')}>
                     {msg.messageType === 'exercise_comment' && msg.reference && (
-                      <div className={cn(
-                        'text-xs px-2 py-0.5 rounded-full mb-0.5 max-w-[80%]',
-                        isOwn ? 'bg-primary/10 text-primary' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
-                      )}>
+                      <button
+                        onClick={() => navigate('/athletes', {
+                          state: {
+                            openAthleteId: athleteLocalId,
+                            defaultTab: 'calendar',
+                            defaultCalendarDate: msg.reference?.date,
+                            defaultCalendarSessionName: msg.reference?.sessionName,
+                          },
+                        })}
+                        className={cn(
+                          'text-xs px-2 py-0.5 rounded-full mb-0.5 max-w-[80%] text-left hover:opacity-80 active:opacity-60 transition-opacity hover:underline underline-offset-2',
+                          isOwn ? 'bg-primary/10 text-primary' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+                        )}
+                      >
                         📎 {[
                           msg.reference.exerciseName,
                           msg.reference.sectionName,
                           msg.reference.sessionName,
                           msg.reference.date ? format(parseISO(msg.reference.date + 'T12:00:00'), 'd MMM yyyy') : undefined,
                         ].filter(Boolean).join(' · ')}
-                      </div>
+                      </button>
                     )}
                     <div className={cn(
                       'max-w-[75%] px-3 py-2 rounded-2xl text-sm break-words',
@@ -204,6 +218,7 @@ export default function CoachMessagesPage() {
       <ThreadView
         connectionId={selectedId}
         athleteName={selectedConn.athleteName}
+        athleteLocalId={selectedConn.athleteLocalId}
         onBack={() => setSelectedId(null)}
       />
     );

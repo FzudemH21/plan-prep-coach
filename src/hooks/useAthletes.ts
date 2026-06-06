@@ -215,8 +215,8 @@ export function useAthletes() {
     await setData(prev => ({ ...prev, athleteBiometrics: prev.athleteBiometrics.filter(ab => ab.id !== athleteBiometricId) }));
   }, [setData]);
 
-  const addBiometricValue = useCallback(async (athleteBiometricId: string, value: string, recordedAt?: string): Promise<ParameterValue> => {
-    const newValue: ParameterValue = { id: generateId(), value, recordedAt: recordedAt ?? new Date().toISOString() };
+  const addBiometricValue = useCallback(async (athleteBiometricId: string, value: string, recordedAt?: string, note?: string): Promise<ParameterValue> => {
+    const newValue: ParameterValue = { id: generateId(), value, recordedAt: recordedAt ?? new Date().toISOString(), note: note || undefined };
     await setData(prev => ({
       ...prev,
       athleteBiometrics: prev.athleteBiometrics.map(ab =>
@@ -260,8 +260,8 @@ export function useAthletes() {
     await setData(prev => ({ ...prev, athletePerformanceParameters: prev.athletePerformanceParameters.filter(pp => pp.id !== performanceParameterId) }));
   }, [setData]);
 
-  const addPerformanceParameterValue = useCallback(async (performanceParameterId: string, value: string, recordedAt?: string): Promise<ParameterValue> => {
-    const newValue: ParameterValue = { id: generateId(), value, recordedAt: recordedAt ?? new Date().toISOString() };
+  const addPerformanceParameterValue = useCallback(async (performanceParameterId: string, value: string, recordedAt?: string, note?: string): Promise<ParameterValue> => {
+    const newValue: ParameterValue = { id: generateId(), value, recordedAt: recordedAt ?? new Date().toISOString(), note: note || undefined };
     await setData(prev => ({
       ...prev,
       athletePerformanceParameters: prev.athletePerformanceParameters.map(pp =>

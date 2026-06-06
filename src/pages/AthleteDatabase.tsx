@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
@@ -9,7 +10,16 @@ import { Button } from '@/components/ui/button';
 import { Plus, Users } from 'lucide-react';
 import type { Athlete } from '@/types/athlete';
 
+interface NavState {
+  openAthleteId?: string;
+  defaultTab?: string;
+  defaultCalendarDate?: string;
+  defaultCalendarSessionName?: string;
+}
+
 export default function AthleteDatabase() {
+  const location = useLocation();
+  const navState = (location.state as NavState) ?? {};
   const athleteData = useAthletes();
   const { deleteEventsForAthlete } = useCalendarEvents();
   const { connections, loading: connectionsLoading, getConnectionForAthlete, syncProfileToConnection } = useAthleteConnections();
@@ -89,7 +99,7 @@ export default function AthleteDatabase() {
       }
     }
   }, [athleteData, getConnectionForAthlete, syncProfileToConnection]);
-  const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
+  const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(navState.openAthleteId ?? null);
   const [isNewAthlete, setIsNewAthlete] = useState(false);
   const [selectedGroupForNew, setSelectedGroupForNew] = useState<string | null>(null);
 
@@ -149,7 +159,7 @@ export default function AthleteDatabase() {
   };
 
   return (
-    <div className="h-[calc(100vh-120px)] flex gap-6">
+    <div className="h-full flex gap-6">
       {/* Sidebar */}
       <div className="w-80 shrink-0">
         <AthleteGroupSidebar
@@ -188,7 +198,7 @@ export default function AthleteDatabase() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 h-full overflow-hidden">
         {selectedAthlete ? (
           <AthleteProfileView
             athlete={selectedAthlete}
@@ -204,6 +214,9 @@ export default function AthleteDatabase() {
             isNewAthlete={isNewAthlete}
             onCancelNew={handleCancelNewAthlete}
             onSaveNew={handleSaveNewAthlete}
+            defaultTab={navState.defaultTab}
+            defaultCalendarDate={navState.defaultCalendarDate}
+            defaultCalendarSessionName={navState.defaultCalendarSessionName}
           />
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground">

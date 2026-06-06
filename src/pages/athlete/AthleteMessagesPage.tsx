@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils';
 import { useAthleteApp } from '@/hooks/useAthleteApp';
 import { useChat } from '@/hooks/useChat';
 import { useAuth } from '@/hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
+import type { MessageReference } from '@/hooks/useChat';
 
 function formatMessageDate(iso: string): string {
   const d = parseISO(iso);
@@ -24,8 +26,19 @@ function dayLabel(iso: string): string {
 }
 
 export default function AthleteMessagesPage() {
-  const { connection, loading: connLoading } = useAthleteApp();
+  const { connection, loading: connLoading, schedule } = useAthleteApp();
   const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const handleReferenceClick = (ref: MessageReference) => {
+    if (!ref.date || !schedule) return;
+    const entry = schedule.find((e) => e.date === ref.date);
+    if (!entry) return;
+    const sessionIdx = ref.sessionName
+      ? Math.max(0, entry.sessions.findIndex((s) => s.name === ref.sessionName))
+      : 0;
+    navigate('/athlete/session', { state: { entry, sessionIdx, log: null } });
+  };
   const connectionId = connection?.id ?? null;
 
   const { messages, loading, sendMessage, markRead } = useChat({
@@ -139,14 +152,17 @@ export default function AthleteMessagesPage() {
                     className={cn('flex flex-col', isOwn ? 'items-end' : 'items-start')}
                   >
                     {msg.messageType === 'exercise_comment' && msg.reference && (
-                      <div className={cn(
-                        'text-xs px-2 py-0.5 rounded-full mb-0.5 max-w-[80%]',
-                        isOwn
-                          ? 'bg-primary/10 text-primary self-end'
-                          : 'bg-muted text-muted-foreground self-start'
-                      )}>
+                      <button
+                        onClick={() => handleReferenceClick(msg.reference!)}
+                        className={cn(
+                          'text-xs px-2 py-0.5 rounded-full mb-0.5 max-w-[80%] text-left hover:opacity-80 active:opacity-60 transition-opacity hover:underline underline-offset-2',
+                          isOwn
+                            ? 'bg-primary/10 text-primary self-end'
+                            : 'bg-muted text-muted-foreground self-start'
+                        )}
+                      >
                         📎 {[msg.reference.exerciseName, msg.reference.sectionName, msg.reference.sessionName, msg.reference.date ? format(parseISO(msg.reference.date + 'T12:00:00'), 'd MMM yyyy') : undefined].filter(Boolean).join(' · ')}
-                      </div>
+                      </button>
                     )}
                     <div
                       className={cn(

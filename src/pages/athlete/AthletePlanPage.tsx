@@ -1,10 +1,14 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Dumbbell, ChevronRight, ChevronLeft, Activity, CalendarDays, CheckCircle2, GripVertical, X } from 'lucide-react';
+import { Dumbbell, ChevronRight, ChevronLeft, Activity, CalendarDays, CheckCircle2, GripVertical, ClipboardCheck } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent, SessionLog, SessionSummary } from '@/hooks/useAthleteApp';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { DragDropContext, Droppable, Draggable, DropResult, DraggableProvidedDragHandleProps } from '@hello-pangea/dnd';
+import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent, SessionLog } from '@/hooks/useAthleteApp';
 import { IntensityBadge } from '@/components/athlete-app/IntensityBadge';
 import { cn } from '@/lib/utils';
 
@@ -61,8 +65,8 @@ function SessionCard({
   isPast,
   log,
   canMove,
-  isMoving,
-  onMoveStart,
+  isDragging,
+  dragHandleProps,
 }: {
   session: AthleteScheduleEntry['sessions'][0];
   entry: AthleteScheduleEntry;
@@ -70,15 +74,15 @@ function SessionCard({
   isPast: boolean;
   log?: SessionLog | null;
   canMove?: boolean;
-  isMoving?: boolean;
-  onMoveStart?: () => void;
+  isDragging?: boolean;
+  dragHandleProps?: DraggableProvidedDragHandleProps | null;
 }) {
   const navigate = useNavigate();
   return (
     <Card
       className={cn(
         'transition-all',
-        isMoving ? 'ring-2 ring-primary border-primary' : '',
+        isDragging ? 'ring-2 ring-primary border-primary shadow-lg opacity-90' : '',
         log
           ? 'border-green-200 bg-green-50/50'
           : isPast
@@ -87,20 +91,20 @@ function SessionCard({
       )}
     >
       <CardContent className="flex items-center justify-between p-3">
-        {/* Move handle */}
+        {/* Drag handle — only shown when move is enabled and session not yet logged */}
         {canMove && !log && (
-          <button
-            className="mr-2 p-1 -ml-1 touch-manipulation text-muted-foreground active:text-primary"
-            onClick={e => { e.stopPropagation(); onMoveStart?.(); }}
-            aria-label="Move session"
+          <div
+            {...dragHandleProps}
+            className="mr-2 p-1 -ml-1 touch-manipulation text-muted-foreground cursor-grab active:cursor-grabbing"
+            aria-label="Drag to move session"
           >
             <GripVertical className="h-4 w-4" />
-          </button>
+          </div>
         )}
 
         <div
           className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer active:opacity-80"
-          onClick={() => !isMoving && navigate('/athlete/session', { state: { entry, sessionIdx: index, log } })}
+          onClick={() => !isDragging && navigate('/athlete/session', { state: { entry, sessionIdx: index, log } })}
         >
           <div className={cn(
             'w-8 h-8 rounded-md flex items-center justify-center shrink-0',
@@ -144,124 +148,143 @@ function DaySection({
   isToday,
   getSessionLog,
   canMove,
-  movingSession,
-  onMoveStart,
-  onMoveTo,
+  onEnterTestResult,
 }: {
   dateStr: string;
   entry: AthleteScheduleEntry | null;
   isToday: boolean;
   getSessionLog: (date: string, sessionId: string) => SessionLog | null;
   canMove?: boolean;
-  movingSession?: { sessionId: string; fromDate: string } | null;
-  onMoveStart?: (sessionId: string, fromDate: string) => void;
-  onMoveTo?: (toDate: string) => void;
+  onEnterTestResult: (ev: AthleteCalendarEvent, date: string) => void;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const isPast = dateStr < today;
   const { weekday, dateLabel } = formatDayHeader(dateStr);
   const hasSessions = (entry?.sessions.length ?? 0) > 0;
-  const isSourceDay = movingSession?.fromDate === dateStr;
-  const isMoveMode = !!movingSession;
 
   return (
     <div
       className={cn(
         'rounded-xl p-3 space-y-2',
-        isToday && !isMoveMode && 'bg-primary/5 ring-1 ring-primary/20',
-        isSourceDay && 'ring-2 ring-primary/40 bg-primary/5',
+        isToday && 'bg-primary/5 ring-1 ring-primary/20',
       )}
     >
       {/* Day header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={cn(
-            'text-sm font-semibold',
-            isToday ? 'text-primary' : isPast ? 'text-muted-foreground' : 'text-foreground'
-          )}>
-            {weekday}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className={cn(
+          'text-sm font-semibold',
+          isToday ? 'text-primary' : isPast ? 'text-muted-foreground' : 'text-foreground'
+        )}>
+          {weekday}
+        </span>
+        <span className="text-xs text-muted-foreground">{dateLabel}</span>
+        {isToday && (
+          <span className="text-xs font-medium text-primary bg-primary/10 rounded-full px-2 py-0.5">
+            Today
           </span>
-          <span className="text-xs text-muted-foreground">{dateLabel}</span>
-          {isToday && !isMoveMode && (
-            <span className="text-xs font-medium text-primary bg-primary/10 rounded-full px-2 py-0.5">
-              Today
-            </span>
-          )}
-        </div>
-
-        {/* "Move here" button */}
-        {isMoveMode && !isSourceDay && (
-          <button
-            onClick={() => onMoveTo?.(dateStr)}
-            className="text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 active:bg-primary/30 rounded-full px-3 py-1 transition-colors"
-          >
-            Move here
-          </button>
         )}
       </div>
 
       {/* Intensity badge */}
-      {entry?.intensity && !isMoveMode && <IntensityBadge intensity={entry.intensity} />}
+      {entry?.intensity && <IntensityBadge intensity={entry.intensity} />}
 
-      {/* Tests & events — above sessions */}
-      {!isMoveMode && (entry?.events ?? []).length > 0 && (
+      {/* Tests & events */}
+      {(entry?.events ?? []).length > 0 && (
         <div className="space-y-1.5">
           {entry!.events.map((ev: AthleteCalendarEvent) => (
             <div
               key={ev.id}
               className={cn(
-                'flex items-start gap-2 rounded-lg px-2.5 py-2 border text-xs',
-                isPast ? 'opacity-50' : '',
+                'rounded-lg px-2.5 py-2 border text-xs',
+                isPast ? 'opacity-60' : '',
                 ev.type === 'test'
                   ? 'border-amber-200 bg-amber-50/60'
                   : 'border-blue-200 bg-blue-50/60',
               )}
             >
-              {ev.type === 'test'
-                ? <Activity className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
-                : <CalendarDays className="h-3.5 w-3.5 text-blue-600 shrink-0 mt-0.5" />}
-              <div className="min-w-0">
-                <p className={cn('font-medium', ev.type === 'test' ? 'text-amber-800' : 'text-blue-800')}>
-                  {ev.title}
-                </p>
-                {ev.type === 'test' && ev.targetValue && (
-                  <p className="text-amber-700 mt-0.5">
-                    <span className="font-medium">Goal:</span> {ev.targetValue}{ev.unit ? ` ${ev.unit}` : ''}
+              <div className="flex items-start gap-2">
+                {ev.type === 'test'
+                  ? <Activity className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+                  : <CalendarDays className="h-3.5 w-3.5 text-blue-600 shrink-0 mt-0.5" />}
+                <div className="min-w-0 flex-1">
+                  <p className={cn('font-medium', ev.type === 'test' ? 'text-amber-800' : 'text-blue-800')}>
+                    {ev.title}
                   </p>
-                )}
-                {ev.notes && (
-                  <p className="text-muted-foreground mt-0.5 leading-relaxed">{ev.notes}</p>
-                )}
+                  {ev.type === 'test' && ev.targetValue && (
+                    <p className="text-amber-700 mt-0.5">
+                      <span className="font-medium">Goal:</span> {ev.targetValue}{ev.unit ? ` ${ev.unit}` : ''}
+                    </p>
+                  )}
+                  {ev.notes && (
+                    <p className="text-muted-foreground mt-0.5 leading-relaxed">{ev.notes}</p>
+                  )}
+                </div>
               </div>
+              {/* Enter result button — only for test events that have a linked parameter */}
+              {ev.type === 'test' && ev.parameterId && !isPast && (
+                <button
+                  onClick={() => onEnterTestResult(ev, dateStr)}
+                  className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 active:bg-amber-300 rounded-md py-1.5 transition-colors"
+                >
+                  <ClipboardCheck className="h-3.5 w-3.5" />
+                  Enter result
+                </button>
+              )}
             </div>
           ))}
         </div>
       )}
 
       {/* Sessions or rest */}
-      {hasSessions ? (
-        <div className="space-y-1.5">
-          {entry!.sessions.map((session, idx) => (
-            <SessionCard
-              key={session.id}
-              session={session}
-              entry={entry!}
-              index={idx}
-              isPast={isPast}
-              log={getSessionLog(dateStr, session.id)}
-              canMove={canMove}
-              isMoving={movingSession?.sessionId === session.id && movingSession?.fromDate === dateStr}
-              onMoveStart={() => onMoveStart?.(session.id, dateStr)}
-            />
-          ))}
-        </div>
-      ) : (
-        !isMoveMode && (
-          <p className={cn('text-xs', isPast ? 'text-muted-foreground/50' : 'text-muted-foreground')}>
-            Rest day
-          </p>
-        )
-      )}
+      <Droppable droppableId={dateStr} type="session">
+        {(provided, snapshot) => (
+          <div
+            ref={provided.innerRef}
+            {...provided.droppableProps}
+            className={cn(
+              'space-y-1.5 min-h-[4px] rounded-lg transition-colors',
+              snapshot.isDraggingOver && 'bg-primary/5 ring-1 ring-primary/30 p-1'
+            )}
+          >
+            {hasSessions ? (
+              entry!.sessions.map((session, idx) => {
+                const log = getSessionLog(dateStr, session.id);
+                return (
+                  <Draggable
+                    key={session.id}
+                    draggableId={session.id}
+                    index={idx}
+                    isDragDisabled={!canMove || !!log}
+                  >
+                    {(dragProvided, dragSnapshot) => (
+                      <div
+                        ref={dragProvided.innerRef}
+                        {...dragProvided.draggableProps}
+                      >
+                        <SessionCard
+                          session={session}
+                          entry={entry!}
+                          index={idx}
+                          isPast={isPast}
+                          log={log}
+                          canMove={canMove}
+                          isDragging={dragSnapshot.isDragging}
+                          dragHandleProps={dragProvided.dragHandleProps}
+                        />
+                      </div>
+                    )}
+                  </Draggable>
+                );
+              })
+            ) : (
+              <p className={cn('text-xs', isPast ? 'text-muted-foreground/50' : 'text-muted-foreground')}>
+                Rest day
+              </p>
+            )}
+            {provided.placeholder}
+          </div>
+        )}
+      </Droppable>
     </div>
   );
 }
@@ -269,56 +292,75 @@ function DaySection({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function AthletePlanPage() {
-  const { connection, schedule, loading, error, getSessionLog, moveSession } = useAthleteApp();
+  const { connection, schedule, loading, error, getSessionLog, moveSession, submitTestResult } = useAthleteApp();
 
   const today = new Date().toISOString().slice(0, 10);
   const currentWeekMonday = getMondayOf(today);
   const weeksAhead = connection?.weeksAhead ?? 4;
 
-  // Max week the athlete is allowed to see
   const maxWeekMonday = getMondayOf(addDays(today, weeksAhead * 7));
 
-  // Min week: earliest Monday in schedule data (don't go further back than that)
   const minWeekMonday = useMemo(() => {
     if (schedule.length === 0) return currentWeekMonday;
     return getMondayOf(schedule[0].date);
   }, [schedule, currentWeekMonday]);
 
   const [selectedWeek, setSelectedWeek] = useState<string>(currentWeekMonday);
-  const [movingSession, setMovingSession] = useState<{ sessionId: string; fromDate: string } | null>(null);
   const canMove = connection?.allowRearrangeWorkouts ?? false;
 
-  const handleMoveStart = (sessionId: string, fromDate: string) => {
-    setMovingSession({ sessionId, fromDate });
+  // ── Test result sheet state ───────────────────────────────────────────────
+  const [testSheetEvent, setTestSheetEvent] = useState<{ ev: AthleteCalendarEvent; date: string } | null>(null);
+  const [testValue, setTestValue] = useState('');
+  const [testNote, setTestNote] = useState('');
+  const [testSaving, setTestSaving] = useState(false);
+  const [testSaved, setTestSaved] = useState(false);
+
+  const openTestSheet = (ev: AthleteCalendarEvent, date: string) => {
+    setTestSheetEvent({ ev, date });
+    setTestValue('');
+    setTestNote('');
+    setTestSaved(false);
   };
 
-  const handleMoveTo = async (toDate: string) => {
-    if (!movingSession) return;
-    const { sessionId, fromDate } = movingSession;
-    setMovingSession(null);
-    await moveSession(sessionId, fromDate, toDate);
+  const handleSaveTestResult = async () => {
+    if (!testSheetEvent || !testValue.trim() || !testSheetEvent.ev.parameterId) return;
+    setTestSaving(true);
+    try {
+      const recordedAt = new Date(`${testSheetEvent.date}T12:00:00`).toISOString();
+      await submitTestResult(testSheetEvent.ev.parameterId, testValue.trim(), recordedAt, testNote.trim() || undefined);
+      setTestSaved(true);
+      setTimeout(() => setTestSheetEvent(null), 1200);
+    } finally {
+      setTestSaving(false);
+    }
   };
 
-  // Keep selectedWeek clamped if weeksAhead changes
+  // ─────────────────────────────────────────────────────────────────────────
+
   const clampedWeek = selectedWeek > maxWeekMonday ? maxWeekMonday : selectedWeek;
-
   const prevWeek = addDays(clampedWeek, -7);
   const nextWeek = addDays(clampedWeek, 7);
   const canGoPrev = prevWeek >= minWeekMonday;
   const canGoNext = nextWeek <= maxWeekMonday;
 
-  // Schedule lookup map
   const scheduleMap = useMemo(() => {
     const m = new Map<string, AthleteScheduleEntry>();
     schedule.forEach(e => m.set(e.date, e));
     return m;
   }, [schedule]);
 
-  // Days Mon–Sun for the selected week
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(clampedWeek, i)),
     [clampedWeek]
   );
+
+  const onDragEnd = (result: DropResult) => {
+    if (!result.destination) return;
+    const fromDate = result.source.droppableId;
+    const toDate = result.destination.droppableId;
+    if (fromDate === toDate) return;
+    moveSession(result.draggableId, fromDate, toDate);
+  };
 
   if (loading) {
     return (
@@ -373,37 +415,78 @@ export default function AthletePlanPage() {
         </button>
       </div>
 
-      {/* Move mode banner */}
-      {movingSession && (
-        <div className="flex items-center justify-between px-4 py-2.5 bg-primary/10 border-b shrink-0">
-          <p className="text-sm font-medium text-primary">Tap a day to move the session there</p>
-          <button
-            onClick={() => setMovingSession(null)}
-            className="p-1 rounded-full hover:bg-primary/20 active:bg-primary/30 text-primary"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      )}
-
       {/* Day list */}
-      <ScrollArea className="flex-1 px-4">
-        <div className="space-y-2 py-3 pb-4">
-          {weekDays.map(dateStr => (
-            <DaySection
-              key={dateStr}
-              dateStr={dateStr}
-              entry={scheduleMap.get(dateStr) ?? null}
-              isToday={dateStr === today}
-              getSessionLog={getSessionLog}
-              canMove={canMove}
-              movingSession={movingSession}
-              onMoveStart={handleMoveStart}
-              onMoveTo={handleMoveTo}
-            />
-          ))}
-        </div>
-      </ScrollArea>
+      <DragDropContext onDragEnd={onDragEnd}>
+        <ScrollArea className="flex-1 px-4">
+          <div className="space-y-2 py-3 pb-4">
+            {weekDays.map(dateStr => (
+              <DaySection
+                key={dateStr}
+                dateStr={dateStr}
+                entry={scheduleMap.get(dateStr) ?? null}
+                isToday={dateStr === today}
+                getSessionLog={getSessionLog}
+                canMove={canMove}
+                onEnterTestResult={openTestSheet}
+              />
+            ))}
+          </div>
+        </ScrollArea>
+      </DragDropContext>
+
+      {/* Test result entry dialog */}
+      <Dialog open={!!testSheetEvent} onOpenChange={open => { if (!open) setTestSheetEvent(null); }}>
+        <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base">
+              {testSheetEvent?.ev.title ?? 'Enter result'}
+            </DialogTitle>
+            {testSheetEvent?.ev.targetValue && (
+              <DialogDescription>
+                Goal: {testSheetEvent.ev.targetValue}{testSheetEvent.ev.unit ? ` ${testSheetEvent.ev.unit}` : ''}
+              </DialogDescription>
+            )}
+          </DialogHeader>
+
+          <div className="space-y-4 mt-1">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">
+                Result{testSheetEvent?.ev.unit ? ` (${testSheetEvent.ev.unit})` : ''}
+              </label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                placeholder="Enter value…"
+                value={testValue}
+                onChange={e => setTestValue(e.target.value)}
+                className="text-base h-11"
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1.5 block text-muted-foreground">
+                Note <span className="font-normal">(optional)</span>
+              </label>
+              <Textarea
+                placeholder="Any context, conditions, remarks…"
+                value={testNote}
+                onChange={e => setTestNote(e.target.value)}
+                rows={2}
+                className="resize-none"
+              />
+            </div>
+
+            <Button
+              className="w-full h-11"
+              disabled={!testValue.trim() || testSaving || testSaved}
+              onClick={handleSaveTestResult}
+            >
+              {testSaved ? '✓ Saved' : testSaving ? 'Saving…' : 'Save result'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

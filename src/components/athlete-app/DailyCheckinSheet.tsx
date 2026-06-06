@@ -12,6 +12,8 @@ import {
   getRegionKeyLabel,
 } from '@/lib/bodyMapData';
 import type { DailyCheckinInput } from '@/hooks/useDailyCheckin';
+import type { MonitoringConfig, MonitoringBlock } from '@/types/athlete';
+import { DEFAULT_MONITORING_CONFIG } from '@/types/athlete';
 
 // ── Body map images ───────────────────────────────────────────────────────────
 const FRONT_IMG = '/bodymap-front.png';
@@ -287,27 +289,60 @@ function BodyMap({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-type Step =
-  | 'wellness'
-  | 'wellness_confirm'
-  | 'health_q'
-  | 'body_map'
-  | 'illness_symptoms'
-  | 'illness_nrs'
-  | 'done';
+// Step is now a plain string to support dynamic custom_<blockId> steps and 'notes'.
+// Well-known step names: 'wellness' | 'wellness_confirm' | 'health_q' | 'body_map'
+//   | 'illness_symptoms' | 'illness_nrs' | 'notes' | `custom_${string}` | 'done'
+type Step = string;
 
 interface Props {
   open: boolean;
   onClose: () => void;
   onSave: (input: DailyCheckinInput) => Promise<boolean>;
   athleteName?: string;
+  monitoringConfig?: MonitoringConfig;
 }
 
-export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props) {
+// ── Navigation helpers (config-aware) ─────────────────────────────────────────
+
+/** Returns the ordered "main" steps — one entry per enabled block, then 'notes', 'done'. */
+function computeMainSteps(config?: MonitoringConfig): string[] {
+  const blocks = (config?.blocks ?? DEFAULT_MONITORING_CONFIG.blocks).filter(b => b.enabled);
+  const steps: string[] = [];
+  for (const b of blocks) {
+    if (b.type === 'wellbeing') steps.push('wellness');
+    else if (b.type === 'ostrc') steps.push('health_q');
+    else if (b.type === 'custom_metric') steps.push(`custom_${b.id}`);
+  }
+  steps.push('notes');
+  steps.push('done');
+  return steps;
+}
+
+function initialStep(config?: MonitoringConfig): string {
+  return computeMainSteps(config)[0] ?? 'notes';
+}
+
+function nextMainStep(currentMain: string, config?: MonitoringConfig): string {
+  const main = computeMainSteps(config);
+  const idx = main.indexOf(currentMain);
+  if (idx === -1 || idx >= main.length - 1) return 'notes';
+  return main[idx + 1];
+}
+
+/** Returns the previous step for Back navigation. Going back past 'wellness' lands on 'wellness_confirm'. */
+function prevOfMainStep(currentMain: string, config?: MonitoringConfig): string | null {
+  const main = computeMainSteps(config);
+  const idx = main.indexOf(currentMain);
+  if (idx <= 0) return null;
+  const prev = main[idx - 1];
+  return prev === 'wellness' ? 'wellness_confirm' : prev;
+}
+
+export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitoringConfig }: Props) {
   const today = new Date().toISOString().slice(0, 10);
 
   // ── State ──────────────────────────────────────────────────────────────────
-  const [step, setStep]               = useState<Step>('wellness');
+  const [step, setStep]               = useState<string>(initialStep(monitoringConfig));
   const [wellnessIdx, setWellnessIdx] = useState(0);
   const [wellness, setWellness]       = useState<Record<WellnessKey, number | null>>({
     fatigue: null, sleep: null, soreness: null, stress: null, mood: null,
@@ -327,6 +362,11 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
   const [illnessOther, setIllnessOther]       = useState('');
   const [illnessNrs, setIllnessNrs]           = useState(0);
 
+  // Global notes (always collected, regardless of blocks)
+  const [notes, setNotes]             = useState('');
+  // Custom metric block values: blockId → numeric value entered by athlete
+  const [customMetricValues, setCustomMetricValues] = useState<Record<string, number>>({});
+
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
 
@@ -334,7 +374,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
   const wasOpen = useRef(false);
   if (open && !wasOpen.current) {
     wasOpen.current = true;
-    setStep('wellness');
+    setStep(initialStep(monitoringConfig));
     setWellnessIdx(0);
     setWellness({ fatigue: null, sleep: null, soreness: null, stress: null, mood: null });
     setHasPain(null);
@@ -346,6 +386,8 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
     setIllnessSymptoms(new Set());
     setIllnessOther('');
     setIllnessNrs(0);
+    setNotes('');
+    setCustomMetricValues({});
     setSaving(false);
     setSaveError(false);
   }
@@ -426,6 +468,8 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
       illnessSymptoms: Array.from(illnessSymptoms),
       illnessSymptomOther: illnessSymptoms.has('other') ? illnessOther : '',
       illnessNrs: hasIllness ? illnessNrs : null,
+      notes: notes.trim() || undefined,
+      customMetricValues: Object.keys(customMetricValues).length > 0 ? customMetricValues : undefined,
     };
     const ok = await onSave(input);
     setSaving(false);
@@ -437,24 +481,38 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
     }
   }
 
-  // ── Progress — fixed positions so bar never moves backward ───────────────
-
-  const STEP_PROGRESS: Record<Step, number> = {
-    wellness:           0.05,
-    wellness_confirm:   0.40,
-    health_q:           0.50,
-    body_map:           0.65,
-    illness_symptoms:   0.80,
-    illness_nrs:        0.90,
-    done:               1.00,
-  };
+  // ── Progress — dynamic, based on config-driven step sequence ─────────────
 
   function progressValue(): number {
-    // Within the wellness step, interpolate between 0.05 and 0.38
+    const main = computeMainSteps(monitoringConfig);
+    // Total interactive slots: each main step counts as 1 unit
+    const total = main.length; // includes 'done'
+
     if (step === 'wellness') {
-      return 0.05 + (wellnessIdx / WELLNESS_ITEMS.length) * 0.33;
+      // Interpolate within the wellness block
+      const wellIdx = main.indexOf('wellness');
+      const frac = wellIdx / total + (wellnessIdx / WELLNESS_ITEMS.length) / total;
+      return Math.max(0.04, frac);
     }
-    return STEP_PROGRESS[step] ?? 0;
+    if (step === 'wellness_confirm') {
+      const wellIdx = main.indexOf('wellness');
+      return (wellIdx + 0.9) / total;
+    }
+    if (step === 'body_map') {
+      const hqIdx = main.indexOf('health_q');
+      return (hqIdx + 0.4) / total;
+    }
+    if (step === 'illness_symptoms') {
+      const hqIdx = main.indexOf('health_q');
+      return (hqIdx + 0.65) / total;
+    }
+    if (step === 'illness_nrs') {
+      const hqIdx = main.indexOf('health_q');
+      return (hqIdx + 0.85) / total;
+    }
+    const idx = main.indexOf(step);
+    if (idx === -1) return 0;
+    return idx / total;
   }
 
   // ── Render helpers ─────────────────────────────────────────────────────────
@@ -570,7 +628,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
             <Button
               className="flex-1"
               disabled={Object.values(wellness).some((v) => v === null)}
-              onClick={() => setStep('health_q')}
+              onClick={() => setStep(nextMainStep('wellness', monitoringConfig))}
             >
               Continue <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
@@ -631,22 +689,23 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
             </p>
           )}
           <div className="shrink-0 flex gap-3 pt-2">
-            <Button variant="outline" className="flex-1" onClick={() => setStep('wellness_confirm')}>
-              <ChevronLeft className="h-4 w-4 mr-1" /> Back
-            </Button>
+            {prevOfMainStep('health_q', monitoringConfig) !== null ? (
+              <Button variant="outline" className="flex-1" onClick={() => setStep(prevOfMainStep('health_q', monitoringConfig)!)}>
+                <ChevronLeft className="h-4 w-4 mr-1" /> Back
+              </Button>
+            ) : (
+              <Button variant="ghost" className="flex-1 text-muted-foreground" onClick={onClose}>Skip</Button>
+            )}
             <Button
               className="flex-1"
               disabled={!canContinue || saving}
               onClick={() => {
                 if (hasPain) setStep('body_map');
                 else if (hasIllness) setStep('illness_symptoms');
-                else doSave();
+                else setStep(nextMainStep('health_q', monitoringConfig));
               }}
             >
-              {!canContinue || hasPain || hasIllness
-                ? <><span>Continue</span><ChevronRight className="h-4 w-4 ml-1" /></>
-                : saving ? 'Saving…' : 'Finish'
-              }
+              <><span>Continue</span><ChevronRight className="h-4 w-4 ml-1" /></>
             </Button>
           </div>
         </>
@@ -731,11 +790,12 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
               disabled={painDots.size === 0 || !!pendingKey || saving}
               onClick={() => {
                 if (hasIllness) setStep('illness_symptoms');
-                else doSave();
+                else setStep(nextMainStep('health_q', monitoringConfig));
               }}
             >
-              {hasIllness ? <><span>Next: Illness</span><ChevronRight className="h-4 w-4 ml-1" /></>
-                : saving ? 'Saving…' : 'Finish'}
+              {hasIllness
+                ? <><span>Next: Illness</span><ChevronRight className="h-4 w-4 ml-1" /></>
+                : <><span>Continue</span><ChevronRight className="h-4 w-4 ml-1" /></>}
             </Button>
           </div>
         </>
@@ -826,6 +886,145 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName }: Props)
             <Button variant="outline" className="flex-1" onClick={() => setStep('illness_symptoms')}>
               <ChevronLeft className="h-4 w-4 mr-1" /> Back
             </Button>
+            <Button className="flex-1" disabled={saving} onClick={() => setStep(nextMainStep('health_q', monitoringConfig))}>
+              Continue <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </>
+      );
+    }
+
+    // ── Custom metric block ──
+    if (step.startsWith('custom_')) {
+      const blockId = step.slice(7); // strip 'custom_'
+      const block = (monitoringConfig?.blocks ?? DEFAULT_MONITORING_CONFIG.blocks)
+        .find((b): b is MonitoringBlock => b.id === blockId && b.type === 'custom_metric');
+      const cfg = block?.config;
+      if (!cfg) return null;
+
+      const currentVal = customMetricValues[blockId] ?? null;
+      const questionLabel = cfg.label || cfg.parameterName;
+      const unitSuffix = cfg.parameterUnit ? ` (${cfg.parameterUnit})` : '';
+
+      const goBack = () => {
+        const prev = prevOfMainStep(step, monitoringConfig);
+        if (prev) setStep(prev);
+      };
+      const goNext = () => setStep(nextMainStep(step, monitoringConfig));
+
+      if (cfg.inputType === 'scale') {
+        const min = cfg.scaleMin ?? 0;
+        const max = cfg.scaleMax ?? 10;
+        const count = max - min + 1;
+        const minAnchor = cfg.scaleAnchors?.find(a => a.value === min)?.label;
+        const maxAnchor = cfg.scaleAnchors?.find(a => a.value === max)?.label;
+        return (
+          <>
+            <Header title={questionLabel} subtitle={`Rate from ${min} to ${max}${unitSuffix}`} />
+            <div className="flex-1 overflow-y-auto space-y-3">
+              {(minAnchor || maxAnchor) && (
+                <div className="flex justify-between text-[11px] text-muted-foreground px-0.5">
+                  <span>{minAnchor ?? min}</span>
+                  <span>{maxAnchor ?? max}</span>
+                </div>
+              )}
+              <div className="flex gap-0.5 flex-wrap">
+                {Array.from({ length: count }, (_, i) => min + i).map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setCustomMetricValues(prev => ({ ...prev, [blockId]: n }))}
+                    className={cn(
+                      'flex-1 min-w-[2rem] h-10 rounded text-xs font-bold border transition-all active:scale-95',
+                      currentVal === n
+                        ? 'bg-primary border-primary text-primary-foreground'
+                        : 'bg-background border-border text-muted-foreground hover:border-primary/40',
+                    )}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+              {currentVal !== null && (
+                <p className="text-center text-sm font-medium text-muted-foreground">
+                  Selected: {currentVal}{unitSuffix}
+                </p>
+              )}
+            </div>
+            <div className="shrink-0 flex gap-3 pt-4">
+              <Button variant="outline" className="flex-1" onClick={goBack}>
+                <ChevronLeft className="h-4 w-4 mr-1" /> Back
+              </Button>
+              <Button className="flex-1" onClick={goNext}>
+                Continue <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </>
+        );
+      }
+
+      // Number input type
+      return (
+        <>
+          <Header title={questionLabel} subtitle={`Enter today's value${unitSuffix}`} />
+          <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center gap-4 py-4">
+            <div className="flex items-center gap-3 w-full max-w-[200px]">
+              <input
+                type="number"
+                inputMode="decimal"
+                className="flex-1 h-14 text-2xl font-bold text-center rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="–"
+                value={currentVal ?? ''}
+                onChange={e => {
+                  const v = parseFloat(e.target.value);
+                  setCustomMetricValues(prev => isNaN(v) ? (({ [blockId]: _, ...rest }) => rest)(prev) : { ...prev, [blockId]: v });
+                }}
+              />
+              {cfg.parameterUnit && (
+                <span className="text-muted-foreground text-sm font-medium">{cfg.parameterUnit}</span>
+              )}
+            </div>
+          </div>
+          <div className="shrink-0 flex gap-3 pt-4">
+            <Button variant="outline" className="flex-1" onClick={goBack}>
+              <ChevronLeft className="h-4 w-4 mr-1" /> Back
+            </Button>
+            <Button className="flex-1" onClick={goNext}>
+              Continue <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </>
+      );
+    }
+
+    // ── Notes ──
+    if (step === 'notes') {
+      return (
+        <>
+          <Header
+            title="Any notes for your coach?"
+            subtitle="Optional — leave blank if there's nothing to add."
+          />
+          <div className="flex-1 overflow-y-auto">
+            <textarea
+              className="w-full h-32 resize-none rounded-xl border border-border bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground"
+              placeholder="How are you feeling overall? Anything your coach should know…"
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+            />
+          </div>
+          {saveError && (
+            <p className="text-xs text-destructive text-center pb-1">
+              Something went wrong — please try again.
+            </p>
+          )}
+          <div className="shrink-0 flex gap-3 pt-4">
+            {prevOfMainStep('notes', monitoringConfig) !== null ? (
+              <Button variant="outline" className="flex-1" onClick={() => setStep(prevOfMainStep('notes', monitoringConfig)!)}>
+                <ChevronLeft className="h-4 w-4 mr-1" /> Back
+              </Button>
+            ) : (
+              <Button variant="ghost" className="flex-1 text-muted-foreground" onClick={onClose}>Skip</Button>
+            )}
             <Button className="flex-1" disabled={saving} onClick={doSave}>
               {saving ? 'Saving…' : 'Finish'}
             </Button>

@@ -28,6 +28,10 @@ export interface DailyCheckin {
   illnessSymptoms: string[];    // array of symptom IDs
   illnessSymptomOther: string;  // free text for 'other'
   illnessNrs: number | null;    // overall illness severity NRS 0–10
+  // Free-text notes (always collected, regardless of which blocks are active)
+  notes: string | null;
+  // Custom metric values: parameterId → numeric value (saved also to athlete_test_results)
+  customMetricValues: Record<string, number> | null;
   createdAt: string;
 }
 
@@ -44,6 +48,8 @@ export interface DailyCheckinInput {
   illnessSymptoms: string[];
   illnessSymptomOther: string;
   illnessNrs: number | null;
+  notes?: string;
+  customMetricValues?: Record<string, number>;
 }
 
 // ── DB row ────────────────────────────────────────────────────────────────────
@@ -63,6 +69,8 @@ interface DbRow {
   illness_symptoms: string[];
   illness_symptom_other: string;
   illness_nrs: number | null;
+  // Added via migration: ALTER TABLE athlete_daily_checkins ADD COLUMN IF NOT EXISTS notes TEXT;
+  notes: string | null;
   created_at: string;
 }
 
@@ -82,6 +90,8 @@ function fromDb(row: DbRow): DailyCheckin {
     illnessSymptoms: row.illness_symptoms ?? [],
     illnessSymptomOther: row.illness_symptom_other ?? '',
     illnessNrs: row.illness_nrs,
+    notes: row.notes ?? null,
+    customMetricValues: null, // saved to athlete_test_results, not fetched back here
     createdAt: row.created_at,
   };
 }
@@ -129,7 +139,7 @@ export function useDailyCheckin(connectionId: string | null) {
 
   const saveCheckin = useCallback(async (input: DailyCheckinInput): Promise<boolean> => {
     if (!athleteId || !user) return false;
-    const payload = {
+    const payload: Record<string, unknown> = {
       athlete_connection_id: athleteId,
       date: input.date,
       wellness_fatigue: input.wellnessFatigue,
@@ -143,14 +153,49 @@ export function useDailyCheckin(connectionId: string | null) {
       illness_symptoms: input.illnessSymptoms,
       illness_symptom_other: input.illnessSymptomOther,
       illness_nrs: input.illnessNrs,
+      // Requires: ALTER TABLE athlete_daily_checkins ADD COLUMN IF NOT EXISTS notes TEXT;
+      notes: input.notes ?? null,
     };
     const { data, error } = await supabase
       .from('athlete_daily_checkins')
       .upsert(payload, { onConflict: 'athlete_connection_id,date' })
       .select()
       .single();
-    if (error) { console.error('saveCheckin:', error); return false; }
-    setTodayCheckin(fromDb(data as DbRow));
+    if (error) {
+      console.error('saveCheckin:', error);
+      // If notes column missing (column not yet added via migration), retry without it
+      if (error.code === '42703') {
+        delete payload.notes;
+        const { data: data2, error: error2 } = await supabase
+          .from('athlete_daily_checkins')
+          .upsert(payload, { onConflict: 'athlete_connection_id,date' })
+          .select()
+          .single();
+        if (error2) { console.error('saveCheckin (retry):', error2); return false; }
+        setTodayCheckin(fromDb(data2 as DbRow));
+      } else {
+        return false;
+      }
+    } else {
+      setTodayCheckin(fromDb(data as DbRow));
+    }
+
+    // Save custom metric values as athlete_test_results entries
+    const metricValues = input.customMetricValues ?? {};
+    for (const [parameterId, value] of Object.entries(metricValues)) {
+      await supabase
+        .from('athlete_test_results')
+        .insert({
+          athlete_connection_id: athleteId,
+          parameter_id: parameterId,
+          value: String(value),
+          recorded_at: new Date().toISOString(),
+        })
+        .then(({ error: e }) => {
+          if (e) console.warn('Failed to save custom metric value:', e);
+        });
+    }
+
     await load();
     return true;
   }, [athleteId, user, load]);

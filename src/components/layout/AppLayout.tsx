@@ -67,7 +67,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen w-full bg-background overflow-x-hidden">
+    <div className="h-screen w-full bg-background overflow-hidden flex flex-col">
       {/* Top Navigation Bar */}
       <header className="border-b bg-card shadow-sm">
         <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4">
@@ -138,7 +138,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       </header>
 
       {/* Main Content Area */}
-      <div className="flex">
+      <div className="flex flex-1 min-h-0">
         {/* AI Agent Sidebar */}
         {showAIAgent && (
           <aside className="w-80 border-r bg-card p-4">
@@ -170,7 +170,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         )}
 
         {/* Main Content */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-none min-w-0">
+        <main className="flex-1 overflow-hidden p-4 sm:p-6 lg:p-8 max-w-none min-w-0">
           {children || <Outlet />}
         </main>
       </div>

@@ -85,6 +85,7 @@ interface AthleteCalendarDayCellProps {
   // Athlete context — required for tests/events storage
   athleteId?: string;
   athletePerformanceParameters?: AthletePerformanceParameter[];
+  athleteBiometrics?: import('@/types/athlete').AthleteBiometric[];
   // Parent-owned event callbacks — use these so mutations go through the
   // authoritative hook instance, not the DayCell's own stale store.
   onAddCalendarEvent?: (athleteId: string, event: Omit<import('@/hooks/useCalendarEvents').CalendarEvent, 'id'>) => void;
@@ -112,6 +113,7 @@ export function AthleteCalendarDayCell({
   lastDragEndRef,
   athleteId,
   athletePerformanceParameters,
+  athleteBiometrics,
   onAddCalendarEvent,
   onDeleteCalendarEvent,
   sessionLogs,
@@ -700,6 +702,7 @@ export function AthleteCalendarDayCell({
           }
         }}
         athletePerformanceParameters={athletePerformanceParameters}
+        athleteBiometrics={athleteBiometrics}
       />
     </>
   );

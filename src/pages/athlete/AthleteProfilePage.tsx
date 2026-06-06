@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Dumbbell, Flame, CheckCircle2, Pencil, X, Check } from 'lucide-react';
+import { LogOut, Dumbbell, Flame, CheckCircle2, Pencil, X, Check, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -15,8 +15,10 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAthleteApp } from '@/hooks/useAthleteApp';
 import { useAuth } from '@/hooks/useAuth';
+import { useAthleteSettings } from '@/hooks/useAthleteSettings';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -289,6 +291,8 @@ export default function AthleteProfilePage() {
       });
   }, [connection]);
 
+  const { chatEnabled, update: updateSettings } = useAthleteSettings();
+
   const handleSignOut = async () => {
     await signOut();
     navigate('/athlete/login');
@@ -344,6 +348,29 @@ export default function AthleteProfilePage() {
             ) : (
               logs.slice(0, 10).map(log => <SessionLogRow key={log.id} log={log} />)
             )}
+          </CardContent>
+        </Card>
+
+        {/* Settings */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">Settings</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 space-y-0">
+            <div className="flex items-center justify-between py-3 border-b last:border-0">
+              <div className="flex items-center gap-2.5">
+                <MessageCircle className="h-4 w-4 text-muted-foreground shrink-0" />
+                <div>
+                  <p className="text-sm font-medium">Messages &amp; Comments</p>
+                  <p className="text-xs text-muted-foreground">Show chat tab, notifications, and exercise comment buttons</p>
+                </div>
+              </div>
+              <Switch
+                checked={chatEnabled}
+                onCheckedChange={v => updateSettings({ chatEnabled: v })}
+                className="ml-3 shrink-0"
+              />
+            </div>
           </CardContent>
         </Card>
 

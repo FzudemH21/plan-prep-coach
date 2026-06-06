@@ -1,6 +1,8 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { ExerciseMetricsTab } from '@/components/athletes/ExerciseMetricsTab';
 import { format, subDays, parseISO } from 'date-fns';
+import { supabase } from '@/lib/supabase';
+import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import {
   AreaChart,
   Area,
@@ -194,6 +196,7 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
   const [timeRange, setTimeRange] = useState<TimeRange>('All');
   const [newValue, setNewValue] = useState('');
   const [newDate, setNewDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [newNote, setNewNote] = useState('');
 
   // Add dialogs
   const [showAddBiometric, setShowAddBiometric] = useState(false);
@@ -251,6 +254,36 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
     });
   }, [athletePerformanceParams, search, athleticismParameters]);
 
+  // ── Self-reported test results (entered by athlete in athlete app) ───────────
+  const { getConnectionForAthlete } = useAthleteConnections();
+  // Map of athleticismParameterId → self-reported ParameterValue[]
+  const [selfReportedMap, setSelfReportedMap] = useState<Map<string, ParameterValue[]>>(new Map());
+
+  useEffect(() => {
+    const connection = getConnectionForAthlete(athlete.id);
+    if (!connection) return;
+    supabase
+      .from('athlete_test_results')
+      .select('id, parameter_id, value, recorded_at, note')
+      .eq('athlete_connection_id', connection.id)
+      .then(({ data }) => {
+        if (!data) return;
+        const map = new Map<string, ParameterValue[]>();
+        for (const row of data as Array<{ id: string; parameter_id: string; value: string; recorded_at: string; note: string | null }>) {
+          const existing = map.get(row.parameter_id) ?? [];
+          existing.push({
+            id: row.id,
+            value: row.value,
+            recordedAt: row.recorded_at,
+            selfReported: true,
+            note: row.note ?? undefined,
+          });
+          map.set(row.parameter_id, existing);
+        }
+        setSelfReportedMap(map);
+      });
+  }, [athlete.id, getConnectionForAthlete]);
+
   // Keep selected item in sync; only resolve if it matches the active tab
   const resolvedSelected = useMemo<SelectedItem | null>(() => {
     if (!selected) return null;
@@ -267,11 +300,23 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
     }
   }, [selected, topTab, athleteBiometrics, athletePerformanceParams]);
 
-  const selectedValues = resolvedSelected
-    ? resolvedSelected.kind === 'biometric'
+  const selectedValues: ParameterValue[] = useMemo(() => {
+    if (!resolvedSelected) return [];
+    const base = resolvedSelected.kind === 'biometric'
       ? resolvedSelected.ab.values
-      : resolvedSelected.pp.values
-    : [];
+      : resolvedSelected.pp.values;
+    // Merge self-reported values — keyed by athleticismParameterId for performance,
+    // or by 'bio:${defId}' for biometrics (matching the prefix used in CalendarEventDialog).
+    const selfReportedKey = resolvedSelected.kind === 'performance'
+      ? resolvedSelected.pp.athleticismParameterId
+      : `bio:${resolvedSelected.ab.biometricDefinitionId}`;
+    const selfReported = selfReportedMap.get(selfReportedKey) ?? [];
+    if (selfReported.length > 0) {
+      const ids = new Set(base.map(v => v.id));
+      return [...base, ...selfReported.filter(v => !ids.has(v.id))];
+    }
+    return base;
+  }, [resolvedSelected, selfReportedMap]);
 
   const selectedUnit = resolvedSelected
     ? resolvedSelected.kind === 'biometric'
@@ -305,13 +350,14 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
       ? new Date(newDate + 'T12:00:00').toISOString()
       : new Date().toISOString();
     if (resolvedSelected.kind === 'biometric') {
-      athleteData.addBiometricValue(resolvedSelected.ab.id, newValue.trim(), recordedAt);
+      athleteData.addBiometricValue(resolvedSelected.ab.id, newValue.trim(), recordedAt, newNote.trim() || undefined);
     } else {
-      athleteData.addPerformanceParameterValue(resolvedSelected.pp.id, newValue.trim(), recordedAt);
+      athleteData.addPerformanceParameterValue(resolvedSelected.pp.id, newValue.trim(), recordedAt, newNote.trim() || undefined);
     }
     setNewValue('');
     setNewDate(format(new Date(), 'yyyy-MM-dd'));
-  }, [resolvedSelected, newValue, newDate, athleteData]);
+    setNewNote('');
+  }, [resolvedSelected, newValue, newDate, newNote, athleteData]);
 
   const handleDeleteValue = useCallback((valueId: string) => {
     if (!resolvedSelected) return;
@@ -494,12 +540,22 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
                     onChange={e => setNewValue(e.target.value)}
                     placeholder={isQuantitative ? '0.0' : 'Enter value'}
                     className="h-8 text-sm"
-                    onKeyDown={e => e.key === 'Enter' && handleAddValue()}
+                    onKeyDown={e => e.key === 'Enter' && !newNote.trim() && handleAddValue()}
                   />
                 </div>
                 <Button size="sm" className="h-8" onClick={handleAddValue} disabled={!newValue.trim()}>
                   <Plus className="h-3.5 w-3.5 mr-1" /> Add
                 </Button>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Note <span className="font-normal">(optional)</span></Label>
+                <Input
+                  value={newNote}
+                  onChange={e => setNewNote(e.target.value)}
+                  placeholder="Testing conditions, remarks…"
+                  className="h-8 text-sm"
+                  onKeyDown={e => e.key === 'Enter' && handleAddValue()}
+                />
               </div>
             </div>
 
@@ -509,21 +565,37 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
                 <h4 className="text-sm font-medium">History</h4>
                 <div className="border rounded-lg divide-y">
                   {sortedHistory.map(v => (
-                    <div key={v.id} className="flex items-center justify-between px-4 py-2.5 text-sm group">
-                      <span className="text-muted-foreground text-xs w-28 shrink-0">
-                        {format(parseRecordedAt(v.recordedAt), 'MMM d, yyyy')}
-                      </span>
-                      <span className="font-medium flex-1">
-                        {v.value}{selectedUnit ? ` ${selectedUnit}` : ''}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-                        onClick={() => handleDeleteValue(v.id)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                    <div key={v.id} className={cn(
+                      'px-4 py-2.5 text-sm group',
+                      v.selfReported ? 'bg-amber-50/40' : '',
+                    )}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground text-xs w-28 shrink-0">
+                          {format(parseRecordedAt(v.recordedAt), 'MMM d, yyyy')}
+                        </span>
+                        <span className="font-medium flex-1">
+                          {v.value}{selectedUnit ? ` ${selectedUnit}` : ''}
+                        </span>
+                        {v.selfReported ? (
+                          <span className="text-[10px] font-medium text-amber-700 bg-amber-100 border border-amber-200 rounded-full px-2 py-0.5 shrink-0">
+                            Self-reported
+                          </span>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+                            onClick={() => handleDeleteValue(v.id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                      {v.note && (
+                        <p className="text-xs text-muted-foreground mt-1 ml-28 italic">
+                          "{v.note}"
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>
