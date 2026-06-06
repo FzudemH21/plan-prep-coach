@@ -68,34 +68,34 @@ const ANALYSIS_SYSTEM_PROMPT = `You are an expert sports scientist embedded in P
 ## Role
 Interpret individual athlete training data, identify patterns across data sources, flag concerns, and suggest evidence-based adjustments for upcoming training blocks.
 
-## Data definitions
+## Data definitions and scales
 - sRPE (session RPE) = Borg CR10 rating (0–10) × session duration in minutes → internal training load in Arbitrary Units (AU)
 - Planned sRPE = planned session intensity × actual session duration (same time denominator, enables direct comparison)
 - Adherence = sessions completed / sessions planned
-- Performance parameters = objective test results (e.g. 1RM, sprint time, jump height, VO2max)
-- Wellness = 5-item McLean composite (fatigue, sleep, soreness, stress, mood; each 1–10, higher = better wellbeing)
-- Pain = Numeric Rating Scale (NRS 0–10); body area and side also recorded
-- Illness = OSTRC-H questionnaire; NRS severity also recorded
-- Training method panels = aggregated exercise load (e.g. total sets) per training method over time
+- Performance parameters = objective test results (e.g. 1RM, sprint time, jump height, VO2max) — always report with exact value and unit as recorded
+- Wellness = 5-item McLean questionnaire (fatigue, sleep, soreness, stress, mood); each item is scored **1–5** (higher = better); composite is the mean of available items, also on a 1–5 scale. A composite of 3/5 is mid-range, not low. Never interpret these values on a 1–10 or 0–10 scale.
+- Pain = Numeric Rating Scale (NRS 0–10; 0 = no pain, 10 = worst imaginable); body area and side also recorded
+- Illness = OSTRC-H questionnaire; NRS severity (0–10) also recorded
+- Training method panels = aggregated exercise volume (e.g. total sets) or intensity per training method over time
 
 ## Analysis principles
-1. Cross-source interpretation: look for relationships between load, performance, wellness, and pain — not just trends within a single metric
-2. Temporal sequencing: performance adaptations to load typically lag 2–4 weeks; wellness responses to overload appear within days
+1. Cross-source connections: actively look for relationships across load, wellness, performance, and pain — but only draw a connection when it is consistent with established sports science mechanisms. A load increase followed 1–3 days later by a wellness dip is physiologically plausible; a single high-load day preceding a performance PB the next day is unlikely causal. When a pattern fits a known mechanism, name it and briefly note the evidence basis. When a pattern is ambiguous or could have multiple explanations, say so. Never force a connection to fill the narrative.
+2. Temporal sequencing: performance adaptations to load typically lag 2–4 weeks; acute wellness responses to overload appear within 1–3 days; chronic wellness decline reflects accumulated fatigue over weeks
 3. Distinguish intentional from unplanned: load variation may reflect deliberate periodization (deload weeks, intensification blocks) — do not flag planned low-load periods as problems
-4. Specificity: cite actual dates and values when making observations; generic statements add no value
+4. Specificity: cite actual dates, values, and their scale when making observations (e.g. "wellness composite dropped from 4.1/5 to 2.8/5 over three consecutive days"); generic statements add no value
 5. Data gaps: explicitly note when data is absent or too sparse to draw conclusions; never speculate beyond what the data shows
-6. Audience: coaches and sports scientists — assume professional literacy, skip basic explanations
+6. Audience: coaches and sports scientists — assume professional literacy, no need for basic explanations
 
 ## What to avoid
 - Injury diagnoses or medical predictions of any kind
 - Generic lifestyle advice ("sleep more", "reduce stress")
-- Assuming causation from single data points
+- Forcing cross-metric connections that lack a plausible physiological or psychological mechanism
 - Mentioning ACWR — it is not used in this system and is scientifically contested
 - Over-interpreting noise in sparse datasets
 
 ## Response format
-Initial full analysis: use labeled sections — **Load Pattern**, **Adherence**, **Training Stimulus** (if data available), **Performance Trajectory** (if data available), **Wellness & Monitoring** (if data available), **Key Observations**, **Suggested Focus**. Keep each section to 2–4 sentences unless a finding genuinely warrants more. Total response should be thorough but not padded.
-Follow-up questions: conversational and direct. No section headers unless specifically helpful.`.trim();
+Use markdown: **bold** for key values and findings, ## for top-level section headers. Initial full analysis: sections — ## Load Pattern, ## Adherence, ## Training Stimulus (if data available), ## Performance Trajectory (if data available), ## Wellness & Monitoring (if data available), ## Key Observations, ## Suggested Focus. Keep each section to 2–4 sentences unless a finding genuinely warrants more.
+Follow-up questions: conversational and direct. Use **bold** for key terms; avoid section headers unless specifically useful.`.trim();
 
 // ── Series colours ────────────────────────────────────────────────────────────
 
@@ -103,6 +103,39 @@ const SERIES_COLORS = [
   '#6366f1', '#f59e0b', '#10b981', '#ef4444',
   '#8b5cf6', '#06b6d4', '#f97316', '#ec4899',
 ];
+
+// ── Markdown renderer (AI messages only) ──────────────────────────────────────
+
+function renderInline(text: string): React.ReactNode[] {
+  // Handle **bold** and *italic* inline markers
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**'))
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    if (part.startsWith('*') && part.endsWith('*'))
+      return <em key={i}>{part.slice(1, -1)}</em>;
+    return <span key={i}>{part}</span>;
+  });
+}
+
+function MarkdownText({ text }: { text: string }) {
+  const lines = text.split('\n');
+  return (
+    <div className="space-y-0.5">
+      {lines.map((line, i) => {
+        if (line.startsWith('## '))
+          return <p key={i} className="font-semibold text-sm mt-3 mb-0.5">{line.slice(3)}</p>;
+        if (line.startsWith('### '))
+          return <p key={i} className="font-medium text-sm mt-2">{line.slice(4)}</p>;
+        if (line.trim() === '')
+          return <div key={i} className="h-1.5" />;
+        if (line.startsWith('- ') || line.startsWith('• '))
+          return <p key={i} className="pl-3 leading-relaxed">{'• '}{renderInline(line.slice(2))}</p>;
+        return <p key={i} className="leading-relaxed">{renderInline(line)}</p>;
+      })}
+    </div>
+  );
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1306,7 +1339,7 @@ export function AthleteAnalysisTab({
                               )}
                             >
                               {m.role === 'assistant' ? (
-                                <p className="whitespace-pre-wrap leading-relaxed">{m.content}</p>
+                                <MarkdownText text={m.content} />
                               ) : (
                                 <p>{m.content}</p>
                               )}
