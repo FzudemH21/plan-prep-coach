@@ -9,6 +9,24 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import type { MonitoringConfig } from '@/types/athlete';
 
+// ── Metrics snapshot (written by coach app, read by athlete app) ──────────────
+
+export interface MetricsSnapshotItem {
+  name: string;
+  unit: string | null;
+  category?: string;
+  /** Chronological value history */
+  values: Array<{ value: string; recordedAt: string }>;
+}
+
+export interface MetricsSnapshot {
+  bodyMetrics: MetricsSnapshotItem[];
+  performanceParams: MetricsSnapshotItem[];
+  updatedAt: string;
+}
+
+// ── Profile data ──────────────────────────────────────────────────────────────
+
 export interface AthleteProfileData {
   firstName?: string;
   middleName?: string | null;
@@ -23,6 +41,8 @@ export interface AthleteProfileData {
   monitoringConfig?: MonitoringConfig | null;
   /** Whether the Messages tab is visible in the athlete app (default true) */
   chatEnabled?: boolean;
+  /** Body metrics + performance params snapshot — synced by coach, read by athlete app */
+  metricsSnapshot?: MetricsSnapshot | null;
 }
 
 export interface AthleteConnection {
@@ -206,6 +226,25 @@ export function useAthleteConnections() {
     setConnections(prev => prev.filter(c => c.id !== connectionId));
   }, []);
 
+  /** Push a metrics snapshot (body metrics + performance params) into profile_data.
+   *  Called by AthletePerformanceTab whenever the coach adds/removes a measurement. */
+  const updateMetricsSnapshot = useCallback(async (
+    connectionId: string,
+    snapshot: MetricsSnapshot,
+  ) => {
+    const conn = connections.find(c => c.id === connectionId);
+    if (!conn) return;
+    const newProfileData: AthleteProfileData = { ...conn.profileData, metricsSnapshot: snapshot };
+    const { error } = await supabase
+      .from('athlete_connections')
+      .update({ profile_data: newProfileData })
+      .eq('id', connectionId);
+    if (error) throw error;
+    setConnections(prev =>
+      prev.map(c => c.id === connectionId ? { ...c, profileData: newProfileData } : c)
+    );
+  }, [connections]);
+
   /** Get the connection for a specific athlete (by their local id in the coach's blob). */
   const getConnectionForAthlete = useCallback(
     (athleteLocalId: string): AthleteConnection | undefined =>
@@ -224,6 +263,7 @@ export function useAthleteConnections() {
     updateMonitoringConfig,
     updateChatEnabled,
     updateAllowRearrangeWorkouts,
+    updateMetricsSnapshot,
     getConnectionForAthlete,
     reload: load,
   };

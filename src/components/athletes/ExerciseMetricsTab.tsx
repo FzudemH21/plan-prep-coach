@@ -164,6 +164,17 @@ function SessionHistoryBlock({
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
+  // Only show columns that have at least one non-empty value in THIS session
+  const sessionParamNames = useMemo(() => {
+    const seen = new Set<string>();
+    for (const set of session.sets) {
+      for (const [k, v] of Object.entries(set.values)) {
+        if (v !== undefined && v !== null && v !== '') seen.add(k);
+      }
+    }
+    return paramNames.filter(p => seen.has(p));
+  }, [session.sets, paramNames]);
+
   const bestSet = useMemo(() => {
     if (!tags || session.e1rm === null) return null;
     let best: { setIdx: number; e1rm: number } | null = null;
@@ -205,7 +216,7 @@ function SessionHistoryBlock({
             <thead>
               <tr className="border-t border-b bg-muted/10">
                 <th className="text-left px-4 py-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide w-12">Set</th>
-                {paramNames.map(p => (
+                {sessionParamNames.map(p => (
                   <th key={p} className="text-left px-3 py-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                     {p}
                   </th>
@@ -236,7 +247,7 @@ function SessionHistoryBlock({
                     <td className="px-4 py-2 text-xs font-medium text-muted-foreground">
                       {String(s.setNumber).padStart(2, '0')}
                     </td>
-                    {paramNames.map(p => (
+                    {sessionParamNames.map(p => (
                       <td key={p} className={cn(
                         'px-3 py-2 tabular-nums',
                         tags?.weightParam === p && s.completed && 'font-medium',

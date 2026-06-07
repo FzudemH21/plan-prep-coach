@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import type { MetricsSnapshot, MetricsSnapshotItem } from '@/hooks/useAthleteConnections';
 import { ExerciseMetricsTab } from '@/components/athletes/ExerciseMetricsTab';
 import { format, subDays, parseISO } from 'date-fns';
 import { supabase } from '@/lib/supabase';
@@ -255,7 +256,8 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
   }, [athletePerformanceParams, search, athleticismParameters]);
 
   // ── Self-reported test results (entered by athlete in athlete app) ───────────
-  const { getConnectionForAthlete } = useAthleteConnections();
+  const { getConnectionForAthlete, updateMetricsSnapshot } = useAthleteConnections();
+  const connection = useMemo(() => getConnectionForAthlete(athlete.id), [getConnectionForAthlete, athlete.id]);
   // Map of athleticismParameterId → self-reported ParameterValue[]
   const [selfReportedMap, setSelfReportedMap] = useState<Map<string, ParameterValue[]>>(new Map());
 
@@ -283,6 +285,42 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
         setSelfReportedMap(map);
       });
   }, [athlete.id, getConnectionForAthlete]);
+
+  // ── Metrics snapshot — push to athlete_connections.profile_data on every change ──
+  // Skips the very first mount (initial load is not a user-initiated change).
+  const _snapshotFirstMount = useRef(true);
+  useEffect(() => {
+    if (_snapshotFirstMount.current) { _snapshotFirstMount.current = false; return; }
+    if (!connection) return;
+    const snapshot: MetricsSnapshot = {
+      bodyMetrics: athleteBiometrics
+        .map((ab): MetricsSnapshotItem | null => {
+          const def = athleteData.biometricDefinitions.find(d => d.id === ab.biometricDefinitionId);
+          if (!def) return null;
+          return {
+            name: def.name,
+            unit: def.unit ?? null,
+            values: ab.values.map(v => ({ value: v.value, recordedAt: v.recordedAt })),
+          };
+        })
+        .filter((x): x is MetricsSnapshotItem => x !== null),
+      performanceParams: athletePerformanceParams
+        .map((pp): MetricsSnapshotItem | null => {
+          const param = athleticismParameters.find(p => p.id === pp.athleticismParameterId);
+          if (!param) return null;
+          return {
+            name: param.name,
+            unit: param.unit ?? null,
+            category: param.category ?? undefined,
+            values: pp.values.map(v => ({ value: v.value, recordedAt: v.recordedAt })),
+          };
+        })
+        .filter((x): x is MetricsSnapshotItem => x !== null),
+      updatedAt: new Date().toISOString(),
+    };
+    updateMetricsSnapshot(connection.id, snapshot).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [athleteBiometrics, athletePerformanceParams]);
 
   // Keep selected item in sync; only resolve if it matches the active tab
   const resolvedSelected = useMemo<SelectedItem | null>(() => {

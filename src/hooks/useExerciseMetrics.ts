@@ -1,5 +1,5 @@
 // Coach-side hook — parses athlete_session_logs into per-exercise history
-// and manages 1RM param tags in localStorage.
+// and manages 1RM param tags in Supabase (with one-time localStorage migration).
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -55,7 +55,7 @@ export interface ExerciseEntry {
   allParamUnits: Record<string, string>; // base param name → unit string (if any)
 }
 
-// Param role tags — stored per exercise in localStorage
+// Param role tags — stored per exercise in Supabase
 export interface ParamTags {
   weightParam: string;
   repsParam: string;
@@ -85,49 +85,97 @@ function bestE1RMForSession(sets: LoggedSet[], tags: ParamTags): number | null {
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
-const TAGS_KEY_PREFIX = 'exercise_param_tags_';
+// Legacy key prefix — used only for one-time migration
+const LEGACY_LS_PREFIX = 'exercise_param_tags_';
 
 export function useExerciseMetrics(connectionId: string | null) {
   const { user } = useAuth();
   const [rawLogs, setRawLogs] = useState<RawSessionLog[]>([]);
   const [loading, setLoading] = useState(false);
+  const [paramTags, setParamTagsState] = useState<Record<string, ParamTags>>({});
 
-  // ── Param tags (localStorage) ──────────────────────────────────────────────
+  // ── Load param tags from Supabase (with localStorage migration) ────────────
 
-  const tagsKey = user ? `${TAGS_KEY_PREFIX}${user.id}` : null;
-
-  const [paramTags, setParamTagsState] = useState<Record<string, ParamTags>>(() => {
-    if (!user) return {};
-    try {
-      const raw = localStorage.getItem(`${TAGS_KEY_PREFIX}${user.id}`);
-      return raw ? JSON.parse(raw) : {};
-    } catch { return {}; }
-  });
-
-  // Re-load from localStorage once user resolves (covers the case where auth
-  // was still null when the hook first mounted, so the initializer returned {}).
   useEffect(() => {
-    if (!tagsKey) return;
-    try {
-      const raw = localStorage.getItem(tagsKey);
-      if (raw) setParamTagsState(JSON.parse(raw));
-    } catch {}
-  }, [tagsKey]);
+    if (!user) return;
+    supabase
+      .from('exercise_param_tags')
+      .select('exercise_name, weight_param, reps_param, rir_param')
+      .eq('coach_user_id', user.id)
+      .then(({ data }) => {
+        const dbMap: Record<string, ParamTags> = {};
+        for (const row of (data ?? [])) {
+          dbMap[row.exercise_name as string] = {
+            weightParam: row.weight_param as string,
+            repsParam: row.reps_param as string,
+            rirParam: (row.rir_param as string | null) ?? undefined,
+          };
+        }
+
+        // One-time migration: if Supabase is empty but localStorage has tags, migrate them
+        const lsKey = `${LEGACY_LS_PREFIX}${user.id}`;
+        const lsRaw = localStorage.getItem(lsKey);
+        if (lsRaw) {
+          try {
+            const lsTags = JSON.parse(lsRaw) as Record<string, ParamTags>;
+            if (Object.keys(lsTags).length > 0 && Object.keys(dbMap).length === 0) {
+              const rows = Object.entries(lsTags).map(([name, tags]) => ({
+                coach_user_id: user.id,
+                exercise_name: name,
+                weight_param: tags.weightParam,
+                reps_param: tags.repsParam,
+                rir_param: tags.rirParam ?? null,
+              }));
+              supabase
+                .from('exercise_param_tags')
+                .upsert(rows, { onConflict: 'coach_user_id,exercise_name' })
+                .then(() => { localStorage.removeItem(lsKey); });
+              Object.assign(dbMap, lsTags);
+            }
+          } catch { /* ignore malformed data */ }
+          // Clear LS in all cases — Supabase is now the source of truth
+          localStorage.removeItem(lsKey);
+        }
+
+        setParamTagsState(dbMap);
+      });
+  }, [user]);
+
+  // ── Save / delete param tags ───────────────────────────────────────────────
 
   const setParamTags = useCallback((exerciseName: string, tags: ParamTags | null) => {
+    if (!user) return;
+    // Optimistic state update
     setParamTagsState(prev => {
       const next = { ...prev };
-      if (tags === null) {
-        delete next[exerciseName];
-      } else {
-        next[exerciseName] = tags;
-      }
-      if (tagsKey) localStorage.setItem(tagsKey, JSON.stringify(next));
+      if (tags === null) { delete next[exerciseName]; }
+      else { next[exerciseName] = tags; }
       return next;
     });
-  }, [tagsKey]);
+    // Persist to Supabase
+    if (tags === null) {
+      supabase
+        .from('exercise_param_tags')
+        .delete()
+        .eq('coach_user_id', user.id)
+        .eq('exercise_name', exerciseName)
+        .then(() => {});
+    } else {
+      supabase
+        .from('exercise_param_tags')
+        .upsert({
+          coach_user_id: user.id,
+          exercise_name: exerciseName,
+          weight_param: tags.weightParam,
+          reps_param: tags.repsParam,
+          rir_param: tags.rirParam ?? null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'coach_user_id,exercise_name' })
+        .then(() => {});
+    }
+  }, [user]);
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
+  // ── Fetch session logs ─────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!connectionId) { setRawLogs([]); return; }
@@ -137,7 +185,7 @@ export function useExerciseMetrics(connectionId: string | null) {
       .from('athlete_session_logs')
       .select('id, date, session_name, sets_logged')
       .eq('athlete_connection_id', connectionId)
-      .not('completed_at', 'is', null)   // completed sessions only
+      .not('completed_at', 'is', null)
       .order('date', { ascending: false })
       .then(({ data }) => {
         if (!cancelled) {
@@ -148,15 +196,13 @@ export function useExerciseMetrics(connectionId: string | null) {
     return () => { cancelled = true; };
   }, [connectionId]);
 
-  // ── Derived — exercise list ────────────────────────────────────────────────
+  // ── Key helpers ────────────────────────────────────────────────────────────
 
-  // Helpers for param key normalisation
   const baseKey = (k: string) => k.replace(/_set\d+/g, '').replace(/_unit$/, '');
-  const isUnitKey = (k: string) => {
-    // e.g. "Weight_unit", "Weight_set1_unit" → unit key for "Weight"
-    return /_unit$/.test(k);
-  };
+  const isUnitKey = (k: string) => /_unit$/.test(k);
   const isMetaKey = (k: string) => k.endsWith('_unit') || /_set\d+/.test(k);
+
+  // ── Derived — exercise list ────────────────────────────────────────────────
 
   const exercises = useMemo<ExerciseEntry[]>(() => {
     const map = new Map<string, { dates: string[]; paramNames: Set<string>; paramUnits: Record<string, string> }>();
@@ -170,7 +216,6 @@ export function useExerciseMetrics(connectionId: string | null) {
         for (const set of ex.sets) {
           for (const [k, v] of Object.entries(set.values ?? {})) {
             if (isUnitKey(k)) {
-              // e.g. k = "Weight_unit", v = "kg" → paramUnits["Weight"] = "kg"
               const base = baseKey(k);
               if (base && v) entry.paramUnits[base] = v;
             } else if (!isMetaKey(k)) {
@@ -209,7 +254,7 @@ export function useExerciseMetrics(connectionId: string | null) {
     const tags = paramTags[exerciseName] ?? null;
     const sessions: ExerciseSession[] = [];
 
-    // rawLogs is newest-first; we want chronological for chart so we'll reverse
+    // rawLogs is newest-first; reverse for chronological chart order
     const chronological = [...rawLogs].reverse();
 
     for (const log of chronological) {

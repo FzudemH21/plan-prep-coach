@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, Dumbbell, Flame, CheckCircle2, Pencil, X, Check, MessageCircle } from 'lucide-react';
+import { AthleteProgressTab } from '@/components/athlete-app/AthleteProgressTab';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -261,11 +262,14 @@ function ProfileCard() {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+type ProfileTab = 'overview' | 'progress';
+
 export default function AthleteProfilePage() {
   const navigate = useNavigate();
   const { connection } = useAthleteApp();
   const { signOut } = useAuth();
 
+  const [activeTab, setActiveTab] = useState<ProfileTab>('overview');
   const [logs, setLogs] = useState<SessionLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(true);
 
@@ -309,10 +313,10 @@ export default function AthleteProfilePage() {
 
   return (
     <ScrollArea className="h-full">
-      <div className="p-4 space-y-4 pb-8">
+      <div className="pb-8">
 
-        {/* Avatar + name */}
-        <div className="flex flex-col items-center text-center pt-4 pb-2">
+        {/* Avatar + name — always visible regardless of tab */}
+        <div className="flex flex-col items-center text-center pt-4 pb-2 px-4">
           <div className="w-[72px] h-[72px] rounded-full bg-primary flex items-center justify-center mb-3">
             <span className="text-2xl font-bold text-primary-foreground">{initials}</span>
           </div>
@@ -320,69 +324,99 @@ export default function AthleteProfilePage() {
           {email && <p className="text-sm text-muted-foreground mt-0.5">{email}</p>}
         </div>
 
-        {/* Stats */}
-        <div className="flex gap-3">
-          <StatCard
-            value={logsLoading ? '–' : totalSessions}
-            label="Sessions completed"
-            icon={<Dumbbell className="h-4 w-4" />}
-          />
-          <StatCard
-            value={logsLoading ? '–' : streak}
-            label="Day streak"
-            icon={<Flame className={cn('h-4 w-4', streak > 0 && 'text-orange-500')} />}
-          />
+        {/* Tab strip */}
+        <div className="flex border-b mx-4 mb-4">
+          {(['overview', 'progress'] as ProfileTab[]).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={cn(
+                'flex-1 py-2.5 text-sm font-medium capitalize transition-colors',
+                activeTab === tab
+                  ? 'border-b-2 border-primary text-primary'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {tab === 'overview' ? 'Overview' : 'Progress'}
+            </button>
+          ))}
         </div>
 
-        {/* Profile info */}
-        <ProfileCard />
-
-        {/* Recent sessions */}
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm font-semibold mb-3">Recent Sessions</p>
-            {logsLoading ? (
-              <p className="text-sm text-muted-foreground">Loading…</p>
-            ) : logs.slice(0, 10).length === 0 ? (
-              <p className="text-sm text-muted-foreground">No sessions logged yet.</p>
-            ) : (
-              logs.slice(0, 10).map(log => <SessionLogRow key={log.id} log={log} />)
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Settings */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Settings</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0 space-y-0">
-            <div className="flex items-center justify-between py-3 border-b last:border-0">
-              <div className="flex items-center gap-2.5">
-                <MessageCircle className="h-4 w-4 text-muted-foreground shrink-0" />
-                <div>
-                  <p className="text-sm font-medium">Messages &amp; Comments</p>
-                  <p className="text-xs text-muted-foreground">Show chat tab, notifications, and exercise comment buttons</p>
-                </div>
-              </div>
-              <Switch
-                checked={chatEnabled}
-                onCheckedChange={v => updateSettings({ chatEnabled: v })}
-                className="ml-3 shrink-0"
+        {/* Overview tab */}
+        {activeTab === 'overview' && (
+          <div className="px-4 space-y-4">
+            {/* Stats */}
+            <div className="flex gap-3">
+              <StatCard
+                value={logsLoading ? '–' : totalSessions}
+                label="Sessions completed"
+                icon={<Dumbbell className="h-4 w-4" />}
+              />
+              <StatCard
+                value={logsLoading ? '–' : streak}
+                label="Day streak"
+                icon={<Flame className={cn('h-4 w-4', streak > 0 && 'text-orange-500')} />}
               />
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Sign out */}
-        <Button
-          variant="outline"
-          className="w-full gap-2 text-destructive border-destructive/30 hover:bg-destructive/5"
-          onClick={handleSignOut}
-        >
-          <LogOut className="h-4 w-4" />
-          Sign Out
-        </Button>
+            {/* Profile info */}
+            <ProfileCard />
+
+            {/* Recent sessions */}
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-sm font-semibold mb-3">Recent Sessions</p>
+                {logsLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading…</p>
+                ) : logs.slice(0, 10).length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No sessions logged yet.</p>
+                ) : (
+                  logs.slice(0, 10).map(log => <SessionLogRow key={log.id} log={log} />)
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Settings */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold">Settings</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0 space-y-0">
+                <div className="flex items-center justify-between py-3 border-b last:border-0">
+                  <div className="flex items-center gap-2.5">
+                    <MessageCircle className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium">Messages &amp; Comments</p>
+                      <p className="text-xs text-muted-foreground">Show chat tab, notifications, and exercise comment buttons</p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={chatEnabled}
+                    onCheckedChange={v => updateSettings({ chatEnabled: v })}
+                    className="ml-3 shrink-0"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Sign out */}
+            <Button
+              variant="outline"
+              className="w-full gap-2 text-destructive border-destructive/30 hover:bg-destructive/5"
+              onClick={handleSignOut}
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </Button>
+          </div>
+        )}
+
+        {/* Progress tab */}
+        {activeTab === 'progress' && connection && (
+          <div className="px-4">
+            <AthleteProgressTab connection={connection} />
+          </div>
+        )}
 
       </div>
     </ScrollArea>
