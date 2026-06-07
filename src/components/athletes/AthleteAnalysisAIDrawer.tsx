@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Bot, Send, Sparkles } from 'lucide-react';
+import { Bot, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -272,7 +272,8 @@ interface AthleteAnalysisAIDrawerProps {
   parametersV2: ParameterV2[];
 }
 
-type AIMessage = { role: 'user' | 'assistant'; content: string; hidden?: boolean };
+type DisplayMessage = { role: 'user' | 'assistant'; content: string };
+type ApiMessage    = { role: 'user' | 'assistant'; content: string };
 
 export function AthleteAnalysisAIDrawer({
   athleteId,
@@ -283,22 +284,27 @@ export function AthleteAnalysisAIDrawer({
   const connectionId = getConnectionForAthlete(athleteId)?.id ?? null;
 
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<AIMessage[]>([]);
+  // displayMessages — what the user sees in the chat UI
+  const [displayMessages, setDisplayMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [contextStr, setContextStr] = useState<string | null>(null);
   const [contextLoading, setContextLoading] = useState(false);
 
+  // apiMessages — the actual history sent to the API; context is prepended
+  // to the first user message so we never have two consecutive user turns.
+  const apiMessages = useRef<ApiMessage[]>([]);
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom on new messages
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, loading]);
+  }, [displayMessages, loading]);
 
-  // Fetch data once when the drawer is first opened
+  // Fetch context once when the drawer is first opened
   const handleOpen = useCallback(async () => {
     setOpen(true);
     if (contextStr !== null || contextLoading || !connectionId) return;
@@ -313,51 +319,47 @@ export function AthleteAnalysisAIDrawer({
     }
   }, [connectionId, contextStr, contextLoading, performanceParameters, parametersV2]);
 
-  const handleAnalyze = useCallback(async () => {
-    if (!contextStr || loading) return;
-    const userMsg: AIMessage = {
-      role: 'user',
-      content: `Please provide a structured analysis of the following athlete training data:\n\n${contextStr}`,
-      hidden: true,
-    };
-    setMessages([userMsg]);
-    setLoading(true);
-    try {
-      const reply = await sendMessage(
-        [{ role: 'user', content: userMsg.content }],
-        ANALYSIS_SYSTEM_PROMPT,
-        'claude-sonnet-4-5',
-        4096,
-      );
-      setMessages([userMsg, { role: 'assistant', content: reply }]);
-    } catch (e) {
-      console.error('AI analysis failed', e);
-    } finally {
-      setLoading(false);
-    }
-  }, [contextStr, loading]);
-
   const handleSend = useCallback(async () => {
-    if (!input.trim() || loading) return;
-    const followUp: AIMessage = { role: 'user', content: input.trim() };
-    const next = [...messages, followUp];
-    setMessages(next);
+    const text = input.trim();
+    if (!text || loading) return;
+
+    // Show the message in the UI immediately
+    const userDisplay: DisplayMessage = { role: 'user', content: text };
+    setDisplayMessages((prev) => [...prev, userDisplay]);
     setInput('');
     setLoading(true);
+
+    // Build the API turn — on the first message, merge the data context so the
+    // AI has it without an extra user→user role sequence.
+    const isFirst = apiMessages.current.length === 0;
+    const apiContent = isFirst && contextStr
+      ? `[Athlete data — last 90 days]\n${contextStr}\n\n---\n\n${text}`
+      : text;
+
+    const newApiMsg: ApiMessage = { role: 'user', content: apiContent };
+    const history = [...apiMessages.current, newApiMsg];
+
     try {
-      const apiMsgs = next.map(({ role, content }) => ({ role, content }));
-      const reply = await sendMessage(apiMsgs, ANALYSIS_SYSTEM_PROMPT, 'claude-sonnet-4-5', 4096);
-      setMessages([...next, { role: 'assistant', content: reply }]);
+      const reply = await sendMessage(history, ANALYSIS_SYSTEM_PROMPT, 'claude-sonnet-4-5', 4096);
+      const replyMsg: ApiMessage = { role: 'assistant', content: reply };
+      apiMessages.current = [...history, replyMsg];
+      setDisplayMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
     } catch (e) {
       console.error('AI send failed', e);
+      // Roll back the optimistic user message on error
+      setDisplayMessages((prev) => prev.slice(0, -1));
     } finally {
       setLoading(false);
     }
-  }, [input, loading, messages]);
+  }, [input, loading, contextStr]);
+
+  const handleClear = useCallback(() => {
+    setDisplayMessages([]);
+    apiMessages.current = [];
+    setInput('');
+  }, []);
 
   if (!connectionId) return null;
-
-  const visibleMessages = messages.filter((m) => !m.hidden);
 
   return (
     <>
@@ -389,13 +391,10 @@ export function AthleteAnalysisAIDrawer({
                 <Bot className="h-4 w-4 text-primary" />
                 <SheetTitle className="text-base">AI Analysis Assistant</SheetTitle>
               </div>
-              {visibleMessages.length > 0 && (
+              {displayMessages.length > 0 && (
                 <button
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors mr-8"
-                  onClick={() => {
-                    setMessages([]);
-                    setInput('');
-                  }}
+                  onClick={handleClear}
                 >
                   Clear conversation
                 </button>
@@ -404,38 +403,24 @@ export function AthleteAnalysisAIDrawer({
           </SheetHeader>
 
           {/* Message area */}
-          <div
-            ref={scrollRef}
-            className="flex-1 overflow-y-auto min-h-0 px-5 py-4"
-          >
-            {visibleMessages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full gap-4 py-8">
-                <p className="text-sm text-muted-foreground text-center max-w-sm">
+          <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0 px-5 py-4">
+            {displayMessages.length === 0 && (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-sm text-muted-foreground text-center max-w-xs">
                   {contextLoading
                     ? 'Loading athlete data…'
-                    : 'Send all athlete data to Claude and get a structured interpretation of load, stimulus, performance, and monitoring patterns.'}
+                    : 'Ask anything about this athlete — load, recovery, performance, next steps.'}
                 </p>
-                {!contextLoading && (
-                  <Button
-                    onClick={handleAnalyze}
-                    disabled={loading || !contextStr}
-                    className="gap-2"
-                  >
-                    <Sparkles className="h-4 w-4" />
-                    {loading ? 'Analyzing…' : 'Analyze all data'}
-                  </Button>
-                )}
               </div>
-            ) : (
+            )}
+            {displayMessages.length > 0 && (
               <div className="space-y-4">
-                {visibleMessages.map((m, i) => (
+                {displayMessages.map((m, i) => (
                   <div
                     key={i}
                     className={cn(
                       'rounded-lg px-3 py-2.5 text-sm',
-                      m.role === 'assistant'
-                        ? 'bg-muted'
-                        : 'bg-primary/10 ml-12',
+                      m.role === 'assistant' ? 'bg-muted' : 'bg-primary/10 ml-12',
                     )}
                   >
                     {m.role === 'assistant' ? (
@@ -454,31 +439,30 @@ export function AthleteAnalysisAIDrawer({
             )}
           </div>
 
-          {/* Follow-up input — only after first analysis */}
-          {visibleMessages.length > 0 && (
-            <div className="shrink-0 border-t px-5 py-3 flex items-center gap-2">
-              <Input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask a follow-up question…"
-                className="text-sm h-9"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-              />
-              <Button
-                size="icon"
-                className="h-9 w-9 shrink-0"
-                onClick={handleSend}
-                disabled={loading || !input.trim()}
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
+          {/* Input — always visible */}
+          <div className="shrink-0 border-t px-5 py-3 flex items-center gap-2">
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={contextLoading ? 'Loading data…' : 'Ask about this athlete…'}
+              disabled={contextLoading || loading}
+              className="text-sm h-9"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+            />
+            <Button
+              size="icon"
+              className="h-9 w-9 shrink-0"
+              onClick={handleSend}
+              disabled={contextLoading || loading || !input.trim()}
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
         </SheetContent>
       </Sheet>
     </>
