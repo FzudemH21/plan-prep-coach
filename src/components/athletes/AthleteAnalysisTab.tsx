@@ -39,7 +39,7 @@ import {
 } from '@/components/ui/select';
 import { CalendarIcon, X, Plus, Download } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
-import { exportAnalysisXLSX } from '@/utils/xlsxExport';
+import { exportAnalysisXLSX, type RawSessionLogForExport } from '@/utils/xlsxExport';
 import { supabase } from '@/lib/supabase';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import {
@@ -78,6 +78,7 @@ interface SessionLog {
   borg_rating: number | null;
   duration_seconds: number | null;
   completed_at: string | null;
+  comment: string | null;
   sets_logged: unknown;
 }
 
@@ -566,7 +567,7 @@ export function AthleteAnalysisTab({
       const [logsResult, scheduleResult] = await Promise.all([
         supabase
           .from('athlete_session_logs')
-          .select('id, date, session_id, session_name, borg_rating, duration_seconds, completed_at, sets_logged')
+          .select('id, date, session_id, session_name, borg_rating, duration_seconds, completed_at, comment, sets_logged')
           .eq('athlete_connection_id', resolvedConnectionId)
           .gte('date', r.from).lte('date', r.to),
         supabase
@@ -597,7 +598,7 @@ export function AthleteAnalysisTab({
       setOvLoading(true);
       const { data } = await supabase
         .from('athlete_session_logs')
-        .select('id, date, session_id, session_name, borg_rating, duration_seconds, completed_at, sets_logged')
+        .select('id, date, session_id, session_name, borg_rating, duration_seconds, completed_at, comment, sets_logged')
         .eq('athlete_connection_id', resolvedConnectionId)
         .gte('date', r.from).lte('date', r.to);
       if (!cancelled) {
@@ -883,12 +884,8 @@ export function AthleteAnalysisTab({
             {/* ── Export button ── */}
             <div className="flex justify-end">
               <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8"
-                title="Export session log and weekly summary to XLSX"
-                onClick={() => exportAnalysisXLSX(
-                  loadLogs as Parameters<typeof exportAnalysisXLSX>[0],
-                  schedule as Parameters<typeof exportAnalysisXLSX>[1],
-                  athleteName,
-                )}
+                title="Export internal load to XLSX"
+                onClick={() => exportAnalysisXLSX(loadLogs as RawSessionLogForExport[], athleteName)}
               >
                 <Download className="h-3.5 w-3.5" />
                 Export XLSX

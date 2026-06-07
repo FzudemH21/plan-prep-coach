@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, AlertTriangle, Smile, Activity, CalendarDays, CalendarIcon, X, MessageSquare, CheckCircle, Download } from 'lucide-react';
-import { exportMonitoringXLSX } from '@/utils/xlsxExport';
+import { exportMonitoringXLSX, type CustomBlockExport } from '@/utils/xlsxExport';
 import {
   LineChart, Line, ResponsiveContainer, XAxis, YAxis,
   Tooltip, ReferenceLine, ReferenceArea, CartesianGrid,
@@ -714,6 +714,7 @@ export function AthleteMonitoringTab({ athlete }: Props) {
     if (!athleteId) return;
     setExporting(true);
     try {
+      // 1. All check-ins (no date cap)
       const { data } = await supabase
         .from('athlete_daily_checkins')
         .select('*')
@@ -736,7 +737,32 @@ export function AthleteMonitoringTab({ athlete }: Props) {
         notes:               (r.notes as string | null) ?? null,
         createdAt:           r.created_at as string,
       }));
-      exportMonitoringXLSX(allCheckins, [athlete.firstName, athlete.lastName].filter(Boolean).join(' ') || 'Athlete');
+
+      // 2. Fetch all custom metric block data (full history, no date cap)
+      const customBlocks: CustomBlockExport[] = [];
+      for (const block of enabledCustomBlocks) {
+        const cfg = block.config;
+        const { data: rows } = await supabase
+          .from('athlete_test_results')
+          .select('value, recorded_at')
+          .eq('athlete_connection_id', athleteId)
+          .eq('parameter_id', cfg.parameterId)
+          .order('recorded_at', { ascending: true });
+        customBlocks.push({
+          name: cfg.parameterName,
+          unit: cfg.parameterUnit ?? null,
+          rows: (rows ?? []).map((r: { value: string; recorded_at: string }) => ({
+            date:  (r.recorded_at as string).slice(0, 10),
+            value: String(r.value),
+          })),
+        });
+      }
+
+      exportMonitoringXLSX(
+        allCheckins,
+        [athlete.firstName, athlete.lastName].filter(Boolean).join(' ') || 'Athlete',
+        customBlocks,
+      );
     } finally {
       setExporting(false);
     }
