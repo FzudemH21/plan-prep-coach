@@ -22,6 +22,54 @@ import type { MetricsSnapshotItem } from '@/hooks/useAthleteConnections';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Section = 'body' | 'performance' | 'exercises';
+type DateRangeKey = '3M' | '6M' | '1Y' | 'All';
+
+// ── Date range helpers ────────────────────────────────────────────────────────
+
+const DATE_RANGE_LABELS: Record<DateRangeKey, string> = {
+  '3M': '3M', '6M': '6M', '1Y': '1Y', 'All': 'All',
+};
+const DATE_RANGE_DAYS: Record<DateRangeKey, number | null> = {
+  '3M': 90, '6M': 180, '1Y': 365, 'All': null,
+};
+
+function cutoffDate(range: DateRangeKey): Date | null {
+  const days = DATE_RANGE_DAYS[range];
+  if (days === null) return null;
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+// ── Date range selector component ─────────────────────────────────────────────
+
+function DateRangeSelector({
+  value,
+  onChange,
+}: {
+  value: DateRangeKey;
+  onChange: (v: DateRangeKey) => void;
+}) {
+  return (
+    <div className="flex gap-1.5">
+      {(Object.keys(DATE_RANGE_LABELS) as DateRangeKey[]).map(key => (
+        <button
+          key={key}
+          onClick={() => onChange(key)}
+          className={cn(
+            'flex-1 py-1 rounded-md text-xs font-medium transition-colors',
+            value === key
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-muted text-muted-foreground hover:bg-muted/80 active:bg-muted/60',
+          )}
+        >
+          {DATE_RANGE_LABELS[key]}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -122,9 +170,28 @@ function MetricDetail({
   item: MetricsSnapshotItem;
   onBack: () => void;
 }) {
-  const chartData = toChartData(item);
-  const latest = getLatest(item);
-  const sortedValues = [...item.values].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt));
+  const [range, setRange] = useState<DateRangeKey>('All');
+
+  const filteredValues = useMemo(() => {
+    const cutoff = cutoffDate(range);
+    if (!cutoff) return item.values;
+    return item.values.filter(v => new Date(v.recordedAt) >= cutoff);
+  }, [item.values, range]);
+
+  const chartData = useMemo(() =>
+    [...filteredValues]
+      .filter(v => !isNaN(parseFloat(v.value)))
+      .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))
+      .map(v => ({ date: fmtDateShort(v.recordedAt), value: parseFloat(v.value) })),
+    [filteredValues],
+  );
+
+  const sortedValues = useMemo(() =>
+    [...filteredValues].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt)),
+    [filteredValues],
+  );
+
+  const latest = getLatest(item); // always the global latest, regardless of range
 
   return (
     <div className="space-y-4">
@@ -149,6 +216,9 @@ function MetricDetail({
           </div>
         )}
       </div>
+
+      {/* Date range selector */}
+      <DateRangeSelector value={range} onChange={setRange} />
 
       {/* Chart */}
       {chartData.length >= 2 ? (
@@ -175,7 +245,9 @@ function MetricDetail({
       ) : (
         <div className="h-24 flex items-center justify-center border rounded-lg bg-muted/20">
           <p className="text-xs text-muted-foreground text-center px-4">
-            {chartData.length === 0 ? 'No measurements recorded yet' : 'Add more measurements to see a trend chart'}
+            {chartData.length === 0
+              ? (range === 'All' ? 'No measurements recorded yet' : `No measurements in the last ${DATE_RANGE_LABELS[range]}`)
+              : 'Add more measurements to see a trend chart'}
           </p>
         </div>
       )}
@@ -401,17 +473,25 @@ function ExerciseDetail({
   tags: ParamTags | null;
   onBack: () => void;
 }) {
+  const [range, setRange] = useState<DateRangeKey>('All');
+
+  const filteredSessions = useMemo(() => {
+    const cutoff = cutoffDate(range);
+    if (!cutoff) return sessions;
+    return sessions.filter(s => new Date(s.date + 'T12:00:00') >= cutoff);
+  }, [sessions, range]);
+
   const chartData = useMemo(() => {
     if (!tags) return [];
-    return sessions
+    return filteredSessions
       .filter(s => s.e1rm !== null)
       .map(s => ({
         date: format(parseISO(s.date + 'T12:00:00'), 'MMM d'),
         value: parseFloat((s.e1rm as number).toFixed(1)),
       }));
-  }, [sessions, tags]);
+  }, [filteredSessions, tags]);
 
-  const latestE1RM = sessions.filter(s => s.e1rm !== null).pop()?.e1rm ?? null;
+  const latestE1RM = sessions.filter(s => s.e1rm !== null).pop()?.e1rm ?? null; // global latest
   const weightUnit = tags?.weightParam ? (exercise.allParamUnits[tags.weightParam] ?? '') : '';
 
   return (
@@ -440,6 +520,9 @@ function ExerciseDetail({
           </div>
         )}
       </div>
+
+      {/* Date range selector */}
+      <DateRangeSelector value={range} onChange={setRange} />
 
       {/* e1RM chart */}
       {tags && (
@@ -473,7 +556,9 @@ function ExerciseDetail({
           <div className="h-16 flex items-center justify-center border rounded-lg bg-muted/20">
             <p className="text-xs text-muted-foreground text-center px-4">
               {chartData.length === 0
-                ? 'Log sets with weight + reps for e1RM estimation'
+                ? (range === 'All'
+                    ? 'Log sets with weight + reps for e1RM estimation'
+                    : `No e1RM data in the last ${DATE_RANGE_LABELS[range]}`)
                 : 'Log more sessions with weight + reps to see the trend'}
             </p>
           </div>
@@ -482,8 +567,14 @@ function ExerciseDetail({
 
       {/* Session history */}
       <div className="space-y-2">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Session History</p>
-        {[...sessions].reverse().map((session, i) => (
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+          Session History{filteredSessions.length !== sessions.length ? ` (${filteredSessions.length} of ${sessions.length})` : ''}
+        </p>
+        {filteredSessions.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            No sessions in the last {DATE_RANGE_LABELS[range]}
+          </p>
+        ) : [...filteredSessions].reverse().map((session, i) => (
           <SessionRow
             key={`${session.logId}-${i}`}
             session={session}
