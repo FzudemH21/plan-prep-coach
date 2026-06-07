@@ -38,6 +38,17 @@ function formatShortDate(dateStr: string): { day: string; num: string } {
   };
 }
 
+function formatNextDate(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const targetStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((targetStart.getTime() - todayStart.getTime()) / 86400000);
+  if (diffDays === 1) return 'Tomorrow';
+  if (diffDays < 7) return d.toLocaleDateString('en-US', { weekday: 'long' });
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
 function addDays(dateStr: string, n: number): string {
   const d = new Date(dateStr + 'T12:00:00');
   return new Date(d.getTime() + n * 86400000).toISOString().slice(0, 10);
@@ -103,15 +114,61 @@ function SessionCard({
   );
 }
 
-function RestDay() {
+interface NextSessionInfo {
+  date: string;
+  sessionName: string;
+  sessionCount: number;
+}
+
+function RestDayCard({
+  nextSession,
+  coachNote,
+}: {
+  nextSession: NextSessionInfo | null;
+  coachNote?: string | null;
+}) {
   return (
     <Card className="bg-slate-50 border-slate-200">
-      <CardContent className="flex flex-col items-center justify-center py-8 gap-3">
-        <BedDouble className="h-9 w-9 text-slate-400" />
-        <div className="text-center">
-          <p className="font-semibold text-slate-600">Rest Day</p>
-          <p className="text-sm text-slate-400 mt-1">Recovery is part of the plan.</p>
+      <CardContent className="pt-6 pb-5 px-4 space-y-3">
+        {/* Header */}
+        <div className="flex flex-col items-center gap-2.5">
+          <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
+            <BedDouble className="h-7 w-7 text-slate-400" />
+          </div>
+          <div className="text-center">
+            <p className="font-semibold text-slate-700">Planned Rest Day</p>
+            <p className="text-sm text-slate-400 mt-0.5">Recovery is part of the plan.</p>
+          </div>
         </div>
+
+        {/* Coach note */}
+        {coachNote && (
+          <div className="rounded-xl bg-white border border-slate-200 px-3.5 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1.5">
+              From your coach
+            </p>
+            <p className="text-sm text-slate-700 leading-relaxed">{coachNote}</p>
+          </div>
+        )}
+
+        {/* Next session */}
+        {nextSession && (
+          <div className="flex items-center gap-3 rounded-xl bg-white border border-slate-200 px-3.5 py-3">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <Dumbbell className="h-4 w-4 text-primary" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                Next session
+              </p>
+              <p className="text-sm font-medium text-slate-700 truncate">
+                {nextSession.sessionName}
+                {nextSession.sessionCount > 1 ? ` +${nextSession.sessionCount - 1} more` : ''}
+              </p>
+              <p className="text-xs text-slate-400">{formatNextDate(nextSession.date)}</p>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -171,16 +228,35 @@ function EventCard({ ev }: { ev: AthleteCalendarEvent }) {
 
 function TodaySchedule({
   entry,
+  schedule,
+  today,
   getSessionLog,
   onEnterTestResult,
 }: {
   entry: AthleteScheduleEntry | null;
+  schedule: AthleteScheduleEntry[];
+  today: string; // yyyy-MM-dd
   getSessionLog: (date: string, sessionId: string) => SessionLog | null;
   onEnterTestResult: (ev: AthleteCalendarEvent) => void;
 }) {
   const hasSessions = (entry?.sessions.length ?? 0) > 0;
   const tests  = (entry?.events ?? []).filter(e => e.type === 'test');
   const events = (entry?.events ?? []).filter(e => e.type === 'event');
+
+  // Rest-day enrichment: next upcoming training day + optional coach note
+  const nextSession: NextSessionInfo | null = !hasSessions
+    ? (() => {
+        const next = schedule.find(e => e.date > today && e.sessions.length > 0);
+        return next
+          ? { date: next.date, sessionName: next.sessions[0].name, sessionCount: next.sessions.length }
+          : null;
+      })()
+    : null;
+
+  // Coach note: first event with notes on this day (events are still shown as EventCards above)
+  const coachNote = !hasSessions
+    ? (events.find(e => e.notes)?.notes ?? null)
+    : null;
 
   return (
     <div className="space-y-3">
@@ -199,15 +275,15 @@ function TodaySchedule({
         </div>
       )}
 
-      {/* Events — above sessions */}
-      {events.length > 0 && (
+      {/* Events — above sessions (training days only; rest days show note inside RestDayCard) */}
+      {hasSessions && events.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground">Events</p>
           {events.map(ev => <EventCard key={ev.id} ev={ev} />)}
         </div>
       )}
 
-      {/* Sessions */}
+      {/* Sessions or Rest day */}
       {hasSessions ? (
         <div className="space-y-2">
           {entry!.sessions.map((session, index) => (
@@ -221,7 +297,7 @@ function TodaySchedule({
           ))}
         </div>
       ) : (
-        <RestDay />
+        <RestDayCard nextSession={nextSession} coachNote={coachNote} />
       )}
     </div>
   );
@@ -315,6 +391,8 @@ export default function AthleteTodayPage() {
   }
 
   const todayEntry = getTodayEntry();
+  const _d = new Date();
+  const today = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, '0')}-${String(_d.getDate()).padStart(2, '0')}`;
 
   return (
     <>
@@ -390,6 +468,8 @@ export default function AthleteTodayPage() {
         {/* Today's schedule */}
         <TodaySchedule
           entry={todayEntry}
+          schedule={schedule}
+          today={today}
           getSessionLog={getSessionLog}
           onEnterTestResult={openTestSheet}
         />
