@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Dumbbell, ChevronRight, ChevronLeft, Activity, CalendarDays, CheckCircle2, GripVertical, ClipboardCheck } from 'lucide-react';
+import { Dumbbell, ChevronRight, ChevronLeft, Activity, CalendarDays, CheckCircle2, GripVertical, ClipboardCheck, BedDouble } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -277,9 +277,13 @@ function DaySection({
                 );
               })
             ) : (
-              <p className={cn('text-xs', isPast ? 'text-muted-foreground/50' : 'text-muted-foreground')}>
-                Rest day
-              </p>
+              <div className={cn(
+                'flex items-center gap-1.5 text-xs py-1',
+                isPast ? 'text-muted-foreground/40' : 'text-slate-400'
+              )}>
+                <BedDouble className="h-3.5 w-3.5 shrink-0" />
+                <span>Rest day</span>
+              </div>
             )}
             {provided.placeholder}
           </div>
