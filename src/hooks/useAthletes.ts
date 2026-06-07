@@ -1,5 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useSupabaseStore } from './useSupabaseStore';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 import {
   Athlete,
   AthleteGroup,
@@ -111,6 +113,7 @@ function ensureDefaultBiometrics(defs: BiometricDefinition[]): BiometricDefiniti
 }
 
 export function useAthletes() {
+  const { user } = useAuth();
   const [rawData, setRawData, isLoading] = useSupabaseStore<AthleteDatabase | LegacyAthleteDatabase>({
     tableName: 'athlete_database',
     legacyKey: 'athlete-database',
@@ -183,7 +186,15 @@ export function useAthletes() {
       athletePerformanceParameters: prev.athletePerformanceParameters.filter(pp => pp.athleteId !== id),
       calendarAssignments: prev.calendarAssignments.filter(ca => ca.athleteId !== id),
     }));
-  }, [setData]);
+    // Delete the athlete app connection — cascades to all child data (schedule, logs, check-ins …)
+    if (user) {
+      await supabase
+        .from('athlete_connections')
+        .delete()
+        .eq('athlete_local_id', id)
+        .eq('coach_user_id', user.id);
+    }
+  }, [setData, user]);
 
   // ── Biometric Definitions ─────────────────────────────────────────────────
 
@@ -295,11 +306,27 @@ export function useAthletes() {
 
   const archiveAthlete = useCallback(async (id: string) => {
     await setData(prev => ({ ...prev, athletes: prev.athletes.map(a => a.id === id ? { ...a, isArchived: true, updatedAt: new Date().toISOString() } : a) }));
-  }, [setData]);
+    // Soft-block the athlete app connection
+    if (user) {
+      await supabase
+        .from('athlete_connections')
+        .update({ is_suspended: true })
+        .eq('athlete_local_id', id)
+        .eq('coach_user_id', user.id);
+    }
+  }, [setData, user]);
 
   const unarchiveAthlete = useCallback(async (id: string) => {
     await setData(prev => ({ ...prev, athletes: prev.athletes.map(a => a.id === id ? { ...a, isArchived: false, updatedAt: new Date().toISOString() } : a) }));
-  }, [setData]);
+    // Re-enable the athlete app connection
+    if (user) {
+      await supabase
+        .from('athlete_connections')
+        .update({ is_suspended: false })
+        .eq('athlete_local_id', id)
+        .eq('coach_user_id', user.id);
+    }
+  }, [setData, user]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 

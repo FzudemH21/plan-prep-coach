@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Home, Calendar, MessageCircle, User, Bell } from 'lucide-react';
+import { Home, Calendar, MessageCircle, User, Bell, Lock, UserX } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAthleteApp } from '@/hooks/useAthleteApp';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -77,10 +78,57 @@ function useAthleteUnread(connectionId: string | null) {
   return { unreadCount, previews, markRead, reload: load };
 }
 
+async function signOutAthlete() {
+  await supabase.auth.signOut();
+}
+
 export function AthleteAppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { connection, loading } = useAthleteApp();
+
+  // ── Access gates ────────────────────────────────────────────────────────────
+  // Suspended: coach archived the athlete — show soft-block screen.
+  if (!loading && connection?.isSuspended) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen max-w-[480px] mx-auto px-6 text-center gap-6">
+        <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
+          <Lock className="h-8 w-8 text-amber-600" />
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-xl font-semibold">Access suspended</h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Your coach has temporarily suspended your access to this app.
+            Please reach out to your coach for more information.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={signOutAthlete}>
+          Sign out
+        </Button>
+      </div>
+    );
+  }
+
+  // Removed: connection row was deleted — athlete is logged in but has no account.
+  if (!loading && !connection) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen max-w-[480px] mx-auto px-6 text-center gap-6">
+        <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
+          <UserX className="h-8 w-8 text-destructive" />
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-xl font-semibold">Account removed</h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Your athlete account is no longer linked to a coach.
+            Please contact your coach to receive a new invite.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={signOutAthlete}>
+          Sign out
+        </Button>
+      </div>
+    );
+  }
 
   const chatEnabled = connection?.chatEnabled ?? true;
 

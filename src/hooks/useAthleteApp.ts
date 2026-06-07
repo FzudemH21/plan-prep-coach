@@ -17,6 +17,8 @@ export interface AthleteConnection {
   monitoringEnabled: boolean;
   allowRearrangeWorkouts: boolean;
   chatEnabled: boolean;
+  /** True when the coach has archived the athlete — athlete app shows a soft-block screen. */
+  isSuspended: boolean;
   profileData: AthleteProfileData;
 }
 
@@ -136,17 +138,24 @@ export function useAthleteApp() {
     async function load() {
       console.log(`[useAthleteApp] ▶ loading for user=${user!.id} role=${user!.user_metadata?.role}`);
       try {
-        // Load connection
+        // Load connection — use maybeSingle so a missing row returns null instead of an error
         const { data: connData, error: connErr } = await supabase
           .from('athlete_connections')
           .select('*')
           .eq('athlete_auth_user_id', user!.id)
-          .single();
+          .maybeSingle();
         if (connErr) {
           console.error('[useAthleteApp] ✗ connection query failed:', connErr.code, connErr.message);
           throw connErr;
         }
-        console.log(`[useAthleteApp] ✓ connection found: id=${connData.id} name=${connData.athlete_name}`);
+        if (!connData) {
+          // Connection row was deleted (coach permanently removed this athlete)
+          console.log('[useAthleteApp] no connection found — athlete was removed by coach');
+          setConnection(null);
+          setLoading(false);
+          return;
+        }
+        console.log(`[useAthleteApp] ✓ connection found: id=${connData.id} name=${connData.athlete_name} suspended=${connData.is_suspended}`);
         const conn: AthleteConnection = {
           id: connData.id,
           coachUserId: connData.coach_user_id,
@@ -159,6 +168,7 @@ export function useAthleteApp() {
           monitoringEnabled: connData.monitoring_enabled ?? true,
           allowRearrangeWorkouts: connData.allow_rearrange_workouts ?? false,
           chatEnabled: ((connData.profile_data as AthleteProfileData)?.chatEnabled) ?? true,
+          isSuspended: (connData.is_suspended as boolean) ?? false,
           profileData: (connData.profile_data as AthleteProfileData) ?? {},
         };
         setConnection(conn);
