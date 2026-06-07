@@ -57,7 +57,9 @@ import {
   LineChart,
   Search,
   Dumbbell,
+  Download,
 } from 'lucide-react';
+import { exportPerformanceXLSX } from '@/utils/xlsxExport';
 import {
   Athlete,
   AthleteBiometric,
@@ -703,6 +705,19 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
           >
             <Plus className="h-3.5 w-3.5" />
             Add
+          </Button>
+          <Button
+            variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0"
+            title="Export body metrics & performance parameters to XLSX"
+            onClick={() => exportPerformanceXLSX(
+              athleteBiometrics,
+              athleteData.biometricDefinitions,
+              athletePerformanceParams,
+              athleticismParameters,
+              [athlete.firstName, athlete.lastName].filter(Boolean).join(' ') || 'Athlete',
+            )}
+          >
+            <Download className="h-3.5 w-3.5" />
           </Button>
         </div>
 

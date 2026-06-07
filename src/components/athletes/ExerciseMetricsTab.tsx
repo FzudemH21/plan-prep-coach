@@ -16,7 +16,8 @@ import {
   SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { Dumbbell, Search, Settings2, Trophy, ChevronDown, ChevronUp } from 'lucide-react';
+import { Dumbbell, Search, Settings2, Trophy, ChevronDown, ChevronUp, Download } from 'lucide-react';
+import { exportExerciseXLSX } from '@/utils/xlsxExport';
 import {
   useExerciseMetrics,
   epley1RM,
@@ -627,8 +628,8 @@ export function ExerciseMetricsTab({ athlete }: Props) {
 
       {/* Left panel — exercise list */}
       <div className="w-72 shrink-0 border-r flex flex-col">
-        <div className="p-3 border-b shrink-0">
-          <div className="relative">
+        <div className="p-3 border-b shrink-0 flex items-center gap-2">
+          <div className="relative flex-1">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
             <Input
               placeholder="Search exercises…"
@@ -637,6 +638,18 @@ export function ExerciseMetricsTab({ athlete }: Props) {
               className="pl-8 h-8 text-sm"
             />
           </div>
+          <Button
+            variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0"
+            title="Export exercise e1RM history to XLSX"
+            onClick={() => exportExerciseXLSX(
+              exercises,
+              getExerciseHistory,
+              paramTags,
+              [athlete.firstName, athlete.lastName].filter(Boolean).join(' ') || 'Athlete',
+            )}
+          >
+            <Download className="h-3.5 w-3.5" />
+          </Button>
         </div>
 
         {/* Column headers */}

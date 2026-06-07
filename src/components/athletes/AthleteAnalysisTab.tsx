@@ -37,8 +37,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { CalendarIcon, X, Plus } from 'lucide-react';
+import { CalendarIcon, X, Plus, Download } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
+import { exportAnalysisXLSX } from '@/utils/xlsxExport';
 import { supabase } from '@/lib/supabase';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import {
@@ -474,6 +475,7 @@ function OverviewPerfPanel({ series, data, bucketLabelMap, onRemoveSeries }: Ove
 interface AthleteAnalysisTabProps {
   athleteId: string;
   connectionId: string;
+  athleteName?: string;
   performanceParameters?: AthletePerformanceParameter[];
   parametersV2?: ParameterV2[];
 }
@@ -481,6 +483,7 @@ interface AthleteAnalysisTabProps {
 export function AthleteAnalysisTab({
   athleteId,
   connectionId: connectionIdProp,
+  athleteName = 'Athlete',
   performanceParameters = [],
   parametersV2 = [],
 }: AthleteAnalysisTabProps) {
@@ -877,6 +880,21 @@ export function AthleteAnalysisTab({
 
         {resolvedConnectionId && (
           <>
+            {/* ── Export button ── */}
+            <div className="flex justify-end">
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8"
+                title="Export session log and weekly summary to XLSX"
+                onClick={() => exportAnalysisXLSX(
+                  loadLogs as Parameters<typeof exportAnalysisXLSX>[0],
+                  schedule as Parameters<typeof exportAnalysisXLSX>[1],
+                  athleteName,
+                )}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export XLSX
+              </Button>
+            </div>
+
             {/* ── Internal Load ── */}
             <Card>
               <CardHeader className="pb-2">

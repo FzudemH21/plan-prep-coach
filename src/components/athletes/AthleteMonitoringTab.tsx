@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, AlertTriangle, Smile, Activity, CalendarDays, CalendarIcon, X, MessageSquare, CheckCircle } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, AlertTriangle, Smile, Activity, CalendarDays, CalendarIcon, X, MessageSquare, CheckCircle, Download } from 'lucide-react';
+import { exportMonitoringXLSX } from '@/utils/xlsxExport';
 import {
   LineChart, Line, ResponsiveContainer, XAxis, YAxis,
   Tooltip, ReferenceLine, ReferenceArea, CartesianGrid,
@@ -707,6 +708,40 @@ export function AthleteMonitoringTab({ athlete }: Props) {
   function goNewer() { setSelectedIdx(i => Math.max(0, i - 1)); }
   function goOlder() { setSelectedIdx(i => Math.min(checkins.length - 1, i + 1)); }
 
+  // ── Export ──
+  const [exporting, setExporting] = useState(false);
+  async function handleExport() {
+    if (!athleteId) return;
+    setExporting(true);
+    try {
+      const { data } = await supabase
+        .from('athlete_daily_checkins')
+        .select('*')
+        .eq('athlete_connection_id', athleteId)
+        .order('date', { ascending: false });
+      const allCheckins = (data ?? []).map((r: Record<string, unknown>) => ({
+        id:                  r.id as string,
+        date:                r.date as string,
+        wellnessFatigue:     (r.wellness_fatigue  as number) ?? null,
+        wellnessSleep:       (r.wellness_sleep    as number) ?? null,
+        wellnessSoreness:    (r.wellness_soreness as number) ?? null,
+        wellnessStress:      (r.wellness_stress   as number) ?? null,
+        wellnessMood:        (r.wellness_mood     as number) ?? null,
+        hasPain:             (r.has_pain  as boolean) ?? false,
+        painAreas:           (r.pain_areas  as import('@/hooks/useAthleteCheckins').CheckinPainArea[]) ?? [],
+        hasIllness:          (r.has_illness as boolean) ?? false,
+        illnessSymptoms:     (r.illness_symptoms  as string[]) ?? [],
+        illnessSymptomOther: (r.illness_symptom_other as string) ?? '',
+        illnessNrs:          (r.illness_nrs as number) ?? null,
+        notes:               (r.notes as string | null) ?? null,
+        createdAt:           r.created_at as string,
+      }));
+      exportMonitoringXLSX(allCheckins, [athlete.firstName, athlete.lastName].filter(Boolean).join(' ') || 'Athlete');
+    } finally {
+      setExporting(false);
+    }
+  }
+
   function formatCheckinDate(date: string): string {
     const today     = new Date().toISOString().slice(0, 10);
     const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
@@ -778,6 +813,14 @@ export function AthleteMonitoringTab({ athlete }: Props) {
   return (
     <ScrollArea className="h-full">
       <div className="p-4 space-y-4">
+
+        {/* ── Export button ── */}
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting} className="gap-1.5 text-xs h-8">
+            <Download className="h-3.5 w-3.5" />
+            {exporting ? 'Exporting…' : 'Export XLSX'}
+          </Button>
+        </div>
 
         {/* ── 2×2 grid: [Wellness score | Illness] / [Wellness chart | Pain] ── */}
         <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr', gridTemplateRows: 'auto auto' }}>

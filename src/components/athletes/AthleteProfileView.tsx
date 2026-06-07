@@ -735,6 +735,7 @@ export function AthleteProfileView({
           <AthleteAnalysisTab
             athleteId={athlete.id}
             connectionId=""
+            athleteName={[athlete.firstName, athlete.lastName].filter(Boolean).join(' ') || 'Athlete'}
             performanceParameters={athleteData.athletePerformanceParameters.filter(p => p.athleteId === athlete.id)}
             parametersV2={parametersData.parameters}
           />
