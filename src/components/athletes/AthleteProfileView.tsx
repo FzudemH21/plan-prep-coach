@@ -31,7 +31,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Save, Trash2, X, Calendar, User, Mic, MicOff, Clock, Files, TrendingUp, Settings, BarChart2, Activity, MessageCircle, Send, Loader2, Paperclip, ImageIcon, Film, FileText } from 'lucide-react';
+import { Plus, Save, Trash2, X, Calendar, User, Mic, MicOff, Clock, Files, TrendingUp, Settings, BarChart2, Activity, MessageCircle, Send, Loader2, Paperclip, ImageIcon, Film, FileText, AlertTriangle } from 'lucide-react';
 import { useSpeechInput } from '@/hooks/useSpeechInput';
 import {
   Athlete,
@@ -797,6 +797,7 @@ export function AthleteProfileView({
                 </div>
                 <div ref={chatBottomRef} />
               </ScrollArea>
+              {(athleteConnection?.chatEnabled ?? true) ? (
               <div className="shrink-0 border-t px-4 py-3">
                 {/* Pending file chips */}
                 {chatPendingFiles.length > 0 && (
@@ -858,6 +859,21 @@ export function AthleteProfileView({
                   </Button>
                 </div>
               </div>
+              ) : (
+              <div className="shrink-0 border-t px-4 py-4 bg-amber-50 dark:bg-amber-950/30">
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                      Messaging is disabled for this athlete
+                    </p>
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                      Enable it in the Settings tab so messages reach them.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              )}
             </div>
           )}
         </TabsContent>

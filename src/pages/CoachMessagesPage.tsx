@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { format, parseISO, isToday, isYesterday } from 'date-fns';
-import { Send, MessageCircle, Loader2, ChevronLeft, Paperclip, X, FileText, ImageIcon, Film } from 'lucide-react';
+import { Send, MessageCircle, Loader2, ChevronLeft, Paperclip, X, FileText, ImageIcon, Film, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -40,11 +40,13 @@ function ThreadView({
   connectionId,
   athleteName,
   athleteLocalId,
+  chatEnabled,
   onBack,
 }: {
   connectionId: string;
   athleteName: string;
   athleteLocalId: string;
+  chatEnabled: boolean;
   onBack: () => void;
 }) {
   const { user } = useAuth();
@@ -201,69 +203,84 @@ function ThreadView({
         <div ref={bottomRef} />
       </ScrollArea>
 
-      {/* Input */}
-      <div className="shrink-0 border-t px-4 py-3">
-        {/* Pending file chips */}
-        {pendingFiles.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-2">
-            {pendingFiles.map((file, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-1 bg-muted rounded-full px-2 py-0.5 text-xs text-foreground"
-              >
-                {fileIcon(file)}
-                <span className="max-w-[100px] truncate">{file.name}</span>
-                <button
-                  type="button"
-                  onClick={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
-                  className="ml-0.5 hover:text-destructive"
+      {/* Input or disabled notice */}
+      {chatEnabled ? (
+        <div className="shrink-0 border-t px-4 py-3">
+          {/* Pending file chips */}
+          {pendingFiles.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-2">
+              {pendingFiles.map((file, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-1 bg-muted rounded-full px-2 py-0.5 text-xs text-foreground"
                 >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
+                  {fileIcon(file)}
+                  <span className="max-w-[100px] truncate">{file.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
+                    className="ml-0.5 hover:text-destructive"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex items-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 shrink-0"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending}
+              aria-label="Attach file"
+            >
+              <Paperclip className="h-4 w-4" />
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              multiple
+              accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+              onChange={handleFileChange}
+            />
+            <Textarea
+              ref={textareaRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={`Message ${athleteName}...`}
+              rows={1}
+              className="flex-1 resize-none min-h-[40px] max-h-[120px] text-sm py-2"
+            />
+            <Button
+              size="icon"
+              onClick={handleSend}
+              disabled={(!draft.trim() && pendingFiles.length === 0) || sending}
+              className="h-10 w-10 shrink-0"
+            >
+              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </Button>
           </div>
-        )}
-        <div className="flex items-end gap-2">
-          {/* Attachment button */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-10 w-10 shrink-0"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={sending}
-            aria-label="Attach file"
-          >
-            <Paperclip className="h-4 w-4" />
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            multiple
-            accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
-            onChange={handleFileChange}
-          />
-          <Textarea
-            ref={textareaRef}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={`Message ${athleteName}...`}
-            rows={1}
-            className="flex-1 resize-none min-h-[40px] max-h-[120px] text-sm py-2"
-          />
-          <Button
-            size="icon"
-            onClick={handleSend}
-            disabled={(!draft.trim() && pendingFiles.length === 0) || sending}
-            className="h-10 w-10 shrink-0"
-          >
-            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </Button>
         </div>
-      </div>
+      ) : (
+        <div className="shrink-0 border-t px-4 py-4 bg-amber-50 dark:bg-amber-950/30">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                Messaging is disabled for {athleteName}
+              </p>
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                Enable it in the athlete's Settings tab so messages reach them.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -296,6 +313,7 @@ export default function CoachMessagesPage() {
         connectionId={selectedId}
         athleteName={selectedConn.athleteName}
         athleteLocalId={selectedConn.athleteLocalId}
+        chatEnabled={selectedConn.chatEnabled}
         onBack={() => setSelectedId(null)}
       />
     );
@@ -347,6 +365,11 @@ export default function CoachMessagesPage() {
                     <p className="text-xs text-muted-foreground truncate">{conn.athleteEmail}</p>
                   )}
                 </div>
+                {!conn.chatEnabled && (
+                  <span className="text-[10px] font-medium text-amber-700 bg-amber-100 rounded-full px-2 py-0.5 shrink-0 dark:bg-amber-900/40 dark:text-amber-400">
+                    Messaging off
+                  </span>
+                )}
                 {unread > 0 && (
                   <Badge variant="destructive" className="shrink-0 text-xs">
                     {unread}
