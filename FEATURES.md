@@ -16,7 +16,6 @@ Claude Chat (browser) is my sparring partner for planning, discussion, and promp
 |---|---|---|
 | 🟠 Later | **Squad / Group dashboard** — for each athlete in a group: traffic-light wellness from latest check-in, current-week load vs. SD baseline, compliance rate, flagged pain/illness alerts. Groups already exist in athlete DB. | ⬜ Open |
 | 🟠 Later | **XLSX data export (per athlete)** — contextual export buttons placed where data lives: (1) Monitoring tab → daily wellness (all 5 items + composite + z-score), pain incidents, illness episodes; (2) Performance tab → performance metrics over time, body metrics, e1RM history per exercise; (3) Analysis tab → session log with sRPE, planned vs actual AU, adherence summary. Each export produces a focused XLSX (SheetJS, runs in browser). Physios get the monitoring sheet, sports directors get the performance sheet — no one-size-fits-all dump. | ⬜ Open |
-| 🟠 Later | Goal Management + test notifications | ⬜ Open |
 | 🔵 Future | **Invite flow** — coach sends invite link → athlete onboarding (language, name, birthday, photo) | ⬜ Open |
 | 🔵 Future | Progress photos in athlete profile | ⬜ Open |
 | 🔵 Future | Language selection on first open (German / English) | ⬜ Open |
