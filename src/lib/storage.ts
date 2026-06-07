@@ -34,3 +34,34 @@ export async function getSignedUrl(path: string, expiresIn = 3600): Promise<stri
   if (error) throw error;
   return data.signedUrl;
 }
+
+// ── Chat file upload ──────────────────────────────────────────────────────────
+// Stores chat attachments under chat/{connectionId}/{timestamp}_{filename}
+// in the same documents bucket (private — accessed via signed URLs).
+
+export interface ChatAttachmentMeta {
+  name: string;
+  type: 'image' | 'video' | 'document';
+  mimeType: string;
+  path: string;
+  size: number;
+}
+
+export async function uploadChatFile(
+  connectionId: string,
+  file: File
+): Promise<ChatAttachmentMeta> {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `chat/${connectionId}/${Date.now()}_${safeName}`;
+  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
+    upsert: false,
+    contentType: file.type,
+  });
+  if (error) throw error;
+  const type: 'image' | 'video' | 'document' = file.type.startsWith('image/')
+    ? 'image'
+    : file.type.startsWith('video/')
+    ? 'video'
+    : 'document';
+  return { name: file.name, type, mimeType: file.type, path, size: file.size };
+}

@@ -31,7 +31,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Save, Trash2, X, Calendar, User, Mic, MicOff, Clock, Files, TrendingUp, Settings, BarChart2, Activity, MessageCircle, Send, Loader2 } from 'lucide-react';
+import { Plus, Save, Trash2, X, Calendar, User, Mic, MicOff, Clock, Files, TrendingUp, Settings, BarChart2, Activity, MessageCircle, Send, Loader2, Paperclip, ImageIcon, Film, FileText } from 'lucide-react';
 import { useSpeechInput } from '@/hooks/useSpeechInput';
 import {
   Athlete,
@@ -54,7 +54,10 @@ import { useAthletes } from '@/hooks/useAthletes';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { useChat } from '@/hooks/useChat';
+import type { ChatAttachment } from '@/hooks/useChat';
 import { useAuth } from '@/hooks/useAuth';
+import { uploadChatFile } from '@/lib/storage';
+import { ChatAttachmentDisplay } from '@/components/chat/ChatAttachmentDisplay';
 import { parseISO, isToday, isYesterday } from 'date-fns';
 import { useRef, useLayoutEffect } from 'react';
 
@@ -165,7 +168,32 @@ export function AthleteProfileView({
   });
   const [chatDraft, setChatDraft] = useState('');
   const [chatSending, setChatSending] = useState(false);
+  const [chatPendingFiles, setChatPendingFiles] = useState<File[]>([]);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const chatFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleChatSend = async () => {
+    const hasText = chatDraft.trim().length > 0;
+    const hasFiles = chatPendingFiles.length > 0;
+    if ((!hasText && !hasFiles) || chatSending || !athleteConnection) return;
+    setChatSending(true);
+    try {
+      let attachments: ChatAttachment[] | undefined;
+      if (hasFiles) {
+        const results = await Promise.all(
+          chatPendingFiles.map((f) => uploadChatFile(athleteConnection.id, f))
+        );
+        attachments = results as ChatAttachment[];
+      }
+      await chatSend(chatDraft, { attachments });
+      setChatDraft('');
+      setChatPendingFiles([]);
+    } catch (e) {
+      console.error('[chat] send error', e);
+    } finally {
+      setChatSending(false);
+    }
+  };
 
   // Notes state
   const [newNoteText, setNewNoteText] = useState('');
@@ -752,9 +780,14 @@ export function AthleteProfileView({
                             📎 {[msg.reference.exerciseName, msg.reference.sectionName, msg.reference.sessionName, msg.reference.date ? format(parseISO(msg.reference.date + 'T12:00:00'), 'd MMM yyyy') : undefined].filter(Boolean).join(' · ')}
                           </button>
                         )}
-                        <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm break-words ${isOwn ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-muted text-foreground rounded-bl-sm'}`}>
-                          {msg.content}
-                        </div>
+                        {msg.content && (
+                          <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm break-words ${isOwn ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-muted text-foreground rounded-bl-sm'}`}>
+                            {msg.content}
+                          </div>
+                        )}
+                        {msg.attachments?.map((att, i) => (
+                          <ChatAttachmentDisplay key={i} attachment={att} isOwn={isOwn} />
+                        ))}
                         <span className="text-[10px] text-muted-foreground mt-0.5 px-1">
                           {format(parseISO(msg.createdAt), isToday(parseISO(msg.createdAt)) ? 'HH:mm' : 'dd MMM, HH:mm')}
                         </span>
@@ -764,34 +797,66 @@ export function AthleteProfileView({
                 </div>
                 <div ref={chatBottomRef} />
               </ScrollArea>
-              <div className="shrink-0 border-t px-4 py-3 flex items-end gap-2">
-                <Textarea
-                  value={chatDraft}
-                  onChange={(e) => setChatDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      if (!chatDraft.trim() || chatSending) return;
-                      setChatSending(true);
-                      chatSend(chatDraft).then(() => setChatDraft('')).finally(() => setChatSending(false));
-                    }
-                  }}
-                  placeholder={`Message ${athlete.firstName ?? athlete.id}…`}
-                  rows={1}
-                  className="flex-1 resize-none min-h-[40px] max-h-[120px] text-sm py-2"
-                />
-                <Button
-                  size="icon"
-                  onClick={() => {
-                    if (!chatDraft.trim() || chatSending) return;
-                    setChatSending(true);
-                    chatSend(chatDraft).then(() => setChatDraft('')).finally(() => setChatSending(false));
-                  }}
-                  disabled={!chatDraft.trim() || chatSending}
-                  className="h-10 w-10 shrink-0"
-                >
-                  {chatSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                </Button>
+              <div className="shrink-0 border-t px-4 py-3">
+                {/* Pending file chips */}
+                {chatPendingFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {chatPendingFiles.map((file, i) => (
+                      <div key={i} className="flex items-center gap-1 bg-muted rounded-full px-2 py-0.5 text-xs text-foreground">
+                        {file.type.startsWith('image/') ? <ImageIcon className="h-3 w-3" /> : file.type.startsWith('video/') ? <Film className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
+                        <span className="max-w-[100px] truncate">{file.name}</span>
+                        <button type="button" onClick={() => setChatPendingFiles((prev) => prev.filter((_, j) => j !== i))} className="ml-0.5 hover:text-destructive">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-end gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-10 shrink-0"
+                    onClick={() => chatFileInputRef.current?.click()}
+                    disabled={chatSending}
+                    aria-label="Attach file"
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
+                  <input
+                    ref={chatFileInputRef}
+                    type="file"
+                    className="hidden"
+                    multiple
+                    accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+                    onChange={(e) => {
+                      setChatPendingFiles((prev) => [...prev, ...Array.from(e.target.files ?? [])]);
+                      e.target.value = '';
+                    }}
+                  />
+                  <Textarea
+                    value={chatDraft}
+                    onChange={(e) => setChatDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleChatSend();
+                      }
+                    }}
+                    placeholder={`Message ${athlete.firstName ?? athlete.id}…`}
+                    rows={1}
+                    className="flex-1 resize-none min-h-[40px] max-h-[120px] text-sm py-2"
+                  />
+                  <Button
+                    size="icon"
+                    onClick={handleChatSend}
+                    disabled={(!chatDraft.trim() && chatPendingFiles.length === 0) || chatSending}
+                    className="h-10 w-10 shrink-0"
+                  >
+                    {chatSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  </Button>
+                </div>
               </div>
             </div>
           )}

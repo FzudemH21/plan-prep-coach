@@ -18,6 +18,14 @@ export interface MessageReference {
   date?: string; // yyyy-MM-dd
 }
 
+export interface ChatAttachment {
+  name: string;
+  type: 'image' | 'video' | 'document';
+  mimeType: string;
+  path: string; // storage path relative to documents bucket
+  size: number; // bytes
+}
+
 export interface ChatMessage {
   id: string;
   connectionId: string;
@@ -26,6 +34,7 @@ export interface ChatMessage {
   content: string;
   messageType: MessageType;
   reference?: MessageReference;
+  attachments?: ChatAttachment[];
   readByCoachAt: string | null;
   readByAthleteAt: string | null;
   createdAt: string;
@@ -40,6 +49,7 @@ function rowToMessage(row: Record<string, unknown>): ChatMessage {
     content: row.content as string,
     messageType: (row.message_type as MessageType) ?? 'text',
     reference: row.reference as MessageReference | undefined,
+    attachments: (row.attachments as ChatAttachment[] | null) ?? undefined,
     readByCoachAt: row.read_by_coach_at as string | null,
     readByAthleteAt: row.read_by_athlete_at as string | null,
     createdAt: row.created_at as string,
@@ -136,9 +146,11 @@ export function useChat({ connectionId, callerRole }: UseChatOptions) {
   const sendMessage = useCallback(
     async (
       content: string,
-      opts?: { messageType?: MessageType; reference?: MessageReference }
+      opts?: { messageType?: MessageType; reference?: MessageReference; attachments?: ChatAttachment[] }
     ) => {
-      if (!connectionId || !user || !content.trim()) return;
+      const hasText = content.trim().length > 0;
+      const hasAttachments = (opts?.attachments?.length ?? 0) > 0;
+      if (!connectionId || !user || (!hasText && !hasAttachments)) return;
 
       // Optimistic update — show message immediately while DB write is in flight
       const optimisticId = `optimistic-${Date.now()}`;
@@ -150,6 +162,7 @@ export function useChat({ connectionId, callerRole }: UseChatOptions) {
         content: content.trim(),
         messageType: opts?.messageType ?? 'text',
         reference: opts?.reference,
+        attachments: opts?.attachments,
         readByCoachAt: null,
         readByAthleteAt: null,
         createdAt: new Date().toISOString(),
@@ -163,6 +176,7 @@ export function useChat({ connectionId, callerRole }: UseChatOptions) {
         content: content.trim(),
         message_type: opts?.messageType ?? 'text',
         reference: opts?.reference ?? null,
+        attachments: opts?.attachments ?? null,
       };
 
       const { data, error } = await supabase
