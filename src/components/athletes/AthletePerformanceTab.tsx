@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import type { MetricsSnapshot, MetricsSnapshotItem } from '@/hooks/useAthleteConnections';
 import { ExerciseMetricsTab } from '@/components/athletes/ExerciseMetricsTab';
 import { format, subDays, parseISO } from 'date-fns';
@@ -286,11 +286,10 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
       });
   }, [athlete.id, getConnectionForAthlete]);
 
-  // ── Metrics snapshot — push to athlete_connections.profile_data on every change ──
-  // Skips the very first mount (initial load is not a user-initiated change).
-  const _snapshotFirstMount = useRef(true);
+  // ── Metrics snapshot — push to athlete_connections.profile_data on mount and on every change ──
+  // Uses connection?.id (stable string) instead of connection (object) to avoid re-triggering
+  // after updateMetricsSnapshot updates the local connection object reference.
   useEffect(() => {
-    if (_snapshotFirstMount.current) { _snapshotFirstMount.current = false; return; }
     if (!connection) return;
     const snapshot: MetricsSnapshot = {
       bodyMetrics: athleteBiometrics
@@ -320,7 +319,7 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
     };
     updateMetricsSnapshot(connection.id, snapshot).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [athleteBiometrics, athletePerformanceParams]);
+  }, [athleteBiometrics, athletePerformanceParams, connection?.id]);
 
   // Keep selected item in sync; only resolve if it matches the active tab
   const resolvedSelected = useMemo<SelectedItem | null>(() => {
