@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { addDays, subDays, format } from 'date-fns';
 import {
@@ -119,6 +120,80 @@ function ZBadge({ z, positiveIsGood = false }: { z: number; positiveIsGood?: boo
     <span className={cn('text-xs font-mono tabular-nums', colorClass)} title="Z-score (28-day reference)">
       {label}
     </span>
+  );
+}
+
+/** Thin horizontal bar showing intensity as a proportion of 0–10, coloured with Borg palette. */
+function IntensityBar({ intensity }: { intensity: string }) {
+  if (!isBorgLevel(intensity)) return null;
+  const pct = (parseInt(intensity, 10) / 10) * 100;
+  return (
+    <div className="h-1 w-full rounded-full bg-muted overflow-hidden mt-0.5">
+      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: getBorgBg(intensity) }} />
+    </div>
+  );
+}
+
+/**
+ * Renders up to 2 tests/events; shows a "+n more" tooltip for overflow.
+ * Works in both card and list views.
+ */
+function TestsEventsDisplay({
+  tests, events, truncateClass = 'max-w-[120px]',
+}: {
+  tests: string[];
+  events: string[];
+  truncateClass?: string;
+}) {
+  const all = [
+    ...tests.map(t => ({ label: t, kind: 'test' as const })),
+    ...events.map(e => ({ label: e, kind: 'event' as const })),
+  ];
+  if (all.length === 0) return <span className="text-muted-foreground">—</span>;
+
+  const visible  = all.slice(0, 2);
+  const overflow = all.slice(2);
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      {visible.map((item, i) => (
+        <div
+          key={i}
+          className={cn('flex items-center gap-1 text-[10px]', item.kind === 'test' ? 'text-amber-700' : 'text-blue-700')}
+        >
+          {item.kind === 'test'
+            ? <FlaskConical className="h-3 w-3 shrink-0" />
+            : <CalendarDays className="h-3 w-3 shrink-0" />}
+          <span className={cn('truncate', truncateClass)}>{item.label}</span>
+        </div>
+      ))}
+      {overflow.length > 0 && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-[10px] text-muted-foreground cursor-default hover:text-foreground w-fit">
+                +{overflow.length} more
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="max-w-[200px]">
+              <div className="flex flex-col gap-1">
+                {overflow.map((item, i) => (
+                  <div
+                    key={i}
+                    className={cn('flex items-center gap-1 text-xs', item.kind === 'test' ? 'text-amber-700' : 'text-blue-700')}
+                  >
+                    {item.kind === 'test'
+                      ? <FlaskConical className="h-3 w-3 shrink-0" />
+                      : <CalendarDays className="h-3 w-3 shrink-0" />}
+                    <span>{item.label}</span>
+                  </div>
+                ))}
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+    </div>
   );
 }
 
@@ -254,20 +329,23 @@ function AthleteCard({ name, summary, onClick }: CardProps) {
         </div>
       )}
 
-      {/* Sessions for the day */}
+      {/* Sessions for the day — with intensity bar */}
       {summary?.daySchedule && summary.daySchedule.sessions.length > 0 && (
-        <div className="w-full border-t border-border/50 pt-2 space-y-0.5">
+        <div className="w-full border-t border-border/50 pt-2 space-y-1">
           {summary.daySchedule.sessions.map((s, i) => (
-            <div key={i} className="flex items-center gap-1.5 text-xs">
-              <span className="truncate flex-1 text-left font-medium">{s.name}</span>
-              {s.intensity && isBorgLevel(s.intensity) && (
-                <span
-                  className="shrink-0 w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold"
-                  style={{ background: getBorgBg(s.intensity), color: getBorgFg(s.intensity) }}
-                >
-                  {s.intensity}
-                </span>
-              )}
+            <div key={i} className="text-xs text-left w-full">
+              <div className="flex items-center justify-between gap-1">
+                <span className="truncate font-medium flex-1">{s.name}</span>
+                {s.intensity && isBorgLevel(s.intensity) && (
+                  <span
+                    className="shrink-0 px-1 rounded text-[10px] font-bold"
+                    style={{ background: getBorgBg(s.intensity), color: getBorgFg(s.intensity) }}
+                  >
+                    {s.intensity}
+                  </span>
+                )}
+              </div>
+              {s.intensity && <IntensityBar intensity={s.intensity} />}
             </div>
           ))}
         </div>
@@ -276,21 +354,14 @@ function AthleteCard({ name, summary, onClick }: CardProps) {
       {/* Tests / Events for the day */}
       {summary?.daySchedule && (summary.daySchedule.tests.length > 0 || summary.daySchedule.events.length > 0) && (
         <div className={cn(
-          'w-full space-y-0.5',
+          'w-full',
           summary.daySchedule.sessions.length === 0 ? 'border-t border-border/50 pt-2' : 'pt-1',
         )}>
-          {summary.daySchedule.tests.map((t, i) => (
-            <div key={i} className="flex items-center gap-1 text-[10px] text-amber-700 text-left">
-              <FlaskConical className="h-3 w-3 shrink-0" />
-              <span className="truncate">{t}</span>
-            </div>
-          ))}
-          {summary.daySchedule.events.map((e, i) => (
-            <div key={i} className="flex items-center gap-1 text-[10px] text-blue-700 text-left">
-              <CalendarDays className="h-3 w-3 shrink-0" />
-              <span className="truncate">{e}</span>
-            </div>
-          ))}
+          <TestsEventsDisplay
+            tests={summary.daySchedule.tests}
+            events={summary.daySchedule.events}
+            truncateClass="max-w-full"
+          />
         </div>
       )}
 
@@ -356,21 +427,24 @@ function AthleteListRow({ name, summary, onClick, customColumns }: RowProps) {
           </td>
         );
       })}
-      {/* Session column */}
+      {/* Training column — session name + intensity pill + bar */}
       <td className="py-2.5 px-3 text-sm">
         {summary?.daySchedule && summary.daySchedule.sessions.length > 0 ? (
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-1">
             {summary.daySchedule.sessions.map((s, i) => (
-              <div key={i} className="flex items-center gap-1.5 text-xs">
-                <span className="truncate max-w-[130px]">{s.name}</span>
-                {s.intensity && isBorgLevel(s.intensity) && (
-                  <span
-                    className="shrink-0 w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold"
-                    style={{ background: getBorgBg(s.intensity), color: getBorgFg(s.intensity) }}
-                  >
-                    {s.intensity}
-                  </span>
-                )}
+              <div key={i}>
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="truncate max-w-[110px]">{s.name}</span>
+                  {s.intensity && isBorgLevel(s.intensity) && (
+                    <span
+                      className="shrink-0 px-1 rounded text-[10px] font-bold"
+                      style={{ background: getBorgBg(s.intensity), color: getBorgFg(s.intensity) }}
+                    >
+                      {s.intensity}
+                    </span>
+                  )}
+                </div>
+                {s.intensity && <IntensityBar intensity={s.intensity} />}
               </div>
             ))}
           </div>
@@ -378,26 +452,11 @@ function AthleteListRow({ name, summary, onClick, customColumns }: RowProps) {
           <span className="text-muted-foreground">—</span>
         )}
       </td>
-      {/* Tests / Events column */}
+      {/* Tests / Events column — up to 2 shown, overflow in tooltip */}
       <td className="py-2.5 px-3 text-sm">
-        {summary?.daySchedule && (summary.daySchedule.tests.length > 0 || summary.daySchedule.events.length > 0) ? (
-          <div className="flex flex-col gap-0.5">
-            {summary.daySchedule.tests.map((t, i) => (
-              <div key={i} className="flex items-center gap-1 text-[10px] text-amber-700">
-                <FlaskConical className="h-3 w-3 shrink-0" />
-                <span className="truncate max-w-[120px]">{t}</span>
-              </div>
-            ))}
-            {summary.daySchedule.events.map((e, i) => (
-              <div key={i} className="flex items-center gap-1 text-[10px] text-blue-700">
-                <CalendarDays className="h-3 w-3 shrink-0" />
-                <span className="truncate max-w-[120px]">{e}</span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
+        {summary?.daySchedule
+          ? <TestsEventsDisplay tests={summary.daySchedule.tests} events={summary.daySchedule.events} />
+          : <span className="text-muted-foreground">—</span>}
       </td>
       {/* Week AU — moved to end */}
       <td className="py-2.5 px-3 text-sm tabular-nums">
