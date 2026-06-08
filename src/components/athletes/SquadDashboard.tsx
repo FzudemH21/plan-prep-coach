@@ -131,14 +131,26 @@ function DateNavigator({ date, onChange }: { date: Date; onChange: (d: Date) => 
 
   return (
     <div className="flex items-center gap-0.5">
+      {/* "Today" always rendered — just disabled when already on today (no layout shift) */}
+      <Button
+        variant="ghost" size="sm" className="h-7 px-2 text-xs font-medium"
+        disabled={isToday}
+        onClick={() => onChange(new Date())}
+      >
+        Today
+      </Button>
+      <div className="w-px h-3.5 bg-border/60 mx-0.5" />
       <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onChange(subDays(date, 1))}>
         <ChevronLeft className="h-3.5 w-3.5" />
       </Button>
+      {/* Calendar icon beside the date, opens the picker */}
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs font-medium">
-            <CalendarDays className="h-3.5 w-3.5" />
-            {isToday ? 'Today' : format(date, 'MMM d, yyyy')}
+          <Button variant="ghost" size="sm" className="h-7 gap-1 px-1.5 text-xs font-medium">
+            <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+            <span className="min-w-[80px] text-center">
+              {isToday ? 'Today' : format(date, 'MMM d, yyyy')}
+            </span>
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="end">
@@ -157,11 +169,6 @@ function DateNavigator({ date, onChange }: { date: Date; onChange: (d: Date) => 
       >
         <ChevronRight className="h-3.5 w-3.5" />
       </Button>
-      {!isToday && (
-        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => onChange(new Date())}>
-          Today
-        </Button>
-      )}
     </div>
   );
 }
@@ -245,12 +252,8 @@ function AthleteCard({ name, summary, onClick }: CardProps) {
         </div>
       )}
 
-      {/* Day schedule: sessions, tests, events */}
-      {summary?.daySchedule && (
-        summary.daySchedule.sessions.length > 0 ||
-        summary.daySchedule.tests.length > 0 ||
-        summary.daySchedule.events.length > 0
-      ) && (
+      {/* Sessions for the day */}
+      {summary?.daySchedule && summary.daySchedule.sessions.length > 0 && (
         <div className="w-full border-t border-border/50 pt-2 space-y-0.5">
           {summary.daySchedule.sessions.map((s, i) => (
             <div key={i} className="flex items-center gap-1.5 text-xs">
@@ -265,6 +268,15 @@ function AthleteCard({ name, summary, onClick }: CardProps) {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Tests / Events for the day */}
+      {summary?.daySchedule && (summary.daySchedule.tests.length > 0 || summary.daySchedule.events.length > 0) && (
+        <div className={cn(
+          'w-full space-y-0.5',
+          summary.daySchedule.sessions.length === 0 ? 'border-t border-border/50 pt-2' : 'pt-1',
+        )}>
           {summary.daySchedule.tests.map((t, i) => (
             <div key={i} className="flex items-center gap-1 text-[10px] text-amber-700 text-left">
               <FlaskConical className="h-3 w-3 shrink-0" />
@@ -302,12 +314,14 @@ function AthleteListRow({ name, summary, onClick, customColumns }: RowProps) {
 
   return (
     <tr className="hover:bg-muted/40 cursor-pointer transition-colors border-b border-border/40 last:border-0" onClick={onClick}>
+      {/* Athlete */}
       <td className="py-2.5 px-3">
         <div className="flex items-center gap-2">
           <WellnessDot status={status} />
           <span className="text-sm font-medium">{name}</span>
         </div>
       </td>
+      {/* Wellness */}
       <td className="py-2.5 px-3 text-sm">
         {summary
           ? (
@@ -320,36 +334,29 @@ function AthleteListRow({ name, summary, onClick, customColumns }: RowProps) {
           )
           : <span className="text-muted-foreground text-xs">Not connected</span>}
       </td>
+      {/* Flags */}
       <td className="py-2.5 px-3">
         {summary && <FlagIcons summary={summary} />}
       </td>
-      <td className="py-2.5 px-3 text-sm tabular-nums">
-        {summary
-          ? (summary.weekAU > 0
-            ? (
-              <div className="flex items-center gap-1.5">
-                <span>{summary.weekAU}</span>
-                {summary.avgWeeklyAU > 0 && (
-                  <span className="text-xs text-muted-foreground">avg {summary.avgWeeklyAU}</span>
-                )}
-                {summary.weekAUZScore !== null && <ZBadge z={summary.weekAUZScore} />}
+      {/* Custom monitoring columns — grouped beside Wellness/Flags */}
+      {customColumns.map(col => {
+        const entry = summary?.customMetricValues?.[col.parameterId] ?? null;
+        return (
+          <td key={col.parameterId} className="py-2.5 px-3 text-sm tabular-nums">
+            {entry ? (
+              <div className="flex flex-col gap-0.5">
+                <span>{entry.value}{col.unit ? ` ${col.unit}` : ''}</span>
+                <span className="text-[10px] text-muted-foreground">{entry.date}</span>
               </div>
-            )
-            : <span className="text-muted-foreground">—</span>)
-          : <span className="text-muted-foreground">—</span>}
-      </td>
-      <td className="py-2.5 px-3 text-sm tabular-nums">
-        {summary && summary.weekPlannedSessions > 0
-          ? <>{summary.weekCompletedSessions}/{summary.weekPlannedSessions}<span className="ml-1 text-xs text-muted-foreground">({Math.round((summary.weekCompletedSessions / summary.weekPlannedSessions) * 100)}%)</span></>
-          : <span className="text-muted-foreground">—</span>}
-      </td>
-      {/* Today's schedule column */}
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            )}
+          </td>
+        );
+      })}
+      {/* Session column */}
       <td className="py-2.5 px-3 text-sm">
-        {summary?.daySchedule && (
-          summary.daySchedule.sessions.length > 0 ||
-          summary.daySchedule.tests.length > 0 ||
-          summary.daySchedule.events.length > 0
-        ) ? (
+        {summary?.daySchedule && summary.daySchedule.sessions.length > 0 ? (
           <div className="flex flex-col gap-0.5">
             {summary.daySchedule.sessions.map((s, i) => (
               <div key={i} className="flex items-center gap-1.5 text-xs">
@@ -364,6 +371,15 @@ function AthleteListRow({ name, summary, onClick, customColumns }: RowProps) {
                 )}
               </div>
             ))}
+          </div>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </td>
+      {/* Tests / Events column */}
+      <td className="py-2.5 px-3 text-sm">
+        {summary?.daySchedule && (summary.daySchedule.tests.length > 0 || summary.daySchedule.events.length > 0) ? (
+          <div className="flex flex-col gap-0.5">
             {summary.daySchedule.tests.map((t, i) => (
               <div key={i} className="flex items-center gap-1 text-[10px] text-amber-700">
                 <FlaskConical className="h-3 w-3 shrink-0" />
@@ -381,21 +397,28 @@ function AthleteListRow({ name, summary, onClick, customColumns }: RowProps) {
           <span className="text-muted-foreground">—</span>
         )}
       </td>
-      {customColumns.map(col => {
-        const entry = summary?.customMetricValues?.[col.parameterId] ?? null;
-        return (
-          <td key={col.parameterId} className="py-2.5 px-3 text-sm tabular-nums">
-            {entry ? (
-              <div className="flex flex-col gap-0.5">
-                <span>{entry.value}{col.unit ? ` ${col.unit}` : ''}</span>
-                <span className="text-[10px] text-muted-foreground">{entry.date}</span>
+      {/* Week AU — moved to end */}
+      <td className="py-2.5 px-3 text-sm tabular-nums">
+        {summary
+          ? (summary.weekAU > 0
+            ? (
+              <div className="flex items-center gap-1.5">
+                <span>{summary.weekAU}</span>
+                {summary.avgWeeklyAU > 0 && (
+                  <span className="text-xs text-muted-foreground">avg {summary.avgWeeklyAU}</span>
+                )}
+                {summary.weekAUZScore !== null && <ZBadge z={summary.weekAUZScore} />}
               </div>
-            ) : (
-              <span className="text-muted-foreground">—</span>
-            )}
-          </td>
-        );
-      })}
+            )
+            : <span className="text-muted-foreground">—</span>)
+          : <span className="text-muted-foreground">—</span>}
+      </td>
+      {/* Compliance — moved to end */}
+      <td className="py-2.5 px-3 text-sm tabular-nums">
+        {summary && summary.weekPlannedSessions > 0
+          ? <>{summary.weekCompletedSessions}/{summary.weekPlannedSessions}<span className="ml-1 text-xs text-muted-foreground">({Math.round((summary.weekCompletedSessions / summary.weekPlannedSessions) * 100)}%)</span></>
+          : <span className="text-muted-foreground">—</span>}
+      </td>
     </tr>
   );
 }
@@ -524,8 +547,10 @@ export function SquadDashboard({
             <table className="w-full">
               <thead>
                 <tr className="bg-muted/50 border-b">
-                  {['Athlete', 'Wellness', 'Flags', 'Week AU (avg)', 'Compliance', 'Today',
+                  {[
+                    'Athlete', 'Wellness', 'Flags',
                     ...customColumns.map(c => c.unit ? `${c.name} (${c.unit})` : c.name),
+                    'Session', 'Tests / Events', 'Week AU (avg)', 'Compliance',
                   ].map(h => (
                     <th key={h} className="text-left text-xs font-medium text-muted-foreground py-2 px-3">{h}</th>
                   ))}
