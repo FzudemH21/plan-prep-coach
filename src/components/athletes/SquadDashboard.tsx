@@ -123,16 +123,6 @@ function ZBadge({ z, positiveIsGood = false }: { z: number; positiveIsGood?: boo
   );
 }
 
-/** Thin horizontal bar showing intensity as a proportion of 0–10, coloured with Borg palette. */
-function IntensityBar({ intensity }: { intensity: string }) {
-  if (!isBorgLevel(intensity)) return null;
-  const pct = (parseInt(intensity, 10) / 10) * 100;
-  return (
-    <div className="h-1 w-full rounded-full bg-muted overflow-hidden mt-0.5">
-      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: getBorgBg(intensity) }} />
-    </div>
-  );
-}
 
 /**
  * Renders up to 2 tests/events; shows a "+n more" tooltip for overflow.
@@ -345,7 +335,6 @@ function AthleteCard({ name, summary, onClick }: CardProps) {
                   </span>
                 )}
               </div>
-              {s.intensity && <IntensityBar intensity={s.intensity} />}
             </div>
           ))}
         </div>
@@ -444,8 +433,7 @@ function AthleteListRow({ name, summary, onClick, customColumns }: RowProps) {
                     </span>
                   )}
                 </div>
-                {s.intensity && <IntensityBar intensity={s.intensity} />}
-              </div>
+                </div>
             ))}
           </div>
         ) : (
