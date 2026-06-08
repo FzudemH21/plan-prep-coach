@@ -123,6 +123,8 @@ export default function AthleteDatabase() {
   const [isNewAthlete, setIsNewAthlete] = useState(false);
   const [selectedGroupForNew, setSelectedGroupForNew] = useState<string | null>(null);
   const [squadViewMode, setSquadViewMode] = useState<'list' | 'card'>('card');
+  /** Which group the squad dashboard is filtering to. null = all athletes. */
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
   const selectedAthlete = selectedAthleteId
     ? athleteData.getAthlete(selectedAthleteId)
@@ -215,7 +217,9 @@ export default function AthleteDatabase() {
           onUnarchiveAthlete={(athleteId) => {
             athleteData.unarchiveAthlete(athleteId);
           }}
-          onShowSquad={() => setSelectedAthleteId(null)}
+          onShowSquad={() => { setSelectedAthleteId(null); setSelectedGroupId(null); }}
+          selectedGroupId={selectedGroupId}
+          onSelectGroup={(groupId) => { setSelectedGroupId(groupId); setSelectedAthleteId(null); }}
         />
       </div>
 
@@ -248,6 +252,8 @@ export default function AthleteDatabase() {
             viewMode={squadViewMode}
             onViewModeChange={setSquadViewMode}
             onSelectAthlete={handleSelectAthlete}
+            selectedGroupId={selectedGroupId}
+            onGroupChange={setSelectedGroupId}
           />
         )}
       </div>

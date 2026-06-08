@@ -62,6 +62,10 @@ interface AthleteGroupSidebarProps {
   onArchiveAthlete: (athleteId: string) => void;
   onUnarchiveAthlete: (athleteId: string) => void;
   onShowSquad?: () => void;
+  /** Currently-highlighted group in the squad view (lifted from AthleteDatabase). */
+  selectedGroupId?: string | null;
+  /** Called when the user clicks a group name to navigate to its squad view. */
+  onSelectGroup?: (groupId: string) => void;
 }
 
 export function AthleteGroupSidebar({
@@ -82,6 +86,8 @@ export function AthleteGroupSidebar({
   onArchiveAthlete,
   onUnarchiveAthlete,
   onShowSquad,
+  selectedGroupId,
+  onSelectGroup,
 }: AthleteGroupSidebarProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -158,24 +164,29 @@ export function AthleteGroupSidebar({
                 open={isExpanded}
                 onOpenChange={() => toggleGroup(group.id)}
               >
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-0">
+                  {/* Chevron — toggles expand/collapse only */}
                   <CollapsibleTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="flex-1 justify-start gap-2 h-9"
-                    >
+                    <Button variant="ghost" size="sm" className="h-9 w-8 p-0 shrink-0">
                       {isExpanded ? (
-                        <ChevronDown className="h-4 w-4" />
+                        <ChevronDown className="h-3.5 w-3.5" />
                       ) : (
-                        <ChevronRight className="h-4 w-4" />
+                        <ChevronRight className="h-3.5 w-3.5" />
                       )}
-                      <span className="truncate">{group.name}</span>
-                      <span className="ml-auto text-xs text-muted-foreground">
-                        ({groupAthletes.length})
-                      </span>
                     </Button>
                   </CollapsibleTrigger>
+                  {/* Group name — navigates to squad view for this group */}
+                  <button
+                    onClick={() => onSelectGroup?.(group.id)}
+                    className={cn(
+                      'flex-1 text-left text-sm py-2 px-1.5 rounded-md transition-colors hover:bg-accent',
+                      'h-9 flex items-center justify-between gap-1 min-w-0',
+                      selectedGroupId === group.id && 'bg-accent font-medium',
+                    )}
+                  >
+                    <span className="truncate">{group.name}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">({groupAthletes.length})</span>
+                  </button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-8 w-8">
