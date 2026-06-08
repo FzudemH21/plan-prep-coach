@@ -15,6 +15,12 @@ export interface SessionLibraryEntry {
   method?: string;
   sections: SessionSection[];
   exercises: ExerciseDistribution[];
+  /**
+   * Parameter values in WorkoutSessionSheet format:
+   * [mesocycleId][microcycleIndex][methodId][sessionIndex][exerciseId] → { paramName: value }
+   * For library sessions: mesocycleId = entry.id, microcycleIndex = 0, sessionIndex = 0
+   */
+  parameterValues?: Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>;
   /** Coach-defined custom column values: columnId → value */
   columnValues: Record<string, string>;
   createdAt: string;

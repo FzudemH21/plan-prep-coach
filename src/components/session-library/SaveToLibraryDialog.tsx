@@ -19,8 +19,11 @@ import {
 } from '@/components/ui/select';
 import { BookmarkPlus, X } from 'lucide-react';
 import { useSessionLibrary } from '@/hooks/useSessionLibrary';
-import { useToolboxData } from '@/hooks/useToolboxData';
 import type { SessionSection, ExerciseDistribution } from '@/types/microcycle-planning';
+
+/** Synthetic keys used for all library-session exercises/sections */
+export const LIBRARY_DAY = '__library__';
+export const LIBRARY_SESS = 0;
 
 interface SaveToLibraryDialogProps {
   open: boolean;
@@ -28,7 +31,7 @@ interface SaveToLibraryDialogProps {
   sessionName: string;
   exercises: ExerciseDistribution[];
   sections: SessionSection[];
-  /** Pre-fill method from the session's primary method */
+  /** Saved silently as method metadata — not shown to the user */
   defaultMethod?: string;
   onSaved?: () => void;
 }
@@ -44,36 +47,37 @@ export function SaveToLibraryDialog({
 }: SaveToLibraryDialogProps) {
   const { t } = useTranslation();
   const { columns, addEntry } = useSessionLibrary();
-  const { data: toolboxData } = useToolboxData();
 
   const [name, setName] = useState(sessionName);
-  const [method, setMethod] = useState(defaultMethod ?? '');
   const [columnValues, setColumnValues] = useState<Record<string, string>>({});
 
   // Reset form when dialog opens
   useEffect(() => {
     if (open) {
       setName(sessionName);
-      setMethod(defaultMethod ?? '');
       setColumnValues({});
     }
-  }, [open, sessionName, defaultMethod]);
-
-  // Flat list of all toolbox methods: "Category - SubCategory"
-  const allMethods = Array.from(
-    new Set(
-      toolboxData.entries.map(
-        e => `${e.category}${e.subCategory ? ` - ${e.subCategory}` : ''}`
-      )
-    )
-  ).sort();
+  }, [open, sessionName]);
 
   const handleSave = () => {
+    // Normalize exercises and sections to the standard library day/session keys
+    // so WorkoutSessionSheet can open them correctly from the library page.
+    const normalizedExercises: ExerciseDistribution[] = exercises.map(e => ({
+      ...e,
+      dayDate: LIBRARY_DAY,
+      sessionIndex: LIBRARY_SESS,
+    }));
+    const normalizedSections: SessionSection[] = sections.map(s => ({
+      ...s,
+      dayDate: LIBRARY_DAY,
+      sessionIndex: LIBRARY_SESS,
+    }));
+
     addEntry({
       name: name.trim() || sessionName,
-      method: method || undefined,
-      sections,
-      exercises,
+      method: defaultMethod || undefined,
+      sections: normalizedSections,
+      exercises: normalizedExercises,
       columnValues,
     });
     onOpenChange(false);
@@ -103,97 +107,81 @@ export function SaveToLibraryDialog({
             </DialogTitle>
           </DialogHeader>
 
-        <div className="space-y-4 py-1">
-          {/* Session name */}
-          <div className="space-y-1.5">
-            <Label>{t('sessionLibrary.saveDialog.sessionName')}</Label>
-            <Input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder={sessionName}
-            />
-          </div>
-
-          {/* Method */}
-          <div className="space-y-1.5">
-            <Label>{t('sessionLibrary.saveDialog.method')}</Label>
-            <Select
-              value={method || '__none__'}
-              onValueChange={v => setMethod(v === '__none__' ? '' : v)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={t('sessionLibrary.noMethod')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">{t('sessionLibrary.noMethod')}</SelectItem>
-                {allMethods.map(m => (
-                  <SelectItem key={m} value={m}>
-                    {m}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Custom columns */}
-          {columns.length > 0 && (
-            <div className="space-y-3">
-              <p className="text-sm font-medium text-muted-foreground">
-                {t('sessionLibrary.saveDialog.libraryFields')}
-              </p>
-              {columns.map(col => (
-                <div key={col.id} className="space-y-1.5">
-                  <Label>
-                    {col.name}
-                    {col.required && (
-                      <span className="text-destructive ml-1">*</span>
-                    )}
-                  </Label>
-                  {col.type === 'select' && col.options?.length ? (
-                    <Select
-                      value={columnValues[col.id] ?? ''}
-                      onValueChange={v =>
-                        setColumnValues(prev => ({ ...prev, [col.id]: v }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="—" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {col.options.map(opt => (
-                          <SelectItem key={opt} value={opt}>
-                            {opt}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : col.type === 'textarea' ? (
-                    <Textarea
-                      value={columnValues[col.id] ?? ''}
-                      onChange={e =>
-                        setColumnValues(prev => ({
-                          ...prev,
-                          [col.id]: e.target.value,
-                        }))
-                      }
-                      className="min-h-[60px] resize-y"
-                    />
-                  ) : (
-                    <Input
-                      value={columnValues[col.id] ?? ''}
-                      onChange={e =>
-                        setColumnValues(prev => ({
-                          ...prev,
-                          [col.id]: e.target.value,
-                        }))
-                      }
-                    />
-                  )}
-                </div>
-              ))}
+          <div className="space-y-4 py-1">
+            {/* Session name */}
+            <div className="space-y-1.5">
+              <Label>{t('sessionLibrary.saveDialog.sessionName')}</Label>
+              <Input
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder={sessionName}
+                autoFocus
+              />
             </div>
-          )}
-        </div>
+
+            {/* Custom columns */}
+            {columns.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-muted-foreground">
+                  {t('sessionLibrary.saveDialog.libraryFields')}
+                </p>
+                {columns.map(col => (
+                  <div key={col.id} className="space-y-1.5">
+                    <Label>
+                      {col.name}
+                      {col.required && (
+                        <span className="text-destructive ml-1">*</span>
+                      )}
+                    </Label>
+                    {col.type === 'select' && col.options?.length ? (
+                      <Select
+                        value={columnValues[col.id] ?? '__none__'}
+                        onValueChange={v =>
+                          setColumnValues(prev => ({
+                            ...prev,
+                            [col.id]: v === '__none__' ? '' : v,
+                          }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="—" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">—</SelectItem>
+                          {col.options.map(opt => (
+                            <SelectItem key={opt} value={opt}>
+                              {opt}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : col.type === 'textarea' ? (
+                      <Textarea
+                        value={columnValues[col.id] ?? ''}
+                        onChange={e =>
+                          setColumnValues(prev => ({
+                            ...prev,
+                            [col.id]: e.target.value,
+                          }))
+                        }
+                        className="min-h-[60px] resize-y"
+                      />
+                    ) : (
+                      <Input
+                        value={columnValues[col.id] ?? ''}
+                        onChange={e =>
+                          setColumnValues(prev => ({
+                            ...prev,
+                            [col.id]: e.target.value,
+                          }))
+                        }
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)}>

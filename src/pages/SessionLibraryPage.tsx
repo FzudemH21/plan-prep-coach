@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { format } from 'date-fns';
 import {
@@ -60,8 +60,19 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useSessionLibrary } from '@/hooks/useSessionLibrary';
-import { SessionDetailModal } from '@/components/session-library/SessionDetailModal';
+import { useToolboxData } from '@/hooks/useToolboxData';
+import { WorkoutSessionSheet } from '@/components/microcycle-planning/WorkoutSessionSheet';
+import { LIBRARY_DAY, LIBRARY_SESS } from '@/components/session-library/SaveToLibraryDialog';
 import type { SessionLibraryEntry, SessionLibraryColumn } from '@/types/sessionLibrary';
+import type { ExerciseDistribution, SessionSection } from '@/types/microcycle-planning';
+
+// ── Param-values type alias ────────────────────────────────────────────────────
+type LibParamValues = Record<
+  string,
+  Record<number, Record<string, Record<number, Record<string, string | number>>>>
+>;
+
+const LIBRARY_MICRO = 0;
 
 // ── Add-Column Dialog ──────────────────────────────────────────────────────────
 
@@ -197,17 +208,116 @@ export default function SessionLibraryPage() {
     columns,
     addColumn,
     removeColumn,
+    addEntry,
+    updateEntry,
     deleteEntry,
     duplicateEntry,
   } = useSessionLibrary();
+  const { data: toolboxData } = useToolboxData();
 
   const [search, setSearch] = useState('');
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
-
   const [addColOpen, setAddColOpen] = useState(false);
-  const [detailEntry, setDetailEntry] = useState<SessionLibraryEntry | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  // ── Library WorkoutSessionSheet state ──────────────────────────────────────
+  // null = closed, 'new' = creating, SessionLibraryEntry = editing existing
+  const [libSheet, setLibSheet] = useState<SessionLibraryEntry | 'new' | null>(null);
+  const [liveName, setLiveName] = useState('');
+  const [liveExercises, setLiveExercises] = useState<ExerciseDistribution[]>([]);
+  const [liveSections, setLiveSections] = useState<SessionSection[]>([]);
+  const [liveParamValues, setLiveParamValues] = useState<LibParamValues>({});
+
+  // Derived: mesocycleId key to use for this session (unique per entry)
+  const libMesoId =
+    libSheet === 'new' ? '__lib_new__' : libSheet?.id ?? '__lib_new__';
+
+  const openNew = () => {
+    setLiveName('New Session');
+    setLiveExercises([]);
+    setLiveSections([]);
+    setLiveParamValues({});
+    setLibSheet('new');
+  };
+
+  const openEntry = (entry: SessionLibraryEntry) => {
+    setLiveName(entry.name);
+    setLiveExercises(entry.exercises);
+    setLiveSections(entry.sections);
+    setLiveParamValues(entry.parameterValues ?? {});
+    setLibSheet(entry);
+  };
+
+  const closeSheet = useCallback(() => {
+    if (libSheet === 'new') {
+      // Only create a library entry if the user actually added something
+      if (liveExercises.length > 0 || liveSections.length > 0) {
+        addEntry({
+          name: liveName || 'New Session',
+          exercises: liveExercises,
+          sections: liveSections,
+          parameterValues: liveParamValues,
+          columnValues: {},
+        });
+        toast({ title: t('sessionLibrary.saved') });
+      }
+    } else if (libSheet !== null) {
+      updateEntry(libSheet.id, {
+        name: liveName || libSheet.name,
+        exercises: liveExercises,
+        sections: liveSections,
+        parameterValues: liveParamValues,
+      });
+    }
+    setLibSheet(null);
+  }, [libSheet, liveName, liveExercises, liveSections, liveParamValues, addEntry, updateEntry, toast, t]);
+
+  // ── WorkoutSessionSheet callbacks (library mode) ───────────────────────────
+
+  const handleLibSaveParameters = useCallback(
+    (
+      mesoId: string,
+      mcIdx: number,
+      methodId: string,
+      sessIdx: number,
+      exerciseId: string,
+      params: Record<string, string | number>
+    ) => {
+      setLiveParamValues(prev => ({
+        ...prev,
+        [mesoId]: {
+          ...(prev[mesoId] ?? {}),
+          [mcIdx]: {
+            ...((prev[mesoId] ?? {})[mcIdx] ?? {}),
+            [methodId]: {
+              ...(((prev[mesoId] ?? {})[mcIdx] ?? {})[methodId] ?? {}),
+              [sessIdx]: {
+                ...((((prev[mesoId] ?? {})[mcIdx] ?? {})[methodId] ?? {})[sessIdx] ?? {}),
+                [exerciseId]: params,
+              },
+            },
+          },
+        },
+      }));
+    },
+    []
+  );
+
+  const handleLibDistributionChange = useCallback(
+    (dist: ExerciseDistribution[]) => {
+      setLiveExercises(
+        dist.filter(e => e.dayDate === LIBRARY_DAY && e.sessionIndex === LIBRARY_SESS)
+      );
+    },
+    []
+  );
+
+  const handleLibSectionsChange = useCallback((sects: SessionSection[]) => {
+    setLiveSections(
+      sects.filter(s => s.dayDate === LIBRARY_DAY && s.sessionIndex === LIBRARY_SESS)
+    );
+  }, []);
 
   // ── Sort ───────────────────────────────────────────────────────────────────
 
@@ -302,6 +412,10 @@ export default function SessionLibraryPage() {
             <Settings2 className="h-4 w-4 mr-2" />
             {t('sessionLibrary.addColumn')}
           </Button>
+          <Button size="sm" onClick={openNew}>
+            <Plus className="h-4 w-4 mr-2" />
+            {t('sessionLibrary.newSession')}
+          </Button>
         </div>
       </div>
 
@@ -324,7 +438,7 @@ export default function SessionLibraryPage() {
         )}
       </div>
 
-      {/* Table */}
+      {/* Table — always shown when columns exist; blank state only when both empty */}
       {entries.length === 0 && columns.length === 0 ? (
         <div className="text-center py-16 space-y-3">
           <BookmarkPlus className="h-10 w-10 text-muted-foreground mx-auto" />
@@ -332,6 +446,10 @@ export default function SessionLibraryPage() {
           <p className="text-sm text-muted-foreground max-w-sm mx-auto">
             {t('sessionLibrary.empty.desc')}
           </p>
+          <Button onClick={openNew}>
+            <Plus className="h-4 w-4 mr-2" />
+            {t('sessionLibrary.newSession')}
+          </Button>
         </div>
       ) : (
         <div className="rounded-md border overflow-x-auto">
@@ -344,13 +462,6 @@ export default function SessionLibraryPage() {
                 >
                   {t('sessionLibrary.columns.name')}
                   <SortIcon col="name" />
-                </TableHead>
-                <TableHead
-                  className="cursor-pointer select-none whitespace-nowrap"
-                  onClick={() => handleSort('method')}
-                >
-                  {t('sessionLibrary.columns.method')}
-                  <SortIcon col="method" />
                 </TableHead>
                 <TableHead
                   className="cursor-pointer select-none whitespace-nowrap"
@@ -370,7 +481,7 @@ export default function SessionLibraryPage() {
                       {col.name}
                       <SortIcon col={col.id} />
                       <button
-                        className="ml-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
+                        className="ml-1 text-muted-foreground hover:text-destructive"
                         onClick={e => {
                           e.stopPropagation();
                           removeColumn(col.id);
@@ -396,10 +507,10 @@ export default function SessionLibraryPage() {
               {displayed.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5 + columns.length}
+                    colSpan={4 + columns.length}
                     className="text-center text-sm text-muted-foreground py-8"
                   >
-                    {t('common.noData')}
+                    {entries.length === 0 ? t('sessionLibrary.empty.title') : t('common.noData')}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -407,18 +518,9 @@ export default function SessionLibraryPage() {
                   <TableRow
                     key={entry.id}
                     className="cursor-pointer hover:bg-accent/50 group"
-                    onClick={() => setDetailEntry(entry)}
+                    onClick={() => openEntry(entry)}
                   >
                     <TableCell className="font-medium">{entry.name}</TableCell>
-                    <TableCell>
-                      {entry.method ? (
-                        <Badge variant="secondary" className="text-xs font-normal">
-                          {entry.method.split('::')[0]}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">—</span>
-                      )}
-                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {t('sessionLibrary.exercises', {
                         count: entry.exercises.length,
@@ -426,7 +528,11 @@ export default function SessionLibraryPage() {
                     </TableCell>
                     {columns.map(col => (
                       <TableCell key={col.id} className="text-sm">
-                        {entry.columnValues[col.id] ?? (
+                        {entry.columnValues[col.id] ? (
+                          <Badge variant="secondary" className="text-xs font-normal">
+                            {entry.columnValues[col.id]}
+                          </Badge>
+                        ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
@@ -446,9 +552,7 @@ export default function SessionLibraryPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => setDetailEntry(entry)}
-                          >
+                          <DropdownMenuItem onClick={() => openEntry(entry)}>
                             {t('sessionLibrary.viewDetail')}
                           </DropdownMenuItem>
                           <DropdownMenuItem
@@ -483,13 +587,6 @@ export default function SessionLibraryPage() {
         onAdd={addColumn}
       />
 
-      <SessionDetailModal
-        entry={detailEntry}
-        columns={columns}
-        open={!!detailEntry}
-        onOpenChange={v => { if (!v) setDetailEntry(null); }}
-      />
-
       <AlertDialog open={!!deleteId} onOpenChange={v => { if (!v) setDeleteId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -516,6 +613,27 @@ export default function SessionLibraryPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Library session sheet — view/edit existing or create new */}
+      <WorkoutSessionSheet
+        isOpen={libSheet !== null}
+        onClose={closeSheet}
+        dayDate={LIBRARY_DAY}
+        sessionIndex={LIBRARY_SESS}
+        exercises={liveExercises}
+        allExerciseDistribution={liveExercises}
+        mesocycleId={libMesoId}
+        microcycleIndex={LIBRARY_MICRO}
+        parameterValues={liveParamValues}
+        onSaveParameters={handleLibSaveParameters}
+        sessionSections={liveSections}
+        onSectionsChange={handleLibSectionsChange}
+        onDistributionChange={handleLibDistributionChange}
+        sessionNameFromState={liveName}
+        onRenameSession={(_day, _idx, name) => setLiveName(name)}
+        isAdHocSession={true}
+        toolboxData={toolboxData}
+      />
     </div>
   );
 }
