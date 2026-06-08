@@ -18,6 +18,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { startOfISOWeek, subDays, format } from 'date-fns';
 import type { MonitoringConfig } from '@/types/athlete';
+import { isBorgLevel, migrateLegacyIntensity } from '@/utils/intensityScale';
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -294,12 +295,27 @@ export function useSquadOverview(
 
         // Day schedule for exactly selectedDate
         const dayRow = connSchedule.find(s => s.date === todayStr) ?? null;
+        if (dayRow) {
+          console.log('[useSquadOverview] dayRow raw:', {
+            date: dayRow.date,
+            rowIntensity: dayRow.intensity,
+            sessions: (dayRow.sessions as Array<{ name?: string; intensity?: string | null }>)
+              .map(s => ({ name: s.name, intensity: s.intensity })),
+          });
+        }
+        /** Resolve an intensity value to a valid BorgLevel, or null if absent. */
+        function resolveIntensity(raw: string | null | undefined): string | null {
+          if (!raw) return null;
+          if (isBorgLevel(raw)) return raw;
+          const migrated = migrateLegacyIntensity(raw);
+          return migrated;
+        }
         const daySchedule: DayScheduleInfo | null = dayRow ? {
           sessions: (dayRow.sessions as Array<{ name?: string; intensity?: string | null }>).map(s => ({
             name: s.name ?? 'Session',
             // Fall back to the row-level day intensity when the session has no
-            // per-session intensity (written by older assign-time sync runs).
-            intensity: s.intensity ?? dayRow.intensity ?? null,
+            // per-session intensity. Migrate legacy strings ("moderate" etc.) to Borg.
+            intensity: resolveIntensity(s.intensity) ?? resolveIntensity(dayRow.intensity),
           })),
           tests: (dayRow.events as Array<{ type?: string; title?: string }>)
             .filter(e => e.type === 'test')
