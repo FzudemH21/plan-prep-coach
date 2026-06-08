@@ -111,11 +111,9 @@ function AthleteSplashScreen() {
       ) : (
         <span className="text-2xl font-bold text-primary">Plan Prep Coach</span>
       )}
-      {branding.welcomeMessage && (
-        <p className="text-sm text-muted-foreground leading-relaxed max-w-[280px]">
-          {branding.welcomeMessage}
-        </p>
-      )}
+      <p className="text-sm text-muted-foreground leading-relaxed max-w-[280px]">
+        {branding.welcomeMessage || "Welcome back! Ready to train today?"}
+      </p>
       {/* Loading indicator */}
       <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
     </div>
