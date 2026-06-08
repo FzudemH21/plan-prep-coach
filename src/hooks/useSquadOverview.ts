@@ -297,7 +297,9 @@ export function useSquadOverview(
         const daySchedule: DayScheduleInfo | null = dayRow ? {
           sessions: (dayRow.sessions as Array<{ name?: string; intensity?: string | null }>).map(s => ({
             name: s.name ?? 'Session',
-            intensity: s.intensity ?? null,
+            // Fall back to the row-level day intensity when the session has no
+            // per-session intensity (written by older assign-time sync runs).
+            intensity: s.intensity ?? dayRow.intensity ?? null,
           })),
           tests: (dayRow.events as Array<{ type?: string; title?: string }>)
             .filter(e => e.type === 'test')
