@@ -82,6 +82,46 @@ async function signOutAthlete() {
   await supabase.auth.signOut();
 }
 
+// ── Splash screen helpers ────────────────────────────────────────────────────
+
+interface SplashBranding {
+  logoBase64?: string;
+  welcomeMessage?: string;
+}
+
+function readSplashCache(): SplashBranding {
+  try {
+    const raw = localStorage.getItem('ppc-athlete-splash');
+    return raw ? (JSON.parse(raw) as SplashBranding) : {};
+  } catch {
+    return {};
+  }
+}
+
+function AthleteSplashScreen() {
+  const branding = readSplashCache();
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen max-w-[480px] mx-auto px-8 gap-6 text-center">
+      {branding.logoBase64 ? (
+        <img
+          src={branding.logoBase64}
+          alt="Coach logo"
+          className="max-h-28 max-w-[220px] object-contain"
+        />
+      ) : (
+        <span className="text-2xl font-bold text-primary">Plan Prep Coach</span>
+      )}
+      {branding.welcomeMessage && (
+        <p className="text-sm text-muted-foreground leading-relaxed max-w-[280px]">
+          {branding.welcomeMessage}
+        </p>
+      )}
+      {/* Loading indicator */}
+      <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+    </div>
+  );
+}
+
 export function AthleteAppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -135,6 +175,9 @@ export function AthleteAppLayout() {
   const { unreadCount, previews, markRead } = useAthleteUnread(
     chatEnabled ? (connection?.id ?? null) : null
   );
+
+  // Show branded splash while data loads — placed after all hook calls
+  if (loading) return <AthleteSplashScreen />;
 
   const handleBellClick = () => {
     markRead();

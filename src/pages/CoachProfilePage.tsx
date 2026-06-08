@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useCoachProfile } from "@/hooks/useCoachProfile";
+import { useAthleteConnections } from "@/hooks/useAthleteConnections";
 import { DocumentsSection } from "@/components/coach/DocumentsSection";
 import { TrainingPlanEnricher } from "@/components/coach/TrainingPlanEnricher";
 import {
@@ -443,10 +444,12 @@ function ProfileTab() {
 
 function BrandingCard() {
   const { profile, saveProfile } = useCoachProfile();
+  const { connections, syncProfileToConnection } = useAthleteConnections();
   const { toast } = useToast();
 
   const [businessName, setBusinessName] = useState(profile?.branding?.businessName ?? "");
   const [primaryColor, setPrimaryColor] = useState(profile?.branding?.primaryColor ?? "#2563eb");
+  const [welcomeMessage, setWelcomeMessage] = useState(profile?.branding?.welcomeMessage ?? "");
   const [logoBase64, setLogoBase64] = useState<string | undefined>(
     profile?.branding?.logoBase64
   );
@@ -457,6 +460,7 @@ function BrandingCard() {
     if (!profile?.branding) return;
     setBusinessName(profile.branding.businessName ?? "");
     setPrimaryColor(profile.branding.primaryColor ?? "#2563eb");
+    setWelcomeMessage(profile.branding.welcomeMessage ?? "");
     setLogoBase64(profile.branding.logoBase64);
   }, [profile]);
 
@@ -475,8 +479,16 @@ function BrandingCard() {
     if (!profile) return;
     await saveProfile({
       ...profile,
-      branding: { logoBase64, primaryColor, businessName },
+      branding: { logoBase64, primaryColor, businessName, welcomeMessage },
     });
+    // Sync logo + welcome message to every athlete connection so the
+    // athlete app splash screen can read it without extra RLS queries.
+    const coachBranding = { logoBase64, welcomeMessage };
+    await Promise.all(
+      connections.map((conn) =>
+        syncProfileToConnection(conn.id, { ...conn.profileData, coachBranding })
+      )
+    );
     setDirty(false);
     toast({ title: "Branding saved" });
   };
@@ -579,6 +591,21 @@ function BrandingCard() {
           />
           <p className="text-xs text-muted-foreground">
             Displayed in the top-right corner of the PDF cover page.
+          </p>
+        </div>
+
+        {/* Athlete app welcome message */}
+        <div className="space-y-1.5">
+          <Label>Athlete App Welcome Message</Label>
+          <Textarea
+            placeholder="e.g. Welcome! Let's make today count. 💪"
+            value={welcomeMessage}
+            onChange={(e) => { setWelcomeMessage(e.target.value); setDirty(true); }}
+            className="min-h-[72px] resize-y"
+          />
+          <p className="text-xs text-muted-foreground">
+            Shown on the athlete app loading screen alongside your logo.
+            Leave blank to show no message.
           </p>
         </div>
 

@@ -173,6 +173,10 @@ export function useAthleteApp() {
         };
         setConnection(conn);
 
+        // Cache coach branding for the splash screen so it shows instantly on next open
+        const splash = conn.profileData?.coachBranding ?? {};
+        try { localStorage.setItem('ppc-athlete-splash', JSON.stringify(splash)); } catch { /* ignore */ }
+
         // Load schedule (90-day window around today) — use local date strings so the
         // window edges align with the same calendar day the athlete app displays.
         const todayLocal = new Date();

@@ -43,6 +43,8 @@ export interface AthleteProfileData {
   chatEnabled?: boolean;
   /** Body metrics + performance params snapshot — synced by coach, read by athlete app */
   metricsSnapshot?: MetricsSnapshot | null;
+  /** Coach branding synced at save time — read by athlete app splash screen */
+  coachBranding?: { logoBase64?: string; welcomeMessage?: string };
 }
 
 export interface AthleteConnection {
