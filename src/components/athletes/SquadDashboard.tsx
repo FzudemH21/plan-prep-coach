@@ -139,7 +139,14 @@ function DateNavigator({ date, onChange }: { date: Date; onChange: (d: Date) => 
       <span className="text-xs font-medium px-1 min-w-[84px] text-center tabular-nums">
         {format(date, 'MMM d, yyyy')}
       </span>
-      {/* Calendar icon — opens the date picker */}
+      {/* Right arrow */}
+      <Button
+        variant="ghost" size="sm" className="h-7 w-7 p-0"
+        disabled={isToday} onClick={() => onChange(addDays(date, 1))}
+      >
+        <ChevronRight className="h-3.5 w-3.5" />
+      </Button>
+      {/* Calendar icon — to the right of >, opens the date picker */}
       <Popover>
         <PopoverTrigger asChild>
           <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
@@ -156,13 +163,6 @@ function DateNavigator({ date, onChange }: { date: Date; onChange: (d: Date) => 
           />
         </PopoverContent>
       </Popover>
-      {/* Right arrow */}
-      <Button
-        variant="ghost" size="sm" className="h-7 w-7 p-0"
-        disabled={isToday} onClick={() => onChange(addDays(date, 1))}
-      >
-        <ChevronRight className="h-3.5 w-3.5" />
-      </Button>
       {/* "Today" button — always rendered to avoid layout shift */}
       <Button
         variant="ghost" size="sm" className="h-7 px-2 text-xs font-medium"
