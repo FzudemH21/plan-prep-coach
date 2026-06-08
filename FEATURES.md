@@ -14,12 +14,12 @@ Claude Chat (browser) is my sparring partner for planning, discussion, and promp
 
 | Priority | Feature | Status |
 |---|---|---|
+| 🔴 Now | Language selection on first open (German / English) | ⬜ Open |
+| 🔵 Future | **Coach Mobile App** — log workout for athlete (in-person PT), athlete overview, quick session edit, coach↔athlete chat. Built pre-launch so both apps ship simultaneously. | ⬜ Open |
 | 🔵 Future | **Pre-publish security hardening** — replace `dangerouslyAllowBrowser`, move API key to Edge Function, rate limiting, full RLS audit | ⬜ Open |
 | 🔵 Future | SaaS & monetization (login, packages, Stripe) | ⬜ Open |
-| 🔵 Future | Language selection on first open (German / English) | ⬜ Open |
 | 🔵 Future | Booking system (athletes book with coach) + coach calendar | ⬜ Open |
 | 🔵 Future | Payment system Coach↔Athlete (marketplace model) | ⬜ Open |
-| 🔵 Future | **Coach Mobile App** — log workout for athlete (in-person PT), athlete overview, quick session edit, coach↔athlete chat. Built pre-launch so both apps ship simultaneously. | ⬜ Open |
 | 🔵 Future | **🚀 App Store / Play Store launch** — Capacitor wrapper for athlete app + coach mobile app, both published to iOS and Android stores simultaneously. This is the official product launch. | ⬜ Open |
 | 🔵 Future | **Push notifications** — session reminders, coach messages, test-day alerts. Unblocked by App Store distribution (native push). | ⬜ Open |
 | 🔵 Future | **PDF exports** — printable reports per athlete: monitoring summary, training plan overview, performance progress. | ⬜ Open |
