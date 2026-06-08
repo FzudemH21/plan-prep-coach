@@ -123,6 +123,9 @@ interface WorkoutSessionSheetProps {
   onOpenAIAssistant?: (ctx: FocusedSessionContext) => void;
   // Increment to force a full rebuild of exercise parameters from updated parameterValues
   forceParamRefresh?: number;
+  // When true the sheet is opened from the Session Library — hide the "Save to Library"
+  // button (already in the library) and show only "Save Changes"
+  isLibrarySession?: boolean;
 }
 
 export function WorkoutSessionSheet({
@@ -168,6 +171,7 @@ export function WorkoutSessionSheet({
   athletePerformanceParameters,
   onOpenAIAssistant,
   forceParamRefresh,
+  isLibrarySession = false,
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -2860,14 +2864,6 @@ export function WorkoutSessionSheet({
                   <Bot className="h-4 w-4" />
                 </Button>
               )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSaveLibOpen(true)}
-                title="Save to Session Library"
-              >
-                <BookmarkPlus className="h-4 w-4" />
-              </Button>
               <Button variant="outline" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
                 {sidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
               </Button>
@@ -2875,6 +2871,15 @@ export function WorkoutSessionSheet({
                 <Save className="h-4 w-4 mr-2" />
                 Save Changes
               </Button>
+              {!isLibrarySession && (
+                <Button
+                  onClick={() => setSaveLibOpen(true)}
+                  className="bg-gray-900 text-white hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200"
+                >
+                  <BookmarkPlus className="h-4 w-4 mr-2" />
+                  Save to Library
+                </Button>
+              )}
             </div>
           </div>
         </DialogHeader>

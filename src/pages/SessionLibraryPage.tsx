@@ -637,6 +637,7 @@ export default function SessionLibraryPage() {
           sessionNameFromState={liveName}
           onRenameSession={(_day, _idx, name) => setLiveName(name)}
           isAdHocSession={true}
+          isLibrarySession={true}
           toolboxData={toolboxData}
         />
       )}
