@@ -282,37 +282,17 @@ export function SquadDashboard({
   const connectedCount = displayItems.filter(i => i.summary !== null).length;
   const flaggedCount   = displayItems.filter(i => i.summary && (i.summary.hasPainFlag || i.summary.hasIllnessFlag)).length;
 
-  const groupChips = useMemo(
-    () => [{ id: null as string | null, name: 'All' }, ...groups.map(g => ({ id: g.id as string | null, name: g.name }))],
-    [groups],
+  const activeGroupName = useMemo(
+    () => selectedGroupId ? (groups.find(g => g.id === selectedGroupId)?.name ?? 'Squad') : 'All Athletes',
+    [groups, selectedGroupId],
   );
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between pb-3 shrink-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h2 className="text-base font-semibold">Squad</h2>
-
-          {/* Group chips — always visible, synced with sidebar selection */}
-          {groups.length > 0 && (
-            <div className="flex gap-1 flex-wrap">
-              {groupChips.map(({ id, name }) => (
-                <button
-                  key={id ?? 'all'}
-                  onClick={() => onGroupChange(id)}
-                  className={cn(
-                    'px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors border',
-                    selectedGroupId === id
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-muted/60 border-transparent hover:bg-muted text-muted-foreground',
-                  )}
-                >
-                  {name}
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="flex items-center gap-3 flex-wrap">
+          <h2 className="text-lg font-semibold">{activeGroupName}</h2>
 
           {/* Status line */}
           <span className="text-xs text-muted-foreground">
