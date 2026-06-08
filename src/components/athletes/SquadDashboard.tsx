@@ -18,6 +18,7 @@ import {
   useSquadOverview,
   type AthleteSquadSummary,
   type WellnessStatus,
+  type CustomSquadColumn,
 } from '@/hooks/useSquadOverview';
 import type { Athlete, AthleteGroup } from '@/types/athlete';
 import { getAthleteDisplayName } from '@/types/athlete';
@@ -111,7 +112,7 @@ function ZBadge({ z, positiveIsGood = false }: { z: number; positiveIsGood?: boo
     : z <= -1.5 ? 'text-sky-600'
     : 'text-muted-foreground';
   return (
-    <span className={cn('text-[10px] font-mono tabular-nums', colorClass)} title="Z-score (28-day reference)">
+    <span className={cn('text-xs font-mono tabular-nums', colorClass)} title="Z-score (28-day reference)">
       {label}
     </span>
   );
@@ -153,7 +154,7 @@ function AthleteCard({ name, summary, onClick }: CardProps) {
             <WellnessDot status={status} />
             <span className={cn('text-xs font-medium', cfg.textClass)}>{cfg.label}</span>
             {summary.wellnessComposite !== null && (
-              <span className="text-xs text-muted-foreground">{summary.wellnessComposite}/5</span>
+              <span className="text-xs text-muted-foreground">{summary.wellnessComposite}</span>
             )}
             {summary.wellnessZScore !== null && <ZBadge z={summary.wellnessZScore} positiveIsGood />}
           </div>
@@ -205,9 +206,14 @@ function AthleteCard({ name, summary, onClick }: CardProps) {
 
 // ── List row ──────────────────────────────────────────────────────────────────
 
-interface RowProps { name: string; summary: AthleteSquadSummary | null; onClick: () => void; }
+interface RowProps {
+  name: string;
+  summary: AthleteSquadSummary | null;
+  onClick: () => void;
+  customColumns: CustomSquadColumn[];
+}
 
-function AthleteListRow({ name, summary, onClick }: RowProps) {
+function AthleteListRow({ name, summary, onClick, customColumns }: RowProps) {
   const status = summary?.wellnessStatus ?? 'unknown';
   const cfg    = WELLNESS[status];
 
@@ -222,11 +228,16 @@ function AthleteListRow({ name, summary, onClick }: RowProps) {
       <td className="py-2.5 px-3 text-sm">
         {summary
           ? (
-            <div className="flex items-center gap-1.5">
-              <span className={cfg.textClass}>
-                {summary.wellnessComposite !== null ? `${summary.wellnessComposite}/5` : cfg.label}
-              </span>
-              {summary.wellnessZScore !== null && <ZBadge z={summary.wellnessZScore} positiveIsGood />}
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-1.5">
+                <span className={cfg.textClass}>
+                  {summary.wellnessComposite !== null ? String(summary.wellnessComposite) : cfg.label}
+                </span>
+                {summary.wellnessZScore !== null && <ZBadge z={summary.wellnessZScore} positiveIsGood />}
+              </div>
+              {summary.wellnessDate && (
+                <span className="text-[10px] text-muted-foreground">{summary.wellnessDate}</span>
+              )}
             </div>
           )
           : <span className="text-muted-foreground text-xs">Not connected</span>}
@@ -254,6 +265,21 @@ function AthleteListRow({ name, summary, onClick }: RowProps) {
           ? <>{summary.weekCompletedSessions}/{summary.weekPlannedSessions}<span className="ml-1 text-xs text-muted-foreground">({Math.round((summary.weekCompletedSessions / summary.weekPlannedSessions) * 100)}%)</span></>
           : <span className="text-muted-foreground">—</span>}
       </td>
+      {customColumns.map(col => {
+        const entry = summary?.customMetricValues?.[col.parameterId] ?? null;
+        return (
+          <td key={col.parameterId} className="py-2.5 px-3 text-sm tabular-nums">
+            {entry ? (
+              <div className="flex flex-col gap-0.5">
+                <span>{entry.value}{col.unit ? ` ${col.unit}` : ''}</span>
+                <span className="text-[10px] text-muted-foreground">{entry.date}</span>
+              </div>
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            )}
+          </td>
+        );
+      })}
     </tr>
   );
 }
@@ -294,12 +320,12 @@ export function SquadDashboard({
   const connectedConns = useMemo(
     () => filteredAthletes.flatMap(a => {
       const c = connByAthleteId.get(a.id);
-      return c ? [{ id: c.id, athleteLocalId: c.athleteLocalId, athleteName: c.athleteName }] : [];
+      return c ? [{ id: c.id, athleteLocalId: c.athleteLocalId, athleteName: c.athleteName, monitoringConfig: c.monitoringConfig }] : [];
     }),
     [filteredAthletes, connByAthleteId],
   );
 
-  const { summaries, loading } = useSquadOverview(connectedConns);
+  const { summaries, loading, customColumns } = useSquadOverview(connectedConns);
 
   const summaryByConnId = useMemo(
     () => new Map(summaries.map(s => [s.connectionId, s])),
@@ -376,7 +402,9 @@ export function SquadDashboard({
             <table className="w-full">
               <thead>
                 <tr className="bg-muted/50 border-b">
-                  {['Athlete', 'Wellness', 'Flags', 'Week AU (avg)', 'Compliance'].map(h => (
+                  {['Athlete', 'Wellness', 'Flags', 'Week AU (avg)', 'Compliance',
+                    ...customColumns.map(c => c.unit ? `${c.name} (${c.unit})` : c.name),
+                  ].map(h => (
                     <th key={h} className="text-left text-xs font-medium text-muted-foreground py-2 px-3">{h}</th>
                   ))}
                 </tr>
@@ -388,6 +416,7 @@ export function SquadDashboard({
                     name={getAthleteDisplayName(athlete)}
                     summary={summary}
                     onClick={() => onSelectAthlete(athlete.id)}
+                    customColumns={customColumns}
                   />
                 ))}
               </tbody>
