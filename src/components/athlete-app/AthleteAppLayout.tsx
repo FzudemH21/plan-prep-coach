@@ -101,21 +101,21 @@ function readSplashCache(): SplashBranding {
 function AthleteSplashScreen() {
   const branding = readSplashCache();
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen max-w-[480px] mx-auto px-8 gap-6 text-center">
+    <div className="flex flex-col items-center justify-center min-h-screen max-w-[480px] mx-auto px-10 gap-8 text-center">
       {branding.logoBase64 ? (
         <img
           src={branding.logoBase64}
           alt="Coach logo"
-          className="max-h-28 max-w-[220px] object-contain"
+          className="max-h-48 max-w-[300px] object-contain"
         />
       ) : (
-        <span className="text-2xl font-bold text-primary">Plan Prep Coach</span>
+        <span className="text-3xl font-bold text-primary">Plan Prep Coach</span>
       )}
-      <p className="text-sm text-muted-foreground leading-relaxed max-w-[280px]">
+      <p className="text-xl font-medium text-foreground leading-relaxed max-w-[320px]">
         {branding.welcomeMessage || "Welcome back! Ready to train today?"}
       </p>
       {/* Loading indicator */}
-      <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+      <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
     </div>
   );
 }
