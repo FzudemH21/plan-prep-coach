@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, Save, PanelRightClose, PanelRight, Pencil, MessageSquare, ChevronDown, X, Trophy, Calendar as CalendarIcon, Bot, TrendingUp, TrendingDown, Check, RefreshCw, BookmarkPlus } from 'lucide-react';
+import { Plus, Save, PanelRightClose, PanelRight, Pencil, MessageSquare, ChevronDown, X, Trophy, Calendar as CalendarIcon, TrendingUp, TrendingDown, Check, RefreshCw, BookmarkPlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { WorkoutSection, WorkoutExercise, WorkoutSession, SupersetMapping } from '@/types/workout';
 import { IntensityLevel } from '@/types/training';
@@ -2833,37 +2833,6 @@ export function WorkoutSessionSheet({
               </div>
             </div>
             <div className="flex items-center gap-2 pr-10">
-              {onOpenAIAssistant && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const uniqueMethods = [...new Set(exercises.map(e => e.categoryName))];
-                    // Build a lookup of current params from workoutSections state
-                    const paramLookup = new Map<string, Record<string, string | number>>();
-                    workoutSections.forEach(sec => {
-                      sec.exercises.forEach(ex => {
-                        paramLookup.set(ex.exerciseId, ex.parameters ?? {});
-                      });
-                    });
-                    onOpenAIAssistant({
-                      dayDate,
-                      dayLabel: format(parseISO(`${dayDate}T12:00:00`), 'EEEE d MMMM yyyy'),
-                      sessionIndex,
-                      sessionName,
-                      methods: uniqueMethods,
-                      exercises: exercises.map(e => ({
-                        name: e.exerciseName,
-                        methodName: e.categoryName,
-                        params: paramLookup.get(e.exerciseId) ?? {},
-                      })),
-                    });
-                  }}
-                  title="AI Advisor"
-                >
-                  <Bot className="h-4 w-4" />
-                </Button>
-              )}
               <Button variant="outline" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
                 {sidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
               </Button>
