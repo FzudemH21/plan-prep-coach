@@ -36,6 +36,9 @@ import AthleteProfilePage from "./pages/athlete/AthleteProfilePage";
 import AthleteSessionPage from "./pages/athlete/AthleteSessionPage";
 import { hasCoachProfile } from "./hooks/useCoachProfile";
 import { useAuth } from "./hooks/useAuth";
+import { useState } from "react";
+import { LanguagePickerModal } from "./components/LanguagePickerModal";
+import { isFirstOpen } from "./i18n";
 
 const queryClient = new QueryClient();
 
@@ -67,6 +70,90 @@ function HomeGuard() {
   return <HomePage />;
 }
 
+function AppWithLanguagePicker() {
+  const [languagePicked, setLanguagePicked] = useState(() => !isFirstOpen());
+
+  if (!languagePicked) {
+    return <LanguagePickerModal onSelect={() => setLanguagePicked(true)} />;
+  }
+
+  return <AppRoutes />;
+}
+
+function AppRoutes() {
+  return (
+    <BrowserRouter>
+      {/* Public + standalone routes live outside AppLayout and AuthGuard */}
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
+
+        {/* Athlete app — public routes (no auth required) */}
+        <Route path="/athlete/login" element={<AthleteLoginPage />} />
+        <Route path="/athlete/connect" element={<AthleteConnectPage />} />
+        <Route path="/athlete/onboarding" element={<AthleteAuthGuard><AthleteOnboardingPage /></AthleteAuthGuard>} />
+
+        {/* Athlete session — full-screen, no nav shell */}
+        <Route
+          path="/athlete/session"
+          element={
+            <AthleteAuthGuard>
+              <AthleteSessionPage />
+            </AthleteAuthGuard>
+          }
+        />
+
+        {/* Athlete app — protected shell with nested tabs */}
+        <Route
+          path="/athlete"
+          element={
+            <AthleteAuthGuard>
+              <AthleteAppLayout />
+            </AthleteAuthGuard>
+          }
+        >
+          <Route index element={<Navigate to="/athlete/today" replace />} />
+          <Route path="today" element={<AthleteTodayPage />} />
+          <Route path="plan" element={<AthletePlanPage />} />
+          <Route path="messages" element={<AthleteMessagesPage />} />
+          <Route path="profile" element={<AthleteProfilePage />} />
+        </Route>
+
+        <Route
+          path="*"
+          element={
+            <AuthGuard>
+              <AppLayout>
+                <Routes>
+                  <Route path="/" element={<HomeGuard />} />
+                  <Route path="/macrocycle" element={<MacrocyclePage />} />
+                  <Route path="/mesocycle" element={<MesocyclePage />} />
+                  <Route path="/microcycle" element={<MicrocyclePlanningPage />} />
+                  <Route path="/athletes" element={<AthleteDatabase />} />
+                  <Route path="/templates" element={<TemplatesPage />} />
+                  <Route path="/templates/programs" element={<TrainingProgramsPage />} />
+                  <Route path="/templates/athleticism" element={<AthleticismDatabaseV2 />} />
+                  <Route path="/templates/athleticism-v2" element={<Navigate to="/templates/athleticism" replace />} />
+                  <Route path="/templates/toolbox" element={<ToolboxDatabase />} />
+                  <Route path="/templates/libraries/:libraryName" element={<LibraryPage />} />
+                  <Route path="/templates/exercise-libraries" element={<ExerciseLibrariesPage />} />
+                  <Route path="/templates/program-templates" element={<ProgramTemplatesPage />} />
+                  <Route path="/coach-profile" element={<CoachProfilePage />} />
+                  <Route path="/messages" element={<CoachMessagesPage />} />
+                  <Route path="/analytics" element={<div className="text-center py-12">Analytics coming soon...</div>} />
+                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </AppLayout>
+            </AuthGuard>
+          }
+        />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -75,75 +162,7 @@ const App = () => (
           <WizardDataProvider>
           <Toaster />
           <Sonner />
-          <BrowserRouter>
-            {/* Public + standalone routes live outside AppLayout and AuthGuard */}
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/signup" element={<SignupPage />} />
-              <Route path="/onboarding" element={<OnboardingPage />} />
-
-              {/* Athlete app — public routes (no auth required) */}
-              <Route path="/athlete/login" element={<AthleteLoginPage />} />
-              <Route path="/athlete/connect" element={<AthleteConnectPage />} />
-              <Route path="/athlete/onboarding" element={<AthleteAuthGuard><AthleteOnboardingPage /></AthleteAuthGuard>} />
-
-              {/* Athlete session — full-screen, no nav shell */}
-              <Route
-                path="/athlete/session"
-                element={
-                  <AthleteAuthGuard>
-                    <AthleteSessionPage />
-                  </AthleteAuthGuard>
-                }
-              />
-
-              {/* Athlete app — protected shell with nested tabs */}
-              <Route
-                path="/athlete"
-                element={
-                  <AthleteAuthGuard>
-                    <AthleteAppLayout />
-                  </AthleteAuthGuard>
-                }
-              >
-                <Route index element={<Navigate to="/athlete/today" replace />} />
-                <Route path="today" element={<AthleteTodayPage />} />
-                <Route path="plan" element={<AthletePlanPage />} />
-                <Route path="messages" element={<AthleteMessagesPage />} />
-                <Route path="profile" element={<AthleteProfilePage />} />
-              </Route>
-
-              <Route
-                path="*"
-                element={
-                  <AuthGuard>
-                    <AppLayout>
-                      <Routes>
-                        <Route path="/" element={<HomeGuard />} />
-                        <Route path="/macrocycle" element={<MacrocyclePage />} />
-                        <Route path="/mesocycle" element={<MesocyclePage />} />
-                        <Route path="/microcycle" element={<MicrocyclePlanningPage />} />
-                        <Route path="/athletes" element={<AthleteDatabase />} />
-                        <Route path="/templates" element={<TemplatesPage />} />
-                        <Route path="/templates/programs" element={<TrainingProgramsPage />} />
-                        <Route path="/templates/athleticism" element={<AthleticismDatabaseV2 />} />
-                        <Route path="/templates/athleticism-v2" element={<Navigate to="/templates/athleticism" replace />} />
-                        <Route path="/templates/toolbox" element={<ToolboxDatabase />} />
-                        <Route path="/templates/libraries/:libraryName" element={<LibraryPage />} />
-                        <Route path="/templates/exercise-libraries" element={<ExerciseLibrariesPage />} />
-                        <Route path="/templates/program-templates" element={<ProgramTemplatesPage />} />
-                        <Route path="/coach-profile" element={<CoachProfilePage />} />
-                        <Route path="/messages" element={<CoachMessagesPage />} />
-                        <Route path="/analytics" element={<div className="text-center py-12">Analytics coming soon...</div>} />
-                        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                        <Route path="*" element={<NotFound />} />
-                      </Routes>
-                    </AppLayout>
-                  </AuthGuard>
-                }
-              />
-            </Routes>
-          </BrowserRouter>
+          <AppWithLanguagePicker />
           </WizardDataProvider>
         </CustomLibrariesProvider>
       </DisplayModeProvider>

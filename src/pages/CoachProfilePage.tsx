@@ -1,4 +1,6 @@
 import { useState, useEffect, ChangeEvent } from "react";
+import { useTranslation } from "react-i18next";
+import { SUPPORTED_LANGUAGES } from "@/i18n";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -510,6 +512,9 @@ function BrandingCard() {
 // ─────────────────────────────────────────────
 
 function SettingsTab() {
+  const { i18n } = useTranslation();
+  const currentLang = i18n.language as string;
+
   return (
     <div className="space-y-6">
       {/* Branding */}
@@ -653,14 +658,22 @@ function SettingsTab() {
               <Globe className="h-4 w-4 text-muted-foreground" />
               <div>
                 <p className="text-sm font-medium">Language</p>
-                <p className="text-xs text-muted-foreground">English / Deutsch</p>
+                <p className="text-xs text-muted-foreground">
+                  {SUPPORTED_LANGUAGES.find(l => l.code === currentLang)?.label ?? 'English'}
+                </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <ComingSoon />
-              <Button variant="outline" size="sm" disabled>
-                Change
-              </Button>
+            <div className="flex items-center gap-1">
+              {SUPPORTED_LANGUAGES.map(lang => (
+                <Button
+                  key={lang.code}
+                  variant={currentLang === lang.code ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => i18n.changeLanguage(lang.code)}
+                >
+                  {lang.flag} {lang.label}
+                </Button>
+              ))}
             </div>
           </div>
           <Separator />
