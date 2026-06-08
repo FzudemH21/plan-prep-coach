@@ -902,7 +902,9 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
       const cfg = block?.config;
       if (!cfg) return null;
 
-      const currentVal = customMetricValues[blockId] ?? null;
+      // Key by cfg.parameterId so athlete_test_results rows match what useSquadOverview queries.
+      const metricKey = cfg.parameterId;
+      const currentVal = customMetricValues[metricKey] ?? null;
       const questionLabel = cfg.label || cfg.parameterName;
       const unitSuffix = cfg.parameterUnit ? ` (${cfg.parameterUnit})` : '';
 
@@ -926,7 +928,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
                 return (
                   <button
                     key={n}
-                    onClick={() => setCustomMetricValues(prev => ({ ...prev, [blockId]: n }))}
+                    onClick={() => setCustomMetricValues(prev => ({ ...prev, [metricKey]: n }))}
                     className={cn(
                       'w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all active:scale-[0.98]',
                       isSelected
@@ -978,7 +980,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
                 value={currentVal ?? ''}
                 onChange={e => {
                   const v = parseFloat(e.target.value);
-                  setCustomMetricValues(prev => isNaN(v) ? (({ [blockId]: _, ...rest }) => rest)(prev) : { ...prev, [blockId]: v });
+                  setCustomMetricValues(prev => isNaN(v) ? (({ [metricKey]: _, ...rest }) => rest)(prev) : { ...prev, [metricKey]: v });
                 }}
               />
               {cfg.parameterUnit && (

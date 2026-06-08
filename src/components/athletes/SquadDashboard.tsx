@@ -413,12 +413,6 @@ function AthleteListRow({ name, summary, onClick, customColumns }: RowProps) {
             : <span className="text-muted-foreground">—</span>)
           : <span className="text-muted-foreground">—</span>}
       </td>
-      {/* Compliance — moved to end */}
-      <td className="py-2.5 px-3 text-sm tabular-nums">
-        {summary && summary.weekPlannedSessions > 0
-          ? <>{summary.weekCompletedSessions}/{summary.weekPlannedSessions}<span className="ml-1 text-xs text-muted-foreground">({Math.round((summary.weekCompletedSessions / summary.weekPlannedSessions) * 100)}%)</span></>
-          : <span className="text-muted-foreground">—</span>}
-      </td>
     </tr>
   );
 }
@@ -550,7 +544,7 @@ export function SquadDashboard({
                   {[
                     'Athlete', 'Wellness', 'Flags',
                     ...customColumns.map(c => c.unit ? `${c.name} (${c.unit})` : c.name),
-                    'Session', 'Tests / Events', 'Week AU (avg)', 'Compliance',
+                    'Training', 'Tests / Events', 'Week AU (avg)',
                   ].map(h => (
                     <th key={h} className="text-left text-xs font-medium text-muted-foreground py-2 px-3">{h}</th>
                   ))}
