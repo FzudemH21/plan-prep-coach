@@ -325,7 +325,7 @@ export default function SessionLibraryPage() {
       </div>
 
       {/* Table */}
-      {entries.length === 0 ? (
+      {entries.length === 0 && columns.length === 0 ? (
         <div className="text-center py-16 space-y-3">
           <BookmarkPlus className="h-10 w-10 text-muted-foreground mx-auto" />
           <h3 className="text-lg font-semibold">{t('sessionLibrary.empty.title')}</h3>

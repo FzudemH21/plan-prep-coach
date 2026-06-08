@@ -3365,7 +3365,7 @@ export function WorkoutSessionSheet({
         sessionName={sessionName}
         exercises={exercises.filter(e => e.dayDate === dayDate && e.sessionIndex === sessionIndex)}
         sections={(sessionSectionsProp ?? []).filter(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex)}
-        defaultMethod={exercises.find(e => e.dayDate === dayDate && e.sessionIndex === sessionIndex)?.categoryName}
+        defaultMethod={exercises.find(e => e.dayDate === dayDate && e.sessionIndex === sessionIndex)?.categoryName?.split('::')[0]}
         onSaved={() => setSaveLibOpen(false)}
       />
 
