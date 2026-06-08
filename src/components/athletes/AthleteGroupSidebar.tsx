@@ -297,12 +297,16 @@ export function AthleteGroupSidebar({
           Athletes
         </h2>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" onClick={onCreateAthlete} title="Create Athlete">
-            <UserPlus className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => { setShowCreateGroup(true); setSidebarTab('groups'); }} title="Create Group">
-            <FolderPlus className="h-4 w-4" />
-          </Button>
+          {sidebarTab === 'athletes' && (
+            <Button variant="ghost" size="icon" onClick={onCreateAthlete} title="Create Athlete">
+              <UserPlus className="h-4 w-4" />
+            </Button>
+          )}
+          {sidebarTab === 'groups' && (
+            <Button variant="ghost" size="icon" onClick={() => setShowCreateGroup(true)} title="Create Group">
+              <FolderPlus className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -435,15 +439,6 @@ export function AthleteGroupSidebar({
                     );
                   })}
 
-                  {/* Ungrouped */}
-                  {ungroupedAthletes.length > 0 && (
-                    <div className="pt-2 border-t mt-2">
-                      <p className="text-xs text-muted-foreground px-2 py-1">Ungrouped</p>
-                      {ungroupedAthletes.map(athlete => (
-                        <AthleteRow key={athlete.id} athlete={athlete} {...sharedRowProps} />
-                      ))}
-                    </div>
-                  )}
                 </>
               )}
             </>
