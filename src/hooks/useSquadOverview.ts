@@ -1,17 +1,17 @@
 /**
  * useSquadOverview
  *
- * Batch-fetches monitoring data for a set of athlete connections and
- * returns a per-athlete summary suitable for the Squad Dashboard.
+ * Batch-fetches monitoring data for a set of athlete connections for a
+ * specific `selectedDate` and returns a per-athlete summary for the Squad Dashboard.
  *
- * Four parallel Supabase queries cover all data in one round-trip:
- *   1. Daily check-ins (last 28 days) — wellness + z-score reference
- *   2. Completed session logs (last 28 days) — week AU + prior-week average + z-score
- *   3. This-week schedule rows — planned session count
+ * Four parallel Supabase queries:
+ *   1. Daily check-ins (28-day window ending at selectedDate) — wellness + z-score ref
+ *   2. Completed session logs (28-day window) — week AU + prior-week avg + z-score
+ *   3. ISO-week schedule rows — planned session count
  *   4. Latest custom-metric test results per parameterId
  *
- * The load metric is displayed as "this week AU vs. prior-week average" —
- * NOT as ACWR. This is purely descriptive context, not a risk predictor.
+ * Wellness shows the check-in for *exactly* selectedDate (not the latest overall).
+ * Load/AU shows the totals for the ISO week that contains selectedDate.
  */
 
 import { useState, useEffect, useMemo } from 'react';
@@ -23,7 +23,6 @@ import type { MonitoringConfig } from '@/types/athlete';
 
 export type WellnessStatus = 'good' | 'moderate' | 'poor' | 'unknown';
 
-/** A unique custom-metric column derived from all athletes' monitoringConfigs. */
 export interface CustomSquadColumn {
   parameterId: string;
   name: string;
@@ -34,39 +33,30 @@ export interface AthleteSquadSummary {
   connectionId: string;
   athleteLocalId: string;
   athleteName: string;
-  /** Average of available wellness items (1–5 scale). Null if no check-in in last 28 days. */
+  /** Composite for exactly selectedDate (null if no check-in on that day). */
   wellnessComposite: number | null;
   wellnessStatus: WellnessStatus;
-  /** Date of the most recent check-in (yyyy-MM-dd). */
+  /** The check-in date used — always selectedDate or null. */
   wellnessDate: string | null;
   hasPainFlag: boolean;
   hasIllnessFlag: boolean;
-  /** AU = sRPE × duration_minutes, summed for the current ISO week (Mon–today). */
+  /** AU summed for the ISO week that contains selectedDate, up to selectedDate. */
   weekAU: number;
-  /** Average weekly AU across complete prior ISO weeks in the last 28 days. 0 if no history. */
+  /** Average weekly AU across complete prior ISO weeks in the 28-day window. */
   avgWeeklyAU: number;
-  /** Completed sessions (with completed_at set) this ISO week. */
   weekCompletedSessions: number;
-  /** Planned sessions (from athlete_schedule) this ISO week up to today. */
   weekPlannedSessions: number;
-  /** Z-score of today's wellness vs all daily composites in the last 28 days. Null if < 2 data points. */
+  /** Z-score vs all daily composites in the 28-day window. Null if < 2 data points. */
   wellnessZScore: number | null;
-  /** Z-score of this week's AU vs prior complete-week AUs in the last 28 days. Null if < 2 prior weeks. */
+  /** Z-score of weekAU vs prior complete-week AUs. Null if < 2 prior weeks. */
   weekAUZScore: number | null;
-  /**
-   * Latest value per custom parameterId. Key = parameterId.
-   * Null entry means no test result found for that metric.
-   */
   customMetricValues: Record<string, { value: string; date: string } | null>;
 }
-
-// ── Connection input type ─────────────────────────────────────────────────────
 
 export interface SquadConnectionInput {
   id: string;
   athleteLocalId: string;
   athleteName: string;
-  /** Used to derive custom metric columns across the squad. */
   monitoringConfig?: MonitoringConfig | null;
 }
 
@@ -115,25 +105,17 @@ function toWellnessStatus(composite: number | null): WellnessStatus {
 
 function computeComposite(row: CheckinRow): number | null {
   const items = [
-    row.wellness_fatigue,
-    row.wellness_sleep,
-    row.wellness_soreness,
-    row.wellness_stress,
-    row.wellness_mood,
+    row.wellness_fatigue, row.wellness_sleep,
+    row.wellness_soreness, row.wellness_stress, row.wellness_mood,
   ].filter((v): v is number => v !== null);
-  if (items.length === 0) return null;
+  if (!items.length) return null;
   return Math.round((items.reduce((a, b) => a + b, 0) / items.length) * 10) / 10;
 }
 
-/**
- * Z-score of `value` relative to `population` (sample std dev, Bessel-corrected).
- * Returns null when population has fewer than 2 data points or std dev is 0.
- * Rounded to one decimal place.
- */
 function computeZScore(value: number, population: number[]): number | null {
   if (population.length < 2) return null;
   const m = population.reduce((a, b) => a + b, 0) / population.length;
-  const variance = population.reduce((sum, v) => sum + (v - m) ** 2, 0) / (population.length - 1);
+  const variance = population.reduce((s, v) => s + (v - m) ** 2, 0) / (population.length - 1);
   const s = Math.sqrt(variance);
   if (s === 0) return null;
   return Math.round(((value - m) / s) * 10) / 10;
@@ -141,20 +123,18 @@ function computeZScore(value: number, population: number[]): number | null {
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
-export function useSquadOverview(connections: SquadConnectionInput[]) {
-  // Stable dep-key: prevents re-fetch on every parent render due to array reference churn
-  const connKey = connections
-    .map(c => c.id)
-    .sort()
-    .join(',');
+export function useSquadOverview(
+  connections: SquadConnectionInput[],
+  selectedDate: Date = new Date(),
+) {
+  const connKey = connections.map(c => c.id).sort().join(',');
+  const dateKey = format(selectedDate, 'yyyy-MM-dd');
 
-  // Derive unique enabled custom-metric columns across all athletes.
-  // Deduped by parameterId so each metric appears once regardless of how many athletes have it.
+  // Unique enabled custom-metric columns across the squad
   const customColumns = useMemo((): CustomSquadColumn[] => {
     const seen = new Map<string, CustomSquadColumn>();
     for (const conn of connections) {
-      const blocks = conn.monitoringConfig?.blocks ?? [];
-      for (const block of blocks) {
+      for (const block of conn.monitoringConfig?.blocks ?? []) {
         if (block.type === 'custom_metric' && block.enabled && block.config) {
           const { parameterId, parameterName, parameterUnit } = block.config;
           if (!seen.has(parameterId)) {
@@ -170,39 +150,34 @@ export function useSquadOverview(connections: SquadConnectionInput[]) {
   const [loading, setLoading]     = useState(false);
 
   useEffect(() => {
-    if (!connKey) {
-      setSummaries([]);
-      return;
-    }
+    if (!connKey) { setSummaries([]); return; }
 
     let cancelled = false;
 
     async function load() {
       setLoading(true);
-      const connectionIds   = connections.map(c => c.id);
-      const customParamIds  = customColumns.map(c => c.parameterId);
 
-      const today        = new Date();
+      const connectionIds  = connections.map(c => c.id);
+      const customParamIds = customColumns.map(c => c.parameterId);
+
+      // All date arithmetic anchored on selectedDate
+      const today        = selectedDate;
       const weekStart    = startOfISOWeek(today);
       const weekStartStr = format(weekStart, 'yyyy-MM-dd');
       const todayStr     = format(today, 'yyyy-MM-dd');
       const from28Str    = format(subDays(today, 28), 'yyyy-MM-dd');
 
-      const queries: [
-        ReturnType<typeof supabase.from>,
-        ReturnType<typeof supabase.from>,
-        ReturnType<typeof supabase.from>,
-        ReturnType<typeof supabase.from> | null,
-      ] = [
-        // 1. Daily check-ins — last 28 days (wellness values + z-score reference)
+      const [checkinsRes, logsRes, scheduleRes, testRes] = await Promise.all([
+        // 1. Check-ins: 28-day window for z-score reference; exact todayStr for display value
         supabase
           .from('athlete_daily_checkins')
           .select('athlete_connection_id, date, wellness_fatigue, wellness_sleep, wellness_soreness, wellness_stress, wellness_mood, has_pain, has_illness')
           .in('athlete_connection_id', connectionIds)
           .gte('date', from28Str)
+          .lte('date', todayStr)
           .order('date', { ascending: false }),
 
-        // 2. Completed session logs — last 28 days
+        // 2. Completed session logs — 28-day window
         supabase
           .from('athlete_session_logs')
           .select('athlete_connection_id, date, borg_rating, duration_seconds, completed_at')
@@ -211,7 +186,7 @@ export function useSquadOverview(connections: SquadConnectionInput[]) {
           .lte('date', todayStr)
           .not('completed_at', 'is', null),
 
-        // 3. This-week schedule (planned sessions)
+        // 3. This-week schedule (Mon → selectedDate)
         supabase
           .from('athlete_schedule')
           .select('athlete_connection_id, date, sessions')
@@ -219,7 +194,7 @@ export function useSquadOverview(connections: SquadConnectionInput[]) {
           .gte('date', weekStartStr)
           .lte('date', todayStr),
 
-        // 4. Latest custom-metric test results (only if there are custom columns)
+        // 4. Custom metric test results
         customParamIds.length > 0
           ? supabase
               .from('athlete_test_results')
@@ -227,26 +202,24 @@ export function useSquadOverview(connections: SquadConnectionInput[]) {
               .in('athlete_connection_id', connectionIds)
               .in('parameter_id', customParamIds)
               .order('recorded_at', { ascending: false })
-          : null,
-      ];
-
-      const [checkinsRes, logsRes, scheduleRes, testRes] = await Promise.all(
-        queries.map(q => q ?? Promise.resolve({ data: [], error: null }))
-      );
+          : Promise.resolve({ data: [], error: null }),
+      ]);
 
       if (cancelled) return;
 
       const checkins    = (checkinsRes.data  ?? []) as CheckinRow[];
       const logs        = (logsRes.data      ?? []) as LogRow[];
       const schedule    = (scheduleRes.data  ?? []) as ScheduleRow[];
-      const testResults = (testRes?.data     ?? []) as TestResultRow[];
+      const testResults = ((testRes as { data: unknown[] | null }).data ?? []) as TestResultRow[];
 
-      // ── Latest check-in + all composites per connection ──────────────────────
-      const latestCheckin      = new Map<string, CheckinRow>();
+      // Check-in for *exactly* selectedDate per athlete (for display)
+      const exactCheckin       = new Map<string, CheckinRow>();
+      // All composites in the 28-day window (for z-score reference)
       const allCompositesByConn = new Map<string, number[]>();
+
       for (const row of checkins) {
-        if (!latestCheckin.has(row.athlete_connection_id)) {
-          latestCheckin.set(row.athlete_connection_id, row);
+        if (row.date === todayStr && !exactCheckin.has(row.athlete_connection_id)) {
+          exactCheckin.set(row.athlete_connection_id, row);
         }
         const comp = computeComposite(row);
         if (comp !== null) {
@@ -256,27 +229,22 @@ export function useSquadOverview(connections: SquadConnectionInput[]) {
         }
       }
 
-      // ── Latest test result per (connectionId, parameterId) ───────────────────
-      // Rows already ordered recorded_at DESC, so first hit per key is the latest.
+      // Latest test result per (connectionId, parameterId)
       const latestTestResult = new Map<string, { value: string; date: string }>();
       for (const row of testResults) {
         const key = `${row.athlete_connection_id}::${row.parameter_id}`;
         if (!latestTestResult.has(key)) {
-          latestTestResult.set(key, {
-            value: String(row.value),
-            date: row.recorded_at.slice(0, 10),
-          });
+          latestTestResult.set(key, { value: String(row.value), date: row.recorded_at.slice(0, 10) });
         }
       }
 
-      // ── Per-athlete summaries ────────────────────────────────────────────────
       const results: AthleteSquadSummary[] = connections.map(conn => {
-        const checkin   = latestCheckin.get(conn.id) ?? null;
+        const checkin   = exactCheckin.get(conn.id) ?? null;
         const composite = checkin ? computeComposite(checkin) : null;
 
         const connLogs = logs.filter(l => l.athlete_connection_id === conn.id);
 
-        // Current ISO-week AU
+        // ISO-week AU (Mon → selectedDate)
         const weekLogs = connLogs.filter(l => l.date >= weekStartStr);
         const weekAU   = weekLogs.reduce((sum, l) => {
           const b = l.borg_rating ?? 0;
@@ -284,7 +252,7 @@ export function useSquadOverview(connections: SquadConnectionInput[]) {
           return sum + b * d;
         }, 0);
 
-        // Prior-weeks average AU (excluding current week)
+        // Prior-week AU averages
         const prevLogs = connLogs.filter(l => l.date < weekStartStr);
         const auByWeek = new Map<string, number>();
         for (const l of prevLogs) {
@@ -297,11 +265,10 @@ export function useSquadOverview(connections: SquadConnectionInput[]) {
           ? Math.round(prevWeekAUs.reduce((a, b) => a + b, 0) / prevWeekAUs.length)
           : 0;
 
-        // Planned sessions this week
-        const connSchedule = schedule.filter(s => s.athlete_connection_id === conn.id);
+        // Planned sessions for the week containing selectedDate
+        const connSchedule        = schedule.filter(s => s.athlete_connection_id === conn.id);
         const weekPlannedSessions = connSchedule.reduce(
-          (sum, row) => sum + (Array.isArray(row.sessions) ? row.sessions.length : 0),
-          0,
+          (sum, row) => sum + (Array.isArray(row.sessions) ? row.sessions.length : 0), 0,
         );
 
         // Z-scores
@@ -309,11 +276,10 @@ export function useSquadOverview(connections: SquadConnectionInput[]) {
         const wellnessZScore = composite !== null ? computeZScore(composite, allComposites) : null;
         const weekAUZScore   = computeZScore(weekAU, prevWeekAUs);
 
-        // Custom metric latest values
+        // Custom metric values
         const customMetricValues: Record<string, { value: string; date: string } | null> = {};
         for (const col of customColumns) {
-          const key = `${conn.id}::${col.parameterId}`;
-          customMetricValues[col.parameterId] = latestTestResult.get(key) ?? null;
+          customMetricValues[col.parameterId] = latestTestResult.get(`${conn.id}::${col.parameterId}`) ?? null;
         }
 
         return {
@@ -342,7 +308,7 @@ export function useSquadOverview(connections: SquadConnectionInput[]) {
     load();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connKey, customColumns]);
+  }, [connKey, dateKey, customColumns]);
 
   return { summaries, loading, customColumns };
 }

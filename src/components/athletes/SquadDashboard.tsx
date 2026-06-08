@@ -9,11 +9,14 @@
  * dashboard stay in sync.
  */
 
-import { useMemo } from 'react';
-import { LayoutGrid, List, Thermometer, Zap, Users, Loader2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { LayoutGrid, List, Thermometer, Zap, Users, Loader2, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
+import { addDays, subDays, format } from 'date-fns';
 import {
   useSquadOverview,
   type AthleteSquadSummary,
@@ -115,6 +118,50 @@ function ZBadge({ z, positiveIsGood = false }: { z: number; positiveIsGood?: boo
     <span className={cn('text-xs font-mono tabular-nums', colorClass)} title="Z-score (28-day reference)">
       {label}
     </span>
+  );
+}
+
+// ── Date navigator ────────────────────────────────────────────────────────────
+
+function DateNavigator({ date, onChange }: { date: Date; onChange: (d: Date) => void }) {
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const dateStr  = format(date, 'yyyy-MM-dd');
+  const isToday  = dateStr === todayStr;
+
+  return (
+    <div className="flex items-center gap-0.5">
+      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onChange(subDays(date, 1))}>
+        <ChevronLeft className="h-3.5 w-3.5" />
+      </Button>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs font-medium">
+            <CalendarDays className="h-3.5 w-3.5" />
+            {isToday ? 'Today' : format(date, 'MMM d, yyyy')}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="end">
+          <Calendar
+            mode="single"
+            selected={date}
+            onSelect={d => d && onChange(d)}
+            disabled={d => d > new Date()}
+            initialFocus
+          />
+        </PopoverContent>
+      </Popover>
+      <Button
+        variant="ghost" size="sm" className="h-7 w-7 p-0"
+        disabled={isToday} onClick={() => onChange(addDays(date, 1))}
+      >
+        <ChevronRight className="h-3.5 w-3.5" />
+      </Button>
+      {!isToday && (
+        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => onChange(new Date())}>
+          Today
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -237,9 +284,6 @@ function AthleteListRow({ name, summary, onClick, customColumns }: RowProps) {
           )
           : <span className="text-muted-foreground text-xs">Not connected</span>}
       </td>
-      <td className="py-2.5 px-3 text-xs text-muted-foreground tabular-nums">
-        {summary?.wellnessDate ?? '—'}
-      </td>
       <td className="py-2.5 px-3">
         {summary && <FlagIcons summary={summary} />}
       </td>
@@ -323,7 +367,7 @@ export function SquadDashboard({
     [filteredAthletes, connByAthleteId],
   );
 
-  const { summaries, loading, customColumns } = useSquadOverview(connectedConns);
+  const { summaries, loading, customColumns } = useSquadOverview(connectedConns, selectedDate);
 
   const summaryByConnId = useMemo(
     () => new Map(summaries.map(s => [s.connectionId, s])),
@@ -344,6 +388,8 @@ export function SquadDashboard({
 
   const connectedCount = displayItems.filter(i => i.summary !== null).length;
   const flaggedCount   = displayItems.filter(i => i.summary && (i.summary.hasPainFlag || i.summary.hasIllnessFlag)).length;
+
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
 
   const activeGroupName = useMemo(
     () => selectedGroupId ? (groups.find(g => g.id === selectedGroupId)?.name ?? 'Squad') : 'All Athletes',
@@ -366,14 +412,17 @@ export function SquadDashboard({
           </span>
         </div>
 
-        {/* View toggle */}
-        <div className="flex items-center gap-1 shrink-0">
-          <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" className="h-7 w-7 p-0" title="List view" onClick={() => onViewModeChange('list')}>
-            <List className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant={viewMode === 'card' ? 'secondary' : 'ghost'} size="sm" className="h-7 w-7 p-0" title="Card view" onClick={() => onViewModeChange('card')}>
-            <LayoutGrid className="h-3.5 w-3.5" />
-          </Button>
+        {/* Right controls: date navigator + view toggle */}
+        <div className="flex items-center gap-2 shrink-0">
+          <DateNavigator date={selectedDate} onChange={setSelectedDate} />
+          <div className="flex items-center gap-1 border-l pl-2">
+            <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" className="h-7 w-7 p-0" title="List view" onClick={() => onViewModeChange('list')}>
+              <List className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant={viewMode === 'card' ? 'secondary' : 'ghost'} size="sm" className="h-7 w-7 p-0" title="Card view" onClick={() => onViewModeChange('card')}>
+              <LayoutGrid className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -400,7 +449,7 @@ export function SquadDashboard({
             <table className="w-full">
               <thead>
                 <tr className="bg-muted/50 border-b">
-                  {['Athlete', 'Wellness', 'Date', 'Flags', 'Week AU (avg)', 'Compliance',
+                  {['Athlete', 'Wellness', 'Flags', 'Week AU (avg)', 'Compliance',
                     ...customColumns.map(c => c.unit ? `${c.name} (${c.unit})` : c.name),
                   ].map(h => (
                     <th key={h} className="text-left text-xs font-medium text-muted-foreground py-2 px-3">{h}</th>
