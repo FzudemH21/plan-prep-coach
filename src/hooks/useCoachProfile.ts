@@ -111,12 +111,28 @@ export function hasCoachProfile(): boolean {
   return readCache() !== null;
 }
 
+// ─── Cross-instance broadcast ─────────────────────────────────────────────────
+// All hook instances listen for this event so any save propagates immediately
+// to every component that uses useCoachProfile (e.g. AppLayout + CoachProfilePage).
+const PROFILE_UPDATED_EVENT = "coachProfileUpdated";
+
+function broadcastProfileUpdate() {
+  window.dispatchEvent(new CustomEvent(PROFILE_UPDATED_EVENT));
+}
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 export function useCoachProfile() {
   const { user } = useAuth();
 
   // Initialise synchronously from cache → no UI flicker on revisits
   const [profile, setProfileState] = useState<CoachProfile | null>(readCache);
+
+  // ── Re-sync from cache whenever any hook instance saves ──────────────────────
+  useEffect(() => {
+    const handleUpdate = () => setProfileState(readCache());
+    window.addEventListener(PROFILE_UPDATED_EVENT, handleUpdate);
+    return () => window.removeEventListener(PROFILE_UPDATED_EVENT, handleUpdate);
+  }, []);
 
   // ── Load from Supabase on mount / when the logged-in user changes ─────────────
   useEffect(() => {
@@ -181,6 +197,7 @@ export function useCoachProfile() {
     async (newProfile: CoachProfile): Promise<void> => {
       setProfileState(newProfile);
       writeCache(newProfile);
+      broadcastProfileUpdate();
       if (!user) {
         console.warn("[useCoachProfile] saveProfile: user is null — saved to cache only, will sync after auth resolves");
         return;
@@ -199,6 +216,7 @@ export function useCoachProfile() {
   const clearProfile = useCallback(async (): Promise<void> => {
     setProfileState(null);
     writeCache(null);
+    broadcastProfileUpdate();
     localStorage.removeItem(LEGACY_KEY);
     if (!user) return;
     const { error } = await supabase
