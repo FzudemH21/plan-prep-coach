@@ -1,4 +1,4 @@
-import { useState, useEffect, ChangeEvent } from "react";
+import { useState, useEffect, useRef, ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { SUPPORTED_LANGUAGES } from "@/i18n";
 import { useNavigate } from "react-router-dom";
@@ -46,6 +46,7 @@ import {
   Palette,
   Upload,
   RotateCcw,
+  Camera,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -171,6 +172,32 @@ function ComingSoon() {
 }
 
 // ─────────────────────────────────────────────
+// Image resize helper (avatar upload)
+// ─────────────────────────────────────────────
+
+function resizeImageToBase64(file: File, maxPx: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("canvas context unavailable")); return; }
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+// ─────────────────────────────────────────────
 // Tab: Profile
 // ─────────────────────────────────────────────
 
@@ -186,7 +213,9 @@ function ProfileTab() {
   const [targetGroup, setTargetGroup] = useState(profile?.structured?.targetGroup ?? "");
   const [experience, setExperience] = useState(profile?.structured?.experience ?? "");
   const [summary, setSummary] = useState(profile?.summary ?? "");
+  const [avatarBase64, setAvatarBase64] = useState(profile?.avatarBase64 ?? "");
   const [dirty, setDirty] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -197,11 +226,22 @@ function ProfileTab() {
     setTargetGroup(profile.structured?.targetGroup ?? "");
     setExperience(profile.structured?.experience ?? "");
     setSummary(profile.summary ?? "");
+    setAvatarBase64(profile.avatarBase64 ?? "");
   }, [profile]);
 
   const markDirty = <T,>(setter: (v: T) => void) => (v: T) => {
     setter(v);
     setDirty(true);
+  };
+
+  const handleAvatarUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const base64 = await resizeImageToBase64(file, 200);
+    setAvatarBase64(base64);
+    if (profile) {
+      saveProfile({ ...profile, name, sports, structured: { philosophy, methods, targetGroup, experience }, summary, avatarBase64: base64 });
+    }
   };
 
   const handleSave = () => {
@@ -212,6 +252,7 @@ function ProfileTab() {
       sports,
       structured: { philosophy, methods, targetGroup, experience },
       summary,
+      avatarBase64,
     });
     setDirty(false);
     toast({ title: "Profile saved" });
@@ -272,6 +313,49 @@ function ProfileTab() {
           <CardTitle className="text-base">Identity</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Avatar upload */}
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => avatarInputRef.current?.click()}
+              className="relative group shrink-0 w-16 h-16 rounded-full overflow-hidden border-2 border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              title="Change profile photo"
+            >
+              {avatarBase64 ? (
+                <img src={avatarBase64} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-muted text-muted-foreground font-semibold text-xl select-none">
+                  {name ? name.trim().split(/\s+/).map((w) => w[0]).join("").toUpperCase().slice(0, 2) : "?"}
+                </div>
+              )}
+              {/* Camera overlay */}
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Camera className="h-5 w-5 text-white" />
+              </div>
+            </button>
+            <div className="flex flex-col gap-1">
+              <span className="text-sm font-medium">Profile Photo</span>
+              <span className="text-xs text-muted-foreground">Click the circle to upload a photo.</span>
+              {avatarBase64 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs text-destructive hover:text-destructive w-fit"
+                  onClick={() => { setAvatarBase64(""); setDirty(true); }}
+                >
+                  Remove photo
+                </Button>
+              )}
+            </div>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleAvatarUpload}
+            />
+          </div>
           <div className="space-y-1.5">
             <Label>Name</Label>
             <Input value={name} onChange={(e) => markDirty(setName)(e.target.value)} />

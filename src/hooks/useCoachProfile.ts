@@ -35,6 +35,8 @@ export interface CoachProfile {
   skipped?: boolean;
   /** PDF report branding (logo, accent color, business name) */
   branding?: CoachBranding;
+  /** Base64 data-URL of the coach's profile photo (JPEG, resized to ≤200px) */
+  avatarBase64?: string;
 }
 
 // ─── Cache helpers (sync, no network) ─────────────────────────────────────────

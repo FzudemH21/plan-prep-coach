@@ -21,13 +21,13 @@ import {
   Zap,
   Wrench,
   Library,
-  UserCircle,
   LogOut,
   MessageCircle,
 } from "lucide-react";
 import { useAthleteConnections } from "@/hooks/useAthleteConnections";
 import { useUnreadCounts } from "@/hooks/useChat";
 import { useMemo } from "react";
+import { useCoachProfile } from "@/hooks/useCoachProfile";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -62,7 +62,13 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
   const navigate = useNavigate();
   const location = useLocation();
   const { signOut, user } = useAuth();
-  
+  const { profile } = useCoachProfile();
+
+  const coachName = profile?.name ?? user?.email ?? "";
+  const coachInitials = coachName
+    ? coachName.trim().split(/\s+/).map((w: string) => w[0]).join("").toUpperCase().slice(0, 2)
+    : "?";
+
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     templates: true,
     exerciseLibraries: false,
@@ -277,19 +283,6 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
           {/* Templates & Libraries Group */}
           {renderNavGroup(templatesGroup, "templates")}
 
-          {/* Coach-Profil - standalone */}
-          <Button
-            variant="ghost"
-            className={cn(
-              "w-full justify-start h-10",
-              isActive("/coach-profile") && "bg-accent text-accent-foreground font-medium"
-            )}
-            onClick={() => handleNavigate("/coach-profile")}
-          >
-            <UserCircle className="h-4 w-4 mr-2" />
-            Coach-Profil
-          </Button>
-
           {/* Chat - standalone */}
           <Button
             variant="ghost"
@@ -322,14 +315,42 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
           </Button>
         </div>
 
-        {/* Sign out — pinned to the bottom */}
-        <div className="border-t p-2">
-          {user?.email && (
-            <p className="px-2 py-1 text-xs text-muted-foreground truncate">{user.email}</p>
-          )}
+        {/* Coach profile + sign out — pinned to the bottom */}
+        <div className="border-t p-2 space-y-1">
+          {/* Clickable avatar + name → /coach-profile */}
+          <button
+            type="button"
+            className={cn(
+              "w-full flex items-center gap-3 px-2 py-2 rounded-md text-left",
+              "hover:bg-accent transition-colors",
+              isActive("/coach-profile") && "bg-accent"
+            )}
+            onClick={() => handleNavigate("/coach-profile")}
+          >
+            {/* Avatar circle */}
+            <div className="shrink-0 w-8 h-8 rounded-full overflow-hidden border border-border flex items-center justify-center bg-muted">
+              {profile?.avatarBase64 ? (
+                <img src={profile.avatarBase64} alt="Coach" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-xs font-semibold text-muted-foreground select-none">
+                  {coachInitials}
+                </span>
+              )}
+            </div>
+            {/* Name / email */}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate leading-tight">
+                {profile?.name || user?.email || "Coach"}
+              </p>
+              {profile?.name && user?.email && (
+                <p className="text-xs text-muted-foreground truncate leading-tight">{user.email}</p>
+              )}
+            </div>
+          </button>
+
           <Button
             variant="ghost"
-            className="w-full justify-start h-10 text-muted-foreground hover:text-destructive"
+            className="w-full justify-start h-9 text-muted-foreground hover:text-destructive"
             onClick={async () => {
               await signOut();
               onOpenChange(false);
