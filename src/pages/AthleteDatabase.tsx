@@ -7,8 +7,9 @@ import type { AthleteProfileData } from '@/hooks/useAthleteConnections';
 import { AthleteGroupSidebar } from '@/components/athletes/AthleteGroupSidebar';
 import { AthleteProfileView } from '@/components/athletes/AthleteProfileView';
 import { Button } from '@/components/ui/button';
-import { Plus, Users } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import type { Athlete } from '@/types/athlete';
+import { SquadDashboard } from '@/components/athletes/SquadDashboard';
 
 interface NavState {
   openAthleteId?: string;
@@ -121,6 +122,7 @@ export default function AthleteDatabase() {
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(navState.openAthleteId ?? null);
   const [isNewAthlete, setIsNewAthlete] = useState(false);
   const [selectedGroupForNew, setSelectedGroupForNew] = useState<string | null>(null);
+  const [squadViewMode, setSquadViewMode] = useState<'list' | 'card'>('card');
 
   const selectedAthlete = selectedAthleteId
     ? athleteData.getAthlete(selectedAthleteId)
@@ -238,15 +240,14 @@ export default function AthleteDatabase() {
             defaultCalendarSessionName={navState.defaultCalendarSessionName}
           />
         ) : (
-          <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground">
-            <Users className="h-16 w-16 mb-4 opacity-50" />
-            <h3 className="text-lg font-medium mb-2">No Athlete Selected</h3>
-            <p className="mb-4">Select an athlete from the sidebar or create a new one.</p>
-            <Button onClick={() => handleCreateAthlete()}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Athlete
-            </Button>
-          </div>
+          <SquadDashboard
+            athletes={athleteData.athletes.filter(a => !a.isArchived)}
+            groups={athleteData.groups}
+            connections={connections}
+            viewMode={squadViewMode}
+            onViewModeChange={setSquadViewMode}
+            onSelectAthlete={handleSelectAthlete}
+          />
         )}
       </div>
     </div>
