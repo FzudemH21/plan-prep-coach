@@ -131,26 +131,19 @@ function DateNavigator({ date, onChange }: { date: Date; onChange: (d: Date) => 
 
   return (
     <div className="flex items-center gap-0.5">
-      {/* "Today" always rendered — just disabled when already on today (no layout shift) */}
-      <Button
-        variant="ghost" size="sm" className="h-7 px-2 text-xs font-medium"
-        disabled={isToday}
-        onClick={() => onChange(new Date())}
-      >
-        Today
-      </Button>
-      <div className="w-px h-3.5 bg-border/60 mx-0.5" />
+      {/* Left arrow */}
       <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onChange(subDays(date, 1))}>
         <ChevronLeft className="h-3.5 w-3.5" />
       </Button>
-      {/* Calendar icon beside the date, opens the picker */}
+      {/* Always show the actual date (never "Today" label here) */}
+      <span className="text-xs font-medium px-1 min-w-[84px] text-center tabular-nums">
+        {format(date, 'MMM d, yyyy')}
+      </span>
+      {/* Calendar icon — opens the date picker */}
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-7 gap-1 px-1.5 text-xs font-medium">
-            <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-            <span className="min-w-[80px] text-center">
-              {isToday ? 'Today' : format(date, 'MMM d, yyyy')}
-            </span>
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+            <CalendarDays className="h-3.5 w-3.5" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="end">
@@ -163,11 +156,20 @@ function DateNavigator({ date, onChange }: { date: Date; onChange: (d: Date) => 
           />
         </PopoverContent>
       </Popover>
+      {/* Right arrow */}
       <Button
         variant="ghost" size="sm" className="h-7 w-7 p-0"
         disabled={isToday} onClick={() => onChange(addDays(date, 1))}
       >
         <ChevronRight className="h-3.5 w-3.5" />
+      </Button>
+      {/* "Today" button — always rendered to avoid layout shift */}
+      <Button
+        variant="ghost" size="sm" className="h-7 px-2 text-xs font-medium"
+        disabled={isToday}
+        onClick={() => onChange(new Date())}
+      >
+        Today
       </Button>
     </div>
   );
