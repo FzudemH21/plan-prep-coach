@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, Save, PanelRightClose, PanelRight, Pencil, MessageSquare, ChevronDown, X, Trophy, Calendar as CalendarIcon, Bot, TrendingUp, TrendingDown, Check, RefreshCw } from 'lucide-react';
+import { Plus, Save, PanelRightClose, PanelRight, Pencil, MessageSquare, ChevronDown, X, Trophy, Calendar as CalendarIcon, Bot, TrendingUp, TrendingDown, Check, RefreshCw, BookmarkPlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { WorkoutSection, WorkoutExercise, WorkoutSession, SupersetMapping } from '@/types/workout';
 import { IntensityLevel } from '@/types/training';
@@ -41,6 +41,7 @@ import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { AthletePerformanceParameter } from '@/types/athlete';
 import { FocusedSessionContext } from '@/components/wizard/WizardAIAssistant';
+import { SaveToLibraryDialog } from '@/components/session-library/SaveToLibraryDialog';
 
 interface SessionSectionProp {
   id: string;
@@ -187,6 +188,7 @@ export function WorkoutSessionSheet({
   const [isTestEventDialogOpen, setIsTestEventDialogOpen] = useState(false);
   const [testsEventsExpanded, setTestsEventsExpanded] = useState(true);
   const [sectionToDelete, setSectionToDelete] = useState<string | null>(null);
+  const [saveLibOpen, setSaveLibOpen] = useState(false);
   
   // Parameters database hook for test method dropdown
   const { data: parametersData, addParameter } = useParametersDataV2();
@@ -2854,6 +2856,14 @@ export function WorkoutSessionSheet({
                   <Bot className="h-4 w-4" />
                 </Button>
               )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSaveLibOpen(true)}
+                title="Save to Session Library"
+              >
+                <BookmarkPlus className="h-4 w-4" />
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
                 {sidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
               </Button>
@@ -3347,6 +3357,17 @@ export function WorkoutSessionSheet({
           </div>
         </>
       )}
+
+      {/* Save to Session Library Dialog */}
+      <SaveToLibraryDialog
+        open={saveLibOpen}
+        onOpenChange={setSaveLibOpen}
+        sessionName={sessionName}
+        exercises={exercises.filter(e => e.dayDate === dayDate && e.sessionIndex === sessionIndex)}
+        sections={(sessionSectionsProp ?? []).filter(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex)}
+        defaultMethod={exercises.find(e => e.dayDate === dayDate && e.sessionIndex === sessionIndex)?.categoryName}
+        onSaved={() => setSaveLibOpen(false)}
+      />
 
       {/* Circuit edit dialog — opens CircuitBuilderDialog pre-filled with current session circuit data */}
       {circuitDetailExercise && (
