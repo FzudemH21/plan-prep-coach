@@ -1,2 +1,232 @@
 {
+  "common": {
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "delete": "Löschen",
+    "remove": "Entfernen",
+    "edit": "Bearbeiten",
+    "add": "Hinzufügen",
+    "upload": "Hochladen",
+    "replace": "Ersetzen",
+    "reset": "Zurücksetzen",
+    "manage": "Verwalten",
+    "view": "Anzeigen",
+    "confirm": "Bestätigen",
+    "back": "Zurück",
+    "next": "Weiter",
+    "done": "Fertig",
+    "loading": "Wird geladen…",
+    "comingSoon": "Demnächst",
+    "unsavedChanges": "Nicht gespeicherte Änderungen",
+    "unassigned": "Nicht zugewiesen",
+    "unknown": "Unbekannt",
+    "noData": "Keine Daten",
+    "weeks_one": "{{count}} Woche",
+    "weeks_other": "{{count}} Wochen"
+  },
+  "nav": {
+    "title": "Navigation",
+    "home": "Startseite",
+    "athletes": "Athleten-Datenbank",
+    "toolbox": "Trainings-Toolbox",
+    "parameters": "Parameter-Datenbank",
+    "programLibrary": "Trainingsplan-Bibliothek",
+    "exerciseLibraries": "Übungsbibliotheken",
+    "chat": "Chat",
+    "analytics": "Analytik",
+    "signOut": "Abmelden"
+  },
+  "home": {
+    "title": "Plan Prep Coach",
+    "tagline": "Evidenzbasierte Trainingsplanung mit KI-Unterstützung. Erstelle umfassende periodisierte Programme – von der Zielsetzung bis zur Trainingseinheit.",
+    "quickActions": {
+      "athletes": {
+        "title": "Athleten-Datenbank",
+        "desc": "Athleten verwalten"
+      },
+      "programs": {
+        "title": "Trainingspläne",
+        "desc": "Trainingspläne erstellen und verwalten"
+      },
+      "analytics": {
+        "title": "Analytik",
+        "desc": "Fortschritt und Ergebnisse verfolgen"
+      }
+    },
+    "recentPlans": {
+      "title": "Zuletzt bearbeitete Trainingspläne",
+      "viewAll": "Alle Trainingspläne anzeigen",
+      "empty": {
+        "title": "Noch keine Trainingspläne",
+        "desc": "Lege deinen ersten Trainingsplan an",
+        "cta": "Zu den Trainingsplänen"
+      }
+    },
+    "features": {
+      "evidenceBased": {
+        "title": "Evidenzbasiert",
+        "desc": "KI-gestützte Empfehlungen auf Basis aktueller Kraft- und Konditionsforschung für optimale Trainingsresultate."
+      },
+      "periodization": {
+        "title": "Vollständige Periodisierung",
+        "desc": "Von der Makroplanung bis zur Einheitengestaltung. Mesozyklen, Mikrozyklen und tägliches Training präzise steuern."
+      },
+      "export": {
+        "title": "Exportieren & Teilen",
+        "desc": "Trainingspläne als PDF oder Excel exportieren – von der Makroübersicht bis zum detaillierten Einheitenplan."
+      }
+    }
+  },
+  "coachProfile": {
+    "title": "Coach-Profil",
+    "tabs": {
+      "profile": "Profil",
+      "documents": "Dokumente",
+      "settings": "Einstellungen",
+      "docs": "Dokumente",
+      "trainingPlans": "Trainingspläne"
+    },
+    "noProfile": {
+      "title": "Kein Coach-Profil vorhanden",
+      "desc": "Ohne Profil kann die KI keine personalisierten Trainingsempfehlungen, Methodenvorschläge oder Periodisierungsunterstützung leisten.",
+      "cta": "Coach-Profil jetzt anlegen"
+    },
+    "aiGenerated": "KI-generiertes Profil – alle Felder direkt bearbeitbar",
+    "startAiConversation": "KI-Gespräch starten",
+    "aiDialog": {
+      "title": "Neues KI-Gespräch starten?",
+      "desc": "Das neue Gespräch wird mit deinem bestehenden Profil zusammengeführt. Genannte Felder werden aktualisiert – alles andere bleibt erhalten.",
+      "confirm": "Gespräch starten"
+    },
+    "identity": {
+      "title": "Identität",
+      "name": "Name",
+      "sports": "Sportart(en)",
+      "photo": "Profilfoto",
+      "photoHint": "Klicke auf den Kreis, um ein Foto hochzuladen.",
+      "removePhoto": "Foto entfernen",
+      "addSport": "Sportart hinzufügen…"
+    },
+    "coachingProfile": {
+      "title": "Coaching-Profil",
+      "subtitle": "Von KI extrahiert – direkt bearbeitbar",
+      "philosophy": "Philosophie",
+      "philosophyPlaceholder": "Deine Coaching-Philosophie…",
+      "methods": "Trainingsmethoden",
+      "methodsPlaceholder": "Bevorzugte Methoden und Ansätze…",
+      "targetGroup": "Zielgruppe",
+      "targetGroupPlaceholder": "Deine typischen Athleten…",
+      "experience": "Erfahrung",
+      "experiencePlaceholder": "Dein Hintergrund und deine Erfahrung…"
+    },
+    "summary": {
+      "title": "Zusammenfassung",
+      "subtitle": "KI-generierter Freitext – direkt bearbeitbar",
+      "placeholder": "Eine Zusammenfassung deines Coaching-Ansatzes…"
+    },
+    "profileSaved": "Profil gespeichert"
+  },
+  "branding": {
+    "title": "Branding",
+    "subtitle": "Logo und Farben erscheinen auf exportierten Trainingsplan-PDFs.",
+    "businessName": "Geschäfts- / Organisationsname",
+    "businessNamePlaceholder": "z. B. Elite Performance Coaching",
+    "businessNameHint": "Erscheint im PDF-Footer und auf der Titelseite.",
+    "accentColor": "Akzentfarbe",
+    "accentColorHint": "Wird als Kopfzeilen- und Hervorhebungsfarbe in PDFs verwendet.",
+    "logo": "Logo",
+    "logoUploadHint": "PNG, JPG oder SVG hochladen",
+    "logoPositionHint": "Wird oben rechts auf der PDF-Titelseite angezeigt.",
+    "welcomeMessage": "Willkommensnachricht (Athleten-App)",
+    "welcomeMessagePlaceholder": "z. B. Willkommen! Lass uns heute Gas geben. 💪",
+    "welcomeMessageHint": "Wird auf dem Ladebildschirm der Athleten-App neben deinem Logo angezeigt.",
+    "save": "Branding speichern",
+    "saved": "Branding gespeichert"
+  },
+  "settings": {
+    "language": { "title": "Sprache" },
+    "theme": {
+      "title": "Design",
+      "options": "Hell / Dunkel / System",
+      "customize": "Anpassen"
+    },
+    "personal": {
+      "title": "Persönliche Informationen",
+      "profilePicture": "Profilfoto",
+      "uploadPicture": "Bild hochladen",
+      "name": "Name",
+      "email": "E-Mail",
+      "hint": "Persönliche Informationen werden verfügbar, sobald der Login aktiviert ist."
+    },
+    "security": {
+      "title": "Sicherheit",
+      "resetPassword": "Passwort zurücksetzen",
+      "resetHint": "Erfordert ein aktives Konto",
+      "twoFactor": "Zwei-Faktor-Authentifizierung",
+      "twoFactorHint": "Zusätzliche Sicherheit für dein Konto",
+      "setup": "Einrichten",
+      "reset": "Zurücksetzen"
+    },
+    "billing": {
+      "title": "Abonnement & Abrechnung",
+      "currentPlan": "Aktueller Plan",
+      "freeBeta": "Kostenlose Beta",
+      "paymentMethod": "Zahlungsmethode",
+      "paymentMethodHint": "Stripe-Integration",
+      "invoices": "Rechnungen",
+      "pastTransactions": "Frühere Transaktionen"
+    },
+    "app": { "title": "App-Einstellungen" }
+  },
+  "auth": {
+    "tagline": "Evidenzbasierte Trainingsplanung",
+    "email": "E-Mail",
+    "password": "Passwort",
+    "login": {
+      "title": "Anmelden",
+      "subtitle": "E-Mail-Adresse und Passwort eingeben",
+      "submit": "Anmelden",
+      "noAccount": "Noch kein Konto?",
+      "signUp": "Registrieren",
+      "error": "Anmeldung fehlgeschlagen. Bitte erneut versuchen."
+    },
+    "signup": {
+      "title": "Konto erstellen",
+      "subtitle": "Gib deine Daten ein, um loszulegen",
+      "confirmPassword": "Passwort bestätigen",
+      "submit": "Konto erstellen",
+      "hasAccount": "Bereits ein Konto?",
+      "signIn": "Anmelden",
+      "passwordMismatch": "Passwörter stimmen nicht überein.",
+      "passwordTooShort": "Das Passwort muss mindestens 6 Zeichen lang sein.",
+      "error": "Registrierung fehlgeschlagen. Bitte erneut versuchen.",
+      "checkEmail": {
+        "title": "E-Mail prüfen",
+        "descPre": "Wir haben einen Bestätigungslink an",
+        "descPost": "gesendet. Klicke darauf, um dein Konto zu aktivieren, und melde dich dann an.",
+        "backToLogin": "Zurück zur Anmeldung"
+      }
+    }
+  },
+  "athlete": {
+    "splash": {
+      "defaultMessage": "Willkommen zurück! Bereit zu trainieren?"
+    },
+    "nav": {
+      "today": "Heute",
+      "plan": "Plan",
+      "messages": "Nachrichten",
+      "profile": "Profil"
+    },
+    "suspended": {
+      "title": "Zugang gesperrt",
+      "desc": "Dein Coach hat deinen Zugang vorübergehend gesperrt. Bitte wende dich an deinen Coach."
+    },
+    "removed": {
+      "title": "Konto entfernt",
+      "desc": "Dein Athleten-Konto ist keinem Coach mehr zugeordnet. Bitte kontaktiere deinen Coach für eine neue Einladung."
+    },
+    "signOut": "Abmelden"
+  }
 }

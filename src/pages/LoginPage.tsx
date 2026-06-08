@@ -1,4 +1,5 @@
 import { useState, FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import { Dumbbell, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function LoginPage() {
+  const { t } = useTranslation();
   const { session, loading, signIn } = useAuth();
   const navigate = useNavigate();
 
@@ -36,7 +38,7 @@ export default function LoginPage() {
       await signIn(email, password);
       navigate("/", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign in failed. Please try again.");
+      setError(err instanceof Error ? err.message : t('auth.login.error'));
     } finally {
       setSubmitting(false);
     }
@@ -51,19 +53,19 @@ export default function LoginPage() {
             <Dumbbell className="h-7 w-7 text-primary" />
             <span className="text-2xl font-bold text-primary">Plan Prep Coach</span>
           </div>
-          <p className="text-sm text-muted-foreground">Evidence-informed training planning</p>
+          <p className="text-sm text-muted-foreground">{t('auth.tagline')}</p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl">Sign in</CardTitle>
-            <CardDescription>Enter your email and password to access your account</CardDescription>
+            <CardTitle className="text-xl">{t('auth.login.title')}</CardTitle>
+            <CardDescription>{t('auth.login.subtitle')}</CardDescription>
           </CardHeader>
 
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{t('auth.email')}</Label>
                 <Input
                   id="email"
                   type="email"
@@ -76,7 +78,7 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">{t('auth.password')}</Label>
                 <Input
                   id="password"
                   type="password"
@@ -96,12 +98,12 @@ export default function LoginPage() {
             <CardFooter className="flex flex-col gap-3">
               <Button type="submit" className="w-full" disabled={submitting}>
                 {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Sign in
+                {t('auth.login.submit')}
               </Button>
               <p className="text-sm text-muted-foreground text-center">
-                Don't have an account?{" "}
+                {t('auth.login.noAccount')}{" "}
                 <Link to="/signup" className="text-primary hover:underline font-medium">
-                  Sign up
+                  {t('auth.login.signUp')}
                 </Link>
               </p>
             </CardFooter>

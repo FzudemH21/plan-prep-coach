@@ -1,4 +1,5 @@
 import { useState, FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import { Dumbbell, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function SignupPage() {
+  const { t } = useTranslation();
   const { session, loading, signUp } = useAuth();
   const navigate = useNavigate();
 
@@ -35,11 +37,11 @@ export default function SignupPage() {
     setError(null);
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+      setError(t('auth.signup.passwordMismatch'));
       return;
     }
     if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+      setError(t('auth.signup.passwordTooShort'));
       return;
     }
 
@@ -50,7 +52,7 @@ export default function SignupPage() {
       // If not, show a confirmation message instead of navigating
       setConfirmationSent(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign up failed. Please try again.");
+      setError(err instanceof Error ? err.message : t('auth.signup.error'));
     } finally {
       setSubmitting(false);
     }
@@ -68,15 +70,14 @@ export default function SignupPage() {
           </div>
           <Card>
             <CardHeader>
-              <CardTitle className="text-xl">Check your email</CardTitle>
+              <CardTitle className="text-xl">{t('auth.signup.checkEmail.title')}</CardTitle>
               <CardDescription>
-                We sent a confirmation link to <strong>{email}</strong>. Click it to activate your
-                account, then come back to sign in.
+                {t('auth.signup.checkEmail.descPre')} <strong>{email}</strong>{t('auth.signup.checkEmail.descPost')}
               </CardDescription>
             </CardHeader>
             <CardFooter>
               <Button asChild variant="outline" className="w-full">
-                <Link to="/login">Back to Sign in</Link>
+                <Link to="/login">{t('auth.signup.checkEmail.backToLogin')}</Link>
               </Button>
             </CardFooter>
           </Card>
@@ -94,19 +95,19 @@ export default function SignupPage() {
             <Dumbbell className="h-7 w-7 text-primary" />
             <span className="text-2xl font-bold text-primary">Plan Prep Coach</span>
           </div>
-          <p className="text-sm text-muted-foreground">Evidence-informed training planning</p>
+          <p className="text-sm text-muted-foreground">{t('auth.tagline')}</p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl">Create an account</CardTitle>
-            <CardDescription>Enter your details to get started</CardDescription>
+            <CardTitle className="text-xl">{t('auth.signup.title')}</CardTitle>
+            <CardDescription>{t('auth.signup.subtitle')}</CardDescription>
           </CardHeader>
 
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{t('auth.email')}</Label>
                 <Input
                   id="email"
                   type="email"
@@ -119,7 +120,7 @@ export default function SignupPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">{t('auth.password')}</Label>
                 <Input
                   id="password"
                   type="password"
@@ -132,7 +133,7 @@ export default function SignupPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="confirm-password">Confirm Password</Label>
+                <Label htmlFor="confirm-password">{t('auth.signup.confirmPassword')}</Label>
                 <Input
                   id="confirm-password"
                   type="password"
@@ -152,12 +153,12 @@ export default function SignupPage() {
             <CardFooter className="flex flex-col gap-3">
               <Button type="submit" className="w-full" disabled={submitting}>
                 {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Create account
+                {t('auth.signup.submit')}
               </Button>
               <p className="text-sm text-muted-foreground text-center">
-                Already have an account?{" "}
+                {t('auth.signup.hasAccount')}{" "}
                 <Link to="/login" className="text-primary hover:underline font-medium">
-                  Sign in
+                  {t('auth.signup.signIn')}
                 </Link>
               </p>
             </CardFooter>

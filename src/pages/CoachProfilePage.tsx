@@ -56,17 +56,17 @@ import { cn } from "@/lib/utils";
 // ─────────────────────────────────────────────
 
 function SkippedBanner({ onStart }: { onStart: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className="rounded-lg border border-amber-400 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-600 p-5 space-y-3">
       <div className="flex items-start gap-3">
         <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
         <div className="space-y-1">
           <p className="font-semibold text-amber-800 dark:text-amber-300">
-            No coach profile found
+            {t('coachProfile.noProfile.title')}
           </p>
           <p className="text-sm text-amber-700 dark:text-amber-400 leading-relaxed">
-            Without a profile, the AI cannot provide personalized training recommendations,
-            method suggestions, or meaningful periodization support.
+            {t('coachProfile.noProfile.desc')}
           </p>
         </div>
       </div>
@@ -75,7 +75,7 @@ function SkippedBanner({ onStart }: { onStart: () => void }) {
         onClick={onStart}
       >
         <UserCircle className="h-4 w-4 mr-2" />
-        Set up coach profile now
+        {t('coachProfile.noProfile.cta')}
       </Button>
     </div>
   );
@@ -91,6 +91,7 @@ interface SportEditorProps {
 }
 
 function SportEditor({ sports, onChange }: SportEditorProps) {
+  const { t } = useTranslation();
   const [input, setInput] = useState("");
 
   const add = () => {
@@ -103,7 +104,7 @@ function SportEditor({ sports, onChange }: SportEditorProps) {
     <div className="space-y-2">
       <div className="flex gap-2">
         <Input
-          placeholder="Add sport…"
+          placeholder={t('coachProfile.identity.addSport')}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
@@ -165,9 +166,10 @@ function Field({
 // ─────────────────────────────────────────────
 
 function ComingSoon() {
+  const { t } = useTranslation();
   return (
     <Badge variant="outline" className="text-xs text-muted-foreground">
-      Coming soon
+      {t('common.comingSoon')}
     </Badge>
   );
 }
@@ -203,6 +205,7 @@ function resizeImageToBase64(file: File, maxPx: number): Promise<string> {
 // ─────────────────────────────────────────────
 
 function ProfileTab() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { profile, saveProfile } = useCoachProfile();
@@ -256,7 +259,7 @@ function ProfileTab() {
       avatarBase64,
     });
     setDirty(false);
-    toast({ title: "Profile saved" });
+    toast({ title: t('coachProfile.profileSaved') });
   };
 
   // No profile at all or skipped
@@ -273,29 +276,27 @@ function ProfileTab() {
       {/* Action row */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <p className="text-sm text-muted-foreground">
-          AI-generated profile – all fields directly editable
+          {t('coachProfile.aiGenerated')}
         </p>
         <div className="flex gap-2">
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="outline" size="sm">
                 <MessageSquarePlus className="h-4 w-4 mr-2" />
-                Start AI Conversation
+                {t('coachProfile.startAiConversation')}
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Start new AI conversation?</AlertDialogTitle>
+                <AlertDialogTitle>{t('coachProfile.aiDialog.title')}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  The new conversation will be merged with your existing profile.
-                  Fields mentioned in the new conversation will be updated –
-                  everything else will be kept.
+                  {t('coachProfile.aiDialog.desc')}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
                 <AlertDialogAction onClick={() => navigate("/onboarding?mode=refresh")}>
-                  Start conversation
+                  {t('coachProfile.aiDialog.confirm')}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -303,7 +304,7 @@ function ProfileTab() {
 
           <Button size="sm" onClick={handleSave} disabled={!dirty}>
             <Save className="h-4 w-4 mr-2" />
-            Save
+            {t('common.save')}
           </Button>
         </div>
       </div>
@@ -311,7 +312,7 @@ function ProfileTab() {
       {/* Identity */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Identity</CardTitle>
+          <CardTitle className="text-base">{t('coachProfile.identity.title')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Avatar upload */}
@@ -335,8 +336,8 @@ function ProfileTab() {
               </div>
             </button>
             <div className="flex flex-col gap-1">
-              <span className="text-sm font-medium">Profile Photo</span>
-              <span className="text-xs text-muted-foreground">Click the circle to upload a photo.</span>
+              <span className="text-sm font-medium">{t('coachProfile.identity.photo')}</span>
+              <span className="text-xs text-muted-foreground">{t('coachProfile.identity.photoHint')}</span>
               {avatarBase64 && (
                 <Button
                   type="button"
@@ -345,7 +346,7 @@ function ProfileTab() {
                   className="h-7 px-2 text-xs text-destructive hover:text-destructive w-fit"
                   onClick={() => { setAvatarBase64(""); setDirty(true); }}
                 >
-                  Remove photo
+                  {t('coachProfile.identity.removePhoto')}
                 </Button>
               )}
             </div>
@@ -358,11 +359,11 @@ function ProfileTab() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Name</Label>
+            <Label>{t('coachProfile.identity.name')}</Label>
             <Input value={name} onChange={(e) => markDirty(setName)(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label>Sport(s)</Label>
+            <Label>{t('coachProfile.identity.sports')}</Label>
             <SportEditor sports={sports} onChange={markDirty(setSports)} />
           </div>
         </CardContent>
@@ -371,36 +372,36 @@ function ProfileTab() {
       {/* Structured fields */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Coaching Profile</CardTitle>
-          <CardDescription>Extracted by AI – directly editable</CardDescription>
+          <CardTitle className="text-base">{t('coachProfile.coachingProfile.title')}</CardTitle>
+          <CardDescription>{t('coachProfile.coachingProfile.subtitle')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <Field
-            label="Philosophy"
+            label={t('coachProfile.coachingProfile.philosophy')}
             value={philosophy}
             onChange={markDirty(setPhilosophy)}
-            placeholder="Your coaching philosophy…"
+            placeholder={t('coachProfile.coachingProfile.philosophyPlaceholder')}
           />
           <Separator />
           <Field
-            label="Training Methods"
+            label={t('coachProfile.coachingProfile.methods')}
             value={methods}
             onChange={markDirty(setMethods)}
-            placeholder="Preferred methods and approaches…"
+            placeholder={t('coachProfile.coachingProfile.methodsPlaceholder')}
           />
           <Separator />
           <Field
-            label="Target Group"
+            label={t('coachProfile.coachingProfile.targetGroup')}
             value={targetGroup}
             onChange={markDirty(setTargetGroup)}
-            placeholder="Your typical athletes…"
+            placeholder={t('coachProfile.coachingProfile.targetGroupPlaceholder')}
           />
           <Separator />
           <Field
-            label="Experience"
+            label={t('coachProfile.coachingProfile.experience')}
             value={experience}
             onChange={markDirty(setExperience)}
-            placeholder="Your background and experience…"
+            placeholder={t('coachProfile.coachingProfile.experiencePlaceholder')}
           />
         </CardContent>
       </Card>
@@ -408,15 +409,15 @@ function ProfileTab() {
       {/* Summary */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Summary</CardTitle>
-          <CardDescription>AI-generated free text – directly editable</CardDescription>
+          <CardTitle className="text-base">{t('coachProfile.summary.title')}</CardTitle>
+          <CardDescription>{t('coachProfile.summary.subtitle')}</CardDescription>
         </CardHeader>
         <CardContent>
           <Textarea
             className="min-h-[140px] resize-y"
             value={summary}
             onChange={(e) => markDirty(setSummary)(e.target.value)}
-            placeholder="A summary of your coaching approach…"
+            placeholder={t('coachProfile.summary.placeholder')}
           />
         </CardContent>
       </Card>
@@ -427,10 +428,10 @@ function ProfileTab() {
           "fixed bottom-6 right-6 z-50",
           "flex items-center gap-3 rounded-lg border bg-card shadow-lg px-4 py-3"
         )}>
-          <span className="text-sm text-muted-foreground">Unsaved changes</span>
+          <span className="text-sm text-muted-foreground">{t('common.unsavedChanges')}</span>
           <Button size="sm" onClick={handleSave}>
             <Save className="h-4 w-4 mr-2" />
-            Save
+            {t('common.save')}
           </Button>
         </div>
       )}
@@ -443,6 +444,7 @@ function ProfileTab() {
 // ─────────────────────────────────────────────
 
 function BrandingCard() {
+  const { t } = useTranslation();
   const { profile, saveProfile } = useCoachProfile();
   const { connections, syncProfileToConnection } = useAthleteConnections();
   const { toast } = useToast();
@@ -490,7 +492,7 @@ function BrandingCard() {
       )
     );
     setDirty(false);
-    toast({ title: "Branding saved" });
+    toast({ title: t('branding.saved') });
   };
 
   return (
@@ -498,29 +500,29 @@ function BrandingCard() {
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <Palette className="h-4 w-4" />
-          Report Branding
+          {t('branding.title')}
         </CardTitle>
         <CardDescription>
-          Your logo and colors appear on exported training plan PDFs.
+          {t('branding.subtitle')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         {/* Business name */}
         <div className="space-y-1.5">
-          <Label>Business / Organisation Name</Label>
+          <Label>{t('branding.businessName')}</Label>
           <Input
-            placeholder="e.g. Elite Performance Coaching"
+            placeholder={t('branding.businessNamePlaceholder')}
             value={businessName}
             onChange={(e) => { setBusinessName(e.target.value); setDirty(true); }}
           />
           <p className="text-xs text-muted-foreground">
-            Shown in the PDF footer and cover page.
+            {t('branding.businessNameHint')}
           </p>
         </div>
 
         {/* Accent color */}
         <div className="space-y-1.5">
-          <Label>Accent Color</Label>
+          <Label>{t('branding.accentColor')}</Label>
           <div className="flex items-center gap-3">
             <input
               type="color"
@@ -536,17 +538,17 @@ function BrandingCard() {
               onClick={() => { setPrimaryColor("#2563eb"); setDirty(true); }}
             >
               <RotateCcw className="h-3 w-3 mr-1" />
-              Reset
+              {t('common.reset')}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Used as the header and highlight color in exported PDFs.
+            {t('branding.accentColorHint')}
           </p>
         </div>
 
         {/* Logo */}
         <div className="space-y-1.5">
-          <Label>Logo</Label>
+          <Label>{t('branding.logo')}</Label>
           {logoBase64 ? (
             <div className="flex items-center gap-3">
               <img
@@ -557,7 +559,7 @@ function BrandingCard() {
               <div className="flex gap-2">
                 <Label htmlFor="logo-upload" className="cursor-pointer">
                   <Button variant="outline" size="sm" asChild>
-                    <span>Replace</span>
+                    <span>{t('common.replace')}</span>
                   </Button>
                 </Label>
                 <Button
@@ -566,7 +568,7 @@ function BrandingCard() {
                   className="text-destructive hover:text-destructive"
                   onClick={() => { setLogoBase64(undefined); setDirty(true); }}
                 >
-                  Remove
+                  {t('common.remove')}
                 </Button>
               </div>
             </div>
@@ -576,7 +578,7 @@ function BrandingCard() {
                 <div className="text-center">
                   <Upload className="mx-auto mb-1 h-5 w-5 text-muted-foreground" />
                   <p className="text-xs text-muted-foreground">
-                    Click to upload PNG, JPG, or SVG
+                    {t('branding.logoUploadHint')}
                   </p>
                 </div>
               </div>
@@ -590,28 +592,27 @@ function BrandingCard() {
             onChange={handleLogoUpload}
           />
           <p className="text-xs text-muted-foreground">
-            Displayed in the top-right corner of the PDF cover page.
+            {t('branding.logoPositionHint')}
           </p>
         </div>
 
         {/* Athlete app welcome message */}
         <div className="space-y-1.5">
-          <Label>Athlete App Welcome Message</Label>
+          <Label>{t('branding.welcomeMessage')}</Label>
           <Textarea
-            placeholder="e.g. Welcome! Let's make today count. 💪"
+            placeholder={t('branding.welcomeMessagePlaceholder')}
             value={welcomeMessage}
             onChange={(e) => { setWelcomeMessage(e.target.value); setDirty(true); }}
             className="min-h-[72px] resize-y"
           />
           <p className="text-xs text-muted-foreground">
-            Shown on the athlete app loading screen alongside your logo.
-            Leave blank to show no message.
+            {t('branding.welcomeMessageHint')}
           </p>
         </div>
 
         <Button size="sm" onClick={handleSave} disabled={!dirty || !profile}>
           <Save className="h-4 w-4 mr-2" />
-          Save Branding
+          {t('branding.save')}
         </Button>
       </CardContent>
     </Card>
@@ -623,7 +624,7 @@ function BrandingCard() {
 // ─────────────────────────────────────────────
 
 function SettingsTab() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const currentLang = i18n.language as string;
 
   return (
@@ -636,38 +637,38 @@ function SettingsTab() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <User className="h-4 w-4" />
-            Personal Information
+            {t('settings.personal.title')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
             <Label className="flex items-center gap-2">
               <Image className="h-3.5 w-3.5 text-muted-foreground" />
-              Profile Picture
+              {t('settings.personal.profilePicture')}
             </Label>
             <div className="flex items-center gap-3">
               <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center border">
                 <User className="h-8 w-8 text-muted-foreground" />
               </div>
               <Button variant="outline" size="sm" disabled>
-                Upload picture
+                {t('settings.personal.uploadPicture')}
                 <ComingSoon />
               </Button>
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Name</Label>
+            <Label>{t('settings.personal.name')}</Label>
             <Input placeholder="Your name" disabled />
           </div>
           <div className="space-y-1.5">
             <Label className="flex items-center gap-2">
               <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-              Email
+              {t('settings.personal.email')}
             </Label>
             <Input type="email" placeholder="your@email.com" disabled />
           </div>
           <p className="text-xs text-muted-foreground">
-            Personal information will be available once login is enabled.{" "}
+            {t('settings.personal.hint')}{" "}
             <ComingSoon />
           </p>
         </CardContent>
@@ -678,32 +679,32 @@ function SettingsTab() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Lock className="h-4 w-4" />
-            Security
+            {t('settings.security.title')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">Reset password</p>
-              <p className="text-xs text-muted-foreground">Requires an active account</p>
+              <p className="text-sm font-medium">{t('settings.security.resetPassword')}</p>
+              <p className="text-xs text-muted-foreground">{t('settings.security.resetHint')}</p>
             </div>
             <div className="flex items-center gap-2">
               <ComingSoon />
               <Button variant="outline" size="sm" disabled>
-                Reset
+                {t('settings.security.reset')}
               </Button>
             </div>
           </div>
           <Separator />
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">Two-factor authentication</p>
-              <p className="text-xs text-muted-foreground">Extra security for your account</p>
+              <p className="text-sm font-medium">{t('settings.security.twoFactor')}</p>
+              <p className="text-xs text-muted-foreground">{t('settings.security.twoFactorHint')}</p>
             </div>
             <div className="flex items-center gap-2">
               <ComingSoon />
               <Button variant="outline" size="sm" disabled>
-                Set up
+                {t('settings.security.setup')}
               </Button>
             </div>
           </div>
@@ -715,40 +716,40 @@ function SettingsTab() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <CreditCard className="h-4 w-4" />
-            Subscription & Billing
+            {t('settings.billing.title')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">Current plan</p>
-              <p className="text-xs text-muted-foreground">Free Beta</p>
+              <p className="text-sm font-medium">{t('settings.billing.currentPlan')}</p>
+              <p className="text-xs text-muted-foreground">{t('settings.billing.freeBeta')}</p>
             </div>
             <ComingSoon />
           </div>
           <Separator />
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">Payment method</p>
-              <p className="text-xs text-muted-foreground">Stripe integration</p>
+              <p className="text-sm font-medium">{t('settings.billing.paymentMethod')}</p>
+              <p className="text-xs text-muted-foreground">{t('settings.billing.paymentMethodHint')}</p>
             </div>
             <div className="flex items-center gap-2">
               <ComingSoon />
               <Button variant="outline" size="sm" disabled>
-                Manage
+                {t('common.manage')}
               </Button>
             </div>
           </div>
           <Separator />
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">Invoices</p>
-              <p className="text-xs text-muted-foreground">Past transactions</p>
+              <p className="text-sm font-medium">{t('settings.billing.invoices')}</p>
+              <p className="text-xs text-muted-foreground">{t('settings.billing.pastTransactions')}</p>
             </div>
             <div className="flex items-center gap-2">
               <ComingSoon />
               <Button variant="outline" size="sm" disabled>
-                View
+                {t('common.view')}
               </Button>
             </div>
           </div>
@@ -760,7 +761,7 @@ function SettingsTab() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Settings className="h-4 w-4" />
-            App Settings
+            {t('settings.app.title')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -768,7 +769,7 @@ function SettingsTab() {
             <div className="flex items-center gap-2">
               <Globe className="h-4 w-4 text-muted-foreground" />
               <div>
-                <p className="text-sm font-medium">Language</p>
+                <p className="text-sm font-medium">{t('settings.language.title')}</p>
                 <p className="text-xs text-muted-foreground">
                   {SUPPORTED_LANGUAGES.find(l => l.code === currentLang)?.label ?? 'English'}
                 </p>
@@ -792,14 +793,14 @@ function SettingsTab() {
             <div className="flex items-center gap-2">
               <Moon className="h-4 w-4 text-muted-foreground" />
               <div>
-                <p className="text-sm font-medium">Theme</p>
-                <p className="text-xs text-muted-foreground">Light / Dark / System</p>
+                <p className="text-sm font-medium">{t('settings.theme.title')}</p>
+                <p className="text-xs text-muted-foreground">{t('settings.theme.options')}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <ComingSoon />
               <Button variant="outline" size="sm" disabled>
-                Customize
+                {t('settings.theme.customize')}
               </Button>
             </div>
           </div>
@@ -814,28 +815,29 @@ function SettingsTab() {
 // ─────────────────────────────────────────────
 
 export default function CoachProfilePage() {
+  const { t } = useTranslation();
   return (
     <div className="h-full overflow-y-auto">
     <div className="max-w-2xl mx-auto space-y-6 py-6">
       {/* Title */}
       <h1 className="text-2xl font-bold flex items-center gap-2">
         <UserCircle className="h-6 w-6 text-primary" />
-        Coach Profile
+        {t('coachProfile.title')}
       </h1>
 
       <Tabs defaultValue="profile">
         <TabsList className="mb-2">
           <TabsTrigger value="profile" className="flex items-center gap-1.5">
             <User className="h-3.5 w-3.5" />
-            Profile
+            {t('coachProfile.tabs.profile')}
           </TabsTrigger>
           <TabsTrigger value="documents" className="flex items-center gap-1.5">
             <Files className="h-3.5 w-3.5" />
-            Documents
+            {t('coachProfile.tabs.documents')}
           </TabsTrigger>
           <TabsTrigger value="settings" className="flex items-center gap-1.5">
             <Settings className="h-3.5 w-3.5" />
-            Settings
+            {t('coachProfile.tabs.settings')}
           </TabsTrigger>
         </TabsList>
 
@@ -848,11 +850,11 @@ export default function CoachProfilePage() {
             <TabsList className="mb-4">
               <TabsTrigger value="docs" className="gap-1.5">
                 <BookOpen className="h-3.5 w-3.5" />
-                Documents
+                {t('coachProfile.tabs.docs')}
               </TabsTrigger>
               <TabsTrigger value="plans" className="gap-1.5">
                 <ClipboardList className="h-3.5 w-3.5" />
-                Training Plans
+                {t('coachProfile.tabs.trainingPlans')}
               </TabsTrigger>
             </TabsList>
             <TabsContent value="docs">

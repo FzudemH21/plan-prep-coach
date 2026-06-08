@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Sheet,
@@ -61,6 +62,7 @@ interface NavGroup {
 export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
   const { signOut, user } = useAuth();
   const { profile } = useCoachProfile();
 
@@ -106,8 +108,8 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
     title: "Templates & Libraries",
     icon: FileText,
     items: [
-      { title: "Training Program Library", path: "/templates/programs", icon: Calendar },
-      { title: "Exercise Libraries", path: "/templates/exercise-libraries", icon: Library },
+      { title: t('nav.programLibrary'), path: "/templates/programs", icon: Calendar },
+      { title: t('nav.exerciseLibraries'), path: "/templates/exercise-libraries", icon: Library },
     ],
   };
 
@@ -224,7 +226,7 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="left" className="w-72 p-0 flex flex-col">
         <SheetHeader className="p-4 border-b">
-          <SheetTitle className="text-left">Navigation</SheetTitle>
+          <SheetTitle className="text-left">{t('nav.title')}</SheetTitle>
         </SheetHeader>
         
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -238,7 +240,7 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
             onClick={() => handleNavigate("/")}
           >
             <Home className="h-4 w-4 mr-2" />
-            Home
+            {t('nav.home')}
           </Button>
 
           {/* Athlete Database - standalone */}
@@ -251,7 +253,7 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
             onClick={() => handleNavigate("/athletes")}
           >
             <Users className="h-4 w-4 mr-2" />
-            Athlete Database
+            {t('nav.athletes')}
           </Button>
 
           {/* Training Toolbox - standalone */}
@@ -264,7 +266,7 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
             onClick={() => handleNavigate("/templates/toolbox")}
           >
             <Wrench className="h-4 w-4 mr-2" />
-            Training Toolbox
+            {t('nav.toolbox')}
           </Button>
 
           {/* Parameter Database - standalone */}
@@ -277,7 +279,7 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
             onClick={() => handleNavigate("/templates/athleticism")}
           >
             <Target className="h-4 w-4 mr-2" />
-            Parameter Database
+            {t('nav.parameters')}
           </Button>
 
           {/* Templates & Libraries Group */}
@@ -293,7 +295,7 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
             onClick={() => handleNavigate("/messages")}
           >
             <MessageCircle className="h-4 w-4 mr-2" />
-            Chat
+            {t('nav.chat')}
             {totalUnread > 0 && (
               <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] text-white font-medium">
                 {totalUnread > 9 ? '9+' : totalUnread}
@@ -311,7 +313,7 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
             onClick={() => handleNavigate("/analytics")}
           >
             <BarChart3 className="h-4 w-4 mr-2" />
-            Analytics
+            {t('nav.analytics')}
           </Button>
         </div>
 
@@ -358,7 +360,7 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
             }}
           >
             <LogOut className="h-4 w-4 mr-2" />
-            Sign out
+            {t('nav.signOut')}
           </Button>
         </div>
       </SheetContent>

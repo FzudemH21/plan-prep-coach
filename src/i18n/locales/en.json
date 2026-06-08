@@ -1,2 +1,232 @@
 {
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "delete": "Delete",
+    "remove": "Remove",
+    "edit": "Edit",
+    "add": "Add",
+    "upload": "Upload",
+    "replace": "Replace",
+    "reset": "Reset",
+    "manage": "Manage",
+    "view": "View",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "done": "Done",
+    "loading": "Loading…",
+    "comingSoon": "Coming soon",
+    "unsavedChanges": "Unsaved changes",
+    "unassigned": "Unassigned",
+    "unknown": "Unknown",
+    "noData": "No data",
+    "weeks_one": "{{count}} week",
+    "weeks_other": "{{count}} weeks"
+  },
+  "nav": {
+    "title": "Navigation",
+    "home": "Home",
+    "athletes": "Athlete Database",
+    "toolbox": "Training Toolbox",
+    "parameters": "Parameter Database",
+    "programLibrary": "Training Program Library",
+    "exerciseLibraries": "Exercise Libraries",
+    "chat": "Chat",
+    "analytics": "Analytics",
+    "signOut": "Sign out"
+  },
+  "home": {
+    "title": "Plan Prep Coach",
+    "tagline": "Evidence-informed training program design with AI guidance. Create comprehensive periodized programs from goal setting to session planning.",
+    "quickActions": {
+      "athletes": {
+        "title": "Athlete Database",
+        "desc": "Manage athletes"
+      },
+      "programs": {
+        "title": "Training Programs",
+        "desc": "Create and manage training programs"
+      },
+      "analytics": {
+        "title": "Analytics",
+        "desc": "Track progress and outcomes"
+      }
+    },
+    "recentPlans": {
+      "title": "Recent Training Plans",
+      "viewAll": "View All Programs",
+      "empty": {
+        "title": "No training plans yet",
+        "desc": "Get started by creating your first training program",
+        "cta": "Go to Training Programs"
+      }
+    },
+    "features": {
+      "evidenceBased": {
+        "title": "Evidence-Informed",
+        "desc": "AI-powered suggestions based on current strength & conditioning research and best practices for optimal training outcomes."
+      },
+      "periodization": {
+        "title": "Complete Periodization",
+        "desc": "From macro-level planning to individual session design. Manage mesocycles, microcycles, and daily training with precision."
+      },
+      "export": {
+        "title": "Export & Share",
+        "desc": "Export training plans to PDF or Excel at any level of detail. Share macro overviews or detailed session plans."
+      }
+    }
+  },
+  "coachProfile": {
+    "title": "Coach Profile",
+    "tabs": {
+      "profile": "Profile",
+      "documents": "Documents",
+      "settings": "Settings",
+      "docs": "Documents",
+      "trainingPlans": "Training Plans"
+    },
+    "noProfile": {
+      "title": "No coach profile found",
+      "desc": "Without a profile, the AI cannot provide personalized training recommendations, method suggestions, or meaningful periodization support.",
+      "cta": "Set up coach profile now"
+    },
+    "aiGenerated": "AI-generated profile – all fields directly editable",
+    "startAiConversation": "Start AI Conversation",
+    "aiDialog": {
+      "title": "Start new AI conversation?",
+      "desc": "The new conversation will be merged with your existing profile. Fields mentioned in the new conversation will be updated – everything else will be kept.",
+      "confirm": "Start conversation"
+    },
+    "identity": {
+      "title": "Identity",
+      "name": "Name",
+      "sports": "Sport(s)",
+      "photo": "Profile Photo",
+      "photoHint": "Click the circle to upload a photo.",
+      "removePhoto": "Remove photo",
+      "addSport": "Add sport…"
+    },
+    "coachingProfile": {
+      "title": "Coaching Profile",
+      "subtitle": "Extracted by AI – directly editable",
+      "philosophy": "Philosophy",
+      "philosophyPlaceholder": "Your coaching philosophy…",
+      "methods": "Training Methods",
+      "methodsPlaceholder": "Preferred methods and approaches…",
+      "targetGroup": "Target Group",
+      "targetGroupPlaceholder": "Your typical athletes…",
+      "experience": "Experience",
+      "experiencePlaceholder": "Your background and experience…"
+    },
+    "summary": {
+      "title": "Summary",
+      "subtitle": "AI-generated free text – directly editable",
+      "placeholder": "A summary of your coaching approach…"
+    },
+    "profileSaved": "Profile saved"
+  },
+  "branding": {
+    "title": "Report Branding",
+    "subtitle": "Your logo and colors appear on exported training plan PDFs.",
+    "businessName": "Business / Organisation Name",
+    "businessNamePlaceholder": "e.g. Elite Performance Coaching",
+    "businessNameHint": "Shown in the PDF footer and cover page.",
+    "accentColor": "Accent Color",
+    "accentColorHint": "Used as the header and highlight color in exported PDFs.",
+    "logo": "Logo",
+    "logoUploadHint": "Click to upload PNG, JPG, or SVG",
+    "logoPositionHint": "Displayed in the top-right corner of the PDF cover page.",
+    "welcomeMessage": "Athlete App Welcome Message",
+    "welcomeMessagePlaceholder": "e.g. Welcome! Let's make today count. 💪",
+    "welcomeMessageHint": "Shown on the athlete app loading screen alongside your logo.",
+    "save": "Save Branding",
+    "saved": "Branding saved"
+  },
+  "settings": {
+    "language": { "title": "Language" },
+    "theme": {
+      "title": "Theme",
+      "options": "Light / Dark / System",
+      "customize": "Customize"
+    },
+    "personal": {
+      "title": "Personal Information",
+      "profilePicture": "Profile Photo",
+      "uploadPicture": "Upload picture",
+      "name": "Name",
+      "email": "Email",
+      "hint": "Personal information will be available once login is enabled."
+    },
+    "security": {
+      "title": "Security",
+      "resetPassword": "Reset password",
+      "resetHint": "Requires an active account",
+      "twoFactor": "Two-factor authentication",
+      "twoFactorHint": "Extra security for your account",
+      "setup": "Set up",
+      "reset": "Reset"
+    },
+    "billing": {
+      "title": "Subscription & Billing",
+      "currentPlan": "Current plan",
+      "freeBeta": "Free Beta",
+      "paymentMethod": "Payment method",
+      "paymentMethodHint": "Stripe integration",
+      "invoices": "Invoices",
+      "pastTransactions": "Past transactions"
+    },
+    "app": { "title": "App Settings" }
+  },
+  "auth": {
+    "tagline": "Evidence-informed training planning",
+    "email": "Email",
+    "password": "Password",
+    "login": {
+      "title": "Sign in",
+      "subtitle": "Enter your email and password to access your account",
+      "submit": "Sign in",
+      "noAccount": "Don't have an account?",
+      "signUp": "Sign up",
+      "error": "Sign in failed. Please try again."
+    },
+    "signup": {
+      "title": "Create an account",
+      "subtitle": "Enter your details to get started",
+      "confirmPassword": "Confirm Password",
+      "submit": "Create account",
+      "hasAccount": "Already have an account?",
+      "signIn": "Sign in",
+      "passwordMismatch": "Passwords do not match.",
+      "passwordTooShort": "Password must be at least 6 characters.",
+      "error": "Sign up failed. Please try again.",
+      "checkEmail": {
+        "title": "Check your email",
+        "descPre": "We sent a confirmation link to",
+        "descPost": ". Click it to activate your account, then come back to sign in.",
+        "backToLogin": "Back to Sign in"
+      }
+    }
+  },
+  "athlete": {
+    "splash": {
+      "defaultMessage": "Welcome back! Ready to train today?"
+    },
+    "nav": {
+      "today": "Today",
+      "plan": "Plan",
+      "messages": "Messages",
+      "profile": "Profile"
+    },
+    "suspended": {
+      "title": "Access suspended",
+      "desc": "Your coach has temporarily suspended your access to this app. Please reach out to your coach for more information."
+    },
+    "removed": {
+      "title": "Account removed",
+      "desc": "Your athlete account is no longer linked to a coach. Please contact your coach to receive a new invite."
+    },
+    "signOut": "Sign out"
+  }
 }

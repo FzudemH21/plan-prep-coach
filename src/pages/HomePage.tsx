@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +20,7 @@ import { useWizardData } from "@/contexts/WizardDataContext";
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { getRecentPrograms, loadProgramIntoSession } = useTrainingPrograms();
   const { athletes } = useAthletes();
   const { loadWizardSession } = useWizardData();
@@ -51,11 +53,10 @@ export default function HomePage() {
       {/* Welcome Section */}
       <div className="text-center space-y-4">
         <h1 className="text-4xl font-bold tracking-tight">
-          Training Programming System
+          {t('home.title')}
         </h1>
         <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-          Evidence-informed training program design with AI guidance. 
-          Create comprehensive periodized programs from goal setting to session planning.
+          {t('home.tagline')}
         </p>
       </div>
 
@@ -64,24 +65,24 @@ export default function HomePage() {
         <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/athletes")}>
           <CardHeader className="text-center pb-4">
             <Users className="h-12 w-12 text-primary mx-auto mb-2" />
-            <CardTitle className="text-lg">Athlete Database</CardTitle>
-            <CardDescription>Manage athlete profiles and history</CardDescription>
+            <CardTitle className="text-lg">{t('home.quickActions.athletes.title')}</CardTitle>
+            <CardDescription>{t('home.quickActions.athletes.desc')}</CardDescription>
           </CardHeader>
         </Card>
 
         <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/templates/programs")}>
           <CardHeader className="text-center pb-4">
             <FileText className="h-12 w-12 text-primary mx-auto mb-2" />
-            <CardTitle className="text-lg">Training Programs</CardTitle>
-            <CardDescription>Create and manage training programs</CardDescription>
+            <CardTitle className="text-lg">{t('home.quickActions.programs.title')}</CardTitle>
+            <CardDescription>{t('home.quickActions.programs.desc')}</CardDescription>
           </CardHeader>
         </Card>
 
         <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/analytics")}>
           <CardHeader className="text-center pb-4">
             <BarChart3 className="h-12 w-12 text-primary mx-auto mb-2" />
-            <CardTitle className="text-lg">Analytics</CardTitle>
-            <CardDescription>Track progress and outcomes</CardDescription>
+            <CardTitle className="text-lg">{t('home.quickActions.analytics.title')}</CardTitle>
+            <CardDescription>{t('home.quickActions.analytics.desc')}</CardDescription>
           </CardHeader>
         </Card>
       </div>
@@ -89,9 +90,9 @@ export default function HomePage() {
       {/* Recent Training Plans */}
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-semibold">Recent Training Plans</h2>
+          <h2 className="text-2xl font-semibold">{t('home.recentPlans.title')}</h2>
           <Button variant="outline" onClick={() => navigate("/templates/programs")}>
-            View All Programs
+            {t('home.recentPlans.viewAll')}
           </Button>
         </div>
 
@@ -129,7 +130,7 @@ export default function HomePage() {
                     {program.duration.weeks > 0 && (
                       <div className="flex items-center space-x-1">
                         <Calendar className="h-4 w-4" />
-                        <span>{program.duration.weeks} weeks</span>
+                        <span>{t('common.weeks', { count: program.duration.weeks })}</span>
                       </div>
                     )}
                   </div>
@@ -141,13 +142,13 @@ export default function HomePage() {
           <Card>
             <CardContent className="text-center py-12">
               <Target className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No training plans yet</h3>
+              <h3 className="text-lg font-semibold mb-2">{t('home.recentPlans.empty.title')}</h3>
               <p className="text-muted-foreground mb-4">
-                Get started by creating your first training program
+                {t('home.recentPlans.empty.desc')}
               </p>
               <Button onClick={() => navigate("/templates/programs")}>
                 <Plus className="h-4 w-4 mr-2" />
-                Go to Training Programs
+                {t('home.recentPlans.empty.cta')}
               </Button>
             </CardContent>
           </Card>
@@ -160,13 +161,12 @@ export default function HomePage() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Target className="h-5 w-5 text-primary" />
-              <span>Evidence-Informed</span>
+              <span>{t('home.features.evidenceBased.title')}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              AI-powered suggestions based on current strength & conditioning research 
-              and best practices for optimal training outcomes.
+              {t('home.features.evidenceBased.desc')}
             </p>
           </CardContent>
         </Card>
@@ -175,13 +175,12 @@ export default function HomePage() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Calendar className="h-5 w-5 text-primary" />
-              <span>Complete Periodization</span>
+              <span>{t('home.features.periodization.title')}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              From macro-level planning to individual session design. 
-              Manage mesocycles, microcycles, and daily training with precision.
+              {t('home.features.periodization.desc')}
             </p>
           </CardContent>
         </Card>
@@ -190,13 +189,12 @@ export default function HomePage() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <FileText className="h-5 w-5 text-primary" />
-              <span>Export & Share</span>
+              <span>{t('home.features.export.title')}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Export training plans to PDF or Excel at any level of detail. 
-              Share macro overviews or detailed session plans.
+              {t('home.features.export.desc')}
             </p>
           </CardContent>
         </Card>

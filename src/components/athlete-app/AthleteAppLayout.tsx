@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Home, Calendar, MessageCircle, User, Bell, Lock, UserX } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -15,10 +16,10 @@ import {
 import { format, parseISO } from 'date-fns';
 
 const NAV_PATHS = [
-  { label: 'Today', icon: Home, path: '/athlete/today' },
-  { label: 'Plan', icon: Calendar, path: '/athlete/plan' },
-  { label: 'Messages', icon: MessageCircle, path: '/athlete/messages' },
-  { label: 'Profile', icon: User, path: '/athlete/profile' },
+  { labelKey: 'athlete.nav.today' as const, icon: Home, path: '/athlete/today' },
+  { labelKey: 'athlete.nav.plan' as const, icon: Calendar, path: '/athlete/plan' },
+  { labelKey: 'athlete.nav.messages' as const, icon: MessageCircle, path: '/athlete/messages' },
+  { labelKey: 'athlete.nav.profile' as const, icon: User, path: '/athlete/profile' },
 ];
 
 interface UnreadPreview {
@@ -99,6 +100,7 @@ function readSplashCache(): SplashBranding {
 }
 
 function AthleteSplashScreen() {
+  const { t } = useTranslation();
   const branding = readSplashCache();
   return (
     <div className="flex flex-col items-center justify-center min-h-screen max-w-[480px] mx-auto px-10 gap-8 text-center">
@@ -112,7 +114,7 @@ function AthleteSplashScreen() {
         <span className="text-3xl font-bold text-primary">Plan Prep Coach</span>
       )}
       <p className="text-xl font-medium text-foreground leading-relaxed max-w-[320px]">
-        {branding.welcomeMessage || "Welcome back! Ready to train today?"}
+        {branding.welcomeMessage || t('athlete.splash.defaultMessage')}
       </p>
       {/* Loading indicator */}
       <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
@@ -123,6 +125,7 @@ function AthleteSplashScreen() {
 export function AthleteAppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
   const { connection, loading } = useAthleteApp();
 
   // ── Access gates ────────────────────────────────────────────────────────────
@@ -134,14 +137,13 @@ export function AthleteAppLayout() {
           <Lock className="h-8 w-8 text-amber-600" />
         </div>
         <div className="space-y-2">
-          <h1 className="text-xl font-semibold">Access suspended</h1>
+          <h1 className="text-xl font-semibold">{t('athlete.suspended.title')}</h1>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Your coach has temporarily suspended your access to this app.
-            Please reach out to your coach for more information.
+            {t('athlete.suspended.desc')}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={signOutAthlete}>
-          Sign out
+          {t('athlete.signOut')}
         </Button>
       </div>
     );
@@ -155,14 +157,13 @@ export function AthleteAppLayout() {
           <UserX className="h-8 w-8 text-destructive" />
         </div>
         <div className="space-y-2">
-          <h1 className="text-xl font-semibold">Account removed</h1>
+          <h1 className="text-xl font-semibold">{t('athlete.removed.title')}</h1>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Your athlete account is no longer linked to a coach.
-            Please contact your coach to receive a new invite.
+            {t('athlete.removed.desc')}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={signOutAthlete}>
-          Sign out
+          {t('athlete.signOut')}
         </Button>
       </div>
     );
@@ -248,7 +249,7 @@ export function AthleteAppLayout() {
       {/* Bottom navigation */}
       <nav className="shrink-0 border-t bg-background/95 backdrop-blur-sm">
         <div className="flex items-stretch">
-          {NAV_PATHS.filter(({ path }) => path !== '/athlete/messages' || chatEnabled).map(({ label, icon: Icon, path }) => {
+          {NAV_PATHS.filter(({ path }) => path !== '/athlete/messages' || chatEnabled).map(({ labelKey, icon: Icon, path }) => {
             const isActive =
               location.pathname === path ||
               location.pathname.startsWith(path + '/');
@@ -275,7 +276,7 @@ export function AthleteAppLayout() {
                     </span>
                   )}
                 </div>
-                <span>{label}</span>
+                <span>{t(labelKey)}</span>
               </button>
             );
           })}
