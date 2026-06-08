@@ -111,12 +111,15 @@ export function SaveToLibraryDialog({
           {/* Method */}
           <div className="space-y-1.5">
             <Label>{t('sessionLibrary.saveDialog.method')}</Label>
-            <Select value={method} onValueChange={setMethod}>
+            <Select
+              value={method || '__none__'}
+              onValueChange={v => setMethod(v === '__none__' ? '' : v)}
+            >
               <SelectTrigger>
                 <SelectValue placeholder={t('sessionLibrary.noMethod')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">{t('sessionLibrary.noMethod')}</SelectItem>
+                <SelectItem value="__none__">{t('sessionLibrary.noMethod')}</SelectItem>
                 {allMethods.map(m => (
                   <SelectItem key={m} value={m}>
                     {m}
