@@ -10,7 +10,8 @@
  */
 
 import { useMemo, useState } from 'react';
-import { LayoutGrid, List, Thermometer, Zap, Users, Loader2, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
+import { LayoutGrid, List, Thermometer, Zap, Users, Loader2, ChevronLeft, ChevronRight, CalendarDays, FlaskConical } from 'lucide-react';
+import { isBorgLevel, getBorgBg, getBorgFg } from '@/utils/intensityScale';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -244,6 +245,41 @@ function AthleteCard({ name, summary, onClick }: CardProps) {
         </div>
       )}
 
+      {/* Day schedule: sessions, tests, events */}
+      {summary?.daySchedule && (
+        summary.daySchedule.sessions.length > 0 ||
+        summary.daySchedule.tests.length > 0 ||
+        summary.daySchedule.events.length > 0
+      ) && (
+        <div className="w-full border-t border-border/50 pt-2 space-y-0.5">
+          {summary.daySchedule.sessions.map((s, i) => (
+            <div key={i} className="flex items-center gap-1.5 text-xs">
+              <span className="truncate flex-1 text-left font-medium">{s.name}</span>
+              {s.intensity && isBorgLevel(s.intensity) && (
+                <span
+                  className="shrink-0 w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold"
+                  style={{ background: getBorgBg(s.intensity), color: getBorgFg(s.intensity) }}
+                >
+                  {s.intensity}
+                </span>
+              )}
+            </div>
+          ))}
+          {summary.daySchedule.tests.map((t, i) => (
+            <div key={i} className="flex items-center gap-1 text-[10px] text-amber-700 text-left">
+              <FlaskConical className="h-3 w-3 shrink-0" />
+              <span className="truncate">{t}</span>
+            </div>
+          ))}
+          {summary.daySchedule.events.map((e, i) => (
+            <div key={i} className="flex items-center gap-1 text-[10px] text-blue-700 text-left">
+              <CalendarDays className="h-3 w-3 shrink-0" />
+              <span className="truncate">{e}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {!summary && (
         <p className="text-xs text-muted-foreground mt-auto">No app data yet</p>
       )}
@@ -306,6 +342,44 @@ function AthleteListRow({ name, summary, onClick, customColumns }: RowProps) {
         {summary && summary.weekPlannedSessions > 0
           ? <>{summary.weekCompletedSessions}/{summary.weekPlannedSessions}<span className="ml-1 text-xs text-muted-foreground">({Math.round((summary.weekCompletedSessions / summary.weekPlannedSessions) * 100)}%)</span></>
           : <span className="text-muted-foreground">—</span>}
+      </td>
+      {/* Today's schedule column */}
+      <td className="py-2.5 px-3 text-sm">
+        {summary?.daySchedule && (
+          summary.daySchedule.sessions.length > 0 ||
+          summary.daySchedule.tests.length > 0 ||
+          summary.daySchedule.events.length > 0
+        ) ? (
+          <div className="flex flex-col gap-0.5">
+            {summary.daySchedule.sessions.map((s, i) => (
+              <div key={i} className="flex items-center gap-1.5 text-xs">
+                <span className="truncate max-w-[130px]">{s.name}</span>
+                {s.intensity && isBorgLevel(s.intensity) && (
+                  <span
+                    className="shrink-0 w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold"
+                    style={{ background: getBorgBg(s.intensity), color: getBorgFg(s.intensity) }}
+                  >
+                    {s.intensity}
+                  </span>
+                )}
+              </div>
+            ))}
+            {summary.daySchedule.tests.map((t, i) => (
+              <div key={i} className="flex items-center gap-1 text-[10px] text-amber-700">
+                <FlaskConical className="h-3 w-3 shrink-0" />
+                <span className="truncate max-w-[120px]">{t}</span>
+              </div>
+            ))}
+            {summary.daySchedule.events.map((e, i) => (
+              <div key={i} className="flex items-center gap-1 text-[10px] text-blue-700">
+                <CalendarDays className="h-3 w-3 shrink-0" />
+                <span className="truncate max-w-[120px]">{e}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
       </td>
       {customColumns.map(col => {
         const entry = summary?.customMetricValues?.[col.parameterId] ?? null;
@@ -450,7 +524,7 @@ export function SquadDashboard({
             <table className="w-full">
               <thead>
                 <tr className="bg-muted/50 border-b">
-                  {['Athlete', 'Wellness', 'Flags', 'Week AU (avg)', 'Compliance',
+                  {['Athlete', 'Wellness', 'Flags', 'Week AU (avg)', 'Compliance', 'Today',
                     ...customColumns.map(c => c.unit ? `${c.name} (${c.unit})` : c.name),
                   ].map(h => (
                     <th key={h} className="text-left text-xs font-medium text-muted-foreground py-2 px-3">{h}</th>

@@ -29,6 +29,23 @@ export interface CustomSquadColumn {
   unit: string | null;
 }
 
+export interface DaySessionInfo {
+  name: string;
+  /** Planned session-level intensity (Borg CR10 string "0"–"10", or null). */
+  intensity: string | null;
+}
+
+export interface DayScheduleInfo {
+  /** Planned sessions for the selected day. */
+  sessions: DaySessionInfo[];
+  /** Titles of test events scheduled for the day. */
+  tests: string[];
+  /** Titles of calendar events scheduled for the day. */
+  events: string[];
+  /** Day-level planned intensity (from athlete_schedule.intensity). */
+  intensity: string | null;
+}
+
 export interface AthleteSquadSummary {
   connectionId: string;
   athleteLocalId: string;
@@ -51,6 +68,8 @@ export interface AthleteSquadSummary {
   /** Z-score of weekAU vs prior complete-week AUs. Null if < 2 prior weeks. */
   weekAUZScore: number | null;
   customMetricValues: Record<string, { value: string; date: string } | null>;
+  /** Sessions, tests, and events planned for exactly selectedDate. Null if no row exists. */
+  daySchedule: DayScheduleInfo | null;
 }
 
 export interface SquadConnectionInput {
@@ -85,6 +104,8 @@ interface ScheduleRow {
   athlete_connection_id: string;
   date: string;
   sessions: unknown[];
+  events: unknown[];
+  intensity: string | null;
 }
 
 interface TestResultRow {
@@ -186,10 +207,10 @@ export function useSquadOverview(
           .lte('date', todayStr)
           .not('completed_at', 'is', null),
 
-        // 3. This-week schedule (Mon → selectedDate)
+        // 3. This-week schedule (Mon → selectedDate) — also fetch events/intensity for day display
         supabase
           .from('athlete_schedule')
-          .select('athlete_connection_id, date, sessions')
+          .select('athlete_connection_id, date, sessions, events, intensity')
           .in('athlete_connection_id', connectionIds)
           .gte('date', weekStartStr)
           .lte('date', todayStr),
@@ -271,6 +292,22 @@ export function useSquadOverview(
           (sum, row) => sum + (Array.isArray(row.sessions) ? row.sessions.length : 0), 0,
         );
 
+        // Day schedule for exactly selectedDate
+        const dayRow = connSchedule.find(s => s.date === todayStr) ?? null;
+        const daySchedule: DayScheduleInfo | null = dayRow ? {
+          sessions: (dayRow.sessions as Array<{ name?: string; intensity?: string | null }>).map(s => ({
+            name: s.name ?? 'Session',
+            intensity: s.intensity ?? null,
+          })),
+          tests: (dayRow.events as Array<{ type?: string; title?: string }>)
+            .filter(e => e.type === 'test')
+            .map(e => e.title ?? ''),
+          events: (dayRow.events as Array<{ type?: string; title?: string }>)
+            .filter(e => e.type === 'event')
+            .map(e => e.title ?? ''),
+          intensity: dayRow.intensity,
+        } : null;
+
         // Z-scores
         const allComposites  = allCompositesByConn.get(conn.id) ?? [];
         const wellnessZScore = composite !== null ? computeZScore(composite, allComposites) : null;
@@ -298,6 +335,7 @@ export function useSquadOverview(
           wellnessZScore,
           weekAUZScore,
           customMetricValues,
+          daySchedule,
         };
       });
 
