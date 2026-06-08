@@ -533,7 +533,7 @@ export async function syncAthleteSchedule(
           exerciseCount: exercisesForSession.length,
           methodCount: 0,
           notes: sessionNotes,
-          intensity: sessionIntensities?.[`${td.date}-${i}`] ?? undefined,
+          intensity: sessionIntensities?.[`${td.date}-${i}`] ?? (td.intensity || undefined),
           exercises: exercisesForSession,
         };
       });
