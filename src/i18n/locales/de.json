@@ -32,6 +32,7 @@
     "toolbox": "Trainings-Toolbox",
     "parameters": "Parameter-Datenbank",
     "programLibrary": "Trainingsplan-Bibliothek",
+    "sessionLibrary": "Einheitenbibliothek",
     "exerciseLibraries": "Übungsbibliotheken",
     "chat": "Chat",
     "analytics": "Analytik",
@@ -208,6 +209,70 @@
         "backToLogin": "Zurück zur Anmeldung"
       }
     }
+  },
+  "sessionLibrary": {
+    "title": "Einheitenbibliothek",
+    "subtitle": "Wiederverwendbare Einheiten für jeden Trainingstag",
+    "newSession": "Neue Einheit",
+    "saveToLibrary": "In Bibliothek speichern",
+    "noMethod": "Keine Methode",
+    "exercises_one": "{{count}} Übung",
+    "exercises_other": "{{count}} Übungen",
+    "savedOn": "Gespeichert am",
+    "empty": {
+      "title": "Noch keine Einheiten gespeichert",
+      "desc": "Speichere eine Einheit aus dem Wizard oder dem Athletenkalender, oder erstelle eine von Grund auf.",
+      "cta": "Einheit erstellen"
+    },
+    "columns": {
+      "name": "Einheitsname",
+      "method": "Methode",
+      "exercises": "Übungen",
+      "savedOn": "Gespeichert am"
+    },
+    "addColumn": "Spalte hinzufügen",
+    "columnDialog": {
+      "title": "Spalte hinzufügen",
+      "namePlaceholder": "z. B. Sportart, Phase, Equipment…",
+      "type": "Typ",
+      "typeText": "Text",
+      "typeSelect": "Auswahl (Dropdown)",
+      "typeTextarea": "Langer Text",
+      "options": "Optionen (eine pro Zeile)",
+      "required": "Pflichtfeld",
+      "add": "Spalte hinzufügen"
+    },
+    "saveDialog": {
+      "title": "In Einheitenbibliothek speichern",
+      "sessionName": "Einheitsname",
+      "method": "Methode",
+      "libraryFields": "Bibliotheksfelder",
+      "save": "In Bibliothek speichern"
+    },
+    "detail": {
+      "noExercises": "Keine Übungen in dieser Einheit.",
+      "unsectioned": "Ohne Abschnitt"
+    },
+    "builder": {
+      "title": "Einheit erstellen",
+      "sessionName": "Einheitsname",
+      "sessionNamePlaceholder": "z. B. Unterkörper Power",
+      "method": "Methode (optional)",
+      "noMethod": "Keine Methode",
+      "addSection": "+ Abschnitt hinzufügen",
+      "sectionNamePlaceholder": "Abschnittsname (z. B. Aufwärmen)",
+      "save": "In Bibliothek speichern"
+    },
+    "deleteDialog": {
+      "title": "Einheit löschen?",
+      "confirm": "Löschen"
+    },
+    "duplicate": "Duplizieren",
+    "delete": "Löschen",
+    "viewDetail": "Details anzeigen",
+    "saved": "Einheit in Bibliothek gespeichert",
+    "deleted": "Einheit aus Bibliothek gelöscht",
+    "duplicated": "Einheit dupliziert"
   },
   "athlete": {
     "splash": {

@@ -109,6 +109,7 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
     icon: FileText,
     items: [
       { title: t('nav.programLibrary'), path: "/templates/programs", icon: Calendar },
+      { title: t('nav.sessionLibrary'), path: "/templates/sessions", icon: Zap },
       { title: t('nav.exerciseLibraries'), path: "/templates/exercise-libraries", icon: Library },
     ],
   };

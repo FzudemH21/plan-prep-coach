@@ -24,6 +24,7 @@ import NotFound from "./pages/NotFound";
 import OnboardingPage from "./pages/OnboardingPage";
 import CoachProfilePage from "./pages/CoachProfilePage";
 import CoachMessagesPage from "./pages/CoachMessagesPage";
+import SessionLibraryPage from "./pages/SessionLibraryPage";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import AthleteLoginPage from "./pages/athlete/AthleteLoginPage";
@@ -138,6 +139,7 @@ function AppRoutes() {
                   <Route path="/templates/toolbox" element={<ToolboxDatabase />} />
                   <Route path="/templates/libraries/:libraryName" element={<LibraryPage />} />
                   <Route path="/templates/exercise-libraries" element={<ExerciseLibrariesPage />} />
+                  <Route path="/templates/sessions" element={<SessionLibraryPage />} />
                   <Route path="/templates/program-templates" element={<ProgramTemplatesPage />} />
                   <Route path="/coach-profile" element={<CoachProfilePage />} />
                   <Route path="/messages" element={<CoachMessagesPage />} />

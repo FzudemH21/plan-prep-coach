@@ -79,6 +79,8 @@ interface EnhancedExerciseDistributionProps {
   methodExerciseCategories?: Record<string, string[]>;
   /** Increment to force a re-load of session comments from localStorage */
   sessionCommentsRefreshKey?: number;
+  /** Save a session snapshot to the Session Library */
+  onSaveToLibrary?: (dayDate: string, sessionIndex: number) => void;
 }
 
 // ── Pure helpers (no component state — defined outside to avoid re-creation) ──
@@ -121,6 +123,7 @@ export function EnhancedExerciseDistribution({
   methodAllocations = {},
   methodExerciseCategories,
   sessionCommentsRefreshKey,
+  onSaveToLibrary,
 }: EnhancedExerciseDistributionProps) {
   const { toast } = useToast();
   const { libraries } = useCustomLibraries();
@@ -2583,6 +2586,7 @@ export function EnhancedExerciseDistribution({
                                     onMoveSessionDown={handleMoveSessionDownLocal}
                                     onExerciseNotesChange={handleExerciseNotesChange}
                                     onReorderSection={handleSectionReorder}
+                                    onSaveToLibrary={onSaveToLibrary}
                                   />
                                 );
                               })}

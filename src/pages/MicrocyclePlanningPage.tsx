@@ -40,6 +40,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import { AccumulatedContextDialog } from '@/components/wizard/AccumulatedContextDialog';
 import { extractPlanSummary } from '@/lib/planMemory';
+import { SaveToLibraryDialog } from '@/components/session-library/SaveToLibraryDialog';
 
 // Using ExerciseDistribution, SessionSection, and SupersetMapping from types file
 
@@ -93,6 +94,13 @@ export default function MicrocyclePlanningPage() {
   const [pdfExportProgram, setPdfExportProgram] = useState<TrainingProgram | null>(null);
   const [pdfExportOpen, setPdfExportOpen] = useState(false);
   const { libraries } = useCustomLibraries();
+
+  // ── Session Library save dialog ─────────────────────────────────────────────
+  const [saveLibTarget, setSaveLibTarget] = useState<{ dayDate: string; sessionIndex: number } | null>(null);
+
+  const handleSaveToLibrary = (dayDate: string, sessionIndex: number) => {
+    setSaveLibTarget({ dayDate, sessionIndex });
+  };
 
   // Resolve athlete name from selectedAthleteId
   const selectedAthleteId = macrocycleData?.selectedAthleteId;
@@ -3464,6 +3472,7 @@ export default function MicrocyclePlanningPage() {
           methodAllocations={methodAllocations}
           methodExerciseCategories={methodExerciseCategories}
           sessionCommentsRefreshKey={sessionCommentsRefreshKey}
+          onSaveToLibrary={handleSaveToLibrary}
         />
       </div>
     );
@@ -4976,6 +4985,33 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
           navigate("/templates/programs");
         }}
       />
+
+      {/* Session Library — save dialog */}
+      {saveLibTarget && (
+        <SaveToLibraryDialog
+          open={!!saveLibTarget}
+          onOpenChange={open => { if (!open) setSaveLibTarget(null); }}
+          sessionName={
+            trainingDays
+              .find(d => d.date === saveLibTarget.dayDate)
+              ?.sessionNames?.[saveLibTarget.sessionIndex] ??
+            `Session ${saveLibTarget.sessionIndex + 1}`
+          }
+          exercises={exerciseDistribution.filter(
+            e => e.dayDate === saveLibTarget.dayDate && e.sessionIndex === saveLibTarget.sessionIndex
+          )}
+          sections={sessionSections.filter(
+            s => s.dayDate === saveLibTarget.dayDate && s.sessionIndex === saveLibTarget.sessionIndex
+          )}
+          defaultMethod={(() => {
+            const ex = exerciseDistribution.find(
+              e => e.dayDate === saveLibTarget.dayDate && e.sessionIndex === saveLibTarget.sessionIndex && e.methodId
+            );
+            return ex ? (ex.categoryName ? `${ex.methodId.split('::')[0]}` : ex.methodId) : undefined;
+          })()}
+          onSaved={() => toast({ title: 'Session saved to library' })}
+        />
+      )}
 
       {/* AI Assistant */}
       <WizardAIAssistant

@@ -23,7 +23,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, X, ChevronUp, ChevronDown, ChevronRight, MessageSquare, Copy, ArrowUp, ArrowDown, StickyNote, Recycle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, X, ChevronUp, ChevronDown, ChevronRight, MessageSquare, Copy, ArrowUp, ArrowDown, StickyNote, Recycle, BookmarkPlus } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { TrainingDay } from '@/types/daily-intensity';
 import { IntensityLevel } from '@/types/training';
@@ -71,6 +72,8 @@ interface SessionColumnViewProps {
   onAddCircuitInline?: (sectionId?: string) => void;
   /** Called when the user clicks "Edit" on a circuit card — passes the circuit's distribution entry id */
   onEditCircuit?: (exerciseDistributionId: string) => void;
+  /** Save this session to the Session Library */
+  onSaveToLibrary?: (dayDate: string, sessionIndex: number) => void;
 }
 
 export function SessionColumnView({
@@ -106,7 +109,9 @@ export function SessionColumnView({
   onAddExerciseInline,
   onAddCircuitInline,
   onEditCircuit,
+  onSaveToLibrary,
 }: SessionColumnViewProps) {
+  const { t } = useTranslation();
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionName, setEditingSectionName] = useState('');
   const [deleteSectionDialogOpen, setDeleteSectionDialogOpen] = useState(false);
@@ -476,7 +481,20 @@ export function SessionColumnView({
                     <Copy className="h-3 w-3 text-muted-foreground hover:text-foreground" />
                   </Button>
                 )}
-                
+
+                {/* Save to Library Button */}
+                {onSaveToLibrary && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 hover:bg-accent"
+                    onClick={() => onSaveToLibrary(day.date, sessionIndex)}
+                    title={t('sessionLibrary.saveToLibrary')}
+                  >
+                    <BookmarkPlus className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                  </Button>
+                )}
+
                 {/* Move Up/Down Arrows - only show when multiple sessions exist */}
                 {totalSessionsOnDay > 1 && (
                   <>

@@ -32,6 +32,7 @@
     "toolbox": "Training Toolbox",
     "parameters": "Parameter Database",
     "programLibrary": "Training Program Library",
+    "sessionLibrary": "Session Library",
     "exerciseLibraries": "Exercise Libraries",
     "chat": "Chat",
     "analytics": "Analytics",
@@ -208,6 +209,70 @@
         "backToLogin": "Back to Sign in"
       }
     }
+  },
+  "sessionLibrary": {
+    "title": "Session Library",
+    "subtitle": "Reusable sessions you can add to any training day",
+    "newSession": "New Session",
+    "saveToLibrary": "Save to Library",
+    "noMethod": "No method",
+    "exercises_one": "{{count}} exercise",
+    "exercises_other": "{{count}} exercises",
+    "savedOn": "Saved on",
+    "empty": {
+      "title": "No sessions saved yet",
+      "desc": "Save a session from the wizard or athlete calendar, or build one from scratch.",
+      "cta": "Build a session"
+    },
+    "columns": {
+      "name": "Session Name",
+      "method": "Method",
+      "exercises": "Exercises",
+      "savedOn": "Saved on"
+    },
+    "addColumn": "Add Column",
+    "columnDialog": {
+      "title": "Add Column",
+      "namePlaceholder": "e.g. Sport, Phase, Equipment…",
+      "type": "Type",
+      "typeText": "Text",
+      "typeSelect": "Select (dropdown)",
+      "typeTextarea": "Long text",
+      "options": "Options (one per line)",
+      "required": "Required field",
+      "add": "Add Column"
+    },
+    "saveDialog": {
+      "title": "Save to Session Library",
+      "sessionName": "Session Name",
+      "method": "Method",
+      "libraryFields": "Library Fields",
+      "save": "Save to Library"
+    },
+    "detail": {
+      "noExercises": "No exercises in this session.",
+      "unsectioned": "Unsectioned"
+    },
+    "builder": {
+      "title": "Build Session",
+      "sessionName": "Session Name",
+      "sessionNamePlaceholder": "e.g. Lower Body Power",
+      "method": "Method (optional)",
+      "noMethod": "No method",
+      "addSection": "+ Add Section",
+      "sectionNamePlaceholder": "Section name (e.g. Warm-up)",
+      "save": "Save to Library"
+    },
+    "deleteDialog": {
+      "title": "Delete session?",
+      "confirm": "Delete"
+    },
+    "duplicate": "Duplicate",
+    "delete": "Delete",
+    "viewDetail": "View Details",
+    "saved": "Session saved to library",
+    "deleted": "Session deleted from library",
+    "duplicated": "Session duplicated"
   },
   "athlete": {
     "splash": {
