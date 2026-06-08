@@ -178,6 +178,7 @@ function AthleteCard({ name, summary, onClick }: AthleteCardProps) {
       className={cn(
         'text-left w-full rounded-lg border border-l-4 bg-card',
         'hover:shadow-md transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'flex flex-col aspect-[4/3] overflow-hidden',
         cfg.borderClass,
       )}
     >
@@ -224,26 +225,28 @@ function AthleteCard({ name, summary, onClick }: AthleteCardProps) {
 
       {/* Stats body */}
       {summary ? (
-        <div className="px-4 py-3 space-y-2 text-sm">
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-muted-foreground">Week AU</span>
-            <AUCell weekAU={summary.weekAU} avgWeeklyAU={summary.avgWeeklyAU} />
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-muted-foreground">Sessions</span>
-            <ComplianceCell
-              completed={summary.weekCompletedSessions}
-              planned={summary.weekPlannedSessions}
-            />
+        <div className="px-4 py-3 flex-1 flex flex-col justify-between text-sm">
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-muted-foreground">Week AU</span>
+              <AUCell weekAU={summary.weekAU} avgWeeklyAU={summary.avgWeeklyAU} />
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-muted-foreground">Sessions</span>
+              <ComplianceCell
+                completed={summary.weekCompletedSessions}
+                planned={summary.weekPlannedSessions}
+              />
+            </div>
           </div>
           {summary.wellnessDate && (
-            <p className="text-[10px] text-muted-foreground/60 pt-1 border-t border-border/40">
+            <p className="text-[10px] text-muted-foreground/60 pt-2 border-t border-border/40 mt-2">
               Last check-in: {summary.wellnessDate}
             </p>
           )}
         </div>
       ) : (
-        <div className="px-4 py-3">
+        <div className="px-4 py-3 flex-1">
           <p className="text-xs text-muted-foreground">No app data yet</p>
         </div>
       )}

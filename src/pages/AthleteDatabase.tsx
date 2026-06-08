@@ -215,6 +215,7 @@ export default function AthleteDatabase() {
           onUnarchiveAthlete={(athleteId) => {
             athleteData.unarchiveAthlete(athleteId);
           }}
+          onShowSquad={() => setSelectedAthleteId(null)}
         />
       </div>
 

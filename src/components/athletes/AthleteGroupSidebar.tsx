@@ -31,6 +31,7 @@ import {
   ChevronDown,
   ChevronRight,
   FolderPlus,
+  LayoutGrid,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -60,6 +61,7 @@ interface AthleteGroupSidebarProps {
   onDeleteAthlete: (athleteId: string) => void;
   onArchiveAthlete: (athleteId: string) => void;
   onUnarchiveAthlete: (athleteId: string) => void;
+  onShowSquad?: () => void;
 }
 
 export function AthleteGroupSidebar({
@@ -79,6 +81,7 @@ export function AthleteGroupSidebar({
   onDeleteAthlete,
   onArchiveAthlete,
   onUnarchiveAthlete,
+  onShowSquad,
 }: AthleteGroupSidebarProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -128,6 +131,11 @@ export function AthleteGroupSidebar({
           Athletes
         </h2>
         <div className="flex items-center gap-1">
+          {onShowSquad && (
+            <Button variant="ghost" size="icon" onClick={onShowSquad} title="Squad Overview">
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+          )}
           <Button variant="ghost" size="icon" onClick={onCreateAthlete} title="Create Athlete">
             <UserPlus className="h-4 w-4" />
           </Button>
