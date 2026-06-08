@@ -228,19 +228,17 @@ function AthleteListRow({ name, summary, onClick, customColumns }: RowProps) {
       <td className="py-2.5 px-3 text-sm">
         {summary
           ? (
-            <div className="flex flex-col gap-0.5">
-              <div className="flex items-center gap-1.5">
-                <span className={cfg.textClass}>
-                  {summary.wellnessComposite !== null ? String(summary.wellnessComposite) : cfg.label}
-                </span>
-                {summary.wellnessZScore !== null && <ZBadge z={summary.wellnessZScore} positiveIsGood />}
-              </div>
-              {summary.wellnessDate && (
-                <span className="text-[10px] text-muted-foreground">{summary.wellnessDate}</span>
-              )}
+            <div className="flex items-center gap-1.5">
+              <span className={cfg.textClass}>
+                {summary.wellnessComposite !== null ? String(summary.wellnessComposite) : cfg.label}
+              </span>
+              {summary.wellnessZScore !== null && <ZBadge z={summary.wellnessZScore} positiveIsGood />}
             </div>
           )
           : <span className="text-muted-foreground text-xs">Not connected</span>}
+      </td>
+      <td className="py-2.5 px-3 text-xs text-muted-foreground tabular-nums">
+        {summary?.wellnessDate ?? '—'}
       </td>
       <td className="py-2.5 px-3">
         {summary && <FlagIcons summary={summary} />}
@@ -402,7 +400,7 @@ export function SquadDashboard({
             <table className="w-full">
               <thead>
                 <tr className="bg-muted/50 border-b">
-                  {['Athlete', 'Wellness', 'Flags', 'Week AU (avg)', 'Compliance',
+                  {['Athlete', 'Wellness', 'Date', 'Flags', 'Week AU (avg)', 'Compliance',
                     ...customColumns.map(c => c.unit ? `${c.name} (${c.unit})` : c.name),
                   ].map(h => (
                     <th key={h} className="text-left text-xs font-medium text-muted-foreground py-2 px-3">{h}</th>
