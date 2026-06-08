@@ -16,14 +16,14 @@ Claude Chat (browser) is my sparring partner for planning, discussion, and promp
 |---|---|---|
 | 🔵 Future | Language selection on first open (German / English) | ⬜ Open |
 | 🔵 Future | **PDF exports** — printable reports per athlete: monitoring summary, training plan overview, performance progress. Complements the XLSX exports for sharing with physios, sports directors, or athletes. | ⬜ Open |
-| 🔵 Future | Push notifications (session reminders, coach messages) | ⬜ Open |
-| 🔵 Future | Athlete Management System (standalone area: profiles, progress tracking, communication, wearable data, AI analysis) | ⬜ Open |
-| 🔵 Future | **External data integrations** — GPS platforms (Catapult, STATSports), force plate systems (VALD), HRV apps (HRV4Training, Garmin), wearables (Oura, Whoop, Apple Fitness), VBT devices. Data ingested per session/day and surfaced in Analysis tab alongside internally logged load. | ⬜ Open |
-| 🔵 Future | SaaS & monetization (login, packages, Stripe) | ⬜ Open |
 | 🔵 Future | **Pre-publish security hardening** — replace `dangerouslyAllowBrowser`, move API key to Edge Function, rate limiting, full RLS audit | ⬜ Open |
+| 🔵 Future | SaaS & monetization (login, packages, Stripe) | ⬜ Open |
+| 🔵 Future | Language selection on first open (German / English) | ⬜ Open |
+| 🔵 Future | **App Store / Play Store distribution** — Capacitor wrapper for athlete app (iOS + Android); separate coach mobile app (in-person PT: log workout for athlete, athlete overview, quick session edit, coach↔athlete chat). Both apps published to stores. | ⬜ Open |
+| 🔵 Future | **Push notifications** — session reminders, coach messages, test-day alerts. Depends on App/Play Store distribution (native push) or PWA push for web. | ⬜ Open |
 | 🔵 Future | Booking system (athletes book with coach) + coach calendar | ⬜ Open |
 | 🔵 Future | Payment system Coach↔Athlete (marketplace model) | ⬜ Open |
-| 🔵 Future | **Coach Mobile App** — log workout for athlete (in-person PT), athlete overview, quick session edit, coach↔athlete chat | ⬜ Open |
+| 🔵 Future | **Athlete Management System + external data integrations** — expanded AMS area beyond what's already built: wearable data ingestion (Oura, Whoop, Apple Fitness, Garmin/HRV4Training), GPS platforms (Catapult, STATSports), force plate systems (VALD), VBT devices. Data surfaced per session/day in Analysis tab alongside internally logged load. Elite/enterprise tier. | ⬜ Open |
 
 ---
 
