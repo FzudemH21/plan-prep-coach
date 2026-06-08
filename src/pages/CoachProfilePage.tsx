@@ -704,6 +704,7 @@ function SettingsTab() {
 
 export default function CoachProfilePage() {
   return (
+    <div className="h-full overflow-y-auto">
     <div className="max-w-2xl mx-auto space-y-6 py-6">
       {/* Title */}
       <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -756,6 +757,7 @@ export default function CoachProfilePage() {
           <SettingsTab />
         </TabsContent>
       </Tabs>
+    </div>
     </div>
   );
 }
