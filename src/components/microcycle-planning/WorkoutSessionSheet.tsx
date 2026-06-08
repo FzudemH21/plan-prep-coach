@@ -2728,7 +2728,11 @@ export function WorkoutSessionSheet({
                 </div>
               )}
               <DialogDescription className="mt-1">
-                {dayDate ? format(parseISO(dayDate), 'EEEE, MMMM d, yyyy') : 'New Session'}
+                {dayDate && /^\d{4}-\d{2}-\d{2}$/.test(dayDate)
+                  ? format(parseISO(dayDate), 'EEEE, MMMM d, yyyy')
+                  : dayDate
+                    ? 'Library Session'
+                    : 'New Session'}
               </DialogDescription>
               
               {/* Editable Day Intensity */}

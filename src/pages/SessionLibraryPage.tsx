@@ -538,7 +538,9 @@ export default function SessionLibraryPage() {
                       </TableCell>
                     ))}
                     <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                      {format(new Date(entry.createdAt), 'dd MMM yyyy')}
+                      {entry.createdAt
+                        ? format(new Date(entry.createdAt), 'dd MMM yyyy')
+                        : '—'}
                     </TableCell>
                     <TableCell onClick={e => e.stopPropagation()}>
                       <DropdownMenu>
@@ -614,26 +616,30 @@ export default function SessionLibraryPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Library session sheet — view/edit existing or create new */}
-      <WorkoutSessionSheet
-        isOpen={libSheet !== null}
-        onClose={closeSheet}
-        dayDate={LIBRARY_DAY}
-        sessionIndex={LIBRARY_SESS}
-        exercises={liveExercises}
-        allExerciseDistribution={liveExercises}
-        mesocycleId={libMesoId}
-        microcycleIndex={LIBRARY_MICRO}
-        parameterValues={liveParamValues}
-        onSaveParameters={handleLibSaveParameters}
-        sessionSections={liveSections}
-        onSectionsChange={handleLibSectionsChange}
-        onDistributionChange={handleLibDistributionChange}
-        sessionNameFromState={liveName}
-        onRenameSession={(_day, _idx, name) => setLiveName(name)}
-        isAdHocSession={true}
-        toolboxData={toolboxData}
-      />
+      {/* Library session sheet — view/edit existing or create new.
+          Only mounted when a session is actually open to avoid dayDate='__library__'
+          being passed to WorkoutSessionSheet on page load (format/parseISO crash). */}
+      {libSheet !== null && (
+        <WorkoutSessionSheet
+          isOpen={true}
+          onClose={closeSheet}
+          dayDate={LIBRARY_DAY}
+          sessionIndex={LIBRARY_SESS}
+          exercises={liveExercises}
+          allExerciseDistribution={liveExercises}
+          mesocycleId={libMesoId}
+          microcycleIndex={LIBRARY_MICRO}
+          parameterValues={liveParamValues}
+          onSaveParameters={handleLibSaveParameters}
+          sessionSections={liveSections}
+          onSectionsChange={handleLibSectionsChange}
+          onDistributionChange={handleLibDistributionChange}
+          sessionNameFromState={liveName}
+          onRenameSession={(_day, _idx, name) => setLiveName(name)}
+          isAdHocSession={true}
+          toolboxData={toolboxData}
+        />
+      )}
     </div>
   );
 }
