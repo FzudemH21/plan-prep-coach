@@ -95,6 +95,28 @@ function FlagIcons({ summary }: { summary: AthleteSquadSummary }) {
   );
 }
 
+/**
+ * Inline z-score badge.
+ * positiveIsGood=true  (wellness): z≥1 green, z≤-1 red
+ * positiveIsGood=false (load AU):  z≥1.5 amber (spike), z≤-1.5 sky (dip), else muted
+ */
+function ZBadge({ z, positiveIsGood = false }: { z: number; positiveIsGood?: boolean }) {
+  const sign = z >= 0 ? '+' : '';
+  const label = `z${sign}${z.toFixed(1)}`;
+  const colorClass = positiveIsGood
+    ? z >= 1   ? 'text-emerald-600'
+    : z <= -1  ? 'text-red-500'
+    : 'text-muted-foreground'
+    : z >= 1.5  ? 'text-amber-600'
+    : z <= -1.5 ? 'text-sky-600'
+    : 'text-muted-foreground';
+  return (
+    <span className={cn('text-[10px] font-mono tabular-nums', colorClass)} title="Z-score (28-day reference)">
+      {label}
+    </span>
+  );
+}
+
 // ── Card view — portrait "player card" ────────────────────────────────────────
 
 interface CardProps { name: string; summary: AthleteSquadSummary | null; onClick: () => void; }
@@ -127,12 +149,13 @@ function AthleteCard({ name, summary, onClick }: CardProps) {
       <div className="w-full space-y-0.5">
         <p className="font-semibold text-sm leading-tight truncate">{name}</p>
         {summary ? (
-          <div className="flex items-center justify-center gap-1.5">
+          <div className="flex items-center justify-center gap-1.5 flex-wrap">
             <WellnessDot status={status} />
             <span className={cn('text-xs font-medium', cfg.textClass)}>{cfg.label}</span>
             {summary.wellnessComposite !== null && (
               <span className="text-xs text-muted-foreground">{summary.wellnessComposite}/5</span>
             )}
+            {summary.wellnessZScore !== null && <ZBadge z={summary.wellnessZScore} positiveIsGood />}
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">Not connected</p>
@@ -153,6 +176,7 @@ function AthleteCard({ name, summary, onClick }: CardProps) {
             {summary.avgWeeklyAU > 0 && (
               <p className="text-[10px] text-muted-foreground tabular-nums">avg {summary.avgWeeklyAU}</p>
             )}
+            {summary.weekAUZScore !== null && <ZBadge z={summary.weekAUZScore} />}
           </div>
           <div className="text-center">
             <p className="text-[10px] text-muted-foreground">Sessions</p>
@@ -197,7 +221,14 @@ function AthleteListRow({ name, summary, onClick }: RowProps) {
       </td>
       <td className="py-2.5 px-3 text-sm">
         {summary
-          ? <span className={cfg.textClass}>{summary.wellnessComposite !== null ? `${summary.wellnessComposite}/5` : cfg.label}</span>
+          ? (
+            <div className="flex items-center gap-1.5">
+              <span className={cfg.textClass}>
+                {summary.wellnessComposite !== null ? `${summary.wellnessComposite}/5` : cfg.label}
+              </span>
+              {summary.wellnessZScore !== null && <ZBadge z={summary.wellnessZScore} positiveIsGood />}
+            </div>
+          )
           : <span className="text-muted-foreground text-xs">Not connected</span>}
       </td>
       <td className="py-2.5 px-3">
@@ -206,7 +237,15 @@ function AthleteListRow({ name, summary, onClick }: RowProps) {
       <td className="py-2.5 px-3 text-sm tabular-nums">
         {summary
           ? (summary.weekAU > 0
-            ? <>{summary.weekAU}{summary.avgWeeklyAU > 0 && <span className="ml-1 text-xs text-muted-foreground">avg {summary.avgWeeklyAU}</span>}</>
+            ? (
+              <div className="flex items-center gap-1.5">
+                <span>{summary.weekAU}</span>
+                {summary.avgWeeklyAU > 0 && (
+                  <span className="text-xs text-muted-foreground">avg {summary.avgWeeklyAU}</span>
+                )}
+                {summary.weekAUZScore !== null && <ZBadge z={summary.weekAUZScore} />}
+              </div>
+            )
             : <span className="text-muted-foreground">—</span>)
           : <span className="text-muted-foreground">—</span>}
       </td>

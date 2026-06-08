@@ -25,7 +25,7 @@ export interface AthleteSquadSummary {
   connectionId: string;
   athleteLocalId: string;
   athleteName: string;
-  /** Average of available wellness items (1–5 scale). Null if no check-in in last 14 days. */
+  /** Average of available wellness items (1–5 scale). Null if no check-in in last 28 days. */
   wellnessComposite: number | null;
   wellnessStatus: WellnessStatus;
   /** Date of the most recent check-in (yyyy-MM-dd). */
@@ -40,6 +40,10 @@ export interface AthleteSquadSummary {
   weekCompletedSessions: number;
   /** Planned sessions (from athlete_schedule) this ISO week up to today. */
   weekPlannedSessions: number;
+  /** Z-score of today's wellness vs all daily composites in the last 28 days. Null if < 2 data points. */
+  wellnessZScore: number | null;
+  /** Z-score of this week's AU vs prior complete-week AUs in the last 28 days. Null if < 2 prior weeks. */
+  weekAUZScore: number | null;
 }
 
 // ── Internal row types ────────────────────────────────────────────────────────
@@ -90,6 +94,20 @@ function computeComposite(row: CheckinRow): number | null {
   return Math.round((items.reduce((a, b) => a + b, 0) / items.length) * 10) / 10;
 }
 
+/**
+ * Z-score of `value` relative to `population` (sample std dev, Bessel-corrected).
+ * Returns null when population has fewer than 2 data points or std dev is 0.
+ * Rounded to one decimal place.
+ */
+function computeZScore(value: number, population: number[]): number | null {
+  if (population.length < 2) return null;
+  const m = population.reduce((a, b) => a + b, 0) / population.length;
+  const variance = population.reduce((sum, v) => sum + (v - m) ** 2, 0) / (population.length - 1);
+  const s = Math.sqrt(variance);
+  if (s === 0) return null;
+  return Math.round(((value - m) / s) * 10) / 10;
+}
+
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useSquadOverview(
@@ -127,7 +145,7 @@ export function useSquadOverview(
           .from('athlete_daily_checkins')
           .select('athlete_connection_id, date, wellness_fatigue, wellness_sleep, wellness_soreness, wellness_stress, wellness_mood, has_pain, has_illness')
           .in('athlete_connection_id', connectionIds)
-          .gte('date', format(subDays(today, 14), 'yyyy-MM-dd'))
+          .gte('date', format(subDays(today, 28), 'yyyy-MM-dd'))
           .order('date', { ascending: false }),
 
         // 2. Completed session logs — last 28 days (covers this week + 3 prior weeks)
@@ -156,9 +174,17 @@ export function useSquadOverview(
 
       // Latest check-in per connection (rows already ordered date DESC)
       const latestCheckin = new Map<string, CheckinRow>();
+      // All composites per connection for z-score reference (28-day window)
+      const allCompositesByConn = new Map<string, number[]>();
       for (const row of checkins) {
         if (!latestCheckin.has(row.athlete_connection_id)) {
           latestCheckin.set(row.athlete_connection_id, row);
+        }
+        const comp = computeComposite(row);
+        if (comp !== null) {
+          const arr = allCompositesByConn.get(row.athlete_connection_id) ?? [];
+          arr.push(comp);
+          allCompositesByConn.set(row.athlete_connection_id, arr);
         }
       }
 
@@ -197,6 +223,12 @@ export function useSquadOverview(
           0,
         );
 
+        // Z-scores (require ≥2 data points; sample std dev)
+        const allComposites = allCompositesByConn.get(conn.id) ?? [];
+        const wellnessZScore = composite !== null ? computeZScore(composite, allComposites) : null;
+        // AU z-score: current week vs prior complete weeks as reference
+        const weekAUZScore = computeZScore(weekAU, prevWeekAUs);
+
         return {
           connectionId:           conn.id,
           athleteLocalId:         conn.athleteLocalId,
@@ -210,6 +242,8 @@ export function useSquadOverview(
           avgWeeklyAU,
           weekCompletedSessions:  weekLogs.length,
           weekPlannedSessions,
+          wellnessZScore,
+          weekAUZScore,
         };
       });
 
