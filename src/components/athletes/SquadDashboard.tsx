@@ -367,6 +367,9 @@ export function SquadDashboard({
     [filteredAthletes, connByAthleteId],
   );
 
+  // Must be declared before useSquadOverview which consumes it
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+
   const { summaries, loading, customColumns } = useSquadOverview(connectedConns, selectedDate);
 
   const summaryByConnId = useMemo(
@@ -388,8 +391,6 @@ export function SquadDashboard({
 
   const connectedCount = displayItems.filter(i => i.summary !== null).length;
   const flaggedCount   = displayItems.filter(i => i.summary && (i.summary.hasPainFlag || i.summary.hasIllnessFlag)).length;
-
-  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
 
   const activeGroupName = useMemo(
     () => selectedGroupId ? (groups.find(g => g.id === selectedGroupId)?.name ?? 'Squad') : 'All Athletes',
