@@ -22,6 +22,7 @@ import { useAthleteConnections } from "@/hooks/useAthleteConnections";
 import { useUnreadCounts } from "@/hooks/useChat";
 import { useMemo } from "react";
 import { format, parseISO } from "date-fns";
+import { useCoachProfile } from "@/hooks/useCoachProfile";
 
 interface AppLayoutProps {
   children?: React.ReactNode;
@@ -37,6 +38,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { connections } = useAthleteConnections();
   const connectionIds = useMemo(() => connections.map((c) => c.id), [connections]);
   const { totalUnread } = useUnreadCounts(connectionIds, 'coach');
+  const { profile } = useCoachProfile();
+  const brandingName = profile?.branding?.businessName?.trim() || "";
+  const brandingLogo = profile?.branding?.logoBase64 || "";
 
   const handleLoadSeedData = async () => {
     try {
@@ -79,9 +83,18 @@ export function AppLayout({ children }: AppLayoutProps) {
             >
               <Menu className="h-5 w-5" />
             </Button>
-            <h1 className="text-2xl font-bold text-primary">
-              Training Programming System
-            </h1>
+            <div className="flex items-center gap-3">
+              {brandingLogo && (
+                <img
+                  src={brandingLogo}
+                  alt="Logo"
+                  className="h-8 w-auto max-w-[120px] object-contain"
+                />
+              )}
+              <h1 className="text-2xl font-bold text-primary">
+                {brandingName || "Plan Prep Coach"}
+              </h1>
+            </div>
             <Badge variant="outline" className="text-xs">
               v1.0
             </Badge>
