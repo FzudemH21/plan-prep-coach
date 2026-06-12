@@ -244,7 +244,7 @@ export default function CoachMobileAthleteProfilePage() {
                 <div key={a.id} className="text-sm">
                   <p className="font-medium truncate">{a.programName}</p>
                   <p className="text-xs text-muted-foreground">
-                    {a.startDate ? format(parseISO(a.startDate + 'T12:00:00'), 'MMM d') : '?'} – {a.endDate ? format(parseISO(a.endDate + 'T12:00:00'), 'MMM d, yyyy') : '?'}
+                    {a.startDate ? format(new Date(a.startDate), 'MMM d') : '?'} – {a.endDate ? format(new Date(a.endDate), 'MMM d, yyyy') : '?'}
                   </p>
                 </div>
               ))}
