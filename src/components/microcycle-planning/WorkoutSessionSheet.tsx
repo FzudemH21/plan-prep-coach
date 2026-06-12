@@ -899,6 +899,10 @@ export function WorkoutSessionSheet({
   // Track previous exercise count to detect additions vs deletions
   const prevExerciseCountRef = useRef(exercises.length);
   const hasInitializedRef = useRef(false);
+  // Track whether live schedule overrides have been applied in this open cycle.
+  // Prevents double-apply when liveScheduleEntry is already defined at open time,
+  // and enables a late-apply when it arrives after init (race-condition fix).
+  const liveOverrideAppliedRef = useRef(false);
   // Track freshly added exercise IDs to skip redundant rebuilds (they already have blank params)
   const freshlyAddedExerciseIdsRef = useRef<Set<string>>(new Set());
   
@@ -938,20 +942,28 @@ export function WorkoutSessionSheet({
         // Apply live athlete_schedule param overrides (from mobile coach edits) on top of
         // the plan-derived params so desktop sees changes made in the mobile coach app.
         let sectionsToSet = sectionsWithComments;
+        console.log(`[WorkoutSessionSheet] fresh open ${dayDate}[${sessionIndex}] liveScheduleEntry=`, liveScheduleEntry ? 'defined' : 'undefined');
         if (liveScheduleEntry) {
+          // Mark as applied so the late-override effect skips (no double-apply).
+          liveOverrideAppliedRef.current = true;
           const liveSession = liveScheduleEntry.sessions[sessionIndex];
+          console.log(`[WorkoutSessionSheet] liveSession=`, liveSession ? `found (${(liveSession.exercises??[]).length} exercises)` : 'NOT FOUND', 'sessionIndex=', sessionIndex, 'total sessions=', liveScheduleEntry.sessions.length);
           if (liveSession) {
             const overrideMap = new Map(
               (liveSession.exercises ?? [])
                 .filter(ex => ex.plannedParams && Object.keys(ex.plannedParams).length > 0)
                 .map(ex => [ex.id, ex.plannedParams as Record<string, string | number>])
             );
+            console.log(`[WorkoutSessionSheet] overrideMap.size=`, overrideMap.size, 'keys=', [...overrideMap.keys()].map(k => k.slice(-8)));
+            const sectionExIds = sectionsWithComments.flatMap(s => s.exercises.map(e => e.id.slice(-8)));
+            console.log(`[WorkoutSessionSheet] section exercise id tails=`, sectionExIds);
             if (overrideMap.size > 0) {
               sectionsToSet = sectionsWithComments.map(section => ({
                 ...section,
                 exercises: section.exercises.map(ex => {
                   const overrides = overrideMap.get(ex.id);
                   if (!overrides) return ex;
+                  console.log(`[WorkoutSessionSheet] ✅ APPLYING override to ex id tail=${ex.id.slice(-8)} name=${ex.exerciseName}`);
                   return { ...ex, parameters: { ...ex.parameters, ...overrides } };
                 }),
               }));
@@ -1017,12 +1029,42 @@ export function WorkoutSessionSheet({
     }
   }, [isOpen, exercises.length, dayDate, sessionIndex, parameterValuesKey]);
 
-  // Reset initialization flag when dialog closes
+  // Reset initialization flags when dialog closes
   useEffect(() => {
     if (!isOpen) {
       hasInitializedRef.current = false;
+      liveOverrideAppliedRef.current = false;
     }
   }, [isOpen]);
+
+  // Race-condition fix: liveScheduleEntry may arrive AFTER the sheet was already
+  // initialized (Supabase fetch completes after dialog opens). If the init effect ran
+  // without liveScheduleEntry (it was undefined at that point), re-apply overrides now.
+  useEffect(() => {
+    if (!isOpen || !liveScheduleEntry || !hasInitializedRef.current || liveOverrideAppliedRef.current) return;
+    const liveSession = liveScheduleEntry.sessions[sessionIndex];
+    if (!liveSession) {
+      liveOverrideAppliedRef.current = true;
+      return;
+    }
+    const overrideMap = new Map(
+      (liveSession.exercises ?? [])
+        .filter(ex => ex.plannedParams && Object.keys(ex.plannedParams).length > 0)
+        .map(ex => [ex.id, ex.plannedParams as Record<string, string | number>])
+    );
+    liveOverrideAppliedRef.current = true;
+    if (overrideMap.size === 0) return;
+    console.log(`[WorkoutSessionSheet] late live override applied — overrideMap.size=${overrideMap.size} keys=`, [...overrideMap.keys()].map(k => k.slice(-8)));
+    setWorkoutSections(prev => prev.map(section => ({
+      ...section,
+      exercises: section.exercises.map(ex => {
+        const overrides = overrideMap.get(ex.id);
+        if (!overrides) return ex;
+        console.log(`[WorkoutSessionSheet] ✅ late override ex id tail=${ex.id.slice(-8)} name=${ex.exerciseName}`);
+        return { ...ex, parameters: { ...ex.parameters, ...overrides } };
+      }),
+    })));
+  }, [isOpen, liveScheduleEntry, sessionIndex]);
 
   // External parameter update (e.g. from AI set_exercise_params action) — full rebuild
   useEffect(() => {
