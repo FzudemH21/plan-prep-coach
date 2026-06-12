@@ -1,11 +1,10 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Users, Dumbbell, User } from 'lucide-react';
+import { Users, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCoachProfile } from '@/hooks/useCoachProfile';
 
 const NAV = [
   { label: 'Athletes', icon: Users, path: '/coach-mobile/athletes' },
-  { label: 'Training', icon: Dumbbell, path: '/coach-mobile/training' },
   { label: 'Profile', icon: User, path: '/coach-mobile/profile' },
 ];
 
