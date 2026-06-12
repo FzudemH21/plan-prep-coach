@@ -97,9 +97,21 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     assignmentId: string;
   } | null>(null);
 
-  // Live athlete_schedule data — reflects any session rearrangements the athlete made.
-  // Keyed by date string, value is the sessions array from the Supabase row.
-  const [liveScheduleMap, setLiveScheduleMap] = useState<Map<string, { id: string; sessionName: string; exerciseCount: number; intensity: string | null }[]>>(new Map());
+  // Live athlete_schedule data — reflects any session rearrangements the athlete made
+  // AND any mobile-coach-app param edits. Keyed by date string.
+  interface LiveScheduleSession {
+    id: string;
+    sessionName: string;
+    exerciseCount: number;
+    intensity: string | null;
+    /** Exercise param overrides set via mobile coach or athlete app */
+    exercises: Array<{ id: string; plannedParams?: Record<string, string | number> }>;
+  }
+  interface LiveScheduleEntry {
+    rowId: string;
+    sessions: LiveScheduleSession[];
+  }
+  const [liveScheduleMap, setLiveScheduleMap] = useState<Map<string, LiveScheduleEntry>>(new Map());
 
   // Completed session logs — keyed by session_id = "${date}-${sessionIndex}"
   const [sessionLogs, setSessionLogs] = useState<Map<string, CoachSessionLog>>(new Map());
@@ -195,9 +207,9 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
 
     // Find session index: prefer live schedule map, fall back to 0
     let sessionIndex = 0;
-    const liveSessions = liveScheduleMap.get(date);
-    if (liveSessions && sessionName) {
-      const idx = liveSessions.findIndex((s) => s.sessionName === sessionName);
+    const liveEntry = liveScheduleMap.get(date);
+    if (liveEntry && sessionName) {
+      const idx = liveEntry.sessions.findIndex((s) => s.sessionName === sessionName);
       if (idx >= 0) sessionIndex = idx;
     }
 
@@ -232,21 +244,29 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
 
     supabase
       .from('athlete_schedule')
-      .select('date, sessions, intensity')
+      .select('id, date, sessions, intensity')
       .eq('athlete_connection_id', connection.id)
       .gte('date', localStr(fromLocal))
       .lte('date', localStr(toLocal))
       .then(({ data }) => {
         if (!data) return;
-        const map = new Map<string, { id: string; sessionName: string; exerciseCount: number; intensity: string | null }[]>();
+        const map = new Map<string, LiveScheduleEntry>();
         data.forEach((row: Record<string, unknown>) => {
-          const sessions = (row.sessions as Array<{ id: string; name: string; exerciseCount: number; intensity?: string }>) ?? [];
-          map.set(row.date as string, sessions.map(s => ({
-            id: s.id,
-            sessionName: s.name,
-            exerciseCount: s.exerciseCount ?? 0,
-            intensity: s.intensity ?? null,
-          })));
+          type RawSession = {
+            id: string; name: string; exerciseCount: number; intensity?: string;
+            exercises?: Array<{ id: string; plannedParams?: Record<string, string | number> }>;
+          };
+          const rawSessions = (row.sessions as RawSession[]) ?? [];
+          map.set(row.date as string, {
+            rowId: row.id as string,
+            sessions: rawSessions.map(s => ({
+              id: s.id,
+              sessionName: s.name,
+              exerciseCount: s.exerciseCount ?? 0,
+              intensity: s.intensity ?? null,
+              exercises: s.exercises ?? [],
+            })),
+          });
         });
         setLiveScheduleMap(map);
       });
@@ -930,10 +950,10 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
 
       // Override sessions with live athlete_schedule data so the coach sees
       // any rearrangements the athlete made in the athlete app.
-      const liveEntries = liveScheduleMap.get(dateString);
-      if (liveEntries !== undefined) {
+      const liveEntry = liveScheduleMap.get(dateString);
+      if (liveEntry !== undefined) {
         sessions.length = 0;
-        liveEntries.forEach((s, idx) => {
+        liveEntry.sessions.forEach((s, idx) => {
           sessions.push({
             id: s.id,
             sessionIndex: idx,
@@ -2202,6 +2222,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           }}
           useExternalIntensityOnly={true}
           isAdHocSession={true}
+          liveScheduleEntry={liveScheduleMap.get(selectedSessionInfo.dayDate)}
           onOpenAIAssistant={(ctx: FocusedSessionContext) => {
             setFocusedSessionCtx(ctx);
             setAiOpenTrigger(prev => prev + 1);

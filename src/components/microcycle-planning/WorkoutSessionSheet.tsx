@@ -126,6 +126,15 @@ interface WorkoutSessionSheetProps {
   // When true the sheet is opened from the Session Library — hide the "Save to Library"
   // button (already in the library) and show only "Save Changes"
   isLibrarySession?: boolean;
+  // Live athlete_schedule entry — when present, param overrides from mobile coach edits
+  // are applied on top of the plan-derived params so desktop sees mobile changes.
+  liveScheduleEntry?: {
+    rowId: string;
+    sessions: Array<{
+      id: string;
+      exercises: Array<{ id: string; plannedParams?: Record<string, string | number> }>;
+    }>;
+  };
 }
 
 export function WorkoutSessionSheet({
@@ -172,6 +181,7 @@ export function WorkoutSessionSheet({
   onOpenAIAssistant,
   forceParamRefresh,
   isLibrarySession = false,
+  liveScheduleEntry,
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -925,8 +935,31 @@ export function WorkoutSessionSheet({
           } catch { /* ignore */ }
           return newSections;
         })();
+        // Apply live athlete_schedule param overrides (from mobile coach edits) on top of
+        // the plan-derived params so desktop sees changes made in the mobile coach app.
+        let sectionsToSet = sectionsWithComments;
+        if (liveScheduleEntry) {
+          const liveSession = liveScheduleEntry.sessions[sessionIndex];
+          if (liveSession) {
+            const overrideMap = new Map(
+              (liveSession.exercises ?? [])
+                .filter(ex => ex.plannedParams && Object.keys(ex.plannedParams).length > 0)
+                .map(ex => [ex.id, ex.plannedParams as Record<string, string | number>])
+            );
+            if (overrideMap.size > 0) {
+              sectionsToSet = sectionsWithComments.map(section => ({
+                ...section,
+                exercises: section.exercises.map(ex => {
+                  const overrides = overrideMap.get(ex.id);
+                  if (!overrides) return ex;
+                  return { ...ex, parameters: { ...ex.parameters, ...overrides } };
+                }),
+              }));
+            }
+          }
+        }
         freshlyAddedExerciseIdsRef.current.clear();
-        setWorkoutSections(sectionsWithComments);
+        setWorkoutSections(sectionsToSet);
         hasInitializedRef.current = true;
       } else if (currentCount > prevCount && !isAdHocSession) {
         // EXERCISE ADDED to already-open session: merge to preserve user-entered values
