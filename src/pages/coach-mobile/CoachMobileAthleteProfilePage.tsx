@@ -1,21 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Calendar, Dumbbell, Link2, CheckCircle2, Clock } from 'lucide-react';
+import { ChevronLeft, Calendar, Dumbbell, Link2, CheckCircle2, Clock, BedDouble } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { supabase } from '@/lib/supabase';
 import type { AthleteScheduleEntry } from '@/hooks/useAthleteApp';
-import {
-  startOfWeek,
-  endOfWeek,
-  addWeeks,
-  subWeeks,
-  eachDayOfInterval,
-  format,
-  parseISO,
-  isSameDay,
-} from 'date-fns';
+import { format, parseISO } from 'date-fns';
+import { IntensityBadge } from '@/components/athlete-app/IntensityBadge';
+import { Card, CardContent } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 // ── Avatar helpers ─────────────────────────────────────────────────────────────
 
@@ -29,6 +23,42 @@ function avatarColor(name: string) {
   return PALETTE[Math.abs(h) % PALETTE.length];
 }
 
+// ── Date helpers ───────────────────────────────────────────────────────────────
+
+function addDays(dateStr: string, n: number): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  return new Date(d.getTime() + n * 86_400_000).toISOString().slice(0, 10);
+}
+
+function getMondayOf(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  const dow = d.getDay(); // 0 = Sun
+  const diff = dow === 0 ? -6 : 1 - dow;
+  return new Date(d.getTime() + diff * 86_400_000).toISOString().slice(0, 10);
+}
+
+function fmtShort(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
+}
+
+function fmtFull(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+}
+
+function formatWeekRange(mondayStr: string): string {
+  return `${fmtShort(mondayStr)} – ${fmtFull(addDays(mondayStr, 6))}`;
+}
+
+function formatDayHeader(dateStr: string): { weekday: string; dateLabel: string } {
+  const d = new Date(dateStr + 'T12:00:00');
+  return {
+    weekday: d.toLocaleDateString('en-US', { weekday: 'long' }),
+    dateLabel: d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' }),
+  };
+}
+
 // ── Schedule hook (coach-side read) ───────────────────────────────────────────
 
 function useAthleteSchedule(connectionId: string | null) {
@@ -40,7 +70,7 @@ function useAthleteSchedule(connectionId: string | null) {
     setLoading(true);
 
     const today = new Date();
-    const from = new Date(today); from.setDate(today.getDate() - 7);
+    const from = new Date(today); from.setDate(today.getDate() - 14);
     const to   = new Date(today); to.setDate(today.getDate() + 90);
     const fmt  = (d: Date) =>
       `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -80,7 +110,9 @@ export default function CoachMobileAthleteProfilePage() {
   const { athleteId } = useParams<{ athleteId: string }>();
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>('overview');
-  const [weekOffset, setWeekOffset] = useState(0);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const [weekMonday, setWeekMonday] = useState<string>(() => getMondayOf(today));
 
   const { athletes, calendarAssignments } = useAthletes();
   const { connections } = useAthleteConnections();
@@ -99,7 +131,7 @@ export default function CoachMobileAthleteProfilePage() {
 
   const fullName = `${athlete.firstName} ${athlete.lastName}`;
   const bg = avatarColor(fullName);
-  const ini = `${athlete.firstName[0] ?? ''}${athlete.lastName[0] ?? ''}`.toUpperCase();
+  const ini = `${athlete.firstName?.[0] ?? ''}${athlete.lastName?.[0] ?? ''}`.toUpperCase();
   const sports = athlete.sports?.length ? athlete.sports : athlete.sport ? [athlete.sport] : [];
   const isConnected = !!connection?.connectedAt;
   const isPending   = connection && !connection.connectedAt;
@@ -107,20 +139,15 @@ export default function CoachMobileAthleteProfilePage() {
   const assignments = calendarAssignments.filter(ca => ca.athleteId === athleteId);
 
   // ── Week navigation ──────────────────────────────────────────────────────────
-  const baseDate = weekOffset === 0
-    ? new Date()
-    : weekOffset > 0
-    ? addWeeks(new Date(), weekOffset)
-    : subWeeks(new Date(), Math.abs(weekOffset));
-
-  const weekStart = startOfWeek(baseDate, { weekStartsOn: 1 });
-  const weekEnd   = endOfWeek(baseDate, { weekStartsOn: 1 });
-  const days      = eachDayOfInterval({ start: weekStart, end: weekEnd });
+  const prevMonday = addDays(weekMonday, -7);
+  const nextMonday = addDays(weekMonday, 7);
+  const weekDays   = Array.from({ length: 7 }, (_, i) => addDays(weekMonday, i));
+  const scheduleMap = new Map(schedule.map(e => [e.date, e]));
 
   return (
-    <div className="flex flex-col min-h-full">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 pt-4 pb-2">
+    <div className="flex flex-col h-full">
+      {/* Back button */}
+      <div className="flex items-center gap-3 px-4 pt-4 pb-2 shrink-0">
         <button
           onClick={() => navigate('/coach-mobile/athletes')}
           className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-accent -ml-1"
@@ -130,7 +157,7 @@ export default function CoachMobileAthleteProfilePage() {
       </div>
 
       {/* Profile card */}
-      <div className="px-4 pb-4 flex flex-col items-center text-center gap-2">
+      <div className="px-4 pb-4 flex flex-col items-center text-center gap-2 shrink-0">
         <div className={`w-16 h-16 rounded-full ${bg} flex items-center justify-center`}>
           <span className="text-xl font-bold text-white">{ini}</span>
         </div>
@@ -140,29 +167,22 @@ export default function CoachMobileAthleteProfilePage() {
             <p className="text-sm text-muted-foreground">{sports.join(' · ')}</p>
           )}
         </div>
-        {/* Status pill */}
         <span
           className={cn(
             'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium',
-            isConnected
-              ? 'bg-emerald-100 text-emerald-700'
-              : isPending
-              ? 'bg-amber-100 text-amber-700'
-              : 'bg-muted text-muted-foreground'
+            isConnected ? 'bg-emerald-100 text-emerald-700'
+            : isPending  ? 'bg-amber-100 text-amber-700'
+            : 'bg-muted text-muted-foreground'
           )}
         >
-          {isConnected ? (
-            <><CheckCircle2 className="h-3 w-3" /> Connected</>
-          ) : isPending ? (
-            <><Clock className="h-3 w-3" /> Invite pending</>
-          ) : (
-            'No athlete app'
-          )}
+          {isConnected ? <><CheckCircle2 className="h-3 w-3" /> Connected</>
+          : isPending   ? <><Clock className="h-3 w-3" /> Invite pending</>
+          : 'No athlete app'}
         </span>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b px-4">
+      <div className="flex border-b px-4 shrink-0">
         {(['overview', 'training'] as Tab[]).map(t => (
           <button
             key={t}
@@ -179,167 +199,187 @@ export default function CoachMobileAthleteProfilePage() {
         ))}
       </div>
 
-      {/* Tab content */}
+      {/* ── Overview tab ── */}
       {tab === 'overview' ? (
-        <div className="flex-1 px-4 py-4 space-y-4">
+        <ScrollArea className="flex-1">
+          <div className="px-4 py-4 space-y-4 pb-6">
 
-          {/* Athlete app connection */}
-          {connection && (
-            <div className="rounded-xl border bg-card p-4 space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Athlete App
-              </h3>
-              {isConnected ? (
-                <div className="flex items-center gap-2 text-sm">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                  <span>Connected since {connection.connectedAt
-                    ? format(parseISO(connection.connectedAt), 'MMM d, yyyy')
-                    : '—'}</span>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Invite code:</p>
-                  <div className="flex items-center gap-2">
-                    <code className="text-base font-mono font-bold tracking-widest">
-                      {connection.inviteCode}
-                    </code>
-                    <button
-                      onClick={() => navigator.clipboard.writeText(connection.inviteCode)}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      <Link2 className="h-4 w-4" />
-                    </button>
+            {/* Athlete app connection */}
+            {connection && (
+              <div className="rounded-xl border bg-card p-4 space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  Athlete App
+                </h3>
+                {isConnected ? (
+                  <div className="flex items-center gap-2 text-sm">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                    <span>Connected since {connection.connectedAt
+                      ? format(parseISO(connection.connectedAt), 'MMM d, yyyy')
+                      : '—'}</span>
                   </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Athlete info */}
-          <div className="rounded-xl border bg-card p-4 space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Info
-            </h3>
-            {[
-              { label: 'Birthday', value: athlete.birthday ? format(parseISO(athlete.birthday + 'T12:00:00'), 'MMM d, yyyy') : '—' },
-              { label: 'Sex', value: athlete.sex ?? '—' },
-              { label: 'Team', value: athlete.team ?? '—' },
-              { label: 'Sport(s)', value: sports.length ? sports.join(', ') : '—' },
-            ].map(({ label, value }) => (
-              <div key={label} className="flex justify-between text-sm">
-                <span className="text-muted-foreground">{label}</span>
-                <span className="font-medium capitalize">{value}</span>
+                ) : (
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Invite code:</p>
+                    <div className="flex items-center gap-2">
+                      <code className="text-base font-mono font-bold tracking-widest">
+                        {connection.inviteCode}
+                      </code>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(connection.inviteCode)}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <Link2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+            )}
 
-          {/* Assigned plans */}
-          {assignments.length > 0 && (
-            <div className="rounded-xl border bg-card p-4 space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5" />
-                Assigned Plans
+            {/* Athlete info */}
+            <div className="rounded-xl border bg-card p-4 space-y-3">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Info
               </h3>
-              {assignments.map(a => (
-                <div key={a.id} className="text-sm">
-                  <p className="font-medium truncate">{a.programName}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {a.startDate ? format(new Date(a.startDate), 'MMM d') : '?'} – {a.endDate ? format(new Date(a.endDate), 'MMM d, yyyy') : '?'}
-                  </p>
+              {[
+                { label: 'Birthday', value: athlete.birthday ? format(parseISO(athlete.birthday + 'T12:00:00'), 'MMM d, yyyy') : '—' },
+                { label: 'Sex',      value: athlete.sex ?? '—' },
+                { label: 'Team',     value: athlete.team ?? '—' },
+                { label: 'Sport(s)', value: sports.length ? sports.join(', ') : '—' },
+              ].map(({ label, value }) => (
+                <div key={label} className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{label}</span>
+                  <span className="font-medium capitalize">{value}</span>
                 </div>
               ))}
             </div>
-          )}
-        </div>
+
+            {/* Assigned plans */}
+            {assignments.length > 0 && (
+              <div className="rounded-xl border bg-card p-4 space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5" />
+                  Assigned Plans
+                </h3>
+                {assignments.map(a => (
+                  <div key={a.id} className="text-sm">
+                    <p className="font-medium truncate">{a.programName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {a.startDate ? format(new Date(a.startDate), 'MMM d') : '?'} – {a.endDate ? format(new Date(a.endDate), 'MMM d, yyyy') : '?'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+
       ) : (
         /* ── Training tab ── */
-        <div className="flex-1 px-4 py-4 space-y-3">
-          {/* Week navigation */}
-          <div className="flex items-center justify-between">
+        <div className="flex flex-col flex-1 min-h-0">
+          {/* Week navigation header — matches athlete Plan page style */}
+          <div className="flex items-center gap-2 px-3 py-3 border-b shrink-0">
             <button
-              onClick={() => setWeekOffset(w => w - 1)}
-              className="p-2 rounded-full hover:bg-accent"
+              onClick={() => setWeekMonday(prevMonday)}
+              className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-muted active:bg-muted/80 shrink-0"
+              aria-label="Previous week"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-5 w-5" />
             </button>
-            <div className="text-center">
-              <p className="text-xs font-semibold text-primary uppercase tracking-widest">
-                {weekOffset === 0 ? 'This Week' : weekOffset === 1 ? 'Next Week' : weekOffset === -1 ? 'Last Week' : format(weekStart, 'MMM d')}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d')}
-              </p>
-            </div>
+            <p className="flex-1 text-center text-sm font-semibold tabular-nums">
+              {formatWeekRange(weekMonday)}
+            </p>
             <button
-              onClick={() => setWeekOffset(w => w + 1)}
-              className="p-2 rounded-full hover:bg-accent"
+              onClick={() => setWeekMonday(nextMonday)}
+              className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-muted active:bg-muted/80 shrink-0"
+              aria-label="Next week"
             >
-              <ChevronLeft className="h-4 w-4 rotate-180" />
+              <ChevronLeft className="h-5 w-5 rotate-180" />
             </button>
           </div>
 
           {schedLoading ? (
-            <div className="text-center py-8 text-sm text-muted-foreground">Loading schedule…</div>
+            <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+              Loading schedule…
+            </div>
           ) : (
-            <div className="space-y-2">
-              {days.map(day => {
-                const dateStr = format(day, 'yyyy-MM-dd');
-                const entry   = schedule.find(e => e.date === dateStr);
-                const isToday = isSameDay(day, new Date());
+            <ScrollArea className="flex-1">
+              <div className="px-4 space-y-2 py-3 pb-6">
+                {weekDays.map(dateStr => {
+                  const entry    = scheduleMap.get(dateStr) ?? null;
+                  const isToday  = dateStr === today;
+                  const isPast   = dateStr < today;
+                  const { weekday, dateLabel } = formatDayHeader(dateStr);
+                  const hasSessions = (entry?.sessions.length ?? 0) > 0;
 
-                return (
-                  <div
-                    key={dateStr}
-                    className={cn(
-                      'flex gap-3 items-start',
-                    )}
-                  >
-                    {/* Day label */}
+                  return (
                     <div
+                      key={dateStr}
                       className={cn(
-                        'shrink-0 w-10 text-center pt-2',
-                        isToday ? 'text-primary' : 'text-muted-foreground'
+                        'rounded-xl p-3 space-y-2',
+                        isToday && 'bg-primary/5 ring-1 ring-primary/20',
                       )}
                     >
-                      <p className="text-xs font-semibold uppercase">{format(day, 'EEE')}</p>
-                      <p className={cn('text-base font-bold leading-none mt-0.5', isToday && 'text-primary')}>{format(day, 'd')}</p>
-                    </div>
+                      {/* Day header */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={cn(
+                          'text-sm font-semibold',
+                          isToday ? 'text-primary' : isPast ? 'text-muted-foreground' : 'text-foreground'
+                        )}>
+                          {weekday}
+                        </span>
+                        <span className="text-xs text-muted-foreground">{dateLabel}</span>
+                        {isToday && (
+                          <span className="text-xs font-medium text-primary bg-primary/10 rounded-full px-2 py-0.5">
+                            Today
+                          </span>
+                        )}
+                      </div>
 
-                    {/* Sessions */}
-                    <div className="flex-1 space-y-1.5">
-                      {entry && entry.sessions.length > 0 ? (
-                        entry.sessions.map(s => (
-                          <div
-                            key={s.id}
-                            className={cn(
-                              'rounded-xl border bg-card px-3 py-2.5',
-                              isToday && 'border-primary/30 bg-primary/5'
-                            )}
-                          >
-                            <p className="text-sm font-semibold leading-tight truncate">{s.name || 'Session'}</p>
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <Dumbbell className="h-3 w-3 text-muted-foreground" />
-                              <p className="text-xs text-muted-foreground">
-                                {s.exerciseCount} exercise{s.exerciseCount !== 1 ? 's' : ''}
-                              </p>
-                            </div>
-                          </div>
-                        ))
+                      {/* Daily intensity badge */}
+                      {entry?.intensity && <IntensityBadge intensity={entry.intensity} />}
+
+                      {/* Sessions or rest day */}
+                      {hasSessions ? (
+                        <div className="space-y-1.5">
+                          {entry!.sessions.map(s => (
+                            <Card key={s.id} className={cn('transition-opacity', isPast && 'opacity-60')}>
+                              <CardContent className="flex items-center gap-3 p-3">
+                                <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+                                  <Dumbbell className="h-3.5 w-3.5 text-primary" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{s.name || 'Session'}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {s.exerciseCount} exercise{s.exerciseCount !== 1 ? 's' : ''}
+                                  </p>
+                                  {s.intensity && (
+                                    <div className="mt-1.5">
+                                      <IntensityBadge intensity={s.intensity} />
+                                    </div>
+                                  )}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
                       ) : (
-                        <div className="rounded-xl border border-dashed bg-muted/30 px-3 py-2.5 flex items-center justify-center">
-                          <span className="text-xs text-muted-foreground">Rest day</span>
+                        <div className={cn(
+                          'flex items-center gap-1.5 text-xs py-1',
+                          isPast ? 'text-muted-foreground/40' : 'text-slate-400'
+                        )}>
+                          <BedDouble className="h-3.5 w-3.5 shrink-0" />
+                          <span>Rest day</span>
                         </div>
                       )}
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
           )}
         </div>
       )}
-
-      <div className="h-4" />
     </div>
   );
 }
