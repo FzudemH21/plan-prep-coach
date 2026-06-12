@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAthleteCheckins, wellnessComposite, type AthleteCheckin } from '@/hooks/useAthleteCheckins';
 import { DEFAULT_MONITORING_CONFIG } from '@/types/athlete';
+import { FRONT_REGIONS, BACK_REGIONS, nrsSeverityColor, nrsSeverityStroke, svgRegionKey } from '@/lib/bodyMapData';
 
 // ── Monitoring helpers ─────────────────────────────────────────────────────────
 
@@ -45,6 +46,65 @@ function ScoreDots({ value, max = 5 }: { value: number | null; max?: number }) {
       {Array.from({ length: max }, (_, i) => (
         <div key={i} className={cn('w-2.5 h-2.5 rounded-full', i < v ? (WELLNESS_DOT_COLORS[v] ?? 'bg-primary') : 'bg-muted')} />
       ))}
+    </div>
+  );
+}
+
+const ILLNESS_SYMPTOM_LABELS: Record<string, string> = {
+  fever: 'Fever', fatigue: 'Fatigue', lymph_nodes: 'Swollen lymph nodes',
+  sore_throat: 'Sore throat', blocked_nose: 'Blocked/runny nose', cough: 'Cough',
+  breathing: 'Breathing difficulties', headache: 'Headache', nausea: 'Nausea',
+  vomiting: 'Vomiting', diarrhoea: 'Diarrhoea', constipation: 'Constipation',
+  fainting: 'Fainting', rash: 'Rash/itching', arrhythmia: 'Arrhythmia',
+  chest_pain: 'Chest pain', abdominal_pain: 'Abdominal pain', numbness: 'Numbness',
+  anxiety: 'Anxiety', low_mood: 'Low mood', irritability: 'Irritability',
+  eye_problems: 'Eye problems', ear_problems: 'Ear problems', urinary: 'Urinary symptoms',
+};
+
+interface PainDotInfo { cx: number; cy: number; view: 'front' | 'back'; nrs: number }
+
+function buildMobilePainDots(painAreas: AthleteCheckin['painAreas']): PainDotInfo[] {
+  const dots: PainDotInfo[] = [];
+  for (const area of painAreas) {
+    const key = area.regionKey ?? String(area.areaId);
+    for (const r of FRONT_REGIONS) {
+      if (svgRegionKey(r) === key) { dots.push({ cx: r.x + r.w / 2, cy: r.y + r.h / 2, view: 'front', nrs: area.severity }); break; }
+    }
+    for (const r of BACK_REGIONS) {
+      if (svgRegionKey(r) === key) { dots.push({ cx: r.x + r.w / 2, cy: r.y + r.h / 2, view: 'back',  nrs: area.severity }); break; }
+    }
+  }
+  return dots;
+}
+
+function MobileBodyMap({ painAreas }: { painAreas: AthleteCheckin['painAreas'] }) {
+  const dots      = buildMobilePainDots(painAreas);
+  const frontDots = dots.filter(d => d.view === 'front');
+  const backDots  = dots.filter(d => d.view === 'back');
+
+  function HalfMap({ imgSrc, viewBox, viewDots, label }: { imgSrc: string; viewBox: string; viewDots: PainDotInfo[]; label: string }) {
+    return (
+      <div className="flex-1">
+        <p className="text-[10px] text-muted-foreground text-center mb-1 font-medium uppercase tracking-wide">{label}</p>
+        <div className="relative" style={{ height: '155px' }}>
+          <img src={imgSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+          <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }} viewBox={viewBox} preserveAspectRatio="xMidYMid meet">
+            {viewDots.map((d, i) => (
+              <g key={i}>
+                <circle cx={d.cx} cy={d.cy} r={8} fill={nrsSeverityColor(d.nrs)} stroke={nrsSeverityStroke(d.nrs)} strokeWidth={1.5} />
+                <text x={d.cx} y={d.cy + 4} textAnchor="middle" fontSize="8" fontWeight="bold" fill="white">{d.nrs}</text>
+              </g>
+            ))}
+          </svg>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-2 pt-1">
+      <HalfMap imgSrc="/bodymap-front.png" viewBox="0 0 193 306" viewDots={frontDots} label="Front" />
+      <HalfMap imgSrc="/bodymap-back.png"  viewBox="0 0 211 317" viewDots={backDots}  label="Back"  />
     </div>
   );
 }
@@ -284,35 +344,26 @@ export default function CoachMobileAthleteProfilePage() {
         <ScrollArea className="flex-1">
           <div className="px-4 py-4 space-y-4 pb-6">
 
-            {/* Athlete app connection */}
-            {connection && (
+            {/* Athlete app — only show when invite pending (connected shown in top badge) */}
+            {connection && !isConnected && (
               <div className="rounded-xl border bg-card p-4 space-y-2">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                   Athlete App
                 </h3>
-                {isConnected ? (
-                  <div className="flex items-center gap-2 text-sm">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                    <span>Connected since {connection.connectedAt
-                      ? format(parseISO(connection.connectedAt), 'MMM d, yyyy')
-                      : '—'}</span>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Invite code:</p>
+                  <div className="flex items-center gap-2">
+                    <code className="text-base font-mono font-bold tracking-widest">
+                      {connection.inviteCode}
+                    </code>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(connection.inviteCode)}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <Link2 className="h-4 w-4" />
+                    </button>
                   </div>
-                ) : (
-                  <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">Invite code:</p>
-                    <div className="flex items-center gap-2">
-                      <code className="text-base font-mono font-bold tracking-widest">
-                        {connection.inviteCode}
-                      </code>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(connection.inviteCode)}
-                        className="text-muted-foreground hover:text-foreground"
-                      >
-                        <Link2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
+                </div>
               </div>
             )}
 
@@ -334,11 +385,11 @@ export default function CoachMobileAthleteProfilePage() {
               ))}
             </div>
 
-            {/* Monitoring */}
+            {/* ── Monitoring cards ── */}
             {connection && monitoringEnabled && (
-              <div className="rounded-xl border bg-card p-4 space-y-3">
-                {/* Header */}
-                <div className="flex items-center justify-between">
+              <div className="space-y-3">
+                {/* Section header */}
+                <div className="flex items-center justify-between px-0.5">
                   <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
                     <Activity className="h-3.5 w-3.5" />
                     Monitoring
@@ -348,114 +399,137 @@ export default function CoachMobileAthleteProfilePage() {
                   </span>
                 </div>
 
-                {/* Wellness block */}
-                {(hasWellbeing || hasOstrc) && (
-                  checkinsLoading ? (
-                    <p className="text-xs text-muted-foreground">Loading…</p>
-                  ) : !todayCheckin ? (
-                    <div className="space-y-0.5">
-                      <p className="text-sm text-muted-foreground">No check-in today</p>
-                      {latestCheckin && (
-                        <p className="text-xs text-muted-foreground/60">
-                          Last: {fmtMonitoringDate(latestCheckin.date, today)}
-                        </p>
-                      )}
+                {/* Wellness card */}
+                {hasWellbeing && (
+                  <div className="rounded-xl border bg-card p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold">Wellness</span>
+                      {checkinsLoading ? (
+                        <span className="text-xs text-muted-foreground">Loading…</span>
+                      ) : todayComposite !== null ? (
+                        <span className={cn('text-sm font-bold', WELLNESS_TEXT_COLORS[Math.round(todayComposite)])}>
+                          {todayComposite.toFixed(1)} / 5
+                        </span>
+                      ) : !todayCheckin ? (
+                        <span className="text-xs text-muted-foreground">No check-in today</span>
+                      ) : null}
                     </div>
-                  ) : (
-                    <div className="space-y-2.5">
-                      {/* Wellness rows */}
-                      {hasWellbeing && WELLNESS_KEYS.map(key => {
-                        const value = todayCheckin[WELLNESS_FIELD[key]] as number | null;
-                        return (
-                          <div key={key} className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground w-16 shrink-0">
-                              {WELLNESS_LABELS[key]}
-                            </span>
-                            <ScoreDots value={value} />
-                            <span className={cn(
-                              'text-xs font-semibold ml-auto',
-                              value ? WELLNESS_TEXT_COLORS[value] : 'text-muted-foreground'
-                            )}>
-                              {value ?? '—'}
-                            </span>
+
+                    {!checkinsLoading && todayCheckin && (
+                      <>
+                        {/* Composite progress bar */}
+                        {todayComposite !== null && (
+                          <div className="h-2 rounded-full bg-muted overflow-hidden">
+                            <div
+                              className={cn('h-full rounded-full transition-all',
+                                todayComposite >= 4 ? 'bg-green-500' : todayComposite >= 3 ? 'bg-amber-400' : 'bg-red-500'
+                              )}
+                              style={{ width: `${((todayComposite - 1) / 4) * 100}%` }}
+                            />
                           </div>
-                        );
-                      })}
-
-                      {/* Composite */}
-                      {hasWellbeing && todayComposite !== null && (
-                        <div className="flex items-center justify-between pt-1.5 border-t">
-                          <span className="text-xs font-medium text-muted-foreground">Composite</span>
-                          <span className={cn(
-                            'text-sm font-bold',
-                            WELLNESS_TEXT_COLORS[Math.round(todayComposite)] ?? 'text-foreground'
-                          )}>
-                            {todayComposite.toFixed(1)} / 5
-                          </span>
+                        )}
+                        {/* Dimension rows */}
+                        <div className="space-y-2">
+                          {WELLNESS_KEYS.map(key => {
+                            const value = todayCheckin[WELLNESS_FIELD[key]] as number | null;
+                            return (
+                              <div key={key} className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground w-16 shrink-0">{WELLNESS_LABELS[key]}</span>
+                                <ScoreDots value={value} />
+                                <span className={cn('text-xs font-semibold ml-auto', value ? WELLNESS_TEXT_COLORS[value] : 'text-muted-foreground')}>
+                                  {value ?? '—'}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
-                      )}
-
-                      {/* Pain / Illness */}
-                      {hasOstrc && (todayCheckin.hasPain || todayCheckin.hasIllness) && (
-                        <div className="flex flex-wrap gap-1.5 pt-0.5">
-                          {todayCheckin.hasPain && (
-                            <span className="inline-flex items-center gap-1 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">
-                              <AlertTriangle className="h-3 w-3" />
-                              Pain{todayCheckin.painAreas.length > 0 ? ` (${todayCheckin.painAreas.length})` : ''}
-                            </span>
-                          )}
-                          {todayCheckin.hasIllness && (
-                            <span className="inline-flex items-center gap-1 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
-                              <AlertTriangle className="h-3 w-3" />
-                              Illness{todayCheckin.illnessNrs !== null ? ` · ${todayCheckin.illnessNrs}/10` : ''}
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Athlete notes */}
-                      {todayCheckin.notes && (
-                        <p className="text-xs text-muted-foreground italic border-t pt-2 leading-relaxed">
-                          "{todayCheckin.notes}"
-                        </p>
-                      )}
-                    </div>
-                  )
-                )}
-
-                {/* Custom metrics */}
-                {enabledCustomBlocks.length > 0 && (
-                  <div className={cn('space-y-2', (hasWellbeing || hasOstrc) ? 'pt-2 border-t' : '')}>
-                    {enabledCustomBlocks.map(block => {
-                      const metric = customMetricValues.get(block.config.parameterId);
-                      const isToday = metric?.recordedAt === today;
-                      return (
-                        <div key={block.id} className="flex items-center justify-between gap-2">
-                          <span className="text-xs text-muted-foreground truncate">
-                            {block.config.label || block.config.parameterName}
-                            {block.config.parameterUnit && (
-                              <span className="text-muted-foreground/60"> ({block.config.parameterUnit})</span>
-                            )}
-                          </span>
-                          <div className="text-right shrink-0">
-                            {metric ? (
-                              <span className="text-xs font-semibold">
-                                {metric.value}
-                                {!isToday && (
-                                  <span className="font-normal text-muted-foreground ml-1">
-                                    · {fmtMonitoringDate(metric.recordedAt, today)}
-                                  </span>
-                                )}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
+                        {todayCheckin.notes && (
+                          <p className="text-xs text-muted-foreground italic border-t pt-2">"{todayCheckin.notes}"</p>
+                        )}
+                      </>
+                    )}
+                    {!checkinsLoading && !todayCheckin && latestCheckin && (
+                      <p className="text-xs text-muted-foreground/60">Last check-in: {fmtMonitoringDate(latestCheckin.date, today)}</p>
+                    )}
                   </div>
                 )}
+
+                {/* Pain & Body Map card — always shown when OSTRC enabled */}
+                {hasOstrc && (
+                  <div className="rounded-xl border bg-card p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold">Pain & Injury</span>
+                      {todayCheckin?.hasPain ? (
+                        <span className="inline-flex items-center gap-1 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">
+                          <AlertTriangle className="h-3 w-3" />
+                          {todayCheckin.painAreas.length} area{todayCheckin.painAreas.length !== 1 ? 's' : ''}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">
+                          <CheckCircle2 className="h-3 w-3" />
+                          No pain
+                        </span>
+                      )}
+                    </div>
+                    <MobileBodyMap painAreas={todayCheckin?.painAreas ?? []} />
+                  </div>
+                )}
+
+                {/* Illness card */}
+                {hasOstrc && (
+                  <div className="rounded-xl border bg-card p-3">
+                    {todayCheckin?.hasIllness ? (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+                          <span className="text-sm font-semibold text-red-700">
+                            Illness{todayCheckin.illnessNrs !== null ? ` · ${todayCheckin.illnessNrs}/10` : ''}
+                          </span>
+                        </div>
+                        {(todayCheckin.illnessSymptoms.length > 0 || todayCheckin.illnessSymptomOther) && (
+                          <p className="text-xs text-muted-foreground pl-6">
+                            {[
+                              ...todayCheckin.illnessSymptoms.map(id => ILLNESS_SYMPTOM_LABELS[id] ?? id),
+                              todayCheckin.illnessSymptomOther,
+                            ].filter(Boolean).join(' · ')}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                        <span className="text-sm text-muted-foreground">No illness reported</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Custom metric cards */}
+                {enabledCustomBlocks.map(block => {
+                  const metric = customMetricValues.get(block.config.parameterId);
+                  const isToday = metric?.recordedAt === today;
+                  return (
+                    <div key={block.id} className="rounded-xl border bg-card p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            {block.config.label || block.config.parameterName}
+                            {block.config.parameterUnit && <span> ({block.config.parameterUnit})</span>}
+                          </p>
+                          {block.config.scaleMin !== undefined && block.config.scaleMax !== undefined && (
+                            <p className="text-[10px] text-muted-foreground/60">Scale · {block.config.scaleMin}–{block.config.scaleMax}</p>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-2xl font-bold leading-none">{metric?.value ?? '—'}</p>
+                          {metric && !isToday && (
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{fmtMonitoringDate(metric.recordedAt, today)}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
