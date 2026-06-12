@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Calendar, Dumbbell, Link2, CheckCircle2, Clock, BedDouble } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
@@ -10,6 +10,44 @@ import { format, parseISO } from 'date-fns';
 import { IntensityBadge } from '@/components/athlete-app/IntensityBadge';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useAthleteCheckins, wellnessComposite, type AthleteCheckin } from '@/hooks/useAthleteCheckins';
+import { DEFAULT_MONITORING_CONFIG } from '@/types/athlete';
+
+// ── Monitoring helpers ─────────────────────────────────────────────────────────
+
+const WELLNESS_LABELS: Record<string, string> = {
+  fatigue: 'Energy', sleep: 'Sleep', soreness: 'Soreness', stress: 'Stress', mood: 'Mood',
+};
+const WELLNESS_DOT_COLORS: Record<number, string> = {
+  1: 'bg-red-500', 2: 'bg-orange-400', 3: 'bg-amber-400', 4: 'bg-green-400', 5: 'bg-green-600',
+};
+const WELLNESS_TEXT_COLORS: Record<number, string> = {
+  1: 'text-red-600', 2: 'text-orange-500', 3: 'text-amber-500', 4: 'text-green-500', 5: 'text-green-700',
+};
+const WELLNESS_KEYS = ['fatigue', 'sleep', 'soreness', 'stress', 'mood'] as const;
+type WellnessKey = typeof WELLNESS_KEYS[number];
+const WELLNESS_FIELD: Record<WellnessKey, keyof AthleteCheckin> = {
+  fatigue: 'wellnessFatigue', sleep: 'wellnessSleep', soreness: 'wellnessSoreness',
+  stress: 'wellnessStress', mood: 'wellnessMood',
+};
+
+function fmtMonitoringDate(dateStr: string, todayStr: string): string {
+  if (dateStr === todayStr) return 'Today';
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  if (dateStr === yesterday) return 'Yesterday';
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function ScoreDots({ value, max = 5 }: { value: number | null; max?: number }) {
+  const v = value ?? 0;
+  return (
+    <div className="flex gap-0.5">
+      {Array.from({ length: max }, (_, i) => (
+        <div key={i} className={cn('w-2.5 h-2.5 rounded-full', i < v ? (WELLNESS_DOT_COLORS[v] ?? 'bg-primary') : 'bg-muted')} />
+      ))}
+    </div>
+  );
+}
 
 // ── Avatar helpers ─────────────────────────────────────────────────────────────
 
@@ -114,12 +152,56 @@ export default function CoachMobileAthleteProfilePage() {
   const today = new Date().toISOString().slice(0, 10);
   const [weekMonday, setWeekMonday] = useState<string>(() => getMondayOf(today));
 
-  const { athletes, calendarAssignments } = useAthletes();
+  const { athletes } = useAthletes();
   const { connections } = useAthleteConnections();
 
   const athlete = athletes.find(a => a.id === athleteId);
   const connection = connections.find(c => c.athleteLocalId === athleteId);
   const { schedule, loading: schedLoading } = useAthleteSchedule(connection?.id ?? null);
+
+  // ── Monitoring ────────────────────────────────────────────────────────────────
+  const monitoringEnabled   = connection?.monitoringEnabled ?? false;
+  const monitoringConfig    = connection?.monitoringConfig ?? DEFAULT_MONITORING_CONFIG;
+  const enabledBlocks       = monitoringEnabled ? (monitoringConfig?.blocks ?? []).filter(b => b.enabled) : [];
+  const hasWellbeing        = enabledBlocks.some(b => b.type === 'wellbeing');
+  const hasOstrc            = enabledBlocks.some(b => b.type === 'ostrc');
+  const enabledCustomBlocks = enabledBlocks.filter(
+    (b): b is typeof b & { config: NonNullable<typeof b.config> } => b.type === 'custom_metric' && !!b.config
+  );
+  const customBlockParamIds = enabledCustomBlocks.map(b => b.config.parameterId).join(',');
+
+  const { checkins, loading: checkinsLoading } = useAthleteCheckins(connection?.id ?? null, 14);
+  const todayCheckin   = checkins.find(c => c.date === today) ?? null;
+  const latestCheckin  = checkins[0] ?? null;
+  const todayComposite = todayCheckin ? wellnessComposite(todayCheckin) : null;
+
+  const [customMetricValues, setCustomMetricValues] = useState<Map<string, { value: string; recordedAt: string }>>(new Map());
+
+  useEffect(() => {
+    if (!connection?.id || enabledCustomBlocks.length === 0) { setCustomMetricValues(new Map()); return; }
+    let cancelled = false;
+    Promise.all(
+      enabledCustomBlocks.map(async (block) => {
+        const { data } = await supabase
+          .from('athlete_test_results')
+          .select('value, recorded_at')
+          .eq('athlete_connection_id', connection.id)
+          .eq('parameter_id', block.config.parameterId)
+          .order('recorded_at', { ascending: false })
+          .limit(1);
+        if (data && data.length > 0) {
+          return { parameterId: block.config.parameterId, value: String(data[0].value), recordedAt: (data[0].recorded_at as string).slice(0, 10) };
+        }
+        return null;
+      })
+    ).then(results => {
+      if (cancelled) return;
+      const map = new Map<string, { value: string; recordedAt: string }>();
+      results.forEach(r => { if (r) map.set(r.parameterId, r); });
+      setCustomMetricValues(map);
+    });
+    return () => { cancelled = true; };
+  }, [connection?.id, customBlockParamIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!athlete) {
     return (
@@ -135,8 +217,6 @@ export default function CoachMobileAthleteProfilePage() {
   const sports = athlete.sports?.length ? athlete.sports : athlete.sport ? [athlete.sport] : [];
   const isConnected = !!connection?.connectedAt;
   const isPending   = connection && !connection.connectedAt;
-
-  const assignments = calendarAssignments.filter(ca => ca.athleteId === athleteId);
 
   // ── Week navigation ──────────────────────────────────────────────────────────
   const prevMonday = addDays(weekMonday, -7);
@@ -254,21 +334,128 @@ export default function CoachMobileAthleteProfilePage() {
               ))}
             </div>
 
-            {/* Assigned plans */}
-            {assignments.length > 0 && (
-              <div className="rounded-xl border bg-card p-4 space-y-2">
-                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
-                  <Calendar className="h-3.5 w-3.5" />
-                  Assigned Plans
-                </h3>
-                {assignments.map(a => (
-                  <div key={a.id} className="text-sm">
-                    <p className="font-medium truncate">{a.programName}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {a.startDate ? format(new Date(a.startDate), 'MMM d') : '?'} – {a.endDate ? format(new Date(a.endDate), 'MMM d, yyyy') : '?'}
-                    </p>
+            {/* Monitoring */}
+            {connection && monitoringEnabled && (
+              <div className="rounded-xl border bg-card p-4 space-y-3">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                    <Activity className="h-3.5 w-3.5" />
+                    Monitoring
+                  </h3>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(today + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                  </span>
+                </div>
+
+                {/* Wellness block */}
+                {(hasWellbeing || hasOstrc) && (
+                  checkinsLoading ? (
+                    <p className="text-xs text-muted-foreground">Loading…</p>
+                  ) : !todayCheckin ? (
+                    <div className="space-y-0.5">
+                      <p className="text-sm text-muted-foreground">No check-in today</p>
+                      {latestCheckin && (
+                        <p className="text-xs text-muted-foreground/60">
+                          Last: {fmtMonitoringDate(latestCheckin.date, today)}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {/* Wellness rows */}
+                      {hasWellbeing && WELLNESS_KEYS.map(key => {
+                        const value = todayCheckin[WELLNESS_FIELD[key]] as number | null;
+                        return (
+                          <div key={key} className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground w-16 shrink-0">
+                              {WELLNESS_LABELS[key]}
+                            </span>
+                            <ScoreDots value={value} />
+                            <span className={cn(
+                              'text-xs font-semibold ml-auto',
+                              value ? WELLNESS_TEXT_COLORS[value] : 'text-muted-foreground'
+                            )}>
+                              {value ?? '—'}
+                            </span>
+                          </div>
+                        );
+                      })}
+
+                      {/* Composite */}
+                      {hasWellbeing && todayComposite !== null && (
+                        <div className="flex items-center justify-between pt-1.5 border-t">
+                          <span className="text-xs font-medium text-muted-foreground">Composite</span>
+                          <span className={cn(
+                            'text-sm font-bold',
+                            WELLNESS_TEXT_COLORS[Math.round(todayComposite)] ?? 'text-foreground'
+                          )}>
+                            {todayComposite.toFixed(1)} / 5
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Pain / Illness */}
+                      {hasOstrc && (todayCheckin.hasPain || todayCheckin.hasIllness) && (
+                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                          {todayCheckin.hasPain && (
+                            <span className="inline-flex items-center gap-1 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">
+                              <AlertTriangle className="h-3 w-3" />
+                              Pain{todayCheckin.painAreas.length > 0 ? ` (${todayCheckin.painAreas.length})` : ''}
+                            </span>
+                          )}
+                          {todayCheckin.hasIllness && (
+                            <span className="inline-flex items-center gap-1 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
+                              <AlertTriangle className="h-3 w-3" />
+                              Illness{todayCheckin.illnessNrs !== null ? ` · ${todayCheckin.illnessNrs}/10` : ''}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Athlete notes */}
+                      {todayCheckin.notes && (
+                        <p className="text-xs text-muted-foreground italic border-t pt-2 leading-relaxed">
+                          "{todayCheckin.notes}"
+                        </p>
+                      )}
+                    </div>
+                  )
+                )}
+
+                {/* Custom metrics */}
+                {enabledCustomBlocks.length > 0 && (
+                  <div className={cn('space-y-2', (hasWellbeing || hasOstrc) ? 'pt-2 border-t' : '')}>
+                    {enabledCustomBlocks.map(block => {
+                      const metric = customMetricValues.get(block.config.parameterId);
+                      const isToday = metric?.recordedAt === today;
+                      return (
+                        <div key={block.id} className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-muted-foreground truncate">
+                            {block.config.label || block.config.parameterName}
+                            {block.config.parameterUnit && (
+                              <span className="text-muted-foreground/60"> ({block.config.parameterUnit})</span>
+                            )}
+                          </span>
+                          <div className="text-right shrink-0">
+                            {metric ? (
+                              <span className="text-xs font-semibold">
+                                {metric.value}
+                                {!isToday && (
+                                  <span className="font-normal text-muted-foreground ml-1">
+                                    · {fmtMonitoringDate(metric.recordedAt, today)}
+                                  </span>
+                                )}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>
