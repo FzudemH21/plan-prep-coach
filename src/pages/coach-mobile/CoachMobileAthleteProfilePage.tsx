@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Calendar, Dumbbell, Link2, CheckCircle2, Clock, BedDouble } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Dumbbell, Link2, CheckCircle2, Clock, BedDouble } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
@@ -342,8 +342,14 @@ export default function CoachMobileAthleteProfilePage() {
                       {/* Sessions or rest day */}
                       {hasSessions ? (
                         <div className="space-y-1.5">
-                          {entry!.sessions.map(s => (
-                            <Card key={s.id} className={cn('transition-opacity', isPast && 'opacity-60')}>
+                          {entry!.sessions.map((s, sIdx) => (
+                            <Card
+                              key={s.id}
+                              className={cn('transition-opacity cursor-pointer active:scale-[0.98]', isPast && 'opacity-60')}
+                              onClick={() => navigate(`/coach-mobile/athletes/${athleteId}/session`, {
+                                state: { entry, sessionIdx: sIdx },
+                              })}
+                            >
                               <CardContent className="flex items-center gap-3 p-3">
                                 <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
                                   <Dumbbell className="h-3.5 w-3.5 text-primary" />
@@ -359,6 +365,7 @@ export default function CoachMobileAthleteProfilePage() {
                                     </div>
                                   )}
                                 </div>
+                                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                               </CardContent>
                             </Card>
                           ))}

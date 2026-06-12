@@ -13,6 +13,7 @@ import CoachMobileAthletesPage from "./pages/coach-mobile/CoachMobileAthletesPag
 import CoachMobileAthleteProfilePage from "./pages/coach-mobile/CoachMobileAthleteProfilePage";
 import CoachMobileTrainingPage from "./pages/coach-mobile/CoachMobileTrainingPage";
 import CoachMobileProfilePage from "./pages/coach-mobile/CoachMobileProfilePage";
+import CoachMobileSessionEditPage from "./pages/coach-mobile/CoachMobileSessionEditPage";
 import HomePage from "./pages/HomePage";
 import MacrocyclePage from "./pages/MacrocyclePage";
 import MesocyclePage from "./pages/MesocyclePage";
@@ -138,6 +139,7 @@ function AppRoutes() {
           <Route index element={<Navigate to="/coach-mobile/athletes" replace />} />
           <Route path="athletes" element={<CoachMobileAthletesPage />} />
           <Route path="athletes/:athleteId" element={<CoachMobileAthleteProfilePage />} />
+          <Route path="athletes/:athleteId/session" element={<CoachMobileSessionEditPage />} />
           <Route path="training" element={<CoachMobileTrainingPage />} />
           <Route path="profile" element={<CoachMobileProfilePage />} />
         </Route>
