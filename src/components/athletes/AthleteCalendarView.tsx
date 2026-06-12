@@ -272,6 +272,51 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       });
   }, [athlete.id, connectionsLoading, getConnectionForAthlete]);
 
+  // Realtime subscription — update liveScheduleMap whenever athlete_schedule rows change
+  // so desktop reflects mobile coach saves without needing a page reload.
+  useEffect(() => {
+    const connection = getConnectionForAthlete(athlete.id);
+    if (!connection || connectionsLoading) return;
+
+    const channel = supabase
+      .channel(`athlete_schedule_live_${connection.id}`)
+      .on(
+        'postgres_changes' as any,
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'athlete_schedule',
+          filter: `athlete_connection_id=eq.${connection.id}`,
+        },
+        (payload: { new: Record<string, unknown> }) => {
+          const row = payload.new;
+          type RawSession = {
+            id: string; name: string; exerciseCount: number; intensity?: string;
+            exercises?: Array<{ id: string; plannedParams?: Record<string, string | number> }>;
+          };
+          const rawSessions = (row.sessions as RawSession[]) ?? [];
+          const entry: LiveScheduleEntry = {
+            rowId: row.id as string,
+            sessions: rawSessions.map(s => ({
+              id: s.id,
+              sessionName: s.name,
+              exerciseCount: s.exerciseCount ?? 0,
+              intensity: s.intensity ?? null,
+              exercises: s.exercises ?? [],
+            })),
+          };
+          setLiveScheduleMap(prev => {
+            const next = new Map(prev);
+            next.set(row.date as string, entry);
+            return next;
+          });
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [athlete.id, connectionsLoading, getConnectionForAthlete]);
+
   // RAG retrieval — re-query when athlete changes
   useEffect(() => {
     const sports = [...(athlete.sports ?? []), ...(!athlete.sports && athlete.sport ? [athlete.sport] : [])];
