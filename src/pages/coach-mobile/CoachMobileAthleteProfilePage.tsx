@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -13,6 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAthleteCheckins, wellnessComposite, type AthleteCheckin } from '@/hooks/useAthleteCheckins';
 import { DEFAULT_MONITORING_CONFIG } from '@/types/athlete';
 import { FRONT_REGIONS, BACK_REGIONS, nrsSeverityColor, nrsSeverityStroke, svgRegionKey } from '@/lib/bodyMapData';
+import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
 // ── Monitoring helpers ─────────────────────────────────────────────────────────
 
@@ -106,6 +107,99 @@ function MobileBodyMap({ painAreas }: { painAreas: AthleteCheckin['painAreas'] }
       <HalfMap imgSrc="/bodymap-front.png" viewBox="0 0 193 306" viewDots={frontDots} label="Front" />
       <HalfMap imgSrc="/bodymap-back.png"  viewBox="0 0 211 317" viewDots={backDots}  label="Back"  />
     </div>
+  );
+}
+
+// ── Chart helpers ─────────────────────────────────────────────────────────────
+
+const DAY_OPTIONS = [7, 14, 28, 90] as const;
+
+function DaysSelector({ selected, onChange }: { selected: number; onChange: (d: number) => void }) {
+  return (
+    <div className="flex gap-1">
+      {DAY_OPTIONS.map(d => (
+        <button
+          key={d}
+          onClick={e => { e.stopPropagation(); onChange(d); }}
+          className={cn(
+            'px-2 py-0.5 text-xs rounded font-medium transition-colors',
+            selected === d
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          {d}d
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function WellnessMiniChart({ checkins, days }: { checkins: AthleteCheckin[]; days: number }) {
+  const data = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    return [...checkins].filter(c => c.date >= cutoffStr).reverse().map(c => ({
+      label: new Date(c.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      value: wellnessComposite(c),
+    }));
+  }, [checkins, days]);
+
+  if (data.length < 2) return (
+    <p className="text-xs text-muted-foreground text-center py-4">Not enough data — needs 2+ check-ins.</p>
+  );
+
+  return (
+    <ResponsiveContainer width="100%" height={130}>
+      <LineChart data={data} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+        <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+        <YAxis domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+        <Tooltip
+          formatter={(v: number) => [v != null ? v.toFixed(1) : '—', 'Wellness']}
+          contentStyle={{ fontSize: 10, padding: '4px 8px', borderRadius: 6 }}
+          labelStyle={{ fontSize: 10 }}
+        />
+        <Line type="monotone" dataKey="value" stroke="#22c55e" strokeWidth={2} dot={{ r: 3, fill: '#22c55e' }} connectNulls={false} />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+function CustomMetricMiniChart({
+  history, days, unit, scaleMax,
+}: { history: Array<{ date: string; value: number }>; days: number; unit?: string | null; scaleMax?: number }) {
+  const data = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    return history.filter(h => h.date >= cutoffStr).map(h => ({
+      label: new Date(h.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      value: h.value,
+    }));
+  }, [history, days]);
+
+  if (data.length < 2) return (
+    <p className="text-xs text-muted-foreground text-center py-4">Not enough data — needs 2+ entries.</p>
+  );
+
+  const domainMax = scaleMax ?? undefined;
+
+  return (
+    <ResponsiveContainer width="100%" height={120}>
+      <LineChart data={data} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+        <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+        <YAxis domain={[0, domainMax ?? 'auto']} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+        <Tooltip
+          formatter={(v: number) => [unit ? `${v} ${unit}` : String(v), 'Value']}
+          contentStyle={{ fontSize: 10, padding: '4px 8px', borderRadius: 6 }}
+          labelStyle={{ fontSize: 10 }}
+        />
+        <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
+      </LineChart>
+    </ResponsiveContainer>
   );
 }
 
@@ -230,15 +324,26 @@ export default function CoachMobileAthleteProfilePage() {
   );
   const customBlockParamIds = enabledCustomBlocks.map(b => b.config.parameterId).join(',');
 
-  const { checkins, loading: checkinsLoading } = useAthleteCheckins(connection?.id ?? null, 14);
+  const { checkins, loading: checkinsLoading } = useAthleteCheckins(connection?.id ?? null, 90);
   const todayCheckin   = checkins.find(c => c.date === today) ?? null;
   const latestCheckin  = checkins[0] ?? null;
   const todayComposite = todayCheckin ? wellnessComposite(todayCheckin) : null;
 
+  // Expanded / chart state
+  const [wellnessExpanded, setWellnessExpanded] = useState(false);
+  const [wellnessDays, setWellnessDays] = useState(28);
+  const [expandedMetricId, setExpandedMetricId] = useState<string | null>(null);
+  const [metricDays, setMetricDays] = useState(28);
+
   const [customMetricValues, setCustomMetricValues] = useState<Map<string, { value: string; recordedAt: string }>>(new Map());
+  const [customMetricHistory, setCustomMetricHistory] = useState<Map<string, Array<{ date: string; value: number }>>>(new Map());
 
   useEffect(() => {
-    if (!connection?.id || enabledCustomBlocks.length === 0) { setCustomMetricValues(new Map()); return; }
+    if (!connection?.id || enabledCustomBlocks.length === 0) {
+      setCustomMetricValues(new Map());
+      setCustomMetricHistory(new Map());
+      return;
+    }
     let cancelled = false;
     Promise.all(
       enabledCustomBlocks.map(async (block) => {
@@ -247,18 +352,26 @@ export default function CoachMobileAthleteProfilePage() {
           .select('value, recorded_at')
           .eq('athlete_connection_id', connection.id)
           .eq('parameter_id', block.config.parameterId)
-          .order('recorded_at', { ascending: false })
-          .limit(1);
-        if (data && data.length > 0) {
-          return { parameterId: block.config.parameterId, value: String(data[0].value), recordedAt: (data[0].recorded_at as string).slice(0, 10) };
-        }
-        return null;
+          .order('recorded_at', { ascending: true });
+        const rows = (data ?? []).map((r: { value: string; recorded_at: string }) => ({
+          date: (r.recorded_at as string).slice(0, 10),
+          value: parseFloat(String(r.value)),
+        }));
+        return { parameterId: block.config.parameterId, rows };
       })
     ).then(results => {
       if (cancelled) return;
-      const map = new Map<string, { value: string; recordedAt: string }>();
-      results.forEach(r => { if (r) map.set(r.parameterId, r); });
-      setCustomMetricValues(map);
+      const valMap = new Map<string, { value: string; recordedAt: string }>();
+      const histMap = new Map<string, Array<{ date: string; value: number }>>();
+      results.forEach(({ parameterId, rows }) => {
+        histMap.set(parameterId, rows);
+        if (rows.length > 0) {
+          const last = rows[rows.length - 1];
+          valMap.set(parameterId, { value: String(last.value), recordedAt: last.date });
+        }
+      });
+      setCustomMetricValues(valMap);
+      setCustomMetricHistory(histMap);
     });
     return () => { cancelled = true; };
   }, [connection?.id, customBlockParamIds]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -399,9 +512,13 @@ export default function CoachMobileAthleteProfilePage() {
                   </span>
                 </div>
 
-                {/* Wellness card */}
+                {/* Wellness card — tap to expand */}
                 {hasWellbeing && (
-                  <div className="rounded-xl border bg-card p-4 space-y-3">
+                  <div
+                    className="rounded-xl border bg-card p-4 space-y-3 cursor-pointer active:opacity-80"
+                    onClick={() => setWellnessExpanded(v => !v)}
+                  >
+                    {/* Header row — always visible */}
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-semibold">Wellness</span>
                       {checkinsLoading ? (
@@ -415,39 +532,46 @@ export default function CoachMobileAthleteProfilePage() {
                       ) : null}
                     </div>
 
-                    {!checkinsLoading && todayCheckin && (
-                      <>
-                        {/* Composite progress bar */}
-                        {todayComposite !== null && (
-                          <div className="h-2 rounded-full bg-muted overflow-hidden">
-                            <div
-                              className={cn('h-full rounded-full transition-all',
-                                todayComposite >= 4 ? 'bg-green-500' : todayComposite >= 3 ? 'bg-amber-400' : 'bg-red-500'
-                              )}
-                              style={{ width: `${((todayComposite - 1) / 4) * 100}%` }}
-                            />
-                          </div>
-                        )}
-                        {/* Dimension rows */}
-                        <div className="space-y-2">
-                          {WELLNESS_KEYS.map(key => {
-                            const value = todayCheckin[WELLNESS_FIELD[key]] as number | null;
-                            return (
-                              <div key={key} className="flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground w-16 shrink-0">{WELLNESS_LABELS[key]}</span>
-                                <ScoreDots value={value} />
-                                <span className={cn('text-xs font-semibold ml-auto', value ? WELLNESS_TEXT_COLORS[value] : 'text-muted-foreground')}>
-                                  {value ?? '—'}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
+                    {/* Progress bar — always visible when data exists */}
+                    {!checkinsLoading && todayComposite !== null && (
+                      <div className="h-2 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className={cn('h-full rounded-full transition-all',
+                            todayComposite >= 4 ? 'bg-green-500' : todayComposite >= 3 ? 'bg-amber-400' : 'bg-red-500'
+                          )}
+                          style={{ width: `${((todayComposite - 1) / 4) * 100}%` }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Expanded: dimension rows + chart */}
+                    {wellnessExpanded && !checkinsLoading && todayCheckin && (
+                      <div className="space-y-3 pt-1 border-t" onClick={e => e.stopPropagation()}>
+                        {WELLNESS_KEYS.map(key => {
+                          const value = todayCheckin[WELLNESS_FIELD[key]] as number | null;
+                          return (
+                            <div key={key} className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground w-16 shrink-0">{WELLNESS_LABELS[key]}</span>
+                              <ScoreDots value={value} />
+                              <span className={cn('text-xs font-semibold ml-auto', value ? WELLNESS_TEXT_COLORS[value] : 'text-muted-foreground')}>
+                                {value ?? '—'}
+                              </span>
+                            </div>
+                          );
+                        })}
                         {todayCheckin.notes && (
                           <p className="text-xs text-muted-foreground italic border-t pt-2">"{todayCheckin.notes}"</p>
                         )}
-                      </>
+                        <div className="border-t pt-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground font-medium">Trend</span>
+                            <DaysSelector selected={wellnessDays} onChange={setWellnessDays} />
+                          </div>
+                          <WellnessMiniChart checkins={checkins} days={wellnessDays} />
+                        </div>
+                      </div>
                     )}
+
                     {!checkinsLoading && !todayCheckin && latestCheckin && (
                       <p className="text-xs text-muted-foreground/60">Last check-in: {fmtMonitoringDate(latestCheckin.date, today)}</p>
                     )}
@@ -504,29 +628,65 @@ export default function CoachMobileAthleteProfilePage() {
                   </div>
                 )}
 
-                {/* Custom metric cards */}
+                {/* Custom metric cards — tap to expand chart */}
                 {enabledCustomBlocks.map(block => {
-                  const metric = customMetricValues.get(block.config.parameterId);
+                  const pid = block.config.parameterId;
+                  const metric = customMetricValues.get(pid);
+                  const history = customMetricHistory.get(pid) ?? [];
+                  const isExpanded = expandedMetricId === pid;
                   const isToday = metric?.recordedAt === today;
+                  const isScale = block.config.scaleMin !== undefined && block.config.scaleMax !== undefined;
+                  const displayValue = metric
+                    ? (isScale ? `${metric.value}/${block.config.scaleMax}` : metric.value)
+                    : '—';
+
                   return (
-                    <div key={block.id} className="rounded-xl border bg-card p-4">
+                    <div
+                      key={block.id}
+                      className="rounded-xl border bg-card p-4 space-y-3 cursor-pointer active:opacity-80"
+                      onClick={() => setExpandedMetricId(isExpanded ? null : pid)}
+                    >
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-xs text-muted-foreground font-medium">
                             {block.config.label || block.config.parameterName}
-                            {block.config.parameterUnit && <span> ({block.config.parameterUnit})</span>}
                           </p>
-                          {block.config.scaleMin !== undefined && block.config.scaleMax !== undefined && (
-                            <p className="text-[10px] text-muted-foreground/60">Scale · {block.config.scaleMin}–{block.config.scaleMax}</p>
+                          {isScale && (
+                            <p className="text-[10px] text-muted-foreground/60">
+                              Scale · {block.config.scaleMin}–{block.config.scaleMax}
+                            </p>
+                          )}
+                          {!isScale && block.config.parameterUnit && (
+                            <p className="text-[10px] text-muted-foreground/60">{block.config.parameterUnit}</p>
                           )}
                         </div>
                         <div className="text-right shrink-0">
-                          <p className="text-2xl font-bold leading-none">{metric?.value ?? '—'}</p>
+                          <p className={cn('text-2xl font-bold leading-none', metric ? '' : 'text-muted-foreground')}>
+                            {displayValue}
+                          </p>
                           {metric && !isToday && (
-                            <p className="text-[10px] text-muted-foreground mt-0.5">{fmtMonitoringDate(metric.recordedAt, today)}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              {fmtMonitoringDate(metric.recordedAt, today)}
+                            </p>
                           )}
                         </div>
                       </div>
+
+                      {/* Expanded: chart with range picker */}
+                      {isExpanded && (
+                        <div className="border-t pt-3 space-y-2" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground font-medium">History</span>
+                            <DaysSelector selected={metricDays} onChange={setMetricDays} />
+                          </div>
+                          <CustomMetricMiniChart
+                            history={history}
+                            days={metricDays}
+                            unit={!isScale ? (block.config.parameterUnit ?? undefined) : undefined}
+                            scaleMax={isScale ? block.config.scaleMax : undefined}
+                          />
+                        </div>
+                      )}
                     </div>
                   );
                 })}
