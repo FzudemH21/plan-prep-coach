@@ -603,7 +603,13 @@ export async function syncAthleteSchedule(
           for (const session of (row.sessions ?? [])) {
             for (const ex of (session.exercises ?? [])) {
               if ((ex as ExerciseSummary).mobileEdited && ex.plannedParams) {
-                exMap.set(ex.id, ex.plannedParams as Record<string, string | number>);
+                const params = ex.plannedParams as Record<string, string | number>;
+                // Key by both the stored exercise id AND the stable library id so that
+                // the lookup succeeds even when ExerciseDistribution.id has changed
+                // (e.g. after the AI re-adds exercises with a new dist-ai-… id).
+                exMap.set(ex.id, params);
+                const libId = (ex as ExerciseSummary).exerciseLibraryId;
+                if (libId) exMap.set(libId, params);
               }
             }
           }
@@ -623,7 +629,9 @@ export async function syncAthleteSchedule(
       row.sessions = row.sessions.map(session => ({
         ...session,
         exercises: session.exercises.map(ex => {
-          const preserved = exMap.get(ex.id);
+          // Try primary id first, then fall back to the stable library id.
+          const preserved = exMap.get(ex.id)
+            ?? exMap.get((ex as ExerciseSummary).exerciseLibraryId ?? '');
           if (!preserved) return ex;
           // Keep mobile-edited params and re-assert the flag so future syncs preserve them.
           return { ...ex, plannedParams: preserved, mobileEdited: true };

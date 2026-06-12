@@ -105,7 +105,12 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     exerciseCount: number;
     intensity: string | null;
     /** Exercise param overrides set via mobile coach or athlete app */
-    exercises: Array<{ id: string; plannedParams?: Record<string, string | number> }>;
+    exercises: Array<{
+      id: string;
+      /** Stable library exercise ID — fallback lookup key when the distribution id has changed. */
+      exerciseLibraryId?: string;
+      plannedParams?: Record<string, string | number>;
+    }>;
   }
   interface LiveScheduleEntry {
     rowId: string;
@@ -254,7 +259,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         data.forEach((row: Record<string, unknown>) => {
           type RawSession = {
             id: string; name: string; exerciseCount: number; intensity?: string;
-            exercises?: Array<{ id: string; plannedParams?: Record<string, string | number> }>;
+            exercises?: Array<{ id: string; exerciseLibraryId?: string; plannedParams?: Record<string, string | number> }>;
           };
           const rawSessions = (row.sessions as RawSession[]) ?? [];
           map.set(row.date as string, {
@@ -268,6 +273,12 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
             })),
           });
         });
+        // DEBUG: log entries with mobile-edited exercises
+        map.forEach((entry, date) => {
+          const hasEdited = entry.sessions.some(s => (s.exercises as any[]).some((ex: any) => ex.mobileEdited));
+          if (hasEdited) console.log(`[liveScheduleMap] ${date} HAS mobileEdited exercises`, entry.sessions.map(s => s.exercises));
+        });
+        console.log(`[liveScheduleMap] built ${map.size} entries`);
         setLiveScheduleMap(map);
       });
   }, [athlete.id, connectionsLoading, getConnectionForAthlete]);
@@ -292,7 +303,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           const row = payload.new;
           type RawSession = {
             id: string; name: string; exerciseCount: number; intensity?: string;
-            exercises?: Array<{ id: string; plannedParams?: Record<string, string | number> }>;
+            exercises?: Array<{ id: string; exerciseLibraryId?: string; plannedParams?: Record<string, string | number> }>;
           };
           const rawSessions = (row.sessions as RawSession[]) ?? [];
           const entry: LiveScheduleEntry = {

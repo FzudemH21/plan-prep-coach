@@ -132,7 +132,13 @@ interface WorkoutSessionSheetProps {
     rowId: string;
     sessions: Array<{
       id: string;
-      exercises: Array<{ id: string; plannedParams?: Record<string, string | number> }>;
+      exercises: Array<{
+        id: string;
+        /** Stable library exercise ID — used as fallback lookup key when the
+         *  ExerciseDistribution.id has changed since the row was last synced. */
+        exerciseLibraryId?: string;
+        plannedParams?: Record<string, string | number>;
+      }>;
     }>;
   };
 }
@@ -949,21 +955,28 @@ export function WorkoutSessionSheet({
           const liveSession = liveScheduleEntry.sessions[sessionIndex];
           console.log(`[WorkoutSessionSheet] liveSession=`, liveSession ? `found (${(liveSession.exercises??[]).length} exercises)` : 'NOT FOUND', 'sessionIndex=', sessionIndex, 'total sessions=', liveScheduleEntry.sessions.length);
           if (liveSession) {
-            const overrideMap = new Map(
-              (liveSession.exercises ?? [])
-                .filter(ex => ex.plannedParams && Object.keys(ex.plannedParams).length > 0)
-                .map(ex => [ex.id, ex.plannedParams as Record<string, string | number>])
-            );
+            // Build override map keyed by BOTH the stored exercise id AND the stable
+            // library id. This handles cases where ExerciseDistribution.id has changed
+            // since the athlete_schedule row was last written (e.g. AI re-added exercises
+            // with a new dist-ai-… id), while exerciseLibraryId stays the same.
+            const overrideMap = new Map<string, Record<string, string | number>>();
+            for (const ex of (liveSession.exercises ?? [])) {
+              if (!ex.plannedParams || Object.keys(ex.plannedParams).length === 0) continue;
+              const params = ex.plannedParams as Record<string, string | number>;
+              overrideMap.set(ex.id, params);
+              if (ex.exerciseLibraryId) overrideMap.set(ex.exerciseLibraryId, params);
+            }
             console.log(`[WorkoutSessionSheet] overrideMap.size=`, overrideMap.size, 'keys=', [...overrideMap.keys()].map(k => k.slice(-8)));
-            const sectionExIds = sectionsWithComments.flatMap(s => s.exercises.map(e => e.id.slice(-8)));
-            console.log(`[WorkoutSessionSheet] section exercise id tails=`, sectionExIds);
+            const sectionExIds = sectionsWithComments.flatMap(s => s.exercises.map(e => `${e.id.slice(-8)}|lib=${e.exerciseId?.slice(-8)??'?'}`));
+            console.log(`[WorkoutSessionSheet] section exercise ids (tail|libId):`, sectionExIds);
             if (overrideMap.size > 0) {
               sectionsToSet = sectionsWithComments.map(section => ({
                 ...section,
                 exercises: section.exercises.map(ex => {
-                  const overrides = overrideMap.get(ex.id);
+                  // Try distribution id first, then fall back to library id.
+                  const overrides = overrideMap.get(ex.id) ?? overrideMap.get(ex.exerciseId ?? '');
                   if (!overrides) return ex;
-                  console.log(`[WorkoutSessionSheet] ✅ APPLYING override to ex id tail=${ex.id.slice(-8)} name=${ex.exerciseName}`);
+                  console.log(`[WorkoutSessionSheet] ✅ APPLYING override to ex id=${ex.id.slice(-8)} libId=${ex.exerciseId?.slice(-8)} name=${ex.exerciseName}`);
                   return { ...ex, parameters: { ...ex.parameters, ...overrides } };
                 }),
               }));
@@ -1047,20 +1060,23 @@ export function WorkoutSessionSheet({
       liveOverrideAppliedRef.current = true;
       return;
     }
-    const overrideMap = new Map(
-      (liveSession.exercises ?? [])
-        .filter(ex => ex.plannedParams && Object.keys(ex.plannedParams).length > 0)
-        .map(ex => [ex.id, ex.plannedParams as Record<string, string | number>])
-    );
+    // Dual-key map: stored id AND stable library id (handles id format changes).
+    const overrideMap = new Map<string, Record<string, string | number>>();
+    for (const ex of (liveSession.exercises ?? [])) {
+      if (!ex.plannedParams || Object.keys(ex.plannedParams).length === 0) continue;
+      const params = ex.plannedParams as Record<string, string | number>;
+      overrideMap.set(ex.id, params);
+      if (ex.exerciseLibraryId) overrideMap.set(ex.exerciseLibraryId, params);
+    }
     liveOverrideAppliedRef.current = true;
     if (overrideMap.size === 0) return;
     console.log(`[WorkoutSessionSheet] late live override applied — overrideMap.size=${overrideMap.size} keys=`, [...overrideMap.keys()].map(k => k.slice(-8)));
     setWorkoutSections(prev => prev.map(section => ({
       ...section,
       exercises: section.exercises.map(ex => {
-        const overrides = overrideMap.get(ex.id);
+        const overrides = overrideMap.get(ex.id) ?? overrideMap.get(ex.exerciseId ?? '');
         if (!overrides) return ex;
-        console.log(`[WorkoutSessionSheet] ✅ late override ex id tail=${ex.id.slice(-8)} name=${ex.exerciseName}`);
+        console.log(`[WorkoutSessionSheet] ✅ late override ex id=${ex.id.slice(-8)} libId=${ex.exerciseId?.slice(-8)} name=${ex.exerciseName}`);
         return { ...ex, parameters: { ...ex.parameters, ...overrides } };
       }),
     })));
