@@ -24,6 +24,7 @@ import {
   Library,
   LogOut,
   MessageCircle,
+  Smartphone,
 } from "lucide-react";
 import { useAthleteConnections } from "@/hooks/useAthleteConnections";
 import { useUnreadCounts } from "@/hooks/useChat";
@@ -315,6 +316,23 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
           >
             <BarChart3 className="h-4 w-4 mr-2" />
             {t('nav.analytics')}
+          </Button>
+
+          {/* Divider */}
+          <div className="h-px bg-border my-1" />
+
+          {/* Coach mobile app link */}
+          <Button
+            variant="ghost"
+            className={cn(
+              "w-full justify-start h-10 text-muted-foreground hover:text-foreground",
+              location.pathname.startsWith("/coach-mobile") && "bg-accent text-accent-foreground font-medium"
+            )}
+            onClick={() => handleNavigate("/coach-mobile/athletes")}
+          >
+            <Smartphone className="h-4 w-4 mr-2" />
+            Mobile view
+            <span className="ml-auto text-xs text-muted-foreground">→</span>
           </Button>
         </div>
 

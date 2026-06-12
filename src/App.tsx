@@ -8,6 +8,11 @@ import { DisplayModeProvider } from "@/contexts/DisplayModeContext";
 import { CustomLibrariesProvider } from "@/contexts/CustomLibrariesContext";
 import { WizardDataProvider } from "@/contexts/WizardDataContext";
 import { AthleteAppLayout } from "@/components/athlete-app/AthleteAppLayout";
+import { CoachMobileLayout } from "@/components/coach-mobile/CoachMobileLayout";
+import CoachMobileAthletesPage from "./pages/coach-mobile/CoachMobileAthletesPage";
+import CoachMobileAthleteProfilePage from "./pages/coach-mobile/CoachMobileAthleteProfilePage";
+import CoachMobileTrainingPage from "./pages/coach-mobile/CoachMobileTrainingPage";
+import CoachMobileProfilePage from "./pages/coach-mobile/CoachMobileProfilePage";
 import HomePage from "./pages/HomePage";
 import MacrocyclePage from "./pages/MacrocyclePage";
 import MesocyclePage from "./pages/MesocyclePage";
@@ -119,6 +124,22 @@ function AppRoutes() {
           <Route path="plan" element={<AthletePlanPage />} />
           <Route path="messages" element={<AthleteMessagesPage />} />
           <Route path="profile" element={<AthleteProfilePage />} />
+        </Route>
+
+        {/* Coach mobile app — must come before the "*" catch-all */}
+        <Route
+          path="/coach-mobile"
+          element={
+            <AuthGuard>
+              <CoachMobileLayout />
+            </AuthGuard>
+          }
+        >
+          <Route index element={<Navigate to="/coach-mobile/athletes" replace />} />
+          <Route path="athletes" element={<CoachMobileAthletesPage />} />
+          <Route path="athletes/:athleteId" element={<CoachMobileAthleteProfilePage />} />
+          <Route path="training" element={<CoachMobileTrainingPage />} />
+          <Route path="profile" element={<CoachMobileProfilePage />} />
         </Route>
 
         <Route
