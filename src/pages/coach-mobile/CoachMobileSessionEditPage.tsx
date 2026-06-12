@@ -229,7 +229,39 @@ export default function CoachMobileSessionEditPage() {
     if (!ex) return;
     const current = getSetCount(ex);
     const next = Math.max(1, current + delta);
-    updateExercise(exId, e => ({ ...e, plannedSets: next }));
+    updateExercise(exId, e => {
+      const newParams = { ...(e.plannedParams ?? {}) };
+
+      // Update the canonical Sets parameter so the desktop overlay sees the right row count.
+      const setsKey = Object.keys(newParams).find(k => /^sets?$/i.test(k)) ?? 'Sets';
+      newParams[setsKey] = next;
+
+      // Collect all per-set parameter bases (e.g. "Reps" from "Reps_set1").
+      const paramBases = new Set<string>();
+      for (const key of Object.keys(newParams)) {
+        const m = key.match(/^(.+)_set\d+$/);
+        if (m && m[1] !== setsKey) paramBases.add(m[1]);
+      }
+
+      if (next > current) {
+        // Adding sets: seed blank entries for any new set indices.
+        for (const base of paramBases) {
+          for (let i = current + 1; i <= next; i++) {
+            const k = `${base}_set${i}`;
+            if (!(k in newParams)) newParams[k] = '';
+          }
+        }
+      } else if (next < current) {
+        // Removing sets: drop the entries beyond the new count.
+        for (const base of paramBases) {
+          for (let i = next + 1; i <= current; i++) {
+            delete newParams[`${base}_set${i}`];
+          }
+        }
+      }
+
+      return { ...e, plannedSets: next, plannedParams: newParams };
+    });
   }
 
   function setDayIntensity(intensity: string | null) {
