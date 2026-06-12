@@ -69,6 +69,9 @@ export interface ExerciseSummary {
   restParamName?: string;
   /** True when the coach ticked "Each side" — athlete performs on each side separately */
   eachSide?: boolean;
+  /** True when plannedParams were directly edited on the mobile coach app.
+   *  Preserved across plan syncs — syncAthleteSchedule will not overwrite these. */
+  mobileEdited?: boolean;
 }
 
 export interface SessionSummary {

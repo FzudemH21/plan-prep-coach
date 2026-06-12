@@ -248,12 +248,21 @@ export default function CoachMobileSessionEditPage() {
     if (!entry) return;
     setSaving(true);
     try {
+      // Stamp mobileEdited: true on every exercise in the edited session so that
+      // syncAthleteSchedule (triggered by desktop loads) preserves these params
+      // instead of overwriting them with plan-derived values.
+      const sessionsWithFlag = entry.sessions.map((s, i) =>
+        i !== sessionIdx ? s : {
+          ...s,
+          exercises: s.exercises.map(ex => ({ ...ex, mobileEdited: true })),
+        }
+      );
       const { error } = await supabase
         .from('athlete_schedule')
-        .update({ sessions: entry.sessions, intensity: entry.intensity })
+        .update({ sessions: sessionsWithFlag, intensity: entry.intensity })
         .eq('id', entry.id);
       if (error) throw error;
-      originalEntry.current = entry; // lock in new baseline
+      originalEntry.current = { ...entry, sessions: sessionsWithFlag };
       toast({ title: 'Saved ✓', description: 'Session updated in athlete schedule.' });
       setMode('view');
     } catch {

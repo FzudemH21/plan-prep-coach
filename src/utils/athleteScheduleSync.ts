@@ -68,6 +68,10 @@ export interface ExerciseSummary {
   restParamName?: string;    // name of the rest/pause parameter for this exercise's method
   /** True when the coach ticked "Each side" — athlete performs the exercise on each side separately */
   eachSide?: boolean;
+  /** True when plannedParams were directly edited on the mobile coach app.
+   *  Exercises with this flag have their plannedParams preserved across plan syncs
+   *  (syncAthleteSchedule will not overwrite them). */
+  mobileEdited?: boolean;
 }
 
 export interface SessionSummary {
@@ -467,11 +471,15 @@ export async function syncAthleteSchedule(
               sectionNotes = secInfo?.notes;
             }
 
+            // Use the same ID logic as buildSectionsFromExercises so IDs match
+            // when the desktop applies mobile coach param overrides.
+            const exerciseId = ex.id || ex.exerciseId;
+
             // Look up superset group for this exercise
-            const supersetId = supersetLookup.get(`${ex.dayDate}-${i}-${ex.id}`);
+            const supersetId = supersetLookup.get(`${ex.dayDate}-${i}-${exerciseId}`);
 
             return {
-              id: ex.id,
+              id: exerciseId,
               name: ex.exerciseName ?? ex.exerciseId,
               order: ex.order,
               sectionId: ex.sectionId,
@@ -574,6 +582,57 @@ export async function syncAthleteSchedule(
     ...trainingDays.map(td => td.date),
     ...[...eventsByDate.keys()].filter(d => !trainingDayDates.has(d)),
   ];
+
+  // ── Preserve mobile-edited plannedParams ──────────────────────────────────────
+  // Before deleting rows, read existing athlete_schedule data and collect any
+  // exercises flagged mobileEdited: true.  Those params survived from a mobile
+  // coach save and must not be overwritten by the plan-derived sync values.
+  const mobileParamsMap = new Map<string, Map<string, Record<string, string | number>>>();
+  try {
+    const FETCH_BATCH = 200;
+    for (let fi = 0; fi < allDates.length; fi += FETCH_BATCH) {
+      const dateBatch = allDates.slice(fi, fi + FETCH_BATCH);
+      const { data: existingData } = await supabase
+        .from('athlete_schedule')
+        .select('date, sessions')
+        .eq('athlete_connection_id', connectionId)
+        .in('date', dateBatch);
+      if (existingData) {
+        for (const row of existingData as Array<{ date: string; sessions: SessionSummary[] }>) {
+          const exMap = new Map<string, Record<string, string | number>>();
+          for (const session of (row.sessions ?? [])) {
+            for (const ex of (session.exercises ?? [])) {
+              if ((ex as ExerciseSummary).mobileEdited && ex.plannedParams) {
+                exMap.set(ex.id, ex.plannedParams as Record<string, string | number>);
+              }
+            }
+          }
+          if (exMap.size > 0) mobileParamsMap.set(row.date, exMap);
+        }
+      }
+    }
+  } catch {
+    // Non-fatal — if we can't read existing data, proceed without preserving.
+  }
+
+  // Apply preserved mobile params on top of the newly computed rows.
+  if (mobileParamsMap.size > 0) {
+    for (const row of rows) {
+      const exMap = mobileParamsMap.get(row.date);
+      if (!exMap) continue;
+      row.sessions = row.sessions.map(session => ({
+        ...session,
+        exercises: session.exercises.map(ex => {
+          const preserved = exMap.get(ex.id);
+          if (!preserved) return ex;
+          // Keep mobile-edited params and re-assert the flag so future syncs preserve them.
+          return { ...ex, plannedParams: preserved, mobileEdited: true };
+        }),
+      }));
+    }
+    console.log(`[syncAthleteSchedule] preserved mobile edits for ${mobileParamsMap.size} dates`);
+  }
+
   console.log(`[syncAthleteSchedule] plan: DELETE ${allDates.length} dates → UPSERT ${rows.length} training-day rows`);
   const DEL_BATCH = 200;
   for (let i = 0; i < allDates.length; i += DEL_BATCH) {
