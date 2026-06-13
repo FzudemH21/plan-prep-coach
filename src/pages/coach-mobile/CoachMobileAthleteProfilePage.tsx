@@ -442,18 +442,42 @@ export default function CoachMobileAthleteProfilePage() {
     patch: Partial<{ intensity: string | null; sessions: SessionSummary[] }>,
   ) => {
     if (!connection) return;
-    const existing = schedule.find(e => e.date === dateStr);
-    if (existing) {
-      const { error } = await supabase
-        .from('athlete_schedule')
-        .update(patch)
-        .eq('athlete_connection_id', connection.id)
-        .eq('date', dateStr);
-      if (error) throw error;
-      setSchedule(prev => prev.map(e =>
-        e.date === dateStr ? { ...e, ...patch } : e
-      ));
+
+    // Always attempt UPDATE first using the stable composite key.
+    // Returning 'id' lets us detect whether any row was matched.
+    // This correctly handles rows that exist in Supabase but are absent
+    // from local state (e.g. event-only rows written by syncAthleteSchedule).
+    const { data: updatedRows, error: updError } = await supabase
+      .from('athlete_schedule')
+      .update(patch)
+      .eq('athlete_connection_id', connection.id)
+      .eq('date', dateStr)
+      .select('id');
+
+    if (updError) throw updError;
+
+    if (((updatedRows as Array<{ id: string }> | null) ?? []).length > 0) {
+      // Row existed and was updated — sync local state
+      setSchedule(prev => {
+        const exists = prev.some(e => e.date === dateStr);
+        if (exists) {
+          return prev.map(e => e.date === dateStr ? { ...e, ...patch } : e);
+        }
+        // Row was in Supabase but not in local state (e.g. created by syncAthleteSchedule)
+        const rowId = (updatedRows as Array<{ id: string }>)[0]?.id ?? dateStr;
+        return [...prev, {
+          id: rowId,
+          date: dateStr,
+          intensity: patch.intensity ?? null,
+          sessions: patch.sessions ?? [],
+          events: [],
+          programName: null,
+          mesocycleName: null,
+          microcycleName: null,
+        }].sort((a, b) => a.date.localeCompare(b.date));
+      });
     } else {
+      // No row found in Supabase — INSERT a new row
       const { data, error } = await supabase
         .from('athlete_schedule')
         .insert({
@@ -479,7 +503,7 @@ export default function CoachMobileAthleteProfilePage() {
         }].sort((a, b) => a.date.localeCompare(b.date)));
       }
     }
-  }, [connection, schedule, setSchedule]);
+  }, [connection, setSchedule]);
 
   const handleSetDayIntensity = useCallback(async (intensity: string | null) => {
     if (!dayActionTarget) return;

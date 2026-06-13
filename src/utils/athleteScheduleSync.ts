@@ -612,14 +612,20 @@ export async function syncAthleteSchedule(
   // Full existing sessions per date — ground truth for rearranged dates
   const existingSessionsMap = new Map<string, SessionSummary[]>();
   try {
-    const FETCH_BATCH = 200;
-    for (let fi = 0; fi < allDates.length; fi += FETCH_BATCH) {
-      const dateBatch = allDates.slice(fi, fi + FETCH_BATCH);
+    if (allDates.length > 0) {
+      // Fetch ALL rows within the plan's date range — not just plan dates.
+      // This is critical for detecting mobileRearranged sessions on rest days:
+      // those dates are not in allDates (no plan sessions or events), so an
+      // allDates-scoped .in() query would miss them, leaving rearrangedSessions
+      // empty and causing the locked-dates logic to skip the rearrangement.
+      const minDate = allDates.reduce((a, b) => a < b ? a : b);
+      const maxDate = allDates.reduce((a, b) => a > b ? a : b);
       const { data: existingData } = await supabase
         .from('athlete_schedule')
         .select('date, intensity, sessions')
         .eq('athlete_connection_id', connectionId)
-        .in('date', dateBatch);
+        .gte('date', minDate)
+        .lte('date', maxDate);
       if (existingData) {
         for (const row of existingData as Array<{ date: string; intensity?: string | null; sessions: SessionSummary[] }>) {
           // Preserve day-level intensity if set
